@@ -33,9 +33,12 @@ public:
 	vector<string> entity_key_columns;
 	//! The timestamp column
 	string timestamp_column;
+	//! Optional table qualifier for the timestamp column (empty if the reference is unqualified)
+	string timestamp_table;
 	//! The lookback window interval
 	interval_t window_interval;
-	//! The incremental refresh watermark interval
+	//! TTL / serving staleness bound: snapshots older than this (relative to the request time) serve as NULL.
+	//! A zero interval disables the bound. Named watermark_interval internally for storage compatibility.
 	interval_t watermark_interval;
 	//! The refresh mode (FULL/INCREMENTAL)
 	FeatureRefreshMode refresh_mode;

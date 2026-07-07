@@ -1,0 +1,142 @@
+# name: test/sql/feature/test_feature_arbitrary_sql.test
+# description: Feature definitions may use arbitrary SQL (joins, filters, CTEs, window functions) and a
+#              qualified TIMESTAMP; the result maps back to the entity via the entity table's primary key.
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+# ============================================================
+# Setup: an entity table (PRIMARY KEY only; no source-table foreign key is required anymore) plus an event
+# table and a dimension table to join against. carol has no events and must still appear in each snapshot.
+# ============================================================
+statement ok
+CREATE TABLE users (user_id VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO users VALUES ('alice'), ('bob'), ('carol');
+
+statement ok
+CREATE TABLE txns (user_id VARCHAR, amount INTEGER, category VARCHAR, ts TIMESTAMP);
+
+statement ok
+INSERT INTO txns VALUES
+    ('alice', 100, 'food', '2024-01-05 10:00:00'),
+    ('alice', 200, 'food', '2024-01-06 10:00:00'),
+    ('bob',    50, 'toys', '2024-01-05 09:00:00');
+
+statement ok
+CREATE TABLE categories (category VARCHAR, weight INTEGER);
+
+statement ok
+INSERT INTO categories VALUES ('food', 2), ('toys', 3);
+
+# ============================================================
+# JOIN + qualified TIMESTAMP (t.ts). The window predicate is injected on the qualified column so it resolves
+# unambiguously against the aliased event table.
+# ============================================================
+statement ok
+CREATE FEATURE weighted_spend ENTITY users TIMESTAMP t.ts WINDOW 30 DAYS RETAIN 1 AS (
+    SELECT t.user_id, SUM(t.amount * c.weight) AS weighted
+    FROM txns t JOIN categories c ON t.category = c.category
+    GROUP BY t.user_id);
+
+query I
+REFRESH FEATURE weighted_spend AT '2024-01-10 00:00:00';
+----
+3
+
+# alice = 100*2 + 200*2 = 600, bob = 50*3 = 150, carol has no events -> SUM defaults to 0
+query II rowsort
+SELECT user_id, weighted FROM weighted_spend;
+----
+alice	600
+bob	150
+carol	0
+
+# ============================================================
+# WHERE filter inside the feature query (ANDs with the injected window predicate)
+# ============================================================
+statement ok
+CREATE FEATURE big_spend ENTITY users TIMESTAMP ts WINDOW 30 DAYS RETAIN 1 AS (
+    SELECT user_id, SUM(amount) AS big_total FROM txns WHERE amount >= 100 GROUP BY user_id);
+
+statement ok
+REFRESH FEATURE big_spend AT '2024-01-10 00:00:00';
+
+# Only alice's two txns clear the filter; bob's single 50 is excluded -> 0
+query II rowsort
+SELECT user_id, big_total FROM big_spend;
+----
+alice	300
+bob	0
+carol	0
+
+# ============================================================
+# CTE feeding the aggregate. The injected window predicate resolves against the CTE's projected ts.
+# ============================================================
+statement ok
+CREATE FEATURE cte_feature ENTITY users TIMESTAMP ts WINDOW 30 DAYS RETAIN 1 AS (
+    WITH recent AS (SELECT user_id, amount, ts FROM txns)
+    SELECT user_id, COUNT(*) AS n FROM recent GROUP BY user_id);
+
+statement ok
+REFRESH FEATURE cte_feature AT '2024-01-10 00:00:00';
+
+query II rowsort
+SELECT user_id, n FROM cte_feature;
+----
+alice	2
+bob	1
+carol	0
+
+# ============================================================
+# Window function inside a subquery. The outer aggregate maps back to the entity; MAX is not SUM/COUNT so
+# an entity with no events keeps NULL.
+# ============================================================
+statement ok
+CREATE FEATURE running_peak ENTITY users TIMESTAMP ts WINDOW 30 DAYS RETAIN 1 AS (
+    SELECT user_id, MAX(running) AS peak FROM (
+        SELECT user_id, ts, SUM(amount) OVER (PARTITION BY user_id ORDER BY ts) AS running FROM txns) sub
+    GROUP BY user_id);
+
+statement ok
+REFRESH FEATURE running_peak AT '2024-01-10 00:00:00';
+
+# alice running: 100 then 300 -> peak 300; bob: 50; carol: no events -> NULL
+query II rowsort
+SELECT user_id, peak FROM running_peak;
+----
+alice	300
+bob	50
+carol	NULL
+
+# ============================================================
+# Metadata: a multi-table query has no single source table, so source_table is empty; a single-table query
+# still surfaces its base table for display.
+# ============================================================
+query II
+SELECT source_table, timestamp_column FROM duckdb_features() WHERE feature_name = 'weighted_spend';
+----
+(empty)	ts
+
+query I
+SELECT source_table FROM duckdb_features() WHERE feature_name = 'big_spend';
+----
+txns
+
+# ============================================================
+# Cleanup
+# ============================================================
+statement ok
+DROP FEATURE weighted_spend;
+
+statement ok
+DROP FEATURE big_spend;
+
+statement ok
+DROP FEATURE cte_feature;
+
+statement ok
+DROP FEATURE running_peak;

@@ -39,6 +39,8 @@ struct FeatureSnapshotParameters {
 	vector<string> entity_key_columns;
 	//! The event timestamp column used for the window filter.
 	string timestamp_column;
+	//! Optional table qualifier for the timestamp column (empty if the reference is unqualified).
+	string timestamp_table;
 	//! The lookback window interval.
 	interval_t window_interval;
 	//! The snapshot timestamp: events in [feature_ts - window, feature_ts) are aggregated.

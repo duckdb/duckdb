@@ -6,10 +6,13 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -157,13 +160,85 @@ static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const
 	return result;
 }
 
+static bool IsPositiveInterval(const interval_t &interval) {
+	return interval.months > 0 || interval.days > 0 || interval.micros > 0;
+}
+
+//! The feature's value columns: every column of its denormalized store table except the entity keys and the
+//! two internal bookkeeping columns. Read from the store schema (the feature is refreshed, so it exists).
+static vector<string> FeatureValueColumns(ClientContext &context, const FeatureCatalogEntry &feat) {
+	auto store_name = FeatureStoreTableName(feat.name);
+	optional_ptr<CatalogEntry> entry;
+	for (auto &schema : Catalog::GetAllSchemas(context)) {
+		entry = schema.get().GetEntry(schema.get().GetCatalogTransaction(context), CatalogType::TABLE_ENTRY, store_name);
+		if (entry) {
+			break;
+		}
+	}
+	if (!entry) {
+		throw CatalogException("Feature store table \"%s\" does not exist", store_name);
+	}
+	auto &store = entry->Cast<TableCatalogEntry>();
+	vector<string> result;
+	for (auto &col : store.GetColumns().Logical()) {
+		auto &name = col.Name();
+		if (ContainsColumn(feat.entity_columns, name) || name == FEATURE_VERSION_COLUMN ||
+		    name == FEATURE_TIMESTAMP_COLUMN) {
+			continue;
+		}
+		result.push_back(name);
+	}
+	return result;
+}
+
+//! Append the projected feature columns for one served feature. With no TTL configured this is a single
+//! star (excluding the entity keys and internal columns). With a TTL, each value column is wrapped so that a
+//! snapshot older than the TTL relative to the request timestamp resolves to NULL:
+//!   CASE WHEN f.__feature_timestamp >= spine.<asof> - INTERVAL <ttl> THEN f.<col> END AS <col>
+//! The ASOF join already picks the freshest snapshot at/before the request time, so testing that single
+//! matched timestamp is sufficient.
+static void AddFeatureProjections(vector<unique_ptr<ParsedExpression>> &select_list, ClientContext &context,
+                                  const FeatureCatalogEntry &feat, const string &feature_alias,
+                                  const string &spine_ts) {
+	if (!IsPositiveInterval(feat.watermark_interval)) {
+		select_list.push_back(FeatureStar(feature_alias, feat.entity_columns));
+		return;
+	}
+	for (auto &value_column : FeatureValueColumns(context, feat)) {
+		// spine.<asof> - INTERVAL <ttl>
+		vector<unique_ptr<ParsedExpression>> minus_children;
+		minus_children.push_back(ColumnRef("spine", spine_ts));
+		minus_children.push_back(make_uniq<ConstantExpression>(Value::INTERVAL(feat.watermark_interval)));
+		auto stale_threshold =
+		    make_uniq<FunctionExpression>("-", std::move(minus_children), nullptr, nullptr, false, true);
+
+		auto fresh = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+		                                             ColumnRef(feature_alias, FEATURE_TIMESTAMP_COLUMN),
+		                                             std::move(stale_threshold));
+
+		auto case_expr = make_uniq<CaseExpression>();
+		CaseCheck check;
+		check.when_expr = std::move(fresh);
+		check.then_expr = ColumnRef(feature_alias, value_column);
+		case_expr->case_checks.push_back(std::move(check));
+		case_expr->else_expr = make_uniq<ConstantExpression>(Value());
+		case_expr->SetAlias(value_column);
+		select_list.push_back(std::move(case_expr));
+	}
+}
+
+//! The spine column the ASOF join and the TTL freshness test compare against: the request timestamp.
+static string ServeSpineTimestamp(const FeatureCatalogEntry &feat, const string &as_of_override) {
+	return as_of_override.empty() ? feat.timestamp_column : as_of_override;
+}
+
 static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatalogEntry &feat,
                             const string &feature_alias, const vector<FeatureServeEntityMapping> &feature_mappings,
                             const string &spine_entity_override, const string &as_of_override) {
 	// Serve from the denormalized store table via an ASOF join: every retained version is present, and the
 	// join resolves each spine row to the entity's latest snapshot at or before the spine's as-of time.
 	auto store_table = FeatureStoreTableName(feat.name);
-	auto spine_ts = as_of_override.empty() ? feat.timestamp_column : as_of_override;
+	auto spine_ts = ServeSpineTimestamp(feat, as_of_override);
 	auto entity_mappings = ResolveEntityMappings(feat, feature_mappings, spine_entity_override);
 
 	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
@@ -197,8 +272,9 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 
 		auto select = make_uniq<SelectNode>();
 		select->select_list.push_back(make_uniq<StarExpression>("spine"));
-		select->select_list.push_back(FeatureStar("f", feat.entity_columns));
 		select->from_table = BaseTable(spine_table, "spine");
+		AddFeatureProjections(select->select_list, context, feat, "f",
+		                      ServeSpineTimestamp(feat, spine_asof_column));
 		AttachServeJoin(select->from_table, feat, "f", request.entity_mappings, spine_entity_override,
 		                spine_asof_column);
 
@@ -216,7 +292,7 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		auto &feat = ResolveServableFeature(context, request.feature_name);
 		auto alias = "f" + duckdb::to_string(i);
 
-		select->select_list.push_back(FeatureStar(alias, feat.entity_columns));
+		AddFeatureProjections(select->select_list, context, feat, alias, ServeSpineTimestamp(feat, spine_asof_column));
 		AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override,
 		                spine_asof_column);
 	}

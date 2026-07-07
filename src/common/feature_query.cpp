@@ -77,18 +77,25 @@ static bool FeatureIsEntityColumn(const ParsedExpression &expr, const vector<str
 	return FeatureColumnListContains(entity_columns, col_ref.GetColumnName());
 }
 
+//! A reference to the feature timestamp column, qualified with its table alias when one was declared
+//! (TIMESTAMP tbl.col), so the predicate resolves unambiguously in an arbitrary FROM (joins, CTEs).
+static unique_ptr<ColumnRefExpression> FeatureTimestampRef(const FeatureSnapshotParameters &parameters) {
+	if (parameters.timestamp_table.empty()) {
+		return FeatureColumnRef(parameters.timestamp_column);
+	}
+	return FeatureColumnRef(parameters.timestamp_table, parameters.timestamp_column);
+}
+
 //! ts_col >= feature_ts - window  AND  ts_col < feature_ts
 static unique_ptr<ParsedExpression> FeatureWindowFilter(const FeatureSnapshotParameters &parameters) {
 	auto ts_value = Value::TIMESTAMP(parameters.feature_ts);
 	auto window_start =
 	    FeatureBinaryFunction("-", make_uniq<ConstantExpression>(ts_value),
 	                          make_uniq<ConstantExpression>(Value::INTERVAL(parameters.window_interval)));
-	auto lower =
-	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-	                                    FeatureColumnRef(parameters.timestamp_column), std::move(window_start));
-	auto upper =
-	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, FeatureColumnRef(parameters.timestamp_column),
-	                                    make_uniq<ConstantExpression>(ts_value));
+	auto lower = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+	                                             FeatureTimestampRef(parameters), std::move(window_start));
+	auto upper = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, FeatureTimestampRef(parameters),
+	                                             make_uniq<ConstantExpression>(ts_value));
 	return FeatureConjoin(std::move(lower), std::move(upper));
 }
 

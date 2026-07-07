@@ -24,6 +24,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->entity_columns = entity_columns;
 	result->entity_key_columns = entity_key_columns;
 	result->timestamp_column = timestamp_column;
+	result->timestamp_table = timestamp_table;
 	result->window_interval = window_interval;
 	result->watermark_interval = watermark_interval;
 	result->refresh_mode = refresh_mode;
@@ -50,10 +51,14 @@ string CreateFeatureInfo::ToString() const {
 	}
 	result += feature_name;
 	result += " ENTITY " + entity_table;
-	result += " TIMESTAMP " + timestamp_column;
+	result += " TIMESTAMP ";
+	if (!timestamp_table.empty()) {
+		result += timestamp_table + ".";
+	}
+	result += timestamp_column;
 	result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
 	if (!IntervalEquals(watermark_interval, interval_t {0, 0, 0})) {
-		result += " WATERMARK INTERVAL '" + Interval::ToString(watermark_interval) + "'";
+		result += " TTL INTERVAL '" + Interval::ToString(watermark_interval) + "'";
 	}
 	if (has_schedule) {
 		result += " EVERY INTERVAL '" + Interval::ToString(schedule_interval) + "'";

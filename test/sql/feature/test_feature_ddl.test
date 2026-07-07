@@ -42,29 +42,36 @@ syntax error
 # Binder validation
 # ============================================================
 
-# Non-existent source table
+# Non-existent source table (the arbitrary feature query is bound; a missing FROM table is reported)
 statement error
 CREATE FEATURE bad ENTITY cards TIMESTAMP col2 WINDOW 7 DAYS RETAIN 1 AS (SELECT 1 FROM nonexistent);
 ----
 Table with name nonexistent does not exist
 
-# Non-existent entity column
-statement error
-CREATE FEATURE bad ENTITY cards TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT bad_col, SUM(amount) FROM transactions GROUP BY bad_col);
+# A query that does not project the entity key column is a GLOBAL feature (a single aggregate row), so
+# entity_columns is empty. Keyed features project the entity table's primary key.
+statement ok
+CREATE FEATURE global_cards ENTITY cards TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT SUM(amount) AS total FROM transactions);
+
+query I
+SELECT entity_columns FROM duckdb_features() WHERE feature_name = 'global_cards';
 ----
-Entity column "bad_col" does not exist
+(empty)
+
+statement ok
+DROP FEATURE global_cards;
 
 # Non-existent timestamp column
 statement error
 CREATE FEATURE bad ENTITY cards TIMESTAMP bad_col WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 ----
-Timestamp column "bad_col" does not exist
+TIMESTAMP column "bad_col"
 
-# Timestamp column with wrong type (VARCHAR)
+# Timestamp column with a non-temporal type (DECIMAL)
 statement error
-CREATE FEATURE bad ENTITY events TIMESTAMP name WINDOW 7 DAYS RETAIN 1 AS (SELECT id, COUNT(*) FROM events GROUP BY id);
+CREATE FEATURE bad ENTITY cards TIMESTAMP amount WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 ----
-must be a temporal type
+temporal
 
 # Non-existent entity table
 statement error
@@ -72,11 +79,11 @@ CREATE FEATURE bad ENTITY nonexistent TIMESTAMP event_time WINDOW 7 DAYS RETAIN 
 ----
 <REGEX>:.*nonexistent does not exist.*
 
-# Entity columns without a FOREIGN KEY into the entity table
+# The entity table must have a PRIMARY KEY (the feature query's entity columns map onto it)
 statement error
-CREATE FEATURE bad ENTITY cards TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT uid, SUM(amount) FROM no_fk GROUP BY uid);
+CREATE FEATURE bad ENTITY events TIMESTAMP name WINDOW 7 DAYS RETAIN 1 AS (SELECT id, COUNT(*) FROM events GROUP BY id);
 ----
-<REGEX>:.*FOREIGN KEY.*
+must have a PRIMARY KEY
 
 # ============================================================
 # CREATE FEATURE basic
@@ -131,18 +138,18 @@ SELECT sql FROM duckdb_features() WHERE feature_name = 'explicit_hours';
 <REGEX>:.*WINDOW INTERVAL '24:00:00'.*
 
 query II
-SELECT window_interval, watermark_interval FROM duckdb_features() WHERE feature_name = 'daily_txn';
+SELECT window_interval, ttl_interval FROM duckdb_features() WHERE feature_name = 'daily_txn';
 ----
 7 days	00:00:00
 
-# WATERMARK accepts explicit interval shorthand independent of WINDOW
+# TTL accepts explicit interval shorthand independent of WINDOW
 statement ok
-CREATE FEATURE watermark_minutes ENTITY cards TIMESTAMP event_time  WINDOW 24 HOURS WATERMARK 30 MINUTES RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE ttl_minutes ENTITY cards TIMESTAMP event_time  WINDOW 24 HOURS TTL 30 MINUTES RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
-SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'watermark_minutes';
+SELECT ttl_interval, sql FROM duckdb_features() WHERE feature_name = 'ttl_minutes';
 ----
-00:30:00	CREATE FEATURE watermark_minutes ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '24:00:00' WATERMARK INTERVAL '00:30:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+00:30:00	CREATE FEATURE ttl_minutes ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '24:00:00' TTL INTERVAL '00:30:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # WINDOW also accepts INTERVAL string syntax
 statement ok
@@ -153,14 +160,14 @@ SELECT window_interval FROM duckdb_features() WHERE feature_name = 'interval_min
 ----
 01:30:00
 
-# WATERMARK also accepts INTERVAL string syntax
+# TTL also accepts INTERVAL string syntax
 statement ok
-CREATE FEATURE watermark_interval_string ENTITY cards TIMESTAMP event_time  WINDOW 7 DAYS WATERMARK INTERVAL '2 hours' RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE ttl_interval_string ENTITY cards TIMESTAMP event_time  WINDOW 7 DAYS TTL INTERVAL '2 hours' RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
-SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'watermark_interval_string';
+SELECT ttl_interval, sql FROM duckdb_features() WHERE feature_name = 'ttl_interval_string';
 ----
-02:00:00	CREATE FEATURE watermark_interval_string ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '7 days' WATERMARK INTERVAL '02:00:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+02:00:00	CREATE FEATURE ttl_interval_string ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '7 days' TTL INTERVAL '02:00:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 query I
 SELECT COUNT(*) FROM duckdb_features();
@@ -174,10 +181,10 @@ statement ok
 DROP FEATURE interval_minutes;
 
 statement ok
-DROP FEATURE watermark_minutes;
+DROP FEATURE ttl_minutes;
 
 statement ok
-DROP FEATURE watermark_interval_string;
+DROP FEATURE ttl_interval_string;
 
 # ============================================================
 # Default parameter values
@@ -230,7 +237,7 @@ statement ok
 CREATE FEATURE all_defaults ENTITY cards TIMESTAMP event_time AS (SELECT card_no, COUNT(*) AS cnt FROM transactions GROUP BY card_no);
 
 query IIII
-SELECT feature_name, window_interval, watermark_interval, retain_versions FROM duckdb_features() WHERE feature_name = 'all_defaults';
+SELECT feature_name, window_interval, ttl_interval, retain_versions FROM duckdb_features() WHERE feature_name = 'all_defaults';
 ----
 all_defaults	1 day	00:00:00	1
 

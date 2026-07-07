@@ -47,10 +47,12 @@ CREATE FEATURE user_activity ENTITY users TIMESTAMP EventTime
     AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region FROM hits GROUP BY UserID);
 
 -- Same shape but RETAIN 5, used by the interleaved refresh/serve benchmark to exercise multi-version
--- time-travel serving. WATERMARK is accepted but inert.
+-- time-travel serving. TTL bounds serving staleness (a matched snapshot older than the request time by
+-- more than the TTL serves as NULL). It is set wide enough that the sampled spine stays within tolerance,
+-- so SERVE returns real values while still exercising the TTL projection path.
 CREATE FEATURE user_activity_retain5 ENTITY users TIMESTAMP EventTime
     WINDOW 3650 DAYS
-    WATERMARK 1 HOUR
+    TTL 30 DAYS
     RETAIN 5
     AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
 

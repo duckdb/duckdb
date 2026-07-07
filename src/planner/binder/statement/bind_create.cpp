@@ -59,94 +59,57 @@
 
 namespace duckdb {
 
-static string GetFeatureSourceTable(const SelectNode &select_node) {
-	if (!select_node.from_table) {
-		throw BinderException("CREATE FEATURE query must specify a FROM clause");
-	}
-	if (select_node.from_table->type != TableReferenceType::BASE_TABLE) {
-		throw BinderException("CREATE FEATURE query must read from exactly one base table");
+//! Best-effort "source table" shown in feature metadata. A feature query may now be an arbitrary SELECT
+//! (joins, CTEs, subqueries), so there is no single authoritative source table. When the query reads from
+//! exactly one unqualified base table we surface that name for display; otherwise we return "".
+static string GetFeatureDisplaySourceTable(const SelectNode &select_node) {
+	if (!select_node.from_table || select_node.from_table->type != TableReferenceType::BASE_TABLE) {
+		return string();
 	}
 	auto &base_table = select_node.from_table->Cast<BaseTableRef>();
-	if (!base_table.alias.empty()) {
-		throw BinderException("CREATE FEATURE source table aliases are not supported");
-	}
 	if (base_table.at_clause) {
-		throw BinderException("CREATE FEATURE source table cannot use an AT clause");
-	}
-	if (!base_table.catalog_name.empty() && base_table.catalog_name != INVALID_CATALOG) {
-		throw BinderException("CREATE FEATURE source table must be unqualified");
-	}
-	if (!base_table.schema_name.empty() && base_table.schema_name != INVALID_SCHEMA) {
-		throw BinderException("CREATE FEATURE source table must be unqualified");
+		return string();
 	}
 	return base_table.table_name;
 }
 
-static vector<string> GetFeatureEntityColumns(const SelectNode &select_node, const TableCatalogEntry &table_entry,
-                                              const string &source_table) {
-	vector<string> result;
-	for (auto &group_expr : select_node.groups.group_expressions) {
-		if (group_expr->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
-			throw BinderException("CREATE FEATURE GROUP BY keys must be column references");
+//! The entity mapping is derived from the entity table's PRIMARY KEY (no source-table foreign key is
+//! required, since the feature query may join arbitrary relations). The feature query must project columns
+//! named after these key columns; REFRESH's snapshot LEFT JOINs the entity table onto the aggregate on
+//! them. Throws if the entity table has no primary key.
+static vector<string> GetEntityPrimaryKeyColumns(const TableCatalogEntry &entity_entry, const string &entity_table) {
+	for (auto &constraint : entity_entry.GetConstraints()) {
+		if (constraint->type != ConstraintType::UNIQUE) {
+			continue;
 		}
-		auto &col_ref = group_expr->Cast<ColumnRefExpression>();
-		auto column_name = col_ref.GetColumnName();
-		if (FeatureColumnListContains(result, column_name)) {
-			throw BinderException("Duplicate feature entity column \"%s\"", column_name);
+		auto &unique = constraint->Cast<UniqueConstraint>();
+		if (!unique.IsPrimaryKey()) {
+			continue;
 		}
-		if (!table_entry.ColumnExists(column_name)) {
-			throw BinderException("Entity column \"%s\" does not exist in table \"%s\"", column_name, source_table);
+		if (unique.HasIndex()) {
+			return {entity_entry.GetColumns().GetColumn(unique.GetIndex()).Name()};
 		}
-		result.push_back(column_name);
+		return unique.GetColumnNames();
 	}
-	return result;
+	throw BinderException("CREATE FEATURE entity table \"%s\" must have a PRIMARY KEY; the feature query's entity "
+	                      "columns map to it",
+	                      entity_table);
 }
 
-//! The feature's entity columns in the source (event) table must form a FOREIGN KEY that references the
-//! declared entity table. This guarantees every entity value the feature aggregates over maps to a row in
-//! the entity table that REFRESH will LEFT JOIN against. Returns the entity-table key columns the foreign
-//! key references, aligned to entity_columns (used to build the snapshot join).
-static vector<string> ValidateFeatureEntityForeignKey(const TableCatalogEntry &source_entry, const string &source_table,
-                                                      const string &entity_table,
-                                                      const vector<string> &entity_columns) {
-	for (auto &constraint : source_entry.GetConstraints()) {
-		if (constraint->type != ConstraintType::FOREIGN_KEY) {
-			continue;
-		}
-		auto &fk = constraint->Cast<ForeignKeyConstraint>();
-		// FK_TYPE_FOREIGN_KEY_TABLE means the source table is the child (foreign key) side of the relation.
-		if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			continue;
-		}
-		if (!StringUtil::CIEquals(fk.info.table, entity_table)) {
-			continue;
-		}
-		// Map each entity column (fk side) to the entity-table column it references (pk side). fk_columns
-		// and pk_columns are parallel arrays, so a matched index gives the referenced key column.
-		vector<string> key_columns;
-		bool all_covered = true;
-		for (auto &entity_column : entity_columns) {
-			idx_t match = DConstants::INVALID_INDEX;
-			for (idx_t i = 0; i < fk.fk_columns.size(); i++) {
-				if (StringUtil::CIEquals(fk.fk_columns[i], entity_column)) {
-					match = i;
-					break;
-				}
-			}
-			if (match == DConstants::INVALID_INDEX) {
-				all_covered = false;
-				break;
-			}
-			key_columns.push_back(match < fk.pk_columns.size() ? fk.pk_columns[match] : entity_column);
-		}
-		if (all_covered) {
-			return key_columns;
-		}
-	}
-	throw BinderException(
-	    "CREATE FEATURE requires a FOREIGN KEY on \"%s\" (%s) referencing the entity table \"%s\"; the entity "
-	    "columns must depend on the entity table",
-	    source_table, StringUtil::Join(entity_columns, ", "), entity_table);
+//! Bind the raw feature query once to obtain its output column names. This also surfaces clean errors for a
+//! missing FROM table or unknown column before the snapshot is assembled.
+static vector<string> BindFeatureQueryOutputNames(ClientContext &context, Binder &parent,
+                                                  const SelectStatement &query) {
+	auto binder = Binder::CreateBinder(context, &parent);
+	auto query_copy = query.Copy();
+	// Use the public SQLStatement overload; the SelectStatement overload is private to Binder.
+	auto bound = binder->Bind(static_cast<SQLStatement &>(*query_copy));
+	return bound.names;
+}
+
+//! Display form of the (possibly-qualified) feature timestamp reference, e.g. "t.ts" or "ts".
+static string FeatureTimestampDisplay(const CreateFeatureInfo &info) {
+	return info.timestamp_table.empty() ? info.timestamp_column : info.timestamp_table + "." + info.timestamp_column;
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
@@ -860,40 +823,38 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &feature_info = stmt.info->Cast<CreateFeatureInfo>();
 		auto &schema = BindCreateSchema(*stmt.info);
 		auto &select_node = feature_info.query->node->Cast<SelectNode>();
-		feature_info.source_table = GetFeatureSourceTable(select_node);
 
-		// Validate source table exists
-		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, feature_info.catalog, feature_info.schema,
-		                                                         feature_info.source_table);
+		// The feature query may be an arbitrary SELECT (joins, filters, CTEs, window functions); there is no
+		// single authoritative source table. Keep a best-effort name for metadata display only.
+		feature_info.source_table = GetFeatureDisplaySourceTable(select_node);
 
-		// Validate timestamp column exists
-		if (!table_entry.ColumnExists(feature_info.timestamp_column)) {
-			throw BinderException("Timestamp column \"%s\" does not exist in table \"%s\"",
-			                      feature_info.timestamp_column, feature_info.source_table);
-		}
-
-		// Validate timestamp column has a temporal type
-		auto &ts_col = table_entry.GetColumn(feature_info.timestamp_column);
-		auto &ts_type = ts_col.Type();
-		if (ts_type.id() != LogicalTypeId::TIMESTAMP && ts_type.id() != LogicalTypeId::TIMESTAMP_TZ &&
-		    ts_type.id() != LogicalTypeId::DATE && ts_type.id() != LogicalTypeId::TIMESTAMP_NS &&
-		    ts_type.id() != LogicalTypeId::TIMESTAMP_MS && ts_type.id() != LogicalTypeId::TIMESTAMP_SEC) {
-			throw BinderException("Timestamp column \"%s\" must be a temporal type (TIMESTAMP, DATE), got %s",
-			                      feature_info.timestamp_column, ts_type.ToString());
-		}
-
-		// Register dependency on the source table so DROP TABLE blocks without CASCADE
-		feature_info.dependencies.AddDependency(table_entry);
-
-		feature_info.entity_columns = GetFeatureEntityColumns(select_node, table_entry, feature_info.source_table);
-
-		// Validate the declared entity table exists and that the entity columns form a foreign key into it.
+		// The entity table must exist and expose a PRIMARY KEY. A keyed feature maps back to the entity via
+		// those key columns (projected under the same names), replacing the old source-table foreign key.
 		auto &entity_table_entry = Catalog::GetEntry<TableCatalogEntry>(context, feature_info.catalog,
 		                                                                feature_info.schema, feature_info.entity_table);
-		feature_info.entity_key_columns = ValidateFeatureEntityForeignKey(
-		    table_entry, feature_info.source_table, feature_info.entity_table, feature_info.entity_columns);
-		// Register dependency on the entity table so DROP TABLE blocks without CASCADE
-		feature_info.dependencies.AddDependency(entity_table_entry);
+		auto pk_columns = GetEntityPrimaryKeyColumns(entity_table_entry, feature_info.entity_table);
+
+		// Bind the raw query (surfacing clean errors for a missing table / unknown column) and classify the
+		// feature by whether it projects the entity keys: all of them -> keyed (one snapshot row per entity);
+		// none -> global (a single aggregate row); a partial projection is ambiguous and rejected.
+		auto query_names = BindFeatureQueryOutputNames(context, *this, *feature_info.query);
+		idx_t projected_keys = 0;
+		for (auto &pk_column : pk_columns) {
+			if (FeatureColumnListContains(query_names, pk_column)) {
+				projected_keys++;
+			}
+		}
+		if (projected_keys == pk_columns.size()) {
+			feature_info.entity_key_columns = pk_columns;
+			feature_info.entity_columns = pk_columns;
+		} else if (projected_keys == 0) {
+			feature_info.entity_key_columns.clear();
+			feature_info.entity_columns.clear();
+		} else {
+			throw BinderException("CREATE FEATURE query must project either all entity key column(s) (%s) of entity "
+			                      "table \"%s\" (a keyed feature) or none (a global feature)",
+			                      StringUtil::Join(pk_columns, ", "), feature_info.entity_table);
+		}
 
 		FeatureSnapshotParameters snapshot_parameters;
 		snapshot_parameters.entity_table = feature_info.entity_table;
@@ -901,12 +862,37 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		snapshot_parameters.entity_columns = feature_info.entity_columns;
 		snapshot_parameters.entity_key_columns = feature_info.entity_key_columns;
 		snapshot_parameters.timestamp_column = feature_info.timestamp_column;
+		snapshot_parameters.timestamp_table = feature_info.timestamp_table;
 		snapshot_parameters.window_interval = feature_info.window_interval;
 		// The concrete refresh timestamp does not affect the schema; use "now" as a placeholder here.
 		snapshot_parameters.feature_ts = Timestamp::GetCurrentTimestamp();
 		auto snapshot_select = BuildFeatureSnapshotQuery(select_node, snapshot_parameters);
+
+		// Bind the snapshot. The injected window predicate forces the TIMESTAMP column to resolve to a temporal
+		// column, and a catalog lookup callback records every referenced table as a dependency so DROP TABLE on
+		// any of them blocks without CASCADE. Wrap bind failures (which, after the checks above, point at the
+		// TIMESTAMP column) in a targeted message.
 		auto query_binder = Binder::CreateBinder(context, this);
-		auto query_obj = query_binder->Bind(*snapshot_select);
+		auto &feature_catalog = schema.ParentCatalog();
+		auto &feature_dependencies = feature_info.dependencies;
+		query_binder->SetCatalogLookupCallback([&feature_dependencies, &feature_catalog](CatalogEntry &entry) {
+			if (&feature_catalog != &entry.ParentCatalog()) {
+				// Don't register cross-catalog dependencies (e.g. built-in functions).
+				return;
+			}
+			feature_dependencies.AddDependency(entry);
+		});
+		BoundStatement query_obj;
+		try {
+			query_obj = query_binder->Bind(*snapshot_select);
+		} catch (const std::exception &ex) {
+			ErrorData error(ex);
+			throw BinderException("CREATE FEATURE could not bind its query — ensure the TIMESTAMP column \"%s\" "
+			                      "resolves to a temporal column (TIMESTAMP, DATE) in the feature query: %s",
+			                      FeatureTimestampDisplay(feature_info), error.RawMessage());
+		}
+		// The snapshot references the entity table via its LEFT JOIN; ensure it is recorded as a dependency.
+		feature_info.dependencies.AddDependency(entity_table_entry);
 
 		// Store result schema in feature info as metadata. CREATE FEATURE registers metadata only; it does
 		// not materialize a version table (and thus takes no child plan) — the first REFRESH FEATURE builds

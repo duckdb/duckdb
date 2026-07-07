@@ -461,6 +461,11 @@
         "id": 216,
         "name": "entity_key_columns",
         "type": "vector<string>"
+      },
+      {
+        "id": 217,
+        "name": "timestamp_table",
+        "type": "string"
       }
     ]
   }

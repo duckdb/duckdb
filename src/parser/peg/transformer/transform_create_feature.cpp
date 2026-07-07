@@ -114,7 +114,7 @@ static interval_t ParseFeatureScheduleInterval(ParseResult &parse_result) {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
 	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral
-	//                      'TIMESTAMP' IdentifierOrStringLiteral FeatureWindowClause? FeatureWatermarkClause?
+	//                      'TIMESTAMP' QualifiedName FeatureWindowClause? FeatureTTLClause?
 	//                      FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
@@ -123,8 +123,14 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2)).name;
 	// index 3: 'ENTITY' keyword
 	auto entity_table = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(4)).name;
-	// index 5: 'TIMESTAMP' keyword
-	auto timestamp_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(6)).name;
+	// index 5: 'TIMESTAMP' keyword. The operand is a (possibly-qualified) column reference: an unqualified
+	// column keeps schema == INVALID_SCHEMA, while "tbl.col" carries the table qualifier in the schema slot.
+	auto timestamp_ref = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(6));
+	auto timestamp_column = timestamp_ref.name;
+	string timestamp_table;
+	if (timestamp_ref.schema != INVALID_SCHEMA) {
+		timestamp_table = timestamp_ref.schema;
+	}
 	// index 7: FeatureWindowClause? (default: 1 day)
 	interval_t window_interval {0, 1, 0};
 	auto &window_opt = list_pr.Child<OptionalParseResult>(7);
@@ -132,12 +138,13 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
 		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW");
 	}
-	// index 8: FeatureWatermarkClause? (default: zero interval)
+	// index 8: FeatureTTLClause? (default: zero interval = no staleness bound). Stored in the
+	// watermark_interval field, which now carries the TTL / serving staleness tolerance.
 	interval_t watermark_interval = ZERO_INTERVAL;
-	auto &watermark_opt = list_pr.Child<OptionalParseResult>(8);
-	if (watermark_opt.HasResult()) {
-		auto &clause = watermark_opt.GetResult().Cast<ListParseResult>();
-		watermark_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WATERMARK");
+	auto &ttl_opt = list_pr.Child<OptionalParseResult>(8);
+	if (ttl_opt.HasResult()) {
+		auto &clause = ttl_opt.GetResult().Cast<ListParseResult>();
+		watermark_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "TTL");
 	}
 	// index 9: FeatureScheduleClause? (default: no schedule)
 	bool has_schedule = false;
@@ -164,6 +171,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->feature_name = feature_name;
 	info->entity_table = entity_table;
 	info->timestamp_column = timestamp_column;
+	info->timestamp_table = timestamp_table;
 	info->window_interval = window_interval;
 	info->watermark_interval = watermark_interval;
 	info->retain_versions = retain_versions;

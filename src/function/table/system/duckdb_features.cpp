@@ -66,7 +66,9 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("window_interval");
 	return_types.emplace_back(LogicalType::INTERVAL);
 
-	names.emplace_back("watermark_interval");
+	// The staleness bound (TTL): features matched more than this before the request time serve as NULL.
+	// Backed by the internal watermark_interval field.
+	names.emplace_back("ttl_interval");
 	return_types.emplace_back(LogicalType::INTERVAL);
 
 	names.emplace_back("entity_table");

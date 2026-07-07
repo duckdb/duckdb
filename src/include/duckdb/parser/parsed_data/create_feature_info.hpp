@@ -31,9 +31,13 @@ struct CreateFeatureInfo : public CreateInfo {
 	vector<string> entity_key_columns;
 	//! Timestamp column (temporal ordering)
 	string timestamp_column;
+	//! Optional table qualifier for the timestamp column (from "TIMESTAMP tbl.col"); empty if unqualified
+	string timestamp_table;
 	//! Lookback window interval
 	interval_t window_interval;
-	//! Incremental refresh watermark interval
+	//! TTL / serving staleness bound (declared via the TTL clause). At SERVE time, if the entity's matched
+	//! snapshot is older than this relative to the request timestamp, its feature columns resolve to NULL.
+	//! A zero interval disables the bound. Kept as watermark_interval internally for storage compatibility.
 	interval_t watermark_interval;
 	//! Refresh mode
 	FeatureRefreshMode refresh_mode;

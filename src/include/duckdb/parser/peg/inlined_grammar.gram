@@ -1095,10 +1095,10 @@ CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
 AnalyzeStatement <- 'ANALYZE' AnalyzeVerbose? AnalyzeTarget?
 AnalyzeTarget <- BaseTableName NameList?
 AnalyzeVerbose <- 'VERBOSE'
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureWindowClause? FeatureWatermarkClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' QualifiedName FeatureWindowClause? FeatureTTLClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 
 FeatureWindowClause <- 'WINDOW' FeatureInterval
-FeatureWatermarkClause <- 'WATERMARK' FeatureInterval
+FeatureTTLClause <- 'TTL' FeatureInterval
 FeatureScheduleClause <- 'EVERY' FeatureInterval
 FeatureRetainClause <- 'RETAIN' NumberLiteral
 

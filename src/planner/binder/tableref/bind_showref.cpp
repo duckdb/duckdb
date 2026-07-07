@@ -202,7 +202,7 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 		auto feature_name = ref.table_name.substr(strlen("__describe_feature:"));
 		sql = StringUtil::Format("SELECT feature_name, entity_table, source_table, entity_columns, timestamp_column, "
 		                         "retain_versions, current_version, "
-		                         "window_interval, watermark_interval, sql "
+		                         "window_interval, ttl_interval, sql "
 		                         "FROM duckdb_features() WHERE feature_name = %s",
 		                         SQLString(feature_name));
 	} else {

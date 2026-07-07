@@ -23,6 +23,7 @@ static FeatureSnapshotParameters SnapshotParameters(const FeatureCatalogEntry &f
 	parameters.entity_columns = feat.entity_columns;
 	parameters.entity_key_columns = feat.entity_key_columns;
 	parameters.timestamp_column = feat.timestamp_column;
+	parameters.timestamp_table = feat.timestamp_table;
 	parameters.window_interval = feat.window_interval;
 	parameters.feature_ts = feature_ts;
 	return parameters;

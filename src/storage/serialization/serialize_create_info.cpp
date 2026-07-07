@@ -115,6 +115,7 @@ void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<interval_t>(214, "watermark_interval", watermark_interval, interval_t());
 	serializer.WritePropertyWithDefault<string>(215, "entity_table", entity_table);
 	serializer.WritePropertyWithDefault<vector<string>>(216, "entity_key_columns", entity_key_columns);
+	serializer.WritePropertyWithDefault<string>(217, "timestamp_table", timestamp_table);
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
@@ -136,6 +137,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithExplicitDefault<interval_t>(214, "watermark_interval", result->watermark_interval, interval_t());
 	deserializer.ReadPropertyWithDefault<string>(215, "entity_table", result->entity_table);
 	deserializer.ReadPropertyWithDefault<vector<string>>(216, "entity_key_columns", result->entity_key_columns);
+	deserializer.ReadPropertyWithDefault<string>(217, "timestamp_table", result->timestamp_table);
 	result->FinalizeDeserialization();
 	return std::move(result);
 }
