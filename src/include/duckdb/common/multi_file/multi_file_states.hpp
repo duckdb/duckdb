@@ -139,7 +139,7 @@ struct MultiFileReaderData {
 struct MultiFileGlobalState : public GlobalTableFunctionState {
 	explicit MultiFileGlobalState(MultiFileList &file_list_p);
 	explicit MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p);
-	~MultiFileGlobalState();
+	~MultiFileGlobalState() override;
 
 	//! The file list to scan
 	MultiFileList &file_list;
