@@ -31,11 +31,13 @@ tpcds_append_information::tpcds_append_information(duckdb::ClientContext &contex
 		}
 		table_entry = table->Cast<duckdb::DuckTableEntry>();
 		optimistic_writer = duckdb::make_uniq<duckdb::OptimisticDataWriter>(context_p, table_entry->GetStorage());
-		optimistic_collection =
-		    optimistic_writer->CreateCollection(table_entry->GetStorage(), types, partial_manager_type);
-		auto &row_collection = *optimistic_collection->collection;
+		auto collection = optimistic_writer->CreateCollection(table_entry->GetStorage(), types, partial_manager_type);
+		auto &row_collection = *collection->collection;
 		row_collection.InitializeEmpty();
 		row_collection.InitializeAppend(append_state);
+		optimistic_collection_index =
+		    table_entry->GetStorage().CreateOptimisticCollection(context, std::move(collection));
+		optimistic_collection = table_entry->GetStorage().GetOptimisticCollection(context, optimistic_collection_index);
 	}
 	append_types.reserve(types.size());
 	decimal_scales.reserve(types.size());
@@ -83,6 +85,20 @@ tpcds_append_information::tpcds_append_information(duckdb::ClientContext &contex
 	chunk.Initialize(context, types);
 }
 
+tpcds_append_information::~tpcds_append_information() {
+	if (optimistic_writer) {
+		optimistic_writer->Rollback();
+	}
+}
+
+void tpcds_append_information::ResetOptimisticCollection() {
+	D_ASSERT(table_entry);
+	D_ASSERT(optimistic_collection_index.IsValid());
+	table_entry->GetStorage().ResetOptimisticCollection(context, optimistic_collection_index);
+	optimistic_collection_index = duckdb::PhysicalIndex(duckdb::DConstants::INVALID_INDEX);
+	optimistic_collection = nullptr;
+}
+
 append_info *append_info_get(void *info_list, int table_id) {
 	auto &append_vector = *((duckdb::vector<duckdb::unique_ptr<tpcds_append_information>> *)info_list);
 	return (append_info *)append_vector[table_id].get();
@@ -117,7 +133,7 @@ void tpcds_append_information::FlushChunk() {
 		return;
 	}
 	D_ASSERT(active_row == duckdb::DConstants::INVALID_INDEX);
-	chunk.SetCardinality(row);
+	chunk.SetChildCardinality(row);
 	if (appender) {
 		appender->AppendDataChunk(chunk);
 	} else {
@@ -170,7 +186,7 @@ void tpcds_append_information::FlushOptimistic() {
 	auto &row_collection = *optimistic_collection->collection;
 	auto append_count = row_collection.GetTotalRows();
 	if (append_count == 0) {
-		optimistic_collection.reset();
+		ResetOptimisticCollection();
 		optimistic_writer.reset();
 		finalized = false;
 		return;
@@ -188,13 +204,14 @@ void tpcds_append_information::FlushOptimistic() {
 			storage.LocalAppend(local_append_state, table, context, insert_chunk, false);
 		}
 		storage.FinalizeLocalAppend(local_append_state);
+		ResetOptimisticCollection();
 	} else {
 		optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
 		storage.LocalMerge(context, table, *optimistic_collection);
 		auto &storage_writer = storage.GetOptimisticWriter(context);
 		storage_writer.Merge(*optimistic_writer);
+		ResetOptimisticCollection();
 	}
-	optimistic_collection.reset();
 	optimistic_writer.reset();
 	finalized = false;
 }

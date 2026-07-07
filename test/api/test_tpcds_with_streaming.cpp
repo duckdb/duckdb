@@ -170,3 +170,32 @@ TEST_CASE("Test TPC-DS dsdgen parallel output matches sequential output", "[tpcd
 	}
 #endif
 }
+
+TEST_CASE("Test TPC-DS dsdgen rollback after interrupted optimistic write", "[tpcds][.]") {
+#ifdef DUCKDB_NO_THREADS
+	return;
+#else
+	auto db_path = TestCreatePath("tpcds_dsdgen_interrupted_optimistic_write.db");
+	DuckDB db(db_path);
+	Connection con(db);
+	if (!db.ExtensionIsLoaded("tpcds")) {
+		return;
+	}
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
+	REQUIRE_NO_FAIL(con.Query("SET write_buffer_row_group_count=1"));
+
+	auto pending = con.PendingQuery("CALL dsdgen(sf=1, suffix='_interrupted')");
+	auto state = pending->ExecuteTask();
+	REQUIRE(!PendingQueryResult::IsResultReady(state));
+
+	con.Interrupt();
+	auto result = pending->Execute();
+	REQUIRE(result->HasError());
+	con.context->ClearInterrupt();
+
+	REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
+	REQUIRE_NO_FAIL(con.Query("CALL dsdgen(sf=0.01, suffix='_after_interrupt')"));
+	REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
+#endif
+}

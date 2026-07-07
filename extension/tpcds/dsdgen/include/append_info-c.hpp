@@ -55,8 +55,9 @@ struct tpcds_append_information {
 	duckdb::ClientContext &context;
 	duckdb::unique_ptr<duckdb::InternalAppender> appender;
 	duckdb::unique_ptr<duckdb::OptimisticDataWriter> optimistic_writer;
-	duckdb::unique_ptr<duckdb::OptimisticWriteCollection> optimistic_collection;
+	duckdb::optional_ptr<duckdb::OptimisticWriteCollection> optimistic_collection;
 	duckdb::optional_ptr<duckdb::DuckTableEntry> table_entry;
+	duckdb::PhysicalIndex optimistic_collection_index = duckdb::PhysicalIndex(duckdb::DConstants::INVALID_INDEX);
 	duckdb::TableAppendState append_state;
 	duckdb::DataChunk chunk;
 	duckdb::vector<duckdb::LogicalType> types;
@@ -69,6 +70,8 @@ struct tpcds_append_information {
 
 	tpcds_table_def table_def;
 
+	~tpcds_append_information();
+
 	bool IsNull(int nColumn);
 	void BeginRow();
 	void EndRow();
@@ -76,6 +79,7 @@ struct tpcds_append_information {
 	void FlushOptimistic();
 	void FinalizeOptimisticAppend();
 	void PrepareOptimisticWriteToDisk();
+	void ResetOptimisticCollection();
 	void Close();
 	duckdb::Vector &NextColumn();
 	TPCDSAppendType ActiveAppendType() const;
