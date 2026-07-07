@@ -659,6 +659,10 @@ void RowGroup::CommitDrop() {
 }
 
 void RowGroup::NextVector(CollectionScanState &state) {
+	// NextVector skips a full vector and assumes the column cursors sit at a vector boundary.
+	// It must never run mid-sub-batch (offset in (0, vector_max_count)) or it would skip another
+	// full vector on top of the rows already consumed, misaligning the scan.
+	D_ASSERT(!state.sub_vector_state.InProgress());
 	state.vector_index++;
 	state.sub_vector_state.Reset();
 	const auto &column_ids = state.GetColumnIds();
@@ -821,140 +825,119 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			return;
 		}
 
-		// Sub-batch resume: if we're mid-vector from a previous call, continue from svs.offset
-		D_ASSERT(!svs.InProgress() || sub_batch_mode);
-		if (svs.InProgress()) {
-			if (!state.size_predictor.initialized) {
-				state.size_predictor.Initialize(column_ids, *this);
-			}
-			auto remaining = svs.vector_max_count - svs.offset;
-			auto scan_count = state.size_predictor.PredictBatchSize(target_bytes, remaining);
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				auto &col_data = GetColumn(column_ids[i]);
-				state.column_scans[i].update_scan_type = options.update_type;
-				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], scan_count);
-			}
-			result.SetChildCardinality(scan_count);
-			state.size_predictor.Update(result);
-			svs.offset += scan_count;
-			if (svs.offset >= svs.vector_max_count) {
-				state.vector_index++;
-				svs.Reset();
-			}
-			return;
-		}
-
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
+
+		// When sub-batching, one vector is emitted across several Scan calls, so a later call re-enters
+		// this loop mid-vector. "resuming" distinguishes that case: the per-vector setup below (sampling /
+		// zonemap / visibility / prefetch) was already done when the vector started and must not run again,
+		// and we continue scanning from svs.offset instead of restarting the vector. Only sub-batch mode
+		// can leave a vector in progress, hence the assert.
+		D_ASSERT(!svs.InProgress() || sub_batch_mode);
+		bool resuming = svs.InProgress();
+
+		idx_t count = max_count;
 		bool has_sample_selection = false;
 		idx_t sample_count = max_count;
 		SelectionVector sample_sel(STANDARD_VECTOR_SIZE);
+		bool sub_batching = resuming;
 
-		// check the sampling info if we have to sample this chunk
-		if (state.GetSamplingInfo().do_system_sample) {
-			auto &sampling_info = state.GetSamplingInfo();
-			if (!sampling_info.is_percentage) {
-				double rate = sampling_info.sample_rate;
-				if (rate <= 0) {
-					NextVector(state);
-					continue;
-				}
-				if (rate < 1) {
-					auto row_group_start = state.row_group->GetRowStart();
-					sample_count =
-					    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
-					if (sample_count == 0) {
+		if (!resuming) {
+			// check the sampling info if we have to sample this chunk
+			if (state.GetSamplingInfo().do_system_sample) {
+				auto &sampling_info = state.GetSamplingInfo();
+				if (!sampling_info.is_percentage) {
+					double rate = sampling_info.sample_rate;
+					if (rate <= 0) {
 						NextVector(state);
 						continue;
 					}
-					has_sample_selection = true;
-				}
-			} else {
-				// Percentage-based system sampling: original behavior
-				if (state.random.NextRandom() > sampling_info.sample_rate) {
-					NextVector(state);
-					continue;
+					if (rate < 1) {
+						auto row_group_start = state.row_group->GetRowStart();
+						sample_count =
+						    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
+						if (sample_count == 0) {
+							NextVector(state);
+							continue;
+						}
+						has_sample_selection = true;
+					}
+				} else {
+					// Percentage-based system sampling: original behavior
+					if (state.random.NextRandom() > sampling_info.sample_rate) {
+						NextVector(state);
+						continue;
+					}
 				}
 			}
-		}
 
-		//! first check the zonemap if we have to scan this partition
-		if (!CheckZonemapSegments(state)) {
-			continue;
-		}
-		auto &current_row_group = state.row_group->GetNode();
-
-		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		idx_t count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
-		if (count == 0) {
-			// nothing to scan for this vector, skip the entire vector
-			NextVector(state);
-			continue;
-		}
-		state.rows_scanned += count;
-
-		auto &block_manager = GetBlockManager();
-		if (block_manager.Prefetch()) {
-			PrefetchState prefetch_state;
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column = column_ids[i];
-				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
+			//! first check the zonemap if we have to scan this partition
+			if (!CheckZonemapSegments(state)) {
+				continue;
 			}
-			auto &buffer_manager = block_manager.buffer_manager;
-			buffer_manager.Prefetch(state.context, prefetch_state.blocks);
-		}
+			auto &current_row_group = state.row_group->GetNode();
 
-		bool has_filters = filter_info.HasFilters();
-		if (count == max_count && !has_filters) {
-			// scan all vectors completely: full scan without deletions or table filters
+			// second, scan the version chunk manager to figure out which tuples to load for this transaction
+			count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
+			if (count == 0) {
+				// nothing to scan for this vector, skip the entire vector
+				NextVector(state);
+				continue;
+			}
+			state.rows_scanned += count;
 
-			// Sub-batch: limit scan_count if active and eligible (no sampling selection, no updates)
-			bool sub_batch_active = false;
-			if (sub_batch_mode && !has_sample_selection) {
-				bool any_has_updates = false;
+			auto &block_manager = GetBlockManager();
+			if (block_manager.Prefetch()) {
+				PrefetchState prefetch_state;
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					const auto &column = column_ids[i];
+					GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
+				}
+				auto &buffer_manager = block_manager.buffer_manager;
+				buffer_manager.Prefetch(state.context, prefetch_state.blocks);
+			}
+
+			// sub-batch eligibility: clean case only (no deletions, no sampling, no updates)
+			bool eligible = sub_batch_mode && count == max_count && !has_sample_selection;
+			if (eligible) {
 				for (idx_t i = 0; i < column_ids.size(); i++) {
 					if (GetColumn(column_ids[i]).GetUpdateStatistics()) {
-						any_has_updates = true;
+						eligible = false;
 						break;
 					}
 				}
-				sub_batch_active = !any_has_updates;
 			}
+			svs.vector_max_count = max_count;
+			svs.offset = 0;
+			sub_batching = eligible;
+		}
 
-			if (sub_batch_active) {
-				if (!state.size_predictor.initialized) {
-					state.size_predictor.Initialize(column_ids, *this);
-				}
-				auto scan_count = state.size_predictor.PredictBatchSize(target_bytes, max_count);
-				for (idx_t i = 0; i < column_ids.size(); i++) {
-					auto &col_data = GetColumn(column_ids[i]);
-					state.column_scans[i].update_scan_type = options.update_type;
-					col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], scan_count);
-				}
-				result.SetChildCardinality(scan_count);
-				state.size_predictor.Update(result);
-				svs.vector_max_count = max_count;
-				svs.offset = scan_count;
-				if (svs.offset >= svs.vector_max_count) {
-					state.vector_index++;
-					svs.Reset();
-				}
-				return;
+		bool has_filters = filter_info.HasFilters();
+
+		// physical rows to scan this call: the full vector unless sub-batching (then a byte-budgeted batch)
+		idx_t scan_count;
+		if (sub_batching) {
+			if (!state.size_predictor.initialized) {
+				state.size_predictor.Initialize(column_ids, *this);
 			}
+			scan_count = state.size_predictor.PredictBatchSize(target_bytes, svs.vector_max_count - svs.offset);
+		} else {
+			scan_count = max_count;
+		}
 
-			// Full-vector scan path
+		idx_t emit_count;
+		if (count == max_count && !has_filters) {
+			// full scan without deletions or table filters
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
 				state.column_scans[i].update_scan_type = options.update_type;
-				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], max_count);
+				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], scan_count);
 				if (has_sample_selection) {
 					result.data[i].Slice(sample_sel, sample_count);
 				}
 			}
-			if (has_sample_selection) {
-				count = sample_count;
-			}
+			emit_count = has_sample_selection ? sample_count : scan_count;
 		} else {
 			// partial scan: we have deletions or table filters
 			idx_t approved_tuple_count = count;
@@ -975,6 +958,8 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				sel.Initialize(state.valid_sel);
 			} else {
 				sel.Initialize(nullptr);
+				// clean case: only this batch's physical rows are approved before filtering
+				approved_tuple_count = scan_count;
 			}
 			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
 			//! get runtime statistics
@@ -998,12 +983,12 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 					auto &result_vector = result.data[scan_idx];
 					if (approved_tuple_count == 0) {
 						auto &col_data = GetColumn(column_idx);
-						col_data.Skip(state.column_scans[scan_idx]);
+						col_data.Skip(state.column_scans[scan_idx], scan_count);
 						continue;
 					}
 					auto &col_data = GetColumn(column_idx);
 					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
-					                approved_tuple_count, filter.filter, table_filter_state);
+					                approved_tuple_count, filter.filter, table_filter_state, scan_count);
 				}
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
@@ -1016,39 +1001,52 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				// all rows were filtered out by the table filters
 				D_ASSERT(has_filters);
 				result.Reset();
-				// skip this vector in all the scans that were not scanned yet
+				// skip this batch in all the scans that were not scanned yet
 				for (idx_t i = 0; i < column_ids.size(); i++) {
 					auto &col_idx = column_ids[i];
 					if (has_filters && filter_info.ColumnHasFilters(i)) {
 						continue;
 					}
 					auto &col_data = GetColumn(col_idx);
-					col_data.Skip(state.column_scans[i]);
+					col_data.Skip(state.column_scans[i], scan_count);
 				}
 				filter_info.EndFilter(filter_state);
-				state.vector_index++;
-				continue;
-			}
-			//! Now we use the selection vector to fetch data for the other columns.
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (has_filters && filter_info.ColumnHasFilters(i)) {
-					// column has already been scanned as part of the filtering process
-					continue;
+				emit_count = 0;
+			} else {
+				//! Now we use the selection vector to fetch data for the other columns.
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					if (has_filters && filter_info.ColumnHasFilters(i)) {
+						// column has already been scanned as part of the filtering process
+						continue;
+					}
+					auto &column = column_ids[i];
+					auto &col_data = GetColumn(column);
+					state.column_scans[i].update_scan_type = options.update_type;
+					col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
+					                approved_tuple_count, scan_count);
 				}
-				auto &column = column_ids[i];
-				auto &col_data = GetColumn(column);
-				state.column_scans[i].update_scan_type = options.update_type;
-				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
-				                approved_tuple_count);
+				filter_info.EndFilter(filter_state);
+				emit_count = approved_tuple_count;
 			}
-			filter_info.EndFilter(filter_state);
-
-			D_ASSERT(approved_tuple_count > 0);
-			count = approved_tuple_count;
 		}
-		result.SetChildCardinality(count);
-		state.vector_index++;
-		break;
+
+		// unified cursor advancement: advance by the physical rows consumed this batch
+		svs.offset += scan_count;
+		if (svs.offset >= svs.vector_max_count) {
+			state.vector_index++;
+			svs.Reset();
+		}
+		if (emit_count == 0) {
+			// this batch was fully filtered out - continue with the next sub-batch or vector
+			result.Reset();
+			continue;
+		}
+		result.SetChildCardinality(emit_count);
+		if (sub_batching) {
+			// per-row byte size is filter-independent, so the emitted result yields a correct estimate
+			state.size_predictor.Update(result);
+		}
+		return;
 	}
 }
 

@@ -270,7 +270,7 @@ struct ScanSizePredictor {
 struct SubVectorScanState {
 	//! Current row offset within the vector (0..vector_max_count)
 	idx_t offset = 0;
-	//! Total scannable rows in the current vector
+	//! Total scannable rows in the current vector (STANDARD_VECTOR_SIZE for a full vector, less for the tail)
 	idx_t vector_max_count = 0;
 
 	void Reset() {

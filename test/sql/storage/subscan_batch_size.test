@@ -506,3 +506,76 @@ query II
 SELECT MIN(i), MAX(i) FROM t_oom_parallel
 ----
 0	4095
+
+# ============================================================
+# TC20: Filter path under memory pressure — sub-batching also
+# protects the WHERE (has_filters) scan path, not just no-filter.
+#
+# Strings must be >= block_size (256KB): only then does the overflow
+# copy go through buffer_manager.Allocate (tracked by memory_limit).
+# Sub-block strings land in the Vector's untracked string heap, so the
+# filter path would not OOM and this test could not demonstrate the fix.
+# A non-selective filter (i>=1) still materializes a full tracked vector.
+# ============================================================
+
+load {TEST_DIR}/subscan_oom_filter.db
+
+statement ok
+CREATE TABLE t_oom_filter AS SELECT i, repeat(chr((65 + (i % 26))::INTEGER), 300000) as blob_data FROM range(0, 2048) tbl(i)
+
+restart
+
+statement ok
+PRAGMA temp_directory=''
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+SET memory_limit='30MB'
+
+# Disabled: non-selective filter still materializes the full 300KB-blob vector → OOM
+statement ok
+SET scan_target_size_bytes=0
+
+statement error
+SELECT SUM(LENGTH(blob_data)) FROM t_oom_filter WHERE i >= 1
+----
+Out of Memory
+
+# Enable adaptive scan: filter path now scans byte-budgeted sub-batches → fits in 30MB
+statement ok
+SET scan_target_size_bytes=1048576
+
+# Non-selective filter (matches nearly all rows)
+query I
+SELECT COUNT(*) FROM t_oom_filter WHERE i >= 1
+----
+2047
+
+query I
+SELECT SUM(LENGTH(blob_data)) FROM t_oom_filter WHERE i >= 1
+----
+614100000
+
+# Selective filter (matches a subset)
+query I
+SELECT COUNT(*) FROM t_oom_filter WHERE i >= 1024
+----
+1024
+
+query I
+SELECT SUM(LENGTH(blob_data)) FROM t_oom_filter WHERE i >= 1024
+----
+307200000
+
+# Content correctness through the filter path under memory pressure
+query II
+SELECT i, LEFT(blob_data, 3) FROM t_oom_filter WHERE i = 25
+----
+25	ZZZ
+
+query I
+SELECT COUNT(DISTINCT LEFT(blob_data, 1)) FROM t_oom_filter WHERE i >= 1
+----
+26
