@@ -10,8 +10,8 @@ namespace duckdb {
 // BaseNode
 //===--------------------------------------------------------------------===//
 
-template <uint8_t CAPACITY, NType TYPE>
-void BaseNode<CAPACITY, TYPE>::InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child) {
+template <uint8_t CAPACITY, NType NODE_TYPE>
+void BaseNode<CAPACITY, NODE_TYPE>::InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child) {
 	// Still space. Insert the child.
 	uint8_t child_pos = 0;
 	while (child_pos < n.count && n.key[child_pos] < byte) {
@@ -29,10 +29,10 @@ void BaseNode<CAPACITY, TYPE>::InsertChildInternal(BaseNode &n, const uint8_t by
 	n.count++;
 }
 
-template <uint8_t CAPACITY, NType TYPE>
-NodeHandle BaseNode<CAPACITY, TYPE>::DeleteChildInternal(ART &art, Node &node, const uint8_t byte) {
+template <uint8_t CAPACITY, NType NODE_TYPE>
+NodeHandle BaseNode<CAPACITY, NODE_TYPE>::DeleteChildInternal(ART &art, Node &node, const uint8_t byte) {
 	NodeHandle handle(art, node);
-	auto &n = handle.Get<BaseNode<CAPACITY, TYPE>>();
+	auto &n = handle.Get<BaseNode<CAPACITY, NODE_TYPE>>();
 
 	uint8_t child_pos = 0;
 	for (; child_pos < n.count; child_pos++) {

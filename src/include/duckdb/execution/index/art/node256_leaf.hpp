@@ -21,6 +21,7 @@ class Node256Leaf {
 
 public:
 	static constexpr NType NODE_256_LEAF = NType::NODE_256_LEAF;
+	static constexpr NType TYPE = NType::NODE_256_LEAF;
 	static constexpr uint16_t CAPACITY = Node256::CAPACITY;
 
 public:

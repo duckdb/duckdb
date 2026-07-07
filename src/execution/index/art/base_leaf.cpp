@@ -12,8 +12,8 @@ namespace duckdb {
 // BaseLeaf
 //===--------------------------------------------------------------------===//
 
-template <uint8_t CAPACITY, NType TYPE>
-void BaseLeaf<CAPACITY, TYPE>::InsertByteInternal(BaseLeaf &n, const uint8_t byte) {
+template <uint8_t CAPACITY, NType NODE_TYPE>
+void BaseLeaf<CAPACITY, NODE_TYPE>::InsertByteInternal(BaseLeaf &n, const uint8_t byte) {
 	// Still space. Insert the child.
 	uint8_t child_pos = 0;
 	while (child_pos < n.count && n.key[child_pos] < byte) {
@@ -29,10 +29,10 @@ void BaseLeaf<CAPACITY, TYPE>::InsertByteInternal(BaseLeaf &n, const uint8_t byt
 	n.count++;
 }
 
-template <uint8_t CAPACITY, NType TYPE>
-NodeHandle BaseLeaf<CAPACITY, TYPE>::DeleteByteInternal(ART &art, Node &node, const uint8_t byte) {
+template <uint8_t CAPACITY, NType NODE_TYPE>
+NodeHandle BaseLeaf<CAPACITY, NODE_TYPE>::DeleteByteInternal(ART &art, Node &node, const uint8_t byte) {
 	NodeHandle handle(art, node);
-	auto &n = handle.Get<BaseLeaf<CAPACITY, TYPE>>();
+	auto &n = handle.Get<BaseLeaf<CAPACITY, NODE_TYPE>>();
 	uint8_t child_pos = 0;
 
 	for (; child_pos < n.count; child_pos++) {

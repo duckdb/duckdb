@@ -20,6 +20,7 @@ class Node256 {
 
 public:
 	static constexpr NType NODE_256 = NType::NODE_256;
+	static constexpr NType TYPE = NType::NODE_256;
 	static constexpr uint16_t CAPACITY = 256;
 	static constexpr uint8_t SHRINK_THRESHOLD = 36;
 

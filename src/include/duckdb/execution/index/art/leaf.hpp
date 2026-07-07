@@ -23,6 +23,7 @@ namespace duckdb {
 class Leaf {
 public:
 	static constexpr NType LEAF = NType::LEAF;
+	static constexpr NType TYPE = NType::LEAF;
 	static constexpr NType INLINED = NType::LEAF_INLINED;
 
 	static constexpr uint8_t LEAF_SIZE = 4; // Deprecated.

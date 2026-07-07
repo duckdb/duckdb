@@ -30,6 +30,7 @@ public:
 public:
 	template <class T>
 	T &Get() {
+		D_ASSERT(T::TYPE == type);
 		return handle.GetRef<T>();
 	}
 
@@ -58,6 +59,7 @@ public:
 public:
 	template <class T>
 	const T &Get() {
+		D_ASSERT(T::TYPE == type);
 		return handle.GetRef<T>();
 	}
 

@@ -23,6 +23,7 @@ class Node48 {
 
 public:
 	static constexpr NType NODE_48 = NType::NODE_48;
+	static constexpr NType TYPE = NType::NODE_48;
 	static constexpr uint8_t CAPACITY = 48;
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint8_t SHRINK_THRESHOLD = 12;

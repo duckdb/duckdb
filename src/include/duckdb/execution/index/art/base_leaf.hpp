@@ -14,13 +14,15 @@
 
 namespace duckdb {
 
-template <uint8_t CAPACITY, NType TYPE>
+template <uint8_t CAPACITY, NType NODE_TYPE>
 class BaseLeaf {
 	friend class Node7Leaf;
 	friend class Node15Leaf;
 	friend class Node256Leaf;
 
 public:
+	static constexpr NType TYPE = NODE_TYPE;
+
 	BaseLeaf() = delete;
 	BaseLeaf(const BaseLeaf &) = delete;
 	BaseLeaf &operator=(const BaseLeaf &) = delete;
