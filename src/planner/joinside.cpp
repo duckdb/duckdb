@@ -116,6 +116,52 @@ JoinSide JoinSide::GetJoinSide(const Expression &expression, const unordered_set
 	return join_side;
 }
 
+JoinSide JoinSide::GetCurrentJoinSide(TableIndex table_binding, const unordered_set<TableIndex> &left_bindings,
+                                      const unordered_set<TableIndex> &right_bindings) {
+	if (left_bindings.find(table_binding) != left_bindings.end()) {
+		D_ASSERT(right_bindings.find(table_binding) == right_bindings.end());
+		return JoinSide::LEFT;
+	}
+	if (right_bindings.find(table_binding) != right_bindings.end()) {
+		return JoinSide::RIGHT;
+	}
+	return JoinSide::NONE;
+}
+
+JoinSide JoinSide::GetCurrentJoinSide(const Expression &expression, const unordered_set<TableIndex> &left_bindings,
+                                      const unordered_set<TableIndex> &right_bindings) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
+		if (colref.Depth() > 0) {
+			return JoinSide::NONE;
+		}
+		return GetCurrentJoinSide(colref.Binding().table_index, left_bindings, right_bindings);
+	}
+	D_ASSERT(expression.GetExpressionType() != ExpressionType::BOUND_REF);
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		auto &subquery = expression.Cast<BoundSubqueryExpression>();
+		JoinSide side = JoinSide::NONE;
+		for (auto &child : subquery.GetChildren()) {
+			auto child_side = GetCurrentJoinSide(*child, left_bindings, right_bindings);
+			side = CombineJoinSide(side, child_side);
+		}
+		for (auto &corr : subquery.GetBinder()->correlated_columns) {
+			if (corr.depth > 1) {
+				continue;
+			}
+			auto correlated_side = GetCurrentJoinSide(corr.binding.table_index, left_bindings, right_bindings);
+			side = CombineJoinSide(side, correlated_side);
+		}
+		return side;
+	}
+	JoinSide join_side = JoinSide::NONE;
+	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
+		auto child_side = GetCurrentJoinSide(child, left_bindings, right_bindings);
+		join_side = CombineJoinSide(join_side, child_side);
+	});
+	return join_side;
+}
+
 JoinSide JoinSide::GetJoinSide(const unordered_set<TableIndex> &bindings,
                                const unordered_set<TableIndex> &left_bindings,
                                const unordered_set<TableIndex> &right_bindings) {

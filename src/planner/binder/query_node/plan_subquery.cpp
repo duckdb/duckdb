@@ -406,58 +406,12 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	}
 }
 
-static JoinSide GetCurrentJoinSide(TableIndex table_binding, const unordered_set<TableIndex> &left_bindings,
-                                   const unordered_set<TableIndex> &right_bindings) {
-	if (left_bindings.find(table_binding) != left_bindings.end()) {
-		D_ASSERT(right_bindings.find(table_binding) == right_bindings.end());
-		return JoinSide::LEFT;
-	}
-	if (right_bindings.find(table_binding) != right_bindings.end()) {
-		return JoinSide::RIGHT;
-	}
-	return JoinSide::NONE;
-}
-
-static JoinSide GetCurrentJoinSide(const Expression &expr, const unordered_set<TableIndex> &left_bindings,
-                                   const unordered_set<TableIndex> &right_bindings) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		if (colref.Depth() > 0) {
-			return JoinSide::NONE;
-		}
-		return GetCurrentJoinSide(colref.Binding().table_index, left_bindings, right_bindings);
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-		auto &subquery = expr.Cast<BoundSubqueryExpression>();
-		JoinSide side = JoinSide::NONE;
-		for (auto &child : subquery.GetChildren()) {
-			auto child_side = GetCurrentJoinSide(*child, left_bindings, right_bindings);
-			side = JoinSide::CombineJoinSide(side, child_side);
-		}
-		for (auto &corr : subquery.GetBinder()->correlated_columns) {
-			if (corr.depth > 1) {
-				continue;
-			}
-			auto corr_side = GetCurrentJoinSide(corr.binding.table_index, left_bindings, right_bindings);
-			side = JoinSide::CombineJoinSide(side, corr_side);
-		}
-		return side;
-	}
-
-	JoinSide join_side = JoinSide::NONE;
-	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		auto child_side = GetCurrentJoinSide(child, left_bindings, right_bindings);
-		join_side = JoinSide::CombineJoinSide(join_side, child_side);
-	});
-	return join_side;
-}
-
 static JoinSide GetCurrentJoinSide(LogicalJoin &join, const Expression &expr) {
 	unordered_set<TableIndex> left_bindings;
 	unordered_set<TableIndex> right_bindings;
 	LogicalJoin::GetTableReferences(*join.children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*join.children[1], right_bindings);
-	return GetCurrentJoinSide(expr, left_bindings, right_bindings);
+	return JoinSide::GetCurrentJoinSide(expr, left_bindings, right_bindings);
 }
 
 static unique_ptr<LogicalOperator> &GetJoinSideRoot(LogicalJoin &join, JoinSide side, JoinSide uncorrelated_side) {

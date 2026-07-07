@@ -329,10 +329,10 @@ FULL OUTER JOIN pair_r r ON EXISTS (
 ----
 Correlated subquery in a non-inner join condition cannot reference both sides of the join
 
-# Pair-dependent joins that also reference an outer query require nested
-# dependent-join state. Keep this as an explicit unsupported case rather than
-# producing an internal binding error.
-statement error
+# Pair-dependent joins can also reference an outer query. The pair-dependent
+# predicate is still lowered to a left lateral join, and the outer reference is
+# handled by the enclosing dependent join.
+query III
 SELECT outer_l.x, q.a, q.b
 FROM pair_l outer_l
 LEFT JOIN LATERAL (
@@ -343,9 +343,37 @@ LEFT JOIN LATERAL (
 		FROM pair_s s
 		WHERE s.a = l.a
 		  AND s.b = r.b
-		  AND s.a > outer_l.a
+		  AND s.a = outer_l.a
 	)
 	WHERE l.x = outer_l.x
-) q ON true;
+) q ON true
+ORDER BY outer_l.x, q.a, q.b NULLS LAST;
 ----
-Correlated subquery in a non-inner join condition cannot reference both sides of the join
+10	1	10
+10	1	20
+11	1	10
+11	1	20
+20	2	20
+30	3	NULL
+
+query III
+SELECT outer_l.x, q.a, q.b
+FROM pair_l outer_l
+LEFT JOIN LATERAL (
+	SELECT l.a, r.b
+	FROM pair_l l
+	LEFT JOIN pair_r r ON l.a = outer_l.a AND r.b IN (
+		SELECT s.b
+		FROM pair_s s
+		WHERE s.a = l.a
+	)
+	WHERE l.x = outer_l.x
+) q ON true
+ORDER BY outer_l.x, q.a, q.b NULLS LAST;
+----
+10	1	10
+10	1	20
+11	1	10
+11	1	20
+20	2	20
+30	3	NULL
