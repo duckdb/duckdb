@@ -15,32 +15,38 @@ DuckDB is a high-performance analytical database system. It is designed to be fa
 
 ## Feature Store
 
-The feature store extension adds four SQL statements for managing ML features:
+The feature store extension adds SQL statements for defining, refreshing, and serving ML features:
 
 ```sql
--- Define a feature over a source table
-CREATE FEATURE user_activity ON hits
-    ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY HOUR
-    WINDOW 24
-    REFRESH FULL
-    RETAIN 1
-    AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region);
+-- Define a feature over a source (event) table. The GROUP BY keys (the entity
+-- columns) must be a FOREIGN KEY into the declared ENTITY table.
+CREATE FEATURE user_activity
+    ENTITY users
+    TIMESTAMP event_time
+    WINDOW 24 HOURS
+    EVERY 1 HOUR
+    RETAIN 3
+    AS (SELECT user_id, COUNT(*) AS event_count, AVG(region_id) AS avg_region
+        FROM events GROUP BY user_id);
 
--- Recompute/update the feature backing table
+-- Recompute the feature (as of now, or as of a specific point in time) and
+-- append the result as a new version to the backing store
 REFRESH FEATURE user_activity;
+REFRESH FEATURE user_activity AT '2024-01-04 00:00:00';
 
--- Point-in-time correct retrieval via ASOF join
+-- Toggle or change the automatic refresh schedule
+ALTER FEATURE user_activity DISABLE SCHEDULE;
+ALTER FEATURE user_activity SET SCHEDULE EVERY 30 MINUTES;
+
+-- Point-in-time correct retrieval via ASOF join against a spine table
 SERVE FEATURE user_activity FOR spine_table;
+SERVE FEATURE user_activity FOR spine_table ENTITY spine_user_id ASOF request_time;
 
--- Remove the feature and all its version tables
+-- Remove the feature (and its owned resolver view)
 DROP FEATURE user_activity;
 ```
 
-Each `REFRESH FEATURE` creates a new versioned backing table (`feature_name__v1`, `feature_name__v2`, …). A view named `feature_name` always resolves to the current version. Old versions are garbage-collected automatically according to `RETAIN N`.
-
-Both `FULL` (full recompute) and `INCREMENTAL` (watermark-based) refresh modes are supported.
+`CREATE FEATURE` only registers metadata — no data is materialized until the first `REFRESH`. Every `REFRESH FEATURE` fully recomputes the `WINDOW` aggregate over the source table and appends the result as a new version to a single denormalized backing table (`feature_name__store`), tagging each row with an internal version and timestamp. A view named `feature_name` always resolves to the current version; `feature_at_version(name, version)` reads an explicit past version; `duckdb_features()` exposes feature metadata. Old versions are garbage-collected automatically according to `RETAIN N`. `SERVE FEATURE` performs an ASOF join against the backing store for point-in-time correct retrieval, with `ENTITY`/`ASOF` optionally overriding the join columns. A feature can be scheduled to refresh automatically with `EVERY <interval>`, and the schedule can be changed or toggled later with `ALTER FEATURE`.
 
 ## Development
 
