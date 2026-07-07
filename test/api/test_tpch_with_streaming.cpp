@@ -126,3 +126,28 @@ TEST_CASE("Test TPC-H dbgen parallel progress does not finish early", "[tpch][pr
 	REQUIRE(!saw_finished_progress_before_ready);
 	REQUIRE(saw_progress_before_ready);
 }
+
+TEST_CASE("Test TPC-H dbgen rollback after interrupted optimistic write", "[tpch][.]") {
+	auto db_path = TestCreatePath("tpch_dbgen_interrupted_optimistic_write.db");
+	DuckDB db(db_path);
+	Connection con(db);
+	if (!db.ExtensionIsLoaded("tpch")) {
+		return;
+	}
+
+	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
+	REQUIRE_NO_FAIL(con.Query("SET write_buffer_row_group_count=1"));
+
+	auto pending = con.PendingQuery("CALL dbgen(sf=1, suffix='_interrupted')");
+	auto state = pending->ExecuteTask();
+	REQUIRE(!PendingQueryResult::IsResultReady(state));
+
+	con.Interrupt();
+	auto result = pending->Execute();
+	REQUIRE(result->HasError());
+	con.context->ClearInterrupt();
+
+	REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
+	REQUIRE_NO_FAIL(con.Query("CALL dbgen(sf=0.01, suffix='_after_interrupt')"));
+	REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
+}

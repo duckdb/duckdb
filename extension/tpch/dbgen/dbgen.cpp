@@ -42,14 +42,21 @@ enum class TPCHAppendMode : uint8_t { APPENDER, OPTIMISTIC };
 struct tpch_append_information {
 	duckdb::unique_ptr<InternalAppender> appender;
 	unique_ptr<OptimisticDataWriter> optimistic_writer;
-	unique_ptr<OptimisticWriteCollection> optimistic_collection;
+	optional_ptr<OptimisticWriteCollection> optimistic_collection;
 	optional_ptr<DuckTableEntry> table_entry;
+	PhysicalIndex optimistic_collection_index = PhysicalIndex(DConstants::INVALID_INDEX);
 	TableAppendState append_state;
 	DataChunk chunk;
 	idx_t row = 0;
 	idx_t active_row = DConstants::INVALID_INDEX;
 	idx_t active_col = 0;
 	bool finalized = false;
+
+	~tpch_append_information() {
+		if (optimistic_writer) {
+			optimistic_writer->Rollback();
+		}
+	}
 
 	void Initialize(ClientContext &context, TableCatalogEntry &table, idx_t flush_count) {
 		appender = make_uniq<InternalAppender>(context, table, flush_count);
@@ -60,12 +67,22 @@ struct tpch_append_information {
 	                          OptimisticWritePartialManagers partial_manager_type) {
 		table_entry = table;
 		optimistic_writer = make_uniq<OptimisticDataWriter>(context, table.GetStorage());
-		optimistic_collection =
+		auto collection =
 		    optimistic_writer->CreateCollection(table.GetStorage(), table.GetTypes(), partial_manager_type);
-		auto &row_collection = *optimistic_collection->collection;
+		auto &row_collection = *collection->collection;
 		row_collection.InitializeEmpty();
 		row_collection.InitializeAppend(append_state);
+		optimistic_collection_index = table.GetStorage().CreateOptimisticCollection(context, std::move(collection));
+		optimistic_collection = table.GetStorage().GetOptimisticCollection(context, optimistic_collection_index);
 		chunk.Initialize(context, table.GetTypes());
+	}
+
+	void ResetOptimisticCollection(ClientContext &context) {
+		D_ASSERT(table_entry);
+		D_ASSERT(optimistic_collection_index.IsValid());
+		table_entry->GetStorage().ResetOptimisticCollection(context, optimistic_collection_index);
+		optimistic_collection_index = PhysicalIndex(DConstants::INVALID_INDEX);
+		optimistic_collection = nullptr;
 	}
 
 	void FlushChunk() {
@@ -98,7 +115,7 @@ struct tpch_append_information {
 		auto &row_collection = *optimistic_collection->collection;
 		auto append_count = row_collection.GetTotalRows();
 		if (append_count == 0) {
-			optimistic_collection.reset();
+			ResetOptimisticCollection(context);
 			optimistic_writer.reset();
 			finalized = false;
 			return;
@@ -116,13 +133,14 @@ struct tpch_append_information {
 				storage.LocalAppend(local_append_state, table, context, insert_chunk, false);
 			}
 			storage.FinalizeLocalAppend(local_append_state);
+			ResetOptimisticCollection(context);
 		} else {
 			optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
 			storage.LocalMerge(context, table, *optimistic_collection);
 			auto &storage_writer = storage.GetOptimisticWriter(context);
 			storage_writer.Merge(*optimistic_writer);
+			ResetOptimisticCollection(context);
 		}
-		optimistic_collection.reset();
 		optimistic_writer.reset();
 		finalized = false;
 	}
