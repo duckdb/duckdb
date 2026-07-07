@@ -54,6 +54,8 @@ public:
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 	void InternalException(MaterializedQueryResult &result);
 	static void LoadDatabaseFail(const string &file_name, const string &dbpath, const string &message);
+	//! Write a machine-readable event line: "[TEST_EVENT] <json>" (--emit-test-events). Caller gates.
+	static void EmitTestEvent(const string &json_payload);
 
 	static void AppendFailure(const string &log_message);
 	static void LogFailure(const string &log_message);

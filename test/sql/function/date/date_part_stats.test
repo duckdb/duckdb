@@ -135,7 +135,7 @@ endloop
 foreach type DATE TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
 
 statement ok
-CREATE TABLE t0(c0 ${type});
+CREATE TABLE t0(c0 {type});
 
 statement ok
 INSERT INTO t0(c0) VALUES ('-infinity'), ('infinity');

@@ -42,6 +42,8 @@ int main(int argc_in, char *argv[]) {
 			keep_home = true;
 		} else if (argument == "--stdin") {
 			use_stdin = true;
+		} else if (argument == "--emit-test-events") {
+			SetEmitTestEvents(true);
 		} else {
 			try {
 				if (!test_config.ParseArgument(argument, argc, argv, i)) {
