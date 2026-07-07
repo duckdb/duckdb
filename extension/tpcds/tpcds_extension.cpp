@@ -8,6 +8,9 @@
 #include "dsdgen.hpp"
 #include "tpcds_extension.hpp"
 
+#include <atomic>
+#include <mutex>
+
 namespace duckdb {
 
 struct DSDGenFunctionData : public TableFunctionData {
@@ -24,7 +27,8 @@ struct DSDGenFunctionData : public TableFunctionData {
 
 struct DSDGenGlobalState : public GlobalTableFunctionState {
 	bool schema_created = false;
-	bool finished = false;
+	atomic<bool> finished {false};
+	mutable mutex generator_lock;
 	unique_ptr<tpcds::DSDGenGenerator> generator;
 };
 
@@ -87,23 +91,34 @@ unique_ptr<GlobalTableFunctionState> DsdgenInit(ClientContext &context, TableFun
 static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.bind_data->Cast<DSDGenFunctionData>();
 	auto &state = data_p.global_state->Cast<DSDGenGlobalState>();
-	if (state.finished) {
+	if (state.finished.load()) {
 		data_p.async_result = AsyncResultType::FINISHED;
 		return;
 	}
 	if (!state.schema_created) {
 		tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.catalog, data.schema, data.suffix, data.keys,
 		                                        data.overwrite);
-		state.generator = tpcds::CreateDSDGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix);
+		auto generator = tpcds::CreateDSDGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix);
+		{
+			lock_guard<mutex> guard(state.generator_lock);
+			state.generator = std::move(generator);
+		}
 		state.schema_created = true;
 	}
 
-	if (!state.generator || state.generator->GenerateNext()) {
-		state.finished = true;
+	bool finished = false;
+	bool can_yield = false;
+	{
+		lock_guard<mutex> guard(state.generator_lock);
+		finished = !state.generator || state.generator->GenerateNext();
+		can_yield = state.generator && state.generator->CanYield();
+	}
+	if (finished) {
+		state.finished.store(true);
 		data_p.async_result = AsyncResultType::FINISHED;
 		return;
 	}
-	if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR && state.generator->CanYield()) {
+	if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR && can_yield) {
 		data_p.async_result = DSDGenYield();
 	} else {
 		data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
@@ -116,10 +131,13 @@ static double DsdgenProgress(ClientContext &context, const FunctionData *bind_da
 		return 0.0;
 	}
 	auto &state = global_state->Cast<DSDGenGlobalState>();
-	if (state.generator) {
-		return state.generator->Progress();
+	{
+		lock_guard<mutex> guard(state.generator_lock);
+		if (state.generator) {
+			return state.generator->Progress();
+		}
 	}
-	return state.finished ? 100.0 : 0.0;
+	return state.finished.load() ? 100.0 : 0.0;
 }
 
 static unique_ptr<NodeStatistics> DsdgenCardinality(ClientContext &, const FunctionData *) {

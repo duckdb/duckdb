@@ -156,6 +156,15 @@ static idx_t GetDSDGenTableOutputMultiplier(int table_id) {
 	}
 }
 
+static idx_t GetDSDGenTableOrder(int table_id) {
+	for (idx_t i = 0; i < sizeof(DSDGEN_TABLES) / sizeof(DSDGEN_TABLES[0]); i++) {
+		if (DSDGEN_TABLES[i] == table_id) {
+			return i;
+		}
+	}
+	throw InternalException("Unexpected TPC-DS table id");
+}
+
 static idx_t GetDSDGenReturnPercent(int table_id) {
 	switch (table_id) {
 	case CATALOG_SALES:
@@ -424,6 +433,15 @@ private:
 	duckdb::vector<duckdb::unique_ptr<tpcds_append_information>> append_info;
 };
 
+struct FinishedDSDGenAppender {
+	FinishedDSDGenAppender(DSDGenWorkItem work_item, unique_ptr<TPCDSDataAppender> appender)
+	    : work_item(work_item), appender(std::move(appender)) {
+	}
+
+	DSDGenWorkItem work_item;
+	unique_ptr<TPCDSDataAppender> appender;
+};
+
 class ParallelTPCDSAppendTask : public BaseExecutorTask {
 public:
 	ParallelTPCDSAppendTask(TaskExecutor &executor, TPCDSDataAppender &appender, DSDGenWorkItem work_item)
@@ -490,7 +508,7 @@ public:
 
 	bool GenerateNext() override {
 		context.InterruptCheck();
-		if (finished) {
+		if (finished.load()) {
 			return true;
 		}
 		if (total_work == 0) {
@@ -508,7 +526,7 @@ public:
 	}
 
 	double Progress() const override {
-		if (finished) {
+		if (finished.load()) {
 			return 100.0;
 		}
 		if (total_work == 0) {
@@ -591,17 +609,19 @@ private:
 		if (parallel_work_offset < parallel_work_items.size()) {
 			TaskExecutor executor(context);
 
-			vector<TPCDSDataAppender> new_appenders;
+			vector<unique_ptr<TPCDSDataAppender>> new_appenders;
+			new_appenders.reserve(parallel_thread_count);
 			auto launched_offset = parallel_work_offset;
 			for (idx_t thread_idx = 0; thread_idx < parallel_thread_count &&
 			                           launched_offset < parallel_work_items.size();
 			     thread_idx++, launched_offset++) {
 				auto &work_item = parallel_work_items[launched_offset];
-				new_appenders.emplace_back(context, *parameters, scale, TPCDSAppendMode::OPTIMISTIC,
-				                           NumericLimits<int64_t>::Maximum(), &generated_work, work_item.table_id);
+				new_appenders.push_back(make_uniq<TPCDSDataAppender>(
+				    context, *parameters, scale, TPCDSAppendMode::OPTIMISTIC,
+				    NumericLimits<int64_t>::Maximum(), &generated_work, work_item.table_id));
 			}
 			for (auto &appender : new_appenders) {
-				auto task = make_uniq<ParallelTPCDSAppendTask>(executor, appender,
+				auto task = make_uniq<ParallelTPCDSAppendTask>(executor, *appender,
 				                                               parallel_work_items[parallel_work_offset]);
 				executor.ScheduleTask(std::move(task));
 				parallel_work_offset++;
@@ -610,7 +630,11 @@ private:
 			if (executor.HasError()) {
 				executor.ThrowError();
 			}
-			finished_appenders = std::move(new_appenders);
+			for (idx_t appender_idx = 0; appender_idx < new_appenders.size(); appender_idx++) {
+				auto work_item_idx = parallel_work_offset - new_appenders.size() + appender_idx;
+				finished_appenders.push_back(make_uniq<FinishedDSDGenAppender>(
+				    parallel_work_items[work_item_idx], std::move(new_appenders[appender_idx])));
+			}
 			return false;
 		}
 		Finish();
@@ -700,8 +724,17 @@ private:
 		}
 		std::sort(parallel_work_items.begin(), parallel_work_items.end(),
 		          [](const DSDGenWorkItem &left, const DSDGenWorkItem &right) {
-			          return left.progress_units > right.progress_units;
+			          if (left.progress_units != right.progress_units) {
+				          return left.progress_units > right.progress_units;
+			          }
+			          auto left_table_order = GetDSDGenTableOrder(left.table_id);
+			          auto right_table_order = GetDSDGenTableOrder(right.table_id);
+			          if (left_table_order != right_table_order) {
+				          return left_table_order < right_table_order;
+			          }
+			          return left.step < right.step;
 		          });
+		parallel_next_flush_step.assign(DBGEN_VERSION, 0);
 	}
 
 	bool StartNextTable() {
@@ -726,28 +759,32 @@ private:
 	}
 
 	bool FlushNextFinishedAppender() {
-		if (finished_appender_offset >= finished_appenders.size()) {
-			finished_appenders.clear();
-			finished_appender_offset = 0;
-			return false;
+		for (idx_t appender_idx = 0; appender_idx < finished_appenders.size(); appender_idx++) {
+			auto &finished_appender = *finished_appenders[appender_idx];
+			auto table_id = finished_appender.work_item.table_id;
+			if (finished_appender.work_item.step != parallel_next_flush_step[table_id]) {
+				continue;
+			}
+			auto flushed_count = finished_appender.appender->GeneratedWork();
+			finished_appender.appender->Flush();
+			flushed_work.fetch_add(flushed_count);
+			parallel_next_flush_step[table_id]++;
+			finished_appenders.erase(finished_appenders.begin() + UnsafeNumericCast<int64_t>(appender_idx));
+			return true;
 		}
-		auto &appender = finished_appenders[finished_appender_offset++];
-		appender.Flush();
-		flushed_work.fetch_add(appender.GeneratedWork());
-		if (finished_appender_offset >= finished_appenders.size()) {
-			finished_appenders.clear();
-			finished_appender_offset = 0;
-		}
-		return true;
+		return false;
 	}
 
 	void FlushAllFinishedAppenders() {
 		while (FlushNextFinishedAppender()) {
 		}
+		if (!finished_appenders.empty()) {
+			throw InternalException("Failed to flush TPC-DS dsdgen appenders in deterministic order");
+		}
 	}
 
 	void Finish() {
-		if (finished) {
+		if (finished.load()) {
 			return;
 		}
 		FlushAllFinishedAppenders();
@@ -756,9 +793,9 @@ private:
 				append_info[table_idx]->Close();
 			}
 		}
-		generated_work = total_work;
-		flushed_work = total_work;
-		finished = true;
+		generated_work.store(total_work);
+		flushed_work.store(total_work);
+		finished.store(true);
 	}
 
 private:
@@ -769,7 +806,7 @@ private:
 	string suffix;
 	unique_ptr<TPCDSDSDGenParameters> parameters;
 	duckdb::vector<duckdb::unique_ptr<tpcds_append_information>> append_info;
-	bool finished = false;
+	atomic<bool> finished {false};
 	DSDGenMode mode = DSDGenMode::SEQUENTIAL;
 	bool can_yield = true;
 	idx_t total_work = 0;
@@ -780,8 +817,8 @@ private:
 	idx_t parallel_thread_count = 1;
 	vector<DSDGenWorkItem> parallel_work_items;
 	idx_t parallel_work_offset = 0;
-	vector<TPCDSDataAppender> finished_appenders;
-	idx_t finished_appender_offset = 0;
+	vector<unique_ptr<FinishedDSDGenAppender>> finished_appenders;
+	vector<int> parallel_next_flush_step;
 
 	int table_id = CALL_CENTER;
 	bool table_started = false;
