@@ -419,8 +419,7 @@ LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
 }
 
 FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
-	if (vfs.SubSystemIsDisabled(local_fs.GetName())) {
+	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
 	return local_fs;

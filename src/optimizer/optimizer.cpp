@@ -49,6 +49,7 @@
 #include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/optimizer/rule/contains_to_in_clause.hpp"
+#include "duckdb/optimizer/rule/monotone_preimage.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -72,7 +73,10 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<InEnumSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
 	rewriter.rules.push_back(make_uniq<MoveConstantsRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<MoveUnaryMinusRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<MonotonePreimageRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<LeftToPrefixRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<OrderedAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctWindowedOptimizer>(rewriter));
@@ -85,6 +89,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<PredicateFactoringRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ContainsToInClauseRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<NotComparisonSimplificationRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

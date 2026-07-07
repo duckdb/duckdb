@@ -23,8 +23,9 @@ static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionEx
 
 //! Evaluate `func` at the lo/hi corner of each child's value range to derive output min/max.
 //! Decreasing args are swapped so f(lo_args) and f(hi_args) bracket the output range.
-static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &context, BoundFunctionExpression &func,
-                                                             const vector<BaseStatistics> &child_stats) {
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateMonotoneBounds(ClientContext &context,
+                                                                         const BoundFunctionExpression &func,
+                                                                         const vector<BaseStatistics> &child_stats) {
 	if (!func.Function().HasArgProperties() || func.GetChildren().empty()) {
 		return nullptr;
 	}
@@ -147,7 +148,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		FunctionStatisticsInput input(func, func.BindInfo().get(), stats, &expr_ptr);
 		return func.Function().GetStatisticsCallback()(context, input);
 	}
-	return TryPropagateMonotoneBounds(context, func, stats);
+	return PropagateMonotoneBounds(context, func, stats);
 }
 
 } // namespace duckdb

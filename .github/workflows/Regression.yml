@@ -274,10 +274,10 @@ jobs:
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
             --verbose \
-            --threads 2 \
             --clear-benchmark-cache \
             --disable-timeout \
-            --max-timeout 3600
+            --max-timeout 3600 \
+            --timed-runs 20
 
   regression-bench-fivetran:
     name: Bench Fivetran
