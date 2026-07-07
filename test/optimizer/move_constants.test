@@ -106,9 +106,6 @@ query I nosort mult_left_negative_flip
 EXPLAIN SELECT X>5 FROM test
 ----
 
-mode skip instable
-
-# FIXME
 # negation
 query I nosort negation
 EXPLAIN SELECT -X=-5 FROM test
@@ -125,3 +122,151 @@ EXPLAIN SELECT -X<-5 FROM test
 query I nosort negation_flip
 EXPLAIN SELECT X>5 FROM test
 ----
+
+# negation with the constant on the left
+query I nosort negation_flip_left
+EXPLAIN SELECT -5>-X FROM test
+----
+
+query I nosort negation_flip_left
+EXPLAIN SELECT 5<X FROM test
+----
+
+# negated constant out of range: equality can never be true
+statement ok
+CREATE TABLE tiny(x TINYINT);
+
+statement ok
+INSERT INTO tiny VALUES (-127), (-1), (0), (5), (127), (NULL);
+
+query I
+SELECT count(*) FROM tiny WHERE -x = -128
+----
+0
+
+query I
+SELECT count(*) FROM tiny WHERE -x != -128
+----
+5
+
+query I
+SELECT count(*) FROM tiny WHERE -x = 127
+----
+1
+
+# NULL constant
+query I
+SELECT count(*) FROM tiny WHERE -x = NULL::TINYINT
+----
+0
+
+# nested negation
+query I
+SELECT count(*) FROM tiny WHERE -(-x) = 5
+----
+1
+
+query I
+SELECT count(*) FROM tiny WHERE -x > -2
+----
+3
+
+# floating-point negation
+statement ok
+CREATE TABLE floats(x DOUBLE);
+
+statement ok
+INSERT INTO floats VALUES (-3.14), (-1.0), (0.0), (2.5), (7.7), (NULL);
+
+query I nosort float_neg_eq
+EXPLAIN SELECT -x = -2.5 FROM floats
+----
+
+query I nosort float_neg_eq
+EXPLAIN SELECT x = 2.5 FROM floats
+----
+
+query I nosort float_neg_lt
+EXPLAIN SELECT -x < -2.5 FROM floats
+----
+
+query I nosort float_neg_lt
+EXPLAIN SELECT x > 2.5 AND NOT isnan(x) FROM floats
+----
+
+query I nosort float_neg_left
+EXPLAIN SELECT -2.5 > -x FROM floats
+----
+
+query I nosort float_neg_left
+EXPLAIN SELECT 2.5 < x AND NOT isnan(x) FROM floats
+----
+
+query I
+SELECT count(*) FROM floats WHERE -x = -2.5
+----
+1
+
+query I
+SELECT count(*) FROM floats WHERE -x < -2.5
+----
+1
+
+query I
+SELECT count(*) FROM floats WHERE -x > 1.0
+----
+1
+
+# Ordered floating point rewrites need to preserve NaN semantics
+statement ok
+CREATE TABLE floats_nan(x DOUBLE);
+
+statement ok
+INSERT INTO floats_nan VALUES (1.0), (7.0), ('NaN'::DOUBLE), (NULL);
+
+query I
+SELECT count(*) FROM floats_nan WHERE -x < -2.5
+----
+1
+
+# FLOAT type
+statement ok
+CREATE TABLE floats32(x FLOAT);
+
+statement ok
+INSERT INTO floats32 VALUES (-1.0), (0.0), (3.5), (NULL);
+
+query I
+SELECT count(*) FROM floats32 WHERE -x = -3.5
+----
+1
+
+query I
+SELECT count(*) FROM floats32 WHERE -x < 0.0
+----
+1
+
+# DECIMAL negation
+statement ok
+CREATE TABLE decimals(x DECIMAL(9,2));
+
+statement ok
+INSERT INTO decimals VALUES (-10.50), (0.00), (5.25), (99.99), (NULL);
+
+query I nosort decimal_neg
+EXPLAIN SELECT -x = -5.25 FROM decimals
+----
+
+query I nosort decimal_neg
+EXPLAIN SELECT x = 5.25 FROM decimals
+----
+
+query I
+SELECT count(*) FROM decimals WHERE -x = -5.25
+----
+1
+
+query I
+SELECT count(*) FROM decimals WHERE -x < -5.25
+----
+1

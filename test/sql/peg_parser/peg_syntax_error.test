@@ -13,6 +13,11 @@ SELECT (1 + (2 * 3);
 Parser Error: syntax error at or near ";"
 
 statement error
+SELECT (((((((((((((((((((;
+----
+Parser Error: syntax error at or near ";"
+
+statement error
 SELECT 1 + 2 * ;
 ----
 Parser Error: syntax error at or near ";"

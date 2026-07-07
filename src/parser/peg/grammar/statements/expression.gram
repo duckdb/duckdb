@@ -7,7 +7,8 @@ FunctionExpressionArguments <- Parens(FunctionExpressionArgumentList)
 FunctionExpressionArgumentList <- DistinctOrAll? FunctionArgumentList? OrderByClause? IgnoreOrRespectNulls?
 FunctionArgumentList <- List(FunctionArgument)
 
-FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionName
+FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionNameAsQualifiedName
+FunctionNameAsQualifiedName <- FunctionName
 CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
 SchemaReservedFunctionName <- SchemaQualification ReservedFunctionName
 
@@ -87,7 +88,8 @@ ExcludeGroup <- 'GROUP'
 ExcludeTies <- 'TIES'
 ExcludeNoOthers <- 'NO' 'OTHERS'
 OverClause <- 'OVER' WindowFrame
-WindowFrame <- ParensIdentifier / WindowFrameDefinition / Identifier
+WindowFrame <- ParensIdentifier / WindowFrameDefinition / IdentifierWindowFrame
+IdentifierWindowFrame <- Identifier
 ParensIdentifier <- Parens(Identifier)
 WindowFrameDefinition <- WindowFrameNameContentsParens / WindowFrameContentsParens
 WindowFrameNameContentsParens <- Parens(WindowFrameNameContents)
@@ -225,7 +227,10 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 OtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
 OtherOperatorTail <- OtherOperator BitwiseExpression
 OtherOperator <-
-    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
+    AnyAllParsedOperator / NamedOtherOperator
+AnyAllParsedOperator <- AnyAllOperator
+NamedOtherOperator <-
+    QualifiedOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
 OperatorLiteral <- Identifier
 AnyAllOperator <- AnyOp AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll

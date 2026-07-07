@@ -1,0 +1,14 @@
+# name: test/optimizer/statistics/statistics_string_length.test
+# description: Statistics propagation for the length function based on string length statistics
+# group: [statistics]
+
+statement ok
+CREATE TABLE strings AS
+SELECT 'user_' || lpad(i::VARCHAR, 10, '0') AS v
+FROM range(0, 100000) tbl(i);
+
+# every string is exactly 15 characters - length(v) > 30 can be pruned entirely
+query II
+EXPLAIN SELECT count(*) FROM strings WHERE length(v) > 30;
+----
+physical_plan	<REGEX>:.*Empty Result.*

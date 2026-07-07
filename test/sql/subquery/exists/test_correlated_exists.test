@@ -51,6 +51,71 @@ SELECT i FROM integers i1 WHERE EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDE
 2
 3
 
+# left join with correlated EXISTS in the ON clause
+statement ok
+CREATE TEMP VIEW x(x1, x2) AS VALUES
+	(2, 1),
+	(1, 1),
+	(3, 4);
+
+statement ok
+CREATE TEMP VIEW y(y1, y2) AS VALUES
+	(0, 2),
+	(1, 4),
+	(4, 11);
+
+statement ok
+CREATE TEMP VIEW z(z1, z2) AS VALUES
+	(4, 2),
+	(3, 3),
+	(8, 1);
+
+query IIII
+SELECT *
+FROM x
+LEFT JOIN y ON x1 = y1 AND EXISTS (SELECT * FROM z WHERE z2 = x2)
+ORDER BY x1, x2, y1, y2;
+----
+1	1	1	4
+2	1	NULL	NULL
+3	4	NULL	NULL
+
+query IIII
+SELECT *
+FROM x
+LEFT JOIN y ON EXISTS (SELECT * FROM z WHERE z2 = x2)
+ORDER BY x1, x2, y1, y2;
+----
+1	1	0	2
+1	1	1	4
+1	1	4	11
+2	1	0	2
+2	1	1	4
+2	1	4	11
+3	4	NULL	NULL
+
+query IIII
+SELECT *
+FROM x
+LEFT JOIN y ON y1 IN (SELECT z1 FROM z)
+ORDER BY x1, x2, y1, y2;
+----
+1	1	4	11
+2	1	4	11
+3	4	4	11
+
+query IIII
+SELECT *
+FROM x
+LEFT JOIN y ON x1 IN (SELECT z1 FROM z)
+ORDER BY x1, x2, y1, y2;
+----
+1	1	NULL	NULL
+2	1	NULL	NULL
+3	4	0	2
+3	4	1	4
+3	4	4	11
+
 # correlated EXISTS with aggregations
 query T
 SELECT EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;
@@ -123,4 +188,3 @@ query R
 SELECT (SELECT COVAR_POP(i1.i, i1.i) FROM integers i2 LIMIT 1) FROM integers i1 ORDER BY 1;
 ----
 0.666667
-

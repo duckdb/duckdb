@@ -9,7 +9,6 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/function/window/value_functions.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/main/settings.hpp"
@@ -646,7 +645,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			}
 
 			// (1) compute the ROW_NUMBER of the own row
-			frame = FrameBounds(frame_begin[i], frame_end[i]);
+			frame = FrameBounds(frame_begin[i], MaxValue(frame_end[i], frame_begin[i]));
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
 			auto val_idx = NumericCast<int64_t>(own_row);
@@ -842,6 +841,7 @@ WindowFunction FirstValueFun::GetFunction() {
 	fun.SetCanStreamCallback(WindowFirstValueExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowFirstValueExecutor::GetStreamingState);
 	fun.SetStreamingDataCallback(WindowFirstValueExecutor::StreamData);
+	fun.SetCanExclude(true);
 	return fun;
 }
 
@@ -963,6 +963,7 @@ WindowFunction LastValueFun::GetFunction() {
 	fun.SetCanStreamCallback(WindowLastValueExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowLastValueExecutor::GetStreamingState);
 	fun.SetStreamingDataCallback(WindowLastValueExecutor::StreamData);
+	fun.SetCanExclude(true);
 	return fun;
 }
 
@@ -1138,6 +1139,7 @@ WindowFunction NthValueFun::GetFunction() {
 	fun.SetCanStreamCallback(WindowNthValueExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowNthValueExecutor::GetStreamingState);
 	fun.SetStreamingDataCallback(WindowNthValueExecutor::StreamData);
+	fun.SetCanExclude(true);
 	return fun;
 }
 
