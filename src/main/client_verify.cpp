@@ -77,8 +77,10 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		}
 		statement = statement->Copy();
 	} else if (verification == DebugStatementVerification::REPARSE_STATEMENT) {
-		if (statement->type == StatementType::RELATION_STATEMENT) {
-			// reparsing not supported for relation statements
+		if (statement->type == StatementType::RELATION_STATEMENT ||
+		    statement->type == StatementType::PASSTHROUGH_STATEMENT) {
+			// relation statements can't reparse; PASSTHROUGH's ToString() (verbatim CONNECT ... EXECUTE
+			// / foreign payload) is only recognized by the Layer-1 pre-pass, not this standalone Parser
 			return;
 		}
 		Parser parser(GetParserOptions());
