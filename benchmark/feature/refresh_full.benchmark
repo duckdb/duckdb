@@ -1,7 +1,0 @@
-# name: benchmark/feature/refresh_full.benchmark
-# description: Time a FULL feature refresh (windowed group-by aggregation over the whole source)
-# group: [feature]
-
-template benchmark/feature/feature.benchmark.in
-BENCH_NAME=FeatureRefreshFull
-RUN_QUERY=REFRESH FEATURE user_activity_full AT '2016-01-01 00:00:00';

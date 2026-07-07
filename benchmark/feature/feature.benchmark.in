@@ -18,7 +18,7 @@ group feature
 # Sanity check (runs once, before the timed loop): the source and feature
 # tables must be populated, otherwise the timings would be meaningless.
 assert I
-SELECT COUNT(*) > 0 AND (SELECT COUNT(*) FROM user_activity_full) > 0 FROM hits;
+SELECT COUNT(*) > 0 AND (SELECT COUNT(*) FROM user_activity) > 0 FROM hits;
 ----
 true
 
