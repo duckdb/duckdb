@@ -113,20 +113,21 @@ static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		state.schema_created = true;
 	}
 
-	bool finished = false;
-	{
-		lock_guard<mutex> guard(state.generator_lock);
-		finished = !state.generator || state.generator->GenerateNext();
-	}
-	if (finished) {
-		state.finished.store(true);
-		data_p.async_result = AsyncResultType::FINISHED;
-		return;
-	}
-	if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
-		data_p.async_result = DBGenYield();
-	} else {
-		data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+	while (true) {
+		bool finished = false;
+		{
+			lock_guard<mutex> guard(state.generator_lock);
+			finished = !state.generator || state.generator->GenerateNext();
+		}
+		if (finished) {
+			state.finished.store(true);
+			data_p.async_result = AsyncResultType::FINISHED;
+			return;
+		}
+		if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+			data_p.async_result = DBGenYield();
+			return;
+		}
 	}
 }
 
