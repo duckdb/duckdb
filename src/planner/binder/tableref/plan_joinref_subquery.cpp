@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -19,6 +20,8 @@
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -70,23 +73,43 @@ static bool IsGeneratedColumn(LogicalGet &get, idx_t column_index) {
 	return table->GetColumn(LogicalIndex(column_index)).Generated();
 }
 
-static void ExpandLogicalGetOutput(LogicalGet &get) {
+static bool IsUserQueryableVirtualColumn(column_t column_index) {
+	return column_index != COLUMN_IDENTIFIER_EMPTY && column_index != COLUMN_IDENTIFIER_ROW_NUMBER;
+}
+
+static void AddPayloadColumn(LogicalGet &get, column_t column_index) {
+	if (!get.TryGetProjectionIndex(column_index).IsValid()) {
+		get.AddColumnId(column_index);
+	}
+}
+
+static void FinalizeLogicalGetPayload(LogicalGet &get) {
 	for (idx_t column_index = 0; column_index < get.returned_types.size(); column_index++) {
 		if (IsGeneratedColumn(get, column_index)) {
 			continue;
 		}
-		if (!get.TryGetProjectionIndex(column_index).IsValid()) {
-			get.AddColumnId(NumericCast<column_t>(column_index));
+		AddPayloadColumn(get, NumericCast<column_t>(column_index));
+	}
+
+	vector<column_t> virtual_column_ids;
+	virtual_column_ids.reserve(get.virtual_columns.size());
+	for (auto &entry : get.virtual_columns) {
+		if (IsUserQueryableVirtualColumn(entry.first)) {
+			virtual_column_ids.push_back(entry.first);
 		}
+	}
+	std::sort(virtual_column_ids.begin(), virtual_column_ids.end());
+	for (auto virtual_column_id : virtual_column_ids) {
+		AddPayloadColumn(get, virtual_column_id);
 	}
 }
 
-static void ExpandLogicalGetOutputs(LogicalOperator &op) {
+static void FinalizeLogicalGetPayloads(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
-		ExpandLogicalGetOutput(op.Cast<LogicalGet>());
+		FinalizeLogicalGetPayload(op.Cast<LogicalGet>());
 	}
 	for (auto &child : op.children) {
-		ExpandLogicalGetOutputs(*child);
+		FinalizeLogicalGetPayloads(*child);
 	}
 }
 
@@ -326,7 +349,7 @@ static void AddNotDistinctConditions(vector<JoinCondition> &conditions, const Bo
 }
 
 static bool PrepareFullJoinSide(unique_ptr<LogicalOperator> &side, FullJoinSide &info, const string &name_prefix) {
-	ExpandLogicalGetOutputs(*side);
+	FinalizeLogicalGetPayloads(*side);
 	side->ResolveOperatorTypes();
 
 	info.bindings = side->GetColumnBindings();
@@ -475,9 +498,9 @@ bool Binder::TryPlanPairDependentFullJoin(BoundJoinRef &ref, unique_ptr<LogicalO
 	match.cte_index = GenerateTableIndex();
 
 	LogicalOperatorDeepCopy left_remapper(*this, nullptr);
-	left_remapper.Remap(*left);
+	left_remapper.RemapTableIndexesInPlace(*left);
 	LogicalOperatorDeepCopy right_remapper(*this, nullptr);
-	right_remapper.Remap(*right);
+	right_remapper.RemapTableIndexesInPlace(*right);
 
 	auto match_left_index = GenerateTableIndex();
 	auto match_right_index = GenerateTableIndex();

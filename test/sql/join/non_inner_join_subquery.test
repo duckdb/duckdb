@@ -534,6 +534,101 @@ NULL	NULL	10	100	2
 NULL	NULL	20	200	1
 NULL	NULL	30	300	1
 
+statement ok
+CREATE TABLE pair_rowid_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_rowid_r(b INTEGER);
+
+statement ok
+CREATE TABLE pair_rowid_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_rowid_l VALUES (1), (2);
+
+statement ok
+INSERT INTO pair_rowid_r VALUES (10), (20);
+
+statement ok
+INSERT INTO pair_rowid_s VALUES (1, 10);
+
+query IIII
+SELECT l.rowid, l.a, r.rowid, r.b
+FROM pair_rowid_l l
+FULL OUTER JOIN pair_rowid_r r ON EXISTS (
+	SELECT 1 FROM pair_rowid_s s WHERE s.a = l.a AND s.b = r.b
+)
+ORDER BY ALL;
+----
+0	1	0	10
+1	2	NULL	NULL
+NULL	NULL	1	20
+
+statement ok
+PRAGMA disable_optimizer;
+
+query IIII
+SELECT l.rowid, l.a, r.rowid, r.b
+FROM pair_rowid_l l
+FULL OUTER JOIN pair_rowid_r r ON EXISTS (
+	SELECT 1 FROM pair_rowid_s s WHERE s.a = l.a AND s.b = r.b
+)
+ORDER BY ALL;
+----
+0	1	0	10
+1	2	NULL	NULL
+NULL	NULL	1	20
+
+statement ok
+PRAGMA enable_optimizer;
+
+statement ok
+CREATE TABLE pair_generated_l(a INTEGER, x INTEGER GENERATED ALWAYS AS (a + 1));
+
+statement ok
+CREATE TABLE pair_generated_r(b INTEGER, y INTEGER);
+
+statement ok
+CREATE TABLE pair_generated_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_generated_l(a) VALUES (1), (2);
+
+statement ok
+INSERT INTO pair_generated_r VALUES (10, 100), (20, 200), (30, 300);
+
+statement ok
+INSERT INTO pair_generated_s VALUES (1, 10), (2, 20);
+
+query IIII
+SELECT l.a, l.x, r.b, r.y
+FROM pair_generated_l l
+FULL OUTER JOIN pair_generated_r r ON EXISTS (
+	SELECT 1 FROM pair_generated_s s WHERE s.a = l.a AND s.b = r.b
+)
+ORDER BY ALL;
+----
+1	2	10	100
+2	3	20	200
+NULL	NULL	30	300
+
+query IIII
+SELECT l.a, l.x, r.b, r.y
+FROM (SELECT * FROM pair_l WHERE x >= 10) l
+FULL OUTER JOIN (SELECT * FROM pair_r WHERE y >= 100) r ON EXISTS (
+	SELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b
+)
+ORDER BY ALL;
+----
+1	10	10	100
+1	10	20	200
+1	11	10	100
+1	11	20	200
+2	20	20	200
+3	30	NULL	NULL
+NULL	NULL	30	300
+NULL	NULL	40	400
+
 # Pair-dependent joins can also reference an outer query. The pair-dependent
 # predicate is still lowered to a left lateral join, and the outer reference is
 # handled by the enclosing dependent join.
