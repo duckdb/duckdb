@@ -386,7 +386,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		std::swap(left, right);
 	}
 	unique_ptr<LogicalOperator> pair_dependent_join;
-	if (TryPlanPairDependentLeftJoin(ref, left, right, pair_dependent_join)) {
+	if (TryPlanPairDependentJoin(ref, left, right, pair_dependent_join)) {
 		RecursiveDependentJoinPlanner::Plan(*this, *pair_dependent_join);
 		return pair_dependent_join;
 	}

@@ -444,9 +444,8 @@ void RecursiveDependentJoinPlanner::PlanJoinSubqueries(LogicalJoin &join, unique
 	if (!expr) {
 		return;
 	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		PlanJoinSubqueries(join, child, uncorrelated_side);
-	});
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { PlanJoinSubqueries(join, child, uncorrelated_side); });
 	if (expr->GetExpressionClass() != ExpressionClass::BOUND_SUBQUERY) {
 		return;
 	}

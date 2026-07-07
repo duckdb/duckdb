@@ -319,15 +319,41 @@ ORDER BY r.b, l.x NULLS LAST;
 NULL	NULL	30
 NULL	NULL	40
 
-# Other non-inner join types still use the conservative unsupported path.
-statement error
+# Pair-dependent FULL OUTER JOIN predicates are evaluated through a match-set
+# CTE so unmatched rows from both sides are preserved.
+query II
 SELECT l.a, r.b
 FROM pair_l l
 FULL OUTER JOIN pair_r r ON EXISTS (
 	SELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b
-);
+)
+ORDER BY l.a NULLS LAST, r.b NULLS LAST;
 ----
-Correlated subquery in a non-inner join condition cannot reference both sides of the join
+1	10
+1	10
+1	20
+1	20
+2	20
+3	NULL
+NULL	30
+NULL	40
+
+query II
+SELECT l.a, r.b
+FROM pair_l l
+FULL OUTER JOIN pair_r r ON r.b IN (
+	SELECT s.b FROM pair_s s WHERE s.a = l.a
+)
+ORDER BY l.a NULLS LAST, r.b NULLS LAST;
+----
+1	10
+1	10
+1	20
+1	20
+2	20
+3	NULL
+NULL	30
+NULL	40
 
 # Pair-dependent joins can also reference an outer query. The pair-dependent
 # predicate is still lowered to a left lateral join, and the outer reference is

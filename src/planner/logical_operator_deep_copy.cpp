@@ -12,10 +12,15 @@ LogicalOperatorDeepCopy::LogicalOperatorDeepCopy(Binder &binder, optional_ptr<bo
 
 unique_ptr<LogicalOperator> LogicalOperatorDeepCopy::DeepCopy(unique_ptr<duckdb::LogicalOperator> &op) {
 	auto copy = op->Copy(binder.context);
-	VisitOperator(*copy);
-	TableBindingReplacer replacer(table_idx_replacements, parameter_data);
-	replacer.VisitOperator(*copy);
+	Remap(*copy);
 	return copy;
+}
+
+void LogicalOperatorDeepCopy::Remap(LogicalOperator &op) {
+	table_idx_replacements.clear();
+	VisitOperator(op);
+	TableBindingReplacer replacer(table_idx_replacements, parameter_data);
+	replacer.VisitOperator(op);
 }
 
 // The following templates of TableIndexAccessor with ReplaceTableIndex and ReplaceTableIndexMulti
