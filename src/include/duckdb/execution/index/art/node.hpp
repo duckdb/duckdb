@@ -227,6 +227,29 @@ private:
 	string ToStringChildren(ART &art, const ToStringOptions &options) const;
 };
 
+//! OptionalNode either holds a valid node, or is empty.
+//! Emptiness is derived from the node itself: a node without metadata is the empty state.
+class OptionalNode {
+public:
+	OptionalNode() = default;
+	OptionalNode(const Node node) : node(node) { // NOLINT: allow implicit conversion from Node
+	}
+
+	//! Returns true, if the OptionalNode holds a valid node.
+	explicit operator bool() const {
+		return node.HasMetadata();
+	}
+
+	//! Returns the node. Must only be called if the OptionalNode holds a valid node.
+	Node Get() const {
+		D_ASSERT(node.HasMetadata());
+		return node;
+	}
+
+private:
+	Node node;
+};
+
 //! NodeChildren holds the extracted bytes of a node, and their respective children.
 //! The bytes and children are valid as long as the arena is valid,
 //! even if the original node has been freed.

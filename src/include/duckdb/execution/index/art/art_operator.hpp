@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/optional.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/const_prefix_handle.hpp"
@@ -21,8 +20,8 @@ namespace duckdb {
 //! ARTOperator provides functionality for different ART operations.
 class ARTOperator {
 public:
-	//! Lookup returns a Node Pointer by value matching the key, or empty optional if no such leaf exists.
-	static optional<Node> Lookup(ART &art, const Node &node, const ARTKey &key, idx_t depth) {
+	//! Lookup returns the leaf matching the key, or an empty OptionalNode if no such leaf exists.
+	static OptionalNode Lookup(ART &art, const Node &node, const ARTKey &key, idx_t depth) {
 		Node current(node);
 
 		while (current.HasMetadata()) {
@@ -36,7 +35,7 @@ public:
 				auto child = ConstPrefixHandle::ChildRef(art, handle);
 				for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
 					if (data[i] != key[depth]) {
-						return nullopt;
+						return OptionalNode();
 					}
 					depth++;
 				}
@@ -47,7 +46,7 @@ public:
 			D_ASSERT(depth < key.len);
 			auto child = current.GetChildNode(art, key[depth]);
 			if (!child.HasMetadata()) {
-				return nullopt;
+				return OptionalNode();
 			}
 
 			current = child;
@@ -55,7 +54,7 @@ public:
 			depth++;
 		}
 
-		return nullopt;
+		return OptionalNode();
 	}
 
 	//! LookupInLeaf returns true if the rowid is in the leaf:
@@ -354,8 +353,8 @@ private:
 
 				// The row ID has changed.
 				// Thus, the local index has a newer (local) row ID, and this is a constraint violation.
-				D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
-				auto deleted_row_id = delete_leaf->GetRowId();
+				D_ASSERT(delete_leaf.Get().GetType() == NType::LEAF_INLINED);
+				auto deleted_row_id = delete_leaf.Get().GetRowId();
 				auto this_row_id = node.GetRowId();
 				if (deleted_row_id != this_row_id) {
 					continue;
