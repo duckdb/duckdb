@@ -31,8 +31,8 @@ string TerminalProgressBarDisplay::FormatETA(double seconds, bool elapsed) {
 		return string(RENDER_SIZE, ' ');
 	}
 
-	// Round to nearest centisecond as integer
-	auto total_centiseconds = static_cast<uint64_t>(std::llround(seconds * 100.0));
+	// Round to nearest centisecond as integer. The ETA is non-negative here.
+	auto total_centiseconds = static_cast<uint64_t>(seconds * 100.0 + 0.5);
 
 	// Split into seconds and centiseconds
 	uint64_t total_seconds = total_centiseconds / 100;
