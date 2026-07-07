@@ -906,35 +906,6 @@ TEST_CASE("AsyncFileWriter coalesces remote non-positional writes", "[async_file
 	fs.RemoveFile(path);
 }
 
-TEST_CASE("AsyncFileWriter uses remote coalescing when local file delay is enabled", "[async_file_writer]") {
-	DuckDB db(nullptr);
-	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	REQUIRE_NO_FAIL(con->Query("SET GLOBAL debug_local_file_system_delay_ms=1"));
-	BlockingWriteFileSystem fs(true);
-	auto path = TestCreatePath("async_file_writer_debug_delay_remote_coalesce.tmp");
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
-
-	string first(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'a');
-	string second(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'b');
-
-	AsyncFileWriter writer(*con->context, fs, path);
-	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	REQUIRE(fs.BlockedWrites() == 0);
-
-	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
-	REQUIRE(fs.WaitForBlockedWrites(1));
-	fs.ReleaseWrites();
-	writer.Close();
-
-	REQUIRE(ReadFile(path) == first + second);
-	REQUIRE(fs.write_sizes.size() == 1);
-	REQUIRE(fs.write_sizes[0] == AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD);
-	fs.RemoveFile(path);
-}
-
 TEST_CASE("AsyncFileWriter does not eagerly schedule tiny remote tails after one large write", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 4);

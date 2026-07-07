@@ -1,0 +1,17 @@
+# name: test/optimizer/left_to_prefix.test
+# description: Test rewriting of left(s, n) = constant into prefix comparisons
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t AS SELECT printf('%08d', i) AS s, i::BIGINT AS x FROM range(10000000) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE left(s, 5) = '09999';
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+# left rejects substring lengths above the supported range, so don't rewrite those
+statement error
+SELECT * FROM (VALUES ('a')) t(s) WHERE left(s, 4294967296) = 'a';
+----
+Out of Range Error: Substring length outside of supported range

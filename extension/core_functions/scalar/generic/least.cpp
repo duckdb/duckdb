@@ -3,6 +3,8 @@
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 
@@ -169,6 +171,68 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 template <class LEAST_GREATER_OP>
+unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	auto &return_type = expr.GetReturnType();
+	if (BaseStatistics::GetStatsType(return_type) != StatisticsType::NUMERIC_STATS ||
+	    return_type.InternalType() == PhysicalType::BOOL) {
+		return nullptr;
+	}
+	constexpr bool IS_LEAST = std::is_same_v<LEAST_GREATER_OP, LeastOp>;
+
+	auto merge = [](Value &bound, const Value &candidate, bool keep_smaller) {
+		if (bound.IsNull() || (keep_smaller ? candidate < bound : candidate > bound)) {
+			bound = candidate;
+		}
+	};
+
+	// least/greatest always returns one of its inputs, so the result range is built from the
+	// inputs' min/max values. A NULL input is skipped at runtime, so only inputs that can never
+	// be NULL may tighten the "anchored" side of the range:
+	//
+	//             | loose side (over all inputs) | anchored side (over non-null inputs)
+	//   least     | min of the mins  -> min      | min of the maxes -> max
+	//   greatest  | max of the maxes -> max      | max of the mins  -> min
+	//
+	// If every input can be NULL, a single input may end up deciding the result, so the anchored
+	// side falls back to the opposite aggregation over all inputs
+	Value loose;
+	Value anchored;          // over non-null inputs only
+	Value anchored_fallback; // over all inputs; used only when every input is nullable
+	bool has_nonnull_input = false;
+	for (auto &cs : child_stats) {
+		if (cs.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(cs)) {
+			return nullptr;
+		}
+		const Value cmin = NumericStats::Min(cs);
+		const Value cmax = NumericStats::Max(cs);
+		const Value &loose_val = IS_LEAST ? cmin : cmax;
+		const Value &anchored_val = IS_LEAST ? cmax : cmin;
+
+		merge(loose, loose_val, /*keep_smaller=*/IS_LEAST);
+		merge(anchored_fallback, anchored_val, /*keep_smaller=*/!IS_LEAST);
+		if (!cs.CanHaveNull()) {
+			has_nonnull_input = true;
+			merge(anchored, anchored_val, /*keep_smaller=*/IS_LEAST);
+		}
+	}
+	if (!has_nonnull_input) {
+		anchored = std::move(anchored_fallback);
+	}
+
+	auto result = NumericStats::CreateEmpty(return_type);
+	NumericStats::SetMin(result, IS_LEAST ? std::move(loose) : std::move(anchored));
+	NumericStats::SetMax(result, IS_LEAST ? std::move(anchored) : std::move(loose));
+	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
+	if (!has_nonnull_input) {
+		// the result is NULL only if all inputs are NULL
+		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+	return result.ToUnique();
+}
+
+template <class LEAST_GREATER_OP>
 unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
@@ -235,8 +299,9 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
-	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>, nullptr, nullptr,
-	                      LogicalType::ANY, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>,
+	                      PropagateLeastGreatestStats<OP>, nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
+	                      FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 template <class OP>

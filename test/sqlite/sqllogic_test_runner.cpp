@@ -10,6 +10,7 @@
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/settings.hpp"
+#include "debug_fs_extension.hpp"
 #include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
@@ -235,6 +236,7 @@ NewDatabaseConnection SQLLogicTestRunner::CreateDatabase(const string &db_path, 
 	NewDatabaseConnection result;
 	try {
 		result.db = make_uniq<DuckDB>(db_path, config.get());
+		result.db->LoadStaticExtension<DebugFsExtension>();
 
 		// always load core functions
 		auto &test_config = TestConfiguration::Get();

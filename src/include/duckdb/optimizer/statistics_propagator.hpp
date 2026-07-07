@@ -39,6 +39,11 @@ public:
 	static bool CanPropagateCast(const LogicalType &source, const LogicalType &target);
 	static unique_ptr<BaseStatistics> TryPropagateCast(const BaseStatistics &stats, const LogicalType &source,
 	                                                   const LogicalType &target);
+	//! Derive output statistics of a monotone function by evaluating it at the corners of its
+	//! argument ranges (see ArgProperties). Returns nullptr when the bounds cannot be derived.
+	static unique_ptr<BaseStatistics> PropagateMonotoneBounds(ClientContext &context,
+	                                                          const BoundFunctionExpression &func,
+	                                                          const vector<BaseStatistics> &child_stats);
 
 private:
 	//! Propagate statistics through an operator
