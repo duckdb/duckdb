@@ -2,7 +2,6 @@
 
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art_builder.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
@@ -28,6 +27,8 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 
 namespace duckdb {
 
@@ -125,6 +126,27 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 		// we can not make any general assumptions about the exact storage version.
 		storage_version = StorageVersion::INVALID;
 	}
+}
+
+ART::ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr)
+    : BoundIndex(src.name, ART::TYPE_NAME, src.index_constraint_type, src.column_ids, src.table_io_manager,
+                 src.unbound_expressions, src.db),
+      tree(src.tree), allocators(std::move(allocators_ptr)), owns_data(true), storage_version(src.storage_version),
+      prefix_count(src.prefix_count) {
+	D_ASSERT(allocators);
+}
+
+unique_ptr<BoundIndex> ART::CreateShadow(shared_ptr<AllocatorArray> new_allocators) {
+	auto art = make_uniq<ART>(*this, std::move(new_allocators));
+	return std::move(art);
+}
+
+uint8_t ART::GetAllocatorCount(const ARTSerializationFormat format) {
+	if (format == ARTSerializationFormat::V1_0_0) {
+		return DEPRECATED_ALLOCATOR_COUNT;
+	}
+
+	return ALLOCATOR_COUNT;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1006,26 +1028,21 @@ void ART::TransformToDeprecated() {
 	}
 }
 
-IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &options, const bool v1_0_0_storage) {
-	if (v1_0_0_storage) {
+IndexStorageInfo ART::PrepareSerialize(const ARTSerializationFormat target_format) {
+	if (target_format == ARTSerializationFormat::V1_0_0) {
 		TransformToDeprecated();
 	}
 
 	IndexStorageInfo info(name);
 	info.root = tree.Get();
-	info.options = options;
 
 	// It never hurts to serialize the storage version, even to older formats
 	if (storage_version != StorageVersion::INVALID) {
 		info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
 	}
 
-	for (auto &allocator : *allocators) {
-		allocator->RemoveEmptyBuffers();
-	}
-
 #ifdef DEBUG
-	if (v1_0_0_storage) {
+	if (target_format == ARTSerializationFormat::V1_0_0) {
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->Empty());
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_15_LEAF)]->Empty());
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_256_LEAF)]->Empty());
@@ -1037,33 +1054,44 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	return info;
 }
 
-IndexStorageInfo ART::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
-	lock_guard<mutex> guard(lock);
-
-	// If the storage format uses deprecated leaf storage,
-	// then we need to transform all nested leaves before serialization.
-	auto v1_0_0_option = options.find("v1_0_0_storage");
-	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
-	auto info = PrepareSerialize(options, v1_0_0_storage);
-	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
-
-	// Store the data on disk as partial blocks and set the block ids.
-	WritePartialBlocks(context, v1_0_0_storage);
-
-	for (idx_t i = 0; i < allocator_count; i++) {
-		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
+ARTSerializationFormat ART::GetSerializationFormat(const StorageVersion storage_version) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
+		return ARTSerializationFormat::V1_0_0;
 	}
 
-	return info;
+	return ARTSerializationFormat::CURRENT;
 }
 
-IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+BoundCheckpointedIndex ART::CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) {
+	const auto target_format = GetSerializationFormat(writer.GetStorageVersion());
+	// This may mutate the live ART into a deprecated representation, but we accept this to prevent double copying.
+	auto storage_info = PrepareSerialize(target_format);
+
+	auto &partial_block_manager = writer.GetPartialBlockManager();
+	const auto new_allocators = make_shared_ptr<AllocatorArray>();
+	const auto allocator_count = GetAllocatorCount(target_format);
+
+	// We allocate all allocators, but serialize in accordance with the target format.
+	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
+		auto &new_allocator = (*new_allocators)[i];
+
+		new_allocator = (*allocators)[i]->Persist(partial_block_manager);
+
+		if (i < allocator_count) {
+			storage_info.allocator_infos.push_back(new_allocator->GetInfo());
+		}
+	}
+
+	auto shadow = CreateShadow(new_allocators);
+	return {(std::move(storage_info)), std::move(shadow)};
+}
+
+IndexStorageInfo ART::SerializeToWAL(const StorageVersion target_version) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
-	auto v1_0_0_option = options.find("v1_0_0_storage");
-	bool v1_0_0_storage = v1_0_0_option == options.end() || v1_0_0_option->second != Value(false);
-	auto info = PrepareSerialize(options, v1_0_0_storage);
-	auto allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
+	const auto target_format = GetSerializationFormat(target_version);
+	auto info = PrepareSerialize(target_format);
+	const auto allocator_count = GetAllocatorCount(target_format);
 
 	// Set the correct allocation sizes and get the map containing all buffers.
 	for (idx_t i = 0; i < allocator_count; i++) {
@@ -1072,20 +1100,10 @@ IndexStorageInfo ART::SerializeToWAL(const case_insensitive_map_t<Value> &option
 
 	for (idx_t i = 0; i < allocator_count; i++) {
 		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
+		D_ASSERT(info.buffers[i].size() == info.allocator_infos[i].buffer_ids.size());
 	}
 
 	return info;
-}
-
-void ART::WritePartialBlocks(QueryContext context, const bool v1_0_0_storage) {
-	auto &block_manager = table_io_manager.GetIndexBlockManager();
-	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
-
-	idx_t allocator_count = v1_0_0_storage ? DEPRECATED_ALLOCATOR_COUNT : ALLOCATOR_COUNT;
-	for (idx_t i = 0; i < allocator_count; i++) {
-		(*allocators)[i]->SerializeBuffers(partial_block_manager);
-	}
-	partial_block_manager.FlushPartialBlocks();
 }
 
 void ART::InitAllocators(const IndexStorageInfo &info) {

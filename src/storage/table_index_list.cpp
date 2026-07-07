@@ -1,17 +1,16 @@
 #include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
@@ -313,36 +312,28 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
+void TableIndexList::CheckPoint(TableIndexWriter &writer) {
 	lock_guard<mutex> lock(index_entries_lock);
 
-	IndexSerializationResult result;
-
-	idx_t bound_count = 0;
-	for (auto &entry : index_entries) {
-		if (entry->index->IsBound()) {
-			bound_count++;
-		}
+	for (const auto &entry : index_entries) {
+		entry->index->Checkpoint(writer);
 	}
-	result.bound_infos.reserve(bound_count);
-	for (auto &entry : index_entries) {
-		auto &index = *entry->index;
-		if (!index.IsBound()) {
-			// Unbound: reference existing storage info
-			auto &unbound_index = index.Cast<UnboundIndex>();
-			D_ASSERT(!unbound_index.GetStorageInfo().name.empty());
-			result.ordered_infos.push_back(unbound_index.GetStorageInfo());
+
+	// Flush before swapping the live indexes, so we don't reference blocks that do not exist
+	writer.Flush();
+
+	idx_t index_idx = 0;
+	for (const auto &entry : index_entries) {
+		lock_guard<mutex> guard(entry->lock);
+
+		auto shadow_index = writer.TakeShadowIndex(index_idx++);
+		if (!shadow_index) {
+			D_ASSERT(!entry->index->IsBound());
 			continue;
 		}
-		// Bound: move new storage info into bound_infos, then reference it
-		auto &bound_index = index.Cast<BoundIndex>();
-		auto storage_info = bound_index.SerializeToDisk(context, info.options);
-		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
-		result.bound_infos.push_back(std::move(storage_info));
-		result.ordered_infos.push_back(result.bound_infos.back());
+		D_ASSERT(entry->index->IsBound());
+		entry->index = std::move(shadow_index);
 	}
-
-	return result;
 }
 
 void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
@@ -385,6 +376,14 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 		}
 		entry->last_written_checkpoint = checkpoint_id;
 	}
+}
+
+void TableIndexList::Serialize(const vector<CheckpointedIndex> &result, Serializer &serializer) {
+	// write empty block pointers for forwards compatibility
+	const vector<BlockPointer> compat_block_pointers;
+	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
+	serializer.WriteList(104, "index_storage_infos", result.size(),
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(*result[i].storage_info); });
 }
 
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
