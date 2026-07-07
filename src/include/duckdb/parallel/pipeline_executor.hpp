@@ -107,6 +107,8 @@ private:
 	//! Intermediate states for the operators
 	vector<unique_ptr<OperatorState>> intermediate_states;
 
+	//! The global source state used by this executor
+	shared_ptr<GlobalSourceState> global_source_state;
 	//! The local source state
 	unique_ptr<LocalSourceState> local_source_state;
 	//! The local sink state (if any)

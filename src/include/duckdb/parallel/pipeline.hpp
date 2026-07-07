@@ -164,7 +164,7 @@ private:
 	optional_ptr<PhysicalOperator> sink;
 
 	//! The global source state
-	unique_ptr<GlobalSourceState> source_state;
+	shared_ptr<GlobalSourceState> source_state;
 	//! Lock for resetting or inspecting the global source state pointer
 	mutex source_state_lock;
 
@@ -199,6 +199,8 @@ private:
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 	void ResetSinkAndOperators();
+	shared_ptr<GlobalSourceState> GetSourceState();
+	void SetSourceState(shared_ptr<GlobalSourceState> state);
 	void FinishSource(ClientContext &context);
 	void FinishSourceAndPreventBlocking(ClientContext &context);
 	void PreventSourceBlocking();

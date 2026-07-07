@@ -16,6 +16,10 @@
 
 namespace duckdb {
 
+static shared_ptr<GlobalSourceState> ToSharedSourceState(unique_ptr<GlobalSourceState> state) {
+	return shared_ptr<GlobalSourceState>(std::move(state));
+}
+
 PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
     : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p) {
 }
@@ -86,14 +90,12 @@ bool Pipeline::GetProgress(ProgressData &progress) {
 	}
 	auto &client = executor.context;
 
-	{
-		lock_guard<mutex> guard(source_state_lock);
-		if (source_state) {
-			progress = source->GetProgress(client, *source_state);
-		} else {
-			progress.done = 0;
-			progress.total = double(source_cardinality);
-		}
+	auto state = GetSourceState();
+	if (state) {
+		progress = source->GetProgress(client, *state);
+	} else {
+		progress.done = 0;
+		progress.total = double(source_cardinality);
 	}
 	progress.Normalize(double(source_cardinality));
 	if (sink) {
@@ -119,10 +121,9 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 	if (!source->ParallelSource()) {
 		return false;
 	}
-	{
-		lock_guard<mutex> guard(source_state_lock);
-		max_threads = source_state->MaxThreads();
-	}
+	auto source_state = GetSourceState();
+	D_ASSERT(source_state);
+	max_threads = source_state->MaxThreads();
 
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
@@ -403,13 +404,11 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
-	{
-		lock_guard<mutex> guard(source_state_lock);
-		if (!allow_reuse || !source_state || !source_state->SupportsReuse()) {
-			source_state = source->GetGlobalSourceState(client);
-		} else {
-			source_state->Reset(client);
-		}
+	auto source_state = GetSourceState();
+	if (allow_reuse && source_state && source_state->SupportsReuse()) {
+		source_state->Reset(client);
+	} else {
+		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(client)));
 	}
 	initialized = true;
 }
@@ -418,9 +417,9 @@ void Pipeline::ResetSource(bool force) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
-	lock_guard<mutex> guard(source_state_lock);
+	auto source_state = GetSourceState();
 	if (force || !source_state) {
-		source_state = source->GetGlobalSourceState(GetClientContext());
+		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(GetClientContext())));
 	}
 }
 
@@ -439,11 +438,21 @@ void Pipeline::PrepareExternalInput() {
 	initialized = true;
 }
 
+shared_ptr<GlobalSourceState> Pipeline::GetSourceState() {
+	lock_guard<mutex> guard(source_state_lock);
+	return source_state;
+}
+
+void Pipeline::SetSourceState(shared_ptr<GlobalSourceState> state) {
+	lock_guard<mutex> guard(source_state_lock);
+	source_state = std::move(state);
+}
+
 void Pipeline::FinishSource(ClientContext &context) {
 	if (IsExternalInput() || !source) {
 		return;
 	}
-	lock_guard<mutex> guard(source_state_lock);
+	auto source_state = GetSourceState();
 	if (!source_state) {
 		return;
 	}
@@ -454,7 +463,7 @@ void Pipeline::FinishSourceAndPreventBlocking(ClientContext &context) {
 	if (IsExternalInput() || !source) {
 		return;
 	}
-	lock_guard<mutex> source_guard(source_state_lock);
+	auto source_state = GetSourceState();
 	if (!source_state) {
 		return;
 	}
@@ -465,7 +474,7 @@ void Pipeline::FinishSourceAndPreventBlocking(ClientContext &context) {
 }
 
 void Pipeline::PreventSourceBlocking() {
-	lock_guard<mutex> source_guard(source_state_lock);
+	auto source_state = GetSourceState();
 	if (!source_state) {
 		return;
 	}
