@@ -130,3 +130,79 @@ query II
 EXPLAIN SELECT count(*), min(i), max(i) FROM t WHERE i >= 2048 AND j > 5000 GROUP BY i % 10
 ----
 physical_plan	<REGEX>:.*HASH_GROUP_BY.*
+
+# Bare aggregate partition split: some row groups lack min/max stats for a column (all-null).
+statement ok
+ATTACH '{TEST_DIR}/partial_agg_sparse.duckdb' AS sparse (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE sparse
+
+statement ok
+CREATE TABLE t_sparse AS SELECT i, CASE WHEN i < 4096 THEN NULL::BIGINT ELSE i * 2 END AS j FROM range(8192) _(i)
+
+statement ok
+ATTACH '{TEST_DIR}/tmp_partial_sparse.duckdb' AS tmp_sparse
+
+statement ok
+USE tmp_sparse
+
+statement ok
+DETACH sparse
+
+statement ok
+ATTACH '{TEST_DIR}/partial_agg_sparse.duckdb' AS sparse (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE sparse
+
+statement ok
+DETACH tmp_sparse
+
+# Columns with stats on every row group still fully fold without a scan.
+query II
+EXPLAIN SELECT max(i) FROM t_sparse
+----
+physical_plan	<REGEX>:.*COLUMN_DATA_SCAN.*
+
+# Partial split without filters: COALESCE merges manifest-precomputed extrema with a subset scan.
+query II
+EXPLAIN SELECT max(j) FROM t_sparse
+----
+physical_plan	<REGEX>:.*COALESCE.*greatest.*UNGROUPED_AGGREGATE.*
+
+query II
+EXPLAIN SELECT min(j) FROM t_sparse
+----
+physical_plan	<REGEX>:.*COALESCE.*least.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(j) FROM t_sparse
+----
+16382
+
+query I
+SELECT min(j) FROM t_sparse
+----
+8192
+
+query II
+EXPLAIN ANALYZE SELECT max(j) FROM t_sparse
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
+
+statement ok
+SET disabled_optimizers='statistics_propagation'
+
+query I
+SELECT max(j) FROM t_sparse
+----
+16382
+
+query I
+SELECT min(j) FROM t_sparse
+----
+8192
+
+statement ok
+RESET disabled_optimizers
