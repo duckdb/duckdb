@@ -210,7 +210,7 @@ void append_decimal(tpch_append_information &info, int64_t value) {
 
 void append_char(tpch_append_information &info, char value) {
 	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] = string_t(&value, 1);
+	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] = StringVector::AddString(vector, &value, 1);
 }
 
 static date_t raw_tpch_date(DSS_HUGE value) {
@@ -898,6 +898,15 @@ static idx_t GetDBGenTableOutputMultiplier(int table_index) {
 	}
 }
 
+static idx_t GetDBGenTableOrder(int table_index) {
+	for (idx_t i = 0; i < sizeof(DBGEN_TABLES) / sizeof(DBGEN_TABLES[0]); i++) {
+		if (DBGEN_TABLES[i] == table_index) {
+			return i;
+		}
+	}
+	throw InternalException("Unexpected TPC-H dbgen table index");
+}
+
 static idx_t GetDefaultTableChildCount(const DBGenContext &dbgen_ctx, int table_index, idx_t thread_count) {
 	auto row_count = GetDBGenTableRowCount(dbgen_ctx, table_index);
 	if (row_count <= DBGEN_TARGET_CHUNK_ROWS || thread_count <= 1) {
@@ -1019,6 +1028,15 @@ private:
 	DBGenContext dbgen_ctx;
 };
 
+struct FinishedDBGenAppender {
+	FinishedDBGenAppender(DBGenWorkItem work_item, unique_ptr<TPCHDataAppender> appender)
+	    : work_item(work_item), appender(std::move(appender)) {
+	}
+
+	DBGenWorkItem work_item;
+	unique_ptr<TPCHDataAppender> appender;
+};
+
 class ParallelTPCHAppendTask : public BaseExecutorTask {
 public:
 	ParallelTPCHAppendTask(TaskExecutor &executor, TPCHDataAppender &appender, DBGenWorkItem work_item)
@@ -1089,7 +1107,7 @@ public:
 
 	bool GenerateNext() override {
 		context.InterruptCheck();
-		if (finished) {
+		if (finished.load()) {
 			return true;
 		}
 		if (total_work == 0) {
@@ -1107,7 +1125,7 @@ public:
 	}
 
 	double Progress() const override {
-		if (finished) {
+		if (finished.load()) {
 			return 100.0;
 		}
 		if (total_work == 0) {
@@ -1179,6 +1197,17 @@ private:
 		return MinValue<idx_t>(static_cast<idx_t>(CHILDREN_PER_SCALE_FACTOR * flt_scale), MAX_CHILDREN);
 	}
 
+	bool UseStatsCompatibleChildCount(int table_index) const {
+		// Keep small join dimensions on the historical batch boundaries used by plan-cost-sensitive statistics.
+		switch (table_index) {
+		case SUPP:
+		case CUST:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	void InitializeParallelWorkItems() {
 		total_work = 0;
 		parallel_work_items.clear();
@@ -1186,8 +1215,10 @@ private:
 			if (!(table & (1 << table_index))) {
 				continue;
 			}
-			auto children =
-			    NumericCast<int>(GetDefaultTableChildCount(base_context, table_index, parallel_thread_count));
+			auto children = UseStatsCompatibleChildCount(table_index)
+			                    ? NumericCast<int>(GetDefaultChildCount())
+			                    : NumericCast<int>(
+			                          GetDefaultTableChildCount(base_context, table_index, parallel_thread_count));
 			for (int step = 0; step < children; step++) {
 				auto row_count = GetDBGenTableRowCount(base_context, table_index);
 				auto range = GetDBGenTableRange(row_count, children, step);
@@ -1202,28 +1233,41 @@ private:
 		          [](const DBGenWorkItem &left, const DBGenWorkItem &right) {
 			          auto left_output_rows = left.count * GetDBGenTableOutputMultiplier(left.table_index);
 			          auto right_output_rows = right.count * GetDBGenTableOutputMultiplier(right.table_index);
-			          return left_output_rows > right_output_rows;
+			          if (left_output_rows != right_output_rows) {
+				          return left_output_rows > right_output_rows;
+			          }
+			          auto left_table_order = GetDBGenTableOrder(left.table_index);
+			          auto right_table_order = GetDBGenTableOrder(right.table_index);
+			          if (left_table_order != right_table_order) {
+				          return left_table_order < right_table_order;
+			          }
+			          return left.step < right.step;
 		          });
+		parallel_next_flush_step.assign(REGION + 1, 0);
 	}
 
 	bool FlushNextFinishedAppender() {
-		if (finished_appender_offset >= finished_appenders.size()) {
-			finished_appenders.clear();
-			finished_appender_offset = 0;
-			return false;
+		for (idx_t appender_idx = 0; appender_idx < finished_appenders.size(); appender_idx++) {
+			auto &finished_appender = *finished_appenders[appender_idx];
+			auto table_index = finished_appender.work_item.table_index;
+			if (finished_appender.work_item.step != parallel_next_flush_step[table_index]) {
+				continue;
+			}
+			auto flushed_count = finished_appender.appender->GeneratedWork();
+			finished_appender.appender->Flush();
+			flushed_work.fetch_add(flushed_count);
+			parallel_next_flush_step[table_index]++;
+			finished_appenders.erase(finished_appenders.begin() + UnsafeNumericCast<int64_t>(appender_idx));
+			return true;
 		}
-		auto &appender = finished_appenders[finished_appender_offset++];
-		appender.Flush();
-		flushed_work.fetch_add(appender.GeneratedWork());
-		if (finished_appender_offset >= finished_appenders.size()) {
-			finished_appenders.clear();
-			finished_appender_offset = 0;
-		}
-		return true;
+		return false;
 	}
 
 	void FlushAllFinishedAppenders() {
 		while (FlushNextFinishedAppender()) {
+		}
+		if (!finished_appenders.empty()) {
+			throw InternalException("Failed to flush TPC-H dbgen appenders in deterministic order");
 		}
 	}
 
@@ -1237,18 +1281,19 @@ private:
 		if (parallel_work_offset < parallel_work_items.size()) {
 			TaskExecutor executor(context);
 
-			vector<TPCHDataAppender> new_appenders;
+			vector<unique_ptr<TPCHDataAppender>> new_appenders;
+			new_appenders.reserve(parallel_thread_count);
 			auto launched_offset = parallel_work_offset;
 			for (idx_t thr_idx = 0; thr_idx < parallel_thread_count && launched_offset < parallel_work_items.size();
 			     thr_idx++, launched_offset++) {
 				auto &work_item = parallel_work_items[launched_offset];
-				new_appenders.emplace_back(context, *parameters, base_context, TPCHAppendMode::OPTIMISTIC,
-				                           NumericLimits<int64_t>::Maximum(), &generated_work,
-				                           work_item.table_index);
+				new_appenders.push_back(make_uniq<TPCHDataAppender>(
+				    context, *parameters, base_context, TPCHAppendMode::OPTIMISTIC,
+				    NumericLimits<int64_t>::Maximum(), &generated_work, work_item.table_index));
 			}
 			for (auto &appender : new_appenders) {
-				auto task =
-				    make_uniq<ParallelTPCHAppendTask>(executor, appender, parallel_work_items[parallel_work_offset]);
+				auto task = make_uniq<ParallelTPCHAppendTask>(executor, *appender,
+				                                              parallel_work_items[parallel_work_offset]);
 				executor.ScheduleTask(std::move(task));
 				parallel_work_offset++;
 			}
@@ -1256,7 +1301,11 @@ private:
 			if (executor.HasError()) {
 				executor.ThrowError();
 			}
-			finished_appenders = std::move(new_appenders);
+			for (idx_t appender_idx = 0; appender_idx < new_appenders.size(); appender_idx++) {
+				auto work_item_idx = parallel_work_offset - new_appenders.size() + appender_idx;
+				finished_appenders.push_back(make_uniq<FinishedDBGenAppender>(
+				    parallel_work_items[work_item_idx], std::move(new_appenders[appender_idx])));
+			}
 			return false;
 		}
 		Finish();
@@ -1324,9 +1373,9 @@ private:
 			cleanup_dists();
 			distributions_loaded = false;
 		}
-		generated_work = total_work;
-		flushed_work = total_work;
-		finished = true;
+		generated_work.store(total_work);
+		flushed_work.store(total_work);
+		finished.store(true);
 	}
 
 private:
@@ -1337,7 +1386,7 @@ private:
 	DBGenContext base_context;
 	unique_ptr<TPCHDBgenParameters> parameters;
 	bool distributions_loaded = false;
-	bool finished = false;
+	atomic<bool> finished {false};
 	DBGenMode mode = DBGenMode::SEQUENTIAL;
 	atomic<idx_t> generated_work {0};
 	atomic<idx_t> flushed_work {0};
@@ -1346,8 +1395,8 @@ private:
 	idx_t parallel_thread_count = 1;
 	vector<DBGenWorkItem> parallel_work_items;
 	idx_t parallel_work_offset = 0;
-	vector<TPCHDataAppender> finished_appenders;
-	idx_t finished_appender_offset = 0;
+	vector<unique_ptr<FinishedDBGenAppender>> finished_appenders;
+	vector<int> parallel_next_flush_step;
 
 	int sequential_children = 1;
 	int sequential_start_step = 0;

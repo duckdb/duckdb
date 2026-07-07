@@ -8,6 +8,9 @@
 #include "dbgen/dbgen.hpp"
 #include "tpch_extension.hpp"
 
+#include <atomic>
+#include <mutex>
+
 namespace duckdb {
 
 struct DBGenFunctionData : public TableFunctionData {
@@ -25,7 +28,8 @@ struct DBGenFunctionData : public TableFunctionData {
 
 struct DBGenGlobalState : public GlobalTableFunctionState {
 	bool schema_created = false;
-	bool finished = false;
+	atomic<bool> finished {false};
+	mutable mutex generator_lock;
 	unique_ptr<tpch::DBGenGenerator> generator;
 };
 
@@ -94,19 +98,28 @@ unique_ptr<GlobalTableFunctionState> DbgenInit(ClientContext &context, TableFunc
 static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.bind_data->Cast<DBGenFunctionData>();
 	auto &state = data_p.global_state->Cast<DBGenGlobalState>();
-	if (state.finished) {
+	if (state.finished.load()) {
 		data_p.async_result = AsyncResultType::FINISHED;
 		return;
 	}
 	if (!state.schema_created) {
 		tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
-		state.generator = tpch::CreateDBGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix,
-		                                             data.children, data.step);
+		auto generator = tpch::CreateDBGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix,
+		                                            data.children, data.step);
+		{
+			lock_guard<mutex> guard(state.generator_lock);
+			state.generator = std::move(generator);
+		}
 		state.schema_created = true;
 	}
 
-	if (!state.generator || state.generator->GenerateNext()) {
-		state.finished = true;
+	bool finished = false;
+	{
+		lock_guard<mutex> guard(state.generator_lock);
+		finished = !state.generator || state.generator->GenerateNext();
+	}
+	if (finished) {
+		state.finished.store(true);
 		data_p.async_result = AsyncResultType::FINISHED;
 		return;
 	}
@@ -123,10 +136,13 @@ static double DbgenProgress(ClientContext &context, const FunctionData *bind_dat
 		return 0.0;
 	}
 	auto &state = global_state->Cast<DBGenGlobalState>();
-	if (state.generator) {
-		return state.generator->Progress();
+	{
+		lock_guard<mutex> guard(state.generator_lock);
+		if (state.generator) {
+			return state.generator->Progress();
+		}
 	}
-	return state.finished ? 100.0 : 0.0;
+	return state.finished.load() ? 100.0 : 0.0;
 }
 
 struct TPCHData : public GlobalTableFunctionState {
