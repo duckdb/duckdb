@@ -19,7 +19,7 @@ namespace duckdb {
 struct PEGMatcher;
 struct MatcherToken;
 class ParseResult;
-class ListParseResult;
+struct ListParseResult;
 class ParseResultAllocator;
 
 //! One chunk of input as seen by the connect-mode (Layer 1) parser.
