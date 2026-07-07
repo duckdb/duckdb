@@ -495,7 +495,7 @@ public:
 		return MatchResultType::SUCCESS;
 	}
 
-	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+	optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const override {
 		if (state.token_index >= state.tokens.size()) {
 			return nullptr;
 		}
