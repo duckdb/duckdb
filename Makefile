@@ -781,9 +781,12 @@ format-parser-grammar: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated_trampoline.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
 
-.PHONY: parser-grammar
-parser-grammar: $(FORMAT_SETUP_DEPS)
-	./scripts/parser/build_grammar.sh
+.PHONY: parser-grammar-tools parser-grammar
+parser-grammar-tools: $(FORMAT_SETUP_DEPS)
+	@$(FORMAT_PYTHON) -m pip show pyyaml >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install PyYAML
+
+parser-grammar: parser-grammar-tools
+	PYTHON="$(FORMAT_PYTHON)" ./scripts/parser/build_grammar.sh
 
 .PHONY: check-extension-entries
 check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
