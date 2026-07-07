@@ -232,51 +232,54 @@ ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups, Se
 //===----------------------------------------------------------------------===//
 // ScanSizePredictor
 //===----------------------------------------------------------------------===//
-void ScanSizePredictor::Initialize(const vector<StorageIndex> &column_ids, RowGroup &row_group) {
-	fixed_bytes_per_row = 0;
-	dynamic_bytes_per_row = 0;
-	auto row_count = row_group.count.load();
+idx_t ScanSizePredictor::PredictBatchSize(idx_t target_bytes, idx_t max_rows, const vector<StorageIndex> &column_ids,
+                                          RowGroup &row_group) {
+	if (!initialized) {
+		// Cold start: compute per-row byte estimates from this row group's column statistics.
+		fixed_bytes_per_row = 0;
+		dynamic_bytes_per_row = 0;
+		auto row_count = row_group.count.load();
 
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto stats = row_group.GetStatistics(column_ids[i]);
-		if (!stats) {
-			dynamic_bytes_per_row += DEFAULT_BYTES_PER_ROW;
-			continue;
-		}
-		auto physical_type = stats->GetType().InternalType();
-
-		if (TypeIsConstantSize(physical_type)) {
-			fixed_bytes_per_row += GetTypeIdSize(physical_type);
-		} else {
-			double estimate = DEFAULT_BYTES_PER_ROW;
-			if (row_count > 0 && physical_type == PhysicalType::VARCHAR) {
-				auto total_len = StringStats::TotalStringLength(*stats);
-				auto min_len = StringStats::MinStringLength(*stats);
-				if (total_len.IsValid()) {
-					double avg_from_total = static_cast<double>(total_len.GetIndex()) / static_cast<double>(row_count);
-					// Validate: TotalStringLength can be dictionary-level (sum of unique values)
-					// after checkpoint with dictionary compression. If the average is below
-					// min_string_length, it's unreliable — fall back to min/max midpoint.
-					double min_bound = min_len.IsValid() ? static_cast<double>(min_len.GetIndex()) : 0.0;
-					if (avg_from_total >= min_bound) {
-						estimate = avg_from_total;
-					} else if (StringStats::HasMaxStringLength(*stats)) {
-						double max_len = static_cast<double>(StringStats::MaxStringLength(*stats));
-						estimate = (min_bound + max_len) * 0.5;
-					} else {
-						estimate = min_bound;
-					}
-				} else if (StringStats::HasMaxStringLength(*stats)) {
-					estimate = static_cast<double>(StringStats::MaxStringLength(*stats)) * 0.5;
-				}
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto stats = row_group.GetStatistics(column_ids[i]);
+			if (!stats) {
+				dynamic_bytes_per_row += DEFAULT_BYTES_PER_ROW;
+				continue;
 			}
-			dynamic_bytes_per_row += estimate;
-		}
-	}
-	initialized = true;
-}
+			auto physical_type = stats->GetType().InternalType();
 
-idx_t ScanSizePredictor::PredictBatchSize(idx_t target_bytes, idx_t max_rows) const {
+			if (TypeIsConstantSize(physical_type)) {
+				fixed_bytes_per_row += GetTypeIdSize(physical_type);
+			} else {
+				double estimate = DEFAULT_BYTES_PER_ROW;
+				if (row_count > 0 && physical_type == PhysicalType::VARCHAR) {
+					auto total_len = StringStats::TotalStringLength(*stats);
+					auto min_len = StringStats::MinStringLength(*stats);
+					if (total_len.IsValid()) {
+						double avg_from_total =
+						    static_cast<double>(total_len.GetIndex()) / static_cast<double>(row_count);
+						// Validate: TotalStringLength can be dictionary-level (sum of unique values)
+						// after checkpoint with dictionary compression. If the average is below
+						// min_string_length, it's unreliable — fall back to min/max midpoint.
+						double min_bound = min_len.IsValid() ? static_cast<double>(min_len.GetIndex()) : 0.0;
+						if (avg_from_total >= min_bound) {
+							estimate = avg_from_total;
+						} else if (StringStats::HasMaxStringLength(*stats)) {
+							double max_len = static_cast<double>(StringStats::MaxStringLength(*stats));
+							estimate = (min_bound + max_len) * 0.5;
+						} else {
+							estimate = min_bound;
+						}
+					} else if (StringStats::HasMaxStringLength(*stats)) {
+						estimate = static_cast<double>(StringStats::MaxStringLength(*stats)) * 0.5;
+					}
+				}
+				dynamic_bytes_per_row += estimate;
+			}
+		}
+		initialized = true;
+	}
+
 	double total_bpr = static_cast<double>(fixed_bytes_per_row) + dynamic_bytes_per_row;
 	if (total_bpr <= 0) {
 		return max_rows;

@@ -408,11 +408,9 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 		column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
 		state.column_scans[i].scan_options = &state.GetOptions();
 	}
-	if (SubVectorScanState::IsActive(state.GetOptions().scan_target_size_bytes)) {
-		// Re-initialize predictor at each row group boundary — string length
-		// distributions can vary significantly across row groups.
-		state.size_predictor.Initialize(column_ids, *this);
-	}
+	// Invalidate the predictor at each row group boundary so the next PredictBatchSize re-computes its
+	// cold-start estimate — string length distributions can vary significantly across row groups.
+	state.size_predictor.initialized = false;
 	return true;
 }
 
@@ -440,11 +438,9 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 		column_data.InitializeScan(state.column_scans[i]);
 		state.column_scans[i].scan_options = &state.GetOptions();
 	}
-	if (SubVectorScanState::IsActive(state.GetOptions().scan_target_size_bytes)) {
-		// Re-initialize predictor at each row group boundary — string length
-		// distributions can vary significantly across row groups.
-		state.size_predictor.Initialize(column_ids, *this);
-	}
+	// Invalidate the predictor at each row group boundary so the next PredictBatchSize re-computes its
+	// cold-start estimate — string length distributions can vary significantly across row groups.
+	state.size_predictor.initialized = false;
 	return true;
 }
 
@@ -920,10 +916,8 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		// physical rows to scan this call: the full vector unless sub-batching (then a byte-budgeted batch)
 		idx_t scan_count;
 		if (use_sub_batch) {
-			if (!state.size_predictor.initialized) {
-				state.size_predictor.Initialize(column_ids, *this);
-			}
-			scan_count = state.size_predictor.PredictBatchSize(target_bytes, svs.vector_max_count - svs.offset);
+			scan_count =
+			    state.size_predictor.PredictBatchSize(target_bytes, svs.vector_max_count - svs.offset, column_ids, *this);
 		} else {
 			scan_count = max_count;
 		}

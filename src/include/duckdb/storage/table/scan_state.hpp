@@ -230,13 +230,14 @@ private:
 //! Goal: given a byte budget (scan_target_size_bytes), predict how many rows to scan per batch.
 //!
 //! Two-phase approach:
-//!   1. Initialize() — cold start from row group column statistics (TotalStringLength, min/max).
-//!      Fixed-size columns contribute exact widths; variable-size columns use stat-based estimates.
+//!   1. Lazy cold start (on the first PredictBatchSize call) from row group column statistics
+//!      (TotalStringLength, min/max). Fixed-size columns contribute exact widths; variable-size columns
+//!      use stat-based estimates.
 //!   2. Update() — after each batch, refine the variable-size estimate via EMA (old-value weight=0.3,
 //!      new-data weight=0.7) using actual scanned bytes (head-block sampling of string_t::GetSize()).
 //!
-//! The predictor is reset and re-initialized at each row group boundary, since string length
-//! distributions can vary across row groups.
+//! `initialized` is cleared at each row group boundary, so the next PredictBatchSize re-computes the
+//! cold-start estimate, since string length distributions can vary across row groups.
 struct ScanSizePredictor {
 	//! Default per-row estimate when column statistics are unavailable
 	static constexpr double DEFAULT_BYTES_PER_ROW = 256.0;
@@ -253,12 +254,12 @@ struct ScanSizePredictor {
 	idx_t total_actual_bytes = 0;
 	double max_overshoot_ratio = 0.0; //! worst-case actual/predicted ratio across all batches
 	double sum_overshoot_ratio = 0.0; //! sum of per-batch ratios (divide by total_batches for avg)
-	double first_batch_ratio = 0.0;   //! actual/predicted on the very first batch (measures Initialize accuracy)
+	double first_batch_ratio = 0.0;   //! actual/predicted on the very first batch (measures cold-start accuracy)
 
-	//! Compute initial per-row byte estimates from row group statistics
-	void Initialize(const vector<StorageIndex> &column_ids, RowGroup &row_group);
-	//! Predict batch size: target_bytes / bytes_per_row, clamped to [1, max_rows]
-	idx_t PredictBatchSize(idx_t target_bytes, idx_t max_rows) const;
+	//! Predict batch size: target_bytes / bytes_per_row, clamped to [1, max_rows].
+	//! Lazily computes the per-row byte estimate from row group statistics on the first call.
+	idx_t PredictBatchSize(idx_t target_bytes, idx_t max_rows, const vector<StorageIndex> &column_ids,
+	                       RowGroup &row_group);
 	//! Refine dynamic_bytes_per_row via EMA from actual scan result
 	void Update(const DataChunk &result);
 	void Reset();
