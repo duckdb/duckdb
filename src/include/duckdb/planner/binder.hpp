@@ -564,6 +564,10 @@ private:
 	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);
 
 	void PlanSubqueries(unique_ptr<Expression> &expr, unique_ptr<LogicalOperator> &root);
+	void PlanNonInnerJoinSubqueries(unique_ptr<Expression> &expr, unique_ptr<LogicalOperator> &left_child,
+	                                unique_ptr<LogicalOperator> &right_child, JoinSide uncorrelated_side);
+	bool TryPlanPairDependentLeftJoin(BoundJoinRef &ref, unique_ptr<LogicalOperator> &left,
+	                                  unique_ptr<LogicalOperator> &right, unique_ptr<LogicalOperator> &result);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);
 	unique_ptr<LogicalOperator> PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
 	                                            CorrelatedColumns &correlated_columns,

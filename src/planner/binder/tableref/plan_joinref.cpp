@@ -385,6 +385,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		ref.type = JoinType::LEFT;
 		std::swap(left, right);
 	}
+	unique_ptr<LogicalOperator> pair_dependent_join;
+	if (TryPlanPairDependentLeftJoin(ref, left, right, pair_dependent_join)) {
+		RecursiveDependentJoinPlanner::Plan(*this, *pair_dependent_join);
+		return pair_dependent_join;
+	}
 	if (ref.lateral) {
 		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                                std::move(ref.condition));
@@ -445,18 +450,20 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
 			auto &cond = comp_join.conditions[i];
 			if (cond.IsComparison()) {
-				PlanSubqueries(cond.LeftReference(), comp_join.children[0]);
-				PlanSubqueries(cond.RightReference(), comp_join.children[1]);
+				PlanNonInnerJoinSubqueries(cond.LeftReference(), comp_join.children[0], comp_join.children[1],
+				                           JoinSide::LEFT);
+				PlanNonInnerJoinSubqueries(cond.RightReference(), comp_join.children[0], comp_join.children[1],
+				                           JoinSide::RIGHT);
+			} else {
+				PlanNonInnerJoinSubqueries(cond.JoinExpressionReference(), comp_join.children[0], comp_join.children[1],
+				                           JoinSide::LEFT);
 			}
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &any_join = join->Cast<LogicalAnyJoin>();
-		// for the any join we just visit the condition
-		if (any_join.condition->HasSubquery()) {
-			throw NotImplementedException("Cannot perform non-inner join on subquery!");
-		}
+		PlanNonInnerJoinSubqueries(any_join.condition, any_join.children[0], any_join.children[1], JoinSide::LEFT);
 		break;
 	}
 	default:
