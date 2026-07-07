@@ -145,6 +145,11 @@ SELECT count(*) FROM tiny WHERE -x = -128
 0
 
 query I
+SELECT count(*) FROM tiny WHERE -x != -128
+----
+5
+
+query I
 SELECT count(*) FROM tiny WHERE -x = 127
 ----
 1
@@ -186,7 +191,7 @@ EXPLAIN SELECT -x < -2.5 FROM floats
 ----
 
 query I nosort float_neg_lt
-EXPLAIN SELECT x > 2.5 FROM floats
+EXPLAIN SELECT x > 2.5 AND NOT isnan(x) FROM floats
 ----
 
 query I nosort float_neg_left
@@ -194,7 +199,7 @@ EXPLAIN SELECT -2.5 > -x FROM floats
 ----
 
 query I nosort float_neg_left
-EXPLAIN SELECT 2.5 < x FROM floats
+EXPLAIN SELECT 2.5 < x AND NOT isnan(x) FROM floats
 ----
 
 query I
@@ -209,6 +214,18 @@ SELECT count(*) FROM floats WHERE -x < -2.5
 
 query I
 SELECT count(*) FROM floats WHERE -x > 1.0
+----
+1
+
+# Ordered floating point rewrites need to preserve NaN semantics
+statement ok
+CREATE TABLE floats_nan(x DOUBLE);
+
+statement ok
+INSERT INTO floats_nan VALUES (1.0), (7.0), ('NaN'::DOUBLE), (NULL);
+
+query I
+SELECT count(*) FROM floats_nan WHERE -x < -2.5
 ----
 1
 
