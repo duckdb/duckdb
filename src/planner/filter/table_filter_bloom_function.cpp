@@ -97,6 +97,20 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_
 	return found_count;
 }
 
+idx_t BloomFilter::LookupHashes(const Vector &hashes_v, const SelectionVector &sel, SelectionVector &result_sel,
+                                const idx_t count) const {
+	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
+
+	const auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
+	idx_t found_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		result_sel.set_index(found_count, i);
+		found_count += LookupOne(hashes[sel.get_index_unsafe(i)]);
+	}
+	return found_count;
+}
+
 inline void BloomFilter::InsertOne(const hash_t hash) const {
 	D_ASSERT(initialized);
 	const uint64_t bf_offset = hash & bitmask;
@@ -106,7 +120,7 @@ inline void BloomFilter::InsertOne(const hash_t hash) const {
 	slot.fetch_or(mask, std::memory_order_relaxed);
 }
 
-inline bool BloomFilter::LookupOne(const uint64_t hash) const {
+bool BloomFilter::LookupOne(const uint64_t hash) const {
 	D_ASSERT(initialized);
 	const uint64_t bf_offset = hash & bitmask;
 	const uint64_t mask = GetMask(hash);
