@@ -117,7 +117,7 @@ private:
 	vector<unique_ptr<LocalTableFunctionState>> state_pool;
 	//! Jobs scheduled ahead of decoding
 	atomic<idx_t> active_jobs {0};
-	//! Bytes of scheduled I/O belonging to jobs ahead of decoding
+	//! Bytes of scheduled I/O that has not completed yet, released once the claimed job's I/O finished
 	atomic<idx_t> pending_io_bytes {0};
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet

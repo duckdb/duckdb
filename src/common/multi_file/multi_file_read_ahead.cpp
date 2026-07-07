@@ -181,7 +181,6 @@ unique_ptr<MultiFileScanJob> MultiFileReadAhead::ClaimJob() {
 	auto job = std::move(ready_queue.front());
 	ready_queue.pop_front();
 	ReleaseSlot();
-	pending_io_bytes -= job->io_bytes;
 	return job;
 }
 
@@ -207,6 +206,9 @@ void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 			TaskScheduler::YieldThread();
 		}
 	}
+	// the job's I/O has completed, release its budget charge
+	pending_io_bytes -= job.io_bytes;
+	job.io_bytes = 0;
 	ThrowIfError();
 }
 
