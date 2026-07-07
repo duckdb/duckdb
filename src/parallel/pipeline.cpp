@@ -86,9 +86,22 @@ bool Pipeline::GetProgress(ProgressData &progress) {
 	}
 	auto &client = executor.context;
 
-	progress = source->GetProgress(client, *source_state);
+	{
+		lock_guard<mutex> guard(source_state_lock);
+		if (source_state) {
+			progress = source->GetProgress(client, *source_state);
+		} else {
+			progress.done = 0;
+			progress.total = double(source_cardinality);
+		}
+	}
 	progress.Normalize(double(source_cardinality));
-	progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
+	if (sink) {
+		lock_guard<mutex> guard(sink->lock);
+		if (sink->sink_state) {
+			progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
+		}
+	}
 	return progress.IsValid();
 }
 
@@ -106,13 +119,17 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 	if (!source->ParallelSource()) {
 		return false;
 	}
-	max_threads = source_state->MaxThreads();
+	{
+		lock_guard<mutex> guard(source_state_lock);
+		max_threads = source_state->MaxThreads();
+	}
 
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
 		if (!op.ParallelOperator()) {
 			return false;
 		}
+		lock_guard<mutex> guard(op.lock);
 		if (op.op_state) {
 			max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
 		}
@@ -123,8 +140,11 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
 	}
-	if (sink && sink->sink_state) {
-		max_threads = sink->sink_state->MaxThreads(max_threads);
+	if (sink) {
+		lock_guard<mutex> guard(sink->lock);
+		if (sink->sink_state) {
+			max_threads = sink->sink_state->MaxThreads(max_threads);
+		}
 	}
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
@@ -349,7 +369,7 @@ void Pipeline::PrepareFinalize() {
 	}
 }
 
-void Pipeline::Reset() {
+void Pipeline::ResetSinkAndOperators() {
 	ResetSink();
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
@@ -358,9 +378,11 @@ void Pipeline::Reset() {
 			op.op_state = op.GetGlobalOperatorState(GetClientContext());
 		}
 	}
+}
+
+void Pipeline::Reset() {
+	ResetSinkAndOperators();
 	ResetSource(false);
-	// we no longer reset source here because this function is no longer guaranteed to be called by the main thread
-	// source reset needs to be called by the main thread because resetting a source may call into clients like R
 	initialized = true;
 }
 
@@ -381,10 +403,13 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
-	if (!allow_reuse || !source_state || !source_state->SupportsReuse()) {
-		source_state = source->GetGlobalSourceState(client);
-	} else {
-		source_state->Reset(client);
+	{
+		lock_guard<mutex> guard(source_state_lock);
+		if (!allow_reuse || !source_state || !source_state->SupportsReuse()) {
+			source_state = source->GetGlobalSourceState(client);
+		} else {
+			source_state->Reset(client);
+		}
 	}
 	initialized = true;
 }
@@ -393,6 +418,7 @@ void Pipeline::ResetSource(bool force) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
+	lock_guard<mutex> guard(source_state_lock);
 	if (force || !source_state) {
 		source_state = source->GetGlobalSourceState(GetClientContext());
 	}
@@ -409,7 +435,62 @@ void Pipeline::PrepareExternalInput() {
 	if (initialized) {
 		return;
 	}
-	Reset();
+	ResetSinkAndOperators();
+	initialized = true;
+}
+
+void Pipeline::FinishSource(ClientContext &context) {
+	if (IsExternalInput() || !source) {
+		return;
+	}
+	lock_guard<mutex> guard(source_state_lock);
+	if (!source_state) {
+		return;
+	}
+	source->SourceFinished(context, *source_state);
+}
+
+void Pipeline::FinishSourceAndPreventBlocking(ClientContext &context) {
+	if (IsExternalInput() || !source) {
+		return;
+	}
+	lock_guard<mutex> source_guard(source_state_lock);
+	if (!source_state) {
+		return;
+	}
+	source->SourceFinished(context, *source_state);
+	annotated_lock_guard<annotated_mutex> state_guard(source_state->lock);
+	source_state->PreventBlocking();
+	source_state->UnblockTasks();
+}
+
+void Pipeline::PreventSourceBlocking() {
+	lock_guard<mutex> source_guard(source_state_lock);
+	if (!source_state) {
+		return;
+	}
+	annotated_lock_guard<annotated_mutex> state_guard(source_state->lock);
+	source_state->PreventBlocking();
+	source_state->UnblockTasks();
+}
+
+void Pipeline::PreventSinkBlocking() {
+	auto sink = GetSink();
+	if (!sink) {
+		return;
+	}
+	lock_guard<mutex> sink_guard(sink->lock);
+	if (!sink->sink_state) {
+		return;
+	}
+	annotated_lock_guard<annotated_mutex> state_guard(sink->sink_state->lock);
+	sink->sink_state->PreventBlocking();
+	sink->sink_state->UnblockTasks();
+}
+
+void Pipeline::PreventBlocking() {
+	PreventSourceBlocking();
+	PreventSinkBlocking();
 }
 
 void Pipeline::SetExternalInputEvent(shared_ptr<Event> event) {
@@ -554,6 +635,7 @@ const vector<reference<PhysicalOperator>> &Pipeline::GetIntermediateOperators() 
 }
 
 void Pipeline::ClearSource() {
+	lock_guard<mutex> source_guard(source_state_lock);
 	source_state.reset();
 	batch_indexes.clear();
 }

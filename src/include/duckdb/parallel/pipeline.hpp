@@ -165,6 +165,8 @@ private:
 
 	//! The global source state
 	unique_ptr<GlobalSourceState> source_state;
+	//! Lock for resetting or inspecting the global source state pointer
+	mutex source_state_lock;
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
@@ -196,6 +198,12 @@ private:
 private:
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
+	void ResetSinkAndOperators();
+	void FinishSource(ClientContext &context);
+	void FinishSourceAndPreventBlocking(ClientContext &context);
+	void PreventSourceBlocking();
+	void PreventSinkBlocking();
+	void PreventBlocking();
 
 	bool TryGetMaxThreads(idx_t &max_threads);
 	bool ScheduleParallel(shared_ptr<Event> &event);

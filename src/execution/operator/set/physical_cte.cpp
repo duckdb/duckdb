@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -22,16 +23,15 @@ public:
 	}
 
 	void Unregister() {
-		if (unregistered) {
+		if (unregistered.exchange(true)) {
 			return;
 		}
-		unregistered = true;
 		exchange->UnregisterConsumer(consumer_idx);
 	}
 
 	shared_ptr<PipelineBroadcastExchange> exchange;
 	idx_t consumer_idx;
-	bool unregistered = false;
+	atomic<bool> unregistered {false};
 };
 
 class CTEConsumerLocalSourceState : public LocalSourceState {

@@ -15,7 +15,7 @@ namespace duckdb {
 
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
     : pipeline(pipeline_p), thread(context_p), context(context_p, thread, &pipeline_p) {
-	D_ASSERT(pipeline.source_state);
+	D_ASSERT(pipeline.IsExternalInput() || pipeline.source_state);
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
 		required_partition_info = pipeline.sink->RequiredPartitionInfo();
@@ -28,7 +28,9 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
-	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
+	if (!pipeline.IsExternalInput()) {
+		local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
+	}
 
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
@@ -53,7 +55,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 }
 
 void PipelineExecutor::Reset() {
-	D_ASSERT(pipeline.source_state);
+	D_ASSERT(pipeline.IsExternalInput() || pipeline.source_state);
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
 
 	// Reset execution flags
@@ -89,11 +91,15 @@ void PipelineExecutor::Reset() {
 		}
 	}
 
-	// Recreate local source state (source data changed)
-	if (!allow_reuse || !local_source_state || !local_source_state->SupportsReuse()) {
-		local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
+	if (pipeline.IsExternalInput()) {
+		local_source_state.reset();
 	} else {
-		local_source_state->Reset(context, *pipeline.source_state);
+		// Recreate local source state (source data changed)
+		if (!allow_reuse || !local_source_state || !local_source_state->SupportsReuse()) {
+			local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
+		} else {
+			local_source_state->Reset(context, *pipeline.source_state);
+		}
 	}
 
 	// Recreate intermediate operator states (finalized in previous execution)
@@ -441,24 +447,15 @@ void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	finished_processing_idx = operator_idx < 0 ? NumericLimits<int32_t>::Maximum() : operator_idx;
 	in_process_operators = stack<idx_t>();
 
-	if (pipeline.GetSource()) {
-		annotated_lock_guard<annotated_mutex> guard(pipeline.source_state->lock);
-		pipeline.source_state->PreventBlocking();
-		pipeline.source_state->UnblockTasks();
-	}
-	if (pipeline.GetSink()) {
-		annotated_lock_guard<annotated_mutex> guard(pipeline.GetSink()->sink_state->lock);
-		pipeline.GetSink()->sink_state->PreventBlocking();
-		pipeline.GetSink()->sink_state->UnblockTasks();
-	}
+	pipeline.PreventBlocking();
 }
 
 void PipelineExecutor::NotifySourceFinished() {
-	if (source_finished_notified || !pipeline.GetSource() || !pipeline.source_state) {
+	if (source_finished_notified || pipeline.IsExternalInput() || !pipeline.GetSource()) {
 		return;
 	}
 	source_finished_notified = true;
-	pipeline.source->SourceFinished(context.client, *pipeline.source_state);
+	pipeline.FinishSource(context.client);
 }
 
 bool PipelineExecutor::IsFinished() const {
@@ -553,7 +550,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	NotifySourceFinished();
 
 	// If source was not exhausted (e.g. LIMIT stopped the pipeline), collect exact metrics now
-	if (!source_profiling_finalized && local_source_state) {
+	if (!source_profiling_finalized && local_source_state && pipeline.source_state) {
 		context.thread.profiler.FinishSource(*pipeline.source, *pipeline.source_state, *local_source_state);
 	}
 
@@ -702,6 +699,9 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 }
 
 SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
+	D_ASSERT(!pipeline.IsExternalInput());
+	D_ASSERT(pipeline.source_state);
+	D_ASSERT(local_source_state);
 	StartOperator(*pipeline.source);
 
 	OperatorSourceInput source_input = {*pipeline.source_state, *local_source_state, interrupt_state};
