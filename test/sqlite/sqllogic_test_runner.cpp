@@ -86,15 +86,20 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 	config.reset();
 	con.reset();
 	db.reset();
-	for (auto &loaded_path : loaded_databases) {
-		if (loaded_path.empty()) {
-			continue;
+	// Post-test DB cleanup, gated by --database-destroy (on-success aware). Skipping here on
+	// retain/failure keeps loaded DBs inside a retained temp dir (e.g. test_zero_initialize.py,
+	// which diffs the generated DB files after the process exits).
+	if (DatabaseDestroyFires(test_succeeded)) {
+		for (auto &loaded_path : loaded_databases) {
+			if (loaded_path.empty()) {
+				continue;
+			}
+			// only delete database files that were created during the tests
+			if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
+				continue;
+			}
+			DeleteDatabase(loaded_path);
 		}
-		// only delete database files that were created during the tests
-		if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
-			continue;
-		}
-		DeleteDatabase(loaded_path);
 	}
 }
 

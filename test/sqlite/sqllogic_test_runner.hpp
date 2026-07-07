@@ -93,6 +93,10 @@ public:
 	atomic<idx_t> test_stat_passes {0};
 	atomic<idx_t> test_stat_fails {0};
 	atomic<idx_t> test_stat_skip_mode {0};
+	//! Whole-test verdict, set at the terminal (test_sqllogictest.cpp) before this runner is destroyed.
+	//! The destructor's DB cleanup consults it for --database-destroy on-success. Defaults to false so
+	//! an abort/unwind path that never reaches the terminal retains DB files (treated as a failure).
+	bool test_succeeded = false;
 	//! Whole-test skip disposition (require/require-env/config/tag), recorded by SkipTest and read at
 	//! the terminal to emit end{status:"skip-requirement"}.
 	bool test_skipped_requirement = false;

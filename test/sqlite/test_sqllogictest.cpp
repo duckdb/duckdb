@@ -172,7 +172,8 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	// $TEST_ID destroy: execute this test's destroy disposition using its pass/fail. On the
 	// on-success default a passing test's dir is reclaimed now; a failing test's is retained
 	// (main's DestroyTempDir then reclaims the whole run root only on overall success).
-	DestroyTestTempDir(!error.HasError());
+	runner.test_succeeded = !error.HasError();
+	DestroyTestTempDir(runner.test_succeeded);
 
 	// Single terminal event (--emit-test-events): status = skip-requirement (whole-test skip) /
 	// error (a std::exception escaped: LoadDatabase / cleanup / unexpected) / ok. Catch-thrown

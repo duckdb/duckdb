@@ -142,7 +142,9 @@ for test in test_list:
     clear_directories(test_dirs)
     # TEMP_DIR must BE the given dir exactly and survive for the post-run byte diff below,
     # so pin the base with both levels off and destroy=never (the dirs are pre-rmtree'd
-    # above, so the default create=on-absent is fine).
+    # above, so the default create=on-absent is fine). --database-destroy off keeps the
+    # generated DB files (otherwise the harness deletes loaded DBs under TEMP_DIR, leaving
+    # the retained dir empty and the compare with nothing to diff).
     temp_dir_flags = lambda d: [
         '--temp-dir-base',
         d,
@@ -152,6 +154,8 @@ for test in test_list:
         'off',
         '--temp-dir-destroy',
         'never',
+        '--database-destroy',
+        'off',
     ]
     standard_args = [args.unittest, *temp_dir_flags(args.standard_dir), '--one-initialize', '--single-threaded', test]
     zero_init_args = [

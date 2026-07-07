@@ -45,6 +45,8 @@ Every test gets one scratch directory, written in-test as `{TEST_DIR}`. Its path
 
 Lifecycle is one create × one destroy disposition, inherited down every level: `--temp-dir-create {never,on-absent,always}` and `--temp-dir-destroy {never,on-success,always}` (defaults `on-absent` / `on-success`).
 
+The **loaded database files** under `TEMP_DIR` have their own disposition, `--temp-dir-destroy`'s independent sibling: `--database-destroy {on,off,on-success}` (default `on-success`). A DB's keep/destroy is not per-se a temp-dir property, so it is a separate knob — use `off` to retain the generated DB files inside a retained temp dir (e.g. to diff them after the run, as `test_zero_initialize.py` does); `on-success` mirrors `--temp-dir-destroy` so a failed test's DB survives for inspection.
+
 **Naming — read once, then stop worrying:**
 - `{TEST_DIR}` (the token nearly all tests use) and the `TEMP_DIR` env var are the **same directory** — synonyms. Prefer `{TEST_DIR}`; `{TEMP_DIR}` and the deprecated `__TEST_DIR__` also resolve to it.
 - `{TEST_DIR}`/`TEMP_DIR` is **relative** (to `WORKING_DIR`) *by default* — deliberately, so absolute machine paths don't leak into compared test output. When a test genuinely needs an absolute path (e.g. a `file://` URI), use **`TEMP_DIR_ABSOLUTE`**.

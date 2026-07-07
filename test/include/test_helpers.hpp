@@ -41,6 +41,7 @@ bool SummarizeFailures();
 //! env var and the temp-dir leaf so they agree.
 string TestNameToId(const string &name);
 
+//! Delete a database file (+ its .wal). A no-op under --database-destroy off (retain).
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
@@ -88,6 +89,15 @@ enum class TempDirDestroy : uint8_t {
 	ON_SUCCESS, //! remove on pass, retain on fail (default)
 	ALWAYS      //! remove regardless
 };
+//! --database-destroy: disposition of loaded database files (DeleteDatabase). Independent of the
+//! temp-dir dispositions -- a DB's keep/destroy is not per-se a temp-dir property. OFF restores the
+//! old --test-temp-dir behavior where DeleteDatabase was a no-op (so retained temp dirs keep their
+//! DB files). ON_SUCCESS mirrors --temp-dir-destroy so a failed test's DB survives for inspection.
+enum class DatabaseDestroy : uint8_t {
+	ON,        //! always delete DB files
+	OFF,       //! never delete -- retain DB files
+	ON_SUCCESS //! delete on pass, retain on fail (default)
+};
 
 //! Overrides the default base ("duckdb_unittest_tempdir"). Env TEMP_DIR_BASE.
 void SetTempDirBase(const string &base);
@@ -104,6 +114,10 @@ bool SetTempDirTestId(const string &mode);
 //! String setters used by the CLI; return false on an unrecognized value.
 bool SetTempDirCreate(const string &mode);
 bool SetTempDirDestroy(const string &mode);
+//! --database-destroy {on|off|on-success}. Returns false on an unrecognized value.
+bool SetDatabaseDestroy(const string &mode);
+//! Whether the post-test DB cleanup should delete, given this test's pass/fail (on-success aware).
+bool DatabaseDestroyFires(bool success);
 //! Materializes $BASE + $RUN_ID once, at startup (main). Fills error + returns false on failure.
 bool PrepareTempDir(string &error);
 //! Executes the run-id-level destroy disposition (recursive, bottom-up "destroy only what I created").

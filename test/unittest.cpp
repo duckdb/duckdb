@@ -50,6 +50,11 @@ int main(int argc_in, char *argv[]) {
 				fprintf(stderr, "--temp-dir-destroy expects one of: never, on-success, always\n");
 				return 1;
 			}
+		} else if (argument == "--database-destroy") {
+			if (!SetDatabaseDestroy(string(argv[++i]))) {
+				fprintf(stderr, "--database-destroy expects one of: on, off, on-success\n");
+				return 1;
+			}
 		} else if (argument == "--require") {
 			AddRequire(string(argv[++i]));
 		} else if (argument == "--emit-on-skip") {

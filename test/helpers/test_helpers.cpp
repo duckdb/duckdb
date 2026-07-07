@@ -35,6 +35,8 @@ static string temp_dir_run_id;                        // RUN_ID value (--run-id,
 static bool temp_dir_test_id = true;
 static TempDirCreate temp_dir_create = TempDirCreate::ON_ABSENT;
 static TempDirDestroy temp_dir_destroy = TempDirDestroy::ON_SUCCESS;
+// --database-destroy: independent of the temp-dir dispositions (see test_helpers.hpp).
+static DatabaseDestroy database_destroy = DatabaseDestroy::ON_SUCCESS;
 // Levels THIS invocation created (outermost..leaf), split by lifecycle so each
 // destroy step reclaims only what its own step made.
 static vector<string> temp_dir_run_created_levels;  // $BASE..$RUN_ID (main / Prepare|DestroyTempDir)
@@ -80,6 +82,9 @@ string TestGetCurrentDirectory() {
 }
 
 void DeleteDatabase(string path) {
+	if (database_destroy == DatabaseDestroy::OFF) {
+		return; // retain: never touch DB files
+	}
 	TestDeleteFile(path);
 	TestDeleteFile(path + ".wal");
 }
@@ -181,6 +186,31 @@ bool SetTempDirDestroy(const string &mode) {
 		return false;
 	}
 	return true;
+}
+
+bool SetDatabaseDestroy(const string &mode) {
+	if (mode == "on") {
+		database_destroy = DatabaseDestroy::ON;
+	} else if (mode == "off") {
+		database_destroy = DatabaseDestroy::OFF;
+	} else if (mode == "on-success") {
+		database_destroy = DatabaseDestroy::ON_SUCCESS;
+	} else {
+		return false;
+	}
+	return true;
+}
+
+bool DatabaseDestroyFires(bool success) {
+	switch (database_destroy) {
+	case DatabaseDestroy::ON:
+		return true;
+	case DatabaseDestroy::ON_SUCCESS:
+		return success;
+	case DatabaseDestroy::OFF:
+	default:
+		return false;
+	}
 }
 
 // Join a leaf onto a parent. Remote parents are appended as pure strings (no VFS/mkdir);
