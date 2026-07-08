@@ -47,7 +47,6 @@ void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 void TaskExecutor::FinishTask() {
 	const annotated_lock_guard<annotated_mutex> lk(token->producer_lock);
 	++completed_tasks;
-	--finish_counter;
 	token->producer_cv.notify_one();
 }
 
@@ -57,14 +56,14 @@ void TaskExecutor::WorkOnTasks() {
 	// wait for all active tasks to finish
 	while (true) {
 		idx_t observed_enqueue = 0;
-		idx_t observed_finish = 0;
+		idx_t observed_completed = 0;
 		{
 			annotated_lock_guard<annotated_mutex> lk(token->producer_lock);
 			if (completed_tasks == total_tasks) {
 				break;
 			}
 			observed_enqueue = token->enqueue_counter;
-			observed_finish = finish_counter;
+			observed_completed = completed_tasks;
 		}
 		if (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
 			const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
@@ -75,7 +74,7 @@ void TaskExecutor::WorkOnTasks() {
 			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
 			token->producer_cv.wait(lk, [&]() DUCKDB_REQUIRES(token->producer_lock) {
 				return completed_tasks == total_tasks || token->enqueue_counter != observed_enqueue ||
-				       finish_counter != observed_finish;
+				       completed_tasks != observed_completed;
 			});
 		}
 	}
