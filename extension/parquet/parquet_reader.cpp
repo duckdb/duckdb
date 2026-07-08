@@ -1476,16 +1476,18 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.group_index = group_to_read;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
-		unique_ptr<CachingFileHandle> scan_handle;
-		{
-			lock_guard<mutex> guard(prewarm_lock);
-			scan_handle = std::move(prewarmed_scan_handle);
-		}
-		if (!scan_handle) {
-			scan_handle = OpenScanHandle(context);
-		}
 		state.prefetch_mode = ShouldAndCanPrefetch(context, *file_handle);
-		state.file_handle = std::move(scan_handle);
+		// all scan states share one handle (opened with parallel access), so open handles and
+		// connections scale with the number of readers instead of the number of row-group jobs
+		lock_guard<mutex> guard(prewarm_lock);
+		if (!shared_scan_handle) {
+			if (prewarmed_scan_handle) {
+				shared_scan_handle = std::move(prewarmed_scan_handle);
+			} else {
+				shared_scan_handle = OpenScanHandle(context);
+			}
+		}
+		state.file_handle = shared_scan_handle;
 	}
 	state.scan_filters.clear();
 	if (filters) {

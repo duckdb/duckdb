@@ -441,6 +441,8 @@ private:
 	//! Scan handle pre-opened by PrepareReadAhead while the file was opened, adopted by the first InitializeScan
 	mutable mutex prewarm_lock;
 	mutable unique_ptr<CachingFileHandle> prewarmed_scan_handle;
+	//! Scan handle shared by all scan states of this reader
+	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 };
 
 } // namespace duckdb
