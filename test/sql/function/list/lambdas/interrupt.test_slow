@@ -10,7 +10,7 @@ statement ok
 SET max_execution_time=50
 
 statement error
-SELECT list_transform(list(i), x -> x * 2 + (x % 3))
+SELECT list_transform(list(i), lambda x: x * 2 + (x % 3))
 FROM range(1000000) t(i)
 ----
 Query exceeded maximum execution time
@@ -24,7 +24,7 @@ statement ok
 SET max_execution_time=50
 
 statement error
-SELECT list_filter(list(i), x -> x % 7 <> 0)
+SELECT list_filter(list(i), lambda x: x % 7 <> 0)
 FROM range(1000000) t(i)
 ----
 Query exceeded maximum execution time
@@ -38,7 +38,7 @@ statement ok
 SET max_execution_time=50
 
 statement error
-SELECT list_reduce(list(i), (a, b) -> a + b + (b % 3))
+SELECT list_reduce(list(i), lambda a, b: a + b + (b % 3))
 FROM range(1000000) t(i)
 ----
 Query exceeded maximum execution time
@@ -49,4 +49,4 @@ RESET max_execution_time
 # Sanity check: a short list completes without error after reset.
 
 statement ok
-SELECT list_transform(range(100), x -> x * 2)
+SELECT list_transform(range(100), lambda x: x * 2)
