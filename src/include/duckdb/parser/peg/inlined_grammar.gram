@@ -1820,9 +1820,10 @@ ValuesClause <- 'VALUES' List(ValuesExpressions)
 ValuesExpressions <- Parens(List(Expression))
 
 SetStatement <- 'SET' SetAssignmentOrTimeZone
-SetAssignmentOrTimeZone <- StandardAssignment / SetTimeZone
+SetAssignmentOrTimeZone <- SetSchema / StandardAssignment / SetTimeZone
 
 ResetStatement <- 'RESET' SetVariableOrSetting
+SetSchema <- 'SCHEMA' StringLiteral
 StandardAssignment <- SetVariableOrSetting SetAssignment
 SetVariableOrSetting <- SetVariable / SetSetting
 SetTimeZone <- 'TIME' 'ZONE' ZoneValue
@@ -1848,7 +1849,6 @@ SetAssignment <- VariableAssign VariableList
 
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
-
 
 TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
 

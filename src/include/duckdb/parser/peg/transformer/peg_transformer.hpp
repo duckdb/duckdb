@@ -4410,6 +4410,10 @@ public:
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeResetStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSetSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSetSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeStandardAssignmentTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                   TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeStandardAssignmentTrampoline(PEGTransformer &transformer,
@@ -8017,6 +8021,9 @@ public:
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
 	                                                        const SettingInfo &set_variable_or_setting);
+	static unique_ptr<TransformResultValue> TransformSetSchemaInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<SetStatement> TransformSetSchema(PEGTransformer &transformer, const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformStandardAssignmentInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static unique_ptr<SetStatement> TransformStandardAssignment(PEGTransformer &transformer,

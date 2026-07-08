@@ -2641,6 +2641,8 @@ static const TransformFrameOps SET_ASSIGNMENT_OR_TIME_ZONE_OPS = {
 static const TransformFrameOps RESET_STATEMENT_OPS = {"ResetStatement",
                                                       &PEGTransformerFactory::InitializeResetStatementTrampoline,
                                                       &PEGTransformerFactory::FinalizeResetStatementTrampoline};
+static const TransformFrameOps SET_SCHEMA_OPS = {"SetSchema", &PEGTransformerFactory::InitializeSetSchemaTrampoline,
+                                                 &PEGTransformerFactory::FinalizeSetSchemaTrampoline};
 static const TransformFrameOps STANDARD_ASSIGNMENT_OPS = {
     "StandardAssignment", &PEGTransformerFactory::InitializeStandardAssignmentTrampoline,
     &PEGTransformerFactory::FinalizeStandardAssignmentTrampoline};
@@ -3720,6 +3722,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"SetStatement", &SET_STATEMENT_OPS},
 	    {"SetAssignmentOrTimeZone", &SET_ASSIGNMENT_OR_TIME_ZONE_OPS},
 	    {"ResetStatement", &RESET_STATEMENT_OPS},
+	    {"SetSchema", &SET_SCHEMA_OPS},
 	    {"StandardAssignment", &STANDARD_ASSIGNMENT_OPS},
 	    {"SetVariableOrSetting", &SET_VARIABLE_OR_SETTING_OPS},
 	    {"SetTimeZone", &SET_TIME_ZONE_OPS},
@@ -22863,6 +22866,20 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeResetStatementTr
 	auto set_variable_or_setting = frame.TakeResult<SettingInfo>(0);
 	auto result = TransformResetStatement(transformer, set_variable_or_setting);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSetSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                          TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSetSchemaTrampoline(PEGTransformer &transformer,
+                                                                                    TransformStack &stack,
+                                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(1));
+	auto result = TransformSetSchema(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<SetStatement>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeStandardAssignmentTrampoline(PEGTransformer &transformer, TransformStack &stack,
