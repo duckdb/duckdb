@@ -76,3 +76,35 @@ query I
 FROM view_search_path.my_schema.my_view
 ----
 84
+
+# a view in a non-main schema can reference entries in the catalog's main schema
+# with an unqualified name, even when queried from another catalog
+# the view's own schema still takes priority: my_tbl resolves to my_schema.my_tbl (84)
+
+statement ok
+USE view_search_path
+
+statement ok
+CREATE MACRO my_macro(a) AS a + 1
+
+statement ok
+CREATE VIEW my_schema.macro_view AS SELECT my_macro(i) AS t FROM my_tbl
+
+statement ok
+USE view_search_path_other
+
+query I
+FROM view_search_path.my_schema.macro_view
+----
+85
+
+statement ok
+DETACH view_search_path
+
+statement ok
+ATTACH DATABASE '__TEST_DIR__/view_search_path.db' AS view_search_path;
+
+query I
+FROM view_search_path.my_schema.macro_view
+----
+85

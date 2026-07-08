@@ -106,8 +106,9 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 	if (!schema_name.empty()) {
 		view_search_path.emplace_back(catalog_name, schema_name);
 	}
+	// always fall back to the default schema of the catalog, unless it was already added above
 	auto default_schema = catalog.GetDefaultSchema();
-	if (schema_name.empty() && schema_name != default_schema) {
+	if (schema_name != default_schema && !default_schema.empty()) {
 		view_search_path.emplace_back(catalog_name, default_schema);
 	}
 	//! Signal that this catalog should be checked, regardless of the schema in the reference
