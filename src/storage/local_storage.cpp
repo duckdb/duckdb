@@ -463,7 +463,7 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	committed_row_ids.Flatten();
 
 	for (auto &index : delete_indexes.Indexes()) {
-		D_ASSERT(index - IsBound());
+		D_ASSERT(index.IsBound());
 		if (!index.IsUnique()) {
 			continue;
 		}
