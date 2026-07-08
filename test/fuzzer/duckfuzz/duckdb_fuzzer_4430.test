@@ -5,22 +5,23 @@
 statement ok
 ATTACH '{TEST_DIR}/duckdb_fuzzer_4430.db' AS db1
 
-# Write case: forbid DETACH after a write to db1 in the same transaction
+# Write case: DETACH after a write to db1 in the same transaction
 statement ok
 BEGIN
 
 statement ok
 CREATE TABLE db1.tbl(i INTEGER)
 
-statement error
+statement ok
 DETACH db1
-----
-Cannot detach database "db1"
 
 statement ok
 ROLLBACK
 
-# Read case: forbid DETACH after a read from db1 in the same transaction
+# Read case: DETACH after a read from db1 in the same transaction
+statement ok
+ATTACH '{TEST_DIR}/duckdb_fuzzer_4430.db' AS db1
+
 statement ok
 CREATE TABLE db1.tbl(i INTEGER)
 
@@ -31,10 +32,8 @@ query I
 SELECT * FROM db1.tbl
 ----
 
-statement error
+statement ok
 DETACH db1
-----
-Cannot detach database "db1"
 
 statement ok
 ROLLBACK

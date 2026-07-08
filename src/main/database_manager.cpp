@@ -13,6 +13,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -276,6 +277,9 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &n
 		}
 		return;
 	}
+
+	auto &meta_transaction = MetaTransaction::Get(context);
+	meta_transaction.DetachDatabase(*attached_db);
 
 	attached_db->OnDetach(context);
 
