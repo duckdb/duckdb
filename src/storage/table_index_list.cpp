@@ -69,8 +69,17 @@ IndexEntry &TableIndexIterationHelper<IndexEntry>::TableIndexIterator::operator*
 	return *index_entries->at(index.GetIndex());
 }
 
+template <>
+Index &TableIndexIterationHelper<Index>::TableIndexIterator::operator*() const {
+	return index_entries->at(index.GetIndex())->GetIndexUnsafe();
+}
+
 TableIndexIterationHelper<IndexEntry> TableIndexList::IndexEntries() const {
 	return TableIndexIterationHelper<IndexEntry>(index_entries_lock, index_entries);
+}
+
+TableIndexIterationHelper<Index> TableIndexList::Indexes() const {
+	return TableIndexIterationHelper<Index>(index_entries_lock, index_entries);
 }
 
 vector<shared_ptr<Index>> TableIndexList::PinIndexes() const {
@@ -84,6 +93,7 @@ vector<shared_ptr<Index>> TableIndexList::PinIndexes() const {
 }
 
 template class TableIndexIterationHelper<IndexEntry>;
+template class TableIndexIterationHelper<Index>;
 
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);

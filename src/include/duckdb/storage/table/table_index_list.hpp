@@ -59,6 +59,13 @@ public:
 	void MarkWrittenForCheckpoint(const transaction_t checkpoint_id) {
 		last_written_checkpoint = checkpoint_id;
 	}
+	//! Return a reference of "owned_index". This reference is only stable when guarded by "lock" and should not be
+	//! kept alive outside its scope.
+	//! FIXME: Currently the "index_entries_lock" implicitly takes on the responsibilities of the entry lock, move to
+	//! per-entry locking.
+	Index &GetIndexUnsafe() const {
+		return *owned_index;
+	}
 	//! Give the caller a stable snapshot of the current Index
 	shared_ptr<Index> PinIndex() const {
 		lock_guard<mutex> lock(index_pointer_lock);
@@ -200,5 +207,8 @@ public:
 
 template <>
 IndexEntry &TableIndexIterationHelper<IndexEntry>::TableIndexIterator::operator*() const;
+
+template <>
+Index &TableIndexIterationHelper<Index>::TableIndexIterator::operator*() const;
 
 } // namespace duckdb
