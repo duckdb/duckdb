@@ -124,16 +124,15 @@ struct MatcherSuggestion {
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
 	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
-	           ParserPackratCache *packrat_cache_p = nullptr, idx_t max_expression_depth_p = 1000)
+	           ParserPackratCache *packrat_cache_p = nullptr)
 	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
 	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p),
-	      packrat_cache(packrat_cache_p), max_expression_depth(max_expression_depth_p) {
+	      packrat_cache(packrat_cache_p) {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
 	      allocator(state.allocator), max_token_index(state.max_token_index),
-	      preserve_identifier_case(state.preserve_identifier_case), packrat_cache(state.packrat_cache),
-	      match_depth(state.match_depth), max_expression_depth(state.max_expression_depth) {
+	      preserve_identifier_case(state.preserve_identifier_case), packrat_cache(state.packrat_cache) {
 	}
 
 	vector<MatcherToken> &tokens;
@@ -144,8 +143,6 @@ struct MatchState {
 	idx_t &max_token_index;
 	bool preserve_identifier_case = true;
 	ParserPackratCache *packrat_cache;
-	idx_t match_depth = 0;
-	idx_t max_expression_depth = 1000;
 
 	void UpdateMaxTokenIndex() {
 		if (token_index > max_token_index) {

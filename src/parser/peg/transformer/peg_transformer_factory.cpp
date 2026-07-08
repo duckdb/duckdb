@@ -99,7 +99,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_cursor;
 	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case,
-	                 token_cursor, &packrat_cache, options.max_expression_depth);
+	                 token_cursor, &packrat_cache);
 	auto match_result = root_matcher.MatchParseResult(state);
 	if (match_result == nullptr) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
