@@ -470,7 +470,7 @@ query I
 SELECT strlen(v)
 FROM '{TEST_DIR}/scalar-pushdown-nested.parquet'
 ----
-1
+5
 
 query II
 EXPLAIN SELECT strlen(v)

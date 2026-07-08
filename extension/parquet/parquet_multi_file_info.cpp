@@ -435,23 +435,25 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 	if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
 		return false;
 	}
+	if (!bind_data.initial_reader) {
+		return false;
+	}
 
-	if (bind_data.initial_reader) {
-		const FileMetaData &metadata = *bind_data.initial_reader->Cast<ParquetReader>().GetFileMetadata();
-		for (const auto &group : metadata.row_groups) {
-			if (idx >= group.columns.size()) {
-				continue;
-			}
-			for (const Encoding::type type : group.columns[idx].meta_data.encodings) {
-				if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
-					return false;
-				}
+	auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
+	auto &children = reader.root_schema->children;
+	for (const auto &group : reader.GetFileMetadata()->row_groups) {
+		if (idx >= children.size()) {
+			continue;
+		}
+		const idx_t column_flat_idx = children[idx].column_index;
+		for (const Encoding::type type : group.columns[column_flat_idx].meta_data.encodings) {
+			if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
+				return false;
 			}
 		}
 	}
 
 	const LogicalType type = LogicalType::BIGINT;
-
 	if (auto &schema = bind_data.reader_bind.schema; !schema.empty()) {
 		schema[idx].type = type;
 	}
@@ -462,12 +464,7 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 
 	parquet_bind_data.projection_expressions[idx] = expression;
 
-	if (!bind_data.initial_reader) {
-		return true;
-	}
-
 	// initial reader was created before scalar function pushdown optimizer pass, update its types.
-	auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
 	reader.projection_expressions[idx] = expression;
 	if (idx < reader.columns.size()) {
 		reader.columns[idx].type = type;
