@@ -1,5 +1,6 @@
 #include "duckdb/common/http_util.hpp"
 
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -407,6 +408,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		std::exception_ptr caught_e = nullptr;
 		unique_ptr<HTTPResponse> response;
 		string exception_error;
+		string caught_status;
+		string caught_retry_after;
 
 		try {
 			response = on_request();
@@ -419,6 +422,16 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		} catch (HTTPException &e) {
 			exception_error = e.what();
 			caught_e = std::current_exception();
+			// handlers turn error statuses into exceptions; recover the status for throttle detection
+			ErrorData error_data(e);
+			auto entry = error_data.ExtraInfo().find("status_code");
+			if (entry != error_data.ExtraInfo().end()) {
+				caught_status = entry->second;
+			}
+			auto retry_entry = error_data.ExtraInfo().find("header_Retry-After");
+			if (retry_entry != error_data.ExtraInfo().end()) {
+				caught_retry_after = retry_entry->second;
+			}
 		}
 
 		// Note: request errors will always be retried
@@ -442,8 +455,9 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 
 		tries += 1;
 		// throttle responses get extra, capped, jittered backoff so bursts degrade instead of failing queries
-		const bool throttled = response && (response->status == HTTPStatusCode::TooManyRequests_429 ||
-		                                    response->status == HTTPStatusCode::ServiceUnavailable_503);
+		const bool throttled = (response && (response->status == HTTPStatusCode::TooManyRequests_429 ||
+		                                     response->status == HTTPStatusCode::ServiceUnavailable_503)) ||
+		                       caught_status == "429" || caught_status == "503";
 #ifndef DUCKDB_NO_THREADS
 		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 5;
 #else
@@ -461,9 +475,12 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 				uint64_t sleep_amount = (uint64_t)MinValue<double>(backoff_ms, (double)NumericLimits<int64_t>::Maximum());
 				if (throttled) {
 					sleep_amount = MinValue<uint64_t>(sleep_amount, THROTTLE_MAX_BACKOFF_MS);
-					if (response->headers.HasHeader("Retry-After")) {
+					string retry_after = caught_retry_after;
+					if (response && response->headers.HasHeader("Retry-After")) {
+						retry_after = response->headers.GetHeaderValue("Retry-After");
+					}
+					if (!retry_after.empty()) {
 						// honor a numeric Retry-After (seconds), capped like the backoff
-						auto retry_after = response->headers.GetHeaderValue("Retry-After");
 						uint64_t retry_after_s = 0;
 						if (TryCast::Operation<string_t, uint64_t>(string_t(retry_after), retry_after_s)) {
 							retry_after_s = MinValue<uint64_t>(retry_after_s, THROTTLE_MAX_BACKOFF_MS / 1000);
