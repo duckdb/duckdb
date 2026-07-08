@@ -16,7 +16,7 @@
 #include "duckdb/common/enums/task_scheduler_type.hpp"
 
 #ifdef DUCKDB_NO_THREADS
-#include <queue>
+#include "duckdb/common/queue.hpp"
 #endif
 
 namespace duckdb {
@@ -55,7 +55,7 @@ private:
 	unique_ptr<ConcurrentQueueWrapper> queue;
 	atomic<idx_t> tasks_in_queue {0};
 #else
-	reference_map_t<QueueProducerToken, std::queue<shared_ptr<Task>>> q;
+	reference_map_t<QueueProducerToken, queue<shared_ptr<Task>>> q;
 	mutable mutex qlock;
 #endif
 };

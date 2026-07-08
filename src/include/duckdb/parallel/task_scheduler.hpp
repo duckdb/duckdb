@@ -37,9 +37,9 @@ public:
 	QueueProducerToken &GetQueueProducerToken(TaskSchedulerType pool_type);
 
 public:
-	mutex producer_lock;
+	annotated_mutex producer_lock;
 	std::condition_variable producer_cv;
-	atomic<idx_t> enqueue_counter {0};
+	idx_t enqueue_counter DUCKDB_GUARDED_BY(producer_lock) = 0;
 
 private:
 	array<unique_ptr<QueueProducerToken>, TASK_SCHEDULER_TYPE_COUNT> tokens;

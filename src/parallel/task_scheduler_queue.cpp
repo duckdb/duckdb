@@ -34,11 +34,11 @@ TaskSchedulerQueue::TaskSchedulerQueue(TaskSchedulerType pool_type_p)
 }
 
 void TaskSchedulerQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
+	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	task->token = token;
 	if (queue->q.enqueue(token.GetQueueProducerToken(pool_type).token, std::move(task))) {
 		++tasks_in_queue;
-		token.enqueue_counter++;
+		++token.enqueue_counter;
 		token.producer_cv.notify_one();
 	} else {
 		throw InternalException("Could not schedule task!");
@@ -46,7 +46,7 @@ void TaskSchedulerQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 }
 
 void TaskSchedulerQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
+	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	for (auto &task : tasks) {
 		task->token = token;
 	}
@@ -61,7 +61,7 @@ void TaskSchedulerQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Tas
 }
 
 bool TaskSchedulerQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
+	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	if (!queue->q.try_dequeue_from_producer(token.GetQueueProducerToken(pool_type).token, task)) {
 		return false;
 	}
@@ -115,7 +115,7 @@ TaskSchedulerQueue::TaskSchedulerQueue(TaskSchedulerType pool_type_p) : pool_typ
 }
 
 void TaskSchedulerQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
+	annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	lock_guard<mutex> lock(qlock);
 	task->token = token;
 	q[token.GetQueueProducerToken(pool_type)].push(std::move(task));
@@ -124,7 +124,7 @@ void TaskSchedulerQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 }
 
 void TaskSchedulerQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks) {
-	lock_guard<mutex> producer_lock(token.producer_lock);
+	const annotated_lock_guard<annotated_mutex> producer_lock(token.producer_lock);
 	lock_guard<mutex> lock(qlock);
 	for (auto &task : tasks) {
 		task->token = token;

@@ -5,7 +5,7 @@
 namespace duckdb {
 
 TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p)
-    : scheduler(scheduler), type(type_p), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
+    : scheduler(scheduler), type(type_p), token(scheduler.CreateProducer()) {
 }
 
 TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p)
@@ -29,34 +29,38 @@ void TaskExecutor::ThrowError() {
 }
 
 void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
-	++total_tasks;
+	{
+		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
+		++total_tasks;
+	}
 	try {
 		scheduler.ScheduleTask(*token, std::move(task), type);
 	} catch (...) {
-		const lock_guard<mutex> lock(token->producer_lock);
+		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
 		--total_tasks;
 		token->producer_cv.notify_one();
 		throw;
 	}
 }
 void TaskExecutor::FinishTask() {
-	{
-		const lock_guard<mutex> lk(token->producer_lock);
-		++completed_tasks;
-		finish_counter++;
-		token->producer_cv.notify_one();
-	}
+	const annotated_lock_guard<annotated_mutex> lk(token->producer_lock);
+	++completed_tasks;
+	--finish_counter;
+	token->producer_cv.notify_one();
 }
 
 void TaskExecutor::WorkOnTasks() {
 	// repeatedly execute tasks until we are finished
 	shared_ptr<Task> task_from_producer;
 	// wait for all active tasks to finish
-	while (completed_tasks != total_tasks) {
+	while (true) {
 		idx_t observed_enqueue = 0;
 		idx_t observed_finish = 0;
 		{
-			lock_guard<mutex> lk(token->producer_lock);
+			annotated_lock_guard<annotated_mutex> lk(token->producer_lock);
+			if (completed_tasks == total_tasks) {
+				break;
+			}
 			observed_enqueue = token->enqueue_counter;
 			observed_finish = finish_counter;
 		}
@@ -66,8 +70,8 @@ void TaskExecutor::WorkOnTasks() {
 			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
 			task_from_producer.reset();
 		} else {
-			unique_lock<mutex> lk(token->producer_lock);
-			token->producer_cv.wait(lk, [&] {
+			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
+			token->producer_cv.wait(lk, [&]() DUCKDB_REQUIRES(token->producer_lock) {
 				return completed_tasks == total_tasks || token->enqueue_counter != observed_enqueue ||
 				       finish_counter != observed_finish;
 			});
