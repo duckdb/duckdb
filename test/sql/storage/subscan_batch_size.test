@@ -564,10 +564,10 @@ SELECT COUNT(DISTINCT LEFT(blob_data, 1)) FROM t_oom_filter WHERE i >= 1
 26
 
 # ============================================================
-# TC21: Delete path — sub-batch does NOT adapt to deletes (fallback)
-# A deleted row makes count != max_count, forcing the full-vector complex
-# scan path. scan_target_size_bytes cannot lower the peak there, so the
-# query OOMs whether the feature is off or on. Documents the limitation.
+# TC21: Delete path under memory pressure — sub-batch adapts to deletes.
+# Deletes take the complex scan path; the per-batch valid_sel window keeps
+# the physical scan byte-budgeted, so the same query that OOMs with the
+# feature off now succeeds. 21 of 2048 rows are deleted (i % 100 = 0).
 # ============================================================
 
 load {TEST_DIR}/subscan_oom_delete.db
@@ -593,15 +593,31 @@ SELECT SUM(LENGTH(blob_data)) FROM t_oom_delete
 ----
 Out of Memory
 
-# Enabled: deletes force the full-vector fallback, so the same query still OOMs.
+# Enable adaptive scan: deletes now scan byte-budgeted sub-batches → fits in 15MB.
 # Same query as the disabled case above — the only change is scan_target_size_bytes.
 statement ok
 SET scan_target_size_bytes=1048576
 
-statement error
+query I
 SELECT SUM(LENGTH(blob_data)) FROM t_oom_delete
 ----
-Out of Memory
+101350000
+
+query I
+SELECT COUNT(*) FROM t_oom_delete
+----
+2027
+
+# Content correctness through the delete path under memory pressure
+query II
+SELECT i, LEFT(blob_data, 3) FROM t_oom_delete WHERE i = 25
+----
+25	ZZZ
+
+query I
+SELECT COUNT(DISTINCT LEFT(blob_data, 1)) FROM t_oom_delete
+----
+26
 
 # ============================================================
 # TC22: Update path — sub-batch does NOT adapt to pending updates (fallback)

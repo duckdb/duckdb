@@ -841,7 +841,9 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		D_ASSERT(!svs.InProgress() || sub_batch_enabled);
 		bool resuming = svs.InProgress();
 
-		idx_t count = max_count;
+		// on resume, valid_count carries the surviving-row count computed when the vector started
+		// (GetSelVector runs only in the fresh branch); a fresh vector defaults to max_count until then
+		idx_t count = resuming ? svs.ValidCount() : max_count;
 		bool has_sample_selection = false;
 		idx_t sample_count = max_count;
 		SelectionVector sample_sel(STANDARD_VECTOR_SIZE);
@@ -904,11 +906,10 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				buffer_manager.Prefetch(state.context, prefetch_state.blocks);
 			}
 
-			svs.BeginVector(max_count);
-			// fresh vector: sub-batch only in the clean case — feature enabled, no deleted rows
-			// (count == max_count), no sampling, and no pending updates on any scanned column
-			use_sub_batch =
-			    sub_batch_enabled && count == max_count && !has_sample_selection && !HasPendingUpdates(column_ids);
+			svs.BeginVector(max_count, count);
+			// fresh vector: sub-batch when the feature is enabled, no sampling, and no pending updates on any
+			// scanned column. Deletes (count < max_count) are supported by windowing valid_sel per batch.
+			use_sub_batch = sub_batch_enabled && !has_sample_selection && !HasPendingUpdates(column_ids);
 		}
 
 		bool has_filters = filter_info.HasFilters();
@@ -916,8 +917,16 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		// physical rows to scan this call: the full vector unless sub-batching (then a byte-budgeted batch)
 		idx_t scan_count;
 		if (use_sub_batch) {
-			scan_count = state.size_predictor.PredictBatchSize(target_bytes, svs.vector_max_count - svs.offset,
-			                                                   column_ids, *this);
+			scan_count = state.size_predictor.PredictBatchSize(target_bytes, svs.RemainingRows(), column_ids, *this);
+			// PredictBatchSize clamps to the remaining rows (vector_max_count - offset), which is <= max_count
+			D_ASSERT(scan_count <= max_count);
+			// on resume (offset > 0) the remaining rows are strictly < max_count, so demotion to the full
+			// path below can only ever happen on a fresh vector — never mid-vector
+			D_ASSERT(scan_count < max_count || !svs.InProgress());
+			if (scan_count == max_count) {
+				// the whole (remaining) vector fits the byte budget: not a sub-batch, use the original full path
+				use_sub_batch = false;
+			}
 		} else {
 			scan_count = max_count;
 		}
@@ -952,7 +961,15 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				approved_tuple_count = sample_count;
 				sel.Initialize(sample_sel);
 			} else if (count != max_count) {
-				sel.Initialize(state.valid_sel);
+				if (use_sub_batch) {
+					// delete sub-batch: window valid_sel to this batch and rebase into batch-sized coordinates.
+					// sel keeps batch_sel's buffer alive (shared selection_data) after this scope ends.
+					SelectionVector batch_sel(STANDARD_VECTOR_SIZE);
+					approved_tuple_count = svs.WindowValidSelection(state.valid_sel, scan_count, batch_sel);
+					sel.Initialize(batch_sel);
+				} else {
+					sel.Initialize(state.valid_sel);
+				}
 			} else {
 				sel.Initialize(nullptr);
 				// clean case: only this batch's physical rows are approved before filtering
@@ -995,8 +1012,9 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				}
 			}
 			if (approved_tuple_count == 0) {
-				// all rows were filtered out by the table filters
-				D_ASSERT(has_filters);
+				// no rows to emit: either the table filters rejected them all, or a delete sub-batch
+				// landed entirely on deleted rows
+				D_ASSERT(has_filters || use_sub_batch);
 				result.Reset();
 				// skip this batch in all the scans that were not scanned yet
 				for (idx_t i = 0; i < column_ids.size(); i++) {

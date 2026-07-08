@@ -806,10 +806,10 @@ ORDER BY timestamp DESC LIMIT 1
 OK
 
 # ============================================================
-# TC19: Delete forces full-vector fallback — predictor does not engage
-# A deleted row makes count != max_count, so the scan takes the full-vector
-# path and never invokes the size predictor. Baseline (no delete) sub-batches
-# and emits a log; after the delete the same query emits no new log.
+# TC19: Delete engages the predictor — sub-batch adapts to deletes
+# A deleted row makes count != max_count (complex scan path), but the
+# per-batch valid_sel window still byte-budgets the physical scan, so the
+# predictor engages just like the no-delete baseline.
 # ============================================================
 
 statement ok
@@ -836,12 +836,9 @@ FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:') ORDER BY timest
 ----
 OK
 
-# delete at least one row in every vector -> every vector falls back
+# delete at least one row in every vector -> complex path, but sub-batch still engages
 statement ok
 DELETE FROM t_pred_delete WHERE i % 500 = 0
-
-statement ok
-CREATE TABLE log_before_del AS SELECT COUNT(*) as cnt FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:')
 
 statement ok
 CALL enable_logging(level='trace')
@@ -854,9 +851,10 @@ SELECT SUM(LENGTH(blob)) FROM t_pred_delete
 statement ok
 set enable_logging=false
 
-# fallback path emits no new predictor logs
+# delete path still sub-batches: predictor engaged (many batches)
 query I
-SELECT CASE WHEN (SELECT COUNT(*) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:')) = (SELECT cnt FROM log_before_del) THEN 'OK' ELSE 'FAIL' END
+SELECT CASE WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 2 THEN 'OK' ELSE 'FAIL: ' || message END
+FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:') ORDER BY timestamp DESC LIMIT 1
 ----
 OK
 

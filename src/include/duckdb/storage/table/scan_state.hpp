@@ -268,20 +268,30 @@ struct ScanSizePredictor {
 //! A standard 2048-row vector is split into multiple smaller batches,
 //! each sized by ScanSizePredictor to stay within the byte budget.
 struct SubVectorScanState {
-	//! Current row offset within the vector (0..vector_max_count)
-	idx_t offset = 0;
-	//! Total scannable rows in the current vector (STANDARD_VECTOR_SIZE for a full vector, less for the tail)
-	idx_t vector_max_count = 0;
+public:
+	//! Surviving (non-deleted) rows in the current vector; equals vector_max_count when there are no deletes
+	idx_t ValidCount() const {
+		return valid_count;
+	}
+
+	//! Rows of the current vector not yet consumed by prior batches
+	idx_t RemainingRows() const {
+		return vector_max_count - offset;
+	}
 
 	void Reset() {
 		offset = 0;
 		vector_max_count = 0;
+		valid_count = 0;
+		valid_sel_cursor = 0;
 	}
 
-	//! Start scanning a fresh vector: record its total row count and rewind the offset to the start
-	void BeginVector(idx_t max_count) {
+	//! Start scanning a fresh vector: record its total/surviving row count and rewind to the start
+	void BeginVector(idx_t max_count, idx_t valid_count_p) {
 		offset = 0;
 		vector_max_count = max_count;
+		valid_count = valid_count_p;
+		valid_sel_cursor = 0;
 	}
 
 	//! Advance past the batch just scanned; returns true once the whole vector has been consumed
@@ -294,9 +304,32 @@ struct SubVectorScanState {
 		return offset > 0 && offset < vector_max_count;
 	}
 
+	//! Window a vector-wide valid selection to the current batch [offset, offset + scan_count) and rebase the
+	//! surviving absolute positions to [0, scan_count) so they index into the batch-sized result. Advances
+	//! valid_sel_cursor past the consumed entries and returns the number of survivors in this batch.
+	idx_t WindowValidSelection(const SelectionVector &valid_sel, idx_t scan_count, SelectionVector &batch_sel) {
+		idx_t batch_end = offset + scan_count;
+		idx_t survivors = 0;
+		while (valid_sel_cursor < valid_count && valid_sel.get_index(valid_sel_cursor) < batch_end) {
+			idx_t abs_pos = valid_sel.get_index(valid_sel_cursor++);
+			batch_sel.set_index(survivors++, abs_pos - offset);
+		}
+		return survivors;
+	}
+
 	static bool IsActive(idx_t scan_target_size_bytes) {
 		return scan_target_size_bytes > 0;
 	}
+
+private:
+	//! Current row offset within the vector (0..vector_max_count)
+	idx_t offset = 0;
+	//! Total scannable rows in the current vector (STANDARD_VECTOR_SIZE for a full vector, less for the tail)
+	idx_t vector_max_count = 0;
+	//! Surviving (non-deleted) rows in the current vector; equals vector_max_count when there are no deletes
+	idx_t valid_count = 0;
+	//! Entries of valid_sel already consumed by prior batches of the current vector (delete sub-batch cursor)
+	idx_t valid_sel_cursor = 0;
 };
 
 class CollectionScanState {
