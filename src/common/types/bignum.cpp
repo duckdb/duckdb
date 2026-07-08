@@ -140,6 +140,9 @@ static void IncrementDecimalString(string &digits) {
 
 string Bignum::EncodeVarcharBignum(const string_t &value, idx_t start_pos, idx_t end_pos, bool is_negative,
                                    bool is_zero, bool should_round_up) {
+	if (start_pos == end_pos && !should_round_up) {
+		is_zero = true;
+	}
 	if (should_round_up) {
 		string integer_digits(value.GetData() + start_pos, end_pos - start_pos);
 		IncrementDecimalString(integer_digits);
