@@ -7,10 +7,10 @@ require noforcestorage
 require skip_reload
 
 # ============================================================
-# Setup: entity table + event table with a foreign key into it
+# Setup: entity table (no primary key required) + event table
 # ============================================================
 statement ok
-CREATE TABLE users (user_id VARCHAR PRIMARY KEY);
+CREATE TABLE users (user_id VARCHAR);
 
 statement ok
 INSERT INTO users VALUES ('alice'), ('bob'), ('carol');
@@ -19,8 +19,7 @@ statement ok
 CREATE TABLE transactions (
     user_id VARCHAR,
     amount DECIMAL(10,2),
-    ts TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(user_id)
+    ts TIMESTAMP
 );
 
 # carol has no events: she must still appear in every snapshot with default values.
@@ -176,7 +175,7 @@ Feature "nonexistent" does not exist
 
 # Dropping the source table with CASCADE removes the dependent feature.
 statement ok
-CREATE TABLE err_users (entity VARCHAR PRIMARY KEY);
+CREATE TABLE err_users (entity VARCHAR);
 
 statement ok
 INSERT INTO err_users VALUES ('a');
@@ -185,8 +184,7 @@ statement ok
 CREATE TABLE refresh_error_src (
     entity VARCHAR,
     val INTEGER,
-    ts TIMESTAMP,
-    FOREIGN KEY (entity) REFERENCES err_users(entity)
+    ts TIMESTAMP
 );
 
 statement ok

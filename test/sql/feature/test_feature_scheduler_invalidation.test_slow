@@ -5,13 +5,13 @@
 load {TEST_DIR}/feature_scheduler_invalidation.db
 
 statement ok
-CREATE TABLE users (user_id VARCHAR PRIMARY KEY);
+CREATE TABLE users (user_id VARCHAR);
 
 statement ok
 INSERT INTO users VALUES ('alice'), ('bob');
 
 statement ok
-CREATE TABLE events (user_id VARCHAR, value INTEGER, event_time TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(user_id));
+CREATE TABLE events (user_id VARCHAR, value INTEGER, event_time TIMESTAMP);
 
 statement ok
 INSERT INTO events VALUES

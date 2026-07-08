@@ -9,12 +9,12 @@ require skip_reload
 # ============================================================
 # Setup
 # ============================================================
-# The snapshot is built over the entity table; the event table must carry a foreign key into it.
+# The snapshot is built over the entity table; no primary/foreign key is required.
 statement ok
-CREATE TABLE cards (card_no VARCHAR PRIMARY KEY);
+CREATE TABLE cards (card_no VARCHAR);
 
 statement ok
-CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP, FOREIGN KEY (card_no) REFERENCES cards(card_no));
+CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
 
 statement ok
 CREATE TABLE events (id INTEGER, name VARCHAR);
@@ -48,8 +48,8 @@ CREATE FEATURE bad ENTITY cards TIMESTAMP col2 WINDOW 7 DAYS RETAIN 1 AS (SELECT
 ----
 Table with name nonexistent does not exist
 
-# A query that does not project the entity key column is a GLOBAL feature (a single aggregate row), so
-# entity_columns is empty. Keyed features project the entity table's primary key.
+# A query that does not project any entity-table column is a GLOBAL feature (a single aggregate row), so
+# entity_columns is empty. A keyed feature projects the entity key column(s).
 statement ok
 CREATE FEATURE global_cards ENTITY cards TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT SUM(amount) AS total FROM transactions);
 
@@ -79,11 +79,17 @@ CREATE FEATURE bad ENTITY nonexistent TIMESTAMP event_time WINDOW 7 DAYS RETAIN 
 ----
 <REGEX>:.*nonexistent does not exist.*
 
-# The entity table must have a PRIMARY KEY (the feature query's entity columns map onto it)
+# Explicit entity key column that does not exist in the entity table
 statement error
-CREATE FEATURE bad ENTITY events TIMESTAMP name WINDOW 7 DAYS RETAIN 1 AS (SELECT id, COUNT(*) FROM events GROUP BY id);
+CREATE FEATURE bad ENTITY cards (nope) TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 ----
-must have a PRIMARY KEY
+Entity key column "nope" does not exist
+
+# Explicit entity key column not projected by the feature query
+statement error
+CREATE FEATURE bad ENTITY cards (card_no) TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT SUM(amount) AS total FROM transactions);
+----
+must project the entity key column "card_no"
 
 # ============================================================
 # CREATE FEATURE basic
@@ -101,7 +107,7 @@ daily_txn	cards	card_no	7 days
 query IIIIIIIII
 DESCRIBE FEATURE daily_txn;
 ----
-daily_txn	cards	card_no	event_time	1	0	7 days	00:00:00	CREATE FEATURE daily_txn ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '7 days' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+daily_txn	cards	card_no	event_time	1	0	7 days	00:00:00	CREATE FEATURE daily_txn ENTITY cards (card_no) TIMESTAMP event_time WINDOW INTERVAL '7 days' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # DESCRIBE non-existent feature returns empty
 query I
@@ -149,7 +155,7 @@ CREATE FEATURE ttl_minutes ENTITY cards TIMESTAMP event_time  WINDOW 24 HOURS TT
 query II
 SELECT ttl_interval, sql FROM duckdb_features() WHERE feature_name = 'ttl_minutes';
 ----
-00:30:00	CREATE FEATURE ttl_minutes ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '24:00:00' TTL INTERVAL '00:30:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+00:30:00	CREATE FEATURE ttl_minutes ENTITY cards (card_no) TIMESTAMP event_time WINDOW INTERVAL '24:00:00' TTL INTERVAL '00:30:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # WINDOW also accepts INTERVAL string syntax
 statement ok
@@ -167,7 +173,7 @@ CREATE FEATURE ttl_interval_string ENTITY cards TIMESTAMP event_time  WINDOW 7 D
 query II
 SELECT ttl_interval, sql FROM duckdb_features() WHERE feature_name = 'ttl_interval_string';
 ----
-02:00:00	CREATE FEATURE ttl_interval_string ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '7 days' TTL INTERVAL '02:00:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+02:00:00	CREATE FEATURE ttl_interval_string ENTITY cards (card_no) TIMESTAMP event_time WINDOW INTERVAL '7 days' TTL INTERVAL '02:00:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 query I
 SELECT COUNT(*) FROM duckdb_features();
@@ -294,13 +300,13 @@ SELECT * FROM daily_txn;
 # Cascade chains: multiple features on different tables
 # ============================================================
 statement ok
-CREATE TABLE entities (entity_id VARCHAR PRIMARY KEY);
+CREATE TABLE entities (entity_id VARCHAR);
 
 statement ok
-CREATE TABLE t1 (entity_id VARCHAR, val DECIMAL, ts TIMESTAMP, FOREIGN KEY (entity_id) REFERENCES entities(entity_id));
+CREATE TABLE t1 (entity_id VARCHAR, val DECIMAL, ts TIMESTAMP);
 
 statement ok
-CREATE TABLE t2 (entity_id VARCHAR, score INTEGER, ts TIMESTAMP, FOREIGN KEY (entity_id) REFERENCES entities(entity_id));
+CREATE TABLE t2 (entity_id VARCHAR, score INTEGER, ts TIMESTAMP);
 
 statement ok
 CREATE FEATURE feat_t1 ENTITY entities TIMESTAMP ts  WINDOW 7 DAYS RETAIN 1 AS (SELECT entity_id, SUM(val) FROM t1 GROUP BY entity_id);

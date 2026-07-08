@@ -9,7 +9,7 @@ require noforcestorage
 require skip_reload
 
 statement ok
-CREATE TABLE users (user_id VARCHAR PRIMARY KEY);
+CREATE TABLE users (user_id VARCHAR);
 
 statement ok
 INSERT INTO users VALUES ('alice'), ('bob');

@@ -59,11 +59,8 @@
 
 namespace duckdb {
 
-//! The entity mapping is derived from the entity table's PRIMARY KEY (no source-table foreign key is
-//! required, since the feature query may join arbitrary relations). The feature query must project columns
-//! named after these key columns; REFRESH's snapshot LEFT JOINs the entity table onto the aggregate on
-//! them. Throws if the entity table has no primary key.
-static vector<string> GetEntityPrimaryKeyColumns(const TableCatalogEntry &entity_entry, const string &entity_table) {
+//! Returns the entity table's PRIMARY KEY columns, or an empty vector if it has none.
+static vector<string> GetEntityPrimaryKeyColumns(const TableCatalogEntry &entity_entry) {
 	for (auto &constraint : entity_entry.GetConstraints()) {
 		if (constraint->type != ConstraintType::UNIQUE) {
 			continue;
@@ -77,9 +74,7 @@ static vector<string> GetEntityPrimaryKeyColumns(const TableCatalogEntry &entity
 		}
 		return unique.GetColumnNames();
 	}
-	throw BinderException("CREATE FEATURE entity table \"%s\" must have a PRIMARY KEY; the feature query's entity "
-	                      "columns map to it",
-	                      entity_table);
+	return {};
 }
 
 //! Bind the raw feature query once to obtain its output column names. This also surfaces clean errors for a
@@ -810,34 +805,58 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &schema = BindCreateSchema(*stmt.info);
 		auto &select_node = feature_info.query->node->Cast<SelectNode>();
 
-		// The feature query may be an arbitrary SELECT (joins, filters, CTEs, window functions).
-		// The entity table must exist and expose a PRIMARY KEY. A keyed feature maps back to the entity via
-		// those key columns (projected under the same names), replacing the old source-table foreign key.
+		// The feature query may be an arbitrary SELECT (joins, filters, CTEs, window functions). It maps back
+		// to the entity via a set of key columns it projects. Bind the raw query first (surfacing clean errors
+		// for a missing table / unknown column) so we can classify it against the resolved keys.
 		auto &entity_table_entry = Catalog::GetEntry<TableCatalogEntry>(context, feature_info.catalog,
 		                                                                feature_info.schema, feature_info.entity_table);
-		auto pk_columns = GetEntityPrimaryKeyColumns(entity_table_entry, feature_info.entity_table);
-
-		// Bind the raw query (surfacing clean errors for a missing table / unknown column) and classify the
-		// feature by whether it projects the entity keys: all of them -> keyed (one snapshot row per entity);
-		// none -> global (a single aggregate row); a partial projection is ambiguous and rejected.
 		auto query_names = BindFeatureQueryOutputNames(context, *this, *feature_info.query);
-		idx_t projected_keys = 0;
-		for (auto &pk_column : pk_columns) {
-			if (FeatureColumnListContains(query_names, pk_column)) {
-				projected_keys++;
+
+		// Resolve the entity key columns, no PRIMARY KEY required: an explicit "ENTITY tbl (cols)" clause wins;
+		// otherwise the entity table's PRIMARY KEY; otherwise the entity-table columns the query also projects.
+		vector<string> entity_keys;
+		if (!feature_info.user_entity_keys.empty()) {
+			// Explicit keys: a keyed feature by declaration. Each must exist in the entity table and be projected.
+			for (auto &key : feature_info.user_entity_keys) {
+				if (!entity_table_entry.ColumnExists(key)) {
+					throw BinderException("Entity key column \"%s\" does not exist in entity table \"%s\"", key,
+					                      feature_info.entity_table);
+				}
+				if (!FeatureColumnListContains(query_names, key)) {
+					throw BinderException("CREATE FEATURE query must project the entity key column \"%s\"", key);
+				}
+			}
+			entity_keys = feature_info.user_entity_keys;
+		} else {
+			auto pk_columns = GetEntityPrimaryKeyColumns(entity_table_entry);
+			if (!pk_columns.empty()) {
+				// Keyed if the query projects all PK columns; global if it projects none; partial is ambiguous.
+				idx_t projected_keys = 0;
+				for (auto &pk_column : pk_columns) {
+					if (FeatureColumnListContains(query_names, pk_column)) {
+						projected_keys++;
+					}
+				}
+				if (projected_keys == pk_columns.size()) {
+					entity_keys = pk_columns;
+				} else if (projected_keys != 0) {
+					throw BinderException(
+					    "CREATE FEATURE query must project either all entity key column(s) (%s) of entity table \"%s\" "
+					    "(a keyed feature) or none (a global feature); otherwise name the keys with ENTITY %s (...)",
+					    StringUtil::Join(pk_columns, ", "), feature_info.entity_table, feature_info.entity_table);
+				}
+				// projected_keys == 0 -> global (entity_keys stays empty)
+			} else {
+				// No PRIMARY KEY: infer keys as the entity-table columns the query also projects. Empty -> global.
+				for (auto &column : entity_table_entry.GetColumns().Logical()) {
+					if (FeatureColumnListContains(query_names, column.Name())) {
+						entity_keys.push_back(column.Name());
+					}
+				}
 			}
 		}
-		if (projected_keys == pk_columns.size()) {
-			feature_info.entity_key_columns = pk_columns;
-			feature_info.entity_columns = pk_columns;
-		} else if (projected_keys == 0) {
-			feature_info.entity_key_columns.clear();
-			feature_info.entity_columns.clear();
-		} else {
-			throw BinderException("CREATE FEATURE query must project either all entity key column(s) (%s) of entity "
-			                      "table \"%s\" (a keyed feature) or none (a global feature)",
-			                      StringUtil::Join(pk_columns, ", "), feature_info.entity_table);
-		}
+		feature_info.entity_key_columns = entity_keys;
+		feature_info.entity_columns = entity_keys;
 
 		FeatureSnapshotParameters snapshot_parameters;
 		snapshot_parameters.entity_table = feature_info.entity_table;

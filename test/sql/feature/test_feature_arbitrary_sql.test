@@ -2,18 +2,18 @@
 # description: Feature definitions may use arbitrary SQL (joins, filters, CTEs, window functions) and a
 # group: [feature]
 
-#              qualified TIMESTAMP; the result maps back to the entity via the entity table's primary key.
+#              qualified TIMESTAMP; the result maps back to the entity via the entity key columns.
 
 require noforcestorage
 
 require skip_reload
 
 # ============================================================
-# Setup: an entity table (PRIMARY KEY only; no source-table foreign key is required anymore) plus an event
-# table and a dimension table to join against. carol has no events and must still appear in each snapshot.
+# Setup: a plain entity table (no primary key needed) plus an event table and a dimension table to join
+# against. carol has no events and must still appear in each snapshot.
 # ============================================================
 statement ok
-CREATE TABLE users (user_id VARCHAR PRIMARY KEY);
+CREATE TABLE users (user_id VARCHAR);
 
 statement ok
 INSERT INTO users VALUES ('alice'), ('bob'), ('carol');
@@ -114,7 +114,7 @@ bob	50
 carol	NULL
 
 # ============================================================
-# Metadata: the entity columns come from the entity table's primary key regardless of query shape.
+# Metadata: the entity key is resolved from the entity-table columns the query projects (user_id here).
 # ============================================================
 query II
 SELECT entity_columns, timestamp_column FROM duckdb_features() WHERE feature_name = 'weighted_spend';

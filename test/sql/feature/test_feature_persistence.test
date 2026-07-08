@@ -9,7 +9,7 @@ load {TEST_DIR}/feature_persistence.db
 # Setup
 # ============================================================
 statement ok
-CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
+CREATE TABLE customers (customer VARCHAR);
 
 statement ok
 INSERT INTO customers VALUES ('x'), ('y'), ('z');
@@ -18,8 +18,7 @@ statement ok
 CREATE TABLE events (
     customer VARCHAR,
     value INTEGER,
-    event_time TIMESTAMP,
-    FOREIGN KEY (customer) REFERENCES customers(customer)
+    event_time TIMESTAMP
 );
 
 statement ok

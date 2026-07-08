@@ -114,7 +114,7 @@ static interval_t ParseFeatureScheduleInterval(ParseResult &parse_result) {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
 	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral
-	//                      'TIMESTAMP' QualifiedName FeatureWindowClause? FeatureTTLClause?
+	//                      ColumnIdList? 'TIMESTAMP' QualifiedName FeatureWindowClause? FeatureTTLClause?
 	//                      FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
@@ -123,45 +123,51 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2)).name;
 	// index 3: 'ENTITY' keyword
 	auto entity_table = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(4)).name;
-	// index 5: 'TIMESTAMP' keyword. The operand is a (possibly-qualified) column reference: an unqualified
+	// index 5: ColumnIdList? — optional explicit entity key columns "ENTITY tbl (col, ...)"
+	vector<string> user_entity_keys;
+	auto &entity_keys_opt = list_pr.Child<OptionalParseResult>(5);
+	if (entity_keys_opt.HasResult()) {
+		user_entity_keys = transformer.Transform<vector<string>>(entity_keys_opt.GetResult());
+	}
+	// index 6: 'TIMESTAMP' keyword. The operand is a (possibly-qualified) column reference: an unqualified
 	// column keeps schema == INVALID_SCHEMA, while "tbl.col" carries the table qualifier in the schema slot.
-	auto timestamp_ref = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(6));
+	auto timestamp_ref = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(7));
 	auto timestamp_column = timestamp_ref.name;
 	string timestamp_table;
 	if (timestamp_ref.schema != INVALID_SCHEMA) {
 		timestamp_table = timestamp_ref.schema;
 	}
-	// index 7: FeatureWindowClause? (default: 1 day)
+	// index 8: FeatureWindowClause? (default: 1 day)
 	interval_t window_interval {0, 1, 0};
-	auto &window_opt = list_pr.Child<OptionalParseResult>(7);
+	auto &window_opt = list_pr.Child<OptionalParseResult>(8);
 	if (window_opt.HasResult()) {
 		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
 		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW");
 	}
-	// index 8: FeatureTTLClause? (default: zero interval = no staleness bound / TTL disabled).
+	// index 9: FeatureTTLClause? (default: zero interval = no staleness bound / TTL disabled).
 	interval_t ttl_interval = ZERO_INTERVAL;
-	auto &ttl_opt = list_pr.Child<OptionalParseResult>(8);
+	auto &ttl_opt = list_pr.Child<OptionalParseResult>(9);
 	if (ttl_opt.HasResult()) {
 		auto &clause = ttl_opt.GetResult().Cast<ListParseResult>();
 		ttl_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "TTL");
 	}
-	// index 9: FeatureScheduleClause? (default: no schedule)
+	// index 10: FeatureScheduleClause? (default: no schedule)
 	bool has_schedule = false;
 	interval_t schedule_interval {0, 0, 0};
-	auto &schedule_opt = list_pr.Child<OptionalParseResult>(9);
+	auto &schedule_opt = list_pr.Child<OptionalParseResult>(10);
 	if (schedule_opt.HasResult()) {
 		schedule_interval = transformer.Transform<interval_t>(schedule_opt.GetResult());
 		has_schedule = true;
 	}
-	// index 10: FeatureRetainClause? (default: 1)
+	// index 11: FeatureRetainClause? (default: 1)
 	int64_t retain_versions = 1;
-	auto &retain_opt = list_pr.Child<OptionalParseResult>(10);
+	auto &retain_opt = list_pr.Child<OptionalParseResult>(11);
 	if (retain_opt.HasResult()) {
 		auto &clause = retain_opt.GetResult().Cast<ListParseResult>();
 		retain_versions = std::stoll(clause.Child<NumberParseResult>(1).number);
 	}
-	// index 11: 'AS' keyword
-	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(12));
+	// index 12: 'AS' keyword
+	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(13));
 	auto query = transformer.Transform<unique_ptr<SelectStatement>>(select_parens);
 
 	auto result = make_uniq<CreateStatement>();
@@ -169,6 +175,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->feature_name = feature_name;
 	info->entity_table = entity_table;
+	info->user_entity_keys = std::move(user_entity_keys);
 	info->timestamp_column = timestamp_column;
 	info->timestamp_table = timestamp_table;
 	info->window_interval = window_interval;

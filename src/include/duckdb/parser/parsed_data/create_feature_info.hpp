@@ -21,7 +21,10 @@ struct CreateFeatureInfo : public CreateInfo {
 	string feature_name;
 	//! Entity table name (one snapshot row per entity); declared via the ENTITY clause
 	string entity_table;
-	//! Entity columns (the entity table's primary key names, projected by the query); empty for global features
+	//! Explicit entity key columns from "ENTITY tbl (col, ...)"; empty if not specified. Transient: consumed
+	//! at bind to resolve entity_key_columns (not serialized).
+	vector<string> user_entity_keys;
+	//! Entity columns (the resolved entity key names, projected by the query); empty for global features
 	vector<string> entity_columns;
 	//! Entity table key columns, aligned to entity_columns
 	vector<string> entity_key_columns;

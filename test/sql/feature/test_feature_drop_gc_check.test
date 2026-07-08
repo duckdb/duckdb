@@ -7,7 +7,7 @@ require noforcestorage
 require skip_reload
 
 statement ok
-CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
+CREATE TABLE customers (customer VARCHAR);
 
 statement ok
 INSERT INTO customers VALUES ('x'), ('y');
@@ -16,8 +16,7 @@ statement ok
 CREATE TABLE events (
     customer VARCHAR,
     value INTEGER,
-    event_time TIMESTAMP,
-    FOREIGN KEY (customer) REFERENCES customers(customer)
+    event_time TIMESTAMP
 );
 
 statement ok

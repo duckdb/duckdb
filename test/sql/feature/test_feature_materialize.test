@@ -10,13 +10,13 @@ require skip_reload
 # Setup: entity table (incl. user 5 with no events) + event table
 # ============================================================
 statement ok
-CREATE TABLE users (user_id INTEGER PRIMARY KEY);
+CREATE TABLE users (user_id INTEGER);
 
 statement ok
 INSERT INTO users VALUES (1), (2), (3), (4), (5);
 
 statement ok
-CREATE TABLE transactions (user_id INTEGER, amount DOUBLE, ts TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(user_id));
+CREATE TABLE transactions (user_id INTEGER, amount DOUBLE, ts TIMESTAMP);
 
 statement ok
 INSERT INTO transactions VALUES

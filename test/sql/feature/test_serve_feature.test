@@ -10,13 +10,13 @@ require skip_reload
 # Setup: entity table, event table, feature, one snapshot AT Jan 4
 # ============================================================
 statement ok
-CREATE TABLE cards (card_no VARCHAR PRIMARY KEY);
+CREATE TABLE cards (card_no VARCHAR);
 
 statement ok
 INSERT INTO cards VALUES ('C001'), ('C002');
 
 statement ok
-CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP, FOREIGN KEY (card_no) REFERENCES cards(card_no));
+CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
 
 statement ok
 INSERT INTO transactions VALUES
@@ -138,13 +138,13 @@ C002	2024-01-05 10:00:00	400.00	3	6
 # SERVE FEATURE: composite entity columns
 # ============================================================
 statement ok
-CREATE TABLE merchants (card_no VARCHAR, merchant_id VARCHAR, PRIMARY KEY (card_no, merchant_id));
+CREATE TABLE merchants (card_no VARCHAR, merchant_id VARCHAR);
 
 statement ok
 INSERT INTO merchants VALUES ('C001', 'M1'), ('C001', 'M2'), ('C002', 'M1');
 
 statement ok
-CREATE TABLE merchant_transactions (card_no VARCHAR, merchant_id VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP, FOREIGN KEY (card_no, merchant_id) REFERENCES merchants(card_no, merchant_id));
+CREATE TABLE merchant_transactions (card_no VARCHAR, merchant_id VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
 
 statement ok
 INSERT INTO merchant_transactions VALUES

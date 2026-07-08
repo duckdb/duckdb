@@ -1,4 +1,4 @@
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' QualifiedName FeatureWindowClause? FeatureTTLClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral ColumnIdList? 'TIMESTAMP' QualifiedName FeatureWindowClause? FeatureTTLClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 
 FeatureWindowClause <- 'WINDOW' FeatureInterval
 FeatureTTLClause <- 'TTL' FeatureInterval

@@ -10,13 +10,13 @@ require skip_reload
 # Setup
 # ============================================================
 statement ok
-CREATE TABLE users (UserID VARCHAR PRIMARY KEY);
+CREATE TABLE users (UserID VARCHAR);
 
 statement ok
 INSERT INTO users VALUES ('a'), ('b');
 
 statement ok
-CREATE TABLE hits (UserID VARCHAR, EventTime TIMESTAMP, FOREIGN KEY (UserID) REFERENCES users(UserID));
+CREATE TABLE hits (UserID VARCHAR, EventTime TIMESTAMP);
 
 statement ok
 INSERT INTO hits VALUES

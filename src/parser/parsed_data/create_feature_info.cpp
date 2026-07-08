@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/interval.hpp"
 
@@ -19,6 +20,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	CopyProperties(*result);
 	result->feature_name = feature_name;
 	result->entity_table = entity_table;
+	result->user_entity_keys = user_entity_keys;
 	result->entity_columns = entity_columns;
 	result->entity_key_columns = entity_key_columns;
 	result->timestamp_column = timestamp_column;
@@ -48,6 +50,13 @@ string CreateFeatureInfo::ToString() const {
 	}
 	result += feature_name;
 	result += " ENTITY " + entity_table;
+	// Render the resolved entity key columns explicitly, e.g. "ENTITY users (user_id)". A global feature has
+	// no entity keys, so it is rendered as bare "ENTITY users". Before binding, fall back to the user-provided
+	// keys (if any) so a round-tripped parse still reflects the clause.
+	auto &render_keys = entity_key_columns.empty() ? user_entity_keys : entity_key_columns;
+	if (!render_keys.empty()) {
+		result += " (" + StringUtil::Join(render_keys, ", ") + ")";
+	}
 	result += " TIMESTAMP ";
 	if (!timestamp_table.empty()) {
 		result += timestamp_table + ".";

@@ -6,15 +6,15 @@ require noforcestorage
 
 require skip_reload
 
-# The snapshot is built over the entity table; the event table must carry a foreign key into it.
+# The snapshot is built over the entity table; no primary/foreign key is required.
 statement ok
-CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
+CREATE TABLE customers (customer VARCHAR);
 
 statement ok
 INSERT INTO customers VALUES ('x'), ('y');
 
 statement ok
-CREATE TABLE events (customer VARCHAR, value INTEGER, event_time TIMESTAMP, FOREIGN KEY (customer) REFERENCES customers(customer));
+CREATE TABLE events (customer VARCHAR, value INTEGER, event_time TIMESTAMP);
 
 statement ok
 INSERT INTO events VALUES

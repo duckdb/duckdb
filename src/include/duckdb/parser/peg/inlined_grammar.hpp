@@ -1009,7 +1009,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"AnalyzeStatement <- 'ANALYZE' AnalyzeVerbose? AnalyzeTarget?\n"
 	"AnalyzeTarget <- BaseTableName NameList?\n"
 	"AnalyzeVerbose <- 'VERBOSE'\n"
-	"CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' QualifiedName FeatureWindowClause? FeatureTTLClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)\n"
+	"CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral ColumnIdList? 'TIMESTAMP' QualifiedName FeatureWindowClause? FeatureTTLClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)\n"
 	"FeatureWindowClause <- 'WINDOW' FeatureInterval\n"
 	"FeatureTTLClause <- 'TTL' FeatureInterval\n"
 	"FeatureScheduleClause <- 'EVERY' FeatureInterval\n"
