@@ -32,17 +32,33 @@ public:
 
 public:
 	atomic<IndexBindState> bind_state;
-	//! lock that should be used if access to "owned_index" and "deleted_rows_in_use" at the same time is necessary
+	//! lock that should be used if access to "owned_index" and delta indexes at the same time is necessary
 	mutex lock;
 	unique_ptr<BoundIndex> deleted_rows_in_use;
 	//! Data that was added to the index during the last checkpoint
 	unique_ptr<BoundIndex> added_data_during_checkpoint;
 	//! Data that was removed from the index during the last checkpoint
 	unique_ptr<BoundIndex> removed_data_during_checkpoint;
-	//! The last checkpoint index that was written with this index
-	optional_idx last_written_checkpoint;
 
 public:
+	//! Returns whether changes should be written to delta indexes, which happens only when a checkpoint is active and
+	//! the delta indexes of the active checkpoint have yet to be merged into the main index.
+	bool ShouldUseDeltaIndexes(const optional_idx active_checkpoint) const {
+		if (!active_checkpoint.IsValid()) {
+			return false;
+		}
+		if (!last_written_checkpoint.IsValid()) {
+			return true;
+		}
+		if (active_checkpoint.GetIndex() != last_written_checkpoint.GetIndex()) {
+			return true;
+		}
+		return false;
+	}
+	//! Mark the index as written for this checkpoint.
+	void MarkWrittenForCheckpoint(const transaction_t checkpoint_id) {
+		last_written_checkpoint = checkpoint_id;
+	}
 	//! Give the caller a stable snapshot of the current Index
 	shared_ptr<Index> PinIndex() const {
 		lock_guard<mutex> lock(index_pointer_lock);
@@ -56,6 +72,8 @@ public:
 	}
 
 private:
+	//! The last checkpoint index that was written with this index
+	optional_idx last_written_checkpoint;
 	//! The owning pointer of the index
 	shared_ptr<Index> owned_index;
 	//! Lock held when accessing or modifying the owned_index pointer
@@ -94,7 +112,8 @@ struct IndexSerializationResult {
 class TableIndexList {
 public:
 	TableIndexIterationHelper<IndexEntry> IndexEntries() const;
-	vector<shared_ptr<Index>> PinIndexes() const;
+	TableIndexIterationHelper<Index> Indexes() const;
+	vector<shared_ptr<Index>> MakeShared() const;
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index entry from the list of index entries and release any storage the index owns.

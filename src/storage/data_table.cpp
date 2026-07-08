@@ -1403,26 +1403,18 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		}
 		optional_ptr<BoundIndex> append_index = bound_index;
 		optional_ptr<BoundIndex> lookup_index, lookup_delete_index;
-		// check if there's an on-going checkpoint
-		if (active_checkpoint.IsValid() && bound_index.SupportsDeltaIndexes()) {
-			// there's an ongoing checkpoint - check if we need to use delta indexes or if we can write to the main
-			// index
-			if (!entry.last_written_checkpoint.IsValid() ||
-			    entry.last_written_checkpoint.GetIndex() != active_checkpoint.GetIndex()) {
-				// there's an on-going checkpoint and we haven't flushed the index yet
-				// we need to append to the "added_data_during_checkpoint" instead
-				// create it if it does not exist
-				if (!entry.added_data_during_checkpoint) {
-					entry.added_data_during_checkpoint =
-					    bound_index.CreateDeltaIndex(DeltaIndexType::ADDED_DURING_CHECKPOINT);
-				}
-				if (bound_index.IsUnique()) {
-					// before appending we still need to look-up in the main index to verify there are no conflicts
-					lookup_index = bound_index;
-					lookup_delete_index = delete_index;
-				}
-				append_index = entry.added_data_during_checkpoint;
+
+		if (bound_index.SupportsDeltaIndexes() && entry.ShouldUseDeltaIndexes(active_checkpoint)) {
+			if (!entry.added_data_during_checkpoint) {
+				entry.added_data_during_checkpoint =
+				    bound_index.CreateDeltaIndex(DeltaIndexType::ADDED_DURING_CHECKPOINT);
 			}
+			if (bound_index.IsUnique()) {
+				// before appending we still need to look-up in the main index to verify there are no conflicts
+				lookup_index = bound_index;
+				lookup_delete_index = delete_index;
+			}
+			append_index = entry.added_data_during_checkpoint;
 		}
 
 		try {

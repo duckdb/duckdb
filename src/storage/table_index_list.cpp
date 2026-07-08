@@ -390,7 +390,7 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) const {
 			entry->removed_data_during_checkpoint.reset();
 			entry->added_data_during_checkpoint.reset();
 		}
-		entry->last_written_checkpoint = checkpoint_id;
+		entry->MarkWrittenForCheckpoint(checkpoint_id);
 	}
 }
 
