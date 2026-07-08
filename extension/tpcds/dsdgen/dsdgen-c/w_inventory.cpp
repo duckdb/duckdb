@@ -51,7 +51,7 @@
 
 #include <stdio.h>
 
-struct W_INVENTORY_TBL g_w_inventory;
+thread_local struct W_INVENTORY_TBL g_w_inventory;
 
 /*
  * Routine:
@@ -69,9 +69,9 @@ struct W_INVENTORY_TBL g_w_inventory;
  */
 int mk_w_inventory(void *info_arr, ds_key_t index) {
 	struct W_INVENTORY_TBL *r;
-	static ds_key_t item_count;
-	static ds_key_t warehouse_count;
-	static int jDate;
+	static thread_local ds_key_t item_count;
+	static thread_local ds_key_t warehouse_count;
+	static thread_local int jDate;
 	date_t base_date_storage;
 	date_t *base_date = &base_date_storage;
 	int nTemp;

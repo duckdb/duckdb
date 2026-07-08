@@ -51,7 +51,7 @@
 
 #include <stdio.h>
 
-struct W_WAREHOUSE_TBL g_w_warehouse;
+thread_local struct W_WAREHOUSE_TBL g_w_warehouse;
 
 /*
  * mk_warehouse
