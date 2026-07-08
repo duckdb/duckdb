@@ -31,7 +31,6 @@ static constexpr idx_t DSDGEN_TARGET_CHUNK_ROWS = 2 * DEFAULT_ROW_GROUP_SIZE;
 static constexpr idx_t DSDGEN_PROGRESS_UNIT_SCALE = 100;
 static constexpr idx_t DSDGEN_PARALLEL_SPLIT_MIN_ROWS = 1000000;
 static constexpr idx_t DSDGEN_MIN_PARALLEL_TASK_ROWS = DSDGEN_MIN_ROW_BATCH_SIZE;
-static constexpr idx_t DSDGEN_TARGET_PROGRESS_PERCENT_PER_WAVE = 5;
 // TPC-DS worker initialization creates large per-thread caches, so fanout is bounded.
 static constexpr idx_t DSDGEN_WORK_ITEMS_PER_THREAD = 128;
 static constexpr idx_t DSDGEN_MAX_WORK_ITEMS_PER_TABLE = 4096;
@@ -194,23 +193,19 @@ static idx_t GetDSDGenTableProgressUnits(int table_id, idx_t row_count) {
 	return row_count * GetDSDGenTableProgressUnitsPerRow(table_id);
 }
 
-static idx_t GetDSDGenTableChildCount(idx_t row_count, idx_t table_progress_units, idx_t total_progress_units,
-                                      idx_t thread_count) {
+static idx_t GetDSDGenTableChildCount(int table_id, idx_t row_count, idx_t thread_count) {
 	if (row_count == 0 || thread_count <= 1) {
 		return 1;
 	}
-	auto row_count_child_count = row_count < DSDGEN_PARALLEL_SPLIT_MIN_ROWS
-	                                 ? 1
-	                                 : (row_count + DSDGEN_TARGET_CHUNK_ROWS - 1) / DSDGEN_TARGET_CHUNK_ROWS;
-	auto progress_child_count = idx_t(1);
-	if (total_progress_units > 0 && table_progress_units > 0) {
-		auto target_progress_units =
-		    MaxValue<idx_t>(1, total_progress_units * DSDGEN_TARGET_PROGRESS_PERCENT_PER_WAVE / thread_count / 100);
-		progress_child_count = (table_progress_units + target_progress_units - 1) / target_progress_units;
-	}
-	auto max_child_count = MinValue<idx_t>(thread_count * DSDGEN_WORK_ITEMS_PER_THREAD, DSDGEN_MAX_WORK_ITEMS_PER_TABLE);
+	auto output_row_count = row_count * GetDSDGenTableOutputMultiplier(table_id);
+	auto row_count_child_count =
+	    output_row_count < DSDGEN_PARALLEL_SPLIT_MIN_ROWS
+	        ? 1
+	        : (output_row_count + DSDGEN_TARGET_CHUNK_ROWS - 1) / DSDGEN_TARGET_CHUNK_ROWS;
+	auto max_child_count =
+	    MinValue<idx_t>(thread_count * DSDGEN_WORK_ITEMS_PER_THREAD, DSDGEN_MAX_WORK_ITEMS_PER_TABLE);
 	max_child_count = MinValue<idx_t>(max_child_count, MaxValue<idx_t>(1, row_count / DSDGEN_MIN_PARALLEL_TASK_ROWS));
-	return MinValue<idx_t>(MaxValue<idx_t>(row_count_child_count, progress_child_count), max_child_count);
+	return MinValue<idx_t>(row_count_child_count, max_child_count);
 }
 
 static int GetDSDGenChildTable(int table_id) {
@@ -693,8 +688,7 @@ private:
 	bool HasParallelWork() const {
 		for (auto table_idx : DSDGEN_TABLES) {
 			auto row_count = NumericCast<idx_t>(GetRowCount(table_idx));
-			auto table_progress_units = GetDSDGenTableProgressUnits(table_idx, row_count);
-			if (GetDSDGenTableChildCount(row_count, table_progress_units, total_work, parallel_thread_count) > 1) {
+			if (GetDSDGenTableChildCount(table_idx, row_count, parallel_thread_count) > 1) {
 				return true;
 			}
 		}
@@ -702,16 +696,12 @@ private:
 	}
 
 	void InitializeParallelWorkItems() {
-		auto planned_total_work = total_work;
 		total_work = 0;
 		parallel_work_items.clear();
 		for (auto table_idx : DSDGEN_TABLES) {
 			auto row_count = NumericCast<idx_t>(GetRowCount(table_idx));
 			auto progress_units_per_row = GetDSDGenTableProgressUnitsPerRow(table_idx);
-			auto table_progress_units = row_count * progress_units_per_row;
-			auto children =
-			    NumericCast<int>(GetDSDGenTableChildCount(row_count, table_progress_units, planned_total_work,
-			                                              parallel_thread_count));
+			auto children = NumericCast<int>(GetDSDGenTableChildCount(table_idx, row_count, parallel_thread_count));
 			for (auto step = 0; step < children; step++) {
 				auto range = GetDSDGenTableRange(row_count, children, step);
 				if (range.count == 0) {
