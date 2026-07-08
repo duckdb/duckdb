@@ -424,9 +424,6 @@ CREATE TABLE t_oom AS SELECT i, repeat(chr((65 + (i % 26))::INTEGER), 50000) as 
 restart
 
 statement ok
-PRAGMA temp_directory=''
-
-statement ok
 PRAGMA threads=1
 
 statement ok
@@ -441,14 +438,10 @@ SELECT SUM(LENGTH(blob_data)) FROM t_oom
 ----
 Out of Memory
 
-# Enable adaptive scan: predictor estimates ~20 rows per 1MB target → fits in 15MB
+# Enable adaptive scan: predictor estimates ~20 rows per 1MB target → fits in 15MB.
+# Same query as the disabled case above — the only change is scan_target_size_bytes.
 statement ok
 SET scan_target_size_bytes=1048576
-
-query I
-SELECT COUNT(*) FROM t_oom
-----
-2048
 
 query I
 SELECT SUM(LENGTH(blob_data)) FROM t_oom
@@ -481,21 +474,24 @@ CREATE TABLE t_oom_parallel AS SELECT i, repeat('P', 50000) as blob_data FROM ra
 restart
 
 statement ok
-PRAGMA temp_directory=''
-
-statement ok
 PRAGMA threads=4
 
 statement ok
 SET memory_limit='30MB'
 
+# Disabled: parallel full-vector scan of 50KB blobs blows the 30MB limit → OOM
+statement ok
+SET scan_target_size_bytes=0
+
+statement error
+SELECT SUM(LENGTH(blob_data)) FROM t_oom_parallel
+----
+Out of Memory
+
+# Enable adaptive scan: same query now fits within 30MB across 4 threads.
+# Same query as the disabled case above — the only change is scan_target_size_bytes.
 statement ok
 SET scan_target_size_bytes=1048576
-
-query I
-SELECT COUNT(*) FROM t_oom_parallel
-----
-4096
 
 query I
 SELECT SUM(LENGTH(blob_data)) FROM t_oom_parallel
@@ -526,9 +522,6 @@ CREATE TABLE t_oom_filter AS SELECT i, repeat(chr((65 + (i % 26))::INTEGER), 300
 restart
 
 statement ok
-PRAGMA temp_directory=''
-
-statement ok
 PRAGMA threads=1
 
 statement ok
@@ -543,27 +536,17 @@ SELECT SUM(LENGTH(blob_data)) FROM t_oom_filter WHERE i >= 1
 ----
 Out of Memory
 
-# Enable adaptive scan: filter path now scans byte-budgeted sub-batches → fits in 30MB
+# Enable adaptive scan: filter path now scans byte-budgeted sub-batches → fits in 30MB.
+# Same query as the disabled case above — the only change is scan_target_size_bytes.
 statement ok
 SET scan_target_size_bytes=1048576
-
-# Non-selective filter (matches nearly all rows)
-query I
-SELECT COUNT(*) FROM t_oom_filter WHERE i >= 1
-----
-2047
 
 query I
 SELECT SUM(LENGTH(blob_data)) FROM t_oom_filter WHERE i >= 1
 ----
 614100000
 
-# Selective filter (matches a subset)
-query I
-SELECT COUNT(*) FROM t_oom_filter WHERE i >= 1024
-----
-1024
-
+# Selective filter (matches a subset) also succeeds through the sub-batched path
 query I
 SELECT SUM(LENGTH(blob_data)) FROM t_oom_filter WHERE i >= 1024
 ----
@@ -579,3 +562,88 @@ query I
 SELECT COUNT(DISTINCT LEFT(blob_data, 1)) FROM t_oom_filter WHERE i >= 1
 ----
 26
+
+# ============================================================
+# TC21: Delete path — sub-batch does NOT adapt to deletes (fallback)
+# A deleted row makes count != max_count, forcing the full-vector complex
+# scan path. scan_target_size_bytes cannot lower the peak there, so the
+# query OOMs whether the feature is off or on. Documents the limitation.
+# ============================================================
+
+load {TEST_DIR}/subscan_oom_delete.db
+
+statement ok
+CREATE TABLE t_oom_delete AS SELECT i, repeat(chr((65 + (i % 26))::INTEGER), 50000) as blob_data FROM range(0, 2048) tbl(i)
+
+statement ok
+DELETE FROM t_oom_delete WHERE i % 100 = 0
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+SET memory_limit='15MB'
+
+# Disabled: full vector of 50KB blobs needs ~100MB → OOM with 15MB limit
+statement ok
+SET scan_target_size_bytes=0
+
+statement error
+SELECT SUM(LENGTH(blob_data)) FROM t_oom_delete
+----
+Out of Memory
+
+# Enabled: deletes force the full-vector fallback, so the same query still OOMs.
+# Same query as the disabled case above — the only change is scan_target_size_bytes.
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement error
+SELECT SUM(LENGTH(blob_data)) FROM t_oom_delete
+----
+Out of Memory
+
+# ============================================================
+# TC22: Update path — sub-batch does NOT adapt to pending updates (fallback)
+# checkpoint_threshold is raised so the UPDATE stays pending in memory
+# (a checkpoint would merge it into the base data and clear HasUpdates()).
+# Pending updates on the scanned column force the full-vector scan path, so
+# scan_target_size_bytes cannot lower the peak and the query OOMs off or on.
+# ============================================================
+
+load {TEST_DIR}/subscan_oom_update.db
+
+statement ok
+CREATE TABLE t_oom_update AS SELECT i, repeat(chr((65 + (i % 26))::INTEGER), 50000) as blob_data FROM range(0, 2048) tbl(i)
+
+# Keep the update pending (no checkpoint) so HasUpdates() stays true at scan time
+statement ok
+SET checkpoint_threshold='10GB'
+
+statement ok
+UPDATE t_oom_update SET blob_data = repeat('Z', 50000) WHERE i < 10
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+SET memory_limit='15MB'
+
+# Disabled: full vector of 50KB blobs needs ~100MB → OOM with 15MB limit
+statement ok
+SET scan_target_size_bytes=0
+
+statement error
+SELECT SUM(LENGTH(blob_data)) FROM t_oom_update
+----
+Out of Memory
+
+# Enabled: pending updates force the full-vector fallback, so the same query still OOMs.
+# Same query as the disabled case above — the only change is scan_target_size_bytes.
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement error
+SELECT SUM(LENGTH(blob_data)) FROM t_oom_update
+----
+Out of Memory

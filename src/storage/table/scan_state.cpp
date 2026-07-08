@@ -354,18 +354,6 @@ void ScanSizePredictor::Update(const DataChunk &result) {
 	dynamic_bytes_per_row = alpha * dynamic_bytes_per_row + (1.0 - alpha) * dynamic_actual;
 }
 
-void ScanSizePredictor::Reset() {
-	fixed_bytes_per_row = 0;
-	dynamic_bytes_per_row = 0;
-	initialized = false;
-	total_batches = 0;
-	total_predicted_bytes = 0;
-	total_actual_bytes = 0;
-	max_overshoot_ratio = 0.0;
-	sum_overshoot_ratio = 0.0;
-	first_batch_ratio = 0.0;
-}
-
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
     : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
       valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {

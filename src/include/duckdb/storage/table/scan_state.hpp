@@ -262,7 +262,6 @@ struct ScanSizePredictor {
 	                       RowGroup &row_group);
 	//! Refine dynamic_bytes_per_row via EMA from actual scan result
 	void Update(const DataChunk &result);
-	void Reset();
 };
 
 //! Tracks progress within a single vector during sub-batch scanning.

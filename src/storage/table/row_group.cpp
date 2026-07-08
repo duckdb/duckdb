@@ -654,9 +654,9 @@ void RowGroup::CommitDrop() {
 	drop_state.FinalizeCommit();
 }
 
-bool RowGroup::HasPendingUpdates(const vector<StorageIndex> &column_ids) {
+bool RowGroup::HasPendingUpdates(const vector<StorageIndex> &column_ids) const {
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (GetColumn(column_ids[i]).GetUpdateStatistics()) {
+		if (GetColumn(column_ids[i]).HasUpdates()) {
 			return true;
 		}
 	}
@@ -850,65 +850,65 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		bool use_sub_batch = resuming;
 
 		if (!resuming) {
-		// check the sampling info if we have to sample this chunk
-		if (state.GetSamplingInfo().do_system_sample) {
-			auto &sampling_info = state.GetSamplingInfo();
-			if (!sampling_info.is_percentage) {
-				double rate = sampling_info.sample_rate;
-				if (rate <= 0) {
-					NextVector(state);
-					continue;
-				}
-				if (rate < 1) {
-					auto row_group_start = state.row_group->GetRowStart();
-					sample_count =
-						SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
-					if (sample_count == 0) {
+			// check the sampling info if we have to sample this chunk
+			if (state.GetSamplingInfo().do_system_sample) {
+				auto &sampling_info = state.GetSamplingInfo();
+				if (!sampling_info.is_percentage) {
+					double rate = sampling_info.sample_rate;
+					if (rate <= 0) {
 						NextVector(state);
 						continue;
 					}
-					has_sample_selection = true;
-				}
-			} else {
-				// Percentage-based system sampling: original behavior
-				if (state.random.NextRandom() > sampling_info.sample_rate) {
-					NextVector(state);
-					continue;
+					if (rate < 1) {
+						auto row_group_start = state.row_group->GetRowStart();
+						sample_count =
+						    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
+						if (sample_count == 0) {
+							NextVector(state);
+							continue;
+						}
+						has_sample_selection = true;
+					}
+				} else {
+					// Percentage-based system sampling: original behavior
+					if (state.random.NextRandom() > sampling_info.sample_rate) {
+						NextVector(state);
+						continue;
+					}
 				}
 			}
-		}
 
-		//! first check the zonemap if we have to scan this partition
-		if (!CheckZonemapSegments(state)) {
-			continue;
-		}
-		auto &current_row_group = state.row_group->GetNode();
-
-		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
-		if (count == 0) {
-			// nothing to scan for this vector, skip the entire vector
-			NextVector(state);
-			continue;
-		}
-		state.rows_scanned += count;
-
-		auto &block_manager = GetBlockManager();
-		if (block_manager.Prefetch()) {
-			PrefetchState prefetch_state;
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column = column_ids[i];
-				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
+			//! first check the zonemap if we have to scan this partition
+			if (!CheckZonemapSegments(state)) {
+				continue;
 			}
-			auto &buffer_manager = block_manager.buffer_manager;
-			buffer_manager.Prefetch(state.context, prefetch_state.blocks);
-		}
+			auto &current_row_group = state.row_group->GetNode();
 
-		svs.BeginVector(max_count);
-		// fresh vector: sub-batch only in the clean case — feature enabled, no deleted rows
-		// (count == max_count), no sampling, and no pending updates on any scanned column
-		use_sub_batch = sub_batch_enabled && count == max_count && !has_sample_selection &&
-		                !HasPendingUpdates(column_ids);
+			// second, scan the version chunk manager to figure out which tuples to load for this transaction
+			count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
+			if (count == 0) {
+				// nothing to scan for this vector, skip the entire vector
+				NextVector(state);
+				continue;
+			}
+			state.rows_scanned += count;
+
+			auto &block_manager = GetBlockManager();
+			if (block_manager.Prefetch()) {
+				PrefetchState prefetch_state;
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					const auto &column = column_ids[i];
+					GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
+				}
+				auto &buffer_manager = block_manager.buffer_manager;
+				buffer_manager.Prefetch(state.context, prefetch_state.blocks);
+			}
+
+			svs.BeginVector(max_count);
+			// fresh vector: sub-batch only in the clean case — feature enabled, no deleted rows
+			// (count == max_count), no sampling, and no pending updates on any scanned column
+			use_sub_batch =
+			    sub_batch_enabled && count == max_count && !has_sample_selection && !HasPendingUpdates(column_ids);
 		}
 
 		bool has_filters = filter_info.HasFilters();
@@ -916,8 +916,8 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		// physical rows to scan this call: the full vector unless sub-batching (then a byte-budgeted batch)
 		idx_t scan_count;
 		if (use_sub_batch) {
-			scan_count =
-			    state.size_predictor.PredictBatchSize(target_bytes, svs.vector_max_count - svs.offset, column_ids, *this);
+			scan_count = state.size_predictor.PredictBatchSize(target_bytes, svs.vector_max_count - svs.offset,
+			                                                   column_ids, *this);
 		} else {
 			scan_count = max_count;
 		}

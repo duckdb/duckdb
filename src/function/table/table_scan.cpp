@@ -409,8 +409,8 @@ public:
 private:
 	// Log accumulated prediction accuracy stats at scan completion (TRACE level).
 	// Useful for diagnosing batch sizing behavior without exposing a pragma function.
-	void LogPredictorStats(ClientContext &context, TableScanLocalState &l_state) {
-		auto &predictor = l_state.scan_state.table_state.size_predictor;
+	void LogPredictorStats(ClientContext &context, const TableScanLocalState &l_state) const {
+		const auto &predictor = l_state.scan_state.table_state.size_predictor;
 		if (predictor.total_batches == 0) {
 			return;
 		}
