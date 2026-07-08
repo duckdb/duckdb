@@ -58,7 +58,7 @@ void TaskExecutor::WorkOnTasks() {
 		idx_t observed_enqueue = 0;
 		idx_t observed_completed = 0;
 		{
-			annotated_lock_guard<annotated_mutex> lk(token->producer_lock);
+			const annotated_lock_guard<annotated_mutex> lk(token->producer_lock);
 			if (completed_tasks == total_tasks) {
 				break;
 			}
@@ -73,7 +73,11 @@ void TaskExecutor::WorkOnTasks() {
 		} else {
 			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
 			token->producer_cv.wait(lk, [&]() DUCKDB_REQUIRES(token->producer_lock) {
-				return completed_tasks == total_tasks || token->enqueue_counter != observed_enqueue ||
+				// All tasks are finished.
+				return completed_tasks == total_tasks
+				       // New tasks were enqueued.
+				       || token->enqueue_counter != observed_enqueue ||
+				       // New tasks were completed.
 				       completed_tasks != observed_completed;
 			});
 		}
