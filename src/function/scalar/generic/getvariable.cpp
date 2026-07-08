@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"

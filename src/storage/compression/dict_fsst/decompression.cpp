@@ -3,6 +3,7 @@
 #include "duckdb/storage/compression/dict_fsst/decompression.hpp"
 #include "fsst.h"
 #include "duckdb/common/fsst.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 
 namespace duckdb {
 namespace dict_fsst {

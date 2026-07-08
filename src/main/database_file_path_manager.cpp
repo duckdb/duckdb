@@ -3,6 +3,7 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 

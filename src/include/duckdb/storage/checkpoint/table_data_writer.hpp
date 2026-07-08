@@ -15,6 +15,8 @@ namespace duckdb {
 class DuckTableEntry;
 class TableStatistics;
 class SingleFileCheckpointWriter;
+class RowGroupCollection;
+struct RowGroupPointer;
 
 //! The table data writer is responsible for writing the data of a table to storage.
 //

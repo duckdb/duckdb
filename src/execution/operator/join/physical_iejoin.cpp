@@ -14,6 +14,9 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include <utility>
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

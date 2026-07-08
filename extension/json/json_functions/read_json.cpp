@@ -1,4 +1,5 @@
 #include "duckdb/common/helper.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"

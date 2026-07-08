@@ -62,6 +62,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>

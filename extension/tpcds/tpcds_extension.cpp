@@ -1,5 +1,6 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"

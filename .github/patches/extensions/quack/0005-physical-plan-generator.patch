@@ -1,0 +1,26 @@
+--- a/src/include/storage/quack_catalog.hpp
++++ b/src/include/storage/quack_catalog.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/catalog/catalog.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
+ #include "duckdb/main/attached_database.hpp"
+ #include "duckdb/main/client_context.hpp"
+ #include "storage/quack_schema.hpp"
+--- a/src/storage/quack_catalog.cpp
++++ b/src/storage/quack_catalog.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/common/exception.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
+ #include "duckdb/main/attached_database.hpp"
+ #include "duckdb/main/client_context.hpp"
+ #include "duckdb/main/connection.hpp"
+--- a/src/storage/quack_insert.cpp
++++ b/src/storage/quack_insert.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
+ #include "duckdb/main/client_context.hpp"
+ #include "duckdb/planner/operator/logical_create_table.hpp"
+ #include "duckdb/planner/operator/logical_insert.hpp"

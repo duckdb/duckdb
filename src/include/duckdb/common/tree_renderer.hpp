@@ -12,7 +12,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/render_tree.hpp"
 #include "duckdb/common/tree_renderer/base_tree_renderer.hpp"
 
@@ -20,6 +19,8 @@ namespace duckdb {
 
 class ClientContext;
 class QueryProfiler;
+class ProfilingNode;
+struct ProfilerPrintFormat;
 
 //! TreeRenderer renders a plan/operator tree (for EXPLAIN) or a query profiler's output in a particular format.
 //! It is the single renderer abstraction: each format (text, JSON, HTML, GraphViz, Mermaid, YAML) is one subclass

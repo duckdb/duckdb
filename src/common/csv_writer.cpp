@@ -3,6 +3,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
