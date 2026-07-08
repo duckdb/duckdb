@@ -3,6 +3,7 @@
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -186,159 +187,6 @@ private:
 	const vector<ReplacementBinding> &replacements;
 };
 
-class OuterReferenceDetector : public LogicalOperatorVisitor {
-public:
-	OuterReferenceDetector(const unordered_set<TableIndex> &left_bindings,
-	                       const unordered_set<TableIndex> &right_bindings)
-	    : left_bindings(left_bindings), right_bindings(right_bindings) {
-	}
-
-	bool HasOuterReference(unique_ptr<Expression> &condition) {
-		VisitExpression(&condition);
-		return has_outer_reference;
-	}
-
-protected:
-	void VisitOperator(LogicalOperator &op) override {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
-			CheckCorrelatedColumns(op.Cast<LogicalDependentJoin>().correlated_columns);
-			break;
-		case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-			CheckCorrelatedColumns(op.Cast<LogicalCTE>().correlated_columns);
-			break;
-		default:
-			break;
-		}
-		LogicalOperatorVisitor::VisitOperator(op);
-	}
-
-	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override {
-		if (IsOuterReference(expr.Binding())) {
-			has_outer_reference = true;
-		}
-		return nullptr;
-	}
-
-	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override {
-		CollectLocalBindings(*expr.SubqueryMutable().plan);
-		for (auto &corr : expr.GetBinder()->correlated_columns) {
-			if (IsOuterReference(corr.binding)) {
-				has_outer_reference = true;
-				break;
-			}
-		}
-		VisitOperator(*expr.SubqueryMutable().plan);
-		return nullptr;
-	}
-
-private:
-	void CollectLocalBindings(LogicalOperator &op) {
-		auto bindings = op.GetColumnBindings();
-		for (auto &binding : bindings) {
-			local_bindings.insert(binding.table_index);
-		}
-		for (auto &child : op.children) {
-			CollectLocalBindings(*child);
-		}
-	}
-
-	void CheckCorrelatedColumns(const CorrelatedColumns &columns) {
-		for (auto &corr : columns) {
-			if (IsOuterReference(corr.binding)) {
-				has_outer_reference = true;
-				break;
-			}
-		}
-	}
-
-	bool IsOuterReference(const ColumnBinding &binding) const {
-		if (IsBindingIn(binding, left_bindings) || IsBindingIn(binding, right_bindings) ||
-		    IsBindingIn(binding, local_bindings)) {
-			return false;
-		}
-		return true;
-	}
-
-	const unordered_set<TableIndex> &left_bindings;
-	const unordered_set<TableIndex> &right_bindings;
-	unordered_set<TableIndex> local_bindings;
-	bool has_outer_reference = false;
-};
-
-class ExternalReferenceDetector : public LogicalOperatorVisitor {
-public:
-	explicit ExternalReferenceDetector(Binder &binder) : binder(binder) {
-	}
-
-	bool HasExternalReference(LogicalOperator &op) {
-		CollectLocalBindings(op);
-		VisitOperator(op);
-		return has_external_reference;
-	}
-
-protected:
-	void VisitOperator(LogicalOperator &op) override {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
-			CheckCorrelatedColumns(op.Cast<LogicalDependentJoin>().correlated_columns);
-			break;
-		case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-			CheckCorrelatedColumns(op.Cast<LogicalCTE>().correlated_columns);
-			break;
-		case LogicalOperatorType::LOGICAL_CTE_REF:
-			if (op.Cast<LogicalCTERef>().correlated_columns > 0 ||
-			    binder.IsCorrelatedCTE(op.Cast<LogicalCTERef>().cte_index)) {
-				has_external_reference = true;
-			}
-			break;
-		default:
-			break;
-		}
-		LogicalOperatorVisitor::VisitOperator(op);
-	}
-
-	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override {
-		if (!IsBindingIn(expr.Binding(), local_bindings)) {
-			has_external_reference = true;
-		}
-		return nullptr;
-	}
-
-	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override {
-		CollectLocalBindings(*expr.SubqueryMutable().plan);
-		CheckCorrelatedColumns(expr.GetBinder()->correlated_columns);
-		VisitOperator(*expr.SubqueryMutable().plan);
-		return nullptr;
-	}
-
-private:
-	void CollectLocalBindings(LogicalOperator &op) {
-		auto bindings = op.GetColumnBindings();
-		for (auto &binding : bindings) {
-			local_bindings.insert(binding.table_index);
-		}
-		for (auto &child : op.children) {
-			CollectLocalBindings(*child);
-		}
-	}
-
-	void CheckCorrelatedColumns(const CorrelatedColumns &columns) {
-		for (auto &corr : columns) {
-			if (!IsBindingIn(corr.binding, local_bindings)) {
-				has_external_reference = true;
-				break;
-			}
-		}
-	}
-
-	unordered_set<TableIndex> local_bindings;
-	Binder &binder;
-	bool has_external_reference = false;
-};
-
 static void AddDepthIncreasedCorrelation(CorrelatedColumns &correlations, const CorrelatedColumnInfo &column) {
 	auto copy = column;
 	copy.depth++;
@@ -514,143 +362,146 @@ private:
 	idx_t subquery_plan_depth = 0;
 };
 
-static JoinSide GetPairDependentExpressionSide(Expression &expr, const unordered_set<TableIndex> &left_bindings,
-                                               const unordered_set<TableIndex> &right_bindings);
-
-static JoinSide GetPairDependentOperatorSide(LogicalOperator &op, const unordered_set<TableIndex> &left_bindings,
-                                             const unordered_set<TableIndex> &right_bindings);
-
-static JoinSide GetPairDependentBindingSide(const ColumnBinding &binding,
-                                            const unordered_set<TableIndex> &left_bindings,
-                                            const unordered_set<TableIndex> &right_bindings) {
-	return JoinSide::GetCurrentJoinSide(binding.table_index, left_bindings, right_bindings);
-}
-
-static JoinSide GetPairDependentSubquerySide(BoundSubqueryExpression &subquery,
-                                             const unordered_set<TableIndex> &left_bindings,
-                                             const unordered_set<TableIndex> &right_bindings) {
-	JoinSide side = JoinSide::NONE;
-	for (auto &child : subquery.GetChildren()) {
-		auto child_side = GetPairDependentExpressionSide(*child, left_bindings, right_bindings);
-		side = JoinSide::CombineJoinSide(side, child_side);
+class PairDependentReferenceAnalyzer {
+public:
+	PairDependentReferenceAnalyzer(const unordered_set<TableIndex> &left_bindings,
+	                               const unordered_set<TableIndex> &right_bindings)
+	    : left_bindings(left_bindings), right_bindings(right_bindings) {
 	}
-	for (auto &corr : subquery.GetBinder()->correlated_columns) {
-		auto corr_side = GetPairDependentBindingSide(corr.binding, left_bindings, right_bindings);
-		side = JoinSide::CombineJoinSide(side, corr_side);
-	}
-	if (subquery.SubqueryMutable().plan) {
-		auto plan_side = GetPairDependentOperatorSide(*subquery.SubqueryMutable().plan, left_bindings, right_bindings);
-		side = JoinSide::CombineJoinSide(side, plan_side);
-	}
-	return side;
-}
 
-static JoinSide GetPairDependentExpressionSide(Expression &expr, const unordered_set<TableIndex> &left_bindings,
-                                               const unordered_set<TableIndex> &right_bindings) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		return GetPairDependentBindingSide(colref.Binding(), left_bindings, right_bindings);
+	bool HasPairDependentSubquery(Expression &expr) const {
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+			auto side = GetSubquerySide(expr.Cast<BoundSubqueryExpression>());
+			if (side == JoinSide::BOTH) {
+				return true;
+			}
+		}
+		bool result = false;
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+			if (!result && HasPairDependentSubquery(child)) {
+				result = true;
+			}
+		});
+		return result;
 	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-		return GetPairDependentSubquerySide(expr.Cast<BoundSubqueryExpression>(), left_bindings, right_bindings);
-	}
-	JoinSide side = JoinSide::NONE;
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
-		auto child_side = GetPairDependentExpressionSide(child, left_bindings, right_bindings);
-		side = JoinSide::CombineJoinSide(side, child_side);
-	});
-	return side;
-}
 
-static JoinSide GetPairDependentOperatorSide(LogicalOperator &op, const unordered_set<TableIndex> &left_bindings,
-                                             const unordered_set<TableIndex> &right_bindings) {
-	JoinSide side = JoinSide::NONE;
-	auto add_correlated_columns = [&](const CorrelatedColumns &columns) {
-		for (auto &corr : columns) {
-			auto corr_side = GetPairDependentBindingSide(corr.binding, left_bindings, right_bindings);
+	bool HasVolatile(Expression &expr) const {
+		if (expr.IsVolatile()) {
+			return true;
+		}
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+			auto &subquery = expr.Cast<BoundSubqueryExpression>();
+			if (subquery.Subquery().plan && HasVolatile(*subquery.SubqueryMutable().plan)) {
+				return true;
+			}
+		}
+		bool result = false;
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+			if (!result && HasVolatile(child)) {
+				result = true;
+			}
+		});
+		return result;
+	}
+
+private:
+	JoinSide GetBindingSide(const ColumnBinding &binding) const {
+		return JoinSide::GetCurrentJoinSide(binding.table_index, left_bindings, right_bindings);
+	}
+
+	JoinSide GetSubquerySide(BoundSubqueryExpression &subquery) const {
+		JoinSide side = JoinSide::NONE;
+		for (auto &child : subquery.GetChildren()) {
+			auto child_side = GetExpressionSide(*child);
+			side = JoinSide::CombineJoinSide(side, child_side);
+		}
+		for (auto &corr : subquery.GetBinder()->correlated_columns) {
+			auto corr_side = GetBindingSide(corr.binding);
 			side = JoinSide::CombineJoinSide(side, corr_side);
 		}
-	};
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
-		add_correlated_columns(op.Cast<LogicalDependentJoin>().correlated_columns);
-		break;
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-		add_correlated_columns(op.Cast<LogicalCTE>().correlated_columns);
-		break;
-	default:
-		break;
+		if (subquery.SubqueryMutable().plan) {
+			auto plan_side = GetOperatorSide(*subquery.SubqueryMutable().plan);
+			side = JoinSide::CombineJoinSide(side, plan_side);
+		}
+		return side;
 	}
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
-		if (!expr || !*expr) {
+
+	JoinSide GetExpressionSide(Expression &expr) const {
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto &colref = expr.Cast<BoundColumnRefExpression>();
+			return GetBindingSide(colref.Binding());
+		}
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+			return GetSubquerySide(expr.Cast<BoundSubqueryExpression>());
+		}
+		JoinSide side = JoinSide::NONE;
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+			auto child_side = GetExpressionSide(child);
+			side = JoinSide::CombineJoinSide(side, child_side);
+		});
+		return side;
+	}
+
+	JoinSide GetOperatorSide(LogicalOperator &op) const {
+		JoinSide side = JoinSide::NONE;
+		AddCorrelatedColumnSides(side, GetOperatorCorrelatedColumns(op));
+		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
+			if (!expr || !*expr) {
+				return;
+			}
+			auto expr_side = GetExpressionSide(**expr);
+			side = JoinSide::CombineJoinSide(side, expr_side);
+		});
+		for (auto &child : op.children) {
+			auto child_side = GetOperatorSide(*child);
+			side = JoinSide::CombineJoinSide(side, child_side);
+		}
+		return side;
+	}
+
+	void AddCorrelatedColumnSides(JoinSide &side, CorrelatedColumns *columns) const {
+		if (!columns) {
 			return;
 		}
-		auto expr_side = GetPairDependentExpressionSide(**expr, left_bindings, right_bindings);
-		side = JoinSide::CombineJoinSide(side, expr_side);
-	});
-	for (auto &child : op.children) {
-		auto child_side = GetPairDependentOperatorSide(*child, left_bindings, right_bindings);
-		side = JoinSide::CombineJoinSide(side, child_side);
+		for (auto &corr : *columns) {
+			auto corr_side = GetBindingSide(corr.binding);
+			side = JoinSide::CombineJoinSide(side, corr_side);
+		}
 	}
-	return side;
-}
 
-static bool HasPairDependentSubquery(Expression &expr, const unordered_set<TableIndex> &left_bindings,
-                                     const unordered_set<TableIndex> &right_bindings) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-		auto side = GetPairDependentSubquerySide(expr.Cast<BoundSubqueryExpression>(), left_bindings, right_bindings);
-		if (side == JoinSide::BOTH) {
+	CorrelatedColumns *GetOperatorCorrelatedColumns(LogicalOperator &op) const {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+			return &op.Cast<LogicalDependentJoin>().correlated_columns;
+		case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+			return &op.Cast<LogicalCTE>().correlated_columns;
+		default:
+			return nullptr;
+		}
+	}
+
+	bool HasVolatile(LogicalOperator &op) const {
+		bool result = false;
+		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
+			if (!result && expr && *expr && HasVolatile(**expr)) {
+				result = true;
+			}
+		});
+		if (result) {
 			return true;
 		}
-	}
-	bool has_pair_dependent_subquery = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
-		if (HasPairDependentSubquery(child, left_bindings, right_bindings)) {
-			has_pair_dependent_subquery = true;
+		for (auto &child : op.children) {
+			if (HasVolatile(*child)) {
+				return true;
+			}
 		}
-	});
-	return has_pair_dependent_subquery;
-}
+		return false;
+	}
 
-static bool HasVolatileExpression(LogicalOperator &op);
-
-static bool HasVolatileExpression(Expression &expr) {
-	if (expr.IsVolatile()) {
-		return true;
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-		auto &subquery = expr.Cast<BoundSubqueryExpression>();
-		if (subquery.Subquery().plan && HasVolatileExpression(*subquery.SubqueryMutable().plan)) {
-			return true;
-		}
-	}
-	bool has_volatile = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
-		if (HasVolatileExpression(child)) {
-			has_volatile = true;
-		}
-	});
-	return has_volatile;
-}
-
-static bool HasVolatileExpression(LogicalOperator &op) {
-	bool has_volatile = false;
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
-		if (!has_volatile && expr && *expr && HasVolatileExpression(**expr)) {
-			has_volatile = true;
-		}
-	});
-	if (has_volatile) {
-		return true;
-	}
-	for (auto &child : op.children) {
-		if (HasVolatileExpression(*child)) {
-			return true;
-		}
-	}
-	return false;
-}
+	const unordered_set<TableIndex> &left_bindings;
+	const unordered_set<TableIndex> &right_bindings;
+};
 
 static bool LateralizePairDependentCondition(unique_ptr<Expression> &condition,
                                              const unordered_set<TableIndex> &left_bindings,
@@ -659,17 +510,6 @@ static bool LateralizePairDependentCondition(unique_ptr<Expression> &condition,
 	LateralizeJoinCondition lateralize(left_bindings, right_bindings, correlated_columns);
 	lateralize.VisitExpression(&condition);
 	return !correlated_columns.empty();
-}
-
-static bool HasOuterReference(unique_ptr<Expression> &condition, const unordered_set<TableIndex> &left_bindings,
-                              const unordered_set<TableIndex> &right_bindings) {
-	OuterReferenceDetector detector(left_bindings, right_bindings);
-	return detector.HasOuterReference(condition);
-}
-
-static bool HasExternalReference(Binder &binder, LogicalOperator &op) {
-	ExternalReferenceDetector detector(binder);
-	return detector.HasExternalReference(op);
 }
 
 static unique_ptr<LogicalOperator> CreateFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> child) {
@@ -727,6 +567,41 @@ struct BoundColumnPayload {
 	vector<ColumnBinding> bindings;
 };
 
+struct PairDependentOutputLayout {
+	PairDependentOutputLayout() = default;
+
+	explicit PairDependentOutputLayout(vector<ColumnBinding> bindings_p) : bindings(std::move(bindings_p)) {
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			positions[bindings[i]] = i;
+		}
+	}
+
+	static PairDependentOutputLayout FromOperator(LogicalOperator &op) {
+		return PairDependentOutputLayout(op.GetColumnBindings());
+	}
+
+	ProjectionIndex GetProjectionIndex(const ColumnBinding &binding) const {
+		auto entry = positions.find(binding);
+		if (entry == positions.end()) {
+			throw InternalException("Could not find binding %s while reconstructing a pair-dependent join side",
+			                        binding.ToString());
+		}
+		return ProjectionIndex(entry->second);
+	}
+
+	vector<ProjectionIndex> CreateProjectionMap(const vector<ColumnBinding> &selected_bindings) const {
+		vector<ProjectionIndex> projection_map;
+		projection_map.reserve(selected_bindings.size());
+		for (auto &binding : selected_bindings) {
+			projection_map.push_back(GetProjectionIndex(binding));
+		}
+		return projection_map;
+	}
+
+	vector<ColumnBinding> bindings;
+	column_binding_map_t<idx_t> positions;
+};
+
 struct SideBindingLayout {
 	TableIndex table_index;
 	vector<idx_t> payload_indices;
@@ -759,12 +634,14 @@ struct PairDependentJoinMatch {
 struct PairDependentSideRef {
 	unique_ptr<LogicalOperator> plan;
 	BoundColumnPayload payload;
+	PairDependentOutputLayout output;
 };
 
 struct PairDependentSideLayoutRef {
 	unique_ptr<LogicalOperator> plan;
 	BoundColumnPayload payload;
 	ColumnBinding row_id_binding;
+	PairDependentOutputLayout output;
 };
 
 struct PairDependentMatchSetPlan {
@@ -787,6 +664,14 @@ static BoundColumnPayload CombinePayloads(const BoundColumnPayload &left, const 
 	result.types.insert(result.types.end(), right.types.begin(), right.types.end());
 	result.bindings.insert(result.bindings.end(), left.bindings.begin(), left.bindings.end());
 	result.bindings.insert(result.bindings.end(), right.bindings.begin(), right.bindings.end());
+	return result;
+}
+
+static vector<ColumnBinding> CombineBindings(const vector<ColumnBinding> &left, const vector<ColumnBinding> &right) {
+	vector<ColumnBinding> result;
+	result.reserve(left.size() + right.size());
+	result.insert(result.end(), left.begin(), left.end());
+	result.insert(result.end(), right.begin(), right.end());
 	return result;
 }
 
@@ -840,34 +725,14 @@ static vector<SideBindingLayout> BuildSideBindingLayouts(const vector<ColumnBind
 	return layouts;
 }
 
-static idx_t FindBindingIndex(const vector<ColumnBinding> &bindings, const ColumnBinding &binding) {
-	for (idx_t i = 0; i < bindings.size(); i++) {
-		if (bindings[i] == binding) {
-			return i;
-		}
-	}
-	throw InternalException("Could not find binding %s while reconstructing a pair-dependent join side",
-	                        binding.ToString());
-}
-
-static vector<ProjectionIndex> CreateProjectionMap(const vector<ColumnBinding> &child_bindings,
-                                                   const vector<ColumnBinding> &selected_bindings) {
-	vector<ProjectionIndex> projection_map;
-	projection_map.reserve(selected_bindings.size());
-	for (auto &binding : selected_bindings) {
-		projection_map.emplace_back(FindBindingIndex(child_bindings, binding));
-	}
-	return projection_map;
-}
-
-static void SetJoinProjectionMaps(LogicalOperator &join, const vector<ColumnBinding> &selected_left_bindings,
+static void SetJoinProjectionMaps(LogicalOperator &join, const PairDependentOutputLayout &left_output,
+                                  const vector<ColumnBinding> &selected_left_bindings,
+                                  const PairDependentOutputLayout &right_output,
                                   const vector<ColumnBinding> &selected_right_bindings) {
 	auto &logical_join = join.Cast<LogicalJoin>();
-	logical_join.left_projection_map =
-	    CreateProjectionMap(logical_join.children[0]->GetColumnBindings(), selected_left_bindings);
+	logical_join.left_projection_map = left_output.CreateProjectionMap(selected_left_bindings);
 	if (!selected_right_bindings.empty()) {
-		logical_join.right_projection_map =
-		    CreateProjectionMap(logical_join.children[1]->GetColumnBindings(), selected_right_bindings);
+		logical_join.right_projection_map = right_output.CreateProjectionMap(selected_right_bindings);
 	}
 }
 
@@ -920,9 +785,7 @@ static unique_ptr<LogicalOperator> CreateDistinctMatchProjection(Binder &binder,
 	vector<unique_ptr<Expression>> aggregates;
 	auto distinct = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
 	for (idx_t i = 0; i < payload.bindings.size(); i++) {
-#ifdef DEBUG
 		D_ASSERT(std::find(match_bindings.begin(), match_bindings.end(), payload.bindings[i]) != match_bindings.end());
-#endif
 		distinct->groups.push_back(make_uniq<BoundColumnRefExpression>(payload.types[i], payload.bindings[i]));
 	}
 	distinct->children.push_back(std::move(match));
@@ -1020,25 +883,29 @@ static PairDependentSideLayoutRef CreateSideBindingLayoutRef(const PairDependent
 		result.row_id_binding = source_bindings[row_id_index];
 	}
 	result.plan = std::move(cte_ref);
+	result.output = PairDependentOutputLayout::FromOperator(*result.plan);
 	return result;
 }
 
 static PairDependentSideRef CreatePairDependentSideRef(const PairDependentJoinSide &side) {
 	if (CanUseDirectSideCTERef(side)) {
 		auto plan = CreateCTERef(side.binding_layouts[0].table_index, side.cte_index, side.cte_types, side.names);
-		return PairDependentSideRef {std::move(plan), CreatePayload(side.types, side.bindings)};
+		auto output = PairDependentOutputLayout::FromOperator(*plan);
+		return PairDependentSideRef {std::move(plan), CreatePayload(side.types, side.bindings), std::move(output)};
 	}
 
 	if (!side.has_row_id) {
 		D_ASSERT(side.binding_layouts.size() == 1);
 		auto layout_ref = CreateSideBindingLayoutRef(side, side.binding_layouts[0], false);
-		return PairDependentSideRef {std::move(layout_ref.plan), std::move(layout_ref.payload)};
+		return PairDependentSideRef {std::move(layout_ref.plan), std::move(layout_ref.payload),
+		                             std::move(layout_ref.output)};
 	}
 
 	auto current_ref = CreateSideBindingLayoutRef(side, side.binding_layouts[0], true);
 	auto current = std::move(current_ref.plan);
 	auto current_payload = std::move(current_ref.payload);
 	auto current_row_id_binding = current_ref.row_id_binding;
+	auto current_output = std::move(current_ref.output);
 	auto row_id_type = side.cte_types[side.row_id_offset];
 
 	for (idx_t layout_idx = 1; layout_idx < side.binding_layouts.size(); layout_idx++) {
@@ -1059,8 +926,9 @@ static PairDependentSideRef CreatePairDependentSideRef(const PairDependentJoinSi
 		                                                std::move(next_ref.plan), std::move(conditions));
 		auto left_outputs = current_payload.bindings;
 		left_outputs.push_back(current_row_id_binding);
-		SetJoinProjectionMaps(*joined, left_outputs, next_ref.payload.bindings);
+		SetJoinProjectionMaps(*joined, current_output, left_outputs, next_ref.output, next_ref.payload.bindings);
 		joined->ResolveOperatorTypes();
+		current_output = PairDependentOutputLayout::FromOperator(*joined);
 		current = std::move(joined);
 		current_payload.types.insert(current_payload.types.end(), next_ref.payload.types.begin(),
 		                             next_ref.payload.types.end());
@@ -1068,7 +936,8 @@ static PairDependentSideRef CreatePairDependentSideRef(const PairDependentJoinSi
 		                                next_ref.payload.bindings.end());
 	}
 
-	return PairDependentSideRef {std::move(current), CreatePayload(side.types, side.bindings)};
+	return PairDependentSideRef {std::move(current), CreatePayload(side.types, side.bindings),
+	                             std::move(current_output)};
 }
 
 static unique_ptr<LogicalOperator> CreatePairDependentFullJoin(Binder &binder, const PairDependentJoinSide &left,
@@ -1080,6 +949,7 @@ static unique_ptr<LogicalOperator> CreatePairDependentFullJoin(Binder &binder, c
 	auto left_match = CreateCTERef(left_match_index, match.cte_index, match.types, match.names);
 
 	auto left_match_payload = CreatePayload(match.types, left_match->GetColumnBindings());
+	auto left_match_output = PairDependentOutputLayout::FromOperator(*left_match);
 
 	vector<JoinCondition> left_match_conditions;
 	AddNotDistinctConditions(left_match_conditions, final_left.payload,
@@ -1087,7 +957,10 @@ static unique_ptr<LogicalOperator> CreatePairDependentFullJoin(Binder &binder, c
 	auto left_with_matches =
 	    LogicalComparisonJoin::CreateJoin(JoinType::LEFT, JoinRefType::REGULAR, std::move(final_left.plan),
 	                                      std::move(left_match), std::move(left_match_conditions));
-	SetJoinProjectionMaps(*left_with_matches, left.bindings, left_match_payload.bindings);
+	SetJoinProjectionMaps(*left_with_matches, final_left.output, left.bindings, left_match_output,
+	                      left_match_payload.bindings);
+	auto left_with_matches_output =
+	    PairDependentOutputLayout(CombineBindings(left.bindings, left_match_payload.bindings));
 
 	auto marker_binding = left_match_payload.bindings[match.types.size() - 1];
 
@@ -1104,73 +977,10 @@ static unique_ptr<LogicalOperator> CreatePairDependentFullJoin(Binder &binder, c
 	                                      std::move(final_right.plan), std::move(final_conditions));
 	auto expected_bindings = left.bindings;
 	expected_bindings.insert(expected_bindings.end(), right.bindings.begin(), right.bindings.end());
-	SetJoinProjectionMaps(*final_join, left.bindings, right.bindings);
-#ifdef DEBUG
+	SetJoinProjectionMaps(*final_join, left_with_matches_output, left.bindings, final_right.output, right.bindings);
 	final_join->ResolveOperatorTypes();
 	auto actual_bindings = final_join->GetColumnBindings();
 	D_ASSERT(actual_bindings == expected_bindings);
-#endif
-	return final_join;
-}
-
-static unique_ptr<LogicalOperator> CreatePairDependentLeftJoin(Binder &binder, const PairDependentJoinSide &left,
-                                                               const PairDependentJoinSide &right,
-                                                               const PairDependentJoinMatch &match) {
-	auto final_left = CreatePairDependentSideRef(left);
-	auto final_right = CreatePairDependentSideRef(right);
-	auto left_match = CreateCTERef(binder.GenerateTableIndex(), match.cte_index, match.types, match.names);
-	auto left_match_payload = CreatePayload(match.types, left_match->GetColumnBindings());
-
-	vector<JoinCondition> left_match_conditions;
-	AddNotDistinctConditions(left_match_conditions, final_left.payload,
-	                         SlicePayload(left_match_payload, 0, left.types.size()));
-	auto left_with_matches =
-	    LogicalComparisonJoin::CreateJoin(JoinType::LEFT, JoinRefType::REGULAR, std::move(final_left.plan),
-	                                      std::move(left_match), std::move(left_match_conditions));
-	SetJoinProjectionMaps(*left_with_matches, left.bindings, left_match_payload.bindings);
-
-	auto marker_binding = left_match_payload.bindings[match.types.size() - 1];
-
-	vector<JoinCondition> final_conditions;
-	AddNotDistinctConditions(final_conditions, SlicePayload(left_match_payload, left.types.size(), right.types.size()),
-	                         final_right.payload);
-	auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::BOOLEAN, marker_binding);
-	auto marker_true = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-	final_conditions.emplace_back(BoundComparisonExpression::Create(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-	                                                                std::move(marker_ref), std::move(marker_true)));
-
-	auto final_join =
-	    LogicalComparisonJoin::CreateJoin(JoinType::LEFT, JoinRefType::REGULAR, std::move(left_with_matches),
-	                                      std::move(final_right.plan), std::move(final_conditions));
-	auto expected_bindings = left.bindings;
-	expected_bindings.insert(expected_bindings.end(), right.bindings.begin(), right.bindings.end());
-	SetJoinProjectionMaps(*final_join, left.bindings, right.bindings);
-#ifdef DEBUG
-	final_join->ResolveOperatorTypes();
-	auto actual_bindings = final_join->GetColumnBindings();
-	D_ASSERT(actual_bindings == expected_bindings);
-#endif
-	return final_join;
-}
-
-static unique_ptr<LogicalOperator> CreatePairDependentExistenceJoin(Binder &binder, const PairDependentJoinSide &left,
-                                                                    const PairDependentJoinMatch &match,
-                                                                    JoinType join_type) {
-	D_ASSERT(join_type == JoinType::SEMI || join_type == JoinType::ANTI);
-	auto final_left = CreatePairDependentSideRef(left);
-	auto left_match = CreateCTERef(binder.GenerateTableIndex(), match.cte_index, match.types, match.names);
-	auto left_match_payload = CreatePayload(match.types, left_match->GetColumnBindings());
-
-	vector<JoinCondition> conditions;
-	AddNotDistinctConditions(conditions, final_left.payload, SlicePayload(left_match_payload, 0, left.types.size()));
-	auto final_join = LogicalComparisonJoin::CreateJoin(join_type, JoinRefType::REGULAR, std::move(final_left.plan),
-	                                                    std::move(left_match), std::move(conditions));
-	SetJoinProjectionMaps(*final_join, left.bindings, vector<ColumnBinding>());
-#ifdef DEBUG
-	final_join->ResolveOperatorTypes();
-	auto actual_bindings = final_join->GetColumnBindings();
-	D_ASSERT(actual_bindings == left.bindings);
-#endif
 	return final_join;
 }
 
@@ -1224,21 +1034,9 @@ static bool CreatePairDependentMatchSet(Binder &binder, BoundJoinRef &ref, uniqu
 	unordered_set<TableIndex> right_binding_set;
 	LogicalJoin::GetTableReferences(*left, left_binding_set);
 	LogicalJoin::GetTableReferences(*right, right_binding_set);
-	if (HasVolatileExpression(*ref.condition)) {
+	PairDependentReferenceAnalyzer references(left_binding_set, right_binding_set);
+	if (references.HasVolatile(*ref.condition)) {
 		return false;
-	}
-	if (HasOuterReference(ref.condition, left_binding_set, right_binding_set)) {
-		return false;
-	}
-	auto left_has_external_reference = HasExternalReference(binder, *left);
-	auto right_has_external_reference = HasExternalReference(binder, *right);
-	if (left_has_external_reference || right_has_external_reference) {
-		// SEMI/ANTI joins only expose their left input. Flattening can carry
-		// external state by the left side directly, or by pairing an independent
-		// left side with the active delim state before applying the SEMI/ANTI.
-		if (!(ref.type == JoinType::SEMI || ref.type == JoinType::ANTI)) {
-			return false;
-		}
 	}
 	if (!PreparePairDependentJoinSide(binder, left, match_set.left_side, left_prefix) ||
 	    !PreparePairDependentJoinSide(binder, right, match_set.right_side, right_prefix)) {
@@ -1293,86 +1091,86 @@ static void WrapPairDependentMatchSet(unique_ptr<LogicalOperator> left, unique_p
 	result = WrapPairDependentJoinCTEs(std::move(left), std::move(right), match_set, std::move(final_join));
 }
 
-static bool TryPlanPairDependentLeftJoinWithMatchSet(Binder &binder, BoundJoinRef &ref,
-                                                     unique_ptr<LogicalOperator> &left,
-                                                     unique_ptr<LogicalOperator> &right,
-                                                     unique_ptr<LogicalOperator> &result) {
-	PairDependentMatchSetPlan match_set;
-	if (!CreatePairDependentMatchSet(binder, ref, left, right, match_set, "__duckdb_left_l_", "__duckdb_left_r_",
-	                                 "__duckdb_left_match_", true)) {
-		return false;
+class PairDependentJoinPlanner {
+public:
+	PairDependentJoinPlanner(Binder &binder, BoundJoinRef &ref, unique_ptr<LogicalOperator> &left,
+	                         unique_ptr<LogicalOperator> &right)
+	    : binder(binder), ref(ref), left(left), right(right) {
+		LogicalJoin::GetTableReferences(*left, left_bindings);
+		LogicalJoin::GetTableReferences(*right, right_bindings);
 	}
 
-	auto final_join = CreatePairDependentLeftJoin(binder, match_set.left_side, match_set.right_side, match_set.match);
-	WrapPairDependentMatchSet(std::move(left), std::move(right), match_set, std::move(final_join), result);
-	return true;
-}
-
-static bool TryPlanPairDependentExistenceJoinWithMatchSet(Binder &binder, BoundJoinRef &ref,
-                                                          unique_ptr<LogicalOperator> &left,
-                                                          unique_ptr<LogicalOperator> &right,
-                                                          unique_ptr<LogicalOperator> &result) {
-	PairDependentMatchSetPlan match_set;
-	if (!CreatePairDependentMatchSet(binder, ref, left, right, match_set, "__duckdb_exists_l_", "__duckdb_exists_r_",
-	                                 "__duckdb_exists_match_", false)) {
-		return false;
+	bool TryPlan(unique_ptr<LogicalOperator> &result) {
+		if (!CanPlan()) {
+			return false;
+		}
+		switch (ref.type) {
+		case JoinType::LEFT:
+			return TryPlanLeft(result);
+		case JoinType::RIGHT:
+			return TryPlanRight(result);
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+			return TryPlanExistence(result);
+		case JoinType::OUTER:
+			return TryPlanFull(result);
+		default:
+			return false;
+		}
 	}
 
-	auto final_join = CreatePairDependentExistenceJoin(binder, match_set.left_side, match_set.match, ref.type);
-	WrapPairDependentMatchSet(std::move(left), std::move(right), match_set, std::move(final_join), result);
-	return true;
-}
-
-bool Binder::TryPlanPairDependentFullJoin(BoundJoinRef &ref, unique_ptr<LogicalOperator> &left,
-                                          unique_ptr<LogicalOperator> &right, unique_ptr<LogicalOperator> &result) {
-	PairDependentMatchSetPlan match_set;
-	if (!CreatePairDependentMatchSet(*this, ref, left, right, match_set, "__duckdb_full_l_", "__duckdb_full_r_",
-	                                 "__duckdb_full_match_", true)) {
-		return false;
+private:
+	bool CanPlan() {
+		if (!ref.condition || ref.lateral || ref.ref_type != JoinRefType::REGULAR) {
+			return false;
+		}
+		PairDependentReferenceAnalyzer references(left_bindings, right_bindings);
+		return references.HasPairDependentSubquery(*ref.condition);
 	}
 
-	auto final_join = CreatePairDependentFullJoin(*this, match_set.left_side, match_set.right_side, match_set.match);
-	WrapPairDependentMatchSet(std::move(left), std::move(right), match_set, std::move(final_join), result);
-	return true;
-}
+	bool TryPlanLeft(unique_ptr<LogicalOperator> &result) {
+		result = binder.PlanPairDependentLateralJoin(std::move(left), std::move(right), std::move(ref.condition),
+		                                             left_bindings, right_bindings, JoinType::LEFT);
+		return result != nullptr;
+	}
+
+	bool TryPlanRight(unique_ptr<LogicalOperator> &result) {
+		result = binder.PlanPairDependentLateralJoin(std::move(right), std::move(left), std::move(ref.condition),
+		                                             right_bindings, left_bindings, JoinType::LEFT);
+		return result != nullptr;
+	}
+
+	bool TryPlanExistence(unique_ptr<LogicalOperator> &result) {
+		result = binder.PlanPairDependentLateralJoin(std::move(left), std::move(right), std::move(ref.condition),
+		                                             left_bindings, right_bindings, ref.type);
+		return result != nullptr;
+	}
+
+	bool TryPlanFull(unique_ptr<LogicalOperator> &result) {
+		PairDependentMatchSetPlan match_set;
+		if (!CreatePairDependentMatchSet(binder, ref, left, right, match_set, "__duckdb_full_l_", "__duckdb_full_r_",
+		                                 "__duckdb_full_match_", true)) {
+			return false;
+		}
+
+		auto final_join =
+		    CreatePairDependentFullJoin(binder, match_set.left_side, match_set.right_side, match_set.match);
+		WrapPairDependentMatchSet(std::move(left), std::move(right), match_set, std::move(final_join), result);
+		return true;
+	}
+
+	Binder &binder;
+	BoundJoinRef &ref;
+	unique_ptr<LogicalOperator> &left;
+	unique_ptr<LogicalOperator> &right;
+	unordered_set<TableIndex> left_bindings;
+	unordered_set<TableIndex> right_bindings;
+};
 
 bool Binder::TryPlanPairDependentJoin(BoundJoinRef &ref, unique_ptr<LogicalOperator> &left,
                                       unique_ptr<LogicalOperator> &right, unique_ptr<LogicalOperator> &result) {
-	if (!ref.condition || ref.lateral || ref.ref_type != JoinRefType::REGULAR) {
-		return false;
-	}
-	unordered_set<TableIndex> left_bindings, right_bindings;
-	LogicalJoin::GetTableReferences(*left, left_bindings);
-	LogicalJoin::GetTableReferences(*right, right_bindings);
-	if (!HasPairDependentSubquery(*ref.condition, left_bindings, right_bindings)) {
-		return false;
-	}
-
-	if (ref.type == JoinType::LEFT) {
-		if (TryPlanPairDependentLeftJoinWithMatchSet(*this, ref, left, right, result)) {
-			return true;
-		}
-		result = PlanPairDependentLateralJoin(std::move(left), std::move(right), std::move(ref.condition),
-		                                      left_bindings, right_bindings, JoinType::LEFT);
-		return result != nullptr;
-	}
-	if (ref.type == JoinType::RIGHT) {
-		result = PlanPairDependentLateralJoin(std::move(right), std::move(left), std::move(ref.condition),
-		                                      right_bindings, left_bindings, JoinType::LEFT);
-		return result != nullptr;
-	}
-	if (ref.type == JoinType::SEMI || ref.type == JoinType::ANTI) {
-		if (TryPlanPairDependentExistenceJoinWithMatchSet(*this, ref, left, right, result)) {
-			return true;
-		}
-		result = PlanPairDependentLateralJoin(std::move(left), std::move(right), std::move(ref.condition),
-		                                      left_bindings, right_bindings, ref.type);
-		return result != nullptr;
-	}
-	if (ref.type == JoinType::OUTER) {
-		return TryPlanPairDependentFullJoin(ref, left, right, result);
-	}
-	return false;
+	PairDependentJoinPlanner planner(*this, ref, left, right);
+	return planner.TryPlan(result);
 }
 
 } // namespace duckdb

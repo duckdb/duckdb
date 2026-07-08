@@ -10,6 +10,7 @@
 
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -60,6 +61,7 @@ private:
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
 	mutable reference_map_t<LogicalOperator, bool> dependency_cache;
+	vector<ReplacementBinding> binding_replacements;
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
 	                             bool include_names) const;
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
@@ -69,6 +71,8 @@ private:
 	                             const vector<ColumnBinding> &state) const;
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const vector<ColumnBinding> &left_state,
 	                                 const vector<ColumnBinding> &right_state) const;
+	void AddBindingReplacement(ColumnBinding old_binding, ColumnBinding new_binding);
+	void RewriteBindingReplacements(LogicalOperator &op);
 	vector<ColumnBinding> CreateDelimCrossProduct(unique_ptr<LogicalOperator> &plan,
 	                                              unique_ptr<LogicalOperator> delim_scan,
 	                                              vector<ColumnBinding> state) const;
@@ -89,6 +93,8 @@ private:
 	                                        vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownCrossProduct(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                           vector<ColumnBinding> state);
+	vector<ColumnBinding> PushDownFullOuterJoin(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                            vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownJoin(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                   vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownLimit(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,

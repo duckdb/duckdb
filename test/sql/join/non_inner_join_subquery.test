@@ -1197,7 +1197,7 @@ CREATE TABLE pair_nested_outer_o(x INTEGER);
 statement ok
 INSERT INTO pair_nested_outer_o VALUES (5);
 
-statement error
+query I
 SELECT *
 FROM pair_nested_outer_o o
 WHERE EXISTS (
@@ -1212,9 +1212,9 @@ WHERE EXISTS (
 	)
 );
 ----
-Not implemented Error: Correlated subquery in a non-inner join condition cannot reference both sides of the join
+5
 
-statement error
+query I
 SELECT *
 FROM pair_nested_outer_o o
 WHERE EXISTS (
@@ -1234,7 +1234,7 @@ WHERE EXISTS (
 	)
 );
 ----
-Not implemented Error: Correlated subquery in a non-inner join condition cannot reference both sides of the join
+5
 
 # The match-set filter still goes through normal subquery decorrelation, including
 # LIMIT, aggregate, and window paths.
@@ -2936,7 +2936,7 @@ ORDER BY o.x, q.a, q.lx, q.b NULLS LAST;
 6	2	20	NULL
 6	3	30	NULL
 
-statement error
+query III
 SELECT outer_l.x, q.a, q.b
 FROM pair_l outer_l
 LEFT JOIN LATERAL (
@@ -2953,7 +2953,12 @@ LEFT JOIN LATERAL (
 ) q ON true
 ORDER BY outer_l.x, q.a, q.b NULLS LAST;
 ----
-Not implemented Error: Correlated subquery in a non-inner join condition cannot reference both sides of the join
+10	1	10
+10	1	20
+11	1	10
+11	1	20
+20	2	20
+30	3	NULL
 
 query III
 SELECT outer_l.x, q.a, q.b
