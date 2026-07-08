@@ -752,7 +752,7 @@ struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 			return string();
 		}
 		auto stats_data = const_data_ptr_cast(stats.data());
-		if constexpr (sizeof(T) == sizeof(hugeint_t)) {
+		if (sizeof(T) == sizeof(hugeint_t)) {
 			auto schema = ParquetColumnSchema(); // schema unused for FLBA/hugeint_t
 			auto numeric_val = ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema);
 			return Value::DECIMAL(numeric_val, width, scale).ToString();
@@ -762,7 +762,7 @@ struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 	}
 
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
-		if constexpr (sizeof(T) != sizeof(hugeint_t)) {
+		if (sizeof(T) != sizeof(hugeint_t)) {
 			// INT32/INT64-backed decimals are little-endian; the base compare is correct.
 			BaseNumericStatsUnifier<T>::UnifyMinMax(new_min, new_max);
 		} else {
