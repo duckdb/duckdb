@@ -13,8 +13,18 @@ SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
 ----
 expression depth limit
 
+restart
+
 statement ok
 SET max_expression_depth TO 1000;
 
 statement ok
 SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
+
+statement ok
+SET max_expression_depth TO 6;
+
+statement error
+SELECT 1;
+----
+Max expression depth limit of 6 exceeded
