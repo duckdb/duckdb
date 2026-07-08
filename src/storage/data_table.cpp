@@ -863,9 +863,9 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
 			D_ASSERT(!delete_index || delete_index->IsBound());
-			manager->AddIndex(PinIndexCast<BoundIndex>(index), delete_index);
+			manager->AddIndex(BoundIndex::MakeShared<BoundIndex>(index), delete_index);
 		} else {
-			manager->AddIndex(PinIndexCast<BoundIndex>(index), nullptr);
+			manager->AddIndex(BoundIndex::MakeShared<BoundIndex>(index), nullptr);
 		}
 	}
 

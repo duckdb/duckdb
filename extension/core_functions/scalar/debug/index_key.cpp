@@ -192,8 +192,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		bound_function.GetArguments().push_back(key_type);
 	}
 
-	auto art = PinIndexCast<ART>(bound_index);
-	return make_uniq<IndexKeyBindData>(std::move(art), std::move(key_types));
+	return make_uniq<IndexKeyBindData>(BoundIndex::MakeShared<ART>(bound_index), std::move(key_types));
 }
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {

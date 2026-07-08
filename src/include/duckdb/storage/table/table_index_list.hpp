@@ -80,15 +80,6 @@ private:
 	mutable mutex index_pointer_lock;
 };
 
-//! Cast a pinned index to a more specific type while preserving ownership of the original snapshot.
-//! The returned pointer keeps the original index snapshot alive.
-template <class TARGET, class SOURCE>
-shared_ptr<TARGET> PinIndexCast(const shared_ptr<SOURCE> &index) {
-	D_ASSERT(index);
-	auto &target = index->template Cast<TARGET>();
-	return shared_ptr<TARGET>(index, &target);
-}
-
 struct IndexSerializationInfo {
 	case_insensitive_map_t<Value> options;
 	transaction_t checkpoint_id;

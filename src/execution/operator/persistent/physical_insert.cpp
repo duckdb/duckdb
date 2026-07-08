@@ -534,7 +534,7 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 			}
 			D_ASSERT(index->IsBound());
 
-			matching_indexes.push_back(PinIndexCast<BoundIndex>(index));
+			matching_indexes.push_back(BoundIndex::MakeShared<BoundIndex>(index));
 		}
 
 		const auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
@@ -547,7 +547,7 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 			}
 			D_ASSERT(index->IsBound());
 
-			matching_indexes.push_back(PinIndexCast<BoundIndex>(index));
+			matching_indexes.push_back(BoundIndex::MakeShared<BoundIndex>(index));
 		}
 	}
 
