@@ -14,6 +14,7 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/enums/task_scheduler_type.hpp"
+#include "duckdb/parallel/task_scheduler_token.hpp"
 
 #ifdef DUCKDB_NO_THREADS
 #include "duckdb/common/queue.hpp"
@@ -24,7 +25,6 @@ namespace duckdb {
 class Task;
 class TaskSchedulerQueue;
 struct ConcurrentQueueWrapper;
-struct ProducerToken;
 struct QueueProducerToken;
 
 class TaskSchedulerQueue {

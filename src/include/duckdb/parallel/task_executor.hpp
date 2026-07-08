@@ -49,7 +49,6 @@ private:
 	const TaskSchedulerType type;
 	TaskErrorManager error_manager;
 	unique_ptr<ProducerToken> token;
-	// Task counts are protected by the producer lock because they determine when the executor can finish.
 	idx_t completed_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
 	idx_t total_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
 	optional_ptr<ClientContext> context;

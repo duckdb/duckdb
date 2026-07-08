@@ -10,39 +10,20 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/enums/task_scheduler_type.hpp"
-
-#include <condition_variable>
+#include "duckdb/parallel/task_scheduler_token.hpp"
 
 namespace duckdb {
 
-struct QueueProducerToken;
 class ClientContext;
 struct DBConfig;
 class DatabaseInstance;
 class TaskScheduler;
 class TaskSchedulerPool;
 class TaskSchedulerQueue;
-
-struct ProducerToken {
-public:
-	explicit ProducerToken(array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_TYPE_COUNT> &queues);
-	~ProducerToken();
-
-public:
-	QueueProducerToken &GetQueueProducerToken(TaskSchedulerType pool_type);
-
-public:
-	annotated_mutex producer_lock;
-	std::condition_variable producer_cv;
-
-private:
-	array<unique_ptr<QueueProducerToken>, TASK_SCHEDULER_TYPE_COUNT> tokens;
-};
 
 //! The TaskScheduler is responsible for managing tasks and threads
 class TaskScheduler {

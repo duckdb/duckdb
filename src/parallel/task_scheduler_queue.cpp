@@ -1,7 +1,6 @@
 #include "duckdb/parallel/task_scheduler_queue.hpp"
 
 #include "duckdb/parallel/task.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
