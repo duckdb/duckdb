@@ -23,15 +23,15 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	auto &collection = *row_groups->collection;
 	collection.InitializeEmpty();
 
-	for (const auto &index : data_table_info->GetIndexes().MakeShared()) {
-		auto constraint = index->GetConstraintType();
+	for (const auto &index : data_table_info->GetIndexes().Indexes()) {
+		const auto constraint = index.GetConstraintType();
 		if (constraint == IndexConstraintType::NONE) {
 			continue;
 		}
-		if (!index->IsBound()) {
+		if (!index.IsBound()) {
 			continue;
 		}
-		auto &bound_index = index->Cast<BoundIndex>();
+		const auto &bound_index = index.Cast<BoundIndex>();
 		if (!bound_index.SupportsDeltaIndexes()) {
 			continue;
 		}
@@ -127,11 +127,11 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	// get the index size
 	idx_t index_sizes = 0;
-	for (const auto &index : append_indexes.MakeShared()) {
-		if (!index->IsBound()) {
+	for (auto &index : append_indexes.Indexes()) {
+		if (!index.IsBound()) {
 			continue;
 		}
-		index_sizes += index->Cast<BoundIndex>().GetInMemorySize();
+		index_sizes += index.Cast<BoundIndex>().GetInMemorySize();
 	}
 
 	// return the size of the appended rows and the index size
@@ -462,13 +462,13 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	Vector committed_row_ids(row_ids, committed_sel, committed_count);
 	committed_row_ids.Flatten();
 
-	for (const auto &index : delete_indexes.MakeShared()) {
-		D_ASSERT(index->IsBound());
-		if (!index->IsUnique()) {
+	for (auto &index : delete_indexes.Indexes()) {
+		D_ASSERT(index - IsBound());
+		if (!index.IsUnique()) {
 			continue;
 		}
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		auto result = index->Cast<BoundIndex>().Append(committed_chunk, committed_row_ids, index_append_info);
+		auto result = index.Cast<BoundIndex>().Append(committed_chunk, committed_row_ids, index_append_info);
 		if (result.HasError()) {
 			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 		}
