@@ -37,6 +37,8 @@ void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 		scheduler.ScheduleTask(*token, std::move(task), type);
 	} catch (...) {
 		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
+		// We failed to schedule the task, so we decrement the total number of tasks, instead of incrementing completed
+		// tasks count.
 		--total_tasks;
 		token->producer_cv.notify_one();
 		throw;
