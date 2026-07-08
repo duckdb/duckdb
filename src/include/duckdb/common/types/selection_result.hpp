@@ -83,6 +83,17 @@ struct SelectionResult : private SelectionVector {
 		return IntersectBitmap(other_result);
 	}
 
+	//! Fill this as the bitwise complement of `other` (a bitmap) over row_span rows; returns the bitmap words.
+	validity_t *Complement(const SelectionResult &other, idx_t row_span) {
+		D_ASSERT(other.IsBitmap() && other.RowSpan() == row_span);
+		auto dst = reinterpret_cast<validity_t *>(PrepareBitmap(row_span));
+		auto src = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
+		for (idx_t w = 0; w < (row_span + 63) / 64; w++) {
+			dst[w] = ~src[w];
+		}
+		return dst;
+	}
+
 	uint64_t *PrepareBitmap(idx_t row_span) {
 		static constexpr idx_t NWORDS = (STANDARD_VECTOR_SIZE + 63) / 64;
 		if (!selection_data || selection_data.use_count() > 1) {

@@ -30,6 +30,8 @@ bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
+	// a `ref <op> const` comparison can be selected straight into a bitmap (autovec) in the fast path below
+	select_bitmap_capable = IsBitmapComparisonCandidate(expr);
 	// Check if the expression is eligible for dictionary optimization
 	if (!expr.IsConsistent() || expr.IsVolatile() || expr.CanThrow()) {
 		return; // Needs to be consistent, non-volatile, and non-throwing
@@ -321,13 +323,18 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
 #ifndef DUCKDB_SMALLER_BINARY
-	// Fast path: a `flat_ref <cmp> const` comparison over the identity selection produces a bitmap straight
-	// from the input chunk, skipping the per-node intermediate-vector machinery below. Any select caller
-	// (scan filters, PhysicalFilter, joins) benefits; non-matching shapes fall through.
-	if (bitmap_sel && chunk && !false_sel && (!sel || !sel->IsSet())) {
-		idx_t result;
-		if (TrySelectComparisonFromChunk(expr, *chunk, count, *bitmap_sel, result)) {
-			return result;
+	// Fast path: a `flat_ref <cmp> const` comparison is evaluated densely into a bitmap straight from the input
+	// chunk, skipping the per-node intermediate-vector machinery below. Any input selection is AND-ed in, and the
+	// result is emitted to whatever the caller wants (bitmap, true and/or false selection). All select callers
+	// (scan filters, PhysicalFilter, joins) benefit; non-matching shapes fall through.
+	if (chunk) {
+		auto &fstate = state->Cast<ExecuteFunctionState>();
+		if (fstate.select_bitmap_capable) {
+			idx_t result;
+			if (SelectComparisonFromChunk(expr, *chunk, sel, count, bitmap_sel, true_sel, false_sel,
+			                              fstate.tmp_sel1, fstate.tmp_sel2, fstate.tmp_sel3, result)) {
+				return result;
+			}
 		}
 	}
 #endif
