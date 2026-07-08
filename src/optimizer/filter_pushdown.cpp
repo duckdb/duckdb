@@ -95,7 +95,8 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<TableInd
 
 	// recurse into the children to find mark joins and project their indexes.
 	for (auto &child : op.children) {
-		CheckMarkToSemi(*child, table_bindings);
+		auto child_table_bindings = table_bindings;
+		CheckMarkToSemi(*child, child_table_bindings);
 	}
 }
 

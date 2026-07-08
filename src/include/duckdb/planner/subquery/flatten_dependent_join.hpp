@@ -80,6 +80,7 @@ private:
 	                                    vector<ColumnBinding> state, bool rewrite_parent = true, idx_t child_idx = 0);
 	vector<ColumnBinding> FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> outer_state,
 	                                            const vector<ColumnBinding> &right_state);
+	vector<ColumnBinding> AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left, LogicalJoin &join);
 	vector<ColumnBinding> PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                                    vector<ColumnBinding> state, bool correlated_left);
 	vector<ColumnBinding> PushDownProjection(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,

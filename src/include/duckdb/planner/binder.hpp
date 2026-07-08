@@ -228,6 +228,8 @@ public:
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
 	unordered_map<TableIndex, LogicalOperator *> recursive_ctes;
+	//! CTE definitions in this binder scope that captured columns from an outer query while binding
+	unordered_set<TableIndex> correlated_ctes;
 
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
@@ -294,6 +296,8 @@ public:
 
 	//! Find all candidate common table expression by name; returns empty vector if none exists
 	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &name);
+	void MarkCTEAsCorrelated(TableIndex table_index);
+	bool IsCorrelatedCTE(TableIndex table_index) const;
 
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);
@@ -566,11 +570,10 @@ private:
 	void PlanSubqueries(unique_ptr<Expression> &expr, unique_ptr<LogicalOperator> &root);
 	bool TryPlanPairDependentJoin(BoundJoinRef &ref, unique_ptr<LogicalOperator> &left,
 	                              unique_ptr<LogicalOperator> &right, unique_ptr<LogicalOperator> &result);
-	unique_ptr<LogicalOperator> PlanPairDependentLeftJoin(unique_ptr<LogicalOperator> left,
-	                                                      unique_ptr<LogicalOperator> right,
-	                                                      unique_ptr<Expression> condition,
-	                                                      const unordered_set<TableIndex> &left_bindings,
-	                                                      const unordered_set<TableIndex> &right_bindings);
+	unique_ptr<LogicalOperator>
+	PlanPairDependentLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
+	                             unique_ptr<Expression> condition, const unordered_set<TableIndex> &left_bindings,
+	                             const unordered_set<TableIndex> &right_bindings, JoinType join_type);
 	bool TryPlanPairDependentFullJoin(BoundJoinRef &ref, unique_ptr<LogicalOperator> &left,
 	                                  unique_ptr<LogicalOperator> &right, unique_ptr<LogicalOperator> &result);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);

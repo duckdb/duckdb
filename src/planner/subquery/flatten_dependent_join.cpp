@@ -21,6 +21,55 @@
 
 namespace duckdb {
 
+struct OutputLayout {
+	explicit OutputLayout(vector<ColumnBinding> bindings_p) : bindings(std::move(bindings_p)) {
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			positions[bindings[i]] = i;
+		}
+	}
+
+	static OutputLayout FromOperator(LogicalOperator &op) {
+		return OutputLayout(op.GetColumnBindings());
+	}
+
+	idx_t GetPosition(const ColumnBinding &binding) const {
+		auto entry = positions.find(binding);
+		if (entry == positions.end()) {
+			throw InternalException("Could not find binding %s in output layout", binding.ToString());
+		}
+		return entry->second;
+	}
+
+	ProjectionIndex GetProjectionIndex(const ColumnBinding &binding) const {
+		return ProjectionIndex(GetPosition(binding));
+	}
+
+	vector<ProjectionIndex> CreateProjectionMap(const vector<ColumnBinding> &projected_bindings) const {
+		vector<ProjectionIndex> result;
+		result.reserve(projected_bindings.size());
+		for (auto &binding : projected_bindings) {
+			result.push_back(GetProjectionIndex(binding));
+		}
+		return result;
+	}
+
+	vector<ColumnBinding> ProjectBindings(const vector<ProjectionIndex> &projection_map) const {
+		if (projection_map.empty()) {
+			return bindings;
+		}
+		vector<ColumnBinding> result;
+		result.reserve(projection_map.size());
+		for (auto &projection_index : projection_map) {
+			D_ASSERT(projection_index.IsValid());
+			result.push_back(bindings[projection_index.GetIndex()]);
+		}
+		return result;
+	}
+
+	vector<ColumnBinding> bindings;
+	column_binding_map_t<idx_t> positions;
+};
+
 static bool HasCTEAccessor(LogicalOperator &op, TableIndex table_index) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		if (op.Cast<LogicalCTERef>().cte_index == table_index) {
@@ -430,6 +479,62 @@ vector<ColumnBinding> FlattenDependentJoins::CreateDelimCrossProduct(unique_ptr<
 	return state;
 }
 
+static bool ProjectionMapContains(const vector<ProjectionIndex> &projection_map, ProjectionIndex projection_index) {
+	for (idx_t i = 0; i < projection_map.size(); i++) {
+		if (projection_map[i].IsValid() && projection_map[i].GetIndex() == projection_index.GetIndex()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void AppendStateToProjectionMap(vector<ProjectionIndex> &projection_map, const OutputLayout &output,
+                                       const vector<ColumnBinding> &state) {
+	if (projection_map.empty()) {
+		return;
+	}
+	for (auto &binding : state) {
+		auto projection_index = output.GetProjectionIndex(binding);
+		if (!ProjectionMapContains(projection_map, projection_index)) {
+			projection_map.push_back(projection_index);
+		}
+	}
+}
+
+static bool IsJoinWithProjectionMap(LogicalOperatorType type) {
+	switch (type) {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		return true;
+	default:
+		return false;
+	}
+}
+
+vector<ColumnBinding> FlattenDependentJoins::AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left,
+                                                                              LogicalJoin &join) {
+	auto original_left_output = OutputLayout::FromOperator(*left);
+	auto projected_left_bindings = original_left_output.ProjectBindings(join.left_projection_map);
+	left = DecorrelateIndependent(binder, std::move(left));
+
+	auto delim_index = binder.GenerateTableIndex();
+	auto left_state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
+	auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
+	left_state = CreateDelimCrossProduct(left, std::move(delim_scan), std::move(left_state));
+
+	auto attached_output = OutputLayout::FromOperator(*left);
+	projected_left_bindings.insert(projected_left_bindings.end(), left_state.begin(), left_state.end());
+	auto projection_map = attached_output.CreateProjectionMap(projected_left_bindings);
+	auto attachment = make_uniq<LogicalFilter>();
+	attachment->projection_map = std::move(projection_map);
+	attachment->children.push_back(std::move(left));
+	left = std::move(attachment);
+	join.left_projection_map.clear();
+	return left_state;
+}
+
 vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan,
                                                                    vector<ColumnBinding> outer_state,
                                                                    const vector<ColumnBinding> &right_state) {
@@ -481,6 +586,15 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownSingleCorrelatedChild(uniqu
 	idx_t correlated_idx = correlated_left ? 0 : 1;
 	idx_t independent_idx = correlated_left ? 1 : 0;
 	state = PushDownCorrelatedNode(plan->children[correlated_idx], propagate_null_values, std::move(state));
+	if (IsJoinWithProjectionMap(plan->type)) {
+		auto &join = plan->Cast<LogicalJoin>();
+		if (correlated_left) {
+			AppendStateToProjectionMap(join.left_projection_map, OutputLayout::FromOperator(*plan->children[0]), state);
+		} else {
+			AppendStateToProjectionMap(join.right_projection_map, OutputLayout::FromOperator(*plan->children[1]),
+			                           state);
+		}
+	}
 	plan->children[independent_idx] = DecorrelateIndependent(binder, std::move(plan->children[independent_idx]));
 	return state;
 }
@@ -670,6 +784,31 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownJoin(unique_ptr<LogicalOper
 	}
 	if (can_push_right_only) {
 		return PushDownSingleCorrelatedChild(plan, propagate_null_values, std::move(state), false);
+	}
+	if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+		if (left_has_correlation && !right_has_correlation) {
+			return PushDownSingleCorrelatedChild(plan, propagate_null_values, std::move(state), true);
+		}
+		if (!left_has_correlation && right_has_correlation) {
+			// The output side is independent, so pair it with the active delim
+			// state before applying the SEMI/ANTI predicate.
+			auto right_state = PushDownChild(plan, propagate_null_values, state, false, 1);
+			auto left_state = AttachDelimToIndependentJoinLeft(plan->children[0], join);
+			AddCorrelatedJoinConditions(join, left_state, right_state);
+			RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(left_state), correlated_aliases);
+			return left_state;
+		}
+		if (left_has_correlation && right_has_correlation) {
+			// SEMI/ANTI only emit the left side. Decorrelate both inputs and join
+			// on the state columns, but return the state carried by the output side.
+			auto right_state = PushDownChild(plan, propagate_null_values, state, false, 1);
+			auto left_state = PushDownChild(plan, propagate_null_values, right_state, false, 0);
+			AppendStateToProjectionMap(join.left_projection_map, OutputLayout::FromOperator(*plan->children[0]),
+			                           left_state);
+			AddCorrelatedJoinConditions(join, left_state, right_state);
+			RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(left_state), correlated_aliases);
+			return left_state;
+		}
 	}
 
 	if (join.join_type == JoinType::MARK) {
