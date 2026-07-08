@@ -288,6 +288,8 @@ public:
 
 	//! Close a client — implementations may cache it for reuse
 	virtual void CloseClient(unique_ptr<HTTPClient> &&client);
+	//! Fetch a previously-cached client for this host, returns null when none is available
+	virtual unique_ptr<HTTPClient> TryGetCachedClient(const string &proto_host_port);
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);

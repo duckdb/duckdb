@@ -1,0 +1,121 @@
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -1042,13 +1042,8 @@
+ }
+ 
+ unique_ptr<HTTPClient> HTTPFileHandle::GetClient() {
+-	// Try to fetch a cached client
+-	auto cached_client = client_cache.GetClient();
+-	if (cached_client) {
+-		return cached_client;
+-	}
+-
+-	// Create a new client
++	// clients are pooled process-wide (InitializeClient consults the connection cache) so that
++	// concurrent handles share connections instead of each hoarding a private pool
+ 	return CreateClient();
+ }
+ 
+@@ -1059,7 +1054,8 @@
+ }
+ 
+ void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
+-	client_cache.StoreClient(std::move(client));
++	// return the client to the process-wide connection cache so other handles can reuse it
++	http_params.http_util.CloseClient(std::move(client));
+ }
+ 
+ HTTPFileHandle::~HTTPFileHandle() {
+--- a/src/httpfs_connection_caching.cpp
++++ b/src/httpfs_connection_caching.cpp
+@@ -27,10 +27,9 @@
+ 	for (size_t i = 0; i < POOL_COUNT; i++) {
+ 		const size_t idx = (start + i) & (POOL_COUNT - 1);
+ 		auto &pool = pools[idx];
+-		unique_lock<mutex> lock(pool.lock, std::try_to_lock);
+-		if (!lock) {
+-			continue;
+-		}
++		// block instead of skipping: a spurious miss dials a new connection (DNS + TLS),
++		// which is far more expensive than waiting for this short critical section
++		lock_guard<mutex> lock(pool.lock);
+ 		for (auto &entry : pool.entries) {
+ 			if (entry && entry->GetBaseUrl() == base_url) {
+ 				cache_pool_idx = idx;
+@@ -46,14 +45,11 @@
+ 		return;
+ 	}
+ 	const size_t start = cache_pool_idx;
+-	// Pass 1: prefer an empty slot in any reachable pool
++	// Pass 1: prefer an empty slot in any pool
+ 	for (size_t i = 0; i < POOL_COUNT; i++) {
+ 		const size_t idx = (start + i) & (POOL_COUNT - 1);
+ 		auto &pool = pools[idx];
+-		unique_lock<mutex> lock(pool.lock, std::try_to_lock);
+-		if (!lock) {
+-			continue;
+-		}
++		lock_guard<mutex> lock(pool.lock);
+ 		for (auto &entry : pool.entries) {
+ 			if (!entry) {
+ 				entry = std::move(client);
+@@ -62,21 +58,12 @@
+ 			}
+ 		}
+ 	}
+-	// Pass 2: every reachable pool is full — evict at random in the first lockable pool
++	// Pass 2: every pool is full — evict at random in the starting pool
+ 	RandomEngine engine;
+-	for (size_t i = 0; i < POOL_COUNT; i++) {
+-		const size_t idx = (start + i) & (POOL_COUNT - 1);
+-		auto &pool = pools[idx];
+-		unique_lock<mutex> lock(pool.lock, std::try_to_lock);
+-		if (!lock) {
+-			continue;
+-		}
+-		const size_t slot = engine.NextRandomInteger() % pool.entries.size();
+-		pool.entries[slot] = std::move(client);
+-		cache_pool_idx = idx;
+-		return;
+-	}
+-	// Every pool busy — drop the client; will reconnect next time.
++	auto &pool = pools[start];
++	lock_guard<mutex> lock(pool.lock);
++	const size_t slot = engine.NextRandomInteger() % pool.entries.size();
++	pool.entries[slot] = std::move(client);
+ }
+ 
+ void HTTPClientConnectionCache::Clear() {
+@@ -106,6 +93,13 @@
+ 	connection_cache.Clear();
+ }
+ 
++unique_ptr<HTTPClient> HTTPFSCurlUtil::TryGetCachedClient(const string &proto_host_port) {
++	if (!connection_caching_enabled) {
++		return nullptr;
++	}
++	return connection_cache.Find(proto_host_port);
++}
++
+ void HTTPFSCurlUtil::CloseClient(unique_ptr<HTTPClient> &&client) {
+ 	if (!client || !connection_caching_enabled) {
+ 		return;
+--- a/src/include/httpfs_client.hpp
++++ b/src/include/httpfs_client.hpp
+@@ -58,7 +58,7 @@
+ class HTTPClientConnectionCache {
+ public:
+ 	static constexpr size_t POOL_COUNT = 16;
+-	static constexpr size_t POOL_SIZE = 16;
++	static constexpr size_t POOL_SIZE = 32;
+ 	static_assert((POOL_COUNT & (POOL_COUNT - 1)) == 0, "POOL_COUNT must be a power of two");
+ 
+ 	unique_ptr<HTTPClient> Find(const string &base_url);
+@@ -95,6 +95,7 @@
+ public:
+ 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
+ 	void CloseClient(unique_ptr<HTTPClient> &&client) override;
++	unique_ptr<HTTPClient> TryGetCachedClient(const string &proto_host_port) override;
+ 	void ClearCachedConnections() override;
+ 	unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) override;
+ 
