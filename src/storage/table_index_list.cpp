@@ -297,7 +297,7 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 
 	lock_guard<mutex> guard(entry->lock);
 	auto &index = entry->GetIndexUnsafe();
-	D_ASSERT(index->IsBound());
+	D_ASSERT(index.IsBound());
 	IndexAppendInfo index_append_info;
 	if (storage) {
 		auto delete_index = storage->delete_indexes.Find(index.GetIndexName());
