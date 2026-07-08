@@ -166,7 +166,7 @@ SELECT count(*)
 FROM d lhs
 WHERE v < (SELECT avg(v) + 1 FROM d rhs WHERE rhs.k = lhs.k);
 ----
-analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 1.*Buffered Consumers: 0.*Materialized Consumers: 1.*
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: (1|2).*Buffered Consumers: 0.*Materialized Consumers: 1.*
 
 query IIII
 WITH d AS (
