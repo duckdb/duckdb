@@ -1,9 +1,6 @@
-# name: test/sql/feature/test_feature_no_pk.test
-# description: The entity table no longer needs a PRIMARY KEY. Keys resolve via an explicit ENTITY t (cols)
+# name: test/sql/feature/test_feature_entity_keys.test
+# description: Entity key resolution — explicit ENTITY t (cols) wins, else the table's PRIMARY KEY, else the entity-table columns the query projects (no PRIMARY KEY required); no keys projected -> global feature. SELECT DISTINCT on the entity source keeps one row per entity even when the entity table has duplicate keys.
 # group: [feature]
-
-#              clause, else the table's PK, else the entity-table columns the query projects. SELECT DISTINCT
-#              on the entity source keeps one row per entity even when the entity table has duplicate keys.
 
 require noforcestorage
 
@@ -17,8 +14,11 @@ CREATE TABLE users_nopk (user_id VARCHAR);
 statement ok
 INSERT INTO users_nopk VALUES ('alice'), ('bob'), ('carol'), ('alice');
 
+# The event table names its identifier column 'cust_id', NOT 'user_id'. The feature queries must alias it to
+# the entity key name ('user_id') for the mapping to resolve — proving the entity key is anchored on the
+# entity table / explicit clause, not on a name coincidence with the event table.
 statement ok
-CREATE TABLE txns (user_id VARCHAR, amount INTEGER, ts TIMESTAMP);
+CREATE TABLE txns (cust_id VARCHAR, amount INTEGER, ts TIMESTAMP);
 
 statement ok
 INSERT INTO txns VALUES
@@ -32,7 +32,7 @@ INSERT INTO txns VALUES
 # ============================================================
 statement ok
 CREATE FEATURE f_heur ENTITY users_nopk TIMESTAMP ts WINDOW 30 DAYS RETAIN 1
-    AS (SELECT user_id, SUM(amount) AS total FROM txns GROUP BY user_id);
+    AS (SELECT cust_id AS user_id, SUM(amount) AS total FROM txns GROUP BY cust_id);
 
 query I
 SELECT entity_columns FROM duckdb_features() WHERE feature_name = 'f_heur';
@@ -56,7 +56,7 @@ carol	0
 # ============================================================
 statement ok
 CREATE FEATURE f_explicit ENTITY users_nopk (user_id) TIMESTAMP ts WINDOW 30 DAYS RETAIN 1
-    AS (SELECT user_id, COUNT(*) AS n FROM txns GROUP BY user_id);
+    AS (SELECT cust_id AS user_id, COUNT(*) AS n FROM txns GROUP BY cust_id);
 
 # ToString renders the resolved (here, explicitly declared) entity keys as ENTITY tbl (keys)
 query I
@@ -106,7 +106,7 @@ INSERT INTO users_pk VALUES ('alice'), ('bob');
 
 statement ok
 CREATE FEATURE f_pk ENTITY users_pk TIMESTAMP ts WINDOW 30 DAYS RETAIN 1
-    AS (SELECT user_id, SUM(amount) AS total FROM txns GROUP BY user_id);
+    AS (SELECT cust_id AS user_id, SUM(amount) AS total FROM txns GROUP BY cust_id);
 
 query I
 SELECT entity_columns FROM duckdb_features() WHERE feature_name = 'f_pk';

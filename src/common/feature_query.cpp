@@ -93,7 +93,9 @@ static bool FeatureIsEntityColumn(const ParsedExpression &expr, const vector<str
 		return false;
 	}
 	auto &col_ref = expr.Cast<ColumnRefExpression>();
-	return FeatureColumnListContains(entity_columns, col_ref.GetColumnName());
+	// Match on the projected output name (the alias, else the unqualified column name) so an entity key
+	// sourced from a differently-named or qualified column (e.g. "cust_id AS user_id") is still recognised.
+	return FeatureColumnListContains(entity_columns, col_ref.GetName());
 }
 
 //! A reference to the feature timestamp column, qualified with its table alias when one was declared
