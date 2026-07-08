@@ -13,8 +13,8 @@ from pathlib import Path
 
 
 DEFAULT_ASSET_BASE_URL = "https://duckdb-staging.duckdb.org"
-DOWNLOAD_RETRIES = 60
-DOWNLOAD_RETRY_SECONDS = 30
+DOWNLOAD_RETRIES = 2
+DOWNLOAD_RETRY_SECONDS = 10
 EXTENSION_SEPARATOR_TRANSLATION = str.maketrans({",": " ", ";": " "})
 
 
