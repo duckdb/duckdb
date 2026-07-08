@@ -132,7 +132,7 @@ static void mk_detail(void *info_arr, int bPrint) {
 
 	if (!InitConstants::mk_detail_init) {
 		jDate = skipDays(WEB_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(NULL, nItemCount = (int)getIDCount(ITEM), WS_PERMUTATION);
+		pItemPermutation = makePermutation(pItemPermutation, nItemCount = (int)getIDCount(ITEM), WS_PERMUTATION);
 
 		InitConstants::mk_detail_init = 1;
 	}

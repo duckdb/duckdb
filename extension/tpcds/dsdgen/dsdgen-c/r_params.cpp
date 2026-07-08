@@ -70,6 +70,16 @@ char *params[9];
 #define OPTION_START '-'
 #endif
 
+struct ParamCache {
+	~ParamCache() {
+		for (int i = 0; options[i].name != NULL; i++) {
+			auto index = options[i].index;
+			free(params[index]);
+			params[index] = NULL;
+		}
+	}
+};
+
 int read_file(const char *param_name, const char *option);
 int fnd_param(const char *name);
 void print_params(void);
@@ -308,7 +318,9 @@ char *get_str(const char *var) {
  * TODO: None
  */
 int init_params(void) {
+	static thread_local ParamCache param_cache;
 	int i;
+	(void)param_cache;
 
 	if (InitConstants::init_params_init)
 		return (0);

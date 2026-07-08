@@ -77,7 +77,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 		strtodec(&dMax, "100000.00");
 		nMaxItemCount = 20;
 		jDate = skipDays(STORE_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(NULL, nItemCount = (int)getIDCount(ITEM), SS_PERMUTATION);
+		pItemPermutation = makePermutation(pItemPermutation, nItemCount = (int)getIDCount(ITEM), SS_PERMUTATION);
 
 		InitConstants::mk_master_store_sales_init = 1;
 	}

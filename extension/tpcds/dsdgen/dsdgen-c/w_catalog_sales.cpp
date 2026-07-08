@@ -84,7 +84,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 		strtodec(&dOne, "1.00");
 		strtodec(&dOneHalf, "0.50");
 		jDate = skipDays(CATALOG_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(NULL, (nItemCount = (int)getIDCount(ITEM)), CS_PERMUTE);
+		pItemPermutation = makePermutation(pItemPermutation, (nItemCount = (int)getIDCount(ITEM)), CS_PERMUTE);
 
 		InitConstants::mk_master_catalog_sales_init = 1;
 	}
