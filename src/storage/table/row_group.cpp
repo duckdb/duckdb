@@ -410,7 +410,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 	}
 	// Invalidate the predictor at each row group boundary so the next PredictBatchSize re-computes its
 	// cold-start estimate — string length distributions can vary significantly across row groups.
-	state.size_predictor.initialized = false;
+	state.size_predictor.Reset();
 	return true;
 }
 
@@ -440,7 +440,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 	}
 	// Invalidate the predictor at each row group boundary so the next PredictBatchSize re-computes its
 	// cold-start estimate — string length distributions can vary significantly across row groups.
-	state.size_predictor.initialized = false;
+	state.size_predictor.Reset();
 	return true;
 }
 

@@ -256,6 +256,12 @@ struct ScanSizePredictor {
 	double sum_overshoot_ratio = 0.0; //! sum of per-batch ratios (divide by total_batches for avg)
 	double first_batch_ratio = 0.0;   //! actual/predicted on the very first batch (measures cold-start accuracy)
 
+	//! Invalidate the cold-start estimate so the next PredictBatchSize re-computes it (e.g. at a row group
+	//! boundary). Accuracy counters accumulate across the whole scan and are intentionally left untouched.
+	void Reset() {
+		initialized = false;
+	}
+
 	//! Predict batch size: target_bytes / bytes_per_row, clamped to [1, max_rows].
 	//! Lazily computes the per-row byte estimate from row group statistics on the first call.
 	idx_t PredictBatchSize(idx_t target_bytes, idx_t max_rows, const vector<StorageIndex> &column_ids,
