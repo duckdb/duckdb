@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 

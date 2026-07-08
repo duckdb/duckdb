@@ -1,3 +1,5 @@
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/binder.hpp"

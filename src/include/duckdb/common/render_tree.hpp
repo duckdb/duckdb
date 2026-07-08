@@ -11,13 +11,14 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/profiler/profiling_node.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 
 namespace duckdb {
 class LogicalOperator;
 class PhysicalOperator;
 class Pipeline;
+class ProfilingNode;
 struct PipelineRenderNode;
 
 struct RenderTreeNode {

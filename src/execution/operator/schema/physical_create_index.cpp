@@ -10,6 +10,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/execution/index/index_type.hpp"
 
 namespace duckdb {
 

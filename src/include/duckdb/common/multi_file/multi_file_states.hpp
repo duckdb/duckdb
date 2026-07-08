@@ -9,13 +9,17 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
+struct MultiFileReader;
 struct MultiFileReaderInterface;
 class MultiFileReadAhead;
 class ReadAheadJobCompletion;

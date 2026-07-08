@@ -1,7 +1,6 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parser.hpp"

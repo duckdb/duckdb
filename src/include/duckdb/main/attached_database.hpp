@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/main/valid_checker.hpp"
@@ -86,6 +87,8 @@ struct AttachOptions {
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
 	optional_idx vacuum_rebuild_indexes_threshold;
+	//! Header prefetched during file-type detection, reused when opening the file. Empty for non-DuckDB files.
+	PrefetchedFileData prefetched;
 };
 
 //! The AttachedDatabase represents an attached database instance.

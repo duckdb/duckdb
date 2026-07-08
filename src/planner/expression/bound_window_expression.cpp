@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_serialization.hpp"

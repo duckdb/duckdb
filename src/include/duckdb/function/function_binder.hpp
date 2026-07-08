@@ -17,6 +17,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 
 namespace duckdb {
+class AggregateFunctionCatalogEntry;
 
 class WindowFunctionCatalogEntry;
 

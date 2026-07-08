@@ -1,4 +1,5 @@
 #include "parquet_multi_file_info.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <stdint.h>
 #include <atomic>

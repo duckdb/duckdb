@@ -8,6 +8,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
 

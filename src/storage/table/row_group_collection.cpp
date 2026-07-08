@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -26,6 +27,8 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
 

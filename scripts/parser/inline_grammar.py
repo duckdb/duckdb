@@ -326,7 +326,7 @@ def load_all_rules():
     contents = ""
     rules = {}
 
-    for filepath in keywords_dir.iterdir():
+    for filepath in sorted(keywords_dir.iterdir()):
         if filepath.name not in FILENAME_TO_CATEGORY:
             continue
         category = FILENAME_TO_CATEGORY[filepath.name]
@@ -354,7 +354,7 @@ def load_all_rules():
             raise Exception(f"common.gram: {e}") from None
         contents += file_content + "\n"
 
-    for filepath in keywords_dir.iterdir():
+    for filepath in sorted(keywords_dir.iterdir()):
         if filepath.suffix != '.list':
             continue
         rule_name = filename_to_upper_camel(filepath)
@@ -365,7 +365,7 @@ def load_all_rules():
         contents += rule
         update_rules(rules, parse_peg_grammar(rule), filepath.name)
 
-    for filepath in statements_dir.iterdir():
+    for filepath in sorted(statements_dir.iterdir()):
         if filepath.suffix != '.gram':
             if not filepath.is_dir():
                 raise Exception(f"File {filepath.name} does not end with .gram")

@@ -14,12 +14,14 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/bignum.hpp"
 
 namespace duckdb {
 using digit_t = uint32_t;
 using twodigit_t = uint64_t;
+
+struct BoundCastInfo;
+struct CastParameters;
 
 //! The Bignum class is a static class that holds helper functions for the Bignum type.
 class Bignum {

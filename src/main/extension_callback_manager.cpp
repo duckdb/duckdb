@@ -6,6 +6,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/profiler_extension.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 

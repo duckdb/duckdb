@@ -29,6 +29,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "parquet_crypto.hpp"
 #include "decode_utils.hpp"
 #include "duckdb/common/enums/vector_type.hpp"

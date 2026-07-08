@@ -10,6 +10,10 @@
 
 #include "duckdb/common/multi_file/multi_file_read_ahead.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"

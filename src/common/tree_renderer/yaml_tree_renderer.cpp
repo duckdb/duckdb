@@ -1,5 +1,6 @@
 #include "duckdb/common/tree_renderer/yaml_tree_renderer.hpp"
 
+#include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/execution/physical_operator.hpp"

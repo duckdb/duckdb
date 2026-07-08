@@ -1,4 +1,5 @@
 #include "json_multi_file_info.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "json_scan.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parallel/async_result.hpp"

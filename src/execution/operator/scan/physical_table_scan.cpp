@@ -5,6 +5,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"

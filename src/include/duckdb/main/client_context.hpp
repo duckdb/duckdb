@@ -24,16 +24,14 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
-#include "duckdb/main/statement_iterator.hpp"
-#include "duckdb/main/prepared_statement.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/main/query_context.hpp"
-#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/common/query_context.hpp"
+#include "duckdb/common/query_parameters.hpp"
 
 namespace duckdb {
+class Logger;
 
 class Appender;
 class AttachedDatabase;
@@ -43,7 +41,10 @@ class ColumnDataCollection;
 class DatabaseInstance;
 class FileOpener;
 class LogicalOperator;
+class PreparedStatement;
 class PreparedStatementData;
+class StreamQueryResult;
+class StatementIterator;
 class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
