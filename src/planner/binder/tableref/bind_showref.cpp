@@ -11,6 +11,10 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_entries.hpp"
+#include "duckdb/logging/logger.hpp"
+#include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
 
@@ -87,7 +91,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, idx_t column_index)
 	return FindBaseTableColumn(op, bindings[column_index]);
 }
 
-BoundStatement Binder::BindShowQuery(ShowRef &ref) {
+BoundStatement Binder::BindDescribeQuery(ShowRef &ref) {
 	// bind the child plan of the DESCRIBE statement
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto plan = child_binder->Bind(*ref.query);
@@ -150,7 +154,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 	return result;
 }
 
-BoundStatement Binder::BindShowTable(ShowRef &ref) {
+BoundStatement Binder::BindDescribeTable(ShowRef &ref) {
 	auto &lname = ref.GetTableName();
 
 	string sql;
@@ -206,14 +210,96 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 	return Bind(*subquery);
 }
 
+bool Binder::TryBindShowSetting(ShowRef &ref, BoundStatement &result) {
+	auto setting_name = StringUtil::Lower(ref.GetTableName().GetIdentifierName());
+	Value setting_value;
+	if (!context.TryGetCurrentSetting(setting_name, setting_value)) {
+		// The setting might be provided by an extension that has not been loaded yet (e.g. "timezone" -> icu).
+		// If this is not a known setting at all, fall back to describing a table with this name.
+		if (ExtensionHelper::FindExtensionInEntries(setting_name, EXTENSION_SETTINGS).empty()) {
+			return false;
+		}
+		// It is a known extension setting: autoload the extension (this throws a helpful error if autoloading is
+		// disabled or the extension is unavailable) and then read the value, mirroring current_setting().
+		Catalog::AutoloadExtensionByConfigName(context, setting_name);
+		context.TryGetCurrentSetting(setting_name, setting_value);
+	}
+
+	vector<LogicalType> types {setting_value.type()};
+	vector<Identifier> names {Identifier(setting_name)};
+
+	DataChunk output;
+	output.Initialize(Allocator::Get(context), types);
+	output.data[0].Append(setting_value);
+	output.CheckCardinality(1);
+
+	auto collection = make_uniq<ColumnDataCollection>(context, types);
+	collection->Append(output);
+
+	auto table_index = GenerateTableIndex();
+	result.names = names;
+	result.types = types;
+	result.plan = make_uniq<LogicalColumnDataGet>(table_index, types, std::move(collection));
+	bind_context.AddGenericBinding(table_index, "__show_setting", names, types);
+	return true;
+}
+
+//! Warn that using "SHOW name" to describe a table is deprecated in favor of DESCRIBE
+static void WarnShowDescribesTable(ClientContext &context, const string &name) {
+	DUCKDB_LOG_WARNING(context,
+	                   "Using \"SHOW %s\" to describe a table is deprecated and will be removed in a future release, "
+	                   "use \"DESCRIBE %s\" instead.",
+	                   name, name);
+}
+
+//! Warn that using "SHOW (query)" to describe a query is deprecated in favor of DESCRIBE
+static void WarnShowDescribesQuery(ClientContext &context) {
+	DUCKDB_LOG_WARNING(context, "Using \"SHOW (query)\" to describe a query is deprecated and will be removed in a "
+	                            "future release, use \"DESCRIBE (query)\" instead.");
+}
+
+BoundStatement Binder::BindShow(ShowRef &ref) {
+	BoundStatement result;
+	if (ref.GetTableName().empty()) {
+		// "SHOW (SELECT ...)": describe the columns of the query. Deprecated in favor of DESCRIBE.
+		WarnShowDescribesQuery(context);
+		return BindDescribeQuery(ref);
+	}
+
+	// "SHOW name" (Postgres-style): a bare (unqualified) name is settings-first. A qualified name
+	// ("SHOW schema.table") cannot be a setting, so it always describes a table.
+	bool qualified = !ref.GetSchemaName().empty() || !ref.GetCatalogName().empty();
+	if (!qualified && TryBindShowSetting(ref, result)) {
+		return result;
+	}
+
+	// Not a setting: describe the table with this name. This still works but is deprecated. For an unqualified
+	// name a missing table is reported as a missing setting, since "SHOW name" is primarily for settings.
+	auto describe_name = ref.qualified_name.ToString();
+	try {
+		result = ref.query ? BindDescribeQuery(ref) : BindDescribeTable(ref);
+	} catch (const std::exception &ex) {
+		if (!qualified && ErrorData(ex).Type() == ExceptionType::CATALOG) {
+			throw CatalogException("Setting with name \"%s\" does not exist", describe_name);
+		}
+		throw;
+	}
+
+	WarnShowDescribesTable(context, describe_name);
+	return result;
+}
+
 BoundStatement Binder::Bind(ShowRef &ref) {
 	if (ref.show_type == ShowType::SUMMARY) {
 		return BindSummarize(ref);
 	}
+	if (ref.show_type == ShowType::SHOW) {
+		return BindShow(ref);
+	}
 	if (ref.query) {
-		return BindShowQuery(ref);
+		return BindDescribeQuery(ref);
 	} else {
-		return BindShowTable(ref);
+		return BindDescribeTable(ref);
 	}
 }
 

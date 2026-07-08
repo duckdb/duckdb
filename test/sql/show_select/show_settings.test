@@ -1,0 +1,76 @@
+# name: test/sql/show_select/show_settings.test
+# description: Test Postgres-style "SHOW setting_name"
+# group: [show_select]
+
+statement ok
+CREATE TABLE my_table(i INTEGER, j INTEGER);
+
+# SHOW <name> returns the value of the setting with that name
+statement ok
+SET threads TO 42;
+
+query I
+SHOW threads
+----
+42
+
+# Quoted identifiers and different casing resolve to the same setting (settings are case-insensitive)
+query I
+SHOW "threads"
+----
+42
+
+query I
+SHOW THREADS
+----
+42
+
+# If no setting with the given name exists, SHOW falls back to describing a table with that name
+query TTTTTT
+SHOW my_table
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL
+
+# If the name is neither a setting nor a table, the error is about the missing setting (not a missing table),
+# because "SHOW name" is primarily for settings
+statement error
+SHOW this_does_not_exist
+----
+<REGEX>:.*Setting with name "this_does_not_exist" does not exist.*
+
+# DESCRIBE always describes tables, it never resolves a setting
+statement error
+DESCRIBE threads
+----
+<REGEX>:.*Table with name threads does not exist.*
+
+# The special MySQL-inherited forms keep working
+statement ok
+SHOW TABLES;
+
+statement ok
+SHOW DATABASES;
+
+statement ok
+SHOW ALL TABLES;
+
+# A qualified name is always describing a table (settings cannot be dotted), so a missing one is a table error
+statement error
+SHOW main.threads
+----
+<REGEX>:.*Table with name threads does not exist.*
+
+# A qualified name that exists is described as a table
+query TTTTTT
+SHOW main.my_table
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL
+
+# "SHOW (SELECT ...)" describes the columns of the query, just like DESCRIBE (deprecated in favor of DESCRIBE)
+query TTTTTT
+SHOW (SELECT * FROM my_table)
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL

@@ -1075,17 +1075,38 @@ TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
 TargetOptAlias <- BaseTableName 'AS'? ColId?
 DeleteUsingClause <- 'USING' List(TableRef)
 
-DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
+DescribeStatement <- ShowTables / ShowDeprecatedSelect / DescribeSelect / ShowAllTables / ShowByName / DescribeByName
 
-ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal
+# "DESCRIBE (query)" and "SUMMARIZE (query)" describe the query's columns. "SHOW (query)" does too but is deprecated,
+# so ShowDeprecatedSelect is parsed yet suppressed from autocomplete (matcher.cpp) - SHOW won't offer to complete a query.
+ShowDeprecatedSelect <- ShowRule SelectStatementInternal
+DescribeSelect <- DescribeOrSummarize SelectStatementInternal
 ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
-ShowQualifiedName <- ShowOrDescribeOrSummarize DescribeTarget?
 ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
+
+# "SHOW name" is settings-first, so its target autocompletes setting names (and the special MySQL forms), not
+# arbitrary tables. "DESCRIBE"/"SUMMARIZE" describe a relation, so their target autocompletes table names.
+ShowByName <- ShowRule ShowTarget?
+DescribeByName <- DescribeOrSummarize DescribeTarget?
+DescribeOrSummarize <- DescribeRule / Summarize
+
+# SHOW's own forms (a settings-first name and the special MySQL forms) plus the describe-style targets it still
+# tolerates for the deprecated "describe via SHOW". Only settings and the special forms are autocompleted after SHOW;
+# a qualified table is parsed but its suggestions are suppressed (see matcher.cpp).
+ShowTarget <- ShowDeprecatedQualifiedTableName / ShowSettingName / DescribeStringLiteral / ShowSpecialForm
+# "SHOW cat.tbl" still describes a table (deprecated), but is suppressed from autocomplete (see matcher.cpp) so SHOW
+# does not complete qualified tables (unlike DESCRIBE, which does). Wraps the generic QualifiedTableName (select.gram).
+ShowDeprecatedQualifiedTableName <- QualifiedTableName
+# A bare identifier is suggested as a setting name (SettingName is overridden to SUGGEST_SETTING_NAME).
+ShowSettingName <- SettingName
+# The special MySQL forms are only here so autocomplete suggests these keywords after SHOW; parsing of e.g.
+# "SHOW databases" resolves through ShowSettingName (the identifier) above, which the transformer special-cases.
+ShowSpecialForm <- 'DATABASES' / 'SCHEMAS' / 'TABLES' / 'VARIABLES'
+
 DescribeTarget <- DescribeBaseTableName / DescribeStringLiteral
 DescribeBaseTableName <- BaseTableName
 DescribeStringLiteral <- StringLiteral
 
-ShowOrDescribeOrSummarize <- ShowOrDescribe / Summarize
 Summarize <- SummarizeRule
 SummarizeRule <- 'SUMMARIZE'
 ShowOrDescribe <- ShowRule / DescribeRule
@@ -1699,8 +1720,9 @@ UnpivotTargetList <- Parens(TargetList)
 
 Lateral <- 'LATERAL'
 
-BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / UnqualifiedBaseTableName
+BaseTableName <- QualifiedTableName / UnqualifiedBaseTableName
 UnqualifiedBaseTableName <- TableName
+QualifiedTableName <- CatalogReservedSchemaTable / SchemaReservedTable
 SchemaReservedTable <- SchemaQualification ReservedTableName
 CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
 

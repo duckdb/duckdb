@@ -134,10 +134,12 @@ QueryNode:
   type: "unique_ptr<QueryNode>"
   by_value: true
   rules:
-    - ShowSelect
+    - ShowDeprecatedSelect
+    - DescribeSelect
     - ShowTables
     - ShowAllTables
-    - ShowQualifiedName
+    - ShowByName
+    - DescribeByName
 
 SelectNode:
   type: "unique_ptr<SelectNode>"
@@ -575,6 +577,7 @@ BaseTableRef:
     - UnqualifiedBaseTableName
     - SchemaReservedTable
     - CatalogReservedSchemaTable
+    - QualifiedTableName
     - TargetOptAlias
     - InsertTarget
 
@@ -1306,8 +1309,8 @@ ShowType:
   type: "ShowType"
   by_value: false
   rules:
-    - ShowOrDescribeOrSummarize
     - ShowOrDescribe
+    - DescribeOrSummarize
     - Summarize
     - SummarizeRule
     - ShowRule
@@ -1448,6 +1451,9 @@ DescribeTarget:
     - DescribeTarget
     - DescribeBaseTableName
     - DescribeStringLiteral
+    - ShowTarget
+    - ShowDeprecatedQualifiedTableName
+    - ShowSettingName
 
 OnConflictExpressionTarget:
   type: "OnConflictExpressionTarget"
@@ -1758,6 +1764,9 @@ packrat_memoized_rules:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
+  # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
+  - ShowSpecialForm
   - PivotStatement
   - UnpivotStatement
   - Program

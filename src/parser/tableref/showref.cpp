@@ -8,6 +8,17 @@ ShowRef::ShowRef() : TableRef(TableReferenceType::SHOW_REF), show_type(ShowType:
 
 string ShowRef::ToString() const {
 	string result;
+	if (show_type == ShowType::SHOW) {
+		result += "SHOW ";
+		if (!GetTableName().empty()) {
+			// "SHOW name" / "SHOW schema.table" keeps a describe fallback query, but its canonical form is the name
+			result += GetTableName().GetIdentifierName();
+		} else if (query) {
+			// "SHOW (SELECT ...)"
+			result += "(" + query->ToString() + ")";
+		}
+		return result;
+	}
 	if (show_type == ShowType::SUMMARY) {
 		result += "SUMMARIZE ";
 	} else if (show_type == ShowType::SHOW_FROM) {
