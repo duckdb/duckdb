@@ -14,6 +14,8 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
+#include <optional>
+
 namespace duckdb {
 class ClientContext;
 
