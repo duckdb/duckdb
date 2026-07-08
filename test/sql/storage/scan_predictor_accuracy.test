@@ -1,9 +1,10 @@
 # name: test/sql/storage/scan_predictor_accuracy.test
 # description: Verify ScanSizePredictor engages on the sub-scan path (via logging).
+# group: [storage]
+
 #   avg_overshoot_ratio / first_batch_ratio are only asserted to be present (>= 0),
 #   not bound-checked: their exact values are workload- and scheduling-dependent.
 #   The per-comment "Acceptable range" notes below are historical, not enforced.
-# group: [storage]
 
 require noforcestorage
 

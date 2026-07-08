@@ -16,9 +16,9 @@ using namespace duckdb;
 
 namespace {
 
-constexpr idx_t BATCH_ROWS = 4096;    // delta rows appended before flush
-constexpr idx_t BLOB_SIZE = 50000;    // ~50KB per row -> one 2048-row vector is ~100MB
-constexpr idx_t DISTINCT_PKS = 128;   // many row versions per key -> tiny aggregate output
+constexpr idx_t BATCH_ROWS = 4096;  // delta rows appended before flush
+constexpr idx_t BLOB_SIZE = 50000;  // ~50KB per row -> one 2048-row vector is ~100MB
+constexpr idx_t DISTINCT_PKS = 128; // many row versions per key -> tiny aggregate output
 
 // #alibaba_rds_delete_flag == 0 means the latest version is a live row (kept by the INSERT)
 const char *DELTA_TMP_DDL = "CREATE TABLE delta_tmp("
@@ -27,19 +27,21 @@ const char *DELTA_TMP_DDL = "CREATE TABLE delta_tmp("
                             "\"#alibaba_rds_delete_flag\" INTEGER)";
 
 // mirrors DeltaAppender::generateQuery(delete_flag=true): dedup keys, then delete matching rows
-const char *DELETE_SQL = "DELETE FROM t WHERE (id) IN ("
-                         "SELECT UNNEST(r) FROM ("
-                         "SELECT LAST(STRUCT_PACK(id) ORDER BY \"#alibaba_rds_row_no\") AS r, "
-                         "LAST(\"#alibaba_rds_delete_flag\" ORDER BY \"#alibaba_rds_row_no\") AS \"#alibaba_rds_delete_flag\" "
-                         "FROM delta_tmp GROUP BY id))";
+const char *DELETE_SQL =
+    "DELETE FROM t WHERE (id) IN ("
+    "SELECT UNNEST(r) FROM ("
+    "SELECT LAST(STRUCT_PACK(id) ORDER BY \"#alibaba_rds_row_no\") AS r, "
+    "LAST(\"#alibaba_rds_delete_flag\" ORDER BY \"#alibaba_rds_row_no\") AS \"#alibaba_rds_delete_flag\" "
+    "FROM delta_tmp GROUP BY id))";
 
 // mirrors DeltaAppender::generateQuery(delete_flag=false): dedup keys, insert the latest live version
-const char *INSERT_SQL = "INSERT INTO t "
-                         "SELECT UNNEST(r) FROM ("
-                         "SELECT LAST(STRUCT_PACK(id, payload) ORDER BY \"#alibaba_rds_row_no\") AS r, "
-                         "LAST(\"#alibaba_rds_delete_flag\" ORDER BY \"#alibaba_rds_row_no\") AS \"#alibaba_rds_delete_flag\" "
-                         "FROM delta_tmp GROUP BY id) "
-                         "WHERE \"#alibaba_rds_delete_flag\" = 0";
+const char *INSERT_SQL =
+    "INSERT INTO t "
+    "SELECT UNNEST(r) FROM ("
+    "SELECT LAST(STRUCT_PACK(id, payload) ORDER BY \"#alibaba_rds_row_no\") AS r, "
+    "LAST(\"#alibaba_rds_delete_flag\" ORDER BY \"#alibaba_rds_row_no\") AS \"#alibaba_rds_delete_flag\" "
+    "FROM delta_tmp GROUP BY id) "
+    "WHERE \"#alibaba_rds_delete_flag\" = 0";
 
 // Append the delta batch through the real Appender and Flush() it, mirroring m_appender->Flush().
 void AppendDeltaBatch(Connection &con) {
