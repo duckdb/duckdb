@@ -1,0 +1,20 @@
+# name: test/sql/peg_parser/expression_depth_limit.test
+# description: Test max expression depth limit in the PEG parser matcher
+# group: [peg_parser]
+
+statement ok
+SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
+
+statement ok
+SET max_expression_depth TO 7;
+
+statement error
+SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
+----
+Max expression depth limit of 7 exceeded
+
+statement ok
+SET max_expression_depth TO 1000;
+
+statement ok
+SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));

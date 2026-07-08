@@ -22,8 +22,27 @@
 
 namespace duckdb {
 
+struct MatchDepthGuard {
+	explicit MatchDepthGuard(MatchState &state_p) : state(state_p) {
+		if (state.match_depth >= state.max_expression_depth) {
+			throw ParserException(
+			    "Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+			    "increase the maximum expression depth.",
+			    state.max_expression_depth);
+		}
+		state.match_depth++;
+	}
+
+	~MatchDepthGuard() {
+		state.match_depth--;
+	}
+
+	MatchState &state;
+};
+
 optional_ptr<ParseResult> Matcher::MatchParseResult(MatchState &state) const {
-	if (state.packrat_cache) {
+	MatchDepthGuard guard(state);
+	if (state.packrat_cache && IsPackratMemoized()) {
 		return state.packrat_cache->Match(*this, state);
 	}
 	return MatchParseResultInternal(state);
