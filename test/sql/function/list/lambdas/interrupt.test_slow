@@ -1,0 +1,52 @@
+# name: test/sql/function/list/lambdas/interrupt.test_slow
+# description: Test that lambda functions respect query interruption via max_execution_time
+# group: [lambdas]
+
+# list_transform on 1M-element list must be interruptible.
+# Before the fix, ExecuteLambda had no InterruptCheck() calls, so the timeout
+# fired but was not observed until the entire lambda loop finished (~700ms).
+
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT list_transform(list(i), x -> x * 2 + (x % 3))
+FROM range(1000000) t(i)
+----
+Query exceeded maximum execution time
+
+statement ok
+RESET max_execution_time
+
+# list_filter on a large list must also be interruptible (same ExecuteLambda path).
+
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT list_filter(list(i), x -> x % 7 <> 0)
+FROM range(1000000) t(i)
+----
+Query exceeded maximum execution time
+
+statement ok
+RESET max_execution_time
+
+# list_reduce has a separate loop (list_reduce.cpp); verify it is also interruptible.
+
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT list_reduce(list(i), (a, b) -> a + b + (b % 3))
+FROM range(1000000) t(i)
+----
+Query exceeded maximum execution time
+
+statement ok
+RESET max_execution_time
+
+# Sanity check: a short list completes without error after reset.
+
+statement ok
+SELECT list_transform(range(100), x -> x * 2)
