@@ -1228,6 +1228,209 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	adbc_error.release(&adbc_error);
 }
 
+// Reads entry `idx` of a utf8 ArrowArray (buffers: validity, offsets, data).
+static string GetStatisticsString(ArrowArray *array, idx_t idx) {
+	auto offsets = static_cast<const int32_t *>(array->buffers[1]);
+	auto data = static_cast<const char *>(array->buffers[2]);
+	return string(data + offsets[idx], static_cast<size_t>(offsets[idx + 1] - offsets[idx]));
+}
+
+TEST_CASE("Test ADBC ConnectionGetStatisticNames", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db("test_statistic_names");
+
+	ArrowArrayStream stream;
+	stream.release = nullptr;
+
+	// ==== UNHAPPY PATH ====
+	AdbcConnection bogus_connection;
+	bogus_connection.private_data = nullptr;
+	bogus_connection.private_driver = nullptr;
+	REQUIRE(AdbcConnectionGetStatisticNames(&bogus_connection, &stream, &db.adbc_error) != ADBC_STATUS_OK);
+	REQUIRE(AdbcConnectionGetStatisticNames(&db.adbc_connection, nullptr, &db.adbc_error) != ADBC_STATUS_OK);
+	if (db.adbc_error.release) {
+		db.adbc_error.release(&db.adbc_error);
+	}
+
+	// ==== HAPPY PATH ====
+	// DuckDB has no driver-specific statistics, so the result is always empty.
+	REQUIRE(SUCCESS(AdbcConnectionGetStatisticNames(&db.adbc_connection, &stream, &db.adbc_error)));
+	REQUIRE(stream.release);
+
+	ArrowSchema schema;
+	schema.release = nullptr;
+	REQUIRE(stream.get_schema(&stream, &schema) == 0);
+	REQUIRE(string(schema.format) == "+s");
+	REQUIRE(schema.n_children == 2);
+	REQUIRE(string(schema.children[0]->name) == "statistic_name");
+	REQUIRE(string(schema.children[0]->format) == "u");
+	REQUIRE((schema.children[0]->flags & ARROW_FLAG_NULLABLE) == 0);
+	REQUIRE(string(schema.children[1]->name) == "statistic_key");
+	REQUIRE(string(schema.children[1]->format) == "s");
+	REQUIRE((schema.children[1]->flags & ARROW_FLAG_NULLABLE) == 0);
+	schema.release(&schema);
+
+	ArrowArray batch;
+	batch.release = nullptr;
+	REQUIRE(stream.get_next(&stream, &batch) == 0);
+	REQUIRE(batch.release);
+	REQUIRE(batch.length == 0);
+	REQUIRE(batch.n_children == 2);
+	batch.release(&batch);
+	stream.release(&stream);
+}
+
+TEST_CASE("Test ADBC ConnectionGetStatistics", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db("test_get_statistics");
+
+	auto res = db.Query("CREATE TABLE stats_table_one (i INTEGER)");
+	REQUIRE(!res->HasError());
+	res = db.Query("INSERT INTO stats_table_one SELECT * FROM range(3)");
+	REQUIRE(!res->HasError());
+	res = db.Query("CREATE TABLE stats_table_two (i INTEGER)");
+	REQUIRE(!res->HasError());
+	res = db.Query("INSERT INTO stats_table_two SELECT * FROM range(5)");
+	REQUIRE(!res->HasError());
+	// Views have no statistics and must not appear in the result.
+	res = db.Query("CREATE VIEW stats_view_one AS SELECT * FROM stats_table_one");
+	REQUIRE(!res->HasError());
+
+	ArrowArrayStream stream;
+	stream.release = nullptr;
+
+	// ==== UNHAPPY PATH ====
+	AdbcConnection bogus_connection;
+	bogus_connection.private_data = nullptr;
+	bogus_connection.private_driver = nullptr;
+	REQUIRE(AdbcConnectionGetStatistics(&bogus_connection, nullptr, nullptr, nullptr, 1, &stream, &db.adbc_error) !=
+	        ADBC_STATUS_OK);
+	REQUIRE(AdbcConnectionGetStatistics(&db.adbc_connection, nullptr, nullptr, nullptr, 1, nullptr, &db.adbc_error) !=
+	        ADBC_STATUS_OK);
+	if (db.adbc_error.release) {
+		db.adbc_error.release(&db.adbc_error);
+	}
+
+	// ==== HAPPY PATH ====
+	// The statistic_value column is a dense union, which DuckDB's arrow_scan
+	// cannot consume; the buffers are validated directly instead.
+	REQUIRE(SUCCESS(AdbcConnectionGetStatistics(&db.adbc_connection, nullptr, nullptr, "stats_table_%", 1, &stream,
+	                                            &db.adbc_error)));
+	REQUIRE(stream.release);
+
+	ArrowSchema schema;
+	schema.release = nullptr;
+	REQUIRE(stream.get_schema(&stream, &schema) == 0);
+	REQUIRE(string(schema.format) == "+s");
+	REQUIRE(schema.n_children == 2);
+	REQUIRE(string(schema.children[0]->name) == "catalog_name");
+	REQUIRE(string(schema.children[1]->name) == "catalog_db_schemas");
+	REQUIRE((schema.children[1]->flags & ARROW_FLAG_NULLABLE) == 0);
+	auto db_schema_schema = schema.children[1]->children[0];
+	REQUIRE(string(db_schema_schema->children[0]->name) == "db_schema_name");
+	REQUIRE(string(db_schema_schema->children[1]->name) == "db_schema_statistics");
+	auto statistics_schema = db_schema_schema->children[1]->children[0];
+	REQUIRE(statistics_schema->n_children == 5);
+	REQUIRE(string(statistics_schema->children[0]->name) == "table_name");
+	REQUIRE((statistics_schema->children[0]->flags & ARROW_FLAG_NULLABLE) == 0);
+	REQUIRE(string(statistics_schema->children[1]->name) == "column_name");
+	REQUIRE(string(statistics_schema->children[2]->name) == "statistic_key");
+	REQUIRE(string(statistics_schema->children[3]->name) == "statistic_value");
+	// The value column must be a *dense* union per the ADBC spec.
+	REQUIRE(string(statistics_schema->children[3]->format) == "+ud:0,1,2,3");
+	REQUIRE(statistics_schema->children[3]->n_children == 4);
+	REQUIRE(string(statistics_schema->children[3]->children[1]->name) == "uint64");
+	REQUIRE(string(statistics_schema->children[3]->children[2]->name) == "float64");
+	REQUIRE(string(statistics_schema->children[4]->name) == "statistic_is_approximate");
+	schema.release(&schema);
+
+	ArrowArray batch;
+	batch.release = nullptr;
+	REQUIRE(stream.get_next(&stream, &batch) == 0);
+	REQUIRE(batch.release);
+
+	// One catalog, named after the database file.
+	REQUIRE(batch.length == 1);
+	REQUIRE(GetStatisticsString(batch.children[0], 0) == "test_get_statistics");
+
+	// One schema in the catalog: "main".
+	auto schemas_list = batch.children[1];
+	auto schema_offsets = static_cast<const int32_t *>(schemas_list->buffers[1]);
+	REQUIRE(schema_offsets[0] == 0);
+	REQUIRE(schema_offsets[1] == 1);
+	auto schema_struct = schemas_list->children[0];
+	REQUIRE(schema_struct->length == 1);
+	REQUIRE(GetStatisticsString(schema_struct->children[0], 0) == "main");
+
+	// Two statistics (one ROW_COUNT per table), view excluded.
+	auto stats_list = schema_struct->children[1];
+	auto stats_offsets = static_cast<const int32_t *>(stats_list->buffers[1]);
+	REQUIRE(stats_offsets[0] == 0);
+	REQUIRE(stats_offsets[1] == 2);
+	auto stats_struct = stats_list->children[0];
+	REQUIRE(stats_struct->length == 2);
+	REQUIRE(GetStatisticsString(stats_struct->children[0], 0) == "stats_table_one");
+	REQUIRE(GetStatisticsString(stats_struct->children[0], 1) == "stats_table_two");
+
+	// column_name is NULL (table-level statistics).
+	auto column_name_array = stats_struct->children[1];
+	REQUIRE(column_name_array->null_count == 2);
+	auto column_name_validity = static_cast<const uint8_t *>(column_name_array->buffers[0]);
+	REQUIRE((column_name_validity[0] & 0x3) == 0);
+
+	auto keys = static_cast<const int16_t *>(stats_struct->children[2]->buffers[1]);
+	REQUIRE(keys[0] == ADBC_STATISTIC_ROW_COUNT_KEY);
+	REQUIRE(keys[1] == ADBC_STATISTIC_ROW_COUNT_KEY);
+
+	// Approximate row counts are stored in the float64 union member (type id 2)
+	// per the ADBC spec for ROW_COUNT.
+	auto value_array = stats_struct->children[3];
+	auto type_ids = static_cast<const int8_t *>(value_array->buffers[0]);
+	auto value_offsets = static_cast<const int32_t *>(value_array->buffers[1]);
+	REQUIRE(type_ids[0] == 2);
+	REQUIRE(type_ids[1] == 2);
+	REQUIRE(value_offsets[0] == 0);
+	REQUIRE(value_offsets[1] == 1);
+	auto row_counts = static_cast<const double *>(value_array->children[2]->buffers[1]);
+	REQUIRE(row_counts[0] == 3.0);
+	REQUIRE(row_counts[1] == 5.0);
+
+	// Estimates are always flagged as approximate.
+	auto approximate_bits = static_cast<const uint8_t *>(stats_struct->children[4]->buffers[1]);
+	REQUIRE((approximate_bits[0] & 0x3) == 0x3);
+
+	batch.release(&batch);
+	stream.release(&stream);
+
+	// ==== FILTERING ====
+	// An exact table name matches a single table.
+	stream.release = nullptr;
+	REQUIRE(SUCCESS(AdbcConnectionGetStatistics(&db.adbc_connection, nullptr, "main", "stats_table_one", 0, &stream,
+	                                            &db.adbc_error)));
+	REQUIRE(stream.get_next(&stream, &batch) == 0);
+	REQUIRE(batch.length == 1);
+	{
+		auto stats = batch.children[1]->children[0]->children[1]->children[0];
+		REQUIRE(stats->length == 1);
+		REQUIRE(GetStatisticsString(stats->children[0], 0) == "stats_table_one");
+	}
+	batch.release(&batch);
+	stream.release(&stream);
+
+	// A pattern with no matches produces an empty result.
+	stream.release = nullptr;
+	REQUIRE(SUCCESS(AdbcConnectionGetStatistics(&db.adbc_connection, nullptr, nullptr, "no_such_table_%", 1, &stream,
+	                                            &db.adbc_error)));
+	REQUIRE(stream.get_next(&stream, &batch) == 0);
+	REQUIRE(batch.length == 0);
+	batch.release(&batch);
+	stream.release(&stream);
+}
+
 TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
