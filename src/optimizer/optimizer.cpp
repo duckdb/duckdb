@@ -214,16 +214,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = filter_pullup.Rewrite(std::move(plan));
 	});
 
-	/* Push down type casts in SELECT e.g. SELECT num::UHUGEINT to file readers.
-	 * This pass must run before FILTER_PUSHDOWN. After filter pushdown
-	 * get.table_filters are populated because WHERE clauses may have been
-	 * pushed. This makes type pushdown much more complex.
-	 */
-	RunOptimizer(OptimizerType::TYPE_PUSHDOWN, [&] {
-		TypePushdown type_pushdown(context);
-		plan = type_pushdown.Optimize(std::move(plan));
-	});
-
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
 		FilterPushdown filter_pushdown(*this);
@@ -439,6 +429,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::ROW_NUMBER_REWRITER, [&]() {
 		RowNumberRewriter window_rewriter;
 		plan = window_rewriter.Optimize(std::move(plan));
+	});
+
+	// Push down type casts in SELECT e.g. SELECT num::UHUGEINT to file readers.
+	RunOptimizer(OptimizerType::TYPE_PUSHDOWN, [&] {
+		TypePushdown type_pushdown(context);
+		plan = type_pushdown.Optimize(std::move(plan));
 	});
 }
 
