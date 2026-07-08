@@ -163,7 +163,8 @@ public:
 	                                         ExpressionExecutor &default_executor);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
-	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
+	                                         vector<StorageIndex> bound_columns, Expression &cast_expr,
+	                                         TransactionData transaction);
 	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
 
 	void SetStats(TableStatistics &new_stats);
