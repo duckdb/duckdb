@@ -2,12 +2,10 @@
 #include "duckdb/parallel/task_notifier.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
-#include <thread>
-
 namespace duckdb {
 
 TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p)
-    : scheduler(scheduler), type(type_p), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
+    : scheduler(scheduler), type(type_p), token(scheduler.CreateProducer()) {
 }
 
 TaskExecutor::TaskExecutor(ClientContext &context_p, TaskSchedulerType type_p)
@@ -31,31 +29,47 @@ void TaskExecutor::ThrowError() {
 }
 
 void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
-	++total_tasks;
+	{
+		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
+		++total_tasks;
+	}
 	try {
 		scheduler.ScheduleTask(*token, std::move(task), type);
 	} catch (...) {
+		const annotated_lock_guard<annotated_mutex> lock(token->producer_lock);
+		// We failed to schedule the task, so we decrement the total number of tasks, instead of incrementing completed
+		// tasks count.
 		--total_tasks;
+		token->producer_cv.notify_one();
 		throw;
 	}
 }
 void TaskExecutor::FinishTask() {
+	const annotated_lock_guard<annotated_mutex> lk(token->producer_lock);
 	++completed_tasks;
+	token->producer_cv.notify_one();
 }
 
 void TaskExecutor::WorkOnTasks() {
 	// repeatedly execute tasks until we are finished
 	shared_ptr<Task> task_from_producer;
 	// wait for all active tasks to finish
-	while (completed_tasks != total_tasks) {
-		if (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
-			const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
-			std::ignore = res;
-			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
-			task_from_producer.reset();
-		} else {
-			std::this_thread::yield();
+	while (true) {
+		{
+			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
+			if (completed_tasks == total_tasks) {
+				break;
+			}
+			if (!scheduler.GetTaskFromProducerLocked(*token, task_from_producer)) {
+				token->producer_cv.wait(lk);
+				continue;
+			}
 		}
+
+		const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
+		std::ignore = res;
+		D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
+		task_from_producer.reset();
 	}
 
 	// check if we ran into any errors while checkpointing
