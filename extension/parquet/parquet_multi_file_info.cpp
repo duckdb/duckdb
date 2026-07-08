@@ -379,6 +379,20 @@ static void ParquetScanGetMetrics(TableFunctionGetMetricsInput &input) {
 	input.operator_metrics.total_row_groups_to_scan = parquet_gstate.total_row_groups_to_scan.load();
 }
 
+static bool ParquetEncodingSupportsBytelengthPushdown(const FileMetaData &metadata, idx_t idx) {
+	for (const auto &group : metadata.row_groups) {
+		if (idx >= group.columns.size()) {
+			continue;
+		}
+		for (const Encoding::type type : group.columns[idx].meta_data.encodings) {
+			if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 static bool ParquetProjectionExpressionPushdown(ClientContext &context,
                                                 const TableFunctionProjectionExpressionInput &input) {
 	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
@@ -390,13 +404,14 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 	}
 
 	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
-	// Don't do pushdown on custom schema users like Ducklake
-	if (!bind_data.reader_bind.schema.empty()) {
+	// Don't do pushdown on custom schema users like Ducklake.
+	// We may support it and UNION readers in the future
+	if (!bind_data.reader_bind.schema.empty() || !bind_data.union_readers.empty()) {
 		return false;
 	}
 
 	const idx_t idx = input.proj_index;
-	// We run this optimizer after FILTER_PUSHDOWN. If there was a filter
+	// We run this optimizer after FILTER_PUSHDOWN. If a filter was
 	// pushed into get.table_filters, we don't see it here and can't
 	// proceed with pushdown
 	const auto &col_ids = input.get.GetColumnIds();
@@ -410,42 +425,48 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 		break;
 	}
 
-	if (bind_data.initial_reader) {
-		const FileMetaData *metadata = bind_data.initial_reader->Cast<ParquetReader>().GetFileMetadata();
-		for (const auto &group : metadata->row_groups) {
-			if (idx >= group.columns.size()) {
-				continue;
-			}
-			for (const Encoding::type type : group.columns[idx].meta_data.encodings) {
-				if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
-					return false;
-				}
+	auto &parquet_bind_data = bind_data.bind_data->Cast<ParquetReadBindData>();
+	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
+		if (bind_data.initial_reader && !ParquetEncodingSupportsBytelengthPushdown(
+		                                    *bind_data.initial_reader->Cast<ParquetReader>().GetFileMetadata(), idx)) {
+			return false;
+		}
+	} else {
+		const auto &caches = parquet_bind_data.TryLoadCaches(bind_data, context);
+		if (caches.empty()) {
+			return false;
+		}
+		for (const auto &cache : caches) {
+			if (!ParquetEncodingSupportsBytelengthPushdown(*cache.metadata->metadata, idx)) {
+				return false;
 			}
 		}
 	}
 
-	if (auto &schema = bind_data.reader_bind.schema; !schema.empty()) {
-		schema[idx].type = LogicalType::BIGINT;
-	}
-	bind_data.types[idx] = LogicalType::BIGINT;
-	bind_data.columns[idx].type = LogicalType::BIGINT;
+	const LogicalType type = LogicalType::BIGINT;
 
-	auto &parquet_bind_data = bind_data.bind_data->Cast<ParquetReadBindData>();
-	parquet_bind_data.projection_expressions[idx] = {ParquetReaderProjectionExpressionType::BYTE_LENGTH,
-	                                                 LogicalType::BIGINT};
+	if (auto &schema = bind_data.reader_bind.schema; !schema.empty()) {
+		schema[idx].type = type;
+	}
+	bind_data.types[idx] = type;
+	bind_data.columns[idx].type = type;
+
+	const ParquetReaderProjectionExpression expression {ParquetReaderProjectionExpressionType::BYTE_LENGTH, type};
+
+	parquet_bind_data.projection_expressions[idx] = expression;
 
 	if (!bind_data.initial_reader) {
 		return true;
 	}
 
-	// initial_reader was created before this optimizer pass, update its types.
+	// initial reader was created before scalar function pushdown optimizer pass, update its types.
 	auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
-	reader.projection_expressions[idx] = {ParquetReaderProjectionExpressionType::BYTE_LENGTH, LogicalType::BIGINT};
+	reader.projection_expressions[idx] = expression;
 	if (idx < reader.columns.size()) {
-		reader.columns[idx].type = LogicalType::BIGINT;
+		reader.columns[idx].type = type;
 	}
 	if (idx < reader.root_schema->children.size()) {
-		reader.root_schema->children[idx].type = LogicalType::BIGINT;
+		reader.root_schema->children[idx].type = type;
 	}
 	return true;
 }
