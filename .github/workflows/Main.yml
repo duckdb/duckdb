@@ -743,7 +743,8 @@ jobs:
       run: |
         python3 scripts/ci/check_staged_extensions.py \
           --git-sha "${{ needs.prepare.outputs.git_sha }}" \
-          --version "${{ needs.prepare.outputs.effective_git_describe }}"
+          --version "${{ needs.prepare.outputs.effective_git_describe }}" \
+          --extensions "httpfs,json,parquet,ducklake,iceberg,icu"
 
  linux-musl-release-cli:
     name: Linux CLI (${{ matrix.config.arch }}-musl)

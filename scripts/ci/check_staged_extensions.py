@@ -15,6 +15,7 @@ from pathlib import Path
 DEFAULT_ASSET_BASE_URL = "https://duckdb-staging.duckdb.org"
 DOWNLOAD_RETRIES = 60
 DOWNLOAD_RETRY_SECONDS = 30
+EXTENSION_SEPARATOR_TRANSLATION = str.maketrans({",": " ", ";": " "})
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,6 +23,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--git-sha", required=True, help="Full git SHA used for the staged build.")
     parser.add_argument("--version", default="", help="Optional staged version directory.")
     parser.add_argument("--asset-base-url", default=DEFAULT_ASSET_BASE_URL)
+    parser.add_argument(
+        "--extensions",
+        default="",
+        help="Optional comma, semicolon or whitespace-separated extension allowlist.",
+    )
     return parser.parse_args()
 
 
@@ -100,6 +106,21 @@ def query_extensions(duckdb: Path, home: Path, extension_directory: Path) -> lis
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
+def parse_extensions(extensions: str) -> list[str]:
+    return [extension for extension in extensions.translate(EXTENSION_SEPARATOR_TRANSLATION).split() if extension]
+
+
+def filter_extensions(available_extensions: list[str], requested_extensions: list[str]) -> list[str]:
+    if not requested_extensions:
+        return available_extensions
+
+    available = set(available_extensions)
+    missing_extensions = [extension for extension in requested_extensions if extension not in available]
+    if missing_extensions:
+        raise RuntimeError(f"requested extensions not reported by duckdb_extensions(): {', '.join(missing_extensions)}")
+    return requested_extensions
+
+
 def print_cli_context(duckdb: Path, home: Path, extension_directory: Path) -> None:
     result = run_duckdb(duckdb, "PRAGMA version; PRAGMA platform;", home, extension_directory)
     print_completed_process(result)
@@ -147,6 +168,7 @@ def main() -> int:
         extensions = query_extensions(duckdb, shared_home, shared_extension_directory)
         if not extensions:
             raise RuntimeError("duckdb_extensions() returned no extensions")
+        extensions = filter_extensions(extensions, parse_extensions(args.extensions))
 
         failed: list[str] = []
         for extension in extensions:
