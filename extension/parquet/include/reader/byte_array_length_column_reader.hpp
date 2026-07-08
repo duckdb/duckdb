@@ -32,6 +32,10 @@ public:
 
 	idx_t fixed_width_string_length;
 
+	unique_ptr<BaseStatistics> Stats(idx_t, const vector<ColumnChunk> &) override {
+		return {};
+	}
+
 protected:
 	void Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, idx_t result_offset,
 	           Vector &result) override {
