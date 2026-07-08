@@ -1,1 +1,0 @@
-COPY (SELECT id, v FROM read_csv('/tmp/multidim.csv', columns={'id':'BIGINT','v':'UUID[]'}, header=true, delim=',', quote='"', escape='"', nullstr=E'\\N')) TO '/tmp/out.parquet' (format 'parquet')
