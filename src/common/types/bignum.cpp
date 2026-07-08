@@ -203,9 +203,12 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 			return false;
 		}
 
+		// Now cur_pos points to the first digit after the decimal point.
+		bool has_digit_after_decimal = false;
 		auto decimal_start = cur_pos;
 		while (cur_pos < end_pos) {
 			if (StringUtil::CharacterIsDigit(int_value_char[cur_pos])) {
+				has_digit_after_decimal = true;
 				cur_pos++;
 			} else {
 				// By now we can only have numbers, otherwise this is invalid.
@@ -213,6 +216,19 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 			}
 		}
 		should_round_up = ShouldRoundDecimalDigits(int_value_char, decimal_start, end_pos);
+		// No integer digits before the decimal (e.g. ".5", "0.5" after leading zero trim, "0.").
+		if (possible_end == start_pos) {
+			if (!at_least_one_zero && !has_digit_after_decimal) {
+				return false;
+			}
+			end_pos = possible_end;
+			if (should_round_up) {
+				is_zero = false;
+				return true;
+			}
+			is_zero = true;
+			return true;
+		}
 		end_pos = possible_end;
 	}
 	return true;

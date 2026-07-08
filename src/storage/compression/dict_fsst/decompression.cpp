@@ -85,8 +85,10 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	case DictFSSTMode::DICT_FSST: {
 		decoder = new duckdb_fsst_decoder_t;
 		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), baseptr + symbol_table_dest);
-		(void)(ret);
-		D_ASSERT(ret != 0); // FIXME: the old code set the decoder to nullptr instead, why???
+		if (ret == 0) {
+			throw IOException("Failed to scan DICT_FSST string segment: invalid FSST symbol table. Database file "
+			                  "appears to be corrupted.");
+		}
 		break;
 	}
 	default:
