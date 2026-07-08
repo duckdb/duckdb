@@ -37,6 +37,24 @@ static bool IsPositiveInterval(const interval_t &interval) {
 	return interval.months > 0 || interval.days > 0 || interval.micros > 0;
 }
 
+//! Parse the RETAIN version count: a positive integer (a feature retains at least one version).
+static int64_t ParseRetainVersions(const string &number) {
+	idx_t start = (!number.empty() && number[0] == '+') ? 1 : 0;
+	if (start >= number.size() || number.find_first_not_of("0123456789", start) != string::npos) {
+		throw ParserException("RETAIN must be a positive integer");
+	}
+	int64_t result;
+	try {
+		result = std::stoll(number);
+	} catch (std::exception &) {
+		throw ParserException("RETAIN value is out of range");
+	}
+	if (result < 1) {
+		throw ParserException("RETAIN must be at least 1");
+	}
+	return result;
+}
+
 static interval_t ParseIntervalString(const string &interval_str, const string &context) {
 	interval_t result {0, 0, 0};
 	string error_message;
@@ -159,12 +177,12 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 		schedule_interval = transformer.Transform<interval_t>(schedule_opt.GetResult());
 		has_schedule = true;
 	}
-	// index 11: FeatureRetainClause? (default: 1)
+	// index 11: FeatureRetainClause? (default: 1). Must be a positive integer (a feature retains >= 1 version).
 	int64_t retain_versions = 1;
 	auto &retain_opt = list_pr.Child<OptionalParseResult>(11);
 	if (retain_opt.HasResult()) {
 		auto &clause = retain_opt.GetResult().Cast<ListParseResult>();
-		retain_versions = std::stoll(clause.Child<NumberParseResult>(1).number);
+		retain_versions = ParseRetainVersions(clause.Child<NumberParseResult>(1).number);
 	}
 	// index 12: 'AS' keyword
 	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(13));

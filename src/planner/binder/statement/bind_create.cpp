@@ -93,6 +93,48 @@ static string FeatureTimestampDisplay(const CreateFeatureInfo &info) {
 	return info.timestamp_table.empty() ? info.timestamp_column : info.timestamp_table + "." + info.timestamp_column;
 }
 
+//! Verify the (possibly-qualified) TIMESTAMP reference resolves to a temporal column within the feature
+//! query's FROM scope. Binds a minimal probe "SELECT <ts> FROM <query from>" and checks the column type
+//! directly, so an implicit VARCHAR cast in the window predicate cannot disguise a non-temporal column.
+static void ValidateFeatureTimestamp(ClientContext &context, Binder &parent, const SelectNode &select_node,
+                                     const CreateFeatureInfo &info) {
+	auto probe_node = select_node.Copy();
+	auto &probe = probe_node->Cast<SelectNode>();
+	// Reduce to a plain projection of just the timestamp column over the same FROM (CTEs are preserved).
+	probe.select_list.clear();
+	unique_ptr<ParsedExpression> ts_ref =
+	    info.timestamp_table.empty() ? make_uniq<ColumnRefExpression>(info.timestamp_column)
+	                                 : make_uniq<ColumnRefExpression>(info.timestamp_column, info.timestamp_table);
+	probe.select_list.push_back(std::move(ts_ref));
+	probe.where_clause.reset();
+	probe.groups.group_expressions.clear();
+	probe.groups.grouping_sets.clear();
+	probe.aggregate_handling = AggregateHandling::STANDARD_HANDLING;
+	probe.having.reset();
+	probe.qualify.reset();
+	probe.sample.reset();
+	probe.modifiers.clear();
+
+	auto probe_stmt = make_uniq<SelectStatement>();
+	probe_stmt->node = std::move(probe_node);
+	auto binder = Binder::CreateBinder(context, &parent);
+	BoundStatement bound;
+	try {
+		bound = binder->Bind(static_cast<SQLStatement &>(*probe_stmt));
+	} catch (const std::exception &ex) {
+		ErrorData error(ex);
+		throw BinderException("TIMESTAMP column \"%s\" could not be resolved in the feature query: %s",
+		                      FeatureTimestampDisplay(info), error.RawMessage());
+	}
+	auto &ts_type = bound.types[0];
+	if (ts_type.id() != LogicalTypeId::TIMESTAMP && ts_type.id() != LogicalTypeId::TIMESTAMP_TZ &&
+	    ts_type.id() != LogicalTypeId::DATE && ts_type.id() != LogicalTypeId::TIMESTAMP_NS &&
+	    ts_type.id() != LogicalTypeId::TIMESTAMP_MS && ts_type.id() != LogicalTypeId::TIMESTAMP_SEC) {
+		throw BinderException("TIMESTAMP column \"%s\" must be a temporal type (TIMESTAMP, DATE), got %s",
+		                      FeatureTimestampDisplay(info), ts_type.ToString());
+	}
+}
+
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
@@ -803,6 +845,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::FEATURE_ENTRY: {
 		auto &feature_info = stmt.info->Cast<CreateFeatureInfo>();
 		auto &schema = BindCreateSchema(*stmt.info);
+		// The window filter and entity join are injected into a single SELECT node. Reject anything else (e.g.
+		// a UNION / set operation as the top-level query) with a clear error instead of an unchecked cast.
+		if (feature_info.query->node->type != QueryNodeType::SELECT_NODE) {
+			throw BinderException("CREATE FEATURE query must be a single SELECT statement (set operations such as "
+			                      "UNION are not supported at the top level)");
+		}
 		auto &select_node = feature_info.query->node->Cast<SelectNode>();
 
 		// The feature query may be an arbitrary SELECT (joins, filters, CTEs, window functions). It maps back
@@ -816,8 +864,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// otherwise the entity table's PRIMARY KEY; otherwise the entity-table columns the query also projects.
 		vector<string> entity_keys;
 		if (!feature_info.user_entity_keys.empty()) {
-			// Explicit keys: a keyed feature by declaration. Each must exist in the entity table and be projected.
+			// Explicit keys: a keyed feature by declaration. Each must exist in the entity table, be projected,
+			// and not be repeated.
 			for (auto &key : feature_info.user_entity_keys) {
+				if (FeatureColumnListContains(entity_keys, key)) {
+					throw BinderException("Duplicate entity key column \"%s\" in ENTITY clause", key);
+				}
 				if (!entity_table_entry.ColumnExists(key)) {
 					throw BinderException("Entity key column \"%s\" does not exist in entity table \"%s\"", key,
 					                      feature_info.entity_table);
@@ -825,8 +877,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				if (!FeatureColumnListContains(query_names, key)) {
 					throw BinderException("CREATE FEATURE query must project the entity key column \"%s\"", key);
 				}
+				entity_keys.push_back(key);
 			}
-			entity_keys = feature_info.user_entity_keys;
 		} else {
 			auto pk_columns = GetEntityPrimaryKeyColumns(entity_table_entry);
 			if (!pk_columns.empty()) {
@@ -858,6 +910,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		feature_info.entity_key_columns = entity_keys;
 		feature_info.entity_columns = entity_keys;
 
+		// Validate the TIMESTAMP column resolves to a temporal type (before building the snapshot, so the error
+		// points at the timestamp rather than a downstream bind failure).
+		ValidateFeatureTimestamp(context, *this, select_node, feature_info);
+
 		FeatureSnapshotParameters snapshot_parameters;
 		snapshot_parameters.entity_table = feature_info.entity_table;
 		snapshot_parameters.entity_columns = feature_info.entity_columns;
@@ -869,10 +925,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		snapshot_parameters.feature_ts = Timestamp::GetCurrentTimestamp();
 		auto snapshot_select = BuildFeatureSnapshotQuery(select_node, snapshot_parameters);
 
-		// Bind the snapshot. The injected window predicate forces the TIMESTAMP column to resolve to a temporal
-		// column, and a catalog lookup callback records every referenced table as a dependency so DROP TABLE on
-		// any of them blocks without CASCADE. Wrap bind failures (which, after the checks above, point at the
-		// TIMESTAMP column) in a targeted message.
+		// Bind the snapshot to capture the result schema. A catalog lookup callback records every referenced
+		// table as a dependency so DROP TABLE on any of them blocks without CASCADE. The FROM, entity keys and
+		// TIMESTAMP were already validated above, so a failure here is unexpected — wrap it generically.
 		auto query_binder = Binder::CreateBinder(context, this);
 		auto &feature_catalog = schema.ParentCatalog();
 		auto &feature_dependencies = feature_info.dependencies;
@@ -888,9 +943,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			query_obj = query_binder->Bind(*snapshot_select);
 		} catch (const std::exception &ex) {
 			ErrorData error(ex);
-			throw BinderException("CREATE FEATURE could not bind its query — ensure the TIMESTAMP column \"%s\" "
-			                      "resolves to a temporal column (TIMESTAMP, DATE) in the feature query: %s",
-			                      FeatureTimestampDisplay(feature_info), error.RawMessage());
+			throw BinderException("CREATE FEATURE could not bind its query: %s", error.RawMessage());
 		}
 		// The snapshot references the entity table via its LEFT JOIN; ensure it is recorded as a dependency.
 		feature_info.dependencies.AddDependency(entity_table_entry);

@@ -1,0 +1,189 @@
+# name: test/sql/feature/test_feature_errors.test
+# description: Exhaustive error handling for CREATE FEATURE — every malformed definition must produce a clean
+#              error, never a crash or a silently-wrong feature.
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE ents (id VARCHAR);
+
+statement ok
+INSERT INTO ents VALUES ('a'), ('b');
+
+statement ok
+CREATE TABLE evts (id VARCHAR, val INTEGER, ts TIMESTAMP, note VARCHAR);
+
+statement ok
+INSERT INTO evts VALUES ('a', 10, '2024-01-01 00:00:00', 'x'), ('b', 20, '2024-01-02 00:00:00', 'y');
+
+statement ok
+CREATE TABLE evts2 (id VARCHAR, ts TIMESTAMP);
+
+statement ok
+INSERT INTO evts2 VALUES ('a', '2024-01-01 00:00:00'), ('b', '2024-01-02 00:00:00');
+
+statement ok
+CREATE VIEW ents_view AS SELECT * FROM ents;
+
+# ============================================================
+# Parser-level errors
+# ============================================================
+
+# Missing ENTITY clause
+statement error
+CREATE FEATURE bad TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+syntax error
+
+# Missing TIMESTAMP clause
+statement error
+CREATE FEATURE bad ENTITY ents WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+syntax error
+
+# Missing AS / query
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+syntax error
+
+# WATERMARK was removed in favour of TTL — it no longer parses
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS WATERMARK 5 MINUTES RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+syntax error
+
+# WINDOW shorthand requires an explicit unit
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 3 RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+syntax error
+
+# RETAIN must be a positive integer
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS RETAIN 0 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+RETAIN must be at least 1
+
+# A negative count is rejected by the parser (NumberLiteral does not accept a leading '-' here)
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS RETAIN -1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+syntax error
+
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS RETAIN 1.5 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+RETAIN must be a positive integer
+
+# WINDOW interval must be positive
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 0 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+must be positive
+
+# A negative interval count is likewise a parser-level syntax error
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW -5 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+syntax error
+
+# TTL interval must be positive
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS TTL 0 SECONDS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+must be positive
+
+# Malformed INTERVAL string
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW INTERVAL 'not-an-interval' RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+Invalid interval
+
+# ============================================================
+# Binder-level errors
+# ============================================================
+
+# Non-existent entity table
+statement error
+CREATE FEATURE bad ENTITY nope TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+<REGEX>:.*nope.*does not exist.*
+
+# The entity table cannot be a VIEW
+statement error
+CREATE FEATURE bad ENTITY ents_view TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+<REGEX>:.*(not a table|does not exist|is not).*
+
+# Non-existent source table in the query
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM missing GROUP BY id);
+----
+Table with name missing does not exist
+
+# Non-existent timestamp column
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP nope WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+TIMESTAMP column "nope"
+
+# Non-temporal timestamp column
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP note WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+temporal
+
+# Explicit entity key column that does not exist in the entity table
+statement error
+CREATE FEATURE bad ENTITY ents (nope) TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+Entity key column "nope" does not exist
+
+# Explicit entity key column not projected by the query
+statement error
+CREATE FEATURE bad ENTITY ents (id) TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT SUM(val) AS total FROM evts);
+----
+must project the entity key column "id"
+
+# Duplicate explicit entity key columns
+statement error
+CREATE FEATURE bad ENTITY ents (id, id) TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+Duplicate entity key column "id"
+
+# A set operation (UNION) as the top-level query is rejected (not an unchecked cast)
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id UNION SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+single SELECT
+
+# The query must project at least one feature expression (not only the entity key)
+statement error
+CREATE FEATURE bad ENTITY ents (id) TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT id FROM evts GROUP BY id);
+----
+at least one feature expression
+
+# An unqualified TIMESTAMP that is ambiguous across a join is reported clearly...
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT e1.id AS id, SUM(e1.val) AS total FROM evts e1 JOIN evts2 e2 ON e1.id = e2.id GROUP BY e1.id);
+----
+TIMESTAMP column "ts"
+
+# ...and qualifying it resolves the ambiguity
+statement ok
+CREATE FEATURE ambiguous_ok ENTITY ents TIMESTAMP e1.ts WINDOW 7 DAYS RETAIN 1 AS (SELECT e1.id AS id, SUM(e1.val) AS total FROM evts e1 JOIN evts2 e2 ON e1.id = e2.id GROUP BY e1.id);
+
+statement ok
+DROP FEATURE ambiguous_ok;
+
+# ============================================================
+# No half-created feature leaks from any failed CREATE above
+# ============================================================
+query I
+SELECT COUNT(*) FROM duckdb_features();
+----
+0
