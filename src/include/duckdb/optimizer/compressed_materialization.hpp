@@ -145,6 +145,7 @@ private:
 	                                                     const bool &can_compress);
 	unique_ptr<CompressExpression> GetCompressExpression(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<CompressExpression> GetIntegralCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
+	unique_ptr<CompressExpression> GetDecimalCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<CompressExpression> GetStringCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<CompressExpression> GetGeometryCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<CompressExpression> GetVariantCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
@@ -160,6 +161,8 @@ private:
 	                                               const BaseStatistics &stats);
 	unique_ptr<Expression> GetIntegralDecompress(unique_ptr<Expression> input, const LogicalType &result_type,
 	                                             const BaseStatistics &stats);
+	unique_ptr<Expression> GetDecimalDecompress(unique_ptr<Expression> input, const LogicalType &result_type,
+	                                            const BaseStatistics &stats);
 	unique_ptr<Expression> GetStringDecompress(unique_ptr<Expression> input, const LogicalType &result_type,
 	                                           const BaseStatistics &stats);
 	unique_ptr<Expression> GetGeometryDecompress(unique_ptr<Expression> input, const LogicalType &result_type,

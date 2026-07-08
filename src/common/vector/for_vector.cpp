@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/for_vector.hpp"
+
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -71,16 +72,6 @@ LogicalType FORVector::StoredTypeToLogical(PhysicalType stored_type) {
 	}
 }
 
-Vector FORVector::CreateStoredView(const Vector &for_vec) {
-	D_ASSERT(for_vec.GetVectorType() == VectorType::FOR_VECTOR);
-	auto stored_data = const_cast<data_ptr_t>(FORVector::GetData(for_vec));
-	Vector stored_vec(StoredTypeToLogical(FORVector::GetStoredType(for_vec)), stored_data, for_vec.size());
-	stored_vec.BufferMutable().AddAuxiliaryData(make_uniq<VectorBufferHolder>(for_vec.GetBufferRef()));
-	stored_vec.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetValidity(stored_vec, FORVector::Validity(for_vec));
-	return stored_vec;
-}
-
 Vector FORVector::CreatePayloadView(PhysicalType stored_type, data_ptr_t payload, idx_t count) {
 	Vector payload_vec(StoredTypeToLogical(stored_type), payload, count);
 	payload_vec.SetVectorType(VectorType::FLAT_VECTOR);
@@ -128,6 +119,22 @@ void FORVector::WidenToFlat(const LogicalType &type, PhysicalType stored_type, c
                             data_ptr_t target, const SelectionVector &sel, idx_t count) {
 	FOR_SWITCH_LOGICAL(type.InternalType(), LOGICAL_T,
 	                   { WidenFORPayload<LOGICAL_T>(stored_type, source, target, sel, count); });
+}
+
+void FORVector::WidenInPlace(const LogicalType &type, VectorBuffer &buffer) {
+	D_ASSERT(buffer.GetVectorType() == VectorType::FOR_VECTOR);
+	auto data = buffer.GetData();
+	auto count = buffer.Size();
+	FOR_SWITCH_LOGICAL(type.InternalType(), LOGICAL_T, {
+		FOR_SWITCH_STORED(buffer.for_stored_type, STORED_T, {
+			auto src = reinterpret_cast<const STORED_T *>(data);
+			auto dst = reinterpret_cast<LOGICAL_T *>(data);
+			for (idx_t i = count; i-- > 0;) {
+				dst[i] = WidenStored<LOGICAL_T>(src[i]);
+			}
+		});
+	});
+	buffer.SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 }
 
 void FORVector::CopyToFlat(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
@@ -239,14 +246,36 @@ static bool TryCastFORMetadata(Vector &source, uhugeint_t &max_storage) {
 	return true;
 }
 
-bool FORVector::TryWidenType(Vector &source, Vector &result) {
+static bool IsPlainIntegral(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool FORVector::TryCastType(Vector &source, Vector &result, idx_t count) {
 	if (source.GetVectorType() != VectorType::FOR_VECTOR) {
 		return false;
 	}
-	if (GetTypeIdSize(result.GetType().InternalType()) < GetTypeIdSize(source.GetType().InternalType())) {
+	// only plain integral <-> integral casts are the identity on the payload; anything with
+	// conversion semantics (decimal rescaling, date/timestamp, enum) must run the real cast
+	if (!IsPlainIntegral(source.GetType()) || !IsPlainIntegral(result.GetType())) {
 		return false;
 	}
 	auto st = GetStoredType(source);
+	if (GetTypeIdSize(st) > GetTypeIdSize(result.GetType().InternalType())) {
+		return false;
+	}
+	// the cast can never fail if the FOR max fits the target type (all values are in [0, max])
 	uhugeint_t max_storage;
 	bool success = false;
 	FOR_SWITCH_LOGICAL(source.GetType().InternalType(), SRC_T, {
@@ -257,11 +286,25 @@ bool FORVector::TryWidenType(Vector &source, Vector &result) {
 		return false;
 	}
 
-	result.SetBuffer(source.GetBufferRef());
-	result.GetBufferRef()->SetVectorTypeOnly(VectorType::FOR_VECTOR);
+	auto buffer = make_buffer<StandardVectorBuffer>(GetData(source), count_t(count),
+	                                                GetTypeIdSize(result.GetType().InternalType()));
+	buffer->AddAuxiliaryData(make_uniq<VectorBufferHolder>(source.GetBufferRef()));
+	if (GetTypeIdSize(st) == GetTypeIdSize(result.GetType().InternalType())) {
+		// stored payload is already the target width bit-for-bit (all values in [0, max] fit the target),
+		// so the FOR label adds nothing: hand back a FLAT reinterpret. This is what compressed
+		// materialization wants - a narrow flat key that hashes/scatters with no flatten pass.
+		buffer->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
+		result.SetBuffer(std::move(buffer));
+		FlatVector::SetValidity(result, Validity(source));
+		return true;
+	}
+	// still narrower than the target: keep it as a FOR view over the same payload (a separate buffer so
+	// flattening the result can never mutate data seen through the source vector)
+	buffer->SetVectorTypeOnly(VectorType::FOR_VECTOR);
+	buffer->for_stored_type = st;
+	buffer->for_max_value = max_storage;
+	result.SetBuffer(std::move(buffer));
 	FORVector::Validity(result).Initialize(Validity(source));
-	result.buffer->for_stored_type = st;
-	result.buffer->for_max_value = max_storage;
 	return true;
 }
 

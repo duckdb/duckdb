@@ -165,6 +165,9 @@ struct FORVector {
 	//! Widen raw FOR payload into a flat target buffer.
 	static void WidenToFlat(const LogicalType &type, PhysicalType stored_type, const_data_ptr_t source,
 	                        data_ptr_t target, const SelectionVector &sel, idx_t count);
+	//! Widen a full-stride FOR buffer's payload in place (back-to-front) and mark the buffer FLAT.
+	//! Only valid for cache-owned buffers, whose allocation stride is the full logical type size.
+	static void WidenInPlace(const LogicalType &type, VectorBuffer &buffer);
 	//! Copy FOR narrow data directly to a FLAT target, widening per element.
 	//! Avoids the allocating Flatten path when use_count > 1.
 	static void CopyToFlat(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
@@ -311,13 +314,9 @@ struct FORVector {
 	template <class T>
 	static bool TryReferencePayload(Vector &source, Vector &result, PhysicalType stored_type, T max_value, idx_t count);
 
-	//! Transfer FOR metadata to a wider logical type.
-	//! Shares the buffer via shared_ptr.
-	static bool TryWidenType(Vector &source, Vector &result);
-
-	//! Create a temporary FLAT_VECTOR view over a FOR vector's narrow stored data.
-	//! The returned vector references the FOR vector's buffer.
-	static Vector CreateStoredView(const Vector &for_vec);
+	//! Cast a FOR vector between plain integral types by re-typing the metadata over a zero-copy
+	//! view of the same narrow payload. Returns false if the FOR max does not fit the target type.
+	static bool TryCastType(Vector &source, Vector &result, idx_t count);
 
 	//! Widen a stored unsigned value to the logical type.
 	//! Uses static_cast: FOR values are guaranteed non-negative and in range by construction.

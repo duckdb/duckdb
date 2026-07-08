@@ -805,41 +805,37 @@ void BitpackingScanPartialInternal(ColumnSegment &segment, ColumnScanState &stat
 			idx_t remaining = scan_count - scanned;
 			idx_t to_scan = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
 			if (try_for) {
-				bool can_for = true;
-				T group_max = 0;
-				for (idx_t i = 0; i < to_scan; i++) {
-					T multiplier;
-					if (!TryCast::Operation<idx_t, T>(scan_state.current_group_offset + i, multiplier)) {
-						can_for = false;
-						break;
-					}
-					T product;
-					T value;
-					if (!TryMultiplyOperator::Operation(multiplier, scan_state.current_constant, product) ||
-					    !TryAddOperator::Operation(product, scan_state.current_frame_of_reference, value) ||
-					    (NumericLimits<T>::IsSigned() && value < T(0))) {
-						can_for = false;
-						break;
-					}
-					group_max = i == 0 ? value : MaxValue(group_max, value);
-				}
+				// value(i) = frame + (group_offset + i) * constant is an affine (monotonic) sequence, so its
+				// min and max live at the two endpoints. Validate only those endpoints for overflow/negativity;
+				// every intermediate value is then guaranteed in range, so the fill loop uses plain wrapping
+				// arithmetic (mirroring the flat fallback below) and auto-vectorizes.
+				T first_val = 0;
+				T last_val = 0;
+				T m_first;
+				T m_last;
+				T p_first;
+				T p_last;
+				const idx_t last_off = scan_state.current_group_offset + (to_scan - 1);
+				bool can_for = TryCast::Operation<idx_t, T>(scan_state.current_group_offset, m_first) &&
+				               TryCast::Operation<idx_t, T>(last_off, m_last) &&
+				               TryMultiplyOperator::Operation(m_first, scan_state.current_constant, p_first) &&
+				               TryAddOperator::Operation(p_first, scan_state.current_frame_of_reference, first_val) &&
+				               TryMultiplyOperator::Operation(m_last, scan_state.current_constant, p_last) &&
+				               TryAddOperator::Operation(p_last, scan_state.current_frame_of_reference, last_val);
+				T group_min = MinValue(first_val, last_val);
+				T group_max = MaxValue(first_val, last_val);
 				PhysicalType requested_type;
-				if (can_for && TryFORStoredTypeForMax<T>(group_max, requested_type)) {
+				if (can_for && !(NumericLimits<T>::IsSigned() && group_min < T(0)) &&
+				    TryFORStoredTypeForMax<T>(group_max, requested_type)) {
 					ReconcileFORType(result_buf, scanned, requested_type, for_st);
 					for_max = MaxValue(for_max, group_max);
+					const T_U frame_u = static_cast<T_U>(scan_state.current_frame_of_reference);
+					const T_U const_u = static_cast<T_U>(scan_state.current_constant);
 					FOR_SWITCH_STORED(for_st, ST, {
 						auto target = reinterpret_cast<ST *>(result_buf + scanned * GetTypeIdSize(for_st));
 						for (idx_t i = 0; i < to_scan; i++) {
-							T multiplier;
-							auto cast = TryCast::Operation<idx_t, T>(scan_state.current_group_offset + i, multiplier);
-							D_ASSERT(cast);
-							T product;
-							T value;
-							auto multiply =
-							    TryMultiplyOperator::Operation(multiplier, scan_state.current_constant, product);
-							auto add = TryAddOperator::Operation(product, scan_state.current_frame_of_reference, value);
-							D_ASSERT(multiply && add);
-							target[i] = UnsafeNumericCast<ST>(value);
+							const T_U multiplier = static_cast<T_U>(scan_state.current_group_offset + i);
+							target[i] = static_cast<ST>(frame_u + const_u * multiplier);
 						}
 					});
 					scanned += to_scan;
@@ -860,9 +856,49 @@ void BitpackingScanPartialInternal(ColumnSegment &segment, ColumnScanState &stat
 		}
 		D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
 		         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
-
 		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
 		                                                          offset_in_compression_group);
+
+		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR && try_for) {
+			// delta runs always produce a uint32 FOR payload; admit when the run stays non-negative and the
+			// conservative bound base + remaining * max_delta fits uint32 (base and delta frame are non-negative,
+			// so the run is non-decreasing and its max is the last value). Only INVALID (first group) or an
+			// already-uint32 vector qualifies - a narrower prior group declines rather than pay a widening copy.
+			bool can_for = sizeof(T) > 4 && scan_state.current_width < 32 &&
+			               (for_st == PhysicalType::INVALID || for_st == PhysicalType::UINT32);
+			if (can_for) {
+				T_S base = static_cast<T_S>(scan_state.current_delta_offset);
+				T_S frame = static_cast<T_S>(scan_state.current_frame_of_reference);
+				T_S remaining_horizon =
+				    static_cast<T_S>(BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+				T_S max_delta;
+				T_S span;
+				T_S upper;
+				can_for = base >= 0 && frame >= 0 &&
+				          TryAddOperator::Operation(
+				              frame, static_cast<T_S>((uint64_t(1) << scan_state.current_width) - 1), max_delta) &&
+				          TryMultiplyOperator::Operation(remaining_horizon, max_delta, span) &&
+				          TryAddOperator::Operation(base, span, upper) &&
+				          upper <= static_cast<T_S>(NumericLimits<uint32_t>::Maximum());
+			}
+			if (can_for) {
+				for_st = PhysicalType::UINT32;
+				// decompress the packed deltas straight into uint32, then prefix-sum in uint32
+				DecodeFORGroupDirect(scan_state, scan_state.current_group_offset, offset_in_compression_group, to_scan,
+				                     result_buf, scanned, PhysicalType::UINT32);
+				auto data32 = reinterpret_cast<uint32_t *>(result_buf + scanned * sizeof(uint32_t));
+				uint32_t prev = static_cast<uint32_t>(scan_state.current_delta_offset);
+				for (idx_t i = 0; i < to_scan; i++) {
+					prev += data32[i];
+					data32[i] = prev;
+				}
+				scan_state.current_delta_offset = static_cast<T>(prev);
+				for_max = MaxValue(for_max, static_cast<T>(prev));
+				scanned += to_scan;
+				scan_state.current_group_offset += to_scan;
+				continue;
+			}
+		}
 
 		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR || !try_for) {
 			AbortFOR<T>(result_buf, scanned, for_st, try_for);

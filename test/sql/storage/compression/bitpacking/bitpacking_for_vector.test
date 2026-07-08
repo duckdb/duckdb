@@ -50,6 +50,112 @@ SELECT sum((val + 7) * 2) FROM t
 ----
 20630000
 
+# casting a FOR vector to a WIDER type re-types the metadata over the same narrow payload (stays FOR);
+# casting to a type the SAME width as the stored payload collapses to a zero-copy FLAT reinterpret
+# (val is stored as UINT16: max 1049; qty is stored as UINT8: max 49)
+query I
+SELECT DISTINCT vector_type(val::BIGINT) FROM t
+----
+FOR_VECTOR
+
+query I
+SELECT DISTINCT vector_type(val::SMALLINT) FROM t
+----
+FLAT_VECTOR
+
+query I
+SELECT DISTINCT vector_type(val::USMALLINT) FROM t
+----
+FLAT_VECTOR
+
+query I
+SELECT DISTINCT vector_type(qty::INTEGER) FROM t
+----
+FOR_VECTOR
+
+query III
+SELECT min(val::SMALLINT), max(val::BIGINT), sum(val::HUGEINT) FROM t
+----
+1000	1049	10245000
+
+query I
+SELECT count(*) FROM t WHERE val::BIGINT >= 1010 AND val::BIGINT <= 1020
+----
+2200
+
+# filtered scans emit dictionary-over-FOR; the cast re-types the child and keeps the selection
+query I
+SELECT DISTINCT vector_type(val::BIGINT) FROM t WHERE qty >= 10
+----
+DICTIONARY_VECTOR
+
+query I
+SELECT sum(val::BIGINT) FROM t WHERE qty >= 10
+----
+8236000
+
+# out-of-range casts must keep their error semantics
+statement error
+SELECT val::UTINYINT FROM t
+----
+<REGEX>:Conversion Error:.*
+
+query I
+SELECT count(try_cast(val AS UTINYINT)) FROM t
+----
+0
+
+# DELTA_FOR (sorted keys): decoded values are kept narrow when they fit the stored domain
+statement ok
+PRAGMA force_bitpacking_mode='delta_for'
+
+statement ok
+CREATE TABLE seq AS SELECT (1000000 + range // 3)::BIGINT AS k FROM range(10000)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT vector_type(k) FROM seq
+----
+FOR_VECTOR
+
+# k is stored UINT32 (max ~1003333); casting to INTEGER (same width) collapses to a FLAT reinterpret
+query I
+SELECT DISTINCT vector_type(k::INTEGER) FROM seq
+----
+FLAT_VECTOR
+
+query III
+SELECT min(k), max(k), sum(k) FROM seq
+----
+1000000	1003333	10016661667
+
+query I
+SELECT count(*) FROM seq WHERE k >= 1000100 AND k < 1000200
+----
+300
+
+# negative values in a delta run must fall back to FLAT
+statement ok
+CREATE TABLE negseq AS SELECT (-5000 + range)::BIGINT AS k FROM range(2048)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT vector_type(k) FROM negseq
+----
+FLAT_VECTOR
+
+query III
+SELECT min(k), max(k), sum(k) FROM negseq
+----
+-5000	-2953	-8143872
+
+statement ok
+PRAGMA force_bitpacking_mode='for'
+
 statement ok
 CREATE TABLE neg AS SELECT (-100 + (range % 50))::INTEGER AS val FROM range(2048)
 

@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/sequence_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
@@ -437,6 +438,12 @@ void Vector::Flatten(idx_t count) const {
 }
 
 void Vector::Flatten() const {
+	if (buffer->GetVectorType() == VectorType::FOR_VECTOR && buffer->cache_owned) {
+		// cache-owned FOR buffers have a full-stride allocation and are pipeline-local:
+		// widen in place so every vector referencing this buffer sees the flat data
+		FORVector::WidenInPlace(GetType(), *buffer);
+		return;
+	}
 	auto new_buffer = Buffer().Flatten(GetType());
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
