@@ -108,8 +108,8 @@ static shared_ptr<BoundIndex> FindBoundIndex(const TableIndexList &index_list, c
 
 	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	vector<Identifier> available;
-	for (const auto &idx : index_list.PinIndexes()) {
-		available.push_back(idx->GetIndexName());
+	for (const auto &idx : index_list.Indexes()) {
+		available.push_back(idx.GetIndexName());
 	}
 
 	if (available.empty()) {
@@ -135,6 +135,7 @@ struct IndexKeyBindData : public FunctionData {
 		return art.get() == other.art.get() && key_types == other.key_types;
 	}
 
+	//! The index needs to be kept alive in case the related logical identity swaps in a new physical backing.
 	shared_ptr<ART> art;
 	vector<LogicalType> key_types;
 };

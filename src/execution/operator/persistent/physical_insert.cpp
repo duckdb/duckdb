@@ -525,7 +525,7 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 	if (conflict_info.column_ids.empty()) {
 		const auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
-		for (const auto &index : global_indexes.PinIndexes()) {
+		for (const auto &index : global_indexes.MakeShared()) {
 			if (!index->IsUnique()) {
 				continue;
 			}
@@ -538,7 +538,7 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 		}
 
 		const auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
-		for (const auto &index : local_indexes.PinIndexes()) {
+		for (const auto &index : local_indexes.MakeShared()) {
 			if (!index->IsUnique()) {
 				continue;
 			}

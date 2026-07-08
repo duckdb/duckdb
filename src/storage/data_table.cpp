@@ -123,7 +123,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the removed column
-	for (const auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.MakeShared()) {
 		for (auto &column_id : index->GetColumnIds()) {
 			if (column_id == removed_column) {
 				throw CatalogException("Cannot drop this column: an index depends on it!");
@@ -191,7 +191,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the changed column
-	for (const auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.MakeShared()) {
 		for (auto &column_id : index->GetColumnIds()) {
 			if (column_id == changed_idx) {
 				throw CatalogException("Cannot change the type of this column: an index depends on it!");
@@ -341,7 +341,7 @@ bool DataTable::HasUniqueIndexes() const {
 	if (!HasIndexes()) {
 		return false;
 	}
-	for (const auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.MakeShared()) {
 		if (index->IsUnique()) {
 			return true;
 		}
@@ -363,7 +363,7 @@ void DataTable::SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info)
 }
 
 void DataTable::VacuumIndexes() {
-	for (const auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.MakeShared()) {
 		if (index->IsBound()) {
 			index->Cast<BoundIndex>().Vacuum();
 		}
@@ -373,7 +373,7 @@ void DataTable::VacuumIndexes() {
 void DataTable::RebuildIndexes() {
 	auto &types = row_groups->GetTypes();
 
-	for (const auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.MakeShared()) {
 		if (!index->IsBound()) {
 			throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
 		}
@@ -476,7 +476,7 @@ void DataTable::SetTableName(Identifier new_name) {
 TableStorageInfo DataTable::GetStorageInfo() const {
 	TableStorageInfo result;
 	result.cardinality = GetTotalRows();
-	for (const auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.MakeShared()) {
 		IndexInfo index_info;
 		index_info.is_primary = index->IsPrimary();
 		index_info.is_unique = index->IsUnique() || index_info.is_primary;
@@ -848,7 +848,7 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 
 	// The conflict manager is only provided for statements containing ON CONFLICT.
 	auto &conflict_info = manager->GetConflictInfo();
-	const auto pinned_indexes = indexes.PinIndexes();
+	const auto pinned_indexes = indexes.MakeShared();
 
 	// Find all indexes matching the conflict target.
 	for (const auto &index : pinned_indexes) {
@@ -1355,7 +1355,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 
 #ifdef DEBUG
 	// Verify that our index memory is stable.
-	for (const auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.MakeShared()) {
 		if (index->IsBound()) {
 			index->Cast<BoundIndex>().VerifyBuffers();
 		}
@@ -1480,7 +1480,7 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row
 
 void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
 	D_ASSERT(IsMainTable());
-	for (const auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.MakeShared()) {
 		auto &main_index = index->Cast<BoundIndex>();
 		main_index.Delete(chunk, row_identifiers);
 	}
@@ -1695,7 +1695,7 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 #ifdef DEBUG
 	// Ensure that we never call UPDATE for indexed columns.
 	// Instead, we must rewrite these updates into DELETE + INSERT.
-	for (const auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.MakeShared()) {
 		D_ASSERT(index->IsBound());
 		D_ASSERT(!index->Cast<BoundIndex>().IndexIsUpdated(column_ids));
 	}
