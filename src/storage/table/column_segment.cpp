@@ -519,6 +519,10 @@ idx_t ColumnSegment::FilterSelection(SelectionResult &sel, Vector &vector, Table
 
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state,
                                      idx_t scan_count, idx_t &approved_tuple_count) {
+	auto &state = filter_state.Cast<ExpressionFilterState>();
+	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE) {
+		return state.fast_executor->FilterSelection(sel, vector, scan_count, approved_tuple_count);
+	}
 	SelectionResult result_sel;
 	result_sel.Initialize(sel);
 	auto result = FilterSelection(result_sel, vector, filter_state, scan_count, approved_tuple_count);

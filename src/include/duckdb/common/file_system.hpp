@@ -109,7 +109,7 @@ public:
 	DUCKDB_API virtual idx_t GetProgress();
 	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
 
-	DUCKDB_API bool CanSeek();
+	DUCKDB_API virtual bool CanSeek();
 	DUCKDB_API bool SupportsPositionalWrites();
 	DUCKDB_API bool IsPipe();
 	DUCKDB_API bool OnDiskFile();

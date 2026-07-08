@@ -33,24 +33,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(
 	}
 
 	auto &attach_info = *result->info;
-	for (const auto &attach_option : *attach_options) {
-		if (attach_option.expression) {
-			attach_info.parsed_options[attach_option.name.GetIdentifierName()] = attach_option.expression->Copy();
-			continue;
-		}
-		if (attach_option.children.empty()) {
-			attach_info.options[attach_option.name.GetIdentifierName()] = Value(true);
-		} else if (attach_option.children.size() == 1) {
-			auto val = attach_option.children[0];
-			if (val.IsNull()) {
-				throw BinderException("NULL is not supported as a valid option for ATTACH option \"%s\"",
-				                      attach_option.name);
-			}
-			attach_info.options[attach_option.name.GetIdentifierName()] = attach_option.children[0];
-		} else {
-			throw ParserException("Option %s can only have one argument", attach_option.name);
-		}
-	}
+	SplitGenericOptions(*attach_options, attach_info.parsed_options, attach_info.options, "ATTACH");
 	return std::move(result);
 }
 

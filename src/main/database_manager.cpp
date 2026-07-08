@@ -387,7 +387,8 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		DBPathAndType::CheckMagicBytes(context, fs, info.path, options.db_type);
+		// Prefetch the header for a DuckDB file, reused when opening it (see AttachOptions::prefetched).
+		DBPathAndType::CheckMagicBytes(context, fs, info.path, options.db_type, &options.prefetched);
 	}
 
 	if (options.db_type.empty()) {

@@ -281,7 +281,12 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 		if (component.literal == "connect_name_prefix") {
 			auto connected = context.TryGetConnectedCatalog();
 			if (connected) {
-				return connected->GetCatalog().GetAttached().GetName() + " ";
+				auto &catalog = connected->GetCatalog();
+				// Ephemeral connections (CONNECT '<uri>') have no user-facing name; show the display (URI).
+				if (catalog.GetAttached().IsEphemeral()) {
+					return catalog.GetConnectDisplay() + " ";
+				}
+				return catalog.GetAttached().GetName() + " ";
 			}
 			return string();
 		}

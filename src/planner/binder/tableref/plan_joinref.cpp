@@ -428,40 +428,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
 	}
-	for (auto &child : join->children) {
-		if (child->type == LogicalOperatorType::LOGICAL_FILTER) {
-			auto &filter = child->Cast<LogicalFilter>();
-			for (auto &expr : filter.expressions) {
-				PlanSubqueries(expr, filter.children[0]);
-			}
-		}
-	}
-
-	// we visit the expressions depending on the type of join
-	switch (join->type) {
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &comp_join = join->Cast<LogicalComparisonJoin>();
-		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
-			auto &cond = comp_join.conditions[i];
-			if (cond.IsComparison()) {
-				PlanSubqueries(cond.LeftReference(), comp_join.children[0]);
-				PlanSubqueries(cond.RightReference(), comp_join.children[1]);
-			}
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-		auto &any_join = join->Cast<LogicalAnyJoin>();
-		// for the any join we just visit the condition
-		if (any_join.condition->HasSubquery()) {
-			throw NotImplementedException("Cannot perform non-inner join on subquery!");
-		}
-		break;
-	}
-	default:
-		break;
-	}
+	RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(*this, *join);
 	if (!ref.duplicate_eliminated_columns.empty()) {
 		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;

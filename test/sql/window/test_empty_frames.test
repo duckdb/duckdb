@@ -31,7 +31,57 @@ NULL	0
 
 endloop
 
-#
+#  Reversed frames are empty, so COUNT must be 0 (not negative)
+foreach agg count(*) count_star()
+
+query I
+SELECT {agg} OVER (ROWS BETWEEN 1 FOLLOWING AND 1 PRECEDING) AS actual
+FROM range(1);
+----
+0
+
+endloop
+
+query II
+SELECT id, count(*) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	0
+2	0
+NULL	0
+
+foreach agg count(*) count_star()
+
+# Check aggregates
+query I
+SELECT {agg} OVER (ROWS BETWEEN 1 FOLLOWING AND 1 PRECEDING EXCLUDE TIES) AS actual
+FROM range(1);
+----
+0
+
+endloop
+
+# Check value functions
+query II
+SELECT id, lead(id ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	NULL
+2	NULL
+NULL	NULL
+
+# Check ranking functions
+query II
+SELECT id, rank() OVER (ORDER BY id ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	1
+2	2
+NULL	3
+
 # All zeroes
 #
 foreach agg approx_count_distinct count entropy
