@@ -17,6 +17,7 @@
 
 namespace duckdb {
 
+// Forward declarations.
 struct QueueProducerToken;
 class TaskSchedulerQueue;
 

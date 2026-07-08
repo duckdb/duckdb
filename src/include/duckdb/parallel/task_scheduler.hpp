@@ -56,8 +56,7 @@ public:
 	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks);
 	//! Fetches a task from a specific producer, returns true if successful or false if no tasks were available
 	bool GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task);
-	//! Fetches a task from a specific producer while token.producer_lock is held.
-	//! Returns true when a task was found and assigned to `task`.
+	//! Fetches a task from a specific producer, returns whether a task was found and assigned to `task`.
 	bool GetTaskFromProducerLocked(ProducerToken &token, shared_ptr<Task> &task) DUCKDB_REQUIRES(token.producer_lock);
 	//! Run tasks forever until "marker" is set to false, "marker" must remain valid until the thread is joined
 	void ExecuteForever(atomic<bool> *marker);
