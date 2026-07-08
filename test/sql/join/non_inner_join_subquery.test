@@ -1666,25 +1666,41 @@ ORDER BY l.a NULLS LAST, r.b NULLS LAST;
 3	NULL
 NULL	30
 
-# Volatile pair-dependent predicates are not lowered through the match-domain
-# rewrite because duplicate payload pairs would otherwise share one evaluation.
-statement error
+# Volatile pair-dependent predicates follow the same decorrelation semantics as
+# the rest of the dependent join machinery.
+query II
 SELECT l.a, r.b
 FROM pair_l l
 FULL OUTER JOIN pair_r r ON EXISTS (
 	SELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b
-) AND random() >= 0;
+) AND random() >= 0
+ORDER BY l.a NULLS LAST, r.b NULLS LAST;
 ----
-Not implemented Error: Correlated subquery in a non-inner join condition cannot reference both sides of the join
+1	10
+1	10
+1	20
+1	20
+2	20
+3	NULL
+NULL	30
+NULL	40
 
-statement error
+query II
 SELECT l.a, r.b
 FROM pair_l l
 FULL OUTER JOIN pair_r r ON EXISTS (
 	SELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b AND random() >= 0
-);
+)
+ORDER BY l.a NULLS LAST, r.b NULLS LAST;
 ----
-Not implemented Error: Correlated subquery in a non-inner join condition cannot reference both sides of the join
+1	10
+1	10
+1	20
+1	20
+2	20
+3	NULL
+NULL	30
+NULL	40
 
 query TII
 SELECT 'semi' AS j, l.a, l.x
@@ -1713,7 +1729,7 @@ semi	1	10
 semi	1	11
 semi	2	20
 
-statement error
+query II
 SELECT l.a, r.b
 FROM pair_nested_l l
 FULL OUTER JOIN pair_nested_r r ON EXISTS (
@@ -1727,9 +1743,13 @@ FULL OUTER JOIN pair_nested_r r ON EXISTS (
 		  AND s.c = t.c
 		  AND random() >= 0
 	)
-);
+)
+ORDER BY ALL;
 ----
-Not implemented Error: Correlated subquery in a non-inner join condition cannot reference both sides of the join
+1	10
+2	20
+3	NULL
+NULL	30
 
 # A FULL OUTER pair-dependent predicate should also work when one side of the
 # join exposes more than one underlying table binding.

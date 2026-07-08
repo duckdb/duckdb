@@ -125,9 +125,6 @@ void CTEBindState::Bind(CTEBinding &binding) {
 
 	// bind the actual CTE
 	query = query_binder->Bind(cte_def);
-	if (query_binder->correlated_columns.size() > 0) {
-		parent_binder.MarkCTEAsCorrelated(binding.GetIndex());
-	}
 
 	// after binding - we add the active binders we removed back so we can leave the binder in its original state
 	for (auto &stored_binder : stored_binders) {

@@ -213,21 +213,6 @@ optional_ptr<CTEBinding> Binder::GetCTEBinding(const BindingAlias &name) {
 	return result;
 }
 
-void Binder::MarkCTEAsCorrelated(TableIndex table_index) {
-	correlated_ctes.insert(table_index);
-}
-
-bool Binder::IsCorrelatedCTE(TableIndex table_index) const {
-	auto current = this;
-	while (current) {
-		if (current->correlated_ctes.find(table_index) != current->correlated_ctes.end()) {
-			return true;
-		}
-		current = current->parent.get();
-	}
-	return false;
-}
-
 void Binder::AddBoundView(ViewCatalogEntry &view) {
 	// check if the view is already bound
 	auto current = this;

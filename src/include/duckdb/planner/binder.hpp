@@ -228,8 +228,6 @@ public:
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
 	unordered_map<TableIndex, LogicalOperator *> recursive_ctes;
-	//! CTE definitions in this binder scope that captured columns from an outer query while binding
-	unordered_set<TableIndex> correlated_ctes;
 
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
@@ -296,8 +294,6 @@ public:
 
 	//! Find all candidate common table expression by name; returns empty vector if none exists
 	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &name);
-	void MarkCTEAsCorrelated(TableIndex table_index);
-	bool IsCorrelatedCTE(TableIndex table_index) const;
 
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);

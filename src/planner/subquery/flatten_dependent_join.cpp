@@ -535,6 +535,17 @@ static void AppendStateToProjectionMap(vector<ProjectionIndex> &projection_map, 
 	}
 }
 
+static void ApplyBindingReplacements(vector<ColumnBinding> &bindings, const vector<ReplacementBinding> &replacements) {
+	for (auto &binding : bindings) {
+		for (auto &replacement : replacements) {
+			if (binding == replacement.old_binding) {
+				binding = replacement.new_binding;
+				break;
+			}
+		}
+	}
+}
+
 static bool IsJoinWithProjectionMap(LogicalOperatorType type) {
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
@@ -813,17 +824,8 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownFullOuterJoin(unique_ptr<Lo
 	AddCorrelatedJoinConditions(join, left_state, right_state);
 	RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(right_state), correlated_aliases);
 
-	auto apply_replacements = [&](vector<ColumnBinding> &bindings) {
-		for (auto &binding : bindings) {
-			for (auto &replacement : binding_replacements) {
-				if (binding == replacement.old_binding) {
-					binding = replacement.new_binding;
-				}
-			}
-		}
-	};
-	apply_replacements(left_payload);
-	apply_replacements(right_payload);
+	ApplyBindingReplacements(left_payload, binding_replacements);
+	ApplyBindingReplacements(right_payload, binding_replacements);
 	auto left_output = OutputLayout::FromOperator(*plan->children[0]);
 	auto right_output = OutputLayout::FromOperator(*plan->children[1]);
 	join.left_projection_map = left_output.CreateProjectionMap(left_payload);
@@ -1049,10 +1051,10 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownSetOperation(unique_ptr<Log
 	for (auto &child : plan->children) {
 		child->ResolveOperatorTypes();
 	}
-#endif
 	for (idx_t i = 1; i < plan->children.size(); i++) {
 		D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
 	}
+#endif
 	for (auto &child : plan->children) {
 		state = PushDownCorrelatedNode(child, true, std::move(state));
 	}
@@ -1075,17 +1077,17 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownSetOperation(unique_ptr<Log
 		}
 	}
 
+#ifdef DEBUG
 	for (idx_t i = 1; i < plan->children.size(); i++) {
 		D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[i]->GetColumnBindings().size());
 	}
-#ifdef DEBUG
 	for (auto &child : plan->children) {
 		child->ResolveOperatorTypes();
 	}
-#endif
 	for (idx_t i = 1; i < plan->children.size(); i++) {
 		D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
 	}
+#endif
 	state = CreateContiguousState(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)));
 	setop.column_count += correlated_columns.size();
 	return state;
