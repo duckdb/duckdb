@@ -97,10 +97,9 @@ inline bool IsBitmapSelectCandidate(const Expression &expr) {
 //! bitmap (branchless/autovec), then combines lazily: any input selection is AND-ed in as a bitmap, and the result
 //! is emitted to whatever the caller wants (a result bitmap, or a true and/or false selection vector). Returns false
 //! (nothing written) for shapes it does not handle, so the caller falls through to generic selection.
-inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataChunk &chunk,
-                                      const SelectionVector *sel, idx_t count, SelectionResult *bitmap_sel,
-                                      SelectionVector *true_sel, SelectionVector *false_sel,
-                                      SelectionResult &tmp_sel1, SelectionResult &tmp_sel2,
+inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataChunk &chunk, const SelectionVector *sel,
+                                      idx_t count, SelectionResult *bitmap_sel, SelectionVector *true_sel,
+                                      SelectionVector *false_sel, SelectionResult &tmp_sel1, SelectionResult &tmp_sel2,
                                       SelectionResult &tmp_sel3, idx_t &result) {
 	// when a bitmap output is requested, true_sel aliases its flat view (see ExpressionExecutor::Select): the
 	// comparison result lands in bitmap_sel and true_sel/false_sel are not materialized separately

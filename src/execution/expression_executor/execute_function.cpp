@@ -331,8 +331,8 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		auto &fstate = state->Cast<ExecuteFunctionState>();
 		if (fstate.select_bitmap_capable) {
 			idx_t result;
-			if (SelectComparisonFromChunk(expr, *chunk, sel, count, bitmap_sel, true_sel, false_sel,
-			                              fstate.tmp_sel1, fstate.tmp_sel2, fstate.tmp_sel3, result)) {
+			if (SelectComparisonFromChunk(expr, *chunk, sel, count, bitmap_sel, true_sel, false_sel, fstate.tmp_sel1,
+			                              fstate.tmp_sel2, fstate.tmp_sel3, result)) {
 				return result;
 			}
 		}
