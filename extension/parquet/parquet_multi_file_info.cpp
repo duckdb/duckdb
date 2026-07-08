@@ -297,7 +297,9 @@ static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<Func
 	if (serializer.ShouldSerialize(StorageVersion::V1_2_0)) {
 		serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
 	}
-	serializer.WriteProperty(105, "projection_expressions", parquet_data.projection_expressions);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WriteProperty(105, "projection_expressions", parquet_data.projection_expressions);
+	}
 }
 
 static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserializer, TableFunction &function) {
@@ -379,20 +381,6 @@ static void ParquetScanGetMetrics(TableFunctionGetMetricsInput &input) {
 	input.operator_metrics.total_row_groups_to_scan = parquet_gstate.total_row_groups_to_scan.load();
 }
 
-static bool ParquetEncodingSupportsBytelengthPushdown(const FileMetaData &metadata, idx_t idx) {
-	for (const auto &group : metadata.row_groups) {
-		if (idx >= group.columns.size()) {
-			continue;
-		}
-		for (const Encoding::type type : group.columns[idx].meta_data.encodings) {
-			if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
-				return false;
-			}
-		}
-	}
-	return true;
-}
-
 static bool ParquetProjectionExpressionPushdown(ClientContext &context,
                                                 const TableFunctionProjectionExpressionInput &input) {
 	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
@@ -410,8 +398,20 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 		return false;
 	}
 
+	// Don't do pushdown of strlen to hive and filename columns.
+	// See src/function/table/read_csv.cpp : PushdownProjectionExpression
+	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
+		if (partition.index == input.proj_index) {
+			return false;
+		}
+	}
+	if (bind_data.reader_bind.filename_idx.IsValid() &&
+	    bind_data.reader_bind.filename_idx.GetIndex() == input.proj_index) {
+		return false;
+	}
+
 	const idx_t idx = input.proj_index;
-	// We run this optimizer after FILTER_PUSHDOWN. If a filter was
+	// We run scalar function pushdown after filter pushdown. If a filter was
 	// pushed into get.table_filters, we don't see it here and can't
 	// proceed with pushdown
 	const auto &col_ids = input.get.GetColumnIds();
@@ -426,19 +426,26 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 	}
 
 	auto &parquet_bind_data = bind_data.bind_data->Cast<ParquetReadBindData>();
-	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
-		if (bind_data.initial_reader && !ParquetEncodingSupportsBytelengthPushdown(
-		                                    *bind_data.initial_reader->Cast<ParquetReader>().GetFileMetadata(), idx)) {
-			return false;
-		}
-	} else {
-		const auto &caches = parquet_bind_data.TryLoadCaches(bind_data, context);
-		if (caches.empty()) {
-			return false;
-		}
-		for (const auto &cache : caches) {
-			if (!ParquetEncodingSupportsBytelengthPushdown(*cache.metadata->metadata, idx)) {
-				return false;
+	// Don't do pushdown with multiple files. As metadata for all but first file is not
+	// available upfront, we need to TryLoadCaches and check cache validity which complicates
+	// things. Another complication is that different files may have separate schemas:
+	// if we're reading file 1 (int, str) and file 2 (str, int) and trying to push down
+	// strlen for column 2, query will fail on file 2 as it compares column indices and
+	// not names
+	if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+		return false;
+	}
+
+	if (bind_data.initial_reader) {
+		const FileMetaData &metadata = *bind_data.initial_reader->Cast<ParquetReader>().GetFileMetadata();
+		for (const auto &group : metadata.row_groups) {
+			if (idx >= group.columns.size()) {
+				continue;
+			}
+			for (const Encoding::type type : group.columns[idx].meta_data.encodings) {
+				if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
+					return false;
+				}
 			}
 		}
 	}

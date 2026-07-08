@@ -457,45 +457,23 @@ ORDER BY ALL;
 1
 2
 
-statement ok
-COPY (SELECT 'bb'::VARCHAR AS s)
-TO '{TEST_DIR}/01_scalar_fn_plain2.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
-
-# Metadata isn't present in caches so we can't determine the encoding, reject pushdown
 query II
 EXPLAIN SELECT strlen(s)
-FROM read_parquet(['{TEST_DIR}/00_scalar_fn_plain.parquet', '{TEST_DIR}/01_scalar_fn_plain2.parquet']);
+FROM read_parquet(['{TEST_DIR}/00_scalar_fn_plain.parquet', '{TEST_DIR}/99_scalar_fn_delta.parquet']);
 ----
 physical_plan	<REGEX>:.*PROJECTION.*
 
 statement ok
-SET parquet_metadata_cache = true;
-
-# Populate cache
-statement ok
-SELECT s FROM read_parquet(['{TEST_DIR}/00_scalar_fn_plain.parquet', '{TEST_DIR}/01_scalar_fn_plain2.parquet']);
-
-# Now we have all caches, pushdown succeeds
-query II
-EXPLAIN SELECT strlen(s)
-FROM read_parquet(['{TEST_DIR}/00_scalar_fn_plain.parquet', '{TEST_DIR}/01_scalar_fn_plain2.parquet']);
-----
-physical_plan	<!REGEX>:.*PROJECTION.*
+COPY (SELECT {'x':0,'y':0} s, 'hello' v) TO '{TEST_DIR}/scalar-pushdown-nested.parquet' (PARQUET_VERSION V2);
 
 query I
-SELECT strlen(s)
-FROM read_parquet(['{TEST_DIR}/00_scalar_fn_plain.parquet', '{TEST_DIR}/01_scalar_fn_plain2.parquet'])
-ORDER BY ALL;
+SELECT strlen(v)
+FROM '{TEST_DIR}/scalar-pushdown-nested.parquet'
 ----
 1
-2
 
-statement ok
-SELECT s FROM read_parquet(['{TEST_DIR}/00_scalar_fn_plain.parquet', '{TEST_DIR}/99_scalar_fn_delta.parquet']);
-
-# Pushdown rejected because second file's encoding is unsupported
 query II
-EXPLAIN SELECT strlen(s)
-FROM read_parquet(['{TEST_DIR}/00_scalar_fn_plain.parquet', '{TEST_DIR}/99_scalar_fn_delta.parquet']);
+EXPLAIN SELECT strlen(v)
+FROM '{TEST_DIR}/scalar-pushdown-nested.parquet'
 ----
 physical_plan	<REGEX>:.*PROJECTION.*
