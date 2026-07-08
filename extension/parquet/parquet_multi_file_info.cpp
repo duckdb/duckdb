@@ -299,6 +299,8 @@ static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<Func
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(105, "projection_expressions", parquet_data.projection_expressions);
+	} else if (!parquet_data.projection_expressions.empty()) {
+		throw SerializationException("Version too old to serialize projection_expressions but they are non-empty");
 	}
 }
 
@@ -441,11 +443,12 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 
 	auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
 	auto &children = reader.root_schema->children;
+	if (idx >= children.size()) {
+		return false;
+	}
 	for (const auto &group : reader.GetFileMetadata()->row_groups) {
-		if (idx >= children.size()) {
-			continue;
-		}
 		const idx_t column_flat_idx = children[idx].column_index;
+		D_ASSERT(column_flat_idx < group.columns.size());
 		for (const Encoding::type type : group.columns[column_flat_idx].meta_data.encodings) {
 			if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
 				return false;
@@ -454,9 +457,6 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 	}
 
 	const LogicalType type = LogicalType::BIGINT;
-	if (auto &schema = bind_data.reader_bind.schema; !schema.empty()) {
-		schema[idx].type = type;
-	}
 	bind_data.types[idx] = type;
 	bind_data.columns[idx].type = type;
 

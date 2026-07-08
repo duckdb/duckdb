@@ -7,14 +7,13 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-
-#include <optional>
 
 namespace duckdb {
 class ClientContext;
@@ -99,7 +98,7 @@ struct GetBinding {
  * Returns nullopt for virtual columns and columns which are neither part of
  * GET nor part of PROJECTION wrapping a GET.
  */
-std::optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Projections &projections);
+optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Projections &projections);
 
 template <class Collect, class Replace>
 unique_ptr<LogicalOperator> PushdownOptimize(ClientContext &context, unique_ptr<LogicalOperator> op) {

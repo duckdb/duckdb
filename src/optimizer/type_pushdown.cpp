@@ -72,9 +72,9 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 	}
 }
 
-std::optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Projections &projections) {
+optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Projections &projections) {
 	if (IsVirtualColumn(binding.column_index)) {
-		return std::nullopt;
+		return nullopt;
 	}
 	if (const auto it = analyses.find(binding.table_index); it != analyses.end()) {
 		return {{it->second, binding.column_index, nullptr}};
@@ -82,22 +82,22 @@ std::optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, con
 
 	const auto projection_it = projections.find(binding.table_index);
 	if (projection_it == projections.end()) {
-		return std::nullopt;
+		return nullopt;
 	}
 
 	LogicalProjection &projection = projection_it->second;
 	const auto &inner = projection.expressions[binding.column_index];
 	if (inner->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-		return std::nullopt;
+		return nullopt;
 	}
 	const ColumnBinding get_binding = inner->Cast<BoundColumnRefExpression>().Binding();
 	if (IsVirtualColumn(get_binding.column_index)) {
-		return std::nullopt;
+		return nullopt;
 	}
 	if (const auto it = analyses.find(get_binding.table_index); it != analyses.end()) {
 		return {{it->second, get_binding.column_index, &projection}};
 	}
-	return std::nullopt;
+	return nullopt;
 }
 
 /**
