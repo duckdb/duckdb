@@ -1523,6 +1523,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		    it != projection_expressions.end() &&
 		    it->second.type == ParquetReaderProjectionExpressionType::BYTE_LENGTH) {
 			auto &schema = root_schema->children[column_id].ResolveExtractedChild(index);
+			schema.type = it->second.return_type;
 			state.column_readers[i] = make_uniq<ByteArrayLengthColumnReader>(*this, schema);
 			continue;
 		}

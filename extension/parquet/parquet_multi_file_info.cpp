@@ -336,20 +336,27 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	parquet_bind_data.projection_expressions = std::move(projection_expressions);
 
 	for (const auto &[idx, expr] : parquet_bind_data.projection_expressions) {
-		if (idx < inner_bind_data.columns.size()) {
-			inner_bind_data.columns[idx].type = expr.return_type;
-		}
-		if (idx < inner_bind_data.types.size()) {
-			inner_bind_data.types[idx] = expr.return_type;
-		}
-		if (auto &schema = inner_bind_data.reader_bind.schema; !schema.empty() && idx < schema.size()) {
-			schema[idx].type = expr.return_type;
+		const bool is_nested =
+		    idx < inner_bind_data.columns.size() && inner_bind_data.columns[idx].type.id() == LogicalTypeId::STRUCT;
+		if (!is_nested) {
+			if (idx < inner_bind_data.columns.size()) {
+				inner_bind_data.columns[idx].type = expr.return_type;
+			}
+			if (idx < inner_bind_data.types.size()) {
+				inner_bind_data.types[idx] = expr.return_type;
+			}
+			if (auto &schema = inner_bind_data.reader_bind.schema; !schema.empty() && idx < schema.size()) {
+				schema[idx].type = expr.return_type;
+			}
 		}
 		if (!inner_bind_data.initial_reader) {
 			continue;
 		}
 		auto &reader = inner_bind_data.initial_reader->Cast<ParquetReader>();
 		reader.projection_expressions[idx] = expr;
+		if (is_nested) {
+			continue;
+		}
 		if (idx < reader.columns.size()) {
 			reader.columns[idx].type = expr.return_type;
 		}
