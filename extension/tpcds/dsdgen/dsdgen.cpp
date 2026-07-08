@@ -16,7 +16,6 @@
 #include "dsdgen-c/parallel.h"
 #include "dsdgen-c/tables.h"
 
-#include <cassert>
 #include <algorithm>
 #include <atomic>
 #include <thread>
@@ -645,7 +644,7 @@ private:
 		for (int table_idx = CALL_CENTER; table_idx < DBGEN_VERSION; table_idx++) {
 			auto table_def = GetTDefByNumber(table_idx);
 			auto table_name = table_def.name + suffix;
-			assert(table_def.name);
+			D_ASSERT(table_def.name);
 			auto &table_entry = catalog.GetEntry<TableCatalogEntry>(
 			    context, QualifiedName(catalog.GetName(), schema, Identifier(table_name)));
 
@@ -743,7 +742,7 @@ private:
 				ResetCountCount();
 			}
 			builder_func = GetTDefFunctionByNumber(table_id);
-			assert(builder_func);
+			D_ASSERT(builder_func);
 			table_started = true;
 			return true;
 		}

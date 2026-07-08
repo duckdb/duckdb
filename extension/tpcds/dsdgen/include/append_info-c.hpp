@@ -15,7 +15,6 @@
 #include "duckdb/storage/table/append_state.hpp"
 
 #include <memory>
-#include <cassert>
 #include <cstdint>
 
 namespace tpcds {

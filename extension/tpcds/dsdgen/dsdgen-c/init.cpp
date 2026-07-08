@@ -119,7 +119,6 @@ void InitConstants::Reset() {
 	mk_part_init = 0;
 	mk_supp_init = 0;
 	dbg_text_init = 0;
-	find_dist_init = 0;
 	cp_join_init = 0;
 	web_join_init = 0;
 	set_pricing_init = 0;
