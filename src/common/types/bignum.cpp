@@ -100,8 +100,59 @@ char Bignum::DigitToChar(int digit) {
 	return static_cast<char>(digit + '0');
 }
 
+static bool ShouldRoundDecimalDigits(const char *data, idx_t decimal_start, idx_t decimal_end) {
+	if (decimal_start >= decimal_end) {
+		return false;
+	}
+	uint64_t decimal = 0;
+	uint16_t decimal_digits = 0;
+	for (idx_t pos = decimal_start; pos < decimal_end; pos++) {
+		auto digit = UnsafeNumericCast<uint8_t>(data[pos] - '0');
+		if (decimal > (NumericLimits<uint64_t>::Maximum() - digit) / 10) {
+			for (; pos < decimal_end; pos++) {
+				if (data[pos] != '0') {
+					return true;
+				}
+			}
+			break;
+		}
+		decimal_digits++;
+		decimal = decimal * 10 + digit;
+	}
+	while (decimal > 10) {
+		decimal /= 10;
+		decimal_digits--;
+	}
+	return decimal_digits == 1 && decimal >= 5;
+}
+
+static void IncrementDecimalString(string &digits) {
+	int carry = 1;
+	for (int64_t i = static_cast<int64_t>(digits.size()) - 1; i >= 0 && carry; i--) {
+		auto digit = static_cast<int>(digits[static_cast<idx_t>(i)] - '0') + carry;
+		digits[static_cast<idx_t>(i)] = static_cast<char>('0' + (digit % 10));
+		carry = digit / 10;
+	}
+	if (carry) {
+		digits = "1" + digits;
+	}
+}
+
+string Bignum::EncodeVarcharBignum(const string_t &value, idx_t start_pos, idx_t end_pos, bool is_negative,
+                                   bool is_zero, bool should_round_up) {
+	if (should_round_up) {
+		string integer_digits(value.GetData() + start_pos, end_pos - start_pos);
+		IncrementDecimalString(integer_digits);
+		is_zero = false;
+		string_t rounded_digits(integer_digits);
+		return EncodeBignum(rounded_digits, 0, integer_digits.size(), is_negative, is_zero);
+	}
+	return EncodeBignum(value, start_pos, end_pos, is_negative, is_zero);
+}
+
 bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative,
-                               bool &is_zero) {
+                               bool &is_zero, bool &should_round_up) {
+	should_round_up = false;
 	// If it's empty we error
 	if (value.Empty()) {
 		return false;
@@ -149,6 +200,7 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 			return false;
 		}
 
+		auto decimal_start = cur_pos;
 		while (cur_pos < end_pos) {
 			if (StringUtil::CharacterIsDigit(int_value_char[cur_pos])) {
 				cur_pos++;
@@ -157,7 +209,7 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 				return false;
 			}
 		}
-		// Floor cast this boy
+		should_round_up = ShouldRoundDecimalDigits(int_value_char, decimal_start, end_pos);
 		end_pos = possible_end;
 	}
 	return true;
@@ -316,11 +368,11 @@ string Bignum::BignumToVarchar(const bignum_t &blob) {
 
 string Bignum::VarcharToBignum(const string_t &value) {
 	idx_t start_pos, end_pos;
-	bool is_negative, is_zero;
-	if (!VarcharFormatting(value, start_pos, end_pos, is_negative, is_zero)) {
+	bool is_negative, is_zero, should_round_up;
+	if (!VarcharFormatting(value, start_pos, end_pos, is_negative, is_zero, should_round_up)) {
 		throw ConversionException("Could not convert string \'%s\' to Bignum", value.GetString());
 	}
-	return EncodeBignum(value, start_pos, end_pos, is_negative, is_zero);
+	return EncodeVarcharBignum(value, start_pos, end_pos, is_negative, is_zero, should_round_up);
 }
 
 bool Bignum::BignumToDouble(const bignum_t &blob, double &result, bool &strict) {

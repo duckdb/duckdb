@@ -55,10 +55,13 @@ public:
 	//! Function to prepare a varchar for conversion. We trim zero's, check for negative values, and what-not
 	//! Returns false if this is an invalid varchar
 	DUCKDB_API static bool VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative,
-	                                         bool &is_zero);
+	                                         bool &is_zero, bool &should_round_up);
 	//! Encodes a VARCHAR into a BIGNUM blob using formatting information returned by VarcharFormatting.
 	DUCKDB_API static string EncodeBignum(const string_t &value, idx_t start_pos, idx_t end_pos, bool is_negative,
 	                                      bool is_zero);
+	//! Encodes a VARCHAR into a BIGNUM blob, applying decimal rounding if requested.
+	DUCKDB_API static string EncodeVarcharBignum(const string_t &value, idx_t start_pos, idx_t end_pos,
+	                                             bool is_negative, bool is_zero, bool should_round_up);
 	//! Converts a char to a Digit
 	DUCKDB_API static int CharToDigit(char c);
 	//! Converts a Digit to a char
