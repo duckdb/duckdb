@@ -417,6 +417,7 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 	// pushed into get.table_filters, we don't see it here and can't
 	// proceed with pushdown
 	const auto &col_ids = input.get.GetColumnIds();
+	optional_ptr<const ColumnIndex> column_id;
 	for (idx_t proj_idx = 0; proj_idx < col_ids.size(); proj_idx++) {
 		if (col_ids[proj_idx].GetPrimaryIndex() != idx) {
 			continue;
@@ -424,7 +425,11 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 		if (input.get.table_filters.HasFilter(ProjectionIndex(proj_idx))) {
 			return false;
 		}
+		column_id = col_ids[proj_idx];
 		break;
+	}
+	if (!column_id) {
+		return false;
 	}
 
 	auto &parquet_bind_data = bind_data.bind_data->Cast<ParquetReadBindData>();
@@ -446,8 +451,10 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 	if (idx >= children.size()) {
 		return false;
 	}
+
+	ParquetColumnSchema &schema = children[idx].ResolveExtractedChild(*column_id);
+	const idx_t column_flat_idx = schema.column_index;
 	for (const auto &group : reader.GetFileMetadata()->row_groups) {
-		const idx_t column_flat_idx = children[idx].column_index;
 		D_ASSERT(column_flat_idx < group.columns.size());
 		for (const Encoding::type type : group.columns[column_flat_idx].meta_data.encodings) {
 			if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
@@ -457,8 +464,10 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 	}
 
 	const LogicalType type = LogicalType::BIGINT;
-	bind_data.types[idx] = type;
-	bind_data.columns[idx].type = type;
+	if (!column_id->IsPushdownExtract()) {
+		bind_data.types[idx] = type;
+		bind_data.columns[idx].type = type;
+	}
 
 	const ParquetReaderProjectionExpression expression {ParquetReaderProjectionExpressionType::BYTE_LENGTH, type};
 
@@ -466,12 +475,10 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 
 	// initial reader was created before scalar function pushdown optimizer pass, update its types.
 	reader.projection_expressions[idx] = expression;
-	if (idx < reader.columns.size()) {
+	if (!column_id->IsPushdownExtract() && idx < reader.columns.size()) {
 		reader.columns[idx].type = type;
 	}
-	if (idx < reader.root_schema->children.size()) {
-		reader.root_schema->children[idx].type = type;
-	}
+	schema.type = type;
 	return true;
 }
 

@@ -479,10 +479,29 @@ FROM '{TEST_DIR}/scalar-pushdown-nested.parquet'
 physical_plan	<REGEX>:.*PROJECTION.*
 
 statement ok
+COPY (SELECT {'x': 'a', 'y': 'b'} s, 'hello' v)
+TO '{TEST_DIR}/scalar-pushdown-nested-2.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
+
+query I
+SELECT strlen(s.x)
+FROM '{TEST_DIR}/scalar-pushdown-nested-2.parquet';
+----
+1
+
+statement ok
+COPY (SELECT {'x': 'a', 'y': {'z': 'aa'}} s, 'hello' v)
+TO '{TEST_DIR}/scalar-pushdown-nested-3.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
+
+query I
+SELECT strlen(s.y.z)
+FROM '{TEST_DIR}/scalar-pushdown-nested-3.parquet';
+----
+2
+
+statement ok
 COPY (SELECT 'hello world ' || r AS s, r FROM range(3) t(r)) TO '{TEST_DIR}/scalar-pushdown-filter.parquet';
 
 query I
 SELECT strlen(s) FROM '{TEST_DIR}/scalar-pushdown-filter.parquet' WHERE r = 2;
 ----
 13
-

@@ -12,6 +12,7 @@
 
 #include "duckdb.hpp"
 #include "parquet_types.h"
+#include "duckdb/common/column_index.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -80,6 +81,7 @@ public:
 
 public:
 	void SetSchemaIndex(idx_t schema_idx);
+	ParquetColumnSchema &ResolveExtractedChild(const ColumnIndex &column_id);
 
 public:
 	string name;

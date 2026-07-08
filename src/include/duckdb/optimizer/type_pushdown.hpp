@@ -28,6 +28,13 @@ struct GetAnalysis {
 	unordered_map<ProjectionIndex, const Expression *> col_to_expr;
 
 	idx_t StorageIndex(ProjectionIndex idx) const;
+
+	/**
+	 * Type returned from a pushed down expression.
+	 * Special case is PushdownExtract column, this function returns the base
+	 * struct type.
+	 */
+	LogicalType GetPushdownType(ProjectionIndex idx) const;
 };
 
 using Analyses = unordered_map<TableIndex, GetAnalysis>;
@@ -121,9 +128,18 @@ unique_ptr<LogicalOperator> PushdownOptimize(ClientContext &context, unique_ptr<
 			}
 			const idx_t storage_index = analysis.StorageIndex(column_index);
 			TableFunctionProjectionExpressionInput input {analysis.get, *expr, storage_index};
+			const LogicalType return_type = expr->GetReturnType();
+
 			if (analysis.get.function.projection_expression_pushdown(context, input)) {
-				// LOGICAL_GET doesn't initialize .types of LogicalOperator
-				analysis.get.returned_types[storage_index] = expr->GetReturnType();
+				auto &column_id = analysis.get.GetMutableColumnIds()[column_index];
+				if (column_id.IsPushdownExtract()) {
+					column_id.SetPushdownExtractType(analysis.get.returned_types[storage_index], &return_type);
+				} else {
+					analysis.get.returned_types[storage_index] = return_type;
+					if (column_index < analysis.get.types.size()) {
+						analysis.get.types[column_index] = return_type;
+					}
+				}
 				any_pushed = true;
 			} else { // failed to push down expression, can't replace it
 				expr = nullptr;

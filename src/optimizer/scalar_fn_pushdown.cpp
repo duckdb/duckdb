@@ -2,7 +2,6 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
@@ -68,8 +67,7 @@ unique_ptr<Expression> ScalarFnReplace::VisitReplace(BoundColumnRefExpression &e
 
 	const auto &[analysis, column_index, projection] = *binding;
 	if (CanPushdownColumn(analysis, column_index)) {
-		const idx_t storage_index = analysis.StorageIndex(column_index);
-		const LogicalType return_type = analysis.get.returned_types[storage_index];
+		const LogicalType return_type = analysis.GetPushdownType(column_index);
 		expr.SetReturnType(return_type);
 		if (projection != nullptr && !projection->types.empty()) {
 			projection->types[column_index] = return_type;
@@ -96,8 +94,7 @@ unique_ptr<Expression> ScalarFnReplace::VisitReplace(BoundFunctionExpression &ex
 		return std::move(*ptr);
 	}
 
-	const idx_t storage_index = analysis.StorageIndex(column_index);
-	const LogicalType return_type = analysis.get.returned_types[storage_index];
+	const LogicalType return_type = analysis.GetPushdownType(column_index);
 	bound_col_base->SetReturnType(return_type);
 	if (projection != nullptr && !projection->types.empty()) {
 		projection->types[column_index] = return_type;
