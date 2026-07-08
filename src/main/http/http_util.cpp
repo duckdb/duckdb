@@ -472,7 +472,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 				const auto backoff_exp = static_cast<double>(throttled ? tries - 1 : tries - 2);
 				const auto backoff_ms = (double)params.retry_wait_ms * pow(params.retry_backoff, backoff_exp);
 				// cap in the double domain to avoid overflow in the cast
-				uint64_t sleep_amount = (uint64_t)MinValue<double>(backoff_ms, (double)NumericLimits<int64_t>::Maximum());
+				uint64_t sleep_amount =
+				    (uint64_t)MinValue<double>(backoff_ms, (double)NumericLimits<int64_t>::Maximum());
 				if (throttled) {
 					sleep_amount = MinValue<uint64_t>(sleep_amount, THROTTLE_MAX_BACKOFF_MS);
 					string retry_after = caught_retry_after;
