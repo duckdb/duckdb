@@ -39,7 +39,6 @@ public:
 public:
 	annotated_mutex producer_lock;
 	std::condition_variable producer_cv;
-	idx_t enqueue_counter DUCKDB_GUARDED_BY(producer_lock) = 0;
 
 private:
 	array<unique_ptr<QueueProducerToken>, TASK_SCHEDULER_TYPE_COUNT> tokens;
@@ -76,6 +75,9 @@ public:
 	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks);
 	//! Fetches a task from a specific producer, returns true if successful or false if no tasks were available
 	bool GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task);
+	//! Fetches a task from a specific producer while token.producer_lock is held.
+	//! Returns true when a task was found and assigned to `task`.
+	bool GetTaskFromProducerLocked(ProducerToken &token, shared_ptr<Task> &task) DUCKDB_REQUIRES(token.producer_lock);
 	//! Run tasks forever until "marker" is set to false, "marker" must remain valid until the thread is joined
 	void ExecuteForever(atomic<bool> *marker);
 	void ExecuteForever(atomic<bool> *marker, TaskSchedulerType pool_type);

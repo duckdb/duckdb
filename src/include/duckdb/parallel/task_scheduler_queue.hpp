@@ -50,6 +50,12 @@ public:
 #endif
 
 private:
+	friend class TaskScheduler;
+
+	//! Dequeues a task enqueued by this producer while token.producer_lock is held.
+	//! Returns true when a task was found and assigned to `task`.
+	bool DequeueFromProducerLocked(ProducerToken &token, shared_ptr<Task> &task) DUCKDB_REQUIRES(token.producer_lock);
+
 	const TaskSchedulerType pool_type;
 #ifndef DUCKDB_NO_THREADS
 	unique_ptr<ConcurrentQueueWrapper> queue;

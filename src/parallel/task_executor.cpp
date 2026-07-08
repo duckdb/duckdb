@@ -55,32 +55,21 @@ void TaskExecutor::WorkOnTasks() {
 	shared_ptr<Task> task_from_producer;
 	// wait for all active tasks to finish
 	while (true) {
-		idx_t observed_enqueue = 0;
-		idx_t observed_completed = 0;
 		{
-			const annotated_lock_guard<annotated_mutex> lk(token->producer_lock);
+			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
 			if (completed_tasks == total_tasks) {
 				break;
 			}
-			observed_enqueue = token->enqueue_counter;
-			observed_completed = completed_tasks;
+			if (!scheduler.GetTaskFromProducerLocked(*token, task_from_producer)) {
+				token->producer_cv.wait(lk);
+				continue;
+			}
 		}
-		if (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
-			const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
-			std::ignore = res;
-			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
-			task_from_producer.reset();
-		} else {
-			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
-			token->producer_cv.wait(lk, [&]() DUCKDB_REQUIRES(token->producer_lock) {
-				// All tasks are finished.
-				return completed_tasks == total_tasks
-				       // New tasks were enqueued.
-				       || token->enqueue_counter != observed_enqueue ||
-				       // New tasks were completed.
-				       completed_tasks != observed_completed;
-			});
-		}
+
+		const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
+		std::ignore = res;
+		D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
+		task_from_producer.reset();
 	}
 
 	// check if we ran into any errors while checkpointing
