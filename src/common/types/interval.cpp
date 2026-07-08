@@ -13,6 +13,24 @@
 
 namespace duckdb {
 
+namespace {
+void AssignInvalidInputErrorOrThrow(const string &message, string *error_message) {
+	if (error_message) {
+		HandleCastError::AssignError(message, error_message);
+		return;
+	}
+	throw InvalidInputException(message);
+}
+
+void AssignOutOfRangeErrorOrThrow(const string &message, string *error_message) {
+	if (error_message) {
+		HandleCastError::AssignError(message, error_message);
+		return;
+	}
+	throw OutOfRangeException(message);
+}
+} // namespace
+
 bool Interval::FromString(const string &str, interval_t &result) {
 	string error_message;
 	return Interval::FromCString(str.c_str(), str.size(), result, &error_message, false);
@@ -22,26 +40,26 @@ template <class T>
 bool IntervalTryAddition(T &target, int64_t input, int64_t multiplier, string *error_message, double fraction = 0) {
 	int64_t addition;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, multiplier, addition)) {
-		HandleCastError::AssignError("interval value is out of range", error_message);
+		AssignOutOfRangeErrorOrThrow("interval value is out of range", error_message);
 		return false;
 	}
 	T addition_base;
 	if (!TryCast::Operation<int64_t, T>(addition, addition_base)) {
-		HandleCastError::AssignError(CastExceptionText<int64_t, T>(addition), error_message);
+		AssignInvalidInputErrorOrThrow(CastExceptionText<int64_t, T>(addition), error_message);
 		return false;
 	}
 	if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
-		HandleCastError::AssignError("interval value is out of range", error_message);
+		AssignOutOfRangeErrorOrThrow("interval value is out of range", error_message);
 		return false;
 	}
 	if (std::fabs(fraction) > 1e-10) {
 		addition = static_cast<int64_t>(round(fraction * static_cast<double>(multiplier)));
 		if (!TryCast::Operation<int64_t, T>(addition, addition_base)) {
-			HandleCastError::AssignError(CastExceptionText<int64_t, T>(addition), error_message);
+			AssignInvalidInputErrorOrThrow(CastExceptionText<int64_t, T>(addition), error_message);
 			return false;
 		}
 		if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
-			HandleCastError::AssignError("interval fraction is out of range", error_message);
+			AssignOutOfRangeErrorOrThrow("interval fraction is out of range", error_message);
 			return false;
 		}
 	}
@@ -122,7 +140,7 @@ interval_parse_number:
 		}
 		string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
 		if (!TryCast::Operation<string_t, int64_t>(nr_string, number)) {
-			HandleCastError::AssignError(CastExceptionText<string_t, int64_t>(nr_string), error_message);
+			AssignInvalidInputErrorOrThrow(CastExceptionText<string_t, int64_t>(nr_string), error_message);
 			return false;
 		}
 		fraction = 0;

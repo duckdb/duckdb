@@ -102,4 +102,4 @@ NULL	NULL	NULL	NULL
 statement error
 SELECT CAST('2147483648 days' AS INTERVAL);
 ----
-<REGEX>:Conversion Error.*out of range.*
+<REGEX>:Invalid Input Error.*out of range.*
