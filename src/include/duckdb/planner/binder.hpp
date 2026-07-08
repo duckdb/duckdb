@@ -207,7 +207,6 @@ struct GlobalBinderState {
 class Binder : public enable_shared_from_this<Binder> {
 	friend class ColumnQualifier;
 	friend class ExpressionBinder;
-	friend class PairDependentJoinPlanner;
 	friend class RecursiveDependentJoinPlanner;
 
 public:
@@ -569,12 +568,6 @@ private:
 	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);
 
 	void PlanSubqueries(unique_ptr<Expression> &expr, unique_ptr<LogicalOperator> &root);
-	bool TryPlanPairDependentJoin(BoundJoinRef &ref, unique_ptr<LogicalOperator> &left,
-	                              unique_ptr<LogicalOperator> &right, unique_ptr<LogicalOperator> &result);
-	unique_ptr<LogicalOperator>
-	PlanPairDependentLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-	                             unique_ptr<Expression> condition, const unordered_set<TableIndex> &left_bindings,
-	                             const unordered_set<TableIndex> &right_bindings, JoinType join_type);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);
 	unique_ptr<LogicalOperator> PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
 	                                            CorrelatedColumns &correlated_columns,

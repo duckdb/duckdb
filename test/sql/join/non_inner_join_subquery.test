@@ -210,7 +210,7 @@ ORDER BY l.x, r.b NULLS LAST;
 3	30	NULL
 
 # When build/probe-side optimization is disabled, RIGHT JOIN reaches the
-# pair-dependent planner before it is normalized to LEFT JOIN.
+# join-condition dependent planner before it is normalized to LEFT JOIN.
 statement ok
 PRAGMA disable_optimizer;
 
@@ -365,8 +365,8 @@ ANTI JOIN pair_r r ON EXISTS (
 ORDER BY ALL;
 ----
 
-# The LEFT match-set rewrite also supports inputs that expose more than one
-# binding group on either side of the join.
+# Pair-dependent LEFT joins are represented as dependent joins, and still
+# support inputs that expose more than one binding group on either side.
 statement ok
 CREATE TABLE pair_left_multi_l2(c INTEGER);
 
@@ -472,8 +472,8 @@ ORDER BY l.a, l.x, r.b NULLS LAST;
 2	20	20
 3	30	NULL
 
-# Pair-dependent SEMI and ANTI joins use the same match-set shape, but only
-# expose the left input and must not multiply it by matching right-side rows.
+# Pair-dependent SEMI and ANTI joins only expose the left input and must not
+# multiply it by matching right-side rows.
 query II
 SELECT l.a, l.x
 FROM pair_l l
@@ -518,7 +518,7 @@ ORDER BY ALL;
 ----
 3	30
 
-# The LEFT match-set rewrite preserves duplicate payload multiplicities and
+# The dependent LEFT rewrite preserves duplicate payload multiplicities and
 # unmatched left rows.
 statement ok
 CREATE TABLE pair_left_dup_l(a INTEGER);
@@ -680,8 +680,8 @@ SELECT currval('pair_left_effect_seq');
 ----
 2
 
-# SEMI/ANTI pair-dependent rewrites also route through generated CTEs. The
-# exposed left input must still be evaluated only once.
+# SEMI/ANTI pair-dependent rewrites route through dependent join decorrelation.
+# The exposed left input must still be evaluated only once.
 statement ok
 CREATE SEQUENCE pair_exists_effect_seq START 1;
 
@@ -931,7 +931,7 @@ ORDER BY ALL;
 statement ok
 PRAGMA enable_optimizer;
 
-# Pair-dependent FULL OUTER JOIN predicates are evaluated through a match-set
+# Pair-dependent FULL OUTER JOIN predicates are evaluated through a match-domain
 # CTE so unmatched rows from both sides are preserved.
 query II
 SELECT l.a, r.b
@@ -1022,7 +1022,7 @@ ORDER BY l.a NULLS LAST, r.b NULLS LAST;
 3	30
 3	40
 
-# Nested subqueries inside the match-set predicate may already contain their own
+# Nested subqueries inside the match-domain predicate may already contain their own
 # dependent joins. Rebinding the predicate to the generated CTE refs must also
 # update the dependent join correlation metadata, not just visible expressions.
 statement ok
@@ -1236,7 +1236,7 @@ WHERE EXISTS (
 ----
 5
 
-# The match-set filter still goes through normal subquery decorrelation, including
+# The match-domain filter still goes through normal subquery decorrelation, including
 # LIMIT, aggregate, and window paths.
 statement ok
 CREATE TABLE pair_decor_l(a INTEGER);
@@ -1666,7 +1666,7 @@ ORDER BY l.a NULLS LAST, r.b NULLS LAST;
 3	NULL
 NULL	30
 
-# Volatile pair-dependent predicates are not lowered through the match-set
+# Volatile pair-dependent predicates are not lowered through the match-domain
 # rewrite because duplicate payload pairs would otherwise share one evaluation.
 statement error
 SELECT l.a, r.b
@@ -2578,9 +2578,8 @@ ORDER BY outer_l.x, q.a NULLS LAST, q.x NULLS LAST;
 20	NULL	NULL
 30	3	30
 
-# The match-set rewrite is only valid when the join inputs are independent of
-# the enclosing query. If an input is already correlated, the LEFT fallback keeps
-# the enclosing dependent join in control.
+# Pair-dependent LEFT joins inside an enclosing lateral join stay in the normal
+# dependent-join pipeline.
 query III
 SELECT outer_l.x, q.lx, q.b
 FROM pair_l outer_l
@@ -2640,7 +2639,7 @@ ORDER BY outer_r.y, q.a, q.x, q.b NULLS LAST;
 400	3	30	NULL
 
 # A CTE ref can hide an input dependency on the enclosing query until CTE
-# decorrelation. The match-set rewrite must not treat that input as independent.
+# decorrelation. The dependent-join pipeline must keep that dependency intact.
 query IIII
 SELECT outer_r.b, q.a, q.x, q.b
 FROM pair_r outer_r

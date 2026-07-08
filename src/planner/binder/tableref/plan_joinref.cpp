@@ -385,11 +385,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		ref.type = JoinType::LEFT;
 		std::swap(left, right);
 	}
-	unique_ptr<LogicalOperator> pair_dependent_join;
-	if (TryPlanPairDependentJoin(ref, left, right, pair_dependent_join)) {
-		RecursiveDependentJoinPlanner::Plan(*this, *pair_dependent_join);
-		return pair_dependent_join;
-	}
 	if (ref.lateral) {
 		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                                std::move(ref.condition));
@@ -433,8 +428,13 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
 	}
-	RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(*this, *join);
+	RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(*this, result);
 	if (!ref.duplicate_eliminated_columns.empty()) {
+		if (result->type == LogicalOperatorType::LOGICAL_FILTER) {
+			join = result->children[0].get();
+		} else {
+			join = result.get();
+		}
 		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
 		comp_join.delim_flipped = ref.delim_flipped;

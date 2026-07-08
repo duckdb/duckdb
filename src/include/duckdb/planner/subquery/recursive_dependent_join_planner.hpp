@@ -23,12 +23,14 @@ class LogicalJoin;
 class RecursiveDependentJoinPlanner : public LogicalOperatorVisitor {
 public:
 	static void Plan(Binder &binder, LogicalOperator &op);
-	static void PlanJoinConditionSubqueries(Binder &binder, LogicalOperator &op);
+	static void PlanJoinConditionSubqueries(Binder &binder, unique_ptr<LogicalOperator> &op);
+	static bool TryRewritePairDependentJoinCondition(Binder &binder, unique_ptr<LogicalOperator> &op);
 
 private:
 	explicit RecursiveDependentJoinPlanner(Binder &binder) : binder(binder) {
 	}
 	void VisitOperator(LogicalOperator &op) override;
+	void PlanJoinConditionSubqueries(unique_ptr<LogicalOperator> &op);
 	void PlanJoinChildFilters(LogicalOperator &op);
 	void PlanJoinExpressions(LogicalOperator &op);
 	void PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr, JoinSide uncorrelated_side);
