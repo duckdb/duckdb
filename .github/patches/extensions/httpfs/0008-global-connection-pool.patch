@@ -1,6 +1,8 @@
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index 3c5aa17..2a78bfb 100644
 --- a/src/httpfs.cpp
 +++ b/src/httpfs.cpp
-@@ -1042,13 +1042,8 @@
+@@ -1042,13 +1042,8 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
  }
  
  unique_ptr<HTTPClient> HTTPFileHandle::GetClient() {
@@ -16,7 +18,7 @@
  	return CreateClient();
  }
  
-@@ -1059,7 +1054,8 @@
+@@ -1059,7 +1054,8 @@ unique_ptr<HTTPClient> HTTPFileHandle::CreateClient() {
  }
  
  void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
@@ -26,9 +28,11 @@
  }
  
  HTTPFileHandle::~HTTPFileHandle() {
+diff --git a/src/httpfs_connection_caching.cpp b/src/httpfs_connection_caching.cpp
+index e2bf406..19eafe5 100644
 --- a/src/httpfs_connection_caching.cpp
 +++ b/src/httpfs_connection_caching.cpp
-@@ -27,10 +27,9 @@
+@@ -27,10 +27,9 @@ unique_ptr<HTTPClient> HTTPClientConnectionCache::Find(const string &base_url) {
  	for (size_t i = 0; i < POOL_COUNT; i++) {
  		const size_t idx = (start + i) & (POOL_COUNT - 1);
  		auto &pool = pools[idx];
@@ -42,7 +46,7 @@
  		for (auto &entry : pool.entries) {
  			if (entry && entry->GetBaseUrl() == base_url) {
  				cache_pool_idx = idx;
-@@ -46,14 +45,11 @@
+@@ -46,14 +45,11 @@ void HTTPClientConnectionCache::Store(unique_ptr<HTTPClient> &&client) {
  		return;
  	}
  	const size_t start = cache_pool_idx;
@@ -59,7 +63,7 @@
  		for (auto &entry : pool.entries) {
  			if (!entry) {
  				entry = std::move(client);
-@@ -62,21 +58,12 @@
+@@ -62,21 +58,12 @@ void HTTPClientConnectionCache::Store(unique_ptr<HTTPClient> &&client) {
  			}
  		}
  	}
@@ -86,23 +90,11 @@
  }
  
  void HTTPClientConnectionCache::Clear() {
-@@ -106,6 +93,13 @@
- 	connection_cache.Clear();
- }
- 
-+unique_ptr<HTTPClient> HTTPFSCurlUtil::TryGetCachedClient(const string &proto_host_port) {
-+	if (!connection_caching_enabled) {
-+		return nullptr;
-+	}
-+	return connection_cache.Find(proto_host_port);
-+}
-+
- void HTTPFSCurlUtil::CloseClient(unique_ptr<HTTPClient> &&client) {
- 	if (!client || !connection_caching_enabled) {
- 		return;
+diff --git a/src/include/httpfs_client.hpp b/src/include/httpfs_client.hpp
+index 308ac1a..df06a58 100644
 --- a/src/include/httpfs_client.hpp
 +++ b/src/include/httpfs_client.hpp
-@@ -58,7 +58,7 @@
+@@ -58,7 +58,7 @@ struct HTTPFSParams : public HTTPParams {
  class HTTPClientConnectionCache {
  public:
  	static constexpr size_t POOL_COUNT = 16;
@@ -111,11 +103,51 @@
  	static_assert((POOL_COUNT & (POOL_COUNT - 1)) == 0, "POOL_COUNT must be a power of two");
  
  	unique_ptr<HTTPClient> Find(const string &base_url);
-@@ -95,6 +95,7 @@
- public:
- 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
- 	void CloseClient(unique_ptr<HTTPClient> &&client) override;
-+	unique_ptr<HTTPClient> TryGetCachedClient(const string &proto_host_port) override;
- 	void ClearCachedConnections() override;
- 	unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) override;
+diff --git a/test/sql/connection_caching.test b/test/sql/connection_caching.test
+index 928c822..d342105 100644
+--- a/test/sql/connection_caching.test
++++ b/test/sql/connection_caching.test
+@@ -18,7 +18,7 @@ SET httpfs_connection_caching=true;
+ statement ok
+ CALL enable_logging('HTTPFSInfo');
  
+-# First request — should be a cache miss
++# First request — a single cold connection is dialed to the host (cache miss)
+ statement ok
+ FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
+ 
+@@ -27,23 +27,29 @@ SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_miss%';
+ ----
+ 1
+ 
+-# Second request to the same file — should be a cache hit
++# Second request to the same file — served from the process-wide pool. Every request checks a
++# connection out and back in, so reuse is logged as a hit and no new cold connection is dialed.
+ statement ok
+ FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
+ 
+ query I
+-SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_hit%';
++SELECT count(*) > 0 FROM duckdb_logs WHERE message LIKE '%connection_cache_hit%';
++----
++true
++
++query I
++SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_miss%';
+ ----
+ 1
+ 
+-# Different file on the same host — should still be a cache hit (same base_url)
++# Different file on the same host — still served by the pooled connection (keyed on base_url), no new cold connect
+ statement ok
+ SELECT * FROM 'https://github.com/duckdb/duckdb/raw/9cf66f950dde0173e1a863a7659b3ecf11bf3978/data/csv/customer.csv';
+ 
+ query I
+-SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_hit%';
++SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_miss%';
+ ----
+-2
++1
+ 
+ # Clear of caching disabled temporarily
+ mode skip

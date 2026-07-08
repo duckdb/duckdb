@@ -1,5 +1,4 @@
 #include "duckdb/common/http_util.hpp"
-#include "duckdb/common/random_engine.hpp"
 
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -247,11 +246,6 @@ unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const
 
 void HTTPUtil::CloseClient(unique_ptr<HTTPClient> &&) {
 	// default: no-op, client is destroyed
-}
-
-unique_ptr<HTTPClient> HTTPUtil::TryGetCachedClient(const string &) {
-	// default: no cached connections
-	return nullptr;
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) {
