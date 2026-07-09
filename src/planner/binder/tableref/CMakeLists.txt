@@ -6,6 +6,7 @@ add_library_unity(
   bind_delimgetref.cpp
   bind_emptytableref.cpp
   bind_expressionlistref.cpp
+  bind_feature_at_version_ref.cpp
   bind_column_data_ref.cpp
   bind_joinref.cpp
   bind_pivot.cpp

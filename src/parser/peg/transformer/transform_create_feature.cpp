@@ -1,10 +1,11 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/statement/call_statement.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/refresh_feature_statement.hpp"
+#include "duckdb/parser/tableref/feature_at_version_ref.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -243,13 +244,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformFeatureAtVersionStateme
 	auto &version_num = list_pr.Child<NumberParseResult>(4);
 	int64_t version = std::stoll(version_num.number);
 
-	// Rewrite to: CALL feature_at_version('feature_name', version)
-	auto result = make_uniq<CallStatement>();
-	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(make_uniq<ConstantExpression>(Value(feature_name)));
-	args.push_back(make_uniq<ConstantExpression>(Value::BIGINT(version)));
-	auto function_expression = make_uniq<FunctionExpression>("feature_at_version", std::move(args));
-	result->function = std::move(function_expression);
+	// Rewrite to: SELECT * FROM <FeatureAtVersionRef>
+	auto table_ref = make_uniq<FeatureAtVersionRef>();
+	table_ref->feature_name = std::move(feature_name);
+	table_ref->version = version;
+
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(table_ref);
+
+	auto result = make_uniq<SelectStatement>();
+	result->node = std::move(select_node);
 	return std::move(result);
 }
 

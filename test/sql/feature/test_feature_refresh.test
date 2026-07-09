@@ -96,16 +96,16 @@ SELECT __feature_version, COUNT(*) FROM total_spend__store GROUP BY __feature_ve
 1	3
 2	3
 
-# feature_at_version reads a specific retained version out of the store
+# FEATURE ... AT VERSION reads a specific retained version out of the store
 query IR rowsort
-SELECT user_id, total FROM feature_at_version('total_spend', 1);
+SELECT user_id, total FROM FEATURE total_spend AT VERSION 1;
 ----
 alice	300.00
 bob	50.00
 carol	0.00
 
 query IR rowsort
-SELECT user_id, total FROM feature_at_version('total_spend', 2);
+SELECT user_id, total FROM FEATURE total_spend AT VERSION 2;
 ----
 alice	600.00
 bob	125.00
@@ -134,7 +134,7 @@ SELECT __feature_version, COUNT(*) FROM total_spend__store GROUP BY __feature_ve
 
 # Version 1 has been evicted from the retain window
 query I
-SELECT COUNT(*) FROM feature_at_version('total_spend', 1);
+SELECT COUNT(*) FROM FEATURE total_spend AT VERSION 1;
 ----
 0
 

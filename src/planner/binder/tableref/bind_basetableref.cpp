@@ -4,9 +4,6 @@
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/feature_query.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -123,35 +120,6 @@ void Binder::SetSearchPath(Catalog &catalog, const string &schema) {
 	entry_retriever.SetSearchPath(std::move(search_path));
 }
 
-//! A feature name used as a relation resolves to its current-version snapshot: the denormalized store table
-//! filtered to the current version, with the internal bookkeeping columns hidden. Built as an AST subquery
-//! and bound like any other subquery — no shadow view or table function is involved.
-static unique_ptr<SubqueryRef> BuildFeatureCurrentVersionRef(BaseTableRef &ref, FeatureCatalogEntry &feature) {
-	auto store_table = make_uniq<BaseTableRef>();
-	store_table->catalog_name = feature.ParentCatalog().GetName();
-	store_table->schema_name = feature.ParentSchema().name;
-	store_table->table_name = FeatureStoreTableName(feature.name);
-
-	auto star = make_uniq<StarExpression>();
-	star->exclude_list.insert(QualifiedColumnName(FEATURE_VERSION_COLUMN));
-	star->exclude_list.insert(QualifiedColumnName(FEATURE_TIMESTAMP_COLUMN));
-
-	auto select = make_uniq<SelectNode>();
-	select->select_list.push_back(std::move(star));
-	select->from_table = std::move(store_table);
-	select->where_clause = make_uniq<ComparisonExpression>(
-	    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>(FEATURE_VERSION_COLUMN),
-	    make_uniq<ConstantExpression>(Value::BIGINT(feature.current_version)));
-
-	auto statement = make_uniq<SelectStatement>();
-	statement->node = std::move(select);
-
-	auto subquery = make_uniq<SubqueryRef>(std::move(statement));
-	subquery->alias = ref.alias.empty() ? ref.table_name : ref.alias;
-	subquery->column_name_alias = ref.column_name_alias;
-	return subquery;
-}
-
 BoundStatement Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
@@ -228,7 +196,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 				throw CatalogException("Feature \"%s\" has not been refreshed yet — run REFRESH FEATURE %s first",
 				                       feature.name, feature.name);
 			}
-			auto feature_ref = BuildFeatureCurrentVersionRef(ref, feature);
+			auto feature_ref = BuildFeatureVersionRef(
+			    feature.ParentCatalog().GetName(), feature.ParentSchema().name, feature.name, feature.current_version,
+			    ref.alias.empty() ? ref.table_name : ref.alias, ref.column_name_alias);
 			return Bind(*feature_ref);
 		}
 

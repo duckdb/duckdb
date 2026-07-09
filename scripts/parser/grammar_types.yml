@@ -477,6 +477,7 @@ TableRef:
     - BaseTableRef
     - ParensTableRef
     - ValuesRef
+    - FeatureAtVersionRef
     - MergeIntoUsingClause
     - UpdateTarget
     - BaseTableSet

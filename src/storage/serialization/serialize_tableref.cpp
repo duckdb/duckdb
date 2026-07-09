@@ -36,6 +36,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = ExpressionListRef::Deserialize(deserializer);
 		break;
+	case TableReferenceType::FEATURE_AT_VERSION:
+		result = FeatureAtVersionRef::Deserialize(deserializer);
+		break;
 	case TableReferenceType::JOIN:
 		result = JoinRef::Deserialize(deserializer);
 		break;
@@ -125,6 +128,19 @@ unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<string>>(200, "expected_names", result->expected_names);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "expected_types", result->expected_types);
 	deserializer.ReadPropertyWithDefault<vector<vector<unique_ptr<ParsedExpression>>>>(202, "values", result->values);
+	return std::move(result);
+}
+
+void FeatureAtVersionRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "feature_name", feature_name);
+	serializer.WritePropertyWithDefault<int64_t>(201, "version", version);
+}
+
+unique_ptr<TableRef> FeatureAtVersionRef::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<FeatureAtVersionRef>(new FeatureAtVersionRef());
+	deserializer.ReadPropertyWithDefault<string>(200, "feature_name", result->feature_name);
+	deserializer.ReadPropertyWithDefault<int64_t>(201, "version", result->version);
 	return std::move(result);
 }
 

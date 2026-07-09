@@ -109,18 +109,18 @@ z	5
 
 # Each retained version preserves its own snapshot
 query I
-SELECT total_value FROM feature_at_version('versioned', 2) WHERE customer = 'x';
+SELECT total_value FROM FEATURE versioned AT VERSION 2 WHERE customer = 'x';
 ----
 30
 
 query I
-SELECT total_value FROM feature_at_version('versioned', 3) WHERE customer = 'x';
+SELECT total_value FROM FEATURE versioned AT VERSION 3 WHERE customer = 'x';
 ----
 70
 
 # Version 1 has been evicted from the retain window
 query I
-SELECT COUNT(*) FROM feature_at_version('versioned', 1);
+SELECT COUNT(*) FROM FEATURE versioned AT VERSION 1;
 ----
 0
 
@@ -157,7 +157,7 @@ SELECT DISTINCT __feature_version FROM latest_only__store;
 
 # The previous version is no longer retrievable
 query I
-SELECT COUNT(*) FROM feature_at_version('latest_only', 1);
+SELECT COUNT(*) FROM FEATURE latest_only AT VERSION 1;
 ----
 0
 

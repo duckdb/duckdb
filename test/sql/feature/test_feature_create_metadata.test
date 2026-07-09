@@ -48,9 +48,9 @@ SELECT * FROM f;
 ----
 <REGEX>:.*has not been refreshed yet.*
 
-# feature_at_version for the (non-existent) v1 also fails clearly
+# FEATURE ... AT VERSION for the (non-existent) v1 also fails clearly
 statement error
-SELECT * FROM feature_at_version('f', 1);
+SELECT * FROM FEATURE f AT VERSION 1;
 ----
 <REGEX>:.*has not been refreshed yet.*
 

@@ -61,6 +61,7 @@ class AtClause;
 class BoundAtClause;
 class RefreshFeatureStatement;
 class ServeFeatureStatement;
+class FeatureAtVersionRef;
 
 struct CreateInfo;
 struct CreateTriggerInfo;
@@ -488,6 +489,7 @@ private:
 	BoundStatement Bind(ColumnDataRef &ref);
 	BoundStatement Bind(PivotRef &expr);
 	BoundStatement Bind(ShowRef &ref);
+	BoundStatement Bind(FeatureAtVersionRef &ref);
 
 	unique_ptr<SelectNode> BindPivot(PivotRef &expr, vector<unique_ptr<ParsedExpression>> all_columns);
 	unique_ptr<SelectNode> BindUnpivot(Binder &child_binder, PivotRef &expr,

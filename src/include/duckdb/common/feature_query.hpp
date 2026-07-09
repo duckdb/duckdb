@@ -16,6 +16,7 @@ namespace duckdb {
 
 class SelectNode;
 class SelectStatement;
+class SubqueryRef;
 
 //! Internal columns appended to every denormalized store row: which refresh produced the row and when.
 //! They are excluded from user-facing output (the resolver view, SERVE, feature_at_version).
@@ -56,5 +57,13 @@ bool FeatureColumnListContains(const vector<string> &columns, const string &colu
 //! default to 0. For a global feature (no entity columns) the result is a single aggregate row.
 unique_ptr<SelectStatement> BuildFeatureSnapshotQuery(const SelectNode &select_node,
                                                       const FeatureSnapshotParameters &parameters);
+
+//! One row per entity out of the denormalized store at a specific version, with the internal bookkeeping
+//! columns (__feature_version, __feature_timestamp) hidden. Built as an AST subquery and bound like any
+//! other subquery — no shadow view, table function, or side connection is involved. Used both for
+//! "FROM my_feature" (current version) and "feature_at_version(name, version)" (an explicit version).
+unique_ptr<SubqueryRef> BuildFeatureVersionRef(const string &catalog_name, const string &schema_name,
+                                               const string &feature_name, int64_t version, const string &alias,
+                                               const vector<string> &column_name_alias);
 
 } // namespace duckdb

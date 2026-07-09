@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -202,6 +203,34 @@ unique_ptr<SelectStatement> BuildFeatureSnapshotQuery(const SelectNode &select_n
 	auto result = make_uniq<SelectStatement>();
 	result->node = std::move(result_select);
 	return result;
+}
+
+unique_ptr<SubqueryRef> BuildFeatureVersionRef(const string &catalog_name, const string &schema_name,
+                                               const string &feature_name, int64_t version, const string &alias,
+                                               const vector<string> &column_name_alias) {
+	auto store_table = make_uniq<BaseTableRef>();
+	store_table->catalog_name = catalog_name;
+	store_table->schema_name = schema_name;
+	store_table->table_name = FeatureStoreTableName(feature_name);
+
+	auto star = make_uniq<StarExpression>();
+	star->exclude_list.insert(QualifiedColumnName(FEATURE_VERSION_COLUMN));
+	star->exclude_list.insert(QualifiedColumnName(FEATURE_TIMESTAMP_COLUMN));
+
+	auto select = make_uniq<SelectNode>();
+	select->select_list.push_back(std::move(star));
+	select->from_table = std::move(store_table);
+	select->where_clause = make_uniq<ComparisonExpression>(
+	    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>(string(FEATURE_VERSION_COLUMN)),
+	    make_uniq<ConstantExpression>(Value::BIGINT(version)));
+
+	auto statement = make_uniq<SelectStatement>();
+	statement->node = std::move(select);
+
+	auto subquery = make_uniq<SubqueryRef>(std::move(statement));
+	subquery->alias = alias;
+	subquery->column_name_alias = column_name_alias;
+	return subquery;
 }
 
 } // namespace duckdb
