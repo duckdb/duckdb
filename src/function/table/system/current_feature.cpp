@@ -5,7 +5,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/feature_query.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"

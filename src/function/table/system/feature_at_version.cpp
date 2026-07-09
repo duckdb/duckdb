@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/feature_query.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"

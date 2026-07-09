@@ -1,7 +1,6 @@
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"

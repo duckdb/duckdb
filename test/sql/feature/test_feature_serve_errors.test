@@ -1,0 +1,155 @@
+# name: test/sql/feature/test_feature_serve_errors.test
+# description: Exhaustive error handling for SERVE FEATURE — malformed requests must produce a clean error,
+# group: [feature]
+
+#              never a crash.
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE custs (cust VARCHAR);
+
+statement ok
+INSERT INTO custs VALUES ('alice'), ('bob');
+
+statement ok
+CREATE TABLE txns (cust VARCHAR, amt INTEGER, ts TIMESTAMP);
+
+statement ok
+INSERT INTO txns VALUES ('alice', 100, '2024-01-05 00:00:00'), ('bob', 50, '2024-01-05 00:00:00');
+
+# A keyed feature (refreshed), a global feature (refreshed), and a keyed feature that is never refreshed.
+statement ok
+CREATE FEATURE spend ENTITY custs TIMESTAMP ts WINDOW 30 DAYS RETAIN 1 AS (SELECT cust, SUM(amt) AS total FROM txns GROUP BY cust);
+
+statement ok
+REFRESH FEATURE spend AT '2024-01-10 00:00:00';
+
+statement ok
+CREATE FEATURE total_global ENTITY custs TIMESTAMP ts WINDOW 30 DAYS RETAIN 1 AS (SELECT SUM(amt) AS grand_total FROM txns);
+
+statement ok
+REFRESH FEATURE total_global AT '2024-01-10 00:00:00';
+
+statement ok
+CREATE FEATURE unrefreshed ENTITY custs TIMESTAMP ts WINDOW 30 DAYS RETAIN 1 AS (SELECT cust, SUM(amt) AS total FROM txns GROUP BY cust);
+
+# A composite-key feature (refreshed) for the multi-column mapping errors.
+statement ok
+CREATE TABLE pairs (a VARCHAR, b VARCHAR);
+
+statement ok
+INSERT INTO pairs VALUES ('alice', 'm1');
+
+statement ok
+CREATE TABLE pair_evts (a VARCHAR, b VARCHAR, amt INTEGER, ts TIMESTAMP);
+
+statement ok
+INSERT INTO pair_evts VALUES ('alice', 'm1', 100, '2024-01-05 00:00:00');
+
+statement ok
+CREATE FEATURE pair_feat ENTITY pairs (a, b) TIMESTAMP ts WINDOW 30 DAYS RETAIN 1 AS (SELECT a, b, SUM(amt) AS total FROM pair_evts GROUP BY a, b);
+
+statement ok
+REFRESH FEATURE pair_feat AT '2024-01-10 00:00:00';
+
+statement ok
+CREATE TABLE spine (cust VARCHAR, req TIMESTAMP);
+
+statement ok
+INSERT INTO spine VALUES ('alice', '2024-01-11 00:00:00'), ('bob', '2024-01-11 00:00:00');
+
+statement ok
+CREATE TABLE spine_pairs (a VARCHAR, b VARCHAR, req TIMESTAMP);
+
+statement ok
+INSERT INTO spine_pairs VALUES ('alice', 'm1', '2024-01-11 00:00:00');
+
+# ============================================================
+# Parser / catalog validation
+# ============================================================
+
+# Missing FOR clause
+statement error
+SERVE FEATURE spend ASOF req;
+----
+syntax error
+
+# Non-existent feature
+statement error
+SERVE FEATURE nope FOR spine ASOF req;
+----
+does not exist
+
+# Non-existent spine table
+statement error
+SERVE FEATURE spend FOR nope ASOF req;
+----
+does not exist
+
+# Serving a feature that has never been refreshed
+statement error
+SERVE FEATURE unrefreshed FOR spine ASOF req;
+----
+has not been refreshed
+
+# ============================================================
+# Entity-mapping validation
+# ============================================================
+
+# An entity mapping on a GLOBAL feature (no entity columns)
+statement error
+SERVE FEATURE total_global ENTITY cust FOR spine ASOF req;
+----
+global feature
+
+# A global ENTITY override cannot be combined with a feature-specific ENTITY mapping
+statement error
+SERVE FEATURE spend ENTITY (cust = cust) FOR spine ENTITY cust ASOF req;
+----
+cannot combine
+
+# A global ENTITY override does not support a composite-key feature
+statement error
+SERVE FEATURE pair_feat FOR spine_pairs ENTITY x ASOF req;
+----
+multiple entity columns
+
+# A shorthand ENTITY mapping does not support a composite-key feature
+statement error
+SERVE FEATURE pair_feat ENTITY x FOR spine_pairs ASOF req;
+----
+multiple entity columns
+
+# A mapping that names an entity column the feature does not have
+statement error
+SERVE FEATURE spend ENTITY (nope = cust) FOR spine ASOF req;
+----
+has no entity column
+
+# ============================================================
+# Column resolution against the spine (reported by the binder)
+# ============================================================
+
+# ASOF column does not exist in the spine
+statement error
+SERVE FEATURE spend FOR spine ASOF nope;
+----
+<REGEX>:.*nope.*
+
+# Mapped spine column does not exist in the spine
+statement error
+SERVE FEATURE spend ENTITY (cust = nope) FOR spine ASOF req;
+----
+<REGEX>:.*nope.*
+
+# ============================================================
+# Sanity: a well-formed SERVE still works after all the failures above
+# ============================================================
+query III rowsort
+SERVE FEATURE spend FOR spine ASOF req;
+----
+alice	2024-01-11 00:00:00	100
+bob	2024-01-11 00:00:00	50

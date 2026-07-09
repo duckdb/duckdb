@@ -1,17 +1,11 @@
 #include "duckdb/common/feature_refresh.hpp"
 
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
-#include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/feature_query.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
