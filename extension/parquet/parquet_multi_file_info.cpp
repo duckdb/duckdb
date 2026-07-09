@@ -297,11 +297,10 @@ static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<Func
 	if (serializer.ShouldSerialize(StorageVersion::V1_2_0)) {
 		serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
 	}
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WriteProperty(105, "projection_expressions", parquet_data.projection_expressions);
-	} else if (!parquet_data.projection_expressions.empty()) {
-		throw SerializationException("Version too old to serialize projection_expressions but they are non-empty");
-	}
+    // Old clients won't be able to read the plan even if we
+    // don't push this field. If projection expression worked,
+    // it modified "types" which we serialize ultimately
+	serializer.WriteProperty(105, "projection_expressions", parquet_data.projection_expressions);
 }
 
 static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserializer, TableFunction &function) {
