@@ -12,13 +12,13 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
 
 namespace duckdb {
+class ClientContext;
 class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;

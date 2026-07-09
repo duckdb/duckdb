@@ -169,11 +169,13 @@ bool TryCastToBignum::Operation(string_t input_value, bignum_t &result_value, Ve
                                 CastParameters &parameters) {
 	idx_t start_pos, end_pos;
 	bool is_negative, is_zero;
-	if (!Bignum::VarcharFormatting(input_value, start_pos, end_pos, is_negative, is_zero)) {
+	bool should_round_up;
+	if (!Bignum::VarcharFormatting(input_value, start_pos, end_pos, is_negative, is_zero, should_round_up)) {
 		return false;
 	}
 
-	auto blob_string = Bignum::EncodeBignum(input_value, start_pos, end_pos, is_negative, is_zero);
+	auto blob_string =
+	    Bignum::EncodeVarcharBignum(input_value, start_pos, end_pos, is_negative, is_zero, should_round_up);
 
 	uint32_t blob_size = static_cast<uint32_t>(blob_string.size());
 	result_value = bignum_t(StringVector::EmptyString(result, blob_size));

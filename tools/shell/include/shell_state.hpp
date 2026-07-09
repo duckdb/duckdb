@@ -310,6 +310,7 @@ public:
 	bool DisplaySchemas(const vector<string> &args);
 	MetadataResult DisplayEntries(const vector<string> &args, char type);
 	MetadataResult DisplayTables(const vector<string> &args);
+	MetadataResult DisplayManual(const vector<string> &args);
 	void ShowConfiguration();
 	void ClearInterrupt();
 

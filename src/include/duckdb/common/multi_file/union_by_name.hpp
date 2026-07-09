@@ -12,7 +12,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 

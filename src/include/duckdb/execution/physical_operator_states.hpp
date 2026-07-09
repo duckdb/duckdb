@@ -8,13 +8,11 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/execution/partition_info.hpp"
 

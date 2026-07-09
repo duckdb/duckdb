@@ -1,0 +1,10 @@
+--- a/src/unity_catalog_extension.cpp
++++ b/src/unity_catalog_extension.cpp
+@@ -6,6 +6,7 @@
+ #include "duckdb/main/secret/secret_manager.hpp"
+ #include "duckdb/parser/parsed_data/attach_info.hpp"
+ #include "duckdb/storage/storage_extension.hpp"
++#include "duckdb/logging/logger.hpp"
+ 
+ #include "storage/unity_catalog.hpp"
+ #include "storage/uc_transaction_manager.hpp"

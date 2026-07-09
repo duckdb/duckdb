@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/operator/numeric_cast.hpp"

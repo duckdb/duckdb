@@ -203,12 +203,22 @@ def execute_test(i, test):
         config_contents['initial_db'] = db_path
         with open(worker_test_config, 'w') as f:
             json.dump(config_contents, f)
+        # The durable db (initial_db) lives outside test_temp_dir, so destroy is indifferent;
+        # pin test_temp_dir as the exact base with both levels off (replaces --test-temp-dir).
+        # The enclosing TemporaryDirectory cleans everything up, so destroy=never just retains
+        # until then.
         unittest_cmd = [
             unittest_program,
             '--test-config',
             worker_test_config,
-            '--test-temp-dir',
+            '--temp-dir-base',
             test_temp_dir,
+            '--temp-dir-run-id',
+            'off',
+            '--temp-dir-test-id',
+            'off',
+            '--temp-dir-destroy',
+            'never',
             test,
         ]
         failure = run_program(

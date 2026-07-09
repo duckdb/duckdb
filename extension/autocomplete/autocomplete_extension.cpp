@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/autocomplete_extension.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"

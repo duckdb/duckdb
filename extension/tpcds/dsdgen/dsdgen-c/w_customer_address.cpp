@@ -49,7 +49,7 @@
 
 #include <stdio.h>
 
-struct W_CUSTOMER_ADDRESS_TBL g_w_customer_address;
+thread_local struct W_CUSTOMER_ADDRESS_TBL g_w_customer_address;
 
 /*
  * mk_customer_address

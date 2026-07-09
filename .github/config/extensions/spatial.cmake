@@ -1,4 +1,4 @@
-if (${BUILD_COMPLETE_EXTENSION_SET})
+if (${BUILD_COMPLETE_EXTENSION_SET} AND NOT ${WASM_ENABLED})
 ################# SPATIAL
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
@@ -6,5 +6,6 @@ duckdb_extension_load(spatial
     GIT_TAG 686950e980a0629c5ffbc788b498681e2b06e75e
     INCLUDE_DIR src/spatial
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()

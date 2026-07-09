@@ -52,8 +52,8 @@
 
 #include <stdio.h>
 
-struct W_WEB_PAGE_TBL g_w_web_page;
-static struct W_WEB_PAGE_TBL g_OldValues;
+thread_local struct W_WEB_PAGE_TBL g_w_web_page;
+static thread_local struct W_WEB_PAGE_TBL g_OldValues;
 
 /*
  * Routine: mk_web_page()
@@ -72,8 +72,8 @@ static struct W_WEB_PAGE_TBL g_OldValues;
  */
 int mk_w_web_page(void *info_arr, ds_key_t index) {
 	int32_t bFirstRecord = 0, nFieldChangeFlags;
-	static date_t dToday;
-	static ds_key_t nConcurrent, nRevisions;
+	static thread_local date_t dToday;
+	static thread_local ds_key_t nConcurrent, nRevisions;
 
 	/* begin locals declarations */
 	int32_t nTemp, nAccess;
