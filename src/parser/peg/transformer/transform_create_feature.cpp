@@ -31,7 +31,8 @@ static int64_t ParseIntervalCount(const string &number, const string &context, b
 		throw ParserException("%s shorthand count is out of range", context);
 	}
 	if (result < 0 || (result == 0 && !allow_zero)) {
-		throw ParserException(allow_zero ? "%s interval must be non-negative" : "%s interval must be positive", context);
+		throw ParserException(allow_zero ? "%s interval must be non-negative" : "%s interval must be positive",
+		                      context);
 	}
 	return result;
 }
@@ -70,7 +71,8 @@ static interval_t ParseIntervalString(const string &interval_str, const string &
 	}
 	bool is_zero = !IsPositiveInterval(result) && !IsNegativeInterval(result);
 	if (IsNegativeInterval(result) || (is_zero && !allow_zero)) {
-		throw ParserException(allow_zero ? "%s interval must be non-negative" : "%s interval must be positive", context);
+		throw ParserException(allow_zero ? "%s interval must be non-negative" : "%s interval must be positive",
+		                      context);
 	}
 	return result;
 }
