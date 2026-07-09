@@ -1,0 +1,102 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_rows_scanned_parquet_prefilter.test
+# description: Test that ROWS_SCANNED reports pre-filter row counts for parquet scans
+# group: [profiling]
+
+require json
+
+require parquet
+
+# Create a parquet file with 10000 rows, where only 10% pass the filter
+statement ok
+COPY (SELECT i, i % 10 AS grp FROM range(0, 10000) t(i)) TO '{TEST_DIR}/prefilter_test.parquet' (FORMAT 'parquet');
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['operator.intermediate_rows', 'operator.rows_scanned', 'query.total_rows_scanned'];
+
+# Query with a selective filter: only 1000 out of 10000 rows pass
+statement ok
+SELECT * FROM '{TEST_DIR}/prefilter_test.parquet' WHERE grp = 5;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+# total_rows_scanned should be 10000 (all rows read pre-filter), not 1000 (post-filter)
+query I
+SELECT
+	CASE WHEN query.total_rows_scanned = 10000 THEN 'correct'
+	ELSE 'wrong: ' || COALESCE(query.total_rows_scanned::VARCHAR, 'NULL') END
+FROM metrics_output;
+----
+correct
+
+# Verify with count(*) and a very selective filter to ensure rows_scanned >> output rows
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['operator.rows_scanned', 'query.total_rows_scanned'];
+
+statement ok
+SELECT count(*) FROM '{TEST_DIR}/prefilter_test.parquet' WHERE grp = 0;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+# rows_scanned should still be 10000 (pre-filter), even though only 1000 rows match
+query I
+SELECT
+	CASE WHEN query.total_rows_scanned = 10000 THEN 'correct'
+	ELSE 'wrong: ' || COALESCE(query.total_rows_scanned::VARCHAR, 'NULL') END
+FROM metrics_output;
+----
+correct
+
+# Test with multiple parquet files to ensure accumulation works across files
+statement ok
+COPY (SELECT i, i % 5 AS grp FROM range(0, 5000) t(i)) TO '{TEST_DIR}/prefilter_multi1.parquet' (FORMAT 'parquet');
+
+statement ok
+COPY (SELECT i, i % 5 AS grp FROM range(5000, 10000) t(i)) TO '{TEST_DIR}/prefilter_multi2.parquet' (FORMAT 'parquet');
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['operator.rows_scanned', 'query.total_rows_scanned'];
+
+# Query across two files with a selective filter (20% pass rate)
+statement ok
+SELECT * FROM read_parquet(['{TEST_DIR}/prefilter_multi1.parquet', '{TEST_DIR}/prefilter_multi2.parquet']) WHERE grp = 2;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+# rows_scanned should be 10000 total (5000 from each file, pre-filter)
+query I
+SELECT
+	CASE WHEN query.total_rows_scanned = 10000 THEN 'correct'
+	ELSE 'wrong: ' || COALESCE(query.total_rows_scanned::VARCHAR, 'NULL') END
+FROM metrics_output;
+----
+correct

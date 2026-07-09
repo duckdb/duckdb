@@ -226,6 +226,9 @@ public:
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
 
+	//! Per-thread rows scanned counter (incremented before filters in Scan)
+	idx_t rows_scanned = 0;
+
 	//! Per-thread counters for row groups whose data was read / skipped, incremented as row groups are processed.
 	//! Read in ParquetScanGetMetrics and surfaced as the standard row_groups_scanned / total_row_groups_to_scan
 	//! profiling metrics (the profiler sums them across threads).
@@ -333,6 +336,7 @@ public:
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
+	idx_t GetLocalRowsScanned(LocalTableFunctionState &lstate) const override;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const;

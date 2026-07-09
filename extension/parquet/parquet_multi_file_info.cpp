@@ -800,6 +800,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
 	return Process(context, local_state.scan_state, chunk);
 }
 
+idx_t ParquetReader::GetLocalRowsScanned(LocalTableFunctionState &lstate) const {
+	auto &local_state = lstate.Cast<ParquetReadLocalState>();
+	return local_state.scan_state.rows_scanned;
+}
+
 unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::Copy() {
 	return make_uniq<ParquetMultiFileInfo>();
 }
