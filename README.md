@@ -15,38 +15,110 @@ DuckDB is a high-performance analytical database system. It is designed to be fa
 
 ## Feature Store
 
-The feature store extension adds SQL statements for defining, refreshing, and serving ML features:
+The feature store extension adds first-class SQL statements for **defining**, **materialising**, **serving**, and **inspecting** ML features. Below is the full supported syntax, followed by how it works and a worked example.
+
+### `CREATE FEATURE` — define a feature
 
 ```sql
--- Define a feature over a source (event) table. The GROUP BY keys (the entity
--- columns) must be a FOREIGN KEY into the declared ENTITY table.
+CREATE FEATURE [IF NOT EXISTS] <name>
+    ENTITY <entity_table> [(<key_col>, ...)]   -- the entity dimension (one snapshot row per entity)
+    TIMESTAMP <ts_col>                          -- event-time column used for the lookback window
+    [WINDOW <interval>]                         -- lookback window for the aggregate (e.g. 24 HOURS)
+    [TTL <interval>]                            -- serving staleness bound (see SERVE below)
+    [EVERY <interval>]                          -- attach an automatic refresh schedule
+    [RETAIN <n>]                                -- how many versions to keep (default 1)
+    AS (<select_query>);                        -- the aggregate that produces feature values
+```
+
+`CREATE FEATURE` only registers **metadata** — no data is materialised until the first `REFRESH`. The entity keys are resolved in this order: the explicit `ENTITY t (cols)` list if given, else the entity table's `PRIMARY KEY`, else whichever entity-table columns the query projects. If the query projects **no** entity column, the feature is *global* (a single aggregate row). Intervals accept `INTERVAL '2 days'`, `INTERVAL 2 DAYS`, or the `2 DAYS` shorthand (units: `SECOND(S)`, `MINUTE(S)`, `HOUR(S)`, `DAY(S)`).
+
+### `REFRESH FEATURE` — materialise a version
+
+```sql
+REFRESH FEATURE <name>;                          -- snapshot as of now
+REFRESH FEATURE <name> AT '2024-01-04 00:00:00'; -- snapshot as of a point in time
+```
+
+Each `REFRESH` recomputes the `WINDOW` aggregate over the source table and appends the result as a **new version** to the single denormalised backing table `<name>__store`, tagging every row with an internal version and timestamp. Versions outside `RETAIN <n>` are garbage-collected in place.
+
+### `ALTER FEATURE` — change schedule or TTL
+
+```sql
+ALTER FEATURE [IF EXISTS] <name> SET SCHEDULE EVERY <interval>;  -- attach/replace schedule (and enable)
+ALTER FEATURE [IF EXISTS] <name> ENABLE SCHEDULE;               -- re-enable, interval unchanged
+ALTER FEATURE [IF EXISTS] <name> DISABLE SCHEDULE;             -- keep interval, stop firing
+ALTER FEATURE [IF EXISTS] <name> SET TTL <interval>;          -- change the serving staleness bound
+```
+
+All `ALTER FEATURE` changes are transactional and survive a restart (written to the WAL / checkpoint).
+
+### Reading a feature
+
+```sql
+-- The current version resolves by using the feature name as a relation:
+SELECT * FROM <name>;
+
+-- A specific retained version (only available while inside the RETAIN window):
+SELECT * FROM FEATURE <name> AT VERSION 3;
+
+-- Feature metadata (window, ttl, schedule, current_version, retain_versions, ...):
+SELECT * FROM duckdb_features();
+```
+
+### `SERVE FEATURE` — point-in-time correct retrieval
+
+```sql
+-- Join one or more features onto a spine table via a LEFT ASOF join:
+SERVE FEATURE  <name> FOR <spine>;
+SERVE FEATURES <name1>, <name2> FOR <spine>;
+
+-- Override the join columns when the spine's names differ from the feature's:
+SERVE FEATURE <name> FOR <spine> ENTITY <spine_entity_col> ASOF <spine_ts_col>;
+
+-- Map differently-named entity keys explicitly (feature_key = spine_key):
+SERVE FEATURE <name> ENTITY (card_no = customer_id) FOR <spine> ASOF request_time;
+```
+
+`SERVE` matches each spine row to the entity's latest snapshot **at or before** the spine timestamp (an ASOF join), so there is no label leakage. Unmatched spine rows are kept with `NULL` feature values (LEFT join). If a `TTL` is set, a matched snapshot older than the spine timestamp by more than the TTL is served as `NULL` (a staleness guard); a zero/absent TTL never nulls on age.
+
+### `DROP FEATURE`
+
+```sql
+DROP FEATURE [IF EXISTS] <name>;   -- removes the feature, its backing store, and metadata
+```
+
+### Worked example
+
+```sql
+CREATE TABLE users (user_id VARCHAR);
+CREATE TABLE events (user_id VARCHAR, region_id INTEGER, event_time TIMESTAMP);
+
+-- Define a feature. The GROUP BY keys (the entity columns) map onto the ENTITY table.
 CREATE FEATURE user_activity
     ENTITY users
     TIMESTAMP event_time
     WINDOW 24 HOURS
+    TTL 7 DAYS
     EVERY 1 HOUR
     RETAIN 3
     AS (SELECT user_id, COUNT(*) AS event_count, AVG(region_id) AS avg_region
         FROM events GROUP BY user_id);
 
--- Recompute the feature (as of now, or as of a specific point in time) and
--- append the result as a new version to the backing store
-REFRESH FEATURE user_activity;
+-- Materialise version 1 (as of a fixed time), then read it back.
 REFRESH FEATURE user_activity AT '2024-01-04 00:00:00';
+SELECT * FROM user_activity;                       -- current version
+SELECT * FROM FEATURE user_activity AT VERSION 1;  -- an explicit version
 
--- Toggle or change the automatic refresh schedule
-ALTER FEATURE user_activity DISABLE SCHEDULE;
+-- Change the schedule and the TTL later on.
 ALTER FEATURE user_activity SET SCHEDULE EVERY 30 MINUTES;
+ALTER FEATURE user_activity SET TTL 2 DAYS;
 
--- Point-in-time correct retrieval via ASOF join against a spine table
-SERVE FEATURE user_activity FOR spine_table;
-SERVE FEATURE user_activity FOR spine_table ENTITY spine_user_id ASOF request_time;
+-- Point-in-time serving against a spine of (entity, request_time) rows.
+SELECT * FROM (SELECT 'alice' AS user_id, TIMESTAMP '2024-01-04 06:00:00' AS request_time) spine;
+SERVE FEATURE user_activity FOR spine ASOF request_time;
 
--- Remove the feature (and its owned resolver view)
 DROP FEATURE user_activity;
 ```
-
-`CREATE FEATURE` only registers metadata — no data is materialized until the first `REFRESH`. Every `REFRESH FEATURE` fully recomputes the `WINDOW` aggregate over the source table and appends the result as a new version to a single denormalized backing table (`feature_name__store`), tagging each row with an internal version and timestamp. A view named `feature_name` always resolves to the current version; `feature_at_version(name, version)` reads an explicit past version; `duckdb_features()` exposes feature metadata. Old versions are garbage-collected automatically according to `RETAIN N`. `SERVE FEATURE` performs an ASOF join against the backing store for point-in-time correct retrieval, with `ENTITY`/`ASOF` optionally overriding the join columns. A feature can be scheduled to refresh automatically with `EVERY <interval>`, and the schedule can be changed or toggled later with `ALTER FEATURE`.
 
 ## Development
 
