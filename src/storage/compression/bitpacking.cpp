@@ -883,17 +883,15 @@ void BitpackingScanPartialInternal(ColumnSegment &segment, ColumnScanState &stat
 			}
 			if (can_for) {
 				for_st = PhysicalType::UINT32;
-				// decompress the packed deltas straight into uint32, then prefix-sum in uint32
+				// unpack the packed deltas straight into uint32, then run the shared 32-bit delta decoder in
+				// place (unrolled prefix sum). No widening, no extra copy: the whole run fits uint32.
 				DecodeFORGroupDirect(scan_state, scan_state.current_group_offset, offset_in_compression_group, to_scan,
 				                     result_buf, scanned, PhysicalType::UINT32);
 				auto data32 = reinterpret_cast<uint32_t *>(result_buf + scanned * sizeof(uint32_t));
-				uint32_t prev = static_cast<uint32_t>(scan_state.current_delta_offset);
-				for (idx_t i = 0; i < to_scan; i++) {
-					prev += data32[i];
-					data32[i] = prev;
-				}
-				scan_state.current_delta_offset = static_cast<T>(prev);
-				for_max = MaxValue(for_max, static_cast<T>(prev));
+				const uint32_t last =
+				    DeltaDecode<uint32_t>(data32, static_cast<uint32_t>(scan_state.current_delta_offset), to_scan);
+				scan_state.current_delta_offset = static_cast<T>(last);
+				for_max = MaxValue(for_max, static_cast<T>(last));
 				scanned += to_scan;
 				scan_state.current_group_offset += to_scan;
 				continue;

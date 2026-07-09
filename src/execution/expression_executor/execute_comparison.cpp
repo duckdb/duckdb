@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/for_comparison.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
@@ -35,6 +36,12 @@ static bool TryPrimitiveSelectOperation(const Vector &left, const Vector &right,
 				}
 			}
 		}
+	}
+	// FOR-native fast path: both operands FOR -> compare narrow payloads directly (no decompress).
+	// Skipped when a null_mask is requested (DISTINCT semantics); those fall through to generic.
+	if (!null_mask &&
+	    TryForSelectComparison<OP>(left, right, sel.get(), count, true_sel.get(), false_sel.get(), result)) {
+		return true;
 	}
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:

@@ -1,0 +1,94 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_for_compare.test
+# description: Test FOR-native column-vs-column comparison selection
+# group: [bitpacking]
+
+require block_size 262144
+
+load {TEST_DIR}/bitpacking_for_compare.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+PRAGMA force_bitpacking_mode='for'
+
+# offset non-negative columns so they scan as FOR (like real DATE columns):
+# a stored as uint8, b as uint16 (differing stored widths), c/d as BIGINT-backed FOR
+statement ok
+CREATE TABLE t AS
+SELECT i::INTEGER AS id,
+       (1000 + (i % 200))::INTEGER AS a,
+       (1000 + (i % 5000))::INTEGER AS b,
+       (1000 + (i % 150))::BIGINT AS c,
+       (1000 + (i % 170))::BIGINT AS d
+FROM range(500000) t(i)
+
+statement ok
+CHECKPOINT
+
+# reference table without FOR compression
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+CREATE TABLE ref AS SELECT * FROM t
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+query I
+SELECT DISTINCT vector_type(a) FROM t
+----
+FOR_VECTOR
+
+query I
+SELECT DISTINCT vector_type(b) FROM t
+----
+FOR_VECTOR
+
+query I
+SELECT DISTINCT vector_type(c) FROM t
+----
+FOR_VECTOR
+
+# all six operators on differing-width FOR payloads (a uint8 vs b uint16) match the reference
+query I
+SELECT (SELECT count(*) FROM t WHERE a < b)  = (SELECT count(*) FROM ref WHERE a < b)
+   AND (SELECT count(*) FROM t WHERE a <= b) = (SELECT count(*) FROM ref WHERE a <= b)
+   AND (SELECT count(*) FROM t WHERE a > b)  = (SELECT count(*) FROM ref WHERE a > b)
+   AND (SELECT count(*) FROM t WHERE a >= b) = (SELECT count(*) FROM ref WHERE a >= b)
+   AND (SELECT count(*) FROM t WHERE a = b)  = (SELECT count(*) FROM ref WHERE a = b)
+   AND (SELECT count(*) FROM t WHERE a <> b) = (SELECT count(*) FROM ref WHERE a <> b)
+----
+true
+
+# BIGINT-backed FOR payloads
+query I
+SELECT (SELECT count(*) FROM t WHERE c < d)  = (SELECT count(*) FROM ref WHERE c < d)
+   AND (SELECT count(*) FROM t WHERE c >= d) = (SELECT count(*) FROM ref WHERE c >= d)
+   AND (SELECT count(*) FROM t WHERE c = d)  = (SELECT count(*) FROM ref WHERE c = d)
+----
+true
+
+# conjunction combining two column-vs-column comparisons (each side sliced to dict-over-FOR)
+query I
+SELECT (SELECT count(*) FROM t WHERE a < b AND c < d)
+     = (SELECT count(*) FROM ref WHERE a < b AND c < d)
+----
+true
+
+# row identities (via sum of ids), not just counts
+query II
+SELECT count(*), sum(id) FROM t WHERE a < b
+----
+480000	120047760000
+
+query I
+SELECT count(*) FROM t WHERE c < d
+----
+264620
+
+query I
+SELECT count(*) FROM t WHERE a < b AND c < d
+----
+253880
