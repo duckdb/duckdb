@@ -1,0 +1,30 @@
+# name: test/sql/optimizer/boolean_row_group_pruning.test
+# description: Row-group pruning on boolean columns via NumericStats zonemap
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/bool_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+# 4096 rows -> 2 row groups of 2048 each. First group is all false, second is all true.
+statement ok
+CREATE TABLE bt AS SELECT (range >= 2048) AS b FROM range(4096);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM bt WHERE b = true;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+# b = false prunes the all-true row group
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM bt WHERE b = false;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+# b IN (true) prunes symmetrically to equality
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM bt WHERE b IN (true);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
