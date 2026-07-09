@@ -8,6 +8,12 @@
 
 require noforcestorage
 
+# predictor only engages (and logs) when a full 2048-row vector exceeds the byte budget
+require vector_size 2048
+
+# large-BLOB tables (hundreds of MB) exceed the 32-bit address space
+require 64bit
+
 load {TEST_DIR}/scan_predictor_accuracy.db
 
 statement ok

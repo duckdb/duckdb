@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 using namespace duckdb;
 
@@ -60,6 +61,10 @@ void AppendDeltaBatch(Connection &con) {
 
 } // namespace
 
+// A full 2048-row vector of 50KB BLOBs (~100MB) is what OOMs under the 60MB limit; with a tiny
+// STANDARD_VECTOR_SIZE (e.g. CI's vector_size=2) the vector is ~100KB and never OOMs, so the test
+// premise does not hold. Skip at compile time, mirroring `require vector_size 2048` in .test files.
+#if STANDARD_VECTOR_SIZE >= 2048
 TEST_CASE("Test DeltaAppender flush OOM and scan_target_size_bytes mitigation", "[api][delta_appender]") {
 	auto db_path = TestCreatePath("delta_appender_oom.db");
 	DeleteDatabase(db_path);
@@ -114,3 +119,4 @@ TEST_CASE("Test DeltaAppender flush OOM and scan_target_size_bytes mitigation", 
 	con.Query("DROP TABLE t");
 	DeleteDatabase(db_path);
 }
+#endif

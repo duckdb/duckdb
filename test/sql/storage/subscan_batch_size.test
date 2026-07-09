@@ -4,6 +4,12 @@
 
 require noforcestorage
 
+# byte-budgeted sub-batching only engages when a full 2048-row vector is large enough to OOM
+require vector_size 2048
+
+# large-BLOB tables (hundreds of MB) exceed the 32-bit address space
+require 64bit
+
 load {TEST_DIR}/subscan_batch.db
 
 statement ok
