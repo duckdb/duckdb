@@ -19,6 +19,8 @@ FROM range(0, 2048) tbl(i);
 statement ok
 CHECKPOINT
 
+restart
+
 query I
 SELECT count(*) FROM pragma_storage_info('partial_segment')
 WHERE column_name = 'task_id'
