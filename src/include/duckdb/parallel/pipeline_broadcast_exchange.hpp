@@ -88,7 +88,6 @@ private:
 
 	struct BufferedChunk {
 		shared_ptr<DataChunk> chunk;
-		idx_t bytes;
 	};
 
 	struct ConsumerState {
@@ -130,7 +129,6 @@ private:
 	void ResetConsumerExecutionLocked(ConsumerState &consumer);
 	void DeactivateConsumerLocked(ConsumerState &consumer, idx_t position);
 	shared_ptr<DataChunk> CopyChunk(DataChunk &chunk);
-	idx_t EstimateChunkSize(DataChunk &chunk) const;
 	bool ShouldStopProducerLocked() const;
 	bool ShouldThrottleProducerLocked() const;
 	bool HasActiveSharedConsumersLocked() const;
@@ -149,10 +147,7 @@ private:
 	ClientContext &context;
 	vector<LogicalType> types;
 	bool run_to_completion;
-	idx_t row_width;
 	idx_t max_threads;
-	idx_t high_watermark;
-	idx_t low_watermark;
 	shared_ptr<ChunkPool> chunk_pool;
 
 	mutable mutex lock;
@@ -165,7 +160,7 @@ private:
 	idx_t base_position = 0;
 	idx_t next_position = 0;
 	idx_t active_consumers = 0;
-	idx_t shared_buffered_bytes = 0;
+	idx_t shared_buffered_chunks = 0;
 	atomic<idx_t> produced_rows {0};
 	atomic<bool> direct_consumer_progress {false};
 	bool producer_finished = false;
