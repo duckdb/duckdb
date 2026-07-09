@@ -57,7 +57,7 @@ does not exist
 statement error
 REFRESH FEATURE spend AT 'notadate';
 ----
-timestamp field value out of range
+invalid timestamp field format
 
 # AT with an out-of-range timestamp
 statement error

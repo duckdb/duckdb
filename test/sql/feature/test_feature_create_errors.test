@@ -179,6 +179,18 @@ CREATE FEATURE ambiguous_ok ENTITY ents TIMESTAMP e1.ts WINDOW 7 DAYS RETAIN 1 A
 statement ok
 DROP FEATURE ambiguous_ok;
 
+# A feature name may not collide with an existing table or view (a feature resolves as a relation)
+statement ok
+CREATE TABLE collide (x INTEGER);
+
+statement error
+CREATE FEATURE collide ENTITY ents TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+----
+a table or view with that name already exists
+
+statement ok
+DROP TABLE collide;
+
 # ============================================================
 # No half-created feature leaks from any failed CREATE above
 # ============================================================

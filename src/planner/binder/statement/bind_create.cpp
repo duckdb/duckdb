@@ -845,6 +845,19 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::FEATURE_ENTRY: {
 		auto &feature_info = stmt.info->Cast<CreateFeatureInfo>();
 		auto &schema = BindCreateSchema(*stmt.info);
+
+		// A feature name resolves as a relation ("FROM my_feature"), sharing the namespace with tables/views
+		// (which the binder resolves first). Reject a name that already belongs to a table or view so the
+		// feature cannot be silently shadowed.
+		if (feature_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+			auto existing_relation = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::TABLE_ENTRY,
+			                                         feature_info.feature_name);
+			if (existing_relation) {
+				throw BinderException("Cannot create feature \"%s\": a table or view with that name already exists",
+				                      feature_info.feature_name);
+			}
+		}
+
 		// The window filter and entity join are injected into a single SELECT node. Reject anything else (e.g.
 		// a UNION / set operation as the top-level query) with a clear error instead of an unchecked cast.
 		if (feature_info.query->node->type != QueryNodeType::SELECT_NODE) {

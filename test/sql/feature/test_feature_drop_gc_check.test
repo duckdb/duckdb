@@ -78,7 +78,8 @@ SELECT COUNT(*) FROM f__store;
 4
 
 # ============================================================
-# DROP FEATURE: the store table and the view are both removed
+# DROP FEATURE removes the store table and the feature entry. A feature is not a view (it resolves as a
+# relation directly in the binder), so it never appears in duckdb_views.
 # ============================================================
 statement ok
 DROP FEATURE f;

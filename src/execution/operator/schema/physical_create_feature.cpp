@@ -1,12 +1,9 @@
 #include "duckdb/execution/operator/schema/physical_create_feature.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/feature_refresh_scheduler.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 
@@ -35,18 +32,11 @@ SourceResultType PhysicalCreateFeature::GetDataInternal(ExecutionContext &contex
 		}
 	}
 
-	// CREATE FEATURE only registers metadata; no version table is materialized here. The first version
-	// table (feature_name__v1) is produced by the first REFRESH FEATURE. Until then current_version is 0,
-	// and queries/serves against the feature raise an error asking the user to refresh it first.
-
-	// Create a view named feature_name that resolves via current_feature()
-	auto view_info = make_uniq<CreateViewInfo>(info->catalog, info->schema, info->feature_name);
-	view_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-	auto select_sql = "SELECT * FROM current_feature('" + info->feature_name + "')";
-	view_info->query = CreateViewInfo::ParseSelect(select_sql);
-	auto view_entry = catalog.CreateView(client, *view_info);
-
-	// Create the feature catalog entry
+	// CREATE FEATURE only registers metadata; no store table is materialized here. The first REFRESH FEATURE
+	// creates the denormalized store (feature_name__store). Until then current_version is 0, and
+	// queries/serves against the feature raise an error asking the user to refresh it first. A feature name
+	// used as a relation ("FROM my_feature") resolves to its current-version snapshot directly in the binder,
+	// so no shadow view is created; the store table is dropped explicitly on DROP FEATURE.
 	auto &dependencies = info->dependencies;
 	auto entry = make_uniq<FeatureCatalogEntry>(catalog, schema, *info);
 
@@ -58,12 +48,6 @@ SourceResultType PhysicalCreateFeature::GetDataInternal(ExecutionContext &contex
 			scheduler->NotifyOnCommit(client);
 		}
 	}
-
-	// Make the feature own the view so dropping the feature cascades to the view.
-	// Version tables are managed explicitly (not via ownership) to allow GC during refresh.
-	auto feature_entry = set.GetEntry(transaction, info->feature_name);
-	auto &duck_catalog = catalog.Cast<DuckCatalog>();
-	duck_catalog.GetDependencyManager()->AddOwnership(transaction, *feature_entry, *view_entry);
 
 	FlatVector::SetSize(chunk.data[0], 1);
 	chunk.SetCardinality(1);

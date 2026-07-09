@@ -110,7 +110,8 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 				}
 			}
 		}
-		// Now drop the feature entry itself (cascades to the view via ownership)
+		// Now drop the feature entry itself. Features no longer own a shadow view (a feature name resolves to
+		// its store directly in the binder), so there is nothing to cascade beyond the store dropped above.
 		catalog.DropEntry(context.client, *info);
 		if (auto scheduler = catalog.GetDatabase().GetFeatureRefreshScheduler()) {
 			scheduler->NotifyOnCommit(context.client);
