@@ -1,0 +1,80 @@
+diff --git a/src/include/sqlite_db.hpp b/src/include/sqlite_db.hpp
+index 8c156b2..c3062ea 100644
+--- a/src/include/sqlite_db.hpp
++++ b/src/include/sqlite_db.hpp
+@@ -11,6 +11,8 @@
+ #include "sqlite_utils.hpp"
+ #include "storage/sqlite_options.hpp"
+ 
++#include "duckdb/parser/column_list.hpp"
++
+ namespace duckdb {
+ class SQLiteStatement;
+ struct IndexInfo;
+diff --git a/src/include/storage/sqlite_delete.hpp b/src/include/storage/sqlite_delete.hpp
+index e7b5204..25ce6dc 100644
+--- a/src/include/storage/sqlite_delete.hpp
++++ b/src/include/storage/sqlite_delete.hpp
+@@ -9,6 +9,9 @@
+ #pragma once
+ 
+ #include "duckdb/execution/physical_operator.hpp"
++#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
++#include "duckdb/planner/logical_operator.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/src/include/storage/sqlite_index.hpp b/src/include/storage/sqlite_index.hpp
+index a3d239d..1cfea50 100644
+--- a/src/include/storage/sqlite_index.hpp
++++ b/src/include/storage/sqlite_index.hpp
+@@ -10,6 +10,8 @@
+ 
+ #include "duckdb/execution/physical_operator.hpp"
+ #include "duckdb/parser/parsed_data/create_index_info.hpp"
++#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/src/include/storage/sqlite_insert.hpp b/src/include/storage/sqlite_insert.hpp
+index 0077fdb..584b697 100644
+--- a/src/include/storage/sqlite_insert.hpp
++++ b/src/include/storage/sqlite_insert.hpp
+@@ -10,6 +10,9 @@
+ 
+ #include "duckdb/execution/physical_operator.hpp"
+ #include "duckdb/common/index_vector.hpp"
++#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
++#include "duckdb/planner/logical_operator.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/src/include/storage/sqlite_update.hpp b/src/include/storage/sqlite_update.hpp
+index 7c20e70..aaf485c 100644
+--- a/src/include/storage/sqlite_update.hpp
++++ b/src/include/storage/sqlite_update.hpp
+@@ -10,6 +10,9 @@
+ 
+ #include "duckdb/execution/physical_operator.hpp"
+ #include "duckdb/common/index_vector.hpp"
++#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
++#include "duckdb/planner/logical_operator.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/src/sqlite_storage.cpp b/src/sqlite_storage.cpp
+index 38255f6..d12069a 100644
+--- a/src/sqlite_storage.cpp
++++ b/src/sqlite_storage.cpp
+@@ -6,6 +6,7 @@
+ #include "storage/sqlite_catalog.hpp"
+ #include "storage/sqlite_transaction_manager.hpp"
+ #include "duckdb/parser/parsed_data/attach_info.hpp"
++#include "duckdb/main/attached_database.hpp"
+ #include "duckdb/transaction/transaction_manager.hpp"
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"

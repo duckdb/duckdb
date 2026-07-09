@@ -2,6 +2,7 @@
 #include "duckdb/storage/compression/roaring/appender.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {

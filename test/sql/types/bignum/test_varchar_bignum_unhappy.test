@@ -48,7 +48,7 @@ select '-0010.'::BIGNUM
 query I
 select '-0010.5'::BIGNUM
 ----
--10
+-11
 
 query I
 select '-0010.4999'::BIGNUM
@@ -58,12 +58,47 @@ select '-0010.4999'::BIGNUM
 query I
 select '0010.5'::BIGNUM
 ----
-10
+11
 
 query I
 select '0010.4999'::BIGNUM
 ----
 10
+
+query I
+select '0.5'::BIGNUM
+----
+1
+
+query I
+select '-0.5'::BIGNUM
+----
+-1
+
+query I
+select '+0.5'::BIGNUM
+----
+1
+
+query I
+select '0.'::BIGNUM
+----
+0
+
+query I
+select '.5'::BIGNUM
+----
+1
+
+query I
+select '-.5'::BIGNUM
+----
+-1
+
+statement error
+select '.'::BIGNUM
+----
+Conversion Error: Could not convert string '.'
 
 statement error
 select '00-0010'::BIGNUM
@@ -78,7 +113,7 @@ select '-0010.2'::BIGNUM
 query I
 select '-0010.9'::BIGNUM
 ----
--10
+-11
 
 query I
 select '0010.2'::BIGNUM
@@ -88,7 +123,7 @@ select '0010.2'::BIGNUM
 query I
 select '0010.9'::BIGNUM
 ----
-10
+11
 
 statement error
 select ''::BIGNUM

@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_duckdb.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -8,6 +9,8 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
 
 namespace duckdb {
 

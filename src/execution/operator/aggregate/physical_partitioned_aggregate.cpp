@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/aggregate/physical_partitioned_aggregate.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/common/types/value_map.hpp"
 

@@ -4,6 +4,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 

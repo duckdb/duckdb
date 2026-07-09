@@ -4,6 +4,8 @@
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 

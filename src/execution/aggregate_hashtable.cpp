@@ -1,4 +1,6 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
@@ -11,6 +13,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/common/atomic.hpp"
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;

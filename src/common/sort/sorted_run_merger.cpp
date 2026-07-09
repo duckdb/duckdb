@@ -1,4 +1,5 @@
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/sorting/sort.hpp"

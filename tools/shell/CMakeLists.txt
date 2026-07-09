@@ -14,6 +14,7 @@ set(SHELL_SOURCES
     shell_extension.cpp
     shell.cpp
     shell_helpers.cpp
+    shell_manual.cpp
     shell_metadata_command.cpp
     shell_prompt.cpp
     shell_renderer.cpp

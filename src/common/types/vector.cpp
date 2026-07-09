@@ -19,6 +19,9 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 

@@ -30,6 +30,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 
 #include <cmath>
+#include "duckdb/common/types/geometry.hpp"
 
 namespace duckdb {
 

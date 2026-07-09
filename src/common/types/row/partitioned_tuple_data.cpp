@@ -1,4 +1,5 @@
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"

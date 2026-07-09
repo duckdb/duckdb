@@ -1,0 +1,10 @@
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -5,6 +5,7 @@
+ #include "delta_log_types.hpp"
+ #include "functions/delta_scan/delta_multi_file_list.hpp"
+ #include "duckdb/common/operator/decimal_cast_operators.hpp"
++#include "duckdb/logging/logger.hpp"
+ 
+ #include "duckdb.hpp"
+ #include "duckdb/planner/expression/bound_columnref_expression.hpp"

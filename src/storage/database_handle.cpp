@@ -1,6 +1,8 @@
 #include "duckdb/storage/database_handle.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 
+#include <cstring>
+
 namespace duckdb {
 
 DatabaseHandle::DatabaseHandle(unique_ptr<FileHandle> handle_p) : handle(std::move(handle_p)) {
@@ -11,6 +13,7 @@ DatabaseHandle::DatabaseHandle(unique_ptr<MemoryMappedFile> mmap_handle_p) : mma
 unique_ptr<DatabaseHandle> DatabaseHandle::Open(AttachedDatabase &db, const string &path,
                                                 const StorageManagerOptions &options, DatabaseOpenMode open_mode) {
 	if (options.io_mode == FileIOMode::MMAP) {
+		// mmap reads are zero-copy from the mapping, so the prefetched header is not needed here.
 		return OpenMemoryMap(db, path, options, open_mode);
 	} else {
 		return OpenFile(db, path, options, open_mode);
@@ -42,7 +45,13 @@ unique_ptr<DatabaseHandle> DatabaseHandle::OpenFile(AttachedDatabase &db, const 
 		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
 		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 	}
-	return make_uniq<DatabaseHandle>(std::move(file_handle));
+
+	auto result = make_uniq<DatabaseHandle>(std::move(file_handle));
+	// Adopt the prefetched header bytes (if any) to serve the initial header reads from memory.
+	if (options.prefetched.HasHeader()) {
+		result->prefetched_header = options.prefetched.header;
+	}
+	return result;
 }
 
 unique_ptr<DatabaseHandle> DatabaseHandle::OpenMemoryMap(AttachedDatabase &db, const string &path,
@@ -86,17 +95,31 @@ bool DatabaseHandle::OnDiskFile() const {
 void DatabaseHandle::CheckMagicBytes(QueryContext context) {
 	if (mmap_handle) {
 		MainHeader::CheckMagicBytes(*mmap_handle);
-	} else {
-		MainHeader::CheckMagicBytes(context, *handle);
+		return;
 	}
+	// Verify against the prefetched header when it covers the magic-byte range.
+	const idx_t magic_end = MainHeader::MAGIC_BYTE_OFFSET + MainHeader::MAGIC_BYTE_SIZE;
+	if (prefetched_header && prefetched_header->size() >= magic_end) {
+		if (memcmp(prefetched_header->data() + MainHeader::MAGIC_BYTE_OFFSET, MainHeader::MAGIC_BYTES,
+		           MainHeader::MAGIC_BYTE_SIZE) != 0) {
+			throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle->GetPath());
+		}
+		return;
+	}
+	MainHeader::CheckMagicBytes(context, *handle);
 }
 
 void DatabaseHandle::Read(QueryContext context, FileBuffer &block, uint64_t location) const {
 	if (mmap_handle) {
 		block.Read(context, *mmap_handle, location);
-	} else {
-		block.Read(context, *handle, location);
+		return;
 	}
+	// Serve fully-covered reads from the prefetched header (only the first few header reads qualify).
+	if (prefetched_header && location + block.AllocSize() <= prefetched_header->size()) {
+		block.ReadFromMemory(const_data_ptr_cast(prefetched_header->data()), location);
+		return;
+	}
+	block.Read(context, *handle, location);
 }
 
 void DatabaseHandle::Write(QueryContext context, FileBuffer &buffer, uint64_t location) {

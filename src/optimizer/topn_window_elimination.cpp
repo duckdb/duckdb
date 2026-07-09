@@ -27,6 +27,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 
 namespace duckdb {
 
