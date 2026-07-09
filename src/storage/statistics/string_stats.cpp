@@ -751,7 +751,7 @@ FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType mi
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		if (max_comp < 0) {
+		if (max_comp < 0 || (max_comp == 0 && max_type != StringStatsType::EXACT_STATS)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -761,7 +761,7 @@ FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType mi
 		}
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_LESSTHAN:
-		if (min_comp > 0) {
+		if (min_comp > 0 || (min_comp == 0 && min_type != StringStatsType::EXACT_STATS)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
