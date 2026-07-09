@@ -1,0 +1,147 @@
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index 34e1a1c..630a3f2 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -226,20 +226,20 @@ public:
+ 
+ 		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
+ 
+-		for (auto &index : table_info.GetIndexes().Indexes()) {
+-			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
++		for (auto &index : table_info.GetIndexes().MakeShared()) {
++			if (!index->IsBound() || RTreeIndex::TYPE_NAME != index->GetIndexType()) {
+ 				continue;
+ 			}
+ 
+-			auto &index_entry = index.Cast<RTreeIndex>();
++			const auto index_entry = BoundIndex::MakeShared<RTreeIndex>(index);
+ 
+ 			// Create the bind data for this index given the bounding box
+ 			bool rewrite_possible = true;
+-			auto index_expr = index_entry.unbound_expressions[0]->Copy();
++			auto index_expr = index_entry->unbound_expressions[0]->Copy();
+ 			if (filter_column_idx) {
+-				RewriteIndexExpressionForFilter(index_entry, get, index_expr, *filter_column_idx, rewrite_possible);
++				RewriteIndexExpressionForFilter(*index_entry, get, index_expr, *filter_column_idx, rewrite_possible);
+ 			} else {
+-				RewriteIndexExpression(index_entry, get, *index_expr, rewrite_possible);
++				RewriteIndexExpression(*index_entry, get, *index_expr, rewrite_possible);
+ 			}
+ 			if (!rewrite_possible) {
+ 				// Could not rewrite!
+@@ -269,7 +269,7 @@ public:
+ 				continue;
+ 			}
+ 
+-			bind_data = make_uniq<RTreeIndexScanBindData>(duck_table, index_entry, bbox);
++			bind_data = make_uniq<RTreeIndexScanBindData>(duck_table, std::move(index_entry), bbox);
+ 			break;
+ 		};
+ 
+diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
+index ca12c7d..1512870 100644
+--- a/src/spatial/index/rtree/rtree_index_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_scan.cpp
+@@ -64,7 +64,7 @@ static unique_ptr<GlobalTableFunctionState> RTreeIndexScanInitGlobal(ClientConte
+ 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
+ 
+ 	// Initialize the scan state for the index
+-	result->index_state = bind_data.index.Cast<RTreeIndex>().InitializeScan(bind_data.bbox);
++	result->index_state = bind_data.index->Cast<RTreeIndex>().InitializeScan(bind_data.bbox);
+ 
+ 	// Early out if there is nothing to project
+ 	if (!input.CanRemoveFilterColumns()) {
+@@ -99,7 +99,7 @@ static void RTreeIndexScanExecute(ClientContext &context, TableFunctionInput &da
+ 	auto &transaction = DuckTransaction::Get(context, bind_data.table.catalog);
+ 
+ 	// Scan the index for row id's
+-	auto row_count = bind_data.index.Cast<RTreeIndex>().Scan(*state.index_state, state.row_ids);
++	auto row_count = bind_data.index->Cast<RTreeIndex>().Scan(*state.index_state, state.row_ids);
+ 
+ 	if (row_count == 0) {
+ 		// Index is exhausted, fetch from local storage instead.
+@@ -176,7 +176,7 @@ static InsertionOrderPreservingMap<string> RTreeIndexScanToString(TableFunctionT
+ 	InsertionOrderPreservingMap<string> result;
+ 	auto &bind_data = input.bind_data->Cast<RTreeIndexScanBindData>();
+ 	result["Table"] = bind_data.table.name.GetIdentifierName();
+-	result["Index"] = bind_data.index.GetIndexName().GetIdentifierName();
++	result["Index"] = bind_data.index->GetIndexName().GetIdentifierName();
+ 	return result;
+ }
+ 
+@@ -189,7 +189,7 @@ static void RTreeScanSerialize(Serializer &serializer, const optional_ptr<Functi
+ 	serializer.WriteProperty(100, "catalog", bind_data.table.schema.catalog.GetName());
+ 	serializer.WriteProperty(101, "schema", bind_data.table.schema.name);
+ 	serializer.WriteProperty(102, "table", bind_data.table.name);
+-	serializer.WriteProperty(103, "index_name", bind_data.index.GetIndexName());
++	serializer.WriteProperty(103, "index_name", bind_data.index->GetIndexName());
+ 
+ 	serializer.WriteObject(104, "bbox", [&](Serializer &ser) {
+ 		ser.WriteProperty<float>(10, "min_x", bind_data.bbox.min.x);
+@@ -205,7 +205,8 @@ static unique_ptr<FunctionData> RTreeScanDeserialize(Deserializer &deserializer,
+ 	const auto catalog = deserializer.ReadProperty<string>(100, "catalog");
+ 	const auto schema = deserializer.ReadProperty<string>(101, "schema");
+ 	const auto table = deserializer.ReadProperty<string>(102, "table");
+-	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(context, Identifier(catalog), Identifier(schema), Identifier(table));
++	auto &catalog_entry =
++	    Catalog::GetEntry<TableCatalogEntry>(context, Identifier(catalog), Identifier(schema), Identifier(table));
+ 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
+ 		throw SerializationException("Cant find table for %s.%s", schema, table);
+ 	}
+@@ -226,13 +227,13 @@ static unique_ptr<FunctionData> RTreeScanDeserialize(Deserializer &deserializer,
+ 	unique_ptr<RTreeIndexScanBindData> result = nullptr;
+ 
+ 	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
+-	for (auto &index : table_info.GetIndexes().Indexes()) {
+-		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
++	for (auto &index : table_info.GetIndexes().MakeShared()) {
++		if (!index->IsBound() || RTreeIndex::TYPE_NAME != index->GetIndexType()) {
+ 			continue;
+ 		}
+-		auto &index_entry = index.Cast<RTreeIndex>();
+-		if (index_entry.GetIndexName() == index_name) {
+-			result = make_uniq<RTreeIndexScanBindData>(duck_table, index_entry, bbox);
++		const auto index_entry = BoundIndex::MakeShared<RTreeIndex>(index);
++		if (index_entry->GetIndexName() == index_name) {
++			result = make_uniq<RTreeIndexScanBindData>(duck_table, std::move(index_entry), bbox);
+ 			break;
+ 		}
+ 	};
+diff --git a/src/spatial/index/rtree/rtree_index_scan.hpp b/src/spatial/index/rtree/rtree_index_scan.hpp
+index b59e6d6..dd5ac5e 100644
+--- a/src/spatial/index/rtree/rtree_index_scan.hpp
++++ b/src/spatial/index/rtree/rtree_index_scan.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include "spatial/index/rtree/rtree_node.hpp"
++#include "duckdb/common/shared_ptr.hpp"
+ #include "duckdb/function/table_function.hpp"
+ 
+ namespace duckdb {
+@@ -9,15 +10,15 @@ class Index;
+ 
+ // This is created by the optimizer rule
+ struct RTreeIndexScanBindData final : public TableFunctionData {
+-	explicit RTreeIndexScanBindData(DuckTableEntry &table, Index &index, const RTreeBounds &bbox)
+-	    : table(table), index(index), bbox(bbox) {
++	explicit RTreeIndexScanBindData(DuckTableEntry &table, shared_ptr<Index> index, const RTreeBounds &bbox)
++	    : table(table), index(std::move(index)), bbox(bbox) {
+ 	}
+ 
+ 	//! The table to scan
+ 	DuckTableEntry &table;
+ 
+ 	//! The index to use
+-	Index &index;
++	shared_ptr<Index> index;
+ 
+ 	//! The bounds to scan
+ 	RTreeBounds bbox;
+@@ -33,4 +34,4 @@ struct RTreeIndexScanFunction {
+ 	static TableFunction GetFunction();
+ };
+ 
+-} // namespace duckdb
+\ No newline at end of file
++} // namespace duckdb
