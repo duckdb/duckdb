@@ -184,7 +184,11 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	auto new_row_group = make_uniq<RowGroup>(*this, 0U);
 	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
 	owned_row_groups->AppendSegment(l, std::move(new_row_group), start_row);
-	row_group_append_mode = RowGroupAppendMode::APPEND_TO_EXISTING;
+
+	// Do not downgrade from REQUIRE_NEW
+	if (row_group_append_mode <= RowGroupAppendMode::SUGGEST_NEW) {
+		row_group_append_mode = RowGroupAppendMode::APPEND_TO_EXISTING;
+	}
 }
 
 optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
