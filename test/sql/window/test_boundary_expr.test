@@ -120,3 +120,29 @@ select avg(a) over (
     rows between mod(b * 1023, 11) preceding and 23 - mod(b * 1023, 11) following)
 from issue1697
 
+# RANGE CURRENT ROW == 0 PRECEDING == 0 FOLLOWING
+query IIII
+WITH t(id, k) AS (
+  VALUES
+    (1, 1),
+    (2, 1)
+)
+SELECT
+  id,
+  SUM(1) OVER (
+    ORDER BY k
+    RANGE BETWEEN CURRENT ROW AND CURRENT ROW
+  ) AS current_row_frame,
+  SUM(1) OVER (
+    ORDER BY k
+    RANGE BETWEEN 0 PRECEDING AND 0 PRECEDING
+  ) AS zero_preceding_frame,
+  SUM(1) OVER (
+    ORDER BY k
+    RANGE BETWEEN 0 FOLLOWING AND 0 FOLLOWING
+  ) AS zero_following_frame
+FROM t
+ORDER BY id;
+----
+1	2	2	2
+2	2	2	2
