@@ -1566,7 +1566,7 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		return column_stats->PushdownExtract(storage_index.GetChildIndex(0));
 	}
 
-	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
+	bool MinMaxIsExact(const StorageIndex &storage_index) override {
 		const idx_t primary_index = storage_index.GetPrimaryIndex();
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
 		D_ASSERT(root_schema->children.size() > primary_index);
@@ -1586,6 +1586,11 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 			const auto &stats = column_chunk.meta_data.statistics;
 			return stats.is_min_value_exact && stats.is_max_value_exact;
 		}
+		return false;
+	}
+
+	bool HasPendingWrites() override {
+		// Parquet row groups are read directly from a file, so there is no notion of pending/uncheckpointed writes.
 		return false;
 	}
 };

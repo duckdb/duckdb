@@ -670,12 +670,12 @@ idx_t LocalStorage::AddedRows(DataTable &table) {
 	return storage->GetCollection().GetTotalRows() - storage->deleted_rows;
 }
 
-vector<PartitionStatistics> LocalStorage::GetPartitionStats(DataTable &table) const {
+vector<PartitionStatistics> LocalStorage::GetPartitionStats(DataTable &table, TransactionData transaction) const {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {
 		return vector<PartitionStatistics>();
 	}
-	return storage->GetCollection().GetPartitionStats();
+	return storage->GetCollection().GetPartitionStats(transaction);
 }
 
 void LocalStorage::DropTable(DataTable &table) {
