@@ -1,4 +1,8 @@
-if (NOT MINGW AND NOT ${WASM_ENABLED})
+# FIXME: disabled for now, the patches do not apply to the pinned GIT_TAG
+if (NOT DEFINED MYSQL_SCANNER_ENABLED)
+    set(MYSQL_SCANNER_ENABLED OFF)
+endif()
+if (MYSQL_SCANNER_ENABLED AND NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(mysql_scanner
             DONT_LINK
             LOAD_TESTS
