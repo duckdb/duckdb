@@ -90,11 +90,21 @@ CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW -5 DAYS RETAIN 1 AS (SELECT i
 ----
 syntax error
 
-# TTL interval must be positive
-statement error
+# TTL 0 is allowed at creation time (means "no staleness bound", same as omitting TTL)
+statement ok
 CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS TTL 0 SECONDS RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
+
+statement ok
+DROP FEATURE bad;
+
+# A negative TTL is still rejected (only zero-or-positive is allowed). Note: an unquoted negative
+# shorthand like "TTL -1 DAYS" or "TTL INTERVAL -1 DAYS" is a parser-level syntax error before it ever
+# reaches this check (NumberLiteral does not accept a leading '-' here, same as RETAIN above) — the
+# quoted INTERVAL string form is what actually exercises the semantic non-negative check.
+statement error
+CREATE FEATURE bad ENTITY ents TIMESTAMP ts WINDOW 7 DAYS TTL INTERVAL '-1 days' RETAIN 1 AS (SELECT id, SUM(val) AS total FROM evts GROUP BY id);
 ----
-must be positive
+must be non-negative
 
 # Malformed INTERVAL string
 statement error

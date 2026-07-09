@@ -14,7 +14,9 @@ namespace duckdb {
 
 static constexpr interval_t ZERO_INTERVAL {0, 0, 0};
 
-static int64_t ParsePositiveIntegerIntervalCount(const string &number, const string &context) {
+//! Parses a shorthand interval count (e.g. the "2" in "2 DAYS"). Zero is only accepted when allow_zero is
+//! set (TTL, where zero means "no staleness bound"); WINDOW and EVERY always require a positive count.
+static int64_t ParseIntervalCount(const string &number, const string &context, bool allow_zero) {
 	if (number.empty() || number[0] == '-') {
 		throw ParserException("%s shorthand count must be a positive integer", context);
 	}
@@ -28,14 +30,18 @@ static int64_t ParsePositiveIntegerIntervalCount(const string &number, const str
 	} catch (std::exception &) {
 		throw ParserException("%s shorthand count is out of range", context);
 	}
-	if (result <= 0) {
-		throw ParserException("%s interval must be positive", context);
+	if (result < 0 || (result == 0 && !allow_zero)) {
+		throw ParserException(allow_zero ? "%s interval must be non-negative" : "%s interval must be positive", context);
 	}
 	return result;
 }
 
 static bool IsPositiveInterval(const interval_t &interval) {
 	return interval.months > 0 || interval.days > 0 || interval.micros > 0;
+}
+
+static bool IsNegativeInterval(const interval_t &interval) {
+	return interval.months < 0 || interval.days < 0 || interval.micros < 0;
 }
 
 //! Parse the RETAIN version count: a positive integer (a feature retains at least one version).
@@ -56,14 +62,15 @@ static int64_t ParseRetainVersions(const string &number) {
 	return result;
 }
 
-static interval_t ParseIntervalString(const string &interval_str, const string &context) {
+static interval_t ParseIntervalString(const string &interval_str, const string &context, bool allow_zero) {
 	interval_t result {0, 0, 0};
 	string error_message;
 	if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), result, &error_message, false)) {
 		throw ParserException("Invalid interval in %s clause: %s", context, error_message);
 	}
-	if (!IsPositiveInterval(result)) {
-		throw ParserException("%s interval must be positive", context);
+	bool is_zero = !IsPositiveInterval(result) && !IsNegativeInterval(result);
+	if (IsNegativeInterval(result) || (is_zero && !allow_zero)) {
+		throw ParserException(allow_zero ? "%s interval must be non-negative" : "%s interval must be positive", context);
 	}
 	return result;
 }
@@ -102,21 +109,23 @@ static interval_t IntervalFromCountAndUnit(int64_t count, const ParseResult &uni
 	throw InternalException("Unsupported feature interval unit");
 }
 
-static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &context) {
+//! Parses a FeatureInterval. allow_zero is true only for TTL, where zero means "no staleness bound";
+//! WINDOW and EVERY always require a strictly positive interval.
+static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &context, bool allow_zero) {
 	// FeatureInterval <- FeatureIntervalString / FeatureIntervalKeywordShorthand / FeatureIntervalShorthand
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	auto &clause = choice.Cast<ListParseResult>();
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalString")) {
-		return ParseIntervalString(clause.Child<StringLiteralParseResult>(1).result, context);
+		return ParseIntervalString(clause.Child<StringLiteralParseResult>(1).result, context, allow_zero);
 	}
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalKeywordShorthand")) {
-		auto count = ParsePositiveIntegerIntervalCount(clause.Child<NumberParseResult>(1).number, context);
+		auto count = ParseIntervalCount(clause.Child<NumberParseResult>(1).number, context, allow_zero);
 		auto &unit = clause.Child<ListParseResult>(2).Child<ChoiceParseResult>(0).GetResult();
 		return IntervalFromCountAndUnit(count, unit, context);
 	}
 
-	auto count = ParsePositiveIntegerIntervalCount(clause.Child<NumberParseResult>(0).number, context);
+	auto count = ParseIntervalCount(clause.Child<NumberParseResult>(0).number, context, allow_zero);
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalShorthand")) {
 		auto &unit = clause.Child<ListParseResult>(1).Child<ChoiceParseResult>(0).GetResult();
 		return IntervalFromCountAndUnit(count, unit, context);
@@ -127,7 +136,7 @@ static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &
 static interval_t ParseFeatureScheduleInterval(ParseResult &parse_result) {
 	// FeatureScheduleClause <- 'EVERY' FeatureInterval
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return ParseFeatureInterval(list_pr.Child<ListParseResult>(1), "EVERY");
+	return ParseFeatureInterval(list_pr.Child<ListParseResult>(1), "EVERY", false);
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
@@ -161,14 +170,14 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	auto &window_opt = list_pr.Child<OptionalParseResult>(8);
 	if (window_opt.HasResult()) {
 		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
-		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW");
+		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW", false);
 	}
 	// index 9: FeatureTTLClause? (default: zero interval = no staleness bound / TTL disabled).
 	interval_t ttl_interval = ZERO_INTERVAL;
 	auto &ttl_opt = list_pr.Child<OptionalParseResult>(9);
 	if (ttl_opt.HasResult()) {
 		auto &clause = ttl_opt.GetResult().Cast<ListParseResult>();
-		ttl_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "TTL");
+		ttl_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "TTL", true);
 	}
 	// index 10: FeatureScheduleClause? (default: no schedule)
 	bool has_schedule = false;
@@ -216,7 +225,7 @@ interval_t PEGTransformerFactory::TransformFeatureScheduleClause(PEGTransformer 
 interval_t PEGTransformerFactory::TransformFeatureTTLClause(PEGTransformer &transformer, ParseResult &parse_result) {
 	// FeatureTTLClause <- 'TTL' FeatureInterval
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return ParseFeatureInterval(list_pr.Child<ListParseResult>(1), "TTL");
+	return ParseFeatureInterval(list_pr.Child<ListParseResult>(1), "TTL", true);
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshFeatureStatement(PEGTransformer &transformer,

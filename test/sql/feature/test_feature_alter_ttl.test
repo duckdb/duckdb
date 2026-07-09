@@ -100,17 +100,50 @@ alice	2024-01-11 00:00:00	100
 bob	2024-01-13 00:00:00	50
 
 # ============================================================
-# Non-positive / non-integer intervals are rejected
+# SET TTL 0 is allowed and fully disables the staleness bound (same as never setting a TTL) —
+# distinct from "widening" above, since it nulls nothing regardless of how stale a match is.
+# ============================================================
+statement ok
+ALTER FEATURE act SET TTL 0 SECONDS;
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+00:00:00
+
+query III rowsort
+SERVE FEATURE act FOR spine ASOF req_ts;
+----
+alice	2024-01-11 00:00:00	100
+bob	2024-01-13 00:00:00	50
+
+# The INTERVAL-string and INTERVAL-keyword-shorthand forms of zero also work
+statement ok
+ALTER FEATURE act SET TTL INTERVAL '0 days';
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+00:00:00
+
+statement ok
+ALTER FEATURE act SET TTL INTERVAL 0 DAYS;
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+00:00:00
+
+# ============================================================
+# Negative / non-integer intervals are still rejected (only zero-or-positive is allowed). Note: an
+# unquoted negative shorthand like "SET TTL -1 DAYS" is a parser-level syntax error (NumberLiteral does
+# not accept a leading '-' here) before it ever reaches this check — the quoted INTERVAL string form is
+# what actually exercises the semantic non-negative check.
 # ============================================================
 statement error
-ALTER FEATURE act SET TTL INTERVAL 0 SECONDS;
+ALTER FEATURE act SET TTL INTERVAL '-1 days';
 ----
-<REGEX>:.*interval must be positive.*
-
-statement error
-ALTER FEATURE act SET TTL 0 DAYS;
-----
-<REGEX>:.*interval must be positive.*
+<REGEX>:.*interval must be non-negative.*
 
 statement error
 ALTER FEATURE act SET TTL 1.5 DAYS;
