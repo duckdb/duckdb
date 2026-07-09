@@ -757,6 +757,11 @@ bool VariantColumnData::IsPersistent() {
 	return true;
 }
 
+bool VariantColumnData::IsAppendable() const {
+	// Once shredded, the variant column can no longer accept appends (see the guard in Append)
+	return !IsShredded();
+}
+
 bool VariantColumnData::HasAnyChanges() const {
 	if (validity->HasAnyChanges()) {
 		return true;

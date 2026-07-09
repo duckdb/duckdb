@@ -414,6 +414,10 @@ bool ListColumnData::IsPersistent() {
 	return ColumnData::IsPersistent() && validity->IsPersistent() && child_column->IsPersistent();
 }
 
+bool ListColumnData::IsAppendable() const {
+	return child_column->IsAppendable();
+}
+
 bool ListColumnData::HasAnyChanges() const {
 	return ColumnData::HasAnyChanges() || validity->HasAnyChanges() || child_column->HasAnyChanges();
 }

@@ -187,6 +187,8 @@ public:
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) const;
 
 	virtual bool IsPersistent();
+	//! Whether new rows can be appended to this column, e.g. shredded GEOMETRY columns no longer accept appends
+	virtual bool IsAppendable() const;
 	vector<DataPointer> GetDataPointers();
 
 	virtual PersistentColumnData Serialize();

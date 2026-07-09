@@ -744,6 +744,10 @@ bool ColumnData::IsPersistent() {
 	return true;
 }
 
+bool ColumnData::IsAppendable() const {
+	return true;
+}
+
 vector<DataPointer> ColumnData::GetDataPointers() {
 	vector<DataPointer> pointers;
 	idx_t row_start = 0;

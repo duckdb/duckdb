@@ -517,6 +517,12 @@ bool GeoColumnData::IsPersistent() {
 	return base_column->IsPersistent();
 }
 
+bool GeoColumnData::IsAppendable() const {
+	// Once this column has been checkpointed into a specialized layout (or holds the legacy spatial format),
+	// the base column no longer matches the GEOMETRY binary format and cannot accept appends.
+	return storage_type == GeometryStorageType::WKB;
+}
+
 bool GeoColumnData::HasAnyChanges() const {
 	return base_column->HasAnyChanges();
 }

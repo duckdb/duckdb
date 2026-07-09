@@ -471,6 +471,15 @@ bool StructColumnData::IsPersistent() {
 	return true;
 }
 
+bool StructColumnData::IsAppendable() const {
+	for (auto &child_col : sub_columns) {
+		if (!child_col->IsAppendable()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool StructColumnData::HasAnyChanges() const {
 	if (validity->HasAnyChanges()) {
 		return true;

@@ -355,6 +355,10 @@ bool ArrayColumnData::IsPersistent() {
 	return validity->IsPersistent() && child_column->IsPersistent();
 }
 
+bool ArrayColumnData::IsAppendable() const {
+	return child_column->IsAppendable();
+}
+
 bool ArrayColumnData::HasAnyChanges() const {
 	return child_column->HasAnyChanges() || validity->HasAnyChanges();
 }

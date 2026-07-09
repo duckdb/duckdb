@@ -54,6 +54,7 @@ public:
 	                                             const BaseStatistics &old_stats) override;
 
 	bool IsPersistent() override;
+	bool IsAppendable() const override;
 	bool HasAnyChanges() const override;
 	PersistentColumnData Serialize() override;
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;

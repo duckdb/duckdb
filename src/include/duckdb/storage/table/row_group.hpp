@@ -182,6 +182,8 @@ public:
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
 	                           idx_t row_group_start);
 	bool IsPersistent() const;
+	//! Whether new rows can be appended to this row group
+	bool IsAppendable() const;
 	PersistentRowGroupData SerializeRowGroupInfo(idx_t row_group_start) const;
 
 	void InitializeAppend(RowGroupAppendState &append_state);

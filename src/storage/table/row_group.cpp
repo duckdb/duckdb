@@ -1631,6 +1631,16 @@ bool RowGroup::IsPersistent() const {
 	return true;
 }
 
+bool RowGroup::IsAppendable() const {
+	for (idx_t c = 0; c < columns.size(); c++) {
+		// GetColumn loads the column if it is not loaded yet - appending would load it regardless
+		if (!GetColumn(c).IsAppendable()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) const {
 	// all columns are persistent - serialize
 	PersistentRowGroupData result;

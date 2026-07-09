@@ -1,0 +1,34 @@
+# name: test/sql/storage/types/variant/variant_shredded_pk.test
+# description: Append into a re-shredded rowgroup through the index append path
+# group: [variant]
+
+# Ensure that when appending to a rowgroup, the presence and state of an index does not impact the decision wether
+# a new row segment is created or not.
+
+load __TEST_DIR__/variant_shred_pk_append.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE t(id UUID PRIMARY KEY, g VARIANT);
+
+statement ok
+INSERT INTO t VALUES (uuidv7(), 'POINT (0 1)'::VARIANT);
+
+statement ok
+CHECKPOINT
+
+statement ok
+INSERT INTO t VALUES (uuidv7(), 'POINT (0 1)'::VARIANT);
+
+statement ok
+CHECKPOINT
+
+statement ok
+INSERT INTO t VALUES (uuidv7(), 'POINT (0 1)'::VARIANT);
+
+query I
+SELECT COUNT(*) FROM t WHERE g::VARCHAR = 'POINT (0 1)';
+----
+3

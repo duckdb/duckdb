@@ -185,10 +185,7 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
 	owned_row_groups->AppendSegment(l, std::move(new_row_group), start_row);
 
-	// Do not downgrade from REQUIRE_NEW
-	if (row_group_append_mode <= RowGroupAppendMode::SUGGEST_NEW) {
-		row_group_append_mode = RowGroupAppendMode::APPEND_TO_EXISTING;
-	}
+	row_group_append_mode = RowGroupAppendMode::APPEND_TO_EXISTING;
 }
 
 optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
@@ -514,6 +511,11 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 			// unless the last row group is full already.
 			needs_new_row_group = row_group_size < state.row_groups->GetLastSegment(l)->GetNode().count;
 		}
+	}
+	if (!needs_new_row_group) {
+		// Some column layouts cannot be appended to once they have been checkpointed (e.g. shredded GEOMETRY).
+		// Ff the last row group contains such a column we always need a new row group, regardless of the append mode
+		needs_new_row_group = !state.row_groups->GetLastSegment(l)->GetNode().IsAppendable();
 	}
 	if (needs_new_row_group) {
 		AppendRowGroup(l, state.row_groups->GetBaseRowId() + total_rows);
