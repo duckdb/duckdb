@@ -382,17 +382,20 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	static constexpr idx_t DICTIONARY_THRESHOLD = 2;
 	// dictionary vector - check if this is a duplicate eliminated dictionary from the storage
 	const auto &dict_col = groups.data[0];
-	auto opt_dict_size = DictionaryVector::DictionarySize(dict_col);
+	const auto opt_dict_size = DictionaryVector::DictionarySize(dict_col);
 	if (!opt_dict_size.IsValid()) {
 		// dict size not known - this is not a dictionary that comes from the storage
 		return optional_idx();
 	}
-	idx_t dict_size = opt_dict_size.GetIndex();
+
+	const idx_t dict_size = opt_dict_size.GetIndex();
+	const idx_t groups_size = groups.size();
+
 	auto &dictionary_id = DictionaryVector::DictionaryId(dict_col);
 	if (dictionary_id.empty()) {
 		// dictionary has no id, we can't cache across vectors
 		// only use dictionary compression if there are fewer entries than groups
-		if (dict_size * DICTIONARY_THRESHOLD >= groups.size()) {
+		if (dict_size * DICTIONARY_THRESHOLD >= groups_size) {
 			// dictionary is too large - use regular aggregation
 			return optional_idx();
 		}
@@ -433,7 +436,7 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	// if we have, we can just use the cached group pointers
 	// once every dict slot has been seen the walk would produce no new entries - skip it
 	if (dict_state.resolved_count < dict_size) {
-		for (idx_t i = 0; i < groups.size(); i++) {
+		for (idx_t i = 0; i < groups_size; i++) {
 			auto dict_idx = offsets.get_index(i);
 			unique_entries.set_index(unique_count, dict_idx);
 			unique_count += !found_entry[dict_idx];
@@ -484,15 +487,15 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		dict_addresses[dict_idx] = addr;
 	}
 	// now set up the addresses for the aggregates
-	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, groups.size());
-	for (idx_t i = 0; i < groups.size(); i++) {
+	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, groups_size);
+	for (idx_t i = 0; i < groups_size; i++) {
 		auto dict_idx = offsets.get_index(i);
 		result_addresses.WriteValue(dict_addresses[dict_idx]);
 	}
-	FlatVector::SetSize(state.addresses, groups.size());
+	FlatVector::SetSize(state.addresses, groups_size);
 
 	// finally process the aggregates (ht_offsets are only valid for unique entries, not the full payload)
-	UpdateAggregates(payload, filter, groups.size(), false);
+	UpdateAggregates(payload, filter, groups_size, false);
 
 	return new_group_count;
 }
@@ -624,8 +627,8 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 	return true;
 }
 
-void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter, idx_t count,
-                                                 bool ht_offsets_valid) {
+void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter,
+                                                 const idx_t count, bool ht_offsets_valid) {
 	if (UpdateAggregatesClustered(payload, filter, count, ht_offsets_valid)) {
 		Verify();
 		return;
