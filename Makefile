@@ -711,6 +711,10 @@ spell_tools:
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
 
+.PHONY: extension-patch-check
+extension-patch-check:
+	cmake -DCONFIG_DIR=.github/config -DPATCH_DIR=.github/patches/extensions -P scripts/check_extension_patches.cmake
+
 .PHONY: format_venv
 format_venv:
 	@if [ ! -x "$(FORMAT_PYTHON)" ]; then \

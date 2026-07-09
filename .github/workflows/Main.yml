@@ -239,7 +239,7 @@ jobs:
 
       - name: Check format
         run: |
-          make format-check-silent enum-integrity-check -j -Otarget
+          make format-check-silent enum-integrity-check extension-patch-check -j -Otarget
           echo "::group::Check generated files"
           make generate-files
           git diff --exit-code

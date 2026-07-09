@@ -1,4 +1,4 @@
-if (${BUILD_COMPLETE_EXTENSION_SET})
+if (${BUILD_COMPLETE_EXTENSION_SET} AND NOT ${WASM_ENABLED})
 ################# SPATIAL
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
