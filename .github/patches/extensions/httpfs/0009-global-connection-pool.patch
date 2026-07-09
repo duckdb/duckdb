@@ -1,29 +1,53 @@
 diff --git a/src/httpfs.cpp b/src/httpfs.cpp
-index 3c5aa17..2a78bfb 100644
+index fd30efb..082800b 100644
 --- a/src/httpfs.cpp
 +++ b/src/httpfs.cpp
-@@ -1042,13 +1042,8 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+@@ -1043,14 +1043,29 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 	}
  }
  
- unique_ptr<HTTPClient> HTTPFileHandle::GetClient() {
+-unique_ptr<HTTPClient> HTTPFileHandle::GetClient() {
 -	// Try to fetch a cached client
 -	auto cached_client = client_cache.GetClient();
 -	if (cached_client) {
 -		return cached_client;
--	}
--
++//! Whether clients are checked out from the shared connection pool instead of the per-handle cache.
++//! Only the curl util pools clients (one pool per database instance); every other configuration
++//! keeps per-handle reuse so it does not pay a fresh connection per request.
++static bool UseSharedConnectionPool(const HTTPParams &http_params) {
++#ifndef EMSCRIPTEN
++	auto &util = http_params.http_util;
++	if (util.GetName() == "HTTPFS-Curl") {
++		return static_cast<const HTTPFSCurlUtil &>(util).connection_caching_enabled;
+ 	}
++#endif
++	return false;
++}
+ 
 -	// Create a new client
-+	// clients are pooled process-wide (InitializeClient consults the connection cache) so that
-+	// concurrent handles share connections instead of each hoarding a private pool
++unique_ptr<HTTPClient> HTTPFileHandle::GetClient() {
++	if (!UseSharedConnectionPool(http_params)) {
++		// no shared pool for this configuration - reuse this handle's cached client
++		auto cached_client = client_cache.GetClient();
++		if (cached_client) {
++			return cached_client;
++		}
++	}
++	// with the shared pool enabled InitializeClient consults the pool, so that concurrent handles
++	// share connections instead of each hoarding a private pool
  	return CreateClient();
  }
  
-@@ -1059,7 +1054,8 @@ unique_ptr<HTTPClient> HTTPFileHandle::CreateClient() {
+@@ -1061,7 +1076,12 @@ unique_ptr<HTTPClient> HTTPFileHandle::CreateClient() {
  }
  
  void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
 -	client_cache.StoreClient(std::move(client));
-+	// return the client to the process-wide connection cache so other handles can reuse it
++	if (!UseSharedConnectionPool(http_params)) {
++		client_cache.StoreClient(std::move(client));
++		return;
++	}
++	// return the client to the shared connection pool so other handles can reuse it
 +	http_params.http_util.CloseClient(std::move(client));
  }
  
@@ -151,3 +175,52 @@ index 928c822..d342105 100644
  
  # Clear of caching disabled temporarily
  mode skip
+diff --git a/test/sql/connection_caching_httplib.test b/test/sql/connection_caching_httplib.test
+new file mode 100644
+index 0000000..e7843a9
+--- /dev/null
++++ b/test/sql/connection_caching_httplib.test
+@@ -0,0 +1,43 @@
++# name: test/sql/connection_caching_httplib.test
++# description: The httplib backend keeps per-handle connection reuse and never touches the shared pool
++# group: [sql]
++
++require httpfs
++
++require parquet
++
++# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
++set ignore_error_messages
++
++statement ok
++SET httpfs_client_implementation='httplib';
++
++statement ok
++SET enable_logging=true;
++
++statement ok
++CALL enable_logging('HTTPFSInfo');
++
++statement ok
++FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
++
++statement ok
++FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
++
++# the shared connection pool is curl-only: the httplib backend must not log any pool activity
++query I
++SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache%';
++----
++0
++
++# enabling connection caching does not reroute httplib to the pool either
++statement ok
++SET httpfs_connection_caching=true;
++
++statement ok
++FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
++
++query I
++SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache%';
++----
++0
