@@ -1356,7 +1356,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 
 #ifdef DEBUG
 	// Verify that our index memory is stable.
-	for (const auto &index : info->indexes.Indexes()) {
+	for (auto &index : info->indexes.Indexes()) {
 		if (index.IsBound()) {
 			index.Cast<BoundIndex>().VerifyBuffers();
 		}
