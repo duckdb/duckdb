@@ -182,7 +182,7 @@ enum class SerializationVersionDeprecated : uint64_t {
 
 struct StorageVersionInfo {
 	// When the default storage version has to be updated, do it here
-	static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
+	static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V1_3_0;
 
 	const char *version_name;
 	StorageVersion storage_version;
