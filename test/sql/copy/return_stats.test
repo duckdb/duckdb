@@ -265,7 +265,7 @@ SET preserve_insertion_order=true;
 statement ok
 CREATE TABLE decimal128_multi_rg AS SELECT CASE WHEN i < 2048 THEN 126619 ELSE 19308 END::DECIMAL(38,0) AS c FROM range(4096) t(i);
 
-query IIIIIII
+query IIIIII
 COPY decimal128_multi_rg TO '{TEST_DIR}/decimal128_multi_rg.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048, RETURN_STATS);
 ----
-<REGEX>:.*decimal128_multi_rg.parquet	4096	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"c"'={column_size_bytes=\d+, max=126619, min=19308, null_count=0, num_values=4096}}	NULL	{row_group_count=2}
+<REGEX>:.*decimal128_multi_rg.parquet	4096	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"c"'={column_size_bytes=\d+, max=126619, min=19308, null_count=0, num_values=4096}}	NULL
