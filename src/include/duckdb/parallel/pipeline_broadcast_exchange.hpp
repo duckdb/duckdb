@@ -124,6 +124,11 @@ private:
 	SinkCombineResultType FinishDirectConsumers(PipelineBroadcastExchangeLocalState &lstate,
 	                                            const InterruptState &interrupt_state);
 	void ResetPushChunk(PipelineBroadcastExchangeLocalState &lstate);
+	void ResetExchangeStateLocked();
+	void ResetConsumerReadStateLocked(ConsumerState &consumer, idx_t position);
+	void ResetConsumerRegistrationLocked(ConsumerState &consumer);
+	void ResetConsumerExecutionLocked(ConsumerState &consumer);
+	void DeactivateConsumerLocked(ConsumerState &consumer, idx_t position);
 	shared_ptr<DataChunk> CopyChunk(DataChunk &chunk);
 	idx_t EstimateChunkSize(DataChunk &chunk) const;
 	bool ShouldStopProducerLocked() const;

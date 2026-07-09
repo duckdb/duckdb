@@ -296,18 +296,8 @@ bool PipelineBroadcastExchange::DisableConsumer(idx_t consumer_idx) {
 		return false;
 	}
 	D_ASSERT(!consumer.direct);
-	if (consumer.active) {
-		D_ASSERT(active_consumers > 0);
-		active_consumers--;
-	}
 	consumer.disabled = true;
-	consumer.active = false;
-	consumer.position = next_position;
-	consumer.detached = false;
-	consumer.read_in_progress = false;
-	consumer.read_position = next_position;
-	consumer.shared_reader.reset();
-	ClearDetachedBufferLocked(consumer);
+	DeactivateConsumerLocked(consumer, next_position);
 	return true;
 }
 
@@ -323,49 +313,19 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 		return true;
 	}
 	consumer.direct = true;
-	if (consumer.active) {
-		D_ASSERT(active_consumers > 0);
-		active_consumers--;
-	}
-	consumer.active = false;
-	consumer.position = base_position;
-	consumer.detached = false;
-	consumer.read_in_progress = false;
-	consumer.read_position = base_position;
-	consumer.shared_reader.reset();
-	ClearDetachedBufferLocked(consumer);
+	DeactivateConsumerLocked(consumer, base_position);
 	direct_pipelines.push_back(pipeline);
 	return true;
 }
 
 void PipelineBroadcastExchange::ResetConsumerRegistrations() {
 	lock_guard<mutex> guard(lock);
-	chunks.clear();
-	shared_spool.reset();
+	ResetExchangeStateLocked();
 	direct_pipelines.clear();
 	blocked_readers.clear();
 	blocked_writers.clear();
-	base_position = 0;
-	next_position = 0;
-	shared_buffered_bytes = 0;
-	produced_rows.store(0, std::memory_order_relaxed);
-	direct_consumer_progress.store(false, std::memory_order_relaxed);
-	producer_finished = false;
-	cancelled = false;
-	active_consumers = 0;
 	for (auto &consumer : consumers) {
-		consumer.position = base_position;
-		consumer.rows_read = 0;
-		consumer.active = true;
-		consumer.disabled = false;
-		consumer.direct = false;
-		consumer.detached = false;
-		consumer.read_in_progress = false;
-		consumer.read_position = base_position;
-		consumer.detached_spool.reset();
-		consumer.shared_reader.reset();
-		consumer.detached_reader.reset();
-		active_consumers++;
+		ResetConsumerRegistrationLocked(consumer);
 	}
 }
 
@@ -374,34 +334,64 @@ void PipelineBroadcastExchange::Reset() {
 	vector<InterruptState> writers;
 	{
 		lock_guard<mutex> guard(lock);
-		chunks.clear();
-		shared_spool.reset();
-		base_position = 0;
-		next_position = 0;
-		shared_buffered_bytes = 0;
-		produced_rows.store(0, std::memory_order_relaxed);
-		direct_consumer_progress.store(false, std::memory_order_relaxed);
-		producer_finished = false;
-		cancelled = false;
-		active_consumers = 0;
+		ResetExchangeStateLocked();
 		for (auto &consumer : consumers) {
-			consumer.position = base_position;
-			consumer.rows_read = 0;
-			consumer.active = !consumer.disabled && !consumer.direct;
-			if (consumer.active) {
-				active_consumers++;
-			}
-			consumer.detached = false;
-			consumer.read_in_progress = false;
-			consumer.read_position = base_position;
-			consumer.shared_reader.reset();
-			ClearDetachedBufferLocked(consumer);
+			ResetConsumerExecutionLocked(consumer);
 		}
 		WakeReadersLocked(readers);
 		WakeWritersLocked(writers);
 	}
 	CallbackAll(readers);
 	CallbackAll(writers);
+}
+
+void PipelineBroadcastExchange::ResetExchangeStateLocked() {
+	chunks.clear();
+	shared_spool.reset();
+	base_position = 0;
+	next_position = 0;
+	shared_buffered_bytes = 0;
+	produced_rows.store(0, std::memory_order_relaxed);
+	direct_consumer_progress.store(false, std::memory_order_relaxed);
+	producer_finished = false;
+	cancelled = false;
+	active_consumers = 0;
+}
+
+void PipelineBroadcastExchange::ResetConsumerReadStateLocked(ConsumerState &consumer, idx_t position) {
+	consumer.position = position;
+	consumer.detached = false;
+	consumer.read_in_progress = false;
+	consumer.read_position = position;
+	consumer.shared_reader.reset();
+	ClearDetachedBufferLocked(consumer);
+}
+
+void PipelineBroadcastExchange::ResetConsumerRegistrationLocked(ConsumerState &consumer) {
+	consumer.rows_read = 0;
+	consumer.active = true;
+	consumer.disabled = false;
+	consumer.direct = false;
+	ResetConsumerReadStateLocked(consumer, base_position);
+	active_consumers++;
+}
+
+void PipelineBroadcastExchange::ResetConsumerExecutionLocked(ConsumerState &consumer) {
+	consumer.rows_read = 0;
+	consumer.active = !consumer.disabled && !consumer.direct;
+	ResetConsumerReadStateLocked(consumer, base_position);
+	if (consumer.active) {
+		active_consumers++;
+	}
+}
+
+void PipelineBroadcastExchange::DeactivateConsumerLocked(ConsumerState &consumer, idx_t position) {
+	if (consumer.active) {
+		D_ASSERT(active_consumers > 0);
+		active_consumers--;
+	}
+	consumer.active = false;
+	ResetConsumerReadStateLocked(consumer, position);
 }
 
 SinkResultType PipelineBroadcastExchange::Push(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,
