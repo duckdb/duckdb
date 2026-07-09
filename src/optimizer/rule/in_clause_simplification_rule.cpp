@@ -2,6 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
+#include "duckdb/optimizer/matcher/type_matcher_id.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/string_map_set.hpp"
@@ -71,15 +72,11 @@ InEnumSimplificationRule::InEnumSimplificationRule(ExpressionRewriter &rewriter)
 	auto cast_matcher = make_uniq<CastExpressionMatcher>();
 	cast_matcher->type = make_uniq<SpecificTypeMatcher>(LogicalType::VARCHAR);
 	auto enum_matcher = make_uniq<ExpressionMatcher>();
-	enum_matcher->type = make_uniq<SpecificTypeIdMatcher>(LogicalTypeId::ENUM);
+	enum_matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::ENUM);
 	cast_matcher->matcher = std::move(enum_matcher);
 	op->probe_matcher = std::move(cast_matcher);
 
 	//	Children must be constant strings
-	vector<LogicalTypeId> ids;
-	ids.emplace_back(LogicalTypeId::VARCHAR);
-	ids.emplace_back(LogicalTypeId::STRING_LITERAL);
-	ids.emplace_back(LogicalTypeId::SQLNULL);
 	op->child_matcher = make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_CONSTANT);
 	op->child_matcher->type = make_uniq<SpecificTypeMatcher>(LogicalType::VARCHAR);
 
@@ -130,6 +127,100 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
 		// constant_or_null(not_in, child[0])
 		const bool not_in = (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
 		return rewriter.ConstantOrNull(in_children[0]->Copy(), Value::BOOLEAN(not_in));
+	}
+
+	return nullptr;
+}
+
+EnumCompareSimplificationRule::EnumCompareSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	// match enum::VARCHAR = string literal
+	auto op = make_uniq<ComparisonExpressionMatcher>();
+	vector<ExpressionType> types;
+	types.emplace_back(ExpressionType::COMPARE_EQUAL);
+	types.emplace_back(ExpressionType::COMPARE_NOTEQUAL);
+	types.emplace_back(ExpressionType::COMPARE_DISTINCT_FROM);
+	types.emplace_back(ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+	op->expr_type = make_uniq<ManyExpressionTypeMatcher>(types);
+
+	//	One side must be enum::VARCHAR
+	auto cast_matcher = make_uniq<CastExpressionMatcher>();
+	cast_matcher->type = make_uniq<SpecificTypeMatcher>(LogicalType::VARCHAR);
+	auto enum_matcher = make_uniq<ExpressionMatcher>();
+	enum_matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::ENUM);
+	cast_matcher->matcher = std::move(enum_matcher);
+	op->matchers.emplace_back(std::move(cast_matcher));
+
+	//	The other must must be a constant string
+	auto const_matcher = make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_CONSTANT);
+	const_matcher->type = make_uniq<SpecificTypeMatcher>(LogicalType::VARCHAR);
+	op->matchers.emplace_back(std::move(const_matcher));
+
+	op->policy = SetMatcher::Policy::UNORDERED;
+
+	root = std::move(op);
+}
+
+unique_ptr<Expression> EnumCompareSimplificationRule::Apply(LogicalOperator &op,
+                                                            vector<reference<Expression>> &bindings, bool &changes_made,
+                                                            bool is_root) {
+	auto &expr = bindings[0].get().Cast<BoundFunctionExpression>();
+
+	optional_ptr<BoundCastExpression> cast_expr;
+	optional_ptr<BoundConstantExpression> const_expr;
+	idx_t cast_idx = 0;
+	if (BoundComparisonExpression::Left(expr).GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		cast_expr = BoundComparisonExpression::RightMutable(expr)->Cast<BoundCastExpression>();
+		const_expr = BoundComparisonExpression::LeftMutable(expr)->Cast<BoundConstantExpression>();
+		cast_idx = 1;
+	} else {
+		cast_expr = BoundComparisonExpression::LeftMutable(expr)->Cast<BoundCastExpression>();
+		const_expr = BoundComparisonExpression::RightMutable(expr)->Cast<BoundConstantExpression>();
+	}
+
+	auto &enum_expr = cast_expr->Child();
+	auto &enum_type = enum_expr.GetReturnType();
+
+	vector<unique_ptr<Expression>> cmp_children;
+	cmp_children.emplace_back(enum_expr.Copy());
+
+	auto &v = const_expr->GetValue();
+	if (v.IsNull()) {
+		//	Keep NULLs
+		cmp_children.emplace_back(make_uniq<BoundConstantExpression>(Value(enum_type)));
+	} else {
+		// Look up the string in the domain for the original ENUM
+		string_t s = v.ToString();
+		auto strings = FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(enum_type));
+		for (uint64_t i = 0; i < EnumType::GetSize(enum_type); ++i) {
+			if (s == strings[i]) {
+				//	The literal is in the ENUM domain, so translate it
+				cmp_children.emplace_back(make_uniq<BoundConstantExpression>(Value::ENUM(i, enum_type)));
+				if (cast_idx) {
+					std::swap(cmp_children[0], cmp_children[1]);
+				}
+				break;
+			}
+		}
+	}
+
+	if (cmp_children.size() == 2) {
+		//	In the domain, so rewrite as enum = constant
+		BoundComparisonExpression::LeftMutable(expr) = std::move(cmp_children[0]);
+		BoundComparisonExpression::RightMutable(expr) = std::move(cmp_children[1]);
+	} else {
+		//	Not in the domain, so rewrite as ConstantOrNull(enum, ne)
+		switch (expr.GetExpressionType()) {
+		case ExpressionType::COMPARE_EQUAL:
+			return rewriter.ConstantOrNull(std::move(cmp_children[0]), Value::BOOLEAN(false));
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+		case ExpressionType::COMPARE_NOTEQUAL:
+			return rewriter.ConstantOrNull(std::move(cmp_children[0]), Value::BOOLEAN(true));
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		default:
+			break;
+		}
 	}
 
 	return nullptr;
