@@ -2,6 +2,8 @@
 
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 

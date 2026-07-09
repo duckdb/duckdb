@@ -1,4 +1,5 @@
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
@@ -419,8 +420,7 @@ LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
 }
 
 FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
-	if (vfs.SubSystemIsDisabled(local_fs.GetName())) {
+	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
 	return local_fs;

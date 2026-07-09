@@ -223,13 +223,12 @@ WHERE TRY_CAST(column00 AS UTINYINT) > 0 ORDER BY 1;
 3
 3
 
-# CAST and TRY_CAST of the same target type: no conflict, both pushed down;
-# PROJECTION remains only to duplicate the column, no cast expressions in the plan
+# CAST and TRY_CAST conflict in NULL-semantics. Not pushed down
 query II
 EXPLAIN SELECT column00::UTINYINT, TRY_CAST(column00 AS UTINYINT)
 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
 ----
-physical_plan	<!REGEX>:.*CAST.*
+physical_plan	<REGEX>:.*CAST.*
 
 query II
 SELECT column00::UTINYINT, TRY_CAST(column00 AS UTINYINT)

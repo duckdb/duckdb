@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/common/enums/lambda_syntax.hpp"
 #include "duckdb/common/enums/allow_parser_override.hpp"
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"

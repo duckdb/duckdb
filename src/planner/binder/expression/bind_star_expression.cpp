@@ -8,6 +8,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
 

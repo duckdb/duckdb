@@ -21,6 +21,7 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 
@@ -282,7 +283,7 @@ public:
 	template <bool USE_DICT_EMISSION>
 	inline data_ptr_t GetNextPointer(data_ptr_t row_ptr) const {
 		if (USE_DICT_EMISSION) {
-			if (!chains_longer_than_one) {
+			if (!chains_longer_than_one.load(std::memory_order_relaxed)) {
 				// aux_next_ptrs is unallocated in this case
 				return nullptr;
 			}
@@ -354,7 +355,7 @@ public:
 	bool needs_chain_matcher;
 
 	//! If there is more than one element in the chain, we need to scan the next elements of the chain
-	bool chains_longer_than_one;
+	atomic<bool> chains_longer_than_one {false};
 
 	//! The capacity of the HT. Is the same as hash_map.GetSize() / sizeof(ht_entry_t)
 	idx_t capacity = DConstants::INVALID_INDEX;
@@ -562,7 +563,6 @@ public:
 	void SetBuildBloomFilter(const bool should_build) {
 		this->should_build_bloom_filter = should_build;
 	}
-	void PrepareBuildBloomFilter(idx_t estimated_row_count);
 	void PrepareBloomFilterForFinalize();
 
 	BloomFilter &GetBloomFilter() {

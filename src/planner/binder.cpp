@@ -233,6 +233,20 @@ StatementProperties &Binder::GetStatementProperties() {
 	return global_binder_state->prop;
 }
 
+optional_ptr<LogicalGet> Binder::GetPassthroughTableFunctionGet(LogicalOperator &op) {
+	// Follow single-child projections down to a lone LOGICAL_GET; anything else is not a passthrough.
+	auto *current = &op;
+	while (true) {
+		if (current->type == LogicalOperatorType::LOGICAL_GET) {
+			return current->Cast<LogicalGet>();
+		}
+		if (current->type != LogicalOperatorType::LOGICAL_PROJECTION || current->children.size() != 1) {
+			return nullptr;
+		}
+		current = current->children[0].get();
+	}
+}
+
 optional_ptr<BoundParameterMap> Binder::GetParameters() {
 	return global_binder_state->parameters;
 }

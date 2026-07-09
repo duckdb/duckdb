@@ -45,6 +45,20 @@ static void register_sqllogic_test_case(void (*test_fun)(), const string &path, 
 template <bool AUTO_SWITCH_TEST_DIR>
 static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input) {
 	const auto test_dir_path = TestDirectoryPath(); // can vary between tests, and does IO
+	// Absolute (main-cwd-anchored) form of the per-test temp dir we just materialized. Captured HERE,
+	// before the AUTO_SWITCH_TEST_DIR block below may chdir into an extension source dir: it names the
+	// physical dir regardless of the cwd in effect when {TEST_DIR}/TEMP_DIR are later substituted.
+	// (After the extension chdir the relative test_dir_path would resolve to a non-existent sibling.)
+	string test_dir_absolute = test_dir_path;
+	{
+		auto local_fs = FileSystem::CreateLocal();
+		if (!FileSystem::IsRemoteFile(test_dir_absolute) && !local_fs->IsPathAbsolute(test_dir_absolute)) {
+			test_dir_absolute = local_fs->JoinPath(TestGetCurrentDirectory(), test_dir_absolute);
+		}
+	}
+	// HOME is NOT touched per-test: main sets it once to the run-wide sandbox (GetTempDirHome(), a
+	// sibling of the run root). Pointing HOME at {TEST_DIR} here would put ~/.duckdb inside a dir tests
+	// whitelist via allowed_directories, breaking permission tests (e.g. INSTALL-is-denied).
 	auto &test_config = TestConfiguration::Get();
 
 	string initial_dbpath = test_config.GetInitialDBPath();
@@ -67,6 +81,10 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 
 	string prev_directory;
+	// The temp dir exposed to this test (TEMP_DIR / {TEST_DIR}). Normally the cwd-relative path; for the
+	// extension case below it becomes the absolute path, since the chdir makes the relative form point
+	// at a non-existent sibling of the extension source dir.
+	string temp_dir_for_test = test_dir_path;
 
 	// We assume the test working dir for extensions to be one dir above the test/sql. Note that this is very hacky.
 	// however for now it suffices: we use it to run tests from out-of-tree extensions that are based on the extension
@@ -81,6 +99,10 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 		}
 		auto test_working_dir = name.substr(0, found);
 		test_config.ChangeWorkingDirectory(test_working_dir);
+		// After the chdir, the temp dir (materialized above at the main cwd) is only reachable by its
+		// absolute path -- pin TEMP_DIR/{TEST_DIR} to it so `load {TEST_DIR}/x.db` & friends resolve.
+		temp_dir_for_test = test_dir_absolute;
+		test_config.SetTestDirOverride(test_dir_absolute);
 	}
 
 	// setup this test runner with Config-based env, then override with ephemerals (only WORKING_DIR at this point)
@@ -91,6 +113,16 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	runner.environment_variables["WORKING_DIR"] = TestGetCurrentDirectory();
 	runner.environment_variables["TEST_NAME"] = name;
 	runner.environment_variables["TEST_NAME__NO_SLASH"] = StringUtil::Replace(name, "/", "_");
+	runner.environment_variables["TEST_ID"] = TestNameToId(name); // full test name, sanitized to a path component
+	// TEMP_DIR -> assigned per-test to $BASE[/$RUN_ID][/$TEST_ID] -- RUN_ID and TEST_ID when enabled
+	// (absolute in the extension case; see temp_dir_for_test above).
+	runner.environment_variables["TEMP_DIR"] = temp_dir_for_test;
+	// TEMP_DIR_ABSOLUTE is always the main-cwd-anchored absolute path captured before any extension
+	// chdir -- computing it from the post-chdir cwd here would point at the wrong (extension) tree.
+	runner.environment_variables["TEMP_DIR_ABSOLUTE"] = test_dir_absolute;
+	runner.environment_variables["CATALOG_DIR"] = temp_dir_for_test + "/" + runner.environment_variables["TEST_UUID"];
+
+	runner.EmitBegin(name);
 
 	ErrorData error;
 	try {
@@ -101,9 +133,16 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 		}
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
+	} catch (...) {
+		// Catch's own assertion-failure control exception (not std::exception): the test aborted
+		// mid-run. Catch carries no message; emit the locator stashed at the throw site (file:line —
+		// the full diff is in the captured output), then rethrow so Catch still records the verdict.
+		runner.EmitEnd(name, "error", runner.test_failure_locator);
+		throw;
 	}
 
 	if (!input && AUTO_SWITCH_TEST_DIR) {
+		test_config.ClearTestDirOverride();
 		test_config.ChangeWorkingDirectory(prev_directory);
 	}
 
@@ -120,15 +159,32 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 			}
 		} catch (std::exception &ex) {
 			string cleanup_failure = "Error while running clean-up routine:\n";
-			ErrorData error(ex);
-			cleanup_failure += error.Message();
+			ErrorData cleanup_error(ex);
+			cleanup_failure += cleanup_error.Message();
+			// FAIL throws, unwinding past the unified terminal-event emit below. Emit the end event
+			// here first so a cleanup failure still yields one — preserving the one-begin/one-end
+			// invariant that --emit-test-events consumers rely on.
+			runner.EmitEnd(name, "error", cleanup_failure);
 			FAIL(cleanup_failure);
 		}
 	}
 
-	// clear test directory after running tests
-	ClearTestDirectory();
+	// $TEST_ID destroy: execute this test's destroy disposition using its pass/fail. On the
+	// on-success default a passing test's dir is reclaimed now; a failing test's is retained
+	// (main's DestroyTempDir then reclaims the whole run root only on overall success).
+	runner.test_succeeded = !error.HasError();
+	DestroyTestTempDir(runner.test_succeeded);
 
+	// Single terminal event (--emit-test-events): status = skip-requirement (whole-test skip) /
+	// error (a std::exception escaped: LoadDatabase / cleanup / unexpected) / ok. Catch-thrown
+	// statement failures are handled by the catch(...) above.
+	if (runner.test_skipped_requirement) {
+		runner.EmitEnd(name, "skip-requirement", runner.test_skip_reason);
+	} else if (error.HasError()) {
+		runner.EmitEnd(name, "error", error.Message());
+	} else {
+		runner.EmitEnd(name, "ok", "");
+	}
 	if (error.HasError()) {
 		FAIL(error.Message());
 	}

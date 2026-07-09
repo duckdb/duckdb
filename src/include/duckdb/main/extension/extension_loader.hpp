@@ -18,6 +18,8 @@
 #include "duckdb/main/extension_manager.hpp"
 
 namespace duckdb {
+struct CreateCoordinateSystemInfo;
+class TableFunctionCatalogEntry;
 
 class DatabaseInstance;
 struct CreateMacroInfo;

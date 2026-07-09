@@ -8,6 +8,10 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_entries.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
 

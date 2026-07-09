@@ -13,6 +13,8 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 
@@ -121,7 +123,7 @@ void JoinHashTable::FinishInitWithLayout(shared_ptr<TupleDataLayout> published_l
 		needs_chain_matcher = false;
 	}
 
-	chains_longer_than_one = false;
+	chains_longer_than_one.store(false, std::memory_order_relaxed);
 	row_matcher_build.Initialize(true, *layout_ptr, equality_predicates);
 
 	const auto &offsets = layout_ptr->GetOffsets();
@@ -762,13 +764,13 @@ static inline void InsertMatchesAndIncrementMisses(unsafe_optional_ptr<atomic<ht
                                                    const hash_t hash_salts[], const idx_t capacity_mask,
                                                    const idx_t key_match_count, const idx_t key_no_match_count) {
 	if (key_match_count != 0) {
-		ht.chains_longer_than_one = true;
+		ht.chains_longer_than_one.store(true, std::memory_order_relaxed);
 	}
 
 	// Insert the rows that match
 	if (ht.insert_duplicate_keys) {
 		if (key_match_count != 0) {
-			ht.chains_longer_than_one = true;
+			ht.chains_longer_than_one.store(true, std::memory_order_relaxed);
 		}
 		for (idx_t i = 0; i < key_match_count; i++) {
 			const auto need_compare_idx = state.key_match_sel.get_index(i);
@@ -1013,29 +1015,21 @@ void JoinHashTable::AllocatePointerTable() {
 	            {"size", to_string(data_collection->SizeInBytes() + hash_map.GetSize())}});
 }
 
-void JoinHashTable::PrepareBuildBloomFilter(idx_t estimated_row_count) {
-	should_build_bloom_filter = true;
-	if (!bloom_filter.IsInitialized()) {
-		bloom_filter_init_count = MaxValue<idx_t>(estimated_row_count, idx_t(1));
-		bloom_filter.Initialize(context, bloom_filter_init_count);
-	}
-}
-
 void JoinHashTable::PrepareBloomFilterForFinalize() {
 	if (!should_build_bloom_filter) {
 		return;
 	}
 
 	// Finalize scans every build tuple and inserts its hash into the bloom filter.
-	// Resize here if the planner estimate was too low, then let finalize populate it.
+	// Make sure any existing filter has enough sectors for the actual build count.
 	const auto build_count = Count();
 	const auto actual_init_count = MaxValue<idx_t>(build_count, 1);
-	static constexpr double REBUILD_UNDERESTIMATE_THRESHOLD = 2.0;
-	const auto estimated_too_low = bloom_filter_init_count == 0 ||
-	                               static_cast<double>(build_count) >
-	                                   static_cast<double>(bloom_filter_init_count) * REBUILD_UNDERESTIMATE_THRESHOLD;
-	if (bloom_filter.IsInitialized() && !estimated_too_low) {
-		return;
+	if (bloom_filter.IsInitialized()) {
+		const auto current_sectors = BloomFilter::GetNumberOfSectors(bloom_filter_init_count);
+		const auto required_sectors = BloomFilter::GetNumberOfSectors(actual_init_count);
+		if (current_sectors >= required_sectors) {
+			return;
+		}
 	}
 
 	bloom_filter.Reset();
@@ -1440,7 +1434,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &probe_data, DataChunk &resu
 		NextLeftJoin(keys, probe_data, result);
 		break;
 	case JoinType::LEFT:
-		if (!ht.chains_longer_than_one) {
+		if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 			NextUniqueLeftJoin(keys, probe_data, result);
 		} else {
 			NextLeftJoin(keys, probe_data, result);
@@ -1583,7 +1577,7 @@ static void AdvancePointersLoop(JoinHashTable &ht, Vector &pointers, SelectionVe
 }
 
 void ScanStructure::AdvancePointers(const SelectionVector &sel, const idx_t sel_count) {
-	if (!ht.chains_longer_than_one) {
+	if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 		this->count = 0;
 		return;
 	}
@@ -1655,6 +1649,18 @@ void JoinHashTable::GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, 
 	}
 }
 
+static bool SelectionIsFullIdentity(const SelectionVector &sel, idx_t count, idx_t source_count) {
+	if (count != source_count) {
+		return false;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		if (sel.get_index_unsafe(i) != i) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void ScanStructure::UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count) {
 	// matches were found
 	// record the result
@@ -1706,11 +1712,17 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 
 			if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 				// fast path: no chains longer than one
-				if (!ht.chains_longer_than_one) {
+				if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 					// extract only OUTPUT columns from probe_data
+					const auto full_identity =
+					    SelectionIsFullIdentity(chain_match_sel_vector, result_count, probe_data.size());
 					for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 						idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-						result.data[i].Slice(probe_data.data[probe_col_idx], chain_match_sel_vector, result_count);
+						if (full_identity) {
+							result.data[i].Reference(probe_data.data[probe_col_idx]);
+						} else {
+							result.data[i].Slice(probe_data.data[probe_col_idx], chain_match_sel_vector, result_count);
+						}
 					}
 					// on the RHS, we need to fetch the data from the hash table
 					ht.GatherRHS(pointers, chain_match_sel_vector, result_count, result, ht.lhs_output_in_probe.size());
@@ -1729,9 +1741,14 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 
 	if (base_count > 0) {
 		// extract only OUTPUT columns from probe_data using compaction buffer
+		const auto full_identity = SelectionIsFullIdentity(lhs_sel_vector, base_count, probe_data.size());
 		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-			result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
+			if (full_identity) {
+				result.data[i].Reference(probe_data.data[probe_col_idx]);
+			} else {
+				result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
+			}
 		}
 		// 2) gather RHS vectors
 		ht.GatherRHS(rhs_pointers, *FlatVector::IncrementalSelectionVector(), base_count, result,
@@ -2095,7 +2112,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
 	// Unique left join: RHS has unique keys, so at most one match per LHS row.
 	// Single pass - no state machine needed.
-	D_ASSERT(!ht.chains_longer_than_one);
+	D_ASSERT(!ht.chains_longer_than_one.load(std::memory_order_relaxed));
 
 	// First scan for key matches
 	ScanKeyMatches(keys, probe_data);
@@ -2406,7 +2423,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	bitmask = DConstants::INVALID_INDEX;
 	finalized = false;
 	has_null = false;
-	chains_longer_than_one = false;
+	chains_longer_than_one.store(false, std::memory_order_relaxed);
 	total_probe_matches = 0;
 	load_factor = DEFAULT_LOAD_FACTOR;
 	should_build_bloom_filter = false;
@@ -2708,7 +2725,8 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 	}
 
 	// save chain pointers before overwriting NEXT_PTR; GetNextPointer reads them back
-	if (chains_longer_than_one) {
+	const auto has_chains = chains_longer_than_one.load(std::memory_order_relaxed);
+	if (has_chains) {
 		aux_next_ptrs = buffer_manager.GetBufferAllocator().Allocate(build_count * sizeof(data_ptr_t));
 		aux_next_ptrs_data = reinterpret_cast<data_ptr_t *>(aux_next_ptrs.get());
 	}
@@ -2716,7 +2734,7 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 	// save the original NEXT_PTR into aux_next_ptrs (if chains exist) and embed the dict index
 	for (idx_t i = 0; i < build_count; i++) {
 		const auto next_ptr_location = row_ptrs[i] + pointer_offset;
-		if (chains_longer_than_one) {
+		if (has_chains) {
 			aux_next_ptrs_data[i] = LoadPointer(next_ptr_location);
 		}
 		Store<uint32_t>(static_cast<uint32_t>(i), next_ptr_location);

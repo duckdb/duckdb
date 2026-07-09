@@ -62,6 +62,7 @@
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/preserve_order.hpp"
+#include "duckdb/common/enums/profiling_coverage.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/enums/regex_match_operator_semantics.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
@@ -96,6 +97,7 @@
 #include "duckdb/common/multi_file/multi_file_states.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/query_parameters.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
@@ -153,8 +155,6 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
-#include "duckdb/main/query_parameters.hpp"
-#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
@@ -214,7 +214,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/storage/table/row_group_reorderer.hpp"
+#include "duckdb/storage/table/row_group_order_options.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
@@ -1744,6 +1744,24 @@ const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType val
 template<>
 DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *value) {
 	return static_cast<DefaultOrderByNullType>(StringUtil::StringToEnum(GetDefaultOrderByNullTypeValues(), 5, "DefaultOrderByNullType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDeferredRuntimeFilterTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DeferredRuntimeFilterType::BLOOM_FILTER), "BLOOM_FILTER" },
+		{ static_cast<uint32_t>(DeferredRuntimeFilterType::PREFIX_RANGE), "PREFIX_RANGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DeferredRuntimeFilterType>(DeferredRuntimeFilterType value) {
+	return StringUtil::EnumToString(GetDeferredRuntimeFilterTypeValues(), 2, "DeferredRuntimeFilterType", static_cast<uint32_t>(value));
+}
+
+template<>
+DeferredRuntimeFilterType EnumUtil::FromString<DeferredRuntimeFilterType>(const char *value) {
+	return static_cast<DeferredRuntimeFilterType>(StringUtil::StringToEnum(GetDeferredRuntimeFilterTypeValues(), 2, "DeferredRuntimeFilterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDependencyEntryTypeValues() {

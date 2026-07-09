@@ -20,6 +20,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
+class BoundIndex;
 
 class ClientContext;
 class TableIOManager;

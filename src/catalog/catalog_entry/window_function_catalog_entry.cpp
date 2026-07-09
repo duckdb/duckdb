@@ -3,6 +3,7 @@
 #include "duckdb/parser/parsed_data/create_window_function_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 

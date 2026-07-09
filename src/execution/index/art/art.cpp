@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -748,6 +749,10 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t
 
 bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
                            set<row_t> &row_ids) {
+	if (!tree.HasMetadata()) {
+		return true;
+	}
+
 	// Find the first node that satisfies the left predicate.
 	Iterator it(*this);
 

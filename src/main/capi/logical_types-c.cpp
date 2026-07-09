@@ -4,6 +4,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 

@@ -69,7 +69,7 @@ char arBKeys[MAX_TABLE][17];
  */
 int setSCDKeys(int nColumnID, ds_key_t kIndex, char *szBKey, ds_key_t *pkBeginDateKey, ds_key_t *pkEndDateKey) {
 	int bNewBKey = 0, nModulo;
-	static ds_key_t jMinimumDataDate, jMaximumDataDate, jH1DataDate, jT1DataDate, jT2DataDate;
+	static thread_local ds_key_t jMinimumDataDate, jMaximumDataDate, jH1DataDate, jT1DataDate, jT2DataDate;
 	date_t dtTemp;
 	int nTableID;
 
@@ -147,7 +147,7 @@ int setSCDKeys(int nColumnID, ds_key_t kIndex, char *szBKey, ds_key_t *pkBeginDa
  */
 ds_key_t scd_join(int tbl, int col, ds_key_t jDate) {
 	ds_key_t res, kRowcount;
-	static int jMinimumDataDate, jMaximumDataDate, jH1DataDate, jT1DataDate, jT2DataDate;
+	static thread_local int jMinimumDataDate, jMaximumDataDate, jH1DataDate, jT1DataDate, jT2DataDate;
 	date_t dtTemp;
 
 	if (!InitConstants::scd_join_init) {
@@ -190,7 +190,7 @@ ds_key_t scd_join(int tbl, int col, ds_key_t jDate) {
 ds_key_t matchSCDSK(ds_key_t kUnique, ds_key_t jDate, int nTable) {
 	ds_key_t kReturn = -1;
 	int jMinimumDataDate, jMaximumDataDate;
-	static int jH1DataDate, jT1DataDate, jT2DataDate;
+	static thread_local int jH1DataDate, jT1DataDate, jT2DataDate;
 	date_t dtTemp;
 
 	if (!InitConstants::matchSCDSK_init) {

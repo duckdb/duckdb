@@ -8,6 +8,9 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 

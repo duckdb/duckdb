@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "utf8proc.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 

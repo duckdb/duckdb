@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
 
 namespace duckdb {
 

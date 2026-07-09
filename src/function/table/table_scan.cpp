@@ -36,6 +36,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
 
 namespace duckdb {
 

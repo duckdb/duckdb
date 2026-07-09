@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/main/valid_checker.hpp"
@@ -79,10 +80,15 @@ struct AttachOptions {
 	bool is_main_database = false;
 	//! The visibility of the attached database
 	AttachVisibility visibility = AttachVisibility::SHOWN;
+	//! Whether this attachment is ephemeral: created implicitly by `CONNECT '<uri>'` and detached
+	//! again on DISCONNECT. Not settable via SQL; only the connection-string CONNECT path sets it.
+	bool ephemeral = false;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
 	optional_idx vacuum_rebuild_indexes_threshold;
+	//! Header prefetched during file-type detection, reused when opening the file. Empty for non-DuckDB files.
+	PrefetchedFileData prefetched;
 };
 
 //! The AttachedDatabase represents an attached database instance.
@@ -141,6 +147,10 @@ public:
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
+	//! True for attachments created implicitly by `CONNECT '<uri>'`; DISCONNECT detaches them.
+	bool IsEphemeral() const {
+		return ephemeral;
+	}
 	//! vacuum_rebuild_indexes threshold for this attached database.
 	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
 	idx_t GetVacuumRebuildIndexThreshold() const;
@@ -166,6 +176,7 @@ private:
 	optional_ptr<StorageExtension> storage_extension;
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	AttachVisibility visibility = AttachVisibility::SHOWN;
+	bool ephemeral = false;
 	bool is_initial_database = false;
 	bool is_closed = false;
 	shared_ptr<mutex> close_lock;

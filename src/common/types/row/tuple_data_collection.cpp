@@ -1,3 +1,4 @@
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -14,6 +15,7 @@
 #include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include <algorithm>
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

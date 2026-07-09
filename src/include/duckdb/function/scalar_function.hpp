@@ -9,17 +9,18 @@
 #pragma once
 
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
+class BaseStatistics;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -59,12 +60,22 @@ class ScalarFunctionCatalogEntry;
 struct StatementProperties;
 
 struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, const BaseStatistics &stats_p)
-	    : bind_data(bind_data_p), stats(stats_p) {
+	FunctionStatisticsPruneInput(const BoundFunctionExpression &function_p, optional_ptr<FunctionData> bind_data_p,
+	                             const vector<optional_ptr<const BaseStatistics>> &child_stats_p)
+	    : function(function_p), bind_data(bind_data_p), child_stats(child_stats_p) {
 	}
 
+	//! The bound function expression being checked (gives access to the argument expressions)
+	const BoundFunctionExpression &function;
 	optional_ptr<FunctionData> bind_data;
-	const BaseStatistics &stats;
+
+	//! Statistics for each function argument (an entry is null if it could not be derived for that argument)
+	const vector<optional_ptr<const BaseStatistics>> &child_stats;
+
+	//! Convenience accessor: statistics of the i-th argument, or null if absent / not derivable
+	optional_ptr<const BaseStatistics> ChildStats(idx_t i) const {
+		return i < child_stats.size() ? child_stats[i] : optional_ptr<const BaseStatistics>();
+	}
 };
 
 struct FunctionStatisticsInput {

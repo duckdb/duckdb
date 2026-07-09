@@ -103,6 +103,10 @@ bool VersioningUtils::IsSupportedCAPIVersion(string &capi_version_string) {
 	return IsSupportedCAPIVersion(major, minor, patch);
 }
 
+bool VersioningUtils::IsReleaseVersion(const string &version_tag) {
+	return !StringUtil::Contains(version_tag, "-dev") && !StringUtil::Contains(version_tag, "-alpha");
+}
+
 bool VersioningUtils::IsSupportedCAPIVersion(idx_t major, idx_t minor, idx_t patch) {
 	if (major != DUCKDB_EXTENSION_API_VERSION_MAJOR) {
 		return false;

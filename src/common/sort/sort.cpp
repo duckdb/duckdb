@@ -1,4 +1,5 @@
 #include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/type_visitor.hpp"
