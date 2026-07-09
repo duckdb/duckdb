@@ -31,8 +31,8 @@ struct SelectionData {
 	AllocatedData owned_data;
 	AllocatedData bitmap_data;
 	idx_t row_span = 0;
-	//! Start of the materialized bitmap indices within owned_data (set by Flatten, INVALID = not filled).
-	idx_t index_cache_offset = DConstants::INVALID_INDEX;
+	//! Whether owned_data already holds the bitmap's materialized indices at [0] (set by Flatten).
+	bool indices_cached = false;
 	bool is_bitmap = false;
 };
 

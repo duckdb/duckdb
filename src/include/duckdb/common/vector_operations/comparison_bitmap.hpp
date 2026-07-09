@@ -149,6 +149,11 @@ inline void DispatchCmpToBitmap(ExpressionType op, const T *__restrict data, T c
 template <class ConstGetter>
 inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const Vector &flat, idx_t count,
                                     const validity_t *validity, validity_t *__restrict bitmap, ConstGetter get_const) {
+	// the result bitmap is a fixed STANDARD_VECTOR_SIZE buffer; writing more bits would overflow it. Guard in
+	// release too (not just an assert): a silent heap overflow here is far worse than a clean error.
+	if (count > STANDARD_VECTOR_SIZE) {
+		throw InternalException("DispatchFlatCmpToBitmap called with count > STANDARD_VECTOR_SIZE");
+	}
 	switch (pt) {
 	case PhysicalType::INT8:
 		return DispatchCmpToBitmap<int8_t>(op, FlatVector::GetData<int8_t>(flat), get_const(int8_t {}), count, validity,

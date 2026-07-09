@@ -42,8 +42,7 @@ static constexpr uint16_t BITMAP_SELVEC_OFFSETS[256] = {
 
 // array with all possible list subsets of 0,1,2,3,4,5,6,7 - BITMAP_SELVEC_OFFSETS contains 256 offsets into it
 // clang-format off
-static constexpr sel_t BITMAP_SELVEC_POSITIONS_STORAGE[7 + 321] = {
-    0, 0, 0, 0, 0, 0, 0, // padding to allow 8-byte suffix reading; below: all lists from 0..7
+static constexpr sel_t BITMAP_SELVEC_POSITIONS_STORAGE[321] = {
     0, 2, 3, 4, 5, 6, 7, /**/ 0, 1, 3, 4, 5, 6, 7, /**/ 0, 1, 2, 4, 5, 6, 7,
     0, 1, 2, 3, 5, 6, 7, /**/ 0, 1, 2, 3, 4, 6, 7, /**/ 0, 1, 2, 3, 4, 5, 7,
     0, 3, 4, 5, 6, 7, /**/ 0, 1, 4, 5, 6, 7, /**/ 0, 1, 2, 5, 6, 7, /**/ 0, 1, 2, 3, 6, 7, /**/ 0, 1, 2, 3, 4, 7,
@@ -60,14 +59,13 @@ static constexpr sel_t BITMAP_SELVEC_POSITIONS_STORAGE[7 + 321] = {
     0, 7, /**/ 0, 1, 2, 3, 4, 5, 6, 7, 0}; /* last 0 pad to be able to read [1-7] */
 // clang-format on
 
-static constexpr const sel_t *BITMAP_SELVEC_POSITIONS = BITMAP_SELVEC_POSITIONS_STORAGE + 7;
+static constexpr const sel_t *BITMAP_SELVEC_POSITIONS = BITMAP_SELVEC_POSITIONS_STORAGE;
 
-static inline sel_t BitmapSelectionEmitByte(sel_t *__restrict dst, sel_t base, uint8_t pattern,
-                                            bool right_align = false) {
+// Emit the set-bit positions of one byte (forward): writes 8 slots (padded), returns the popcount.
+static inline sel_t BitmapSelectionEmitByte(sel_t *__restrict dst, sel_t base, uint8_t pattern) {
 	const auto packed = BITMAP_SELVEC_OFFSETS[pattern];
 	const auto len = UnsafeNumericCast<sel_t>(packed & 0xF);
-	const auto offset = packed >> 4;
-	const auto *src = BITMAP_SELVEC_POSITIONS + offset - (right_align ? 8 - len : 0);
+	const auto *src = BITMAP_SELVEC_POSITIONS + (packed >> 4);
 	for (idx_t j = 0; j < 8; j++) {
 		dst[j] = base + src[j];
 	}
@@ -88,10 +86,8 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 		return 0;
 	}
 
-	// the two-cursor layout starts writing up to STANDARD_VECTOR_SIZE/2 into the buffer (see dst0 below), and the
-	// result may later be reused as a forward-write target for up to a full vector, so reserve half a vector of
-	// head room past the indices themselves. This keeps the materialized selection safe to overwrite in place.
-	const auto needed_capacity = word_count * 64 + STANDARD_VECTOR_SIZE / 2;
+	// EmitByte writes 8 slots (padded) at each step, so reserve a byte of head room past the last match
+	const auto needed_capacity = word_count * 64 + 8;
 	auto sel_data = sel.sel_data();
 	auto *result_sel = sel_data ? reinterpret_cast<sel_t *>(sel_data->owned_data.get()) : nullptr;
 	auto result_capacity = sel_data ? sel_data->owned_data.GetSize() / sizeof(sel_t) : idx_t(0);
@@ -101,65 +97,40 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 		result_sel = sel.data();
 		result_capacity = sel.Capacity();
 	}
-	D_ASSERT(result_sel);
-	D_ASSERT(result_capacity >= needed_capacity);
+	D_ASSERT(result_sel && result_capacity >= needed_capacity);
 
-	// Use two cursors to exploit more execution resources than the single dependent cursor chain can use.
-	const auto half = (word_count - 1) / 2;
-	auto idx0 = half - 1;
-	auto idx1 = half;
-	auto *dst0 = result_sel + half * 64;
-	auto *dst1 = result_sel + half * 64;
-
-	// Sample the middle one or two bitmap words to choose table extraction or ctz/clz extraction.
-	const auto sample = 2 - (word_count & 1);
-	for (; idx1 < half + sample; idx1++) {
-		auto base1 = UnsafeNumericCast<sel_t>(idx1 * 64);
-		for (auto word1 = BitmapSelectionLoadWord(bm, idx1, word_count, count); word1; word1 >>= 8, base1 += 8) {
-			dst1 += BitmapSelectionEmitByte(dst1, base1, static_cast<uint8_t>(word1));
+	// sample the first word(s) to choose between sparse(ctz, few set bits) and table-based extraction (dense)
+	auto *dst = result_sel;
+	const auto sample = MinValue<idx_t>(word_count, 2);
+	for (idx_t w = 0; w < sample; w++) {
+		auto base = UnsafeNumericCast<sel_t>(w * 64);
+		for (auto word = BitmapSelectionLoadWord(bm, w, word_count, count); word; word >>= 8, base += 8) {
+			dst += BitmapSelectionEmitByte(dst, base, static_cast<uint8_t>(word));
 		}
 	}
-	const auto sample_count = UnsafeNumericCast<idx_t>(dst1 - dst0);
-	const bool selective = sample_count <= 14 * sample;
-
-	for (; idx1 < word_count; idx1++, idx0--) {
-		auto word0 = BitmapSelectionLoadWord(bm, idx0, word_count, count);
-		auto word1 = BitmapSelectionLoadWord(bm, idx1, word_count, count);
-		auto base0 = UnsafeNumericCast<sel_t>(idx0 * 64);
-		auto base1 = UnsafeNumericCast<sel_t>(idx1 * 64);
-		if (selective) {
-			while (word0 && word1) {
-				const auto pos0 = UnsafeNumericCast<sel_t>(63 - CountZeros<uint64_t>::Leading(word0));
-				const auto pos1 = UnsafeNumericCast<sel_t>(CountZeros<uint64_t>::Trailing(word1));
-				*(--dst0) = base0 + pos0;
-				*(dst1++) = base1 + pos1;
-				word0 &= ~(validity_t(1) << pos0);
-				word1 &= word1 - 1;
+	const bool sparse = UnsafeNumericCast<idx_t>(dst - result_sel) <= 14 * sample;
+	if (sparse) {
+		// sparse kernel uses CountZeros to skip many consecutive 0 bits in one iteration
+		for (idx_t w = sample; w < word_count; w++) {
+			auto base = UnsafeNumericCast<sel_t>(w * 64);
+			auto word = BitmapSelectionLoadWord(bm, w, word_count, count);
+			while (word) {
+				*dst++ = base + UnsafeNumericCast<sel_t>(CountZeros<uint64_t>::Trailing(word));
+				word &= word - 1;
 			}
-			while (word0) {
-				const auto pos0 = UnsafeNumericCast<sel_t>(63 - CountZeros<uint64_t>::Leading(word0));
-				*(--dst0) = base0 + pos0;
-				word0 &= ~(validity_t(1) << pos0);
-			}
-			while (word1) {
-				const auto pos1 = UnsafeNumericCast<sel_t>(CountZeros<uint64_t>::Trailing(word1));
-				*(dst1++) = base1 + pos1;
-				word1 &= word1 - 1;
-			}
-		} else {
-			for (base0 += 56; word0 || word1; word0 <<= 8, word1 >>= 8, base0 -= 8, base1 += 8) {
-				const auto pat0 = static_cast<uint8_t>(word0 >> 56);
-				const auto pat1 = static_cast<uint8_t>(word1);
-				dst0 -= BitmapSelectionEmitByte(dst0 - 8, base0, pat0, true);
-				dst1 += BitmapSelectionEmitByte(dst1, base1, pat1);
+		}
+	} else {
+		// dense kernel uses a lookup table to generate (up to) 8 sel_t indexes per iteration
+		for (idx_t w = sample; w < word_count; w++) {
+			auto base = UnsafeNumericCast<sel_t>(w * 64);
+			auto word = BitmapSelectionLoadWord(bm, w, word_count, count);
+			for (; word; word >>= 8, base += 8) {
+				dst += BitmapSelectionEmitByte(dst, base, static_cast<uint8_t>(word));
 			}
 		}
 	}
-	const auto result_count = UnsafeNumericCast<idx_t>(dst1 - dst0);
-	// point at the start of the indices (dst0), but keep the capacity at the real remaining buffer space so the
-	// selection stays a valid forward-write target for reuse (matches SelectionResult::Flatten's capacity).
-	const auto offset = UnsafeNumericCast<idx_t>(dst0 - result_sel);
-	sel.Initialize(sel_data, dst0, result_capacity - offset);
+	const auto result_count = UnsafeNumericCast<idx_t>(dst - result_sel);
+	sel.Initialize(sel_data, result_sel, result_capacity);
 	return result_count;
 }
 

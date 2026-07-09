@@ -162,6 +162,11 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 	const bool have_sel = sel && sel->IsSet();
 	// dense over the whole vector when a selection is active (selvec indices span it), else over count
 	const idx_t span = have_sel ? chunk.size() : count;
+	// the bitmap scratch holds exactly STANDARD_VECTOR_SIZE bits; larger inputs (e.g. a parquet dictionary filter
+	// over a >2048-entry dictionary) must fall back to the generic select, which handles any size
+	if (span > STANDARD_VECTOR_SIZE) {
+		return false;
+	}
 
 	// dense comparison -> bitmap (the true side), in the caller's bitmap when one is requested else a scratch
 	SelectionResult &t = bitmap_sel ? *bitmap_sel : tmp_sel1;
@@ -194,6 +199,7 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 		result = BitmapPopcount(t_bm, span);
 	}
 
+	// materialize the plain selection(s) via the standard [0]-start primitive
 	if (f_bm) {
 		BitmapToSelectionVector(f_bm, span, *false_sel);
 	}
