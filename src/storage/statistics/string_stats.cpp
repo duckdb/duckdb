@@ -745,21 +745,31 @@ FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType mi
 		if (min_comp < 0 || max_comp > 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN:
-		if (max_comp <= 0) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
+		if (min_comp == 0 && max_comp == 0 && min_type == StringStatsType::EXACT_STATS &&
+		    max_type == StringStatsType::EXACT_STATS) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_GREATERTHAN:
+		if (max_comp < 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		if (max_comp <= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_LESSTHAN:
+		if (min_comp > 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		if (min_comp >= 0) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	default:
 		throw InternalException("Expression type not implemented for string statistics zone map");
 	}
