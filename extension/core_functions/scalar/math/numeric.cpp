@@ -1027,6 +1027,7 @@ ScalarFunction SqrtFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<SqrtOperator, IEEESqrtOperator>);
 	function.SetFallible();
+	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return function;
 }
 
@@ -1081,6 +1082,7 @@ ScalarFunction LnFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<LnOperator, IEEELnOperator>);
 	function.SetFallible();
+	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return function;
 }
 
@@ -1115,6 +1117,7 @@ ScalarFunction Log10Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
 	function.SetFallible();
+	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return function;
 }
 
@@ -1145,8 +1148,12 @@ struct IEEELogBaseOperator {
 
 ScalarFunctionSet LogFun::GetFunctions() {
 	ScalarFunctionSet funcs;
-	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
-	                                 BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>));
+	ScalarFunction log10({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                     BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
+	// single-argument log is base-10: strictly increasing. the two-arg log(base, x) is only
+	// monotone in x for a fixed base, and decreasing for base < 1, so it is left unannotated.
+	log10.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	funcs.AddFunction(std::move(log10));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                                 BindIEEEFloatingBinary<LogBaseOperator, IEEELogBaseOperator>));
 	for (auto &function : funcs.functions) {
@@ -1184,6 +1191,7 @@ ScalarFunction Log2Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<Log2Operator, IEEELog2Operator>);
 	function.SetFallible();
+	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return function;
 }
 
@@ -1213,8 +1221,10 @@ struct DegreesOperator {
 } // namespace
 
 ScalarFunction DegreesFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, DegreesOperator>);
+	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                    ScalarFunction::UnaryFunction<double, double, DegreesOperator>);
+	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return func;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1230,8 +1240,10 @@ struct RadiansOperator {
 } // namespace
 
 ScalarFunction RadiansFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, RadiansOperator>);
+	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                    ScalarFunction::UnaryFunction<double, double, RadiansOperator>);
+	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return func;
 }
 
 //===--------------------------------------------------------------------===//

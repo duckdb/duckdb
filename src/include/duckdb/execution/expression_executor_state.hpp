@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/function/function.hpp"
 
 namespace duckdb {
@@ -77,6 +78,10 @@ public:
 
 public:
 	unique_ptr<FunctionLocalState> local_state;
+	//! Set once: this expression is a `ref <op> const` comparison the bitmap select fast path can handle
+	bool select_bitmap_capable = false;
+	//! Scratch bitmaps, their buffers are allocated lazily by PrepareBitmap only when actually used.
+	SelectionResult tmp_sel1, tmp_sel2, tmp_sel3;
 
 private:
 	//! Non-constant input columns that may be compatible dictionary vectors

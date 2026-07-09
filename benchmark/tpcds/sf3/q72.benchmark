@@ -1,0 +1,7 @@
+# name: benchmark/tpcds/sf3/q72.benchmark
+# description: Run query 72 from the TPC-DS benchmark (SF3)
+# group: [sf3]
+
+template benchmark/tpcds/sf3/tpcds_sf3.benchmark.in
+QUERY_NUMBER=72
+QUERY_NUMBER_PADDED=72

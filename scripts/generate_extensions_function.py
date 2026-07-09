@@ -47,10 +47,13 @@ DUCKDB_PATH = os.path.join(*args.shell.split('/'))
 HEADER_PATH = os.path.join("src", "include", "duckdb", "main", "extension_entries.hpp")
 
 EXTENSION_DEPENDENCIES = {
+    'ducklake': [
+        'parquet',
+    ],
     'iceberg': [
         'avro',
         'parquet',
-    ]
+    ],
 }
 
 from enum import Enum

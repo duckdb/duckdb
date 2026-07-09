@@ -88,7 +88,10 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 		return 0;
 	}
 
-	const auto needed_capacity = word_count * 64;
+	// the two-cursor layout starts writing up to STANDARD_VECTOR_SIZE/2 into the buffer (see dst0 below), and the
+	// result may later be reused as a forward-write target for up to a full vector, so reserve half a vector of
+	// head room past the indices themselves. This keeps the materialized selection safe to overwrite in place.
+	const auto needed_capacity = word_count * 64 + STANDARD_VECTOR_SIZE / 2;
 	auto sel_data = sel.sel_data();
 	auto *result_sel = sel_data ? reinterpret_cast<sel_t *>(sel_data->owned_data.get()) : nullptr;
 	auto result_capacity = sel_data ? sel_data->owned_data.GetSize() / sizeof(sel_t) : idx_t(0);
@@ -153,7 +156,10 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 		}
 	}
 	const auto result_count = UnsafeNumericCast<idx_t>(dst1 - dst0);
-	sel.Initialize(sel_data, dst0, result_count);
+	// point at the start of the indices (dst0), but keep the capacity at the real remaining buffer space so the
+	// selection stays a valid forward-write target for reuse (matches SelectionResult::Flatten's capacity).
+	const auto offset = UnsafeNumericCast<idx_t>(dst0 - result_sel);
+	sel.Initialize(sel_data, dst0, result_capacity - offset);
 	return result_count;
 }
 

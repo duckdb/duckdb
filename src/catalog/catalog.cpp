@@ -366,7 +366,15 @@ bool Catalog::SupportsPushdown(const QueryNode &node) {
 }
 
 string Catalog::GetConnectDisplay() {
-	return GetAttached().GetName().GetIdentifierName();
+	auto &attached = GetAttached();
+	// Ephemeral catalogs (from `CONNECT '<uri>'`) carry a generated internal name; show the URI instead.
+	if (attached.IsEphemeral()) {
+		auto path = attached.StoredPath();
+		if (!path.empty()) {
+			return path;
+		}
+	}
+	return attached.GetName().GetIdentifierName();
 }
 
 //===--------------------------------------------------------------------===//

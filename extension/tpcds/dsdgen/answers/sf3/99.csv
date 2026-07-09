@@ -1,0 +1,101 @@
+w_substr|sm_type|cc_name|30 days|31-60 days|61-90 days|91-120 days|>120 days
+NULL|EXPRESS|California|1573|1568|1592|0|0
+NULL|EXPRESS|Hawaii/Alaska|1491|1581|1567|0|0
+NULL|EXPRESS|Mid Atlantic|1598|1559|1617|0|0
+NULL|EXPRESS|NY Metro|1547|1630|1668|0|0
+NULL|EXPRESS|North Midwest|1573|1565|1612|0|0
+NULL|EXPRESS|Pacific Northwest|1568|1600|1639|0|0
+NULL|LIBRARY|California|1111|1247|1221|0|0
+NULL|LIBRARY|Hawaii/Alaska|1178|1240|1280|0|0
+NULL|LIBRARY|Mid Atlantic|1093|1179|1233|0|0
+NULL|LIBRARY|NY Metro|1166|1160|1208|0|0
+NULL|LIBRARY|North Midwest|1153|1160|1152|0|0
+NULL|LIBRARY|Pacific Northwest|1196|1200|1192|0|0
+NULL|NEXT DAY|California|1573|1596|1555|0|0
+NULL|NEXT DAY|Hawaii/Alaska|1570|1612|1632|0|0
+NULL|NEXT DAY|Mid Atlantic|1489|1573|1550|0|0
+NULL|NEXT DAY|NY Metro|1528|1593|1502|0|0
+NULL|NEXT DAY|North Midwest|1590|1568|1582|0|0
+NULL|NEXT DAY|Pacific Northwest|1541|1639|1692|0|0
+NULL|OVERNIGHT|California|1171|1238|1214|0|0
+NULL|OVERNIGHT|Hawaii/Alaska|1123|1161|1201|0|0
+NULL|OVERNIGHT|Mid Atlantic|1147|1180|1209|0|0
+NULL|OVERNIGHT|NY Metro|1126|1184|1274|0|0
+NULL|OVERNIGHT|North Midwest|1152|1193|1197|0|0
+NULL|OVERNIGHT|Pacific Northwest|1128|1273|1264|0|0
+NULL|REGULAR|California|1111|1259|1234|0|0
+NULL|REGULAR|Hawaii/Alaska|1239|1184|1191|0|0
+NULL|REGULAR|Mid Atlantic|1148|1175|1182|0|0
+NULL|REGULAR|NY Metro|1160|1222|1206|0|0
+NULL|REGULAR|North Midwest|1120|1224|1194|0|0
+NULL|REGULAR|Pacific Northwest|1133|1195|1220|0|0
+NULL|TWO DAY|California|1129|1224|1200|0|0
+NULL|TWO DAY|Hawaii/Alaska|1180|1186|1230|0|0
+NULL|TWO DAY|Mid Atlantic|1119|1239|1151|0|0
+NULL|TWO DAY|NY Metro|1139|1183|1221|0|0
+NULL|TWO DAY|North Midwest|1129|1191|1180|0|0
+NULL|TWO DAY|Pacific Northwest|1147|1191|1258|0|0
+Bad cards must make.|EXPRESS|California|1559|1583|1565|0|0
+Bad cards must make.|EXPRESS|Hawaii/Alaska|1609|1555|1661|0|0
+Bad cards must make.|EXPRESS|Mid Atlantic|1559|1596|1594|0|0
+Bad cards must make.|EXPRESS|NY Metro|1584|1633|1548|0|0
+Bad cards must make.|EXPRESS|North Midwest|1517|1596|1567|0|0
+Bad cards must make.|EXPRESS|Pacific Northwest|1508|1632|1561|0|0
+Bad cards must make.|LIBRARY|California|1167|1196|1223|0|0
+Bad cards must make.|LIBRARY|Hawaii/Alaska|1202|1199|1177|0|0
+Bad cards must make.|LIBRARY|Mid Atlantic|1150|1232|1207|0|0
+Bad cards must make.|LIBRARY|NY Metro|1186|1188|1214|0|0
+Bad cards must make.|LIBRARY|North Midwest|1169|1151|1215|0|0
+Bad cards must make.|LIBRARY|Pacific Northwest|1118|1208|1198|0|0
+Bad cards must make.|NEXT DAY|California|1583|1620|1706|0|0
+Bad cards must make.|NEXT DAY|Hawaii/Alaska|1486|1645|1581|0|0
+Bad cards must make.|NEXT DAY|Mid Atlantic|1590|1550|1574|0|0
+Bad cards must make.|NEXT DAY|NY Metro|1583|1582|1611|0|0
+Bad cards must make.|NEXT DAY|North Midwest|1542|1562|1561|0|0
+Bad cards must make.|NEXT DAY|Pacific Northwest|1488|1544|1641|0|0
+Bad cards must make.|OVERNIGHT|California|1168|1205|1237|0|0
+Bad cards must make.|OVERNIGHT|Hawaii/Alaska|1140|1205|1226|0|0
+Bad cards must make.|OVERNIGHT|Mid Atlantic|1201|1183|1210|0|0
+Bad cards must make.|OVERNIGHT|NY Metro|1180|1115|1203|0|0
+Bad cards must make.|OVERNIGHT|North Midwest|1162|1182|1227|0|0
+Bad cards must make.|OVERNIGHT|Pacific Northwest|1168|1149|1125|0|0
+Bad cards must make.|REGULAR|California|1180|1200|1243|0|0
+Bad cards must make.|REGULAR|Hawaii/Alaska|1163|1183|1155|0|0
+Bad cards must make.|REGULAR|Mid Atlantic|1237|1175|1213|0|0
+Bad cards must make.|REGULAR|NY Metro|1166|1211|1179|0|0
+Bad cards must make.|REGULAR|North Midwest|1147|1203|1224|0|0
+Bad cards must make.|REGULAR|Pacific Northwest|1103|1209|1145|0|0
+Bad cards must make.|TWO DAY|California|1207|1248|1187|0|0
+Bad cards must make.|TWO DAY|Hawaii/Alaska|1175|1181|1165|0|0
+Bad cards must make.|TWO DAY|Mid Atlantic|1136|1230|1259|0|0
+Bad cards must make.|TWO DAY|NY Metro|1223|1261|1201|0|0
+Bad cards must make.|TWO DAY|North Midwest|1261|1205|1183|0|0
+Bad cards must make.|TWO DAY|Pacific Northwest|1136|1183|1171|0|0
+Conventional childr|EXPRESS|California|1562|1569|1591|0|0
+Conventional childr|EXPRESS|Hawaii/Alaska|1531|1570|1565|0|0
+Conventional childr|EXPRESS|Mid Atlantic|1451|1566|1671|0|0
+Conventional childr|EXPRESS|NY Metro|1537|1668|1656|0|0
+Conventional childr|EXPRESS|North Midwest|1490|1565|1557|0|0
+Conventional childr|EXPRESS|Pacific Northwest|1576|1599|1636|0|0
+Conventional childr|LIBRARY|California|1186|1217|1192|0|0
+Conventional childr|LIBRARY|Hawaii/Alaska|1161|1216|1211|0|0
+Conventional childr|LIBRARY|Mid Atlantic|1163|1251|1160|0|0
+Conventional childr|LIBRARY|NY Metro|1183|1238|1176|0|0
+Conventional childr|LIBRARY|North Midwest|1181|1198|1146|0|0
+Conventional childr|LIBRARY|Pacific Northwest|1137|1204|1142|0|0
+Conventional childr|NEXT DAY|California|1538|1610|1614|0|0
+Conventional childr|NEXT DAY|Hawaii/Alaska|1515|1578|1630|0|0
+Conventional childr|NEXT DAY|Mid Atlantic|1608|1581|1594|0|0
+Conventional childr|NEXT DAY|NY Metro|1592|1638|1619|0|0
+Conventional childr|NEXT DAY|North Midwest|1541|1576|1565|0|0
+Conventional childr|NEXT DAY|Pacific Northwest|1568|1690|1687|0|0
+Conventional childr|OVERNIGHT|California|1157|1221|1172|0|0
+Conventional childr|OVERNIGHT|Hawaii/Alaska|1167|1187|1214|0|0
+Conventional childr|OVERNIGHT|Mid Atlantic|1127|1178|1196|0|0
+Conventional childr|OVERNIGHT|NY Metro|1200|1212|1223|0|0
+Conventional childr|OVERNIGHT|North Midwest|1130|1179|1172|0|0
+Conventional childr|OVERNIGHT|Pacific Northwest|1157|1220|1238|0|0
+Conventional childr|REGULAR|California|1197|1181|1200|0|0
+Conventional childr|REGULAR|Hawaii/Alaska|1154|1240|1123|0|0
+Conventional childr|REGULAR|Mid Atlantic|1132|1202|1128|0|0
+Conventional childr|REGULAR|NY Metro|1123|1200|1184|0|0
