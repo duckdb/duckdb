@@ -1,0 +1,86 @@
+# name: test/sql/storage/metadata/partial_column_metadata_reuse_drop_column.test
+# description: Regression test for DROP COLUMN not shifting per_column_metadata_blocks indices.
+# group: [metadata]
+
+#              Columns after the dropped one shift down a position, but their metadata block entries
+#              kept the old index, so the next partial-reuse checkpoint attributed extra metadata
+#              blocks to the wrong columns and persisted the bad bookkeeping (surfacing later as
+#              "field id mismatch" corruption).
+
+# small block size shrinks the metadata block size (block_size / 64), so per-row-group
+# column metadata easily spills past one metadata block and reused columns end up with extras
+statement ok
+ATTACH '__TEST_DIR__/partial_reuse_drop_column.db' AS db1 (BLOCK_SIZE 16384, STORAGE_VERSION 'latest')
+
+statement ok
+SET debug_skip_checkpoint_on_commit=true
+
+statement ok
+SET force_column_metadata_reuse=true
+
+statement ok
+SET debug_verify_blocks=true
+
+# incompressible varchar payloads so every column's metadata spills into extra metadata blocks
+statement ok
+CREATE TABLE db1.wide_tbl AS SELECT
+    i AS id,
+    md5(i::VARCHAR || 'c0') AS c0,
+    md5(i::VARCHAR || 'c1') AS c1,
+    md5(i::VARCHAR || 'c2') AS c2,
+    md5(i::VARCHAR || 'c3') AS c3,
+    md5(i::VARCHAR || 'c4') AS c4,
+    md5(i::VARCHAR || 'c5') AS c5
+FROM range(50000) t(i)
+
+# initial checkpoint persists all column metadata, including per-column extra metadata blocks
+statement ok
+CHECKPOINT db1
+
+# drop a middle column: c2..c5 shift down one position
+statement ok
+ALTER TABLE db1.wide_tbl DROP COLUMN c1
+
+# modify one of the shifted columns so the next checkpoint partially reuses the others
+statement ok
+UPDATE db1.wide_tbl SET c4 = md5((id * 7)::VARCHAR) WHERE id BETWEEN 100 AND 600
+
+# without the fix this fails with "per_column_metadata_blocks mismatch"
+statement ok
+CHECKPOINT db1
+
+# verify every remaining column still holds its own payload (not a neighbor's)
+query I
+SELECT count(*) FROM db1.wide_tbl
+WHERE c0 != md5(id::VARCHAR || 'c0')
+   OR c2 != md5(id::VARCHAR || 'c2')
+   OR c3 != md5(id::VARCHAR || 'c3')
+   OR c4 != CASE WHEN id BETWEEN 100 AND 600 THEN md5((id * 7)::VARCHAR) ELSE md5(id::VARCHAR || 'c4') END
+   OR c5 != md5(id::VARCHAR || 'c5')
+----
+0
+
+# second round: drop another middle column so the already-shifted entries shift again
+statement ok
+ALTER TABLE db1.wide_tbl DROP COLUMN c3
+
+statement ok
+UPDATE db1.wide_tbl SET c5 = md5((id * 13)::VARCHAR) WHERE id BETWEEN 1000 AND 1500
+
+statement ok
+CHECKPOINT db1
+
+restart
+
+# re-attach and verify the persisted state deserializes correctly from disk
+statement ok
+ATTACH '__TEST_DIR__/partial_reuse_drop_column.db' AS db1
+
+query I
+SELECT count(*) FROM db1.wide_tbl
+WHERE c0 != md5(id::VARCHAR || 'c0')
+   OR c2 != md5(id::VARCHAR || 'c2')
+   OR c4 != CASE WHEN id BETWEEN 100 AND 600 THEN md5((id * 7)::VARCHAR) ELSE md5(id::VARCHAR || 'c4') END
+   OR c5 != CASE WHEN id BETWEEN 1000 AND 1500 THEN md5((id * 13)::VARCHAR) ELSE md5(id::VARCHAR || 'c5') END
+----
+0
