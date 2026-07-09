@@ -41,6 +41,83 @@ SELECT CAST(TIMESTAMP '2262-04-11 23:47:16.854776' AS TIMESTAMP_NS);
 ----
 Could not convert Timestamp to higher precision.
 
+statement error
+SELECT CAST(TIMESTAMP '2262-04-11 23:47:16.854776' AS TIMESTAMPTZ_NS);
+----
+Could not convert Timestamp to higher precision.
+
+statement error
+SELECT CAST(TIMESTAMPTZ '2262-04-11 23:47:16.854776+00' AS TIMESTAMP_NS);
+----
+Could not convert Timestamp to higher precision.
+
+statement error
+SELECT CAST(TIMESTAMP_MS '2262-04-11 23:47:16.855' AS TIMESTAMP_NS);
+----
+Could not convert Timestamp to higher precision.
+
+statement error
+SELECT CAST(TIMESTAMP_MS '2262-04-11 23:47:16.855' AS TIMESTAMPTZ_NS);
+----
+Could not convert Timestamp to higher precision.
+
+statement error
+SELECT CAST(TIMESTAMP_S '2262-04-12 00:00:00' AS TIMESTAMP_NS);
+----
+Could not convert Timestamp to higher precision.
+
+statement error
+SELECT CAST(TIMESTAMP_S '2262-04-12 00:00:00' AS TIMESTAMPTZ_NS);
+----
+Could not convert Timestamp to higher precision.
+
+statement error
+SELECT CAST(TIMESTAMP 'infinity' AS TIME);
+----
+Can't get TIME of infinite TIMESTAMP
+
+statement error
+SELECT CAST(TIMESTAMP 'infinity' AS TIMETZ);
+----
+Can't get TIME of infinite TIMESTAMP
+
+statement error
+SELECT CAST(TIMESTAMPTZ 'infinity' AS TIMETZ);
+----
+Can't get TIME of infinite TIMESTAMP
+
+statement error
+SELECT CAST('infinity'::TIMESTAMPTZ_NS AS TIMETZ);
+----
+Can't get TIME of infinite TIMESTAMP
+
+statement error
+SELECT CAST(TIMESTAMP_MS 'infinity' AS TIME);
+----
+Can't get TIME of infinite TIMESTAMP
+
+statement error
+SELECT CAST('infinity'::TIMESTAMP_NS AS TIME);
+----
+Can't get TIME of infinite TIMESTAMP
+
+statement error
+SELECT CAST(TIMESTAMP_S 'infinity' AS TIME);
+----
+Can't get TIME of infinite TIMESTAMP
+
+statement error
+SELECT CAST('infinity'::TIMESTAMP_NS AS TIME_NS);
+----
+Can't get TIME_NS of infinite TIMESTAMP
+
+query II
+SELECT
+	CAST('1970-01-01 23:59:59.999999999'::TIMESTAMP_NS AS DATE),
+	TRY_CAST('1970-01-01 23:59:59.999999999'::TIMESTAMP_NS AS DATE)
+----
+1970-01-02	1970-01-02
+
 query IIIIIIIII
 SELECT
 	TRY_CAST(TIMESTAMP 'infinity' AS TIME) IS NULL,
