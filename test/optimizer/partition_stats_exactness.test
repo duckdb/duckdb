@@ -97,7 +97,7 @@ SELECT count(*), min(id), max(id) FROM big
 ----
 100999	1	100999
 
-# count(*) inside a transaction must reflect the transaction's own uncommitted deletes.
+# count(*) inside a transaction must reflect uncommitted deletes, but cannot be folded.
 statement ok
 BEGIN
 
@@ -107,7 +107,7 @@ DELETE FROM big WHERE id BETWEEN 1 AND 10
 query II
 EXPLAIN SELECT count(*) FROM big
 ----
-physical_plan	<!REGEX>:.*Sequential Scan.*
+physical_plan	<REGEX>:.*Sequential Scan.*
 
 query I
 SELECT count(*) FROM big

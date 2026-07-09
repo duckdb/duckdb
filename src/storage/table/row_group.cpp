@@ -1929,13 +1929,15 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 	}
 
 	auto vinfo = row_group_ref.GetVersionInfoIfLoaded();
+	bool has_uncommitted_changes = false;
 	if (vinfo) {
 		result.count = row_group_ref.GetVisibleRowCount(transaction);
+		has_uncommitted_changes = vinfo->HasUncommittedChanges();
 	} else {
 		result.count = row_group_ref.count;
 	}
-	result.count_type = CountType::COUNT_EXACT;
-	bool is_exact = result.count == row_group_ref.count && (!vinfo || !vinfo->HasDeletes());
+	result.count_type = has_uncommitted_changes ? CountType::COUNT_APPROXIMATE : CountType::COUNT_EXACT;
+	const bool is_exact = result.count == row_group_ref.count && (!vinfo || !vinfo->HasDeletes());
 	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact);
 
 	return result;

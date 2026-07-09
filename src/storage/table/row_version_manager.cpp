@@ -319,6 +319,16 @@ bool RowVersionManager::HasDeletes() {
 	return false;
 }
 
+bool RowVersionManager::HasUncommittedChanges() {
+	lock_guard<mutex> lock(version_lock);
+	for (auto &info : vector_info) {
+		if (info && info->HasUncommittedChanges()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
 	lock_guard<mutex> lock(version_lock);
 	D_ASSERT(!uncheckpointed_delete_commit.IsValid());

@@ -479,7 +479,7 @@ SELECT * FROM cumulative_metrics;
 statement ok
 ROLLBACK;
 
-# --- Transaction-local append: folded count(*) skips the scan ---
+# --- Transaction-local append: count(*) scans transaction-local row groups ---
 
 statement ok
 BEGIN TRANSACTION;
@@ -518,17 +518,17 @@ PRAGMA disable_profiling;
 query III
 SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
-TABLE_SCAN	0	0
+TABLE_SCAN	2	2
 
 query II
 SELECT * FROM cumulative_metrics;
 ----
-0	0
+2	2
 
 statement ok
 ROLLBACK;
 
-# --- Transaction-local append: folded count(*) on large local table ---
+# --- Transaction-local append: count(*) scans large local table ---
 
 statement ok
 BEGIN TRANSACTION;
@@ -566,12 +566,12 @@ PRAGMA disable_profiling;
 query III
 SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
-TABLE_SCAN	0	0
+TABLE_SCAN	4	4
 
 query II
 SELECT * FROM cumulative_metrics;
 ----
-0	0
+4	4
 
 statement ok
 ROLLBACK;

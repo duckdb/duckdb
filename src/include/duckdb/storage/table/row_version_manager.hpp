@@ -44,6 +44,7 @@ public:
 
 	bool HasUnserializedChanges();
 	bool HasDeletes();
+	bool HasUncommittedChanges();
 	vector<MetaBlockPointer> GetStoragePointers();
 
 private:
