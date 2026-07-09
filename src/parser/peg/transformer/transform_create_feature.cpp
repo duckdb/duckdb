@@ -213,6 +213,12 @@ interval_t PEGTransformerFactory::TransformFeatureScheduleClause(PEGTransformer 
 	return ParseFeatureScheduleInterval(parse_result);
 }
 
+interval_t PEGTransformerFactory::TransformFeatureTTLClause(PEGTransformer &transformer, ParseResult &parse_result) {
+	// FeatureTTLClause <- 'TTL' FeatureInterval
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return ParseFeatureInterval(list_pr.Child<ListParseResult>(1), "TTL");
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshFeatureStatement(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	// RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral FeatureRefreshAtClause?

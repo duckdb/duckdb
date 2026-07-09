@@ -158,6 +158,7 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformAlterFeatureStmt);
 	REGISTER_TRANSFORM(TransformAlterFeatureOptions);
 	REGISTER_TRANSFORM(TransformAlterFeatureSetSchedule);
+	REGISTER_TRANSFORM(TransformAlterFeatureSetTTL);
 	REGISTER_TRANSFORM(TransformAlterFeatureEnableSchedule);
 	REGISTER_TRANSFORM(TransformAlterFeatureDisableSchedule);
 	REGISTER_TRANSFORM(TransformAlterSequenceStmt);
@@ -380,6 +381,7 @@ void PEGTransformerFactory::RegisterCreateTrigger() {
 void PEGTransformerFactory::RegisterCreateFeature() {
 	REGISTER_TRANSFORM(TransformCreateFeatureStmt);
 	REGISTER_TRANSFORM(TransformFeatureScheduleClause);
+	REGISTER_TRANSFORM(TransformFeatureTTLClause);
 	REGISTER_TRANSFORM(TransformRefreshFeatureStatement);
 	REGISTER_TRANSFORM(TransformFeatureAtVersionStatement);
 	REGISTER_TRANSFORM(TransformServeFeatureStatement);

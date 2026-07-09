@@ -48,7 +48,8 @@ SetSequenceOption <- SequenceOption+
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
 
 AlterFeatureStmt <- 'FEATURE' IfExists? IdentifierOrStringLiteral AlterFeatureOptions
-AlterFeatureOptions <- AlterFeatureSetSchedule / AlterFeatureEnableSchedule / AlterFeatureDisableSchedule
+AlterFeatureOptions <- AlterFeatureSetSchedule / AlterFeatureSetTTL / AlterFeatureEnableSchedule / AlterFeatureDisableSchedule
 AlterFeatureSetSchedule <- 'SET' 'SCHEDULE' FeatureScheduleClause
+AlterFeatureSetTTL <- 'SET' FeatureTTLClause
 AlterFeatureEnableSchedule <- 'ENABLE' 'SCHEDULE'
 AlterFeatureDisableSchedule <- 'DISABLE' 'SCHEDULE'

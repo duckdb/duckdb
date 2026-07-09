@@ -53,6 +53,9 @@ unique_ptr<CatalogEntry> FeatureCatalogEntry::AlterEntry(CatalogTransaction tran
 		cast_info.schedule_interval = feature_info.schedule_interval;
 		cast_info.schedule_enabled = true;
 		break;
+	case AlterFeatureType::SET_TTL:
+		cast_info.ttl_interval = feature_info.ttl_interval;
+		break;
 	case AlterFeatureType::ENABLE_SCHEDULE:
 		if (!cast_info.has_schedule) {
 			throw CatalogException("Feature \"%s\" has no schedule to enable", name);

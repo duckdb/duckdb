@@ -280,6 +280,7 @@ void AlterFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<int64_t>(300, "new_version", new_version);
 	serializer.WritePropertyWithDefault<AlterFeatureType>(301, "alter_feature_type", alter_feature_type, AlterFeatureType::BUMP_VERSION);
 	serializer.WritePropertyWithDefault<interval_t>(302, "schedule_interval", schedule_interval, interval_t());
+	serializer.WritePropertyWithDefault<interval_t>(303, "ttl_interval", ttl_interval, interval_t());
 }
 
 unique_ptr<AlterInfo> AlterFeatureInfo::Deserialize(Deserializer &deserializer) {
@@ -287,6 +288,7 @@ unique_ptr<AlterInfo> AlterFeatureInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<int64_t>(300, "new_version", result->new_version);
 	deserializer.ReadPropertyWithExplicitDefault<AlterFeatureType>(301, "alter_feature_type", result->alter_feature_type, AlterFeatureType::BUMP_VERSION);
 	deserializer.ReadPropertyWithExplicitDefault<interval_t>(302, "schedule_interval", result->schedule_interval, interval_t());
+	deserializer.ReadPropertyWithExplicitDefault<interval_t>(303, "ttl_interval", result->ttl_interval, interval_t());
 	return std::move(result);
 }
 

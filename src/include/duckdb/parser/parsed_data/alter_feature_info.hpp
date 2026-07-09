@@ -29,6 +29,8 @@ enum class AlterFeatureType : uint8_t {
 	ENABLE_SCHEDULE = 3,
 	//! Disable the schedule without dropping its interval
 	DISABLE_SCHEDULE = 4,
+	//! Replace the TTL / serving staleness bound interval
+	SET_TTL = 5,
 };
 
 //! Updates a feature transactionally so the change is written to the WAL / checkpoint and survives a
@@ -36,8 +38,9 @@ enum class AlterFeatureType : uint8_t {
 struct AlterFeatureInfo : public AlterInfo {
 	//! Construct a BUMP_VERSION alter (used internally by REFRESH FEATURE)
 	AlterFeatureInfo(AlterEntryData data, int64_t new_version);
-	//! Construct a schedule-related alter (SET_SCHEDULE / ENABLE_SCHEDULE / DISABLE_SCHEDULE)
-	AlterFeatureInfo(AlterEntryData data, AlterFeatureType type, interval_t schedule_interval);
+	//! Construct an interval-carrying alter. The interval is interpreted per type: SET_TTL sets the TTL,
+	//! SET_SCHEDULE sets the schedule interval, and ENABLE/DISABLE_SCHEDULE ignore it.
+	AlterFeatureInfo(AlterEntryData data, AlterFeatureType type, interval_t interval);
 	~AlterFeatureInfo() override;
 
 	//! Which kind of feature alter this is
@@ -46,6 +49,8 @@ struct AlterFeatureInfo : public AlterInfo {
 	int64_t new_version;
 	//! The new schedule interval (valid when alter_feature_type == SET_SCHEDULE)
 	interval_t schedule_interval;
+	//! The new TTL interval (valid when alter_feature_type == SET_TTL)
+	interval_t ttl_interval;
 
 public:
 	CatalogType GetCatalogType() const override;

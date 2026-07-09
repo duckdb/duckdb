@@ -327,6 +327,7 @@ private:
 	static unique_ptr<AlterInfo> TransformAlterFeatureOptions(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<AlterInfo> TransformAlterFeatureSetSchedule(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
+	static unique_ptr<AlterInfo> TransformAlterFeatureSetTTL(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<AlterInfo> TransformAlterFeatureEnableSchedule(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<AlterInfo> TransformAlterFeatureDisableSchedule(PEGTransformer &transformer,
@@ -580,6 +581,7 @@ private:
 	static unique_ptr<CreateStatement> TransformCreateFeatureStmt(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static interval_t TransformFeatureScheduleClause(PEGTransformer &transformer, ParseResult &parse_result);
+	static interval_t TransformFeatureTTLClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformRefreshFeatureStatement(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformFeatureAtVersionStatement(PEGTransformer &transformer,

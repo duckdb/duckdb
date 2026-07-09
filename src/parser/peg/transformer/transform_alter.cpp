@@ -103,6 +103,14 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureSetSchedule(PE
 	return make_uniq<AlterFeatureInfo>(AlterEntryData(), AlterFeatureType::SET_SCHEDULE, schedule_interval);
 }
 
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureSetTTL(PEGTransformer &transformer,
+                                                                         ParseResult &parse_result) {
+	// AlterFeatureSetTTL <- 'SET' FeatureTTLClause
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto ttl_interval = transformer.Transform<interval_t>(list_pr.Child<ListParseResult>(1));
+	return make_uniq<AlterFeatureInfo>(AlterEntryData(), AlterFeatureType::SET_TTL, ttl_interval);
+}
+
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureEnableSchedule(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	// AlterFeatureEnableSchedule <- 'ENABLE' 'SCHEDULE'
