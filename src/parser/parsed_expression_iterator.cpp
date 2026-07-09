@@ -254,6 +254,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 	case TableReferenceType::SHOW_REF:
 	case TableReferenceType::COLUMN_DATA:
 	case TableReferenceType::DELIM_GET:
+	case TableReferenceType::FEATURE_AT_VERSION:
 		// these TableRefs do not need to be unfolded
 		break;
 	case TableReferenceType::INVALID:
