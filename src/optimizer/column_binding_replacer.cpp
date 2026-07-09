@@ -84,19 +84,6 @@ void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 	if (stop_operator && stop_operator.get() == &op) {
 		return;
 	}
-	if (replace_correlated_bindings) {
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
-			ReplaceCorrelatedColumns(op.Cast<LogicalDependentJoin>().correlated_columns, replacement_bindings);
-			break;
-		case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-			ReplaceCorrelatedColumns(op.Cast<LogicalCTE>().correlated_columns, replacement_bindings);
-			break;
-		default:
-			break;
-		}
-	}
 	VisitOperatorChildren(op);
 	VisitOperatorExpressions(op);
 }
@@ -120,9 +107,29 @@ unique_ptr<Expression> ColumnBindingReplacer::VisitReplace(BoundColumnRefExpress
 
 unique_ptr<Expression> ColumnBindingReplacer::VisitReplace(BoundSubqueryExpression &expr,
                                                            unique_ptr<Expression> *expr_ptr) {
-	if (!replace_correlated_bindings) {
-		return nullptr;
+	return nullptr;
+}
+
+void CorrelatedColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
+	if (stop_operator && stop_operator.get() == &op) {
+		return;
 	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+		ReplaceCorrelatedColumns(op.Cast<LogicalDependentJoin>().correlated_columns, replacement_bindings);
+		break;
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		ReplaceCorrelatedColumns(op.Cast<LogicalCTE>().correlated_columns, replacement_bindings);
+		break;
+	default:
+		break;
+	}
+	ColumnBindingReplacer::VisitOperator(op);
+}
+
+unique_ptr<Expression> CorrelatedColumnBindingReplacer::VisitReplace(BoundSubqueryExpression &expr,
+                                                                     unique_ptr<Expression> *expr_ptr) {
 	ReplaceCorrelatedColumns(expr.GetBinder()->correlated_columns, replacement_bindings);
 	if (expr.SubqueryMutable().plan) {
 		VisitOperator(*expr.SubqueryMutable().plan);

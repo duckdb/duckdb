@@ -595,8 +595,7 @@ static bool CreatePairDependentMatchSet(Binder &binder, unique_ptr<Expression> &
 	auto match_payload = match_left_payload;
 	match_payload.Append(match_right_payload);
 
-	ColumnBindingReplacer replace_condition;
-	replace_condition.replace_correlated_bindings = true;
+	CorrelatedColumnBindingReplacer replace_condition;
 	replace_condition.AddReplacements(match_set.left_side.bindings, match_left_payload.bindings);
 	replace_condition.AddReplacements(match_set.right_side.bindings, match_right_payload.bindings);
 	replace_condition.VisitExpression(&condition);

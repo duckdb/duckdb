@@ -172,9 +172,9 @@ static void AddDepthIncreasedCorrelation(CorrelatedColumns &correlations, const 
 	AddLateralCorrelation(correlations, std::move(copy));
 }
 
-class ExternalExpressionDepthIncreaser : public LogicalOperatorVisitor {
+class LateralChildOuterReferenceDepthIncreaser : public LogicalOperatorVisitor {
 public:
-	explicit ExternalExpressionDepthIncreaser(CorrelatedColumns &increased_columns)
+	explicit LateralChildOuterReferenceDepthIncreaser(CorrelatedColumns &increased_columns)
 	    : increased_columns(increased_columns) {
 	}
 
@@ -324,7 +324,7 @@ bool LateralBinder::ExtractPairDependentJoinConditionCorrelations(LogicalOperato
                                                                   const unordered_set<TableIndex> &left_bindings,
                                                                   const unordered_set<TableIndex> &right_bindings,
                                                                   CorrelatedColumns &correlated_columns) {
-	ExternalExpressionDepthIncreaser depth_increaser(correlated_columns);
+	LateralChildOuterReferenceDepthIncreaser depth_increaser(correlated_columns);
 	depth_increaser.Increase(lateral_child);
 
 	PairDependentJoinConditionCorrelator correlator(left_bindings, right_bindings, correlated_columns);

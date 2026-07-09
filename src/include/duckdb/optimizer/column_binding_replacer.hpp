@@ -29,7 +29,7 @@ public:
 };
 
 //! The ColumnBindingReplacer updates column bindings (e.g., after changing the operator plan), utility for optimizers
-class ColumnBindingReplacer : LogicalOperatorVisitor {
+class ColumnBindingReplacer : public LogicalOperatorVisitor {
 public:
 	ColumnBindingReplacer();
 
@@ -50,19 +50,25 @@ public:
 	static void ReplaceBindings(vector<ColumnBinding> &bindings,
 	                            const vector<ReplacementBinding> &replacement_bindings);
 
-private:
+protected:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 public:
-	//! Contains all bindings that need to be updated
-	vector<ReplacementBinding> replacement_bindings;
-
-	//! Also update correlated-column metadata and bound subquery plans.
-	bool replace_correlated_bindings = false;
-
 	//! Do not recurse further than this operator (optional)
 	optional_ptr<LogicalOperator> stop_operator;
+
+	//! Contains all bindings that need to be updated
+	vector<ReplacementBinding> replacement_bindings;
+};
+
+//! Like ColumnBindingReplacer, but also updates correlated-column metadata and nested subquery plans.
+class CorrelatedColumnBindingReplacer : public ColumnBindingReplacer {
+public:
+	void VisitOperator(LogicalOperator &op) override;
+
+protected:
+	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };
 
 } // namespace duckdb

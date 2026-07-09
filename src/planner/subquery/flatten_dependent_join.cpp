@@ -432,8 +432,7 @@ void FlattenDependentJoins::RewritePayloadBindingReferences(LogicalOperator &op)
 		return;
 	}
 	auto table_indexes = op.GetTableIndex();
-	ColumnBindingReplacer replacer;
-	replacer.replace_correlated_bindings = true;
+	CorrelatedColumnBindingReplacer replacer;
 	for (auto &replacement : payload_binding_replacements) {
 		if (std::find(table_indexes.begin(), table_indexes.end(), replacement.new_binding.table_index) !=
 		    table_indexes.end()) {
