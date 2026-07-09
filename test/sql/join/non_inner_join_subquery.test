@@ -1316,6 +1316,60 @@ ORDER BY ALL;
 3	NULL
 NULL	30
 
+# Nested FULL OUTER rewrites can replace the payload bindings from an inner
+# match-domain rewrite again in the outer rewrite. References above the outer
+# join should resolve to the final projection bindings.
+statement ok
+CREATE TABLE pair_nested_full_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_nested_full_m(b INTEGER);
+
+statement ok
+CREATE TABLE pair_nested_full_r(c INTEGER);
+
+statement ok
+CREATE TABLE pair_nested_full_s1(a INTEGER, b INTEGER);
+
+statement ok
+CREATE TABLE pair_nested_full_s2(a INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO pair_nested_full_l VALUES (1), (2);
+
+statement ok
+INSERT INTO pair_nested_full_m VALUES (10), (20);
+
+statement ok
+INSERT INTO pair_nested_full_r VALUES (100), (200);
+
+statement ok
+INSERT INTO pair_nested_full_s1 VALUES (1, 10);
+
+statement ok
+INSERT INTO pair_nested_full_s2 VALUES (1, 100), (2, 200);
+
+query III
+SELECT l.a, m.b, r.c
+FROM pair_nested_full_l l
+FULL OUTER JOIN pair_nested_full_m m ON EXISTS (
+	SELECT 1
+	FROM pair_nested_full_s1 s
+	WHERE s.a = l.a
+	  AND s.b = m.b
+)
+FULL OUTER JOIN pair_nested_full_r r ON EXISTS (
+	SELECT 1
+	FROM pair_nested_full_s2 s
+	WHERE s.a = l.a
+	  AND s.c = r.c
+)
+ORDER BY ALL;
+----
+1	10	100
+2	NULL	200
+NULL	20	NULL
+
 # The FULL OUTER rewrite must preserve payload columns and unmatched rows from
 # both sides across the optimized and unoptimized paths.
 query IIIII

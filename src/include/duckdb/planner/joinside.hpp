@@ -205,6 +205,8 @@ public:
 	                                   const unordered_set<TableIndex> &right_bindings);
 	static JoinSide GetCurrentJoinSide(const Expression &expression, const unordered_set<TableIndex> &left_bindings,
 	                                   const unordered_set<TableIndex> &right_bindings);
+	static bool HasPairDependentSubquery(Expression &expression, const unordered_set<TableIndex> &left_bindings,
+	                                     const unordered_set<TableIndex> &right_bindings);
 	static JoinSide GetJoinSide(const unordered_set<TableIndex> &bindings,
 	                            const unordered_set<TableIndex> &left_bindings,
 	                            const unordered_set<TableIndex> &right_bindings);

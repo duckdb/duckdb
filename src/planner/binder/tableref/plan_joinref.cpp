@@ -435,6 +435,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		} else {
 			join = result.get();
 		}
+		if (join->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			throw NotImplementedException(
+			    "Cannot combine duplicate-eliminated joins with pair-dependent join condition subqueries");
+		}
 		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
 		comp_join.delim_flipped = ref.delim_flipped;

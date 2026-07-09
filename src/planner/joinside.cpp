@@ -5,6 +5,9 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/operator/logical_cte.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
 
 namespace duckdb {
 
@@ -160,6 +163,77 @@ JoinSide JoinSide::GetCurrentJoinSide(const Expression &expression, const unorde
 		join_side = CombineJoinSide(join_side, child_side);
 	});
 	return join_side;
+}
+
+static void AddCurrentCorrelatedColumnSides(JoinSide &side, CorrelatedColumns *columns,
+                                            const unordered_set<TableIndex> &left_bindings,
+                                            const unordered_set<TableIndex> &right_bindings) {
+	if (!columns) {
+		return;
+	}
+	for (auto &corr : *columns) {
+		auto corr_side = JoinSide::GetCurrentJoinSide(corr.binding.table_index, left_bindings, right_bindings);
+		side = JoinSide::CombineJoinSide(side, corr_side);
+	}
+}
+
+static CorrelatedColumns *GetOperatorCorrelatedColumns(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+		return &op.Cast<LogicalDependentJoin>().correlated_columns;
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		return &op.Cast<LogicalCTE>().correlated_columns;
+	default:
+		return nullptr;
+	}
+}
+
+static JoinSide GetOperatorCurrentJoinSide(LogicalOperator &op, const unordered_set<TableIndex> &left_bindings,
+                                           const unordered_set<TableIndex> &right_bindings) {
+	JoinSide side = JoinSide::NONE;
+	AddCurrentCorrelatedColumnSides(side, GetOperatorCorrelatedColumns(op), left_bindings, right_bindings);
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
+		if (!expr || !*expr) {
+			return;
+		}
+		auto expr_side = JoinSide::GetCurrentJoinSide(**expr, left_bindings, right_bindings);
+		side = JoinSide::CombineJoinSide(side, expr_side);
+	});
+	for (auto &child : op.children) {
+		auto child_side = GetOperatorCurrentJoinSide(*child, left_bindings, right_bindings);
+		side = JoinSide::CombineJoinSide(side, child_side);
+	}
+	return side;
+}
+
+static JoinSide GetSubqueryCurrentJoinSide(BoundSubqueryExpression &subquery,
+                                           const unordered_set<TableIndex> &left_bindings,
+                                           const unordered_set<TableIndex> &right_bindings) {
+	auto side = JoinSide::GetCurrentJoinSide(subquery, left_bindings, right_bindings);
+	if (subquery.SubqueryMutable().plan) {
+		auto plan_side = GetOperatorCurrentJoinSide(*subquery.SubqueryMutable().plan, left_bindings, right_bindings);
+		side = JoinSide::CombineJoinSide(side, plan_side);
+	}
+	return side;
+}
+
+bool JoinSide::HasPairDependentSubquery(Expression &expression, const unordered_set<TableIndex> &left_bindings,
+                                        const unordered_set<TableIndex> &right_bindings) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		auto side =
+		    GetSubqueryCurrentJoinSide(expression.Cast<BoundSubqueryExpression>(), left_bindings, right_bindings);
+		if (side == JoinSide::BOTH) {
+			return true;
+		}
+	}
+	bool result = false;
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
+		if (!result && HasPairDependentSubquery(child, left_bindings, right_bindings)) {
+			result = true;
+		}
+	});
+	return result;
 }
 
 JoinSide JoinSide::GetJoinSide(const unordered_set<TableIndex> &bindings,

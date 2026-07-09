@@ -61,8 +61,8 @@ private:
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
 	mutable reference_map_t<LogicalOperator, bool> dependency_cache;
-	//! Payload bindings replaced by wrapper projections while pushing correlated state through FULL OUTER joins.
-	vector<ReplacementBinding> binding_replacements;
+	//! Payload bindings projected above decorrelated FULL OUTER joins.
+	vector<ReplacementBinding> payload_binding_replacements;
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
 	                             bool include_names) const;
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
@@ -72,8 +72,8 @@ private:
 	                             const vector<ColumnBinding> &state) const;
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const vector<ColumnBinding> &left_state,
 	                                 const vector<ColumnBinding> &right_state) const;
-	void AddBindingReplacement(ColumnBinding old_binding, ColumnBinding new_binding);
-	void RewriteBindingReplacements(LogicalOperator &op);
+	void AddPayloadBindingReplacement(ColumnBinding old_binding, ColumnBinding new_binding);
+	void RewritePayloadBindingReferences(LogicalOperator &op);
 	vector<ColumnBinding> CreateDelimCrossProduct(unique_ptr<LogicalOperator> &plan,
 	                                              unique_ptr<LogicalOperator> delim_scan,
 	                                              vector<ColumnBinding> state) const;

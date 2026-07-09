@@ -3,6 +3,7 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 
 namespace duckdb {
@@ -106,8 +107,10 @@ public:
 
 	static void ReduceExpressionSubquery(BoundSubqueryExpression &expr, const CorrelatedColumns &correlated_columns) {
 		ReduceColumnDepth(expr.GetBinder()->correlated_columns, correlated_columns);
-		ExpressionDepthReducerRecursive recursive(correlated_columns);
-		recursive.VisitOperator(*expr.SubqueryMutable().plan);
+		if (expr.SubqueryMutable().plan) {
+			ExpressionDepthReducerRecursive recursive(correlated_columns);
+			recursive.VisitOperator(*expr.SubqueryMutable().plan);
+		}
 	}
 
 private:
@@ -136,6 +139,197 @@ protected:
 void LateralBinder::ReduceExpressionDepth(LogicalOperator &op, const CorrelatedColumns &correlated) {
 	ExpressionDepthReducer depth_reducer(correlated);
 	depth_reducer.VisitOperator(op);
+}
+
+static void AddLateralCorrelation(CorrelatedColumns &correlated_columns, CorrelatedColumnInfo info) {
+	for (auto &existing : correlated_columns) {
+		if (existing == info) {
+			return;
+		}
+	}
+	correlated_columns.AddColumn(std::move(info));
+}
+
+static void AddLateralCorrelation(CorrelatedColumns &correlated_columns, const BoundColumnRefExpression &colref) {
+	AddLateralCorrelation(correlated_columns, CorrelatedColumnInfo(colref.Binding(), colref.GetReturnType(),
+	                                                               colref.GetName(), colref.Depth() + 1));
+}
+
+static bool IsBindingIn(const ColumnBinding &binding, const unordered_set<TableIndex> &bindings) {
+	return bindings.find(binding.table_index) != bindings.end();
+}
+
+static bool ReferenceEscapesSubqueryScope(idx_t reference_depth, idx_t scope_depth) {
+	if (scope_depth == 0) {
+		return reference_depth > 0;
+	}
+	return reference_depth > scope_depth;
+}
+
+static void AddDepthIncreasedCorrelation(CorrelatedColumns &correlations, const CorrelatedColumnInfo &column) {
+	auto copy = column;
+	copy.depth++;
+	AddLateralCorrelation(correlations, std::move(copy));
+}
+
+class ExternalExpressionDepthIncreaser : public LogicalOperatorVisitor {
+public:
+	explicit ExternalExpressionDepthIncreaser(CorrelatedColumns &increased_columns)
+	    : increased_columns(increased_columns) {
+	}
+
+	void Increase(LogicalOperator &op) {
+		CollectLocalBindings(op);
+		VisitOperator(op);
+	}
+
+protected:
+	void VisitOperator(LogicalOperator &op) override {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+			IncreaseCorrelatedColumns(op.Cast<LogicalDependentJoin>().correlated_columns);
+			break;
+		case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+			IncreaseCorrelatedColumns(op.Cast<LogicalCTE>().correlated_columns);
+			break;
+		default:
+			break;
+		}
+		LogicalOperatorVisitor::VisitOperator(op);
+	}
+
+	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+		if (expr.Depth() > 0 && !IsBindingIn(expr.Binding(), local_bindings)) {
+			CorrelatedColumnInfo correlation(expr);
+			expr.DepthMutable()++;
+			AddDepthIncreasedCorrelation(increased_columns, correlation);
+		}
+		return nullptr;
+	}
+
+	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+		IncreaseCorrelatedColumns(expr.GetBinder()->correlated_columns);
+		if (expr.SubqueryMutable().plan) {
+			CollectLocalBindings(*expr.SubqueryMutable().plan);
+			VisitOperator(*expr.SubqueryMutable().plan);
+		}
+		return nullptr;
+	}
+
+private:
+	void CollectLocalBindings(LogicalOperator &op) {
+		auto bindings = op.GetColumnBindings();
+		for (auto &binding : bindings) {
+			local_bindings.insert(binding.table_index);
+		}
+		for (auto &child : op.children) {
+			CollectLocalBindings(*child);
+		}
+	}
+
+	void IncreaseCorrelatedColumns(CorrelatedColumns &columns) {
+		for (auto &column : columns) {
+			if (column.depth > 0 && !IsBindingIn(column.binding, local_bindings)) {
+				auto old_column = column;
+				column.depth++;
+				AddDepthIncreasedCorrelation(increased_columns, old_column);
+			}
+		}
+	}
+
+	unordered_set<TableIndex> local_bindings;
+	CorrelatedColumns &increased_columns;
+};
+
+class PairDependentJoinConditionCorrelator : public LogicalOperatorVisitor {
+public:
+	PairDependentJoinConditionCorrelator(const unordered_set<TableIndex> &left_bindings,
+	                                     const unordered_set<TableIndex> &right_bindings,
+	                                     CorrelatedColumns &correlated_columns)
+	    : left_bindings(left_bindings), right_bindings(right_bindings), correlated_columns(correlated_columns) {
+	}
+
+protected:
+	void VisitOperator(LogicalOperator &op) override {
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
+			LateralizeCorrelatedColumns(op.Cast<LogicalDependentJoin>().correlated_columns, subquery_plan_depth + 1);
+			subquery_plan_depth++;
+			LogicalOperatorVisitor::VisitOperator(op);
+			subquery_plan_depth--;
+			return;
+		}
+		case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+		case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+			LateralizeCorrelatedColumns(op.Cast<LogicalCTE>().correlated_columns, subquery_plan_depth);
+			break;
+		default:
+			break;
+		}
+		LogicalOperatorVisitor::VisitOperator(op);
+	}
+
+	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+		if (NeedsLateralRewrite(expr.Binding(), expr.Depth(), subquery_plan_depth)) {
+			AddLateralCorrelation(correlated_columns, expr);
+			expr.DepthMutable()++;
+		}
+		return nullptr;
+	}
+
+	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+		for (auto &corr : expr.GetBinder()->correlated_columns) {
+			if (NeedsLateralRewrite(corr.binding, corr.depth, subquery_plan_depth + 1)) {
+				AddLateralCorrelation(correlated_columns, corr);
+				corr.depth++;
+			}
+		}
+		if (expr.SubqueryMutable().plan) {
+			subquery_plan_depth++;
+			VisitOperator(*expr.SubqueryMutable().plan);
+			subquery_plan_depth--;
+		}
+		return nullptr;
+	}
+
+private:
+	void LateralizeCorrelatedColumns(CorrelatedColumns &columns, idx_t scope_depth) {
+		for (auto &corr : columns) {
+			if (NeedsLateralRewrite(corr.binding, corr.depth, scope_depth)) {
+				AddLateralCorrelation(correlated_columns, corr);
+				corr.depth++;
+			}
+		}
+	}
+
+	bool NeedsLateralRewrite(const ColumnBinding &binding, idx_t reference_depth, idx_t join_scope_depth) const {
+		if (IsBindingIn(binding, right_bindings)) {
+			return false;
+		}
+		if (IsBindingIn(binding, left_bindings)) {
+			return true;
+		}
+		return ReferenceEscapesSubqueryScope(reference_depth, join_scope_depth);
+	}
+
+	const unordered_set<TableIndex> &left_bindings;
+	const unordered_set<TableIndex> &right_bindings;
+	CorrelatedColumns &correlated_columns;
+	idx_t subquery_plan_depth = 0;
+};
+
+bool LateralBinder::ExtractPairDependentJoinConditionCorrelations(LogicalOperator &lateral_child,
+                                                                  unique_ptr<Expression> &condition,
+                                                                  const unordered_set<TableIndex> &left_bindings,
+                                                                  const unordered_set<TableIndex> &right_bindings,
+                                                                  CorrelatedColumns &correlated_columns) {
+	ExternalExpressionDepthIncreaser depth_increaser(correlated_columns);
+	depth_increaser.Increase(lateral_child);
+
+	PairDependentJoinConditionCorrelator correlator(left_bindings, right_bindings, correlated_columns);
+	correlator.VisitExpression(&condition);
+	return !correlated_columns.empty();
 }
 
 } // namespace duckdb

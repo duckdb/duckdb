@@ -523,7 +523,9 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 
 		for (idx_t i = 0; i < op.children.size(); i++) {
 			D_ASSERT(op.children[i]);
-			PlanJoinConditionSubqueries(op.children[i]);
+			if (!TryRewritePairDependentJoinCondition(binder, op.children[i])) {
+				PlanJoinChildFilters(*op.children[i]);
+			}
 			VisitOperator(*op.children[i]);
 		}
 	}
@@ -534,18 +536,14 @@ void RecursiveDependentJoinPlanner::Plan(Binder &binder, LogicalOperator &op) {
 	planner.VisitOperator(op);
 }
 
-void RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(unique_ptr<LogicalOperator> &op) {
-	if (TryRewritePairDependentJoinCondition(binder, op)) {
-		VisitOperator(*op);
-		return;
-	}
-	PlanJoinChildFilters(*op);
-	PlanJoinExpressions(*op);
-}
-
 void RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(Binder &binder, unique_ptr<LogicalOperator> &op) {
 	RecursiveDependentJoinPlanner planner(binder);
-	planner.PlanJoinConditionSubqueries(op);
+	if (planner.TryRewritePairDependentJoinCondition(binder, op)) {
+		planner.VisitOperator(*op);
+		return;
+	}
+	planner.PlanJoinChildFilters(*op);
+	planner.PlanJoinExpressions(*op);
 }
 
 unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubqueryExpression &expr,

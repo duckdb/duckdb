@@ -12,6 +12,9 @@
 
 namespace duckdb {
 
+class BoundColumnRefExpression;
+class BoundSubqueryExpression;
+
 struct ReplacementBinding {
 public:
 	ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding);
@@ -35,10 +38,28 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 	//! Visit an expression and update its column bindings
 	void VisitExpression(unique_ptr<Expression> *expression) override;
+	//! Add a binding replacement
+	void AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding);
+	//! Add a binding replacement and update the target type
+	void AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding, LogicalType new_type);
+	//! Add binding replacements by position
+	void AddReplacements(const vector<ColumnBinding> &old_bindings, const vector<ColumnBinding> &new_bindings);
+	//! Replace a binding using a replacement list
+	static bool ReplaceBinding(ColumnBinding &binding, const vector<ReplacementBinding> &replacement_bindings);
+	//! Replace bindings using a replacement list
+	static void ReplaceBindings(vector<ColumnBinding> &bindings,
+	                            const vector<ReplacementBinding> &replacement_bindings);
+
+private:
+	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
+	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 public:
 	//! Contains all bindings that need to be updated
 	vector<ReplacementBinding> replacement_bindings;
+
+	//! Also update correlated-column metadata and bound subquery plans.
+	bool replace_correlated_bindings = false;
 
 	//! Do not recurse further than this operator (optional)
 	optional_ptr<LogicalOperator> stop_operator;
