@@ -126,8 +126,7 @@ bool ChunkConstantInfo::HasDeletes(transaction_t transaction_id) const {
 }
 
 bool ChunkConstantInfo::HasUncommittedChanges() const {
-	return insert_id >= TRANSACTION_ID_START ||
-	       (delete_id != NOT_DELETED_ID && delete_id >= TRANSACTION_ID_START);
+	return insert_id >= TRANSACTION_ID_START || (delete_id != NOT_DELETED_ID && delete_id >= TRANSACTION_ID_START);
 }
 
 bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction) const {
