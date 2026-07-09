@@ -22,6 +22,9 @@ AsyncResult BaseFileReader::ScheduleIO(ClientContext &, GlobalTableFunctionState
 void BaseFileReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &) {
 }
 
+void BaseFileReader::PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &) {
+}
+
 void BaseFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
 }
 

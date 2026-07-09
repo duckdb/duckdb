@@ -220,6 +220,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfilingOutputSetting),
     DUCKDB_LOCAL(ProfilingRendererSettingsSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
+    DUCKDB_SETTING_CALLBACK(ReadAheadDepthSetting),
     DUCKDB_SETTING_CALLBACK(RegexMatchOperatorSemanticsSetting),
     DUCKDB_SETTING(ScalarSubqueryErrorOnMultipleRowsSetting),
     DUCKDB_SETTING(SchedulerProcessPartialSetting),
@@ -251,9 +252,9 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("confi
                                                      DUCKDB_SETTING_ALIAS("memory_limit", 128),
                                                      DUCKDB_SETTING_ALIAS("null_order", 61),
                                                      DUCKDB_SETTING_ALIAS("profile_output", 151),
-                                                     DUCKDB_SETTING_ALIAS("user", 169),
+                                                     DUCKDB_SETTING_ALIAS("user", 170),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 29),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 167),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 168),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -645,8 +646,7 @@ idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
 #ifdef DUCKDB_NO_THREADS
 	return 0;
 #else
-	// via benchmark, it seems that ~2x system threads is the I/O-concurrency sweet spot for remote (S3) scans
-	return 2 * GetSystemMaxThreads(fs);
+	return MinValue<idx_t>(4 * GetSystemMaxThreads(fs), 256);
 #endif
 }
 

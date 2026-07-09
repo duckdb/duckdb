@@ -333,6 +333,7 @@ public:
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
+	void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &gstate) override;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const;
@@ -432,9 +433,16 @@ private:
 	                                                ParquetColumnSchema &element);
 	unique_ptr<AdditionalAuthenticatedData> GenerateAAD(uint8_t module_type, uint16_t row_group_ordinal,
 	                                                    uint16_t column_ordinal, uint16_t page_ordinal) const;
+	//! Open a file handle for scanning, resolving the open flags from the prefetch mode
+	unique_ptr<CachingFileHandle> OpenScanHandle(ClientContext &context) const;
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
+	//! Scan handle pre-opened by PrepareReadAhead while the file was opened, adopted by the first InitializeScan
+	mutable mutex prewarm_lock;
+	mutable unique_ptr<CachingFileHandle> prewarmed_scan_handle;
+	//! Scan handle shared by all scan states of this reader
+	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
 };
 
 } // namespace duckdb
