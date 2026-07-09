@@ -48,3 +48,25 @@ statement error
 SELECT factorial(40);
 ----
 <REGEX>:.*Out of Range Error.*out of range.*
+
+# last valid input
+query I
+SELECT factorial(33);
+----
+8683317618811886495518194401280000000
+
+# first invalid input
+statement error
+SELECT factorial(34);
+----
+<REGEX>:.*Out of Range Error.*out of range.*
+
+statement error
+SELECT factorial(1.5);
+----
+<REGEX>:.*No function matches.*
+
+statement error
+SELECT factorial(3.0);
+----
+<REGEX>:.*No function matches.*
