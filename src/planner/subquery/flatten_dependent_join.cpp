@@ -1,5 +1,6 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
+#include "duckdb/planner/subquery/column_binding_layout.hpp"
 
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -10,7 +11,6 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/column_binding_layout.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"

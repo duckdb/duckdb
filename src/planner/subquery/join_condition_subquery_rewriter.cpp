@@ -3,7 +3,6 @@
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/column_binding_layout.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -23,6 +22,7 @@
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 
 #include <algorithm>
@@ -62,7 +62,7 @@ static void AddPayloadColumn(LogicalGet &get, column_t column_index) {
 	}
 }
 
-static void FinalizeLogicalGetPayload(LogicalGet &get) {
+static void ExposeLogicalGetJoinSidePayload(LogicalGet &get) {
 	for (idx_t column_index = 0; column_index < get.returned_types.size(); column_index++) {
 		if (IsGeneratedColumn(get, column_index)) {
 			continue;
@@ -83,12 +83,12 @@ static void FinalizeLogicalGetPayload(LogicalGet &get) {
 	}
 }
 
-static void FinalizeLogicalGetPayloads(LogicalOperator &op) {
+static void ExposeJoinSidePayload(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
-		FinalizeLogicalGetPayload(op.Cast<LogicalGet>());
+		ExposeLogicalGetJoinSidePayload(op.Cast<LogicalGet>());
 	}
 	for (auto &child : op.children) {
-		FinalizeLogicalGetPayloads(*child);
+		ExposeJoinSidePayload(*child);
 	}
 }
 
@@ -220,7 +220,25 @@ struct PairDependentSideLayoutRef {
 	ColumnBindingLayout output;
 };
 
-struct PairDependentMatchSetPlan {
+class PairDependentFullOuterJoinBuilder {
+public:
+	PairDependentFullOuterJoinBuilder(Binder &binder, unique_ptr<Expression> condition,
+	                                  unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right)
+	    : binder(binder), condition(std::move(condition)), left(std::move(left)), right(std::move(right)) {
+	}
+
+	unique_ptr<LogicalOperator> Build();
+
+private:
+	bool CreateMatchSet();
+	unique_ptr<LogicalOperator> CreateFullJoin();
+	unique_ptr<LogicalOperator> WrapCTEs(unique_ptr<LogicalOperator> final_join);
+
+private:
+	Binder &binder;
+	unique_ptr<Expression> condition;
+	unique_ptr<LogicalOperator> left;
+	unique_ptr<LogicalOperator> right;
 	PairDependentJoinSide left_side;
 	PairDependentJoinSide right_side;
 	PairDependentJoinMatch match;
@@ -281,11 +299,10 @@ static void AddNotDistinctConditions(vector<JoinCondition> &conditions, const Bo
 
 static bool PreparePairDependentJoinSide(Binder &binder, unique_ptr<LogicalOperator> &side, PairDependentJoinSide &info,
                                          const string &name_prefix) {
-	// The generated CTE becomes the public side boundary. Columns referenced
-	// above the join can be absent from the side's current scan payload if the
-	// pair-dependent predicate only needed a subset, so expose all queryable
-	// base-table columns before capturing the side layout.
-	FinalizeLogicalGetPayloads(*side);
+	// The generated CTE replaces this whole join side. Expose the full public
+	// side payload before capturing the layout, otherwise the reconstructed
+	// FULL OUTER join can lose columns that were not needed by the predicate.
+	ExposeJoinSidePayload(*side);
 	side->ResolveOperatorTypes();
 
 	info.bindings = side->GetColumnBindings();
@@ -479,11 +496,9 @@ static PairDependentSideRef CreatePairDependentSideRef(const PairDependentJoinSi
 	                             std::move(current_output)};
 }
 
-static unique_ptr<LogicalOperator> CreatePairDependentFullJoin(Binder &binder, const PairDependentJoinSide &left,
-                                                               const PairDependentJoinSide &right,
-                                                               const PairDependentJoinMatch &match) {
-	auto final_left = CreatePairDependentSideRef(left);
-	auto final_right = CreatePairDependentSideRef(right);
+unique_ptr<LogicalOperator> PairDependentFullOuterJoinBuilder::CreateFullJoin() {
+	auto final_left = CreatePairDependentSideRef(left_side);
+	auto final_right = CreatePairDependentSideRef(right_side);
 	auto left_match_index = binder.GenerateTableIndex();
 	auto left_match = make_uniq<LogicalCTERef>(left_match_index, match.cte_index, match.types, match.names);
 
@@ -491,11 +506,12 @@ static unique_ptr<LogicalOperator> CreatePairDependentFullJoin(Binder &binder, c
 	auto left_match_output = ColumnBindingLayout(left_match->GetColumnBindings(), "pair-dependent join side");
 
 	vector<JoinCondition> left_match_conditions;
-	AddNotDistinctConditions(left_match_conditions, final_left.payload, left_match_payload.Slice(0, left.types.size()));
+	AddNotDistinctConditions(left_match_conditions, final_left.payload,
+	                         left_match_payload.Slice(0, left_side.types.size()));
 	auto left_with_matches =
 	    LogicalComparisonJoin::CreateJoin(JoinType::LEFT, JoinRefType::REGULAR, std::move(final_left.plan),
 	                                      std::move(left_match), std::move(left_match_conditions));
-	SetJoinProjectionMaps(*left_with_matches, final_left.output, left.bindings, left_match_output,
+	SetJoinProjectionMaps(*left_with_matches, final_left.output, left_side.bindings, left_match_output,
 	                      left_match_payload.bindings);
 	auto left_with_matches_output =
 	    ColumnBindingLayout(left_with_matches->GetColumnBindings(), "pair-dependent join side");
@@ -503,7 +519,8 @@ static unique_ptr<LogicalOperator> CreatePairDependentFullJoin(Binder &binder, c
 	auto marker_binding = left_match_payload.bindings[match.types.size() - 1];
 
 	vector<JoinCondition> final_conditions;
-	AddNotDistinctConditions(final_conditions, left_match_payload.Slice(left.types.size(), right.types.size()),
+	AddNotDistinctConditions(final_conditions,
+	                         left_match_payload.Slice(left_side.types.size(), right_side.types.size()),
 	                         final_right.payload);
 	auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::BOOLEAN, marker_binding);
 	auto marker_true = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
@@ -513,9 +530,10 @@ static unique_ptr<LogicalOperator> CreatePairDependentFullJoin(Binder &binder, c
 	auto final_join =
 	    LogicalComparisonJoin::CreateJoin(JoinType::OUTER, JoinRefType::REGULAR, std::move(left_with_matches),
 	                                      std::move(final_right.plan), std::move(final_conditions));
-	auto expected_bindings = left.bindings;
-	expected_bindings.insert(expected_bindings.end(), right.bindings.begin(), right.bindings.end());
-	SetJoinProjectionMaps(*final_join, left_with_matches_output, left.bindings, final_right.output, right.bindings);
+	auto expected_bindings = left_side.bindings;
+	expected_bindings.insert(expected_bindings.end(), right_side.bindings.begin(), right_side.bindings.end());
+	SetJoinProjectionMaps(*final_join, left_with_matches_output, left_side.bindings, final_right.output,
+	                      right_side.bindings);
 	final_join->ResolveOperatorTypes();
 	auto actual_bindings = final_join->GetColumnBindings();
 	D_ASSERT(actual_bindings == expected_bindings);
@@ -537,67 +555,64 @@ static unique_ptr<LogicalOperator> WrapSideBindingLayoutCTEs(PairDependentJoinSi
 	return result;
 }
 
-static unique_ptr<LogicalOperator> WrapPairDependentJoinCTEs(unique_ptr<LogicalOperator> left,
-                                                             unique_ptr<LogicalOperator> right,
-                                                             PairDependentMatchSetPlan &match_set,
-                                                             unique_ptr<LogicalOperator> final_join) {
-	auto match_cte_index = match_set.match.cte_index;
+unique_ptr<LogicalOperator> PairDependentFullOuterJoinBuilder::WrapCTEs(unique_ptr<LogicalOperator> final_join) {
+	auto match_cte_index = match.cte_index;
 	auto match_cte_name = Identifier("__duckdb_pair_match_" + to_string(match_cte_index.index));
-	unique_ptr<LogicalOperator> result = make_uniq<LogicalMaterializedCTE>(
-	    match_cte_name, match_cte_index, match_set.match.types.size(), std::move(match_set.match_source),
-	    std::move(final_join), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	result = WrapSideBindingLayoutCTEs(match_set.right_side, std::move(result));
-	result = WrapSideBindingLayoutCTEs(match_set.left_side, std::move(result));
-	auto right_cte_index = match_set.right_side.cte_index;
+	unique_ptr<LogicalOperator> result =
+	    make_uniq<LogicalMaterializedCTE>(match_cte_name, match_cte_index, match.types.size(), std::move(match_source),
+	                                      std::move(final_join), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	result = WrapSideBindingLayoutCTEs(right_side, std::move(result));
+	result = WrapSideBindingLayoutCTEs(left_side, std::move(result));
+	auto right_cte_index = right_side.cte_index;
 	auto right_cte_name = Identifier("__duckdb_pair_right_" + to_string(right_cte_index.index));
 	result =
-	    make_uniq<LogicalMaterializedCTE>(right_cte_name, right_cte_index, match_set.right_side.cte_types.size(),
+	    make_uniq<LogicalMaterializedCTE>(right_cte_name, right_cte_index, right_side.cte_types.size(),
 	                                      std::move(right), std::move(result), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	auto left_cte_index = match_set.left_side.cte_index;
+	auto left_cte_index = left_side.cte_index;
 	auto left_cte_name = Identifier("__duckdb_pair_left_" + to_string(left_cte_index.index));
 	result =
-	    make_uniq<LogicalMaterializedCTE>(left_cte_name, left_cte_index, match_set.left_side.cte_types.size(),
-	                                      std::move(left), std::move(result), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	    make_uniq<LogicalMaterializedCTE>(left_cte_name, left_cte_index, left_side.cte_types.size(), std::move(left),
+	                                      std::move(result), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	return result;
 }
 
-static bool CreatePairDependentMatchSet(Binder &binder, unique_ptr<Expression> &condition,
-                                        unique_ptr<LogicalOperator> &left, unique_ptr<LogicalOperator> &right,
-                                        PairDependentMatchSetPlan &match_set, const string &left_prefix,
-                                        const string &right_prefix, const string &match_prefix) {
+bool PairDependentFullOuterJoinBuilder::CreateMatchSet() {
 	left->ResolveOperatorTypes();
 	right->ResolveOperatorTypes();
 
-	if (!PreparePairDependentJoinSide(binder, left, match_set.left_side, left_prefix) ||
-	    !PreparePairDependentJoinSide(binder, right, match_set.right_side, right_prefix)) {
+	if (!PreparePairDependentJoinSide(binder, left, left_side, "__duckdb_full_l_") ||
+	    !PreparePairDependentJoinSide(binder, right, right_side, "__duckdb_full_r_")) {
 		return false;
 	}
 
-	match_set.left_side.cte_index = binder.GenerateTableIndex();
-	match_set.right_side.cte_index = binder.GenerateTableIndex();
-	match_set.match.cte_index = binder.GenerateTableIndex();
-	CreateSideBindingLayoutCTEs(binder, match_set.left_side, left_prefix);
-	CreateSideBindingLayoutCTEs(binder, match_set.right_side, right_prefix);
+	left_side.cte_index = binder.GenerateTableIndex();
+	right_side.cte_index = binder.GenerateTableIndex();
+	match.cte_index = binder.GenerateTableIndex();
+	CreateSideBindingLayoutCTEs(binder, left_side, "__duckdb_full_l_");
+	CreateSideBindingLayoutCTEs(binder, right_side, "__duckdb_full_r_");
 
+	// The original side table indexes become the public bindings of the CTE refs
+	// used to reconstruct the join. Remap the CTE definitions themselves so the
+	// source plans cannot collide with those public bindings.
 	LogicalOperatorDeepCopy left_remapper(binder, nullptr);
 	left_remapper.RemapTableIndexesInPlace(*left);
 	LogicalOperatorDeepCopy right_remapper(binder, nullptr);
 	right_remapper.RemapTableIndexesInPlace(*right);
 
-	auto match_left = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), match_set.left_side.cte_index,
-	                                           match_set.left_side.cte_types, match_set.left_side.names);
-	auto match_right = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), match_set.right_side.cte_index,
-	                                            match_set.right_side.cte_types, match_set.right_side.names);
+	auto match_left = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), left_side.cte_index, left_side.cte_types,
+	                                           left_side.names);
+	auto match_right = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), right_side.cte_index, right_side.cte_types,
+	                                            right_side.names);
 	auto match_left_bindings = match_left->GetColumnBindings();
 	auto match_right_bindings = match_right->GetColumnBindings();
-	auto match_left_payload = BoundColumnPayload(match_set.left_side.types, match_left_bindings);
-	auto match_right_payload = BoundColumnPayload(match_set.right_side.types, match_right_bindings);
+	auto match_left_payload = BoundColumnPayload(left_side.types, match_left_bindings);
+	auto match_right_payload = BoundColumnPayload(right_side.types, match_right_bindings);
 	auto match_payload = match_left_payload;
 	match_payload.Append(match_right_payload);
 
 	CorrelatedColumnBindingReplacer replace_condition;
-	replace_condition.AddReplacements(match_set.left_side.bindings, match_left_payload.bindings);
-	replace_condition.AddReplacements(match_set.right_side.bindings, match_right_payload.bindings);
+	replace_condition.AddReplacements(left_side.bindings, match_left_payload.bindings);
+	replace_condition.AddReplacements(right_side.bindings, match_right_payload.bindings);
 	replace_condition.VisitExpression(&condition);
 
 	auto match_join = LogicalCrossProduct::Create(std::move(match_left), std::move(match_right));
@@ -606,10 +621,16 @@ static bool CreatePairDependentMatchSet(Binder &binder, unique_ptr<Expression> &
 
 	// Match existing decorrelation behavior: volatile predicates are evaluated on the decorrelated match domain,
 	// so duplicate-equivalent row pairs can share one predicate result.
-	match_set.match_source =
-	    CreateDistinctMatchProjection(binder, std::move(match_filter), match_payload, match_set.match.types);
-	match_set.match.names = GenerateInternalColumnNames(match_set.match.types.size(), match_prefix);
+	match_source = CreateDistinctMatchProjection(binder, std::move(match_filter), match_payload, match.types);
+	match.names = GenerateInternalColumnNames(match.types.size(), "__duckdb_full_match_");
 	return true;
+}
+
+unique_ptr<LogicalOperator> PairDependentFullOuterJoinBuilder::Build() {
+	if (!CreateMatchSet()) {
+		throw InternalException("Failed to create pair-dependent FULL OUTER join match set");
+	}
+	return WrapCTEs(CreateFullJoin());
 }
 
 static bool HasPairDependentSubquery(JoinCondition &condition, const unordered_set<TableIndex> &left_bindings,
@@ -710,14 +731,8 @@ bool RecursiveDependentJoinPlanner::TryRewritePairDependentJoinCondition(Binder 
 		return true;
 	}
 	case JoinType::OUTER: {
-		PairDependentMatchSetPlan match_set;
-		if (!CreatePairDependentMatchSet(binder, condition, left, right, match_set, "__duckdb_full_l_",
-		                                 "__duckdb_full_r_", "__duckdb_full_match_")) {
-			throw InternalException("Failed to create pair-dependent FULL OUTER join match set");
-		}
-		auto final_join =
-		    CreatePairDependentFullJoin(binder, match_set.left_side, match_set.right_side, match_set.match);
-		op = WrapPairDependentJoinCTEs(std::move(left), std::move(right), match_set, std::move(final_join));
+		PairDependentFullOuterJoinBuilder builder(binder, std::move(condition), std::move(left), std::move(right));
+		op = builder.Build();
 		return true;
 	}
 	default:

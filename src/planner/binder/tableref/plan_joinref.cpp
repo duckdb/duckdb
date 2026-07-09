@@ -436,6 +436,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 			join = result.get();
 		}
 		if (join->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			// duplicate_eliminated_columns is internal delim-join metadata. Pair-dependent
+			// rewrites can replace the join by generated CTEs, where that metadata no longer
+			// has a well-defined target join to attach to.
 			throw NotImplementedException(
 			    "Cannot combine duplicate-eliminated joins with pair-dependent join condition subqueries");
 		}
