@@ -1,0 +1,58 @@
+# name: test/sql/table_function/external_resource_types.test
+# description: register_external_resource_type + duckdb_external_resource_types (append-only registry)
+# group: [table_function]
+
+# The registry starts empty.
+query I
+SELECT count(*) FROM duckdb_external_resource_types();
+----
+0
+
+# Register a minimal resource type (name positional; kind + create named). Optional callbacks are NULL.
+statement ok
+CALL register_external_resource_type('quack@aws:ec2', kind := 'catalog', create_function := 'quack_create');
+
+query TTTTTTT
+SELECT name, kind, create_function, status_function, destroy_function, resolve_function, origin FROM duckdb_external_resource_types();
+----
+quack@aws:ec2	catalog	quack_create	NULL	NULL	NULL	user
+
+# Register with all optional callbacks.
+statement ok
+CALL register_external_resource_type('pg@aws:rds', kind := 'catalog', create_function := 'pg_create',
+    status_function := 'pg_status', destroy_function := 'pg_destroy', resolve_function := 'pg_resolve');
+
+query TTT
+SELECT status_function, destroy_function, resolve_function FROM duckdb_external_resource_types() WHERE name = 'pg@aws:rds';
+----
+pg_status	pg_destroy	pg_resolve
+
+# kind is a free-form classification (not restricted to 'catalog').
+statement ok
+CALL register_external_resource_type('scratch_bucket', kind := 'storage', create_function := 's3_bucket_create', destroy_function := 's3_bucket_destroy');
+
+query TT
+SELECT kind, destroy_function FROM duckdb_external_resource_types() WHERE name = 'scratch_bucket';
+----
+storage	s3_bucket_destroy
+
+# Append-only: registering the same name again appends a second row (both are retained).
+statement ok
+CALL register_external_resource_type('quack@aws:ec2', kind := 'catalog', create_function := 'quack_create_v2');
+
+query I
+SELECT count(*) FROM duckdb_external_resource_types() WHERE name = 'quack@aws:ec2';
+----
+2
+
+# NULL required arguments are rejected.
+statement error
+CALL register_external_resource_type(NULL, kind := 'catalog', create_function := 'x');
+----
+<REGEX>:.*must not be NULL.*
+
+# Empty name is rejected.
+statement error
+CALL register_external_resource_type('', kind := 'catalog', create_function := 'x');
+----
+<REGEX>:.*must not be NULL or empty.*

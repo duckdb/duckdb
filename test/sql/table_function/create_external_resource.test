@@ -1,0 +1,80 @@
+# name: test/sql/table_function/create_external_resource.test
+# description: create_external_resource — blocking create + status poll, baseline enforcement, deleter binding
+# group: [table_function]
+
+# Mock recipe callbacks (non-TEMP macros, visible instance-wide to the internal connection).
+statement ok
+CREATE MACRO mock_create(p) AS TABLE SELECT MAP {'id': 'r1'} AS handle;
+
+statement ok
+CREATE MACRO mock_status(h) AS TABLE
+  SELECT 'ready' AS state, MAP {'uri': 'quack:localhost:9494', 'attached_db_type': 'quack', 'token': 't1'} AS result;
+
+statement ok
+CREATE MACRO mock_destroy(h) AS TABLE SELECT 'ok' AS status;
+
+statement ok
+CALL register_external_resource_type('mock@local', kind := 'catalog', create_function := 'mock_create',
+    status_function := 'mock_status', destroy_function := 'mock_destroy');
+
+# Blocking create: invokes create, polls status to 'ready', extracts uri/attached_db_type, binds deleter.
+query TTTT
+SELECT uri, attached_db_type, deleter_function, handle
+FROM create_external_resource('mock@local', params := MAP {'region': 'x'});
+----
+quack:localhost:9494	quack	mock_destroy	{id=r1}
+
+# The connect options ride in `result` (e.g. token flows through generically).
+query T
+SELECT result FROM create_external_resource('mock@local');
+----
+{uri='quack:localhost:9494', attached_db_type=quack, token=t1}
+
+# End-to-end: capture the deleter binding and invoke it.
+statement ok
+SET VARIABLE dfn = (SELECT deleter_function FROM create_external_resource('mock@local'));
+
+statement ok
+SET VARIABLE dpl = (SELECT deleter_payload FROM create_external_resource('mock@local'));
+
+statement ok
+CALL destroy_external_resource(getvariable('dfn'), getvariable('dpl'));
+
+# Baseline enforcement: an catalog resource whose status omits 'uri' errors.
+statement ok
+CREATE MACRO bad_status(h) AS TABLE SELECT 'ready' AS state, MAP {'foo': 'bar'} AS result;
+
+statement ok
+CALL register_external_resource_type('badattach@local', kind := 'catalog', create_function := 'mock_create', status_function := 'bad_status');
+
+statement error
+SELECT * FROM create_external_resource('badattach@local');
+----
+<REGEX>:.*missing 'uri'.*
+
+# A 'failed' status is surfaced as an error.
+statement ok
+CREATE MACRO fail_status(h) AS TABLE SELECT 'failed' AS state, MAP {'x': 'y'} AS result;
+
+statement ok
+CALL register_external_resource_type('failing@local', kind := 'catalog', create_function := 'mock_create', status_function := 'fail_status');
+
+statement error
+SELECT * FROM create_external_resource('failing@local');
+----
+<REGEX>:.*state 'failed'.*
+
+# A type with no status function can't await readiness => error.
+statement ok
+CALL register_external_resource_type('nostatus@local', kind := 'catalog', create_function := 'mock_create');
+
+statement error
+SELECT * FROM create_external_resource('nostatus@local');
+----
+<REGEX>:.*no status function.*
+
+# Unknown resource type errors.
+statement error
+SELECT * FROM create_external_resource('does_not_exist@local');
+----
+<REGEX>:.*unknown resource type.*

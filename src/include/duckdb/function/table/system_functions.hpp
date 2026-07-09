@@ -88,6 +88,22 @@ struct DuckDBExtensionsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct RegisterExternalResourceTypeFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CreateExternalResourceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DestroyExternalResourceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBExternalResourceTypesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBPreparedStatementsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
