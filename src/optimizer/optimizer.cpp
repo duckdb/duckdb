@@ -436,7 +436,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::TYPE_PUSHDOWN, [&] {
 		TypePushdown type_pushdown(context);
 		plan = type_pushdown.Optimize(std::move(plan));
-    });
+	});
 
 	// Pushdown scalar functions in SELECT like SELECT strlen(str) to readers
 	RunOptimizer(OptimizerType::SCALAR_FN_PUSHDOWN, [&] {
