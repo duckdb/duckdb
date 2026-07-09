@@ -482,6 +482,13 @@ statement ok
 COPY (SELECT {'x': 'a', 'y': 'b'} s, 'hello' v)
 TO '{TEST_DIR}/scalar-pushdown-nested-2.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
 
+# pushdown-extract columns e.g s.x are not pushed down
+query II
+EXPLAIN SELECT strlen(s.x)
+FROM '{TEST_DIR}/scalar-pushdown-nested-2.parquet'
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
 query I
 SELECT strlen(s.x)
 FROM '{TEST_DIR}/scalar-pushdown-nested-2.parquet';
@@ -491,6 +498,12 @@ FROM '{TEST_DIR}/scalar-pushdown-nested-2.parquet';
 statement ok
 COPY (SELECT {'x': 'a', 'y': {'z': 'aa'}} s, 'hello' v)
 TO '{TEST_DIR}/scalar-pushdown-nested-3.parquet' (FORMAT PARQUET, PARQUET_VERSION v1);
+
+query II
+EXPLAIN SELECT strlen(s.y.z)
+FROM '{TEST_DIR}/scalar-pushdown-nested-3.parquet'
+----
+physical_plan	<REGEX>:.*PROJECTION.*
 
 query I
 SELECT strlen(s.y.z)

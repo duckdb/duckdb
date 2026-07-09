@@ -17,14 +17,6 @@ void ParquetColumnSchema::SetSchemaIndex(idx_t schema_idx) {
 	schema_index = schema_idx;
 }
 
-ParquetColumnSchema &ParquetColumnSchema::ResolveExtractedChild(const ColumnIndex &column_id) {
-	if (!column_id.HasChildren()) {
-		return *this;
-	}
-	auto &child = column_id.GetChildIndex(0);
-	return children[child.GetPrimaryIndex()].ResolveExtractedChild(child);
-}
-
 //! Writer constructors
 
 ParquetColumnSchema ParquetColumnSchema::FromLogicalType(const Identifier &name, const LogicalType &type,

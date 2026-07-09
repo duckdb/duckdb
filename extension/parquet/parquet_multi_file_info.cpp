@@ -336,27 +336,20 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	parquet_bind_data.projection_expressions = std::move(projection_expressions);
 
 	for (const auto &[idx, expr] : parquet_bind_data.projection_expressions) {
-		const bool is_nested =
-		    idx < inner_bind_data.columns.size() && inner_bind_data.columns[idx].type.id() == LogicalTypeId::STRUCT;
-		if (!is_nested) {
-			if (idx < inner_bind_data.columns.size()) {
-				inner_bind_data.columns[idx].type = expr.return_type;
-			}
-			if (idx < inner_bind_data.types.size()) {
-				inner_bind_data.types[idx] = expr.return_type;
-			}
-			if (auto &schema = inner_bind_data.reader_bind.schema; !schema.empty() && idx < schema.size()) {
-				schema[idx].type = expr.return_type;
-			}
+		if (idx < inner_bind_data.columns.size()) {
+			inner_bind_data.columns[idx].type = expr.return_type;
+		}
+		if (idx < inner_bind_data.types.size()) {
+			inner_bind_data.types[idx] = expr.return_type;
+		}
+		if (auto &schema = inner_bind_data.reader_bind.schema; !schema.empty() && idx < schema.size()) {
+			schema[idx].type = expr.return_type;
 		}
 		if (!inner_bind_data.initial_reader) {
 			continue;
 		}
 		auto &reader = inner_bind_data.initial_reader->Cast<ParquetReader>();
 		reader.projection_expressions[idx] = expr;
-		if (is_nested) {
-			continue;
-		}
 		if (idx < reader.columns.size()) {
 			reader.columns[idx].type = expr.return_type;
 		}
@@ -407,35 +400,28 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 		return false;
 	}
 
+	const auto &column_id = input.get.GetColumnIds()[input.column_index];
+	// Pushdown extract columns i.e. SELECT x.y.z have a complex nested type update
+	if (column_id.IsPushdownExtract()) {
+		return false;
+	}
+	const idx_t idx = column_id.GetPrimaryIndex();
+
 	// Don't do pushdown of strlen to hive and filename columns.
 	// See src/function/table/read_csv.cpp : PushdownProjectionExpression
 	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
-		if (partition.index == input.proj_index) {
+		if (partition.index == idx) {
 			return false;
 		}
 	}
-	if (bind_data.reader_bind.filename_idx.IsValid() &&
-	    bind_data.reader_bind.filename_idx.GetIndex() == input.proj_index) {
+	if (bind_data.reader_bind.filename_idx.IsValid() && bind_data.reader_bind.filename_idx.GetIndex() == idx) {
 		return false;
 	}
 
-	const idx_t idx = input.proj_index;
 	// We run scalar function pushdown after filter pushdown. If a filter was
 	// pushed into get.table_filters, we don't see it here and can't
 	// proceed with pushdown
-	const auto &col_ids = input.get.GetColumnIds();
-	optional_ptr<const ColumnIndex> column_id;
-	for (idx_t proj_idx = 0; proj_idx < col_ids.size(); proj_idx++) {
-		if (col_ids[proj_idx].GetPrimaryIndex() != idx) {
-			continue;
-		}
-		if (input.get.table_filters.HasFilter(ProjectionIndex(proj_idx))) {
-			return false;
-		}
-		column_id = col_ids[proj_idx];
-		break;
-	}
-	if (!column_id) {
+	if (input.get.table_filters.HasFilter(input.column_index)) {
 		return false;
 	}
 
@@ -459,8 +445,7 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 		return false;
 	}
 
-	ParquetColumnSchema &schema = children[idx].ResolveExtractedChild(*column_id);
-	const idx_t column_flat_idx = schema.column_index;
+	const idx_t column_flat_idx = children[idx].column_index;
 	for (const auto &group : reader.GetFileMetadata()->row_groups) {
 		D_ASSERT(column_flat_idx < group.columns.size());
 		for (const Encoding::type type : group.columns[column_flat_idx].meta_data.encodings) {
@@ -471,10 +456,8 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 	}
 
 	const LogicalType type = LogicalType::BIGINT;
-	if (!column_id->IsPushdownExtract()) {
-		bind_data.types[idx] = type;
-		bind_data.columns[idx].type = type;
-	}
+	bind_data.types[idx] = type;
+	bind_data.columns[idx].type = type;
 
 	const ParquetReaderProjectionExpression expression {ParquetReaderProjectionExpressionType::BYTE_LENGTH, type};
 
@@ -482,10 +465,10 @@ static bool ParquetProjectionExpressionPushdown(ClientContext &context,
 
 	// initial reader was created before scalar function pushdown optimizer pass, update its types.
 	reader.projection_expressions[idx] = expression;
-	if (!column_id->IsPushdownExtract() && idx < reader.columns.size()) {
+	if (idx < reader.columns.size()) {
 		reader.columns[idx].type = type;
 	}
-	schema.type = type;
+	children[idx].type = type;
 	return true;
 }
 

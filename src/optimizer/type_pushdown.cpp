@@ -221,7 +221,7 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundColumnRefExpression &expr,
 
 	const auto &[analysis, column_index, projection] = *binding;
 	if (CanPushdownColumn(analysis, column_index)) {
-		const LogicalType return_type = analysis.GetPushdownType(column_index);
+		const LogicalType return_type = analysis.get.returned_types[analysis.StorageIndex(column_index)];
 		expr.SetReturnType(return_type);
 		// LogicalProjection types are resolved by calling
 		// LogicalProjection::ResolveTypes, so we need to check whether types in
@@ -250,7 +250,7 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundCastExpression &expr, uniq
 		return std::move(*ptr);
 	}
 
-	const LogicalType return_type = analysis.GetPushdownType(column_index);
+	const LogicalType return_type = analysis.get.returned_types[analysis.StorageIndex(column_index)];
 	bound_col_base->SetReturnType(return_type);
 	// Same as in CastReplace::VisitReplace(BoundColumnRefExpression)
 	if (projection != nullptr && !projection->types.empty()) {
@@ -274,13 +274,5 @@ bool CanPushdownColumn(const GetAnalysis &analysis, ProjectionIndex idx) {
 
 idx_t GetAnalysis::StorageIndex(ProjectionIndex idx) const {
 	return get.GetColumnIds()[idx].GetPrimaryIndex();
-}
-
-LogicalType GetAnalysis::GetPushdownType(ProjectionIndex idx) const {
-	const auto &column_id = get.GetColumnIds()[idx];
-	if (column_id.IsPushdownExtract()) {
-		return column_id.GetScanType();
-	}
-	return get.returned_types[StorageIndex(idx)];
 }
 } // namespace duckdb
