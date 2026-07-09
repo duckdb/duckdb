@@ -1,4 +1,4 @@
-# name: test/sql/feature/test_serve_feature.test
+# name: test/sql/feature/test_feature_serve.test
 # description: Test SERVE FEATURE — time-travel ASOF against the denormalized store
 # group: [feature]
 
