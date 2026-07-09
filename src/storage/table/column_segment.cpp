@@ -419,6 +419,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 		idx_t result_offset = 0;
 		idx_t current_sel_offset = 0;
 		SelectionVector current_sel(approved_tuple_count);
+		SelectionVector chunk_sel(STANDARD_VECTOR_SIZE);
 		while (offset < scan_count) {
 			idx_t chunk_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count - offset);
 			idx_t chunk_end = offset + chunk_count;
@@ -444,12 +445,10 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 				offset += chunk_count;
 				continue;
 			}
-			auto current_result_data = result_sel.data() + result_offset;
-			SelectionVector current_result_sel(current_result_data, result_sel.Capacity() - result_offset);
-			idx_t new_matches = state.executor->SelectExpression(chunk, current_result_sel, current_sel, current_count);
-			// increment all matches by the offset
+			// filter the chunk into its own selection, then append the (offset-corrected) matches to result_sel
+			idx_t new_matches = state.executor->SelectExpression(chunk, chunk_sel, current_sel, current_count);
 			for (idx_t i = 0; i < new_matches; i++) {
-				current_result_data[i] += offset;
+				result_sel.set_index(result_offset + i, chunk_sel.get_index(i) + offset);
 			}
 			result_offset += new_matches;
 			offset += chunk_count;

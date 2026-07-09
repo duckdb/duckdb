@@ -45,14 +45,14 @@ struct SelectionResult : private SelectionVector {
 		if (sel_vector && capacity >= count) {
 			if (selection_data) {
 				selection_data->is_bitmap = false;
-				selection_data->index_cache_offset = DConstants::INVALID_INDEX;
+				selection_data->indices_cached = false;
 			}
 			return;
 		}
 		if (selection_data && selection_data.use_count() == 1 &&
 		    selection_data->owned_data.GetSize() >= count * sizeof(sel_t)) {
 			selection_data->is_bitmap = false;
-			selection_data->index_cache_offset = DConstants::INVALID_INDEX;
+			selection_data->indices_cached = false;
 			sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
 			capacity = selection_data->owned_data.GetSize() / sizeof(sel_t);
 			return;
@@ -96,13 +96,15 @@ struct SelectionResult : private SelectionVector {
 
 	uint64_t *PrepareBitmap(idx_t row_span) {
 		static constexpr idx_t NWORDS = (STANDARD_VECTOR_SIZE + 63) / 64;
+		// the bitmap is a fixed NWORDS buffer: row_span beyond STANDARD_VECTOR_SIZE would overflow every writer
+		D_ASSERT(row_span <= STANDARD_VECTOR_SIZE);
 		if (!selection_data || selection_data.use_count() > 1) {
 			selection_data = make_shared_ptr<SelectionData>();
 		}
 		if (!selection_data->bitmap_data.get()) {
 			selection_data->bitmap_data = Allocator::DefaultAllocator().Allocate(NWORDS * sizeof(uint64_t));
 		}
-		selection_data->index_cache_offset = DConstants::INVALID_INDEX;
+		selection_data->indices_cached = false;
 		selection_data->is_bitmap = true;
 		selection_data->row_span = row_span;
 		sel_vector = nullptr;
@@ -139,7 +141,7 @@ private:
 
 	idx_t IntersectBitmap(const validity_t *other_bitmap) {
 		D_ASSERT(IsBitmap());
-		selection_data->index_cache_offset = DConstants::INVALID_INDEX;
+		selection_data->indices_cached = false;
 		auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
 		const idx_t nwords = (selection_data->row_span + 63) / 64;
 		idx_t total = 0;
