@@ -525,29 +525,35 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 	if (conflict_info.column_ids.empty()) {
 		const auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
-		for (const auto &index : global_indexes.MakeShared()) {
-			if (!index->IsUnique()) {
-				continue;
-			}
-			if (!conflict_info.ConflictTargetMatches(*index)) {
-				continue;
-			}
-			D_ASSERT(index->IsBound());
+		for (auto &entry : global_indexes.IndexEntries()) {
+			lock_guard<mutex> lock(entry.lock);
+			auto &index = entry.GetIndexUnsafe();
 
-			matching_indexes.push_back(BoundIndex::MakeShared<BoundIndex>(index));
+			if (!index.IsUnique()) {
+				continue;
+			}
+			if (!conflict_info.ConflictTargetMatches(index)) {
+				continue;
+			}
+			D_ASSERT(index.IsBound());
+
+			matching_indexes.push_back(entry.GetSharedIndex<BoundIndex>());
 		}
 
 		const auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
-		for (const auto &index : local_indexes.MakeShared()) {
-			if (!index->IsUnique()) {
-				continue;
-			}
-			if (!conflict_info.ConflictTargetMatches(*index)) {
-				continue;
-			}
-			D_ASSERT(index->IsBound());
+		for (auto &entry : local_indexes.IndexEntries()) {
+			lock_guard<mutex> lock(entry.lock);
+			auto &index = entry.GetIndexUnsafe();
 
-			matching_indexes.push_back(BoundIndex::MakeShared<BoundIndex>(index));
+			if (!index.IsUnique()) {
+				continue;
+			}
+			if (!conflict_info.ConflictTargetMatches(index)) {
+				continue;
+			}
+			D_ASSERT(index.IsBound());
+
+			matching_indexes.push_back(entry.GetSharedIndex<BoundIndex>());
 		}
 	}
 

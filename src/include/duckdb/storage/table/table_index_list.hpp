@@ -71,6 +71,12 @@ public:
 		lock_guard<mutex> lock(index_pointer_lock);
 		return owned_index;
 	}
+	template <class TARGET>
+	shared_ptr<TARGET> GetSharedIndex() const {
+		lock_guard<mutex> lock(index_pointer_lock);
+		auto &target = owned_index->Cast<TARGET>();
+		return shared_ptr<TARGET>(owned_index, &target);
+	}
 
 	//! Replace the current snapshot with another
 	void ReplaceIndex(unique_ptr<Index> index) {

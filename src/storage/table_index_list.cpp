@@ -147,14 +147,14 @@ bool TableIndexList::NameIsUnique(const string &name) const {
 shared_ptr<BoundIndex> TableIndexList::Find(const Identifier &name) const {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		const auto index = entry->GetSharedIndex();
-		if (index->GetIndexName() != name) {
+		const auto &index = entry->GetIndexUnsafe();
+		if (index.GetIndexName() != name) {
 			continue;
 		}
-		if (!index->IsBound()) {
+		if (!index.IsBound()) {
 			throw InternalException("TableIndexList::Find cannot return an unbound index");
 		}
-		return BoundIndex::MakeShared<BoundIndex>(index);
+		return entry->GetSharedIndex<BoundIndex>();
 	}
 	return nullptr;
 }
