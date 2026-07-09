@@ -1157,6 +1157,19 @@ static DST CastTimestampTargetOperation(const SRC &input) {
 	    input, StringUtil::Format("Could not convert Timestamp to %s.", TypeIdToString(GetTypeId<DST>())));
 }
 
+template <typename SRC>
+static dtime_t CastTimestampTimeOperation(const SRC &input) {
+	return Timestamp::GetTime(CastTimestampPrecisionOperation<SRC, timestamp_t>(input));
+}
+
+static dtime_ns_t CastTimestampNsTimeNsOperation(timestamp_ns_t input) {
+	dtime_ns_t result;
+	if (TryCast::Operation(input, result)) {
+		return result;
+	}
+	return Timestamp::GetTimeNs(input);
+}
+
 template <>
 bool TryCast::Operation(timestamp_t input, date_t &result, bool strict) {
 	result = Timestamp::GetDate(input);
@@ -1254,7 +1267,11 @@ bool TryCast::Operation(timestamp_t input, timestamp_ms_t &result, bool strict) 
 
 template <>
 bool TryCast::Operation(timestamp_ns_t input, date_t &result, bool strict) {
-	result = Timestamp::GetDateNS(input);
+	timestamp_t us;
+	if (!TryCast::Operation<timestamp_ns_t, timestamp_t>(input, us, strict)) {
+		return false;
+	}
+	result = Timestamp::GetDate(us);
 	return true;
 }
 
@@ -1403,6 +1420,26 @@ timestamp_sec_t Cast::Operation(timestamp_t input) {
 }
 
 template <>
+dtime_t Cast::Operation(timestamp_t input) {
+	return Timestamp::GetTime(input);
+}
+
+template <>
+dtime_tz_t Cast::Operation(timestamp_t input) {
+	return dtime_tz_t(Timestamp::GetTime(input), 0);
+}
+
+template <>
+dtime_tz_t Cast::Operation(timestamp_tz_t input) {
+	return dtime_tz_t(Timestamp::GetTime(timestamp_t(input)), 0);
+}
+
+template <>
+dtime_tz_t Cast::Operation(timestamp_tz_ns_t input) {
+	return dtime_tz_t(CastTimestampTimeOperation(timestamp_ns_t(input)), 0);
+}
+
+template <>
 timestamp_t Cast::Operation(timestamp_ms_t input) {
 	return CastTimestampPrecisionOperation<timestamp_ms_t, timestamp_t>(input);
 }
@@ -1414,7 +1451,7 @@ date_t Cast::Operation(timestamp_ms_t input) {
 
 template <>
 dtime_t Cast::Operation(timestamp_ms_t input) {
-	return CastTimestampTargetOperation<timestamp_ms_t, dtime_t>(input);
+	return CastTimestampTimeOperation(input);
 }
 
 template <>
@@ -1479,12 +1516,12 @@ date_t Cast::Operation(timestamp_ns_t input) {
 
 template <>
 dtime_t Cast::Operation(timestamp_ns_t input) {
-	return CastTimestampTargetOperation<timestamp_ns_t, dtime_t>(input);
+	return CastTimestampTimeOperation(input);
 }
 
 template <>
 dtime_ns_t Cast::Operation(timestamp_ns_t input) {
-	return CastTimestampTargetOperation<timestamp_ns_t, dtime_ns_t>(input);
+	return CastTimestampNsTimeNsOperation(input);
 }
 
 template <>
@@ -1504,7 +1541,7 @@ date_t Cast::Operation(timestamp_sec_t input) {
 
 template <>
 dtime_t Cast::Operation(timestamp_sec_t input) {
-	return CastTimestampTargetOperation<timestamp_sec_t, dtime_t>(input);
+	return CastTimestampTimeOperation(input);
 }
 
 //===--------------------------------------------------------------------===//

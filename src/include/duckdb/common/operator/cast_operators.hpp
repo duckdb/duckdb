@@ -838,6 +838,14 @@ duckdb::timestamp_ms_t Cast::Operation(duckdb::timestamp_t input);
 template <>
 duckdb::timestamp_ns_t Cast::Operation(duckdb::timestamp_t input);
 template <>
+duckdb::dtime_t Cast::Operation(duckdb::timestamp_t input);
+template <>
+duckdb::dtime_tz_t Cast::Operation(duckdb::timestamp_t input);
+template <>
+duckdb::dtime_tz_t Cast::Operation(duckdb::timestamp_tz_t input);
+template <>
+duckdb::dtime_tz_t Cast::Operation(duckdb::timestamp_tz_ns_t input);
+template <>
 duckdb::date_t Cast::Operation(duckdb::timestamp_ms_t input);
 template <>
 duckdb::dtime_t Cast::Operation(duckdb::timestamp_ms_t input);
