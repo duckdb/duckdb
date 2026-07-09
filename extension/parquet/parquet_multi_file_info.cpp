@@ -297,9 +297,9 @@ static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<Func
 	if (serializer.ShouldSerialize(StorageVersion::V1_2_0)) {
 		serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
 	}
-    // Old clients won't be able to read the plan even if we
-    // don't push this field. If projection expression worked,
-    // it modified "types" which we serialize ultimately
+	// Old clients won't be able to read the plan even if we
+	// don't push this field. If projection expression worked,
+	// it modified "types" which we serialize ultimately
 	serializer.WriteProperty(105, "projection_expressions", parquet_data.projection_expressions);
 }
 
