@@ -87,7 +87,7 @@ vector<shared_ptr<Index>> TableIndexList::MakeShared() const {
 	vector<shared_ptr<Index>> result;
 	result.reserve(index_entries.size());
 	for (const auto &entry : index_entries) {
-		result.push_back(entry->PinIndex());
+		result.push_back(entry->GetSharedIndex());
 	}
 	return result;
 }
@@ -146,7 +146,7 @@ bool TableIndexList::NameIsUnique(const string &name) const {
 shared_ptr<BoundIndex> TableIndexList::Find(const Identifier &name) const {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		const auto index = entry->PinIndex();
+		const auto index = entry->GetSharedIndex();
 		if (index->GetIndexName() != name) {
 			continue;
 		}

@@ -67,7 +67,7 @@ public:
 		return *owned_index;
 	}
 	//! Give the caller a stable snapshot of the current Index
-	shared_ptr<Index> PinIndex() const {
+	shared_ptr<Index> GetSharedIndex() const {
 		lock_guard<mutex> lock(index_pointer_lock);
 		return owned_index;
 	}
