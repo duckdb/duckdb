@@ -135,7 +135,8 @@ struct IndexKeyBindData : public FunctionData {
 		return art.get() == other.art.get() && key_types == other.key_types;
 	}
 
-	//! The index needs to be kept alive in case the related logical identity swaps in a new physical backing.
+	//! index_key can keep using the physical index after its table/index was dropped or replaced.
+	//! The bind data must therefore be allowed to be the ART's last owner.
 	shared_ptr<ART> art;
 	vector<LogicalType> key_types;
 };
