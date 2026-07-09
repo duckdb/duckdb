@@ -22,6 +22,8 @@ namespace duckdb {
 
 class BaseStatistics;
 class BaseUnionData;
+class AsyncResult;
+class DataChunk;
 struct GlobalTableFunctionState;
 struct LocalTableFunctionState;
 

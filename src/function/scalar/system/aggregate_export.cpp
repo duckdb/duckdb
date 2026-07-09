@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/list_segment.hpp"

@@ -1,4 +1,5 @@
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function.hpp"
 

@@ -14,6 +14,7 @@
 namespace duckdb {
 class AttachedDatabase;
 class DatabaseInstance;
+struct CheckpointOptions;
 class TableIOManager;
 class RowGroupCollection;
 

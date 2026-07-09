@@ -7,6 +7,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_merge_into.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 

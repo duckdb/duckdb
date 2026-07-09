@@ -1,4 +1,5 @@
 #include "duckdb/common/arrow/schema_metadata.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

@@ -49,7 +49,6 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/planner/expression.hpp"

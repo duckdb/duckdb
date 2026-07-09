@@ -56,14 +56,14 @@
 #include "parallel.h"
 #include "scd.h"
 
-static struct SCALING_T {
+static thread_local struct SCALING_T {
 	ds_key_t kBaseRowcount;
 	ds_key_t kNextInsertValue;
 	int nUpdatePercentage;
 	ds_key_t kDayRowcount[6];
 } arRowcount[MAX_TABLE + 1];
-static int arUpdateDates[6];
-static int arInventoryUpdateDates[6];
+static thread_local int arUpdateDates[6];
+static thread_local int arInventoryUpdateDates[6];
 
 static int arScaleVolume[9] = {1, 10, 100, 300, 1000, 3000, 10000, 30000, 100000};
 
@@ -232,7 +232,7 @@ ds_key_t getIDCount(int nTable) {
  */
 ds_key_t get_rowcount(int table) {
 
-	static double nScale;
+	static thread_local double nScale;
 	int nTable, nMultiplier, i, nBadScale = 0, nRowcountOffset = 0;
 	tdef *pTdef;
 
@@ -241,7 +241,7 @@ ds_key_t get_rowcount(int table) {
 		if (nScale > 100000)
 			ReportErrorNoLine(QERR_BAD_SCALE, NULL, 1);
 
-		memset(arRowcount, 0, sizeof(long) * MAX_TABLE);
+		memset(arRowcount, 0, sizeof(arRowcount));
 		int iScale = nScale < 1 ? 1 : int(nScale);
 		for (nTable = CALL_CENTER; nTable <= MAX_TABLE; nTable++) {
 			switch (iScale) {
@@ -469,7 +469,7 @@ void setUpdateDates(void) {
  * TODO: None
  */
 int getUpdateDate(int nTable, ds_key_t kRowcount) {
-	static int nIndex = 0, nLastTable = -1;
+	static thread_local int nIndex = 0, nLastTable = -1;
 
 	if (nLastTable != nTable) {
 		nLastTable = nTable;
@@ -613,7 +613,7 @@ Date.julian); *pnOrderNumber += nRowcount; row_skip(nParent, nRowcount);
  * TODO: None
  */
 ds_key_t dateScaling(int nTable, ds_key_t jDate) {
-	static dist_t *pDist;
+	static thread_local dist_t *pDist;
 	d_idx_t *pDistIndex;
 	date_t Date;
 	int nDateWeight = 1, nCalendarTotal, nDayWeight;

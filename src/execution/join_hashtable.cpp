@@ -13,6 +13,8 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 

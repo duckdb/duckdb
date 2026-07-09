@@ -73,7 +73,7 @@ static ds_key_t web_join(int col, ds_key_t join_key);
  */
 static ds_key_t date_join(int from_tbl, int from_col, ds_key_t join_count, int nYear) {
 	int nDay, nTemp, nMin = -1, nMax = -1, nResult;
-	static int jToday;
+	static thread_local int jToday;
 	date_t TempDate;
 
 	if (InitConstants::date_join_init == 0) {
@@ -178,9 +178,9 @@ static ds_key_t time_join(int to_tbl, int to_col, ds_key_t join_count) {
  */
 static ds_key_t cp_join(int tbl, int col, ds_key_t jDate) {
 	ds_key_t res;
-	static int nPagePerCatalog;
+	static thread_local int nPagePerCatalog;
 	int nType, nCount, nOffset, nPage;
-	static date_t dTemp;
+	static thread_local date_t dTemp;
 	char *szTemp;
 
 	if (!InitConstants::cp_join_init) {
@@ -227,7 +227,7 @@ static ds_key_t cp_join(int tbl, int col, ds_key_t jDate) {
  * TODO: None
  */
 ds_key_t getCatalogNumberFromPage(ds_key_t kPageNumber) {
-	static int nPagePerCatalog;
+	static thread_local int nPagePerCatalog;
 
 	if (!InitConstants::getCatalogNumberFromPage_init) {
 		nPagePerCatalog = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
@@ -258,8 +258,8 @@ ds_key_t getCatalogNumberFromPage(ds_key_t kPageNumber) {
  */
 static ds_key_t web_join(int col, ds_key_t join_key) {
 	ds_key_t res = -1, kSite;
-	static int nConcurrentSites, nSiteDuration, nOffset;
-	static date_t dSiteOpen, /* open/close dates for current web site */
+	static thread_local int nConcurrentSites, nSiteDuration, nOffset;
+	static thread_local date_t dSiteOpen, /* open/close dates for current web site */
 	    dSiteClose;
 	int nTemp;
 	tdef *pWS = getSimpleTdefsByNumber(WEB_SITE);

@@ -56,12 +56,12 @@
 
 #include <stdio.h>
 
-struct W_WEB_SALES_TBL g_w_web_sales;
+thread_local struct W_WEB_SALES_TBL g_w_web_sales;
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 
-static ds_key_t kNewDateIndex = 0;
-static ds_key_t jDate;
-static int nItemIndex = 0;
+static thread_local ds_key_t kNewDateIndex = 0;
+static thread_local ds_key_t jDate;
+static thread_local int nItemIndex = 0;
 
 /*
  * the validation process requires generating a single lineitem
@@ -69,10 +69,10 @@ static int nItemIndex = 0;
  * and a detail/lineitem portion.
  */
 static void mk_master(void *info_arr, ds_key_t index) {
-	static decimal_t dMin, dMax;
+	static thread_local decimal_t dMin, dMax;
 	int nGiftPct;
 	struct W_WEB_SALES_TBL *r;
-	static int nItemCount;
+	static thread_local int nItemCount;
 
 	r = &g_w_web_sales;
 
@@ -124,7 +124,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 }
 
 static void mk_detail(void *info_arr, int bPrint) {
-	static int *pItemPermutation, nItemCount;
+	static thread_local int *pItemPermutation, nItemCount;
 	struct W_WEB_SALES_TBL *r;
 	int nShipLag, nTemp;
 	struct W_WEB_RETURNS_TBL w_web_returns;
@@ -132,7 +132,7 @@ static void mk_detail(void *info_arr, int bPrint) {
 
 	if (!InitConstants::mk_detail_init) {
 		jDate = skipDays(WEB_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(NULL, nItemCount = (int)getIDCount(ITEM), WS_PERMUTATION);
+		pItemPermutation = makePermutation(pItemPermutation, nItemCount = (int)getIDCount(ITEM), WS_PERMUTATION);
 
 		InitConstants::mk_detail_init = 1;
 	}

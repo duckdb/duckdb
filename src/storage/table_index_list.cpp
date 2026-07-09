@@ -12,6 +12,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 

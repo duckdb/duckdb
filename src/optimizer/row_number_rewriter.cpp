@@ -37,6 +37,15 @@ bool RowNumberRewriter::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
+	// only rewrite for a base-table scan: its virtual row_number column has SQL
+	// window semantics (dense, over the visible rows of this scan). Table
+	// functions such as read_duckdb also expose a row_number virtual column, but
+	// with different (e.g. file-local) semantics, so mapping ROW_NUMBER() OVER ()
+	// onto it would return the wrong values (issue #23586).
+	if (!get.GetTable()) {
+		return false;
+	}
+
 	// cannot rewrite if there are table filters pushed into the scan
 	// the virtual row_number column counts absolute row positions in storage,
 	// which does not match row_number() over() when rows are filtered out

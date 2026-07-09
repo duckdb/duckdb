@@ -1,0 +1,9 @@
+--- a/src/postgres_extension.cpp
++++ b/src/postgres_extension.cpp
+@@ -1,5 +1,6 @@
+ #define DUCKDB_BUILD_LOADABLE_EXTENSION
+ #include "duckdb.hpp"
++#include "duckdb/logging/log_manager.hpp"
+ #include "duckdb/main/config.hpp"
+ #include <openssl/crypto.h>
+ #include <openssl/ssl.h>

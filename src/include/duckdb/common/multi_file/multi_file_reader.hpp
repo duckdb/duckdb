@@ -9,6 +9,9 @@
 #pragma once
 
 #include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/common/table_column.hpp"
+#include "duckdb/execution/partition_info.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/optional_ptr.hpp"

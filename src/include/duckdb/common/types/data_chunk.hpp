@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"

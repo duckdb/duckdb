@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/projection_index.hpp"

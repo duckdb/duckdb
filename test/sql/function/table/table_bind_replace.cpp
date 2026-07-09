@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"

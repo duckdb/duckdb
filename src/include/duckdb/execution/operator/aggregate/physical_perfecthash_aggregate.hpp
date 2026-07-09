@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class ClientContext;

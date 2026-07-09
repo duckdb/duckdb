@@ -51,6 +51,12 @@ public:
 	bool ChangeWorkingDirectory(const string &dir); // true -> changed
 
 	void ProcessPath(string &path, const string &test_name);
+	// Override the value {TEST_DIR}/__TEST_DIR__ expands to during ProcessPath. Used by the extension
+	// (AUTO_SWITCH_TEST_DIR) runner: after it chdir's into the extension source dir, the default
+	// (cwd-relative) TestDirectoryPath() would resolve to a non-existent sibling, so the runner pins
+	// {TEST_DIR} to the absolute, main-cwd-anchored temp dir. Empty (the default) uses TestDirectoryPath().
+	void SetTestDirOverride(const string &absolute_test_dir);
+	void ClearTestDirOverride();
 
 	string GetDescription();
 	string GetInitialDBPath();
@@ -106,6 +112,9 @@ private:
 	//! Give preference to settings from loaded configs
 	bool test_env_from_config_loaded = false;
 	unordered_set<string> test_env_from_config_keys;
+	//! Parsed once from the `test_env` config list; re-overlaid onto test_env on every
+	//! LoadTestEnvFromConfig() so caller overrides survive UpdateEnvironment's default recompute.
+	unordered_map<string, string> config_test_env;
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
 
@@ -113,6 +122,8 @@ private:
 	// and get env updates to match
 	string working_dir;
 	string test_uuid;
+	// When non-empty, the value {TEST_DIR}/__TEST_DIR__ resolve to in ProcessPath (see SetTestDirOverride).
+	string test_dir_override;
 	unordered_map<string, string> test_env;
 
 	vector<unordered_set<string>> select_tag_sets;
