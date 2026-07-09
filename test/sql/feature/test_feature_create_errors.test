@@ -1,8 +1,6 @@
-# name: test/sql/feature/test_feature_errors.test
-# description: Exhaustive error handling for CREATE FEATURE — every malformed definition must produce a clean
+# name: test/sql/feature/test_feature_create_errors.test
+# description: Exhaustive error handling for CREATE FEATURE — every malformed definition must produce a clean error, never a crash or a silently-wrong feature.
 # group: [feature]
-
-#              error, never a crash or a silently-wrong feature.
 
 require noforcestorage
 
