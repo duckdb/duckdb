@@ -719,7 +719,7 @@ FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, Exp
 	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
-int8_t CompareStringStats(string_t input, string_t stats, StringStatsType type) {
+int8_t StringStats::Compare(string_t input, string_t stats, StringStatsType type) {
 	if (type == StringStatsType::TRUNCATED_STATS && input.GetSize() > stats.GetSize()) {
 		// if the stats are truncated we can only compare at most the bytes as are present in the stats
 		return Comparator::Operation(string_t(input.GetData(), static_cast<uint32_t>(stats.GetSize())), stats);
@@ -730,8 +730,8 @@ int8_t CompareStringStats(string_t input, string_t stats, StringStatsType type) 
 FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType min_type, string_t max,
                                                 StringStatsType max_type, ExpressionType comparison_type,
                                                 string_t constant) {
-	auto min_comp = CompareStringStats(constant, min, min_type);
-	auto max_comp = CompareStringStats(constant, max, max_type);
+	auto min_comp = Compare(constant, min, min_type);
+	auto max_comp = Compare(constant, max, max_type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
@@ -821,14 +821,14 @@ void StringStats::Verify(const BaseStatistics &stats, const Vector &vector, cons
 			}
 		}
 		if (StatsIsSet(string_data.min_type)) {
-			auto min_cmp = CompareStringStats(value, string_data.min, string_data.min_type);
+			auto min_cmp = Compare(value, string_data.min, string_data.min_type);
 			if (min_cmp < 0) {
 				throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 				                        stats.ToString(), vector.ToString());
 			}
 		}
 		if (StatsIsSet(string_data.max_type)) {
-			auto max_cmp = CompareStringStats(value, string_data.max, string_data.max_type);
+			auto max_cmp = Compare(value, string_data.max, string_data.max_type);
 			if (max_cmp > 0) {
 				throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 				                        stats.ToString(), vector.ToString());

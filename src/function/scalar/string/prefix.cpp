@@ -1,5 +1,4 @@
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -64,13 +63,6 @@ struct PrefixOperator {
 	}
 };
 
-int8_t CompareStringStats(string_t input, string_t stats, StringStatsType type) {
-	if (type == StringStatsType::TRUNCATED_STATS && input.GetSize() > stats.GetSize()) {
-		return Comparator::Operation(string_t(input.GetData(), static_cast<uint32_t>(stats.GetSize())), stats);
-	}
-	return Comparator::Operation(input, stats);
-}
-
 // Find the next prefix of the given string
 bool FindNextPrefix(string &prefix) {
 	for (idx_t idx = prefix.size(); idx > 0; idx--) {
@@ -119,21 +111,21 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	auto min = StringStats::Min(*column_stats);
-	auto max = StringStats::Max(*column_stats);
+	const auto min = StringStats::Min(*column_stats);
+	const auto max = StringStats::Max(*column_stats);
 
 	// prefix > max, always false
-	if (CompareStringStats(string_t(prefix.c_str(), prefix.size()), string_t(max.c_str(), max.size()),
-	                       StringStats::GetMaxType(*column_stats)) > 0) {
+	if (StringStats::Compare(string_t(prefix.c_str(), prefix.size()), string_t(max.c_str(), max.size()),
+	                         StringStats::GetMaxType(*column_stats)) > 0) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 
 	// next(prefix) <= min, always false
 	auto upper_bound = prefix;
 	if (FindNextPrefix(upper_bound)) {
-		auto min_compare =
-		    CompareStringStats(string_t(upper_bound.c_str(), upper_bound.size()), string_t(min.c_str(), min.size()),
-		                       StringStats::GetMinType(*column_stats));
+		const auto min_compare =
+		    StringStats::Compare(string_t(upper_bound.c_str(), upper_bound.size()), string_t(min.c_str(), min.size()),
+		                         StringStats::GetMinType(*column_stats));
 		if (min_compare < 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
