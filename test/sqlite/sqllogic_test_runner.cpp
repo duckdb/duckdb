@@ -10,6 +10,7 @@
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/settings.hpp"
+#include "debug_fs_extension.hpp"
 #include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
@@ -18,6 +19,16 @@
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
 #endif
+
+// PROTOTYPE: shadow Catch's SKIP_TEST so every skip also emits a stable, parseable
+// marker (consumed by the pytest collector) before recording the skip with Catch.
+// `file_name` is the runner's member, in scope at all skip sites in this TU.
+#undef SKIP_TEST
+#define SKIP_TEST(reason)                                                                                              \
+	do {                                                                                                               \
+		duckdb::SQLLogicTestLogger::PrintSkip(file_name, (reason));                                                    \
+		Catch::getResultCapture().skipTestDuringRun(reason);                                                           \
+	} while (0)
 
 namespace duckdb {
 
@@ -76,15 +87,20 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 	config.reset();
 	con.reset();
 	db.reset();
-	for (auto &loaded_path : loaded_databases) {
-		if (loaded_path.empty()) {
-			continue;
+	// Post-test DB cleanup, gated by --database-destroy (on-success aware). Skipping here on
+	// retain/failure keeps loaded DBs inside a retained temp dir (e.g. test_zero_initialize.py,
+	// which diffs the generated DB files after the process exits).
+	if (DatabaseDestroyFires(test_succeeded)) {
+		for (auto &loaded_path : loaded_databases) {
+			if (loaded_path.empty()) {
+				continue;
+			}
+			// only delete database files that were created during the tests
+			if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
+				continue;
+			}
+			DeleteDatabase(loaded_path);
 		}
-		// only delete database files that were created during the tests
-		if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
-			continue;
-		}
-		DeleteDatabase(loaded_path);
 	}
 }
 
@@ -235,6 +251,7 @@ NewDatabaseConnection SQLLogicTestRunner::CreateDatabase(const string &db_path, 
 	NewDatabaseConnection result;
 	try {
 		result.db = make_uniq<DuckDB>(db_path, config.get());
+		result.db->LoadStaticExtension<DebugFsExtension>();
 
 		// always load core functions
 		auto &test_config = TestConfiguration::Get();

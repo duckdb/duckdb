@@ -22,6 +22,8 @@ namespace duckdb {
 
 class BaseStatistics;
 class BaseUnionData;
+class AsyncResult;
+class DataChunk;
 struct GlobalTableFunctionState;
 struct LocalTableFunctionState;
 
@@ -90,6 +92,8 @@ public:
 	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name);
 	//! Prepare reader for scanning
 	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
+	//! Called after opening when the scan is driven by read-ahead, lets the reader pre-open scan resources
+	DUCKDB_API virtual void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &);
 
 	//! Try to initialize a scan over the reader - this is done while the global lock is held
 	virtual bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,

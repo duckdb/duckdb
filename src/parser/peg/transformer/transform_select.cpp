@@ -1,5 +1,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/peg/ast/distinct_clause.hpp"
 #include "duckdb/parser/peg/ast/join_prefix.hpp"
 #include "duckdb/parser/peg/ast/join_qualifier.hpp"
@@ -247,19 +248,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &opt_window_clause = list_pr.Child<OptionalParseResult>(4);
 	if (opt_window_clause.HasResult()) {
-		auto window_functions =
-		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_window_clause.GetResult());
-		for (auto &window_func : window_functions) {
-			D_ASSERT(!window_func->GetAlias().empty());
-			auto window_name = window_func->GetAlias();
-			window_func->ClearAlias();
-			auto it = transformer.window_clauses.find(window_name);
-			if (it != transformer.window_clauses.end()) {
-				throw ParserException("window \"%s\" is already defined", window_name.GetIdentifierName());
-			}
-			auto window_function = unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(window_func));
-			transformer.window_clauses[window_name] = std::move(window_function);
-		}
+		transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_window_clause.GetResult());
 	}
 	auto select_node = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, select_node->where_clause);
@@ -282,18 +271,14 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 	return select_statement;
 }
 
-static void RegisterWindowClauses(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> window_functions) {
-	for (auto &window_func : window_functions) {
-		D_ASSERT(!window_func->GetAlias().empty());
-		auto window_name = window_func->GetAlias();
-		window_func->ClearAlias();
-		auto it = transformer.window_clauses.find(window_name);
-		if (it != transformer.window_clauses.end()) {
-			throw ParserException("window \"%s\" is already defined", window_name.GetIdentifierName());
-		}
-		auto window_function = unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(window_func));
-		transformer.window_clauses[window_name] = std::move(window_function);
+static void RegisterWindowClause(PEGTransformer &transformer, const Identifier &window_name,
+                                 WindowExpression &window_function) {
+	auto it = transformer.window_clauses.find(window_name);
+	if (it != transformer.window_clauses.end()) {
+		throw ParserException("window \"%s\" is already defined", window_name.GetIdentifierName());
 	}
+	transformer.window_clauses[window_name] =
+	    unique_ptr_cast<ParsedExpression, WindowExpression>(window_function.Copy());
 }
 
 static void PushSimpleSelectRemainder(TransformStack &stack, TransformStackFrame &frame) {
@@ -346,8 +331,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSimpleSelectTram
                                                                                        TransformStack &stack,
                                                                                        TransformStackFrame &frame) {
 	if (frame.manual_state == 0) {
-		auto window_functions = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(4);
-		RegisterWindowClauses(transformer, std::move(window_functions));
+		frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(4);
 		frame.manual_state = 1;
 		PushSimpleSelectRemainder(stack, frame);
 		return nullptr;
@@ -1214,7 +1198,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PE
 	transformer.in_window_definition = true;
 	auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(2));
 	transformer.in_window_definition = false;
-	window_function->SetAlias(list_pr.Child<IdentifierParseResult>(0).identifier);
+	auto window_name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	RegisterWindowClause(transformer, window_name, *window_function);
 	return std::move(window_function);
 }
 
@@ -1233,7 +1218,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWindowDefinition
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto window_function = frame.TakeResult<unique_ptr<WindowExpression>>(0);
 	transformer.in_window_definition = false;
-	window_function->SetAlias(list_pr.Child<IdentifierParseResult>(0).identifier);
+	auto window_name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	RegisterWindowClause(transformer, window_name, *window_function);
 	unique_ptr<ParsedExpression> result = std::move(window_function);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }

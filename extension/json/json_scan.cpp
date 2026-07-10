@@ -1,4 +1,5 @@
 #include "json_scan.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"

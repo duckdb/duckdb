@@ -29,6 +29,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "parquet_crypto.hpp"
 #include "decode_utils.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
@@ -813,6 +814,10 @@ idx_t ColumnReader::ReadInternal(ColumnReaderInput &input, Vector &result) {
 		to_read -= read_now;
 	}
 	FinishRead(num_values);
+
+	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
+		FlatVector::SetSize(result, num_values);
+	}
 
 	return num_values;
 }

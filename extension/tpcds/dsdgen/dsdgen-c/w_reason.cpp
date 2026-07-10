@@ -47,7 +47,7 @@
 
 #include <stdio.h>
 
-struct W_REASON_TBL g_w_reason;
+thread_local struct W_REASON_TBL g_w_reason;
 
 /*
  * mk_reason

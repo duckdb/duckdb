@@ -322,13 +322,15 @@ enum class MetaPipelineType : uint8_t;
 
 enum class Monotonicity : uint8_t;
 
+enum class MultiFileAcquireResult : uint8_t;
+
 enum class MultiFileColumnMappingMode : uint8_t;
 
 enum class MultiFileDecodeResult : uint8_t;
 
 enum class MultiFileFileState : uint8_t;
 
-enum class MultiFileScanPhase : uint8_t;
+enum class MultiFileJobState : uint8_t;
 
 enum class NType : uint8_t;
 
@@ -1013,6 +1015,9 @@ template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
 
 template<>
+const char* EnumUtil::ToChars<MultiFileAcquireResult>(MultiFileAcquireResult value);
+
+template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
 
 template<>
@@ -1022,7 +1027,7 @@ template<>
 const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
 
 template<>
-const char* EnumUtil::ToChars<MultiFileScanPhase>(MultiFileScanPhase value);
+const char* EnumUtil::ToChars<MultiFileJobState>(MultiFileJobState value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -1830,6 +1835,9 @@ template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
 
 template<>
+MultiFileAcquireResult EnumUtil::FromString<MultiFileAcquireResult>(const char *value);
+
+template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
 
 template<>
@@ -1839,7 +1847,7 @@ template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
 
 template<>
-MultiFileScanPhase EnumUtil::FromString<MultiFileScanPhase>(const char *value);
+MultiFileJobState EnumUtil::FromString<MultiFileJobState>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);

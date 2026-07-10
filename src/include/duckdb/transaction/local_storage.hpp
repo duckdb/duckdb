@@ -36,6 +36,7 @@ struct LocalAppendState;
 struct DataTableInfo;
 struct ParallelCollectionScanState;
 struct TableAppendState;
+struct TransactionData;
 
 class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
@@ -192,7 +193,7 @@ public:
 	bool Find(DataTable &table);
 
 	idx_t AddedRows(DataTable &table);
-	vector<PartitionStatistics> GetPartitionStats(DataTable &table) const;
+	vector<PartitionStatistics> GetPartitionStats(DataTable &table, TransactionData transaction) const;
 
 	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
 	               ExpressionExecutor &default_executor);

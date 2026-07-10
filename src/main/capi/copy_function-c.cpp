@@ -6,6 +6,7 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/capi/capi_internal_table.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 //----------------------------------------------------------------------------------------------------------------------
 // Common Copy Function Info

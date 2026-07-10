@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -27,6 +28,8 @@
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -2315,11 +2318,11 @@ void RowGroupCollection::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
+vector<PartitionStatistics> RowGroupCollection::GetPartitionStats(TransactionData transaction) const {
 	vector<PartitionStatistics> result;
 	auto row_groups = GetRowGroups();
 	for (auto &entry : row_groups->SegmentNodes()) {
-		result.push_back(RowGroup::GetPartitionStats(entry));
+		result.push_back(RowGroup::GetPartitionStats(entry, transaction));
 	}
 	return result;
 }

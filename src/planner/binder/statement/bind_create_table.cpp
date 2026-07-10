@@ -24,6 +24,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 

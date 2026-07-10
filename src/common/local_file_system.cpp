@@ -6,12 +6,10 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/thread.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
@@ -202,26 +200,6 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 #ifndef O_DIRECT
 #define O_DIRECT 0
 #endif
-
-static idx_t GetLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
-	if (!db) {
-		return 0;
-	}
-	return Settings::Get<DebugLocalFileSystemDelayMsSetting>(*db);
-}
-
-static void ApplyLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
-#ifndef DUCKDB_NO_THREADS
-	auto delay_ms = GetLocalFileSystemDelay(db);
-	if (delay_ms > 0) {
-		ThreadUtil::SleepMs(delay_ms);
-	}
-#endif
-}
-
-static void ApplyLocalFileSystemDelay(optional_ptr<FileOpener> opener) {
-	ApplyLocalFileSystemDelay(FileOpener::TryGetDatabase(opener));
-}
 
 struct UnixFileHandle : public FileHandle {
 public:
@@ -524,7 +502,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 
 	// Open the file
-	ApplyLocalFileSystemDelay(opener);
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
@@ -583,7 +560,6 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto bytes_to_read = nr_bytes;
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
-	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
@@ -608,7 +584,6 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
-	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
@@ -624,7 +599,6 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
-	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 	auto write_buffer = char_ptr_cast(buffer);
 
@@ -653,7 +627,6 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
-	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 
 	auto bytes_to_write = nr_bytes;
@@ -726,8 +699,6 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
-	ApplyLocalFileSystemDelay(opener);
-
 	if (!directory.empty()) {
 		auto normalized_dir = ExpandPath(directory, opener);
 		if (access(normalized_dir.c_str(), 0) == 0) {
@@ -744,8 +715,6 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	struct stat st;
-
-	ApplyLocalFileSystemDelay(opener);
 
 	auto normalized_dir = ExpandPath(directory, opener);
 	if (stat(normalized_dir.c_str(), &st) != 0) {

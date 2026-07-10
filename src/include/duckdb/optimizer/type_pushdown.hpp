@@ -7,13 +7,14 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 class TypePushdown {
 public:

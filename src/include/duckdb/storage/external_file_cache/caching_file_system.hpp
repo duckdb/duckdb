@@ -15,7 +15,6 @@
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/external_file_cache/file_buffer_handle_group.hpp"
 
