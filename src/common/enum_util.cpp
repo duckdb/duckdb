@@ -239,22 +239,22 @@ ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
 	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 2, "ARTConflictType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetARTScanActionValues() {
+const StringUtil::EnumStringLiteral *GetARTScanNodeResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ARTScanAction::PUSH_NODE), "PUSH_NODE" },
-		{ static_cast<uint32_t>(ARTScanAction::SKIP), "SKIP" }
+		{ static_cast<uint32_t>(ARTScanNodeResult::SCAN_CHILDREN), "SCAN_CHILDREN" },
+		{ static_cast<uint32_t>(ARTScanNodeResult::SKIP), "SKIP" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<ARTScanAction>(ARTScanAction value) {
-	return StringUtil::EnumToString(GetARTScanActionValues(), 2, "ARTScanAction", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value) {
+	return StringUtil::EnumToString(GetARTScanNodeResultValues(), 2, "ARTScanNodeResult", static_cast<uint32_t>(value));
 }
 
 template<>
-ARTScanAction EnumUtil::FromString<ARTScanAction>(const char *value) {
-	return static_cast<ARTScanAction>(StringUtil::StringToEnum(GetARTScanActionValues(), 2, "ARTScanAction", value));
+ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value) {
+	return static_cast<ARTScanNodeResult>(StringUtil::StringToEnum(GetARTScanNodeResultValues(), 2, "ARTScanNodeResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetARTScanResultValues() {
@@ -4766,24 +4766,6 @@ const char* EnumUtil::ToChars<SamplingState>(SamplingState value) {
 template<>
 SamplingState EnumUtil::FromString<SamplingState>(const char *value) {
 	return static_cast<SamplingState>(StringUtil::StringToEnum(GetSamplingStateValues(), 2, "SamplingState", value));
-}
-
-const StringUtil::EnumStringLiteral *GetScanNodeResultValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ScanNodeResult::SCAN_CHILDREN), "SCAN_CHILDREN" },
-		{ static_cast<uint32_t>(ScanNodeResult::SKIP), "SKIP" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ScanNodeResult>(ScanNodeResult value) {
-	return StringUtil::EnumToString(GetScanNodeResultValues(), 2, "ScanNodeResult", static_cast<uint32_t>(value));
-}
-
-template<>
-ScanNodeResult EnumUtil::FromString<ScanNodeResult>(const char *value) {
-	return static_cast<ScanNodeResult>(StringUtil::StringToEnum(GetScanNodeResultValues(), 2, "ScanNodeResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {

@@ -62,9 +62,9 @@ void Node::FreeTree(ART &art, Node &tree) {
 		return;
 	}
 	// All nodes should be pushed onto the stack.
-	auto filter = [](Node &child) -> ARTScanStep {
+	auto child_handler = [](Node &child) -> OptionalNode {
 		D_ASSERT(child.HasMetadata());
-		return ARTScanStep::Push(child);
+		return child;
 	};
 	// We freed the subtree pointed to by the current node. Free the node.
 	auto post_handler = [&](Node current) {
@@ -90,7 +90,7 @@ void Node::FreeTree(ART &art, Node &tree) {
 			throw InternalException("invalid node type for FreeTree: %d", type);
 		}
 	};
-	ARTScanPostorder(art, tree, filter, post_handler);
+	ARTScanPostorder(art, tree, child_handler, post_handler);
 	tree.Clear();
 }
 
@@ -403,32 +403,20 @@ bool Node::IsAnyLeaf() const {
 //===--------------------------------------------------------------------===//
 
 void Node::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
-	auto filter = [&](Node current) -> ScanNodeResult {
-		auto type = current.GetType();
-		if (type == NType::NODE_4 || type == NType::NODE_16 || type == NType::NODE_48 || type == NType::NODE_256) {
-			auto &alloc = Node::GetAllocator(art, type);
-			if (!alloc.LoadedFromStorage(current)) {
-				return ScanNodeResult::SKIP;
-			}
-		}
-		return ScanNodeResult::SCAN_CHILDREN;
-	};
-
-	auto pre_handler = [&](Node &child) -> ARTScanStep {
+	auto child_handler = [&](Node &child) -> OptionalNode {
 		D_ASSERT(child.HasMetadata());
 		if (child.GetGateStatus() == GateStatus::GATE_SET) {
 			Leaf::TransformToDeprecated(art, child);
-			return ARTScanStep::Skip();
+			return OptionalNode();
 		}
 		auto type = child.GetType();
 		switch (type) {
-		case NType::PREFIX: {
-			auto node = PrefixHandle::TransformToDeprecated(art, child, state);
-			return node.HasMetadata() ? ARTScanStep::Push(node) : ARTScanStep::Skip();
-		}
+		case NType::PREFIX:
+			// An empty node stops the traversal.
+			return PrefixHandle::TransformToDeprecated(art, child, state);
 		case NType::LEAF_INLINED:
 		case NType::LEAF:
-			return ARTScanStep::Skip();
+			return OptionalNode();
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
@@ -436,13 +424,24 @@ void Node::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedStat
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
-			return ARTScanStep::Push(child);
+			return child;
 		default:
 			throw InternalException("invalid node type for TransformToDeprecated: %d", type);
 		}
 	};
 
-	ARTScanPreorder(art, node, filter, pre_handler);
+	auto on_pop = [&](Node current) -> ARTScanNodeResult {
+		auto type = current.GetType();
+		if (type == NType::NODE_4 || type == NType::NODE_16 || type == NType::NODE_48 || type == NType::NODE_256) {
+			auto &alloc = Node::GetAllocator(art, type);
+			if (!alloc.LoadedFromStorage(current)) {
+				return ARTScanNodeResult::SKIP;
+			}
+		}
+		return ARTScanNodeResult::SCAN_CHILDREN;
+	};
+
+	ARTScanPreorder(art, node, child_handler, on_pop);
 }
 
 //===--------------------------------------------------------------------===//
@@ -484,38 +483,38 @@ void Node::Verify(ART &art) const {
 void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
 	D_ASSERT(HasMetadata());
 
-	auto filter = [](Node) -> ScanNodeResult {
-		return ScanNodeResult::SCAN_CHILDREN;
-	};
-
-	auto pre_handler = [&](const Node &child) -> ARTScanStep {
+	auto child_handler = [&](const Node &child) -> OptionalNode {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			return ARTScanStep::Skip();
+			return OptionalNode();
 		case NType::LEAF: {
 			Leaf::DeprecatedVerifyAllocations(art, child, node_counts);
-			return ARTScanStep::Skip();
+			return OptionalNode();
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
 			node_counts[GetAllocatorIdx(type)]++;
-			return ARTScanStep::Skip();
+			return OptionalNode();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
 		case NType::NODE_256:
 			node_counts[GetAllocatorIdx(type)]++;
-			return ARTScanStep::Push(child);
+			return child;
 		default:
 			throw InternalException("invalid node type for VerifyAllocations: %d", type);
 		}
 	};
 
-	ARTConstScanPreorder(art, *this, filter, pre_handler);
+	auto on_pop = [](Node) -> ARTScanNodeResult {
+		return ARTScanNodeResult::SCAN_CHILDREN;
+	};
+
+	ARTConstScanPreorder(art, *this, child_handler, on_pop);
 }
 
 //===--------------------------------------------------------------------===//

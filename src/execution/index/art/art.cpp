@@ -1219,26 +1219,27 @@ void ART::Vacuum(IndexLock &state) {
 
 	auto &art = *this;
 
-	auto filter = [&](Node current) -> ScanNodeResult {
-		D_ASSERT(current.HasMetadata());
-		if (current.GetType() == NType::LEAF_INLINED) {
-			return ScanNodeResult::SKIP;
-		}
-		if (current.GetType() == NType::LEAF) {
-			if (indexes.find(Node::GetAllocatorIdx(NType::LEAF)) != indexes.end()) {
-				Leaf::DeprecatedVacuum(art, current);
-			}
-			return ScanNodeResult::SKIP;
-		}
-		return ScanNodeResult::SCAN_CHILDREN;
-	};
-	auto preorder_handler = [&](Node &child) -> ARTScanStep {
+	auto child_handler = [&](Node &child) -> OptionalNode {
 		// Vacuums the pointer if needed and updates in place within the parent.
 		VacuumPointerIfNeeded(art, indexes, child);
+		if (child.GetType() == NType::LEAF_INLINED) {
+			return OptionalNode();
+		}
 		// Push the updated pointer onto the stack to continue vacuum traversal on the subtree.
-		return ARTScanStep::Push(child);
+		return child;
 	};
-	ARTScanPreorder(art, tree, filter, preorder_handler);
+	auto on_pop = [&](Node current) -> ARTScanNodeResult {
+		D_ASSERT(current.HasMetadata());
+		if (current.GetType() == NType::LEAF) {
+			if (indexes.find(Node::GetAllocatorIdx(NType::LEAF)) != indexes.end()) {
+				// Walks and vacuums the deprecated leaf chain, so it must run with no pins held.
+				Leaf::DeprecatedVacuum(art, current);
+			}
+			return ARTScanNodeResult::SKIP;
+		}
+		return ARTScanNodeResult::SCAN_CHILDREN;
+	};
+	ARTScanPreorder(art, tree, child_handler, on_pop);
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);
@@ -1258,17 +1259,12 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 void ART::InitializeMerge(Node &other_tree, unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(other_tree.HasMetadata());
 
-	auto filter = [](Node node) -> ScanNodeResult {
-		D_ASSERT(node.HasMetadata());
-		return ScanNodeResult::SCAN_CHILDREN;
-	};
-
-	auto pre_handler = [&](Node &child) -> ARTScanStep {
+	auto child_handler = [&](Node &child) -> OptionalNode {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
 		// no-op
 		if (type == NType::LEAF_INLINED) {
-			return ARTScanStep::Skip();
+			return OptionalNode();
 		}
 		// FIXME: Implement merging for deprecated leaves.
 		if (type == NType::LEAF) {
@@ -1284,20 +1280,25 @@ void ART::InitializeMerge(Node &other_tree, unsafe_vector<idx_t> &upper_bounds) 
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
 			// no-op
-			return ARTScanStep::Skip();
+			return OptionalNode();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
 		case NType::NODE_256:
 			// Original pointer is pushed onto the stack.
-			return ARTScanStep::Push(original);
+			return original;
 		default:
 			throw InternalException("invalid node type for InitializeMerge: %d", type);
 		}
 	};
 
-	ARTScanPreorder(*this, other_tree, filter, pre_handler);
+	auto on_pop = [](Node node) -> ARTScanNodeResult {
+		D_ASSERT(node.HasMetadata());
+		return ARTScanNodeResult::SCAN_CHILDREN;
+	};
+
+	ARTScanPreorder(*this, other_tree, child_handler, on_pop);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
