@@ -36,14 +36,17 @@ SELECT kind, destroy_function FROM duckdb_external_resource_types() WHERE name =
 ----
 storage	s3_bucket_destroy
 
-# Append-only: registering the same name again appends a second row (both are retained).
-statement ok
+# First-wins: re-registering an existing name errors (a name is claimed once, no mutation).
+statement error
 CALL register_external_resource_type('quack@aws:ec2', kind := 'catalog', create_function := 'quack_create_v2');
-
-query I
-SELECT count(*) FROM duckdb_external_resource_types() WHERE name = 'quack@aws:ec2';
 ----
-2
+<REGEX>:.*already registered.*
+
+# The original registration is unchanged: still one row, still the first definition.
+query TI
+SELECT create_function, count(*) OVER () FROM duckdb_external_resource_types() WHERE name = 'quack@aws:ec2';
+----
+quack_create	1
 
 # NULL required arguments are rejected.
 statement error

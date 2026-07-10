@@ -42,19 +42,19 @@ struct ExternalResourceType {
 	string search_path;
 };
 
-//! Append-only, in-memory, instance-scoped registry of external resource types (shared across
-//! connections). Registration only ever appends; there is no removal or update. Lookup resolves the
-//! most recently registered entry for a name (latest-wins is an internal lookup detail).
+//! In-memory, instance-scoped registry of external resource types (shared across connections). A name is
+//! claimed by its first registration (first-wins): re-registering an existing name errors, and there is no
+//! removal or mutation.
 class ExternalResourceTypeRegistry {
 public:
 	static ExternalResourceTypeRegistry &Get(DatabaseInstance &db);
 	static ExternalResourceTypeRegistry &Get(ClientContext &context);
 
-	//! Append a resource type (append-only).
+	//! Register a resource type. Throws if a type with the same name is already registered.
 	void Add(ExternalResourceType type);
 	//! Snapshot of all registered resource types, in registration order.
 	vector<ExternalResourceType> List() const;
-	//! Most recently registered type with the given name, or nullptr if none.
+	//! The registered type with the given name, or nullptr if none.
 	unique_ptr<ExternalResourceType> Lookup(const string &name) const;
 
 private:
