@@ -1,7 +1,13 @@
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -59,13 +65,74 @@ struct PrefixOperator {
 	}
 };
 
+static int8_t CompareStringStats(string_t input, string_t stats, StringStatsType type) {
+	if (type == StringStatsType::TRUNCATED_STATS && input.GetSize() > stats.GetSize()) {
+		return Comparator::Operation(string_t(input.GetData(), static_cast<uint32_t>(stats.GetSize())), stats);
+	}
+	return Comparator::Operation(input, stats);
+}
+
+static FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &input) {
+	auto &children = input.function.GetChildren();
+	if (children.size() != 2 || children[1]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats || column_stats->GetStatsType() != StatisticsType::STRING_STATS) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!column_stats->CanHaveNoNull()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	auto &constant = children[1]->Cast<BoundConstantExpression>().GetValue();
+	if (constant.IsNull()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	auto prefix = StringValue::Get(constant);
+	if (prefix.empty()) {
+		return column_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+		                                   : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
+	if (StringStats::HasMaxStringLength(*column_stats) &&
+	    StringStats::MaxStringLength(*column_stats) < prefix.size()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (!StringStats::HasMinMax(*column_stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	auto min = StringStats::Min(*column_stats);
+	auto max = StringStats::Max(*column_stats);
+	if (CompareStringStats(string_t(prefix.c_str(), prefix.size()), string_t(max.c_str(), max.size()),
+	                       StringStats::GetMaxType(*column_stats)) > 0) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	auto upper_bound = prefix;
+	if (Utf8Proc::FindNextLegalUTF8(upper_bound)) {
+		auto min_compare =
+		    CompareStringStats(string_t(upper_bound.c_str(), upper_bound.size()), string_t(min.c_str(), min.size()),
+		                       StringStats::GetMinType(*column_stats));
+		if (min_compare < 0 ||
+		    (min_compare == 0 && StringStats::GetMinType(*column_stats) == StringStatsType::EXACT_STATS)) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
 } // namespace
 
 ScalarFunction PrefixFun::GetFunction() {
-	return ScalarFunction("prefix",                                     // name of the function
-	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                      LogicalType::BOOLEAN,                         // return type
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator>);
+	ScalarFunction function("prefix",                                     // name of the function
+	                        {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
+	                        LogicalType::BOOLEAN,                         // return type
+	                        ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator>);
+	function.SetFilterPruneCallback(PrefixFilterPrune);
+	return function;
 }
 
 } // namespace duckdb
