@@ -159,3 +159,158 @@ SkipRowGroup	2
 
 statement ok
 CALL truncate_duckdb_logs()
+
+# Prefix pruning corner cases: NULL-only row groups, empty prefixes, NULL prefixes, and non-constant prefixes
+statement ok
+COPY (
+	SELECT range::INTEGER AS x,
+		CASE
+			WHEN range < 2048 THEN NULL
+			WHEN range < 4096 THEN 'a' || lpad((range - 2048)::VARCHAR, 4, '0')
+			WHEN range < 6144 THEN 'b' || lpad((range - 4096)::VARCHAR, 4, '0')
+			ELSE 'c' || lpad((range - 6144)::VARCHAR, 4, '0')
+		END AS s,
+		CASE WHEN range % 2 = 0 THEN 'a' ELSE 'b' END AS p
+	FROM range(8192)
+) TO '{TEST_DIR}/expr_prune_prefix_corner.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+# NULL-only, lower, and upper row groups are skipped
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, 'b')
+----
+2048
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	3
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Empty prefixes match all non-NULL strings but not NULL strings
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, '')
+----
+6144
+
+# A NULL prefix can never pass a WHERE filter
+query II
+EXPLAIN SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, NULL::VARCHAR)
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+# Prefixes longer than the maximum string length can never match
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, 'bbbbbbbb')
+----
+0
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+SkipRowGroup	4
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Non-constant prefixes are not pruned using constant-prefix statistics
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, p)
+----
+2048
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	4
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# When exact min equals next_prefix(prefix), no string can match the prefix filter
+statement ok
+COPY (
+	SELECT 'aab'::VARCHAR AS s
+	UNION ALL SELECT 'aac'
+	UNION ALL SELECT 'aba'
+) TO '{TEST_DIR}/expr_prune_prefix_exact_min.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 100)
+
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_exact_min.parquet'
+WHERE prefix(s, 'aaa')
+----
+0
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+SkipRowGroup	1
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Byte-wise prefix successor should prune across a UTF-8 byte boundary
+statement ok
+COPY (
+	SELECT CASE WHEN range < 2048 THEN chr(255) || 'a' ELSE chr(256) || 'a' END AS s
+	FROM range(4096)
+) TO '{TEST_DIR}/expr_prune_prefix_utf8_boundary.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_utf8_boundary.parquet'
+WHERE prefix(s, chr(255))
+----
+2048
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	1
+
+statement ok
+CALL truncate_duckdb_logs()
