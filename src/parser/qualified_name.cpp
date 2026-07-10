@@ -44,6 +44,11 @@ normal:
 	//! quote
 	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
+			if (!entry.empty()) {
+				//! a quote may only open a component, e.g. abc"xyz" is not a valid identifier
+				throw ParserException("Unexpected quote in the middle of a qualified name component! (input: %s)",
+				                      input);
+			}
 			idx++;
 			goto quoted;
 		} else if (input[idx] == '.') {
@@ -61,8 +66,18 @@ quoted:
 	//! look for another quote
 	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
-			//! unquote
+			if (idx + 1 < input.size() && input[idx + 1] == '"') {
+				//! escaped quote ("" inside a quoted identifier is a literal ")
+				entry += '"';
+				idx++;
+				continue;
+			}
+			//! unquote; a closing quote must end the component, e.g. "abc"xyz is not a valid identifier
 			idx++;
+			if (idx < input.size() && input[idx] != '.') {
+				throw ParserException("Unexpected character after a quoted identifier in a qualified name! (input: %s)",
+				                      input);
+			}
 			goto normal;
 		}
 		entry += input[idx];
