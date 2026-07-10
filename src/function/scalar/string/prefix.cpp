@@ -112,8 +112,7 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	}
 
 	// Then check row group pruning with string stats min/max.
-	if (StringStats::HasMaxStringLength(*column_stats) &&
-	    StringStats::MaxStringLength(*column_stats) < prefix.size()) {
+	if (StringStats::HasMaxStringLength(*column_stats) && StringStats::MaxStringLength(*column_stats) < prefix.size()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	if (!StringStats::HasMinMax(*column_stats)) {
