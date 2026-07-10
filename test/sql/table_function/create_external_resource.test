@@ -18,11 +18,13 @@ CALL register_external_resource_type('mock@local', kind := 'catalog', create_fun
     status_function := 'mock_status', destroy_function := 'mock_destroy');
 
 # Blocking create: invokes create, polls status to 'ready', extracts uri/attached_db_type, binds deleter.
+# (deleter_function is suffix-matched: it comes back fully qualified when the type is registered in a
+# non-default search path, e.g. under configs that force a USE.)
 query TTTT
-SELECT uri, attached_db_type, deleter_function, handle
+SELECT uri, attached_db_type, deleter_function LIKE '%mock_destroy', handle
 FROM create_external_resource('mock@local', params := MAP {'region': 'x'});
 ----
-quack:localhost:9494	quack	mock_destroy	{id=r1}
+quack:localhost:9494	quack	true	{id=r1}
 
 # The connect options ride in `result` (e.g. token flows through generically).
 query T
@@ -160,6 +162,48 @@ query T
 SELECT uri FROM create_external_resource('sp@local');
 ----
 quack:sp
+
+# When callbacks live in a non-default schema, the returned deleter_function is fully qualified, so it stays
+# resolvable after the search path changes (as when DETACH fires the deleter from another connection).
+statement ok
+CREATE SCHEMA q;
+
+statement ok
+CREATE SEQUENCE q.qd_calls;
+
+statement ok
+CREATE MACRO q.qd_create(p) AS TABLE SELECT MAP {'id':'r'} AS handle;
+
+statement ok
+CREATE MACRO q.qd_status(h) AS TABLE SELECT 'ready' AS state, MAP {'uri':'qq','attached_db_type':'quack'} AS result;
+
+statement ok
+CREATE MACRO q.qd_destroy(h) AS TABLE SELECT nextval('q.qd_calls') AS n;
+
+statement ok
+SET search_path = 'q';
+
+statement ok
+CALL register_external_resource_type('qd@local', kind := 'catalog', create_function := 'qd_create', status_function := 'qd_status', destroy_function := 'qd_destroy');
+
+# The returned deleter function is fully qualified (catalog.schema.name), not the bare registered name.
+query T
+SELECT deleter_function LIKE '%.q.qd_destroy' FROM create_external_resource('qd@local');
+----
+true
+
+statement ok
+SET VARIABLE dfn = (SELECT deleter_function FROM create_external_resource('qd@local'));
+
+statement ok
+SET VARIABLE dpl = (SELECT deleter_payload FROM create_external_resource('qd@local'));
+
+# Change the search path, then invoke the deleter from the default path: the qualified name still resolves.
+statement ok
+RESET search_path;
+
+statement ok
+CALL destroy_external_resource(getvariable('dfn'), getvariable('dpl'));
 
 # On a post-create failure the provisioned resource must be torn down (no leak): destroy_function is
 # invoked. destroy advances a sequence, which lets us observe the call across the internal connection.

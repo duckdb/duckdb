@@ -1,4 +1,8 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -6,6 +10,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/external_resource_type_registry.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 #include <chrono>
 #include <thread>
@@ -40,6 +45,22 @@ static Value RequireResourceMap(const Value &value, const string &function_name,
 		    column, value.type().ToString());
 	}
 	return value.DefaultCastAs(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+}
+
+//! Resolve a table-producing callback (a table function or table macro) to its fully-qualified
+//! `catalog.schema.name` in `context`'s search path, so the returned deleter stays resolvable from any other
+//! connection later (e.g. when DETACH fires it). Returns empty if the callback can't be resolved.
+static string QualifyTableCallback(ClientContext &context, const string &name) {
+	EntryLookupInfo table_fn(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName::Parse(name));
+	auto entry = Catalog::GetEntry(context, table_fn, OnEntryNotFound::RETURN_NULL);
+	if (!entry) {
+		EntryLookupInfo table_macro(CatalogType::TABLE_MACRO_ENTRY, QualifiedName::Parse(name));
+		entry = Catalog::GetEntry(context, table_macro, OnEntryNotFound::RETURN_NULL);
+	}
+	if (!entry) {
+		return string();
+	}
+	return QualifiedName(entry->ParentCatalog().GetName(), entry->ParentSchema().name, entry->name).ToString();
 }
 
 //===--------------------------------------------------------------------===//
@@ -230,12 +251,25 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 		}
 	}
 
+	// If the callbacks live in a non-default search path, hand back the destroy function fully qualified so the
+	// deleter binding stays resolvable from any other connection later (e.g. when DETACH fires it). Callbacks on
+	// the default path are left as-is so the returned name is stable across catalogs/configs.
+	string deleter_function = type->destroy_function;
+	if (!deleter_function.empty() && !type->search_path.empty()) {
+		con.BeginTransaction();
+		auto qualified = QualifyTableCallback(*con.context, deleter_function);
+		con.Commit();
+		if (!qualified.empty()) {
+			deleter_function = qualified;
+		}
+	}
+
 	// Emit: handle, uri, attached_db_type, result, deleter_function, deleter_payload.
 	output.data[0].Append(handle);
 	output.data[1].Append(has_uri ? Value(uri) : Value(LogicalType::VARCHAR));
 	output.data[2].Append(has_type ? Value(attached_db_type) : Value(LogicalType::VARCHAR));
 	output.data[3].Append(status_result);
-	output.data[4].Append(type->destroy_function.empty() ? Value(LogicalType::VARCHAR) : Value(type->destroy_function));
+	output.data[4].Append(deleter_function.empty() ? Value(LogicalType::VARCHAR) : Value(deleter_function));
 	output.data[5].Append(handle);
 	// The deleter binding is now handed to the caller: ownership transfers, so the guard must not tear down.
 	deleter_returned = true;
