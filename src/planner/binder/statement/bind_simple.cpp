@@ -14,7 +14,8 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/planner/operator/logical_alter.hpp"
+#include "duckdb/planner/operator/logical_transaction.hpp"
 
 namespace duckdb {
 
@@ -112,7 +113,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		auto &properties = GetStatementProperties();
 		properties.return_type = StatementReturnType::NOTHING;
 		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context, DatabaseModificationType::ALTER_TABLE);
-		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
+		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
 		return result;
 	}
 
@@ -144,7 +145,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// Bind types in this binder
 		BindAlterTypes(*this, stmt);
 
-		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
+		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
 		return result;
 	}
 
@@ -168,7 +169,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	    QualifiedName(catalog.GetName(), entry->ParentSchema().name, stmt.info->GetQualifiedName().Name()));
 
 	if (!stmt.info->IsAddPrimaryKey()) {
-		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
+		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
 		return result;
 	}
 
@@ -184,7 +185,7 @@ BoundStatement Binder::Bind(TransactionStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_TRANSACTION, std::move(stmt.info));
+	result.plan = make_uniq<LogicalTransaction>(std::move(stmt.info));
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
