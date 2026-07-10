@@ -70,9 +70,6 @@ public:
 
 	bool TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
 	                                    Vector &result);
-	//! Cheap pre-check: the dictionary fast path can only fire when a tracked input is actually a dictionary
-	//! vector. Lets callers skip allocating a result and entering the slow check on the common flat path.
-	bool DictionaryExecutionPossible(DataChunk &args) const;
 
 	void ResetDictionaryStates() override;
 
@@ -86,6 +83,9 @@ public:
 private:
 	//! Non-constant input columns that may be compatible dictionary vectors
 	vector<idx_t> dictionary_input_indices;
+	//! Reusable input chunk for dictionary execution (points at the dictionary children); allocated once, then only
+	//! re-referenced per call so the hot path does no per-chunk allocation
+	DataChunk dictionary_input_chunk;
 	//! Vector holding the expression executed on the entire dictionary
 	buffer_ptr<DictionaryEntry> output_dictionary;
 	//! ID of the input dictionary Vector

@@ -23,7 +23,9 @@ namespace duckdb {
 
 struct BitmapComparisonInfo {
 	optional_ptr<const BoundReferenceExpression> ref;
+	//! exactly one of `constant` (ref <op> const) or `ref2` (ref <op> ref) is set
 	optional_ptr<const BoundConstantExpression> constant;
+	optional_ptr<const BoundReferenceExpression> ref2;
 	ExpressionType op;
 };
 
@@ -31,13 +33,14 @@ inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonI
 	if (!BoundComparisonExpression::IsComparison(expr)) {
 		return false;
 	}
-	auto op = expr.GetExpressionType();
-	if (op == ExpressionType::COMPARE_DISTINCT_FROM) {
+	const auto raw_op = expr.GetExpressionType();
+	if (raw_op == ExpressionType::COMPARE_DISTINCT_FROM) {
 		return false;
 	}
-	if (op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		op = ExpressionType::COMPARE_EQUAL;
-	}
+	// NOT DISTINCT FROM equals `=` only when a NULL can't meet a NULL. That holds against a (non-null) constant, but
+	// NOT for column-vs-column: two NULLs are "not distinct" (true) yet `=` AND-s out validity (false). So the col-col
+	// path must reject it - decorrelation matches correlated keys this way, and mapping it to `=` drops NULL matches.
+	const auto op = raw_op == ExpressionType::COMPARE_NOT_DISTINCT_FROM ? ExpressionType::COMPARE_EQUAL : raw_op;
 	auto &comparison = expr.Cast<BoundFunctionExpression>();
 	auto &left = BoundComparisonExpression::Left(comparison);
 	auto &right = BoundComparisonExpression::Right(comparison);
@@ -52,6 +55,14 @@ inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonI
 		info.ref = &right.Cast<BoundReferenceExpression>();
 		info.constant = &left.Cast<BoundConstantExpression>();
 		info.op = FlipComparisonExpression(op);
+	} else if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	           right.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		if (raw_op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			return false;
+		}
+		info.ref = &left.Cast<BoundReferenceExpression>();
+		info.ref2 = &right.Cast<BoundReferenceExpression>();
+		info.op = op;
 	} else {
 		return false;
 	}
@@ -66,9 +77,16 @@ inline bool IsBitmapComparisonCandidate(const Expression &expr) {
 	if (!TryGetBitmapComparisonInfo(expr, info)) {
 		return false;
 	}
-	const auto &value = info.constant->GetValue();
 	const auto pt = info.ref->GetReturnType().InternalType();
-	return !value.IsNull() && BitmapCmpTypeSupported(pt) && value.type().InternalType() == pt;
+	if (!BitmapCmpTypeSupported(pt)) {
+		return false;
+	}
+	if (info.ref2) {
+		// both sides of a bound comparison share the same type
+		return true;
+	}
+	const auto &value = info.constant->GetValue();
+	return !value.IsNull() && value.type().InternalType() == pt;
 }
 
 inline bool HasBitmapComparisonChild(const BoundConjunctionExpression &expr) {
@@ -93,7 +111,7 @@ inline bool IsBitmapSelectCandidate(const Expression &expr) {
 	return IsBitmapComparisonCandidate(expr);
 }
 
-//! General `ref <op> const` comparison selection fast path. Evaluates the comparison DENSELY over the input into a
+//! General comparison selection fast path. Evaluates the comparison DENSELY over the input into a
 //! bitmap (branchless/autovec), then combines lazily: any input selection is AND-ed in as a bitmap, and the result
 //! is emitted to whatever the caller wants (a result bitmap, or a true and/or false selection vector). Returns false
 //! (nothing written) for shapes it does not handle, so the caller falls through to generic selection.
@@ -107,15 +125,26 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 	if (!TryGetBitmapComparisonInfo(expr, info)) {
 		return false;
 	}
-	auto &constant = info.constant->GetValue();
 	auto &col = chunk.data[info.ref->Index()];
 	const auto pt = col.GetType().InternalType();
-	// a bound comparison has both sides at the same type, so the constant needs no cast
-	if (constant.IsNull() || constant.type().InternalType() != pt) {
-		return false;
-	}
 	if (col.GetVectorType() != VectorType::FLAT_VECTOR || !BitmapCmpTypeSupported(pt)) {
 		return false;
+	}
+	// only the flat case wins. A sliced input would need a per-row remap to build the row selection, which measured
+	// ~3x slower than the generic gather-select, so sliced comparisons are left to the generic path.
+	optional_ptr<Vector> col2;
+	if (info.ref2) {
+		auto &right = chunk.data[info.ref2->Index()];
+		if (right.GetVectorType() != VectorType::FLAT_VECTOR) {
+			return false;
+		}
+		col2 = right; // both sides of a bound comparison share pt
+	} else {
+		// a bound comparison has both sides at the same type, so the constant needs no cast
+		const auto &constant = info.constant->GetValue();
+		if (constant.IsNull() || constant.type().InternalType() != pt) {
+			return false;
+		}
 	}
 
 	const bool have_sel = sel && sel->IsSet();
@@ -130,10 +159,17 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 	// dense comparison -> bitmap (the true side), in the caller's bitmap when one is requested else a scratch
 	SelectionResult &t = bitmap_sel ? *bitmap_sel : tmp_sel1;
 	auto t_bm = reinterpret_cast<validity_t *>(t.PrepareBitmap(span));
-	auto &validity = FlatVector::Validity(col);
-	const validity_t *validity_data = validity.CanHaveNull() ? validity.GetData() : nullptr;
-	DispatchFlatCmpToBitmap(pt, info.op, col, span, validity_data, t_bm,
-	                        [&](auto tag) { return constant.GetValueUnsafe<decltype(tag)>(); });
+	auto &lvalidity = FlatVector::Validity(col);
+	const validity_t *lvalidity_data = lvalidity.CanHaveNull() ? lvalidity.GetData() : nullptr;
+	if (col2) {
+		auto &rvalidity = FlatVector::Validity(*col2);
+		const validity_t *rvalidity_data = rvalidity.CanHaveNull() ? rvalidity.GetData() : nullptr;
+		DispatchFlatColCmpToBitmap(pt, info.op, col, *col2, span, lvalidity_data, rvalidity_data, t_bm);
+	} else {
+		const auto &constant = info.constant->GetValue();
+		DispatchFlatCmpToBitmap(pt, info.op, col, span, lvalidity_data, t_bm,
+		                        [&](auto tag) { return constant.GetValueUnsafe<decltype(tag)>(); });
+	}
 
 	// the false side is the complement; take it before folding in the input
 	validity_t *f_bm = nullptr;
