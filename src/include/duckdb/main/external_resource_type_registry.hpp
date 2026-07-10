@@ -40,6 +40,11 @@ struct ExternalResourceType {
 	string resolve_function;
 	//! Where it came from: "user" (register_external_resource_type) or "extension".
 	string origin;
+	//! The caller's catalog search path captured at registration (serialized). The callbacks are resolved
+	//! against it when invoked — like views/macros capture their creation-time search path — so unqualified
+	//! callback names keep resolving from create_external_resource's internal connection, regardless of the
+	//! search path in effect when create runs. Empty means "use the internal connection's default".
+	string search_path;
 };
 
 //! Append-only, in-memory, instance-scoped registry of external resource types (shared across

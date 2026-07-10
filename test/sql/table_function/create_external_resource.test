@@ -134,6 +134,33 @@ SELECT result FROM create_external_resource('compute@local');
 ----
 {ip=10.0.0.1}
 
+# Callbacks resolve in the search path captured at registration (like views/macros), so unqualified names in
+# a non-default schema keep resolving from create_external_resource's internal connection — even after the
+# caller's search path changes.
+statement ok
+CREATE SCHEMA app;
+
+statement ok
+CREATE MACRO app.sp_create(p) AS TABLE SELECT MAP {'id':'r'} AS handle;
+
+statement ok
+CREATE MACRO app.sp_status(h) AS TABLE SELECT 'ready' AS state, MAP {'uri':'quack:sp', 'attached_db_type':'quack'} AS result;
+
+statement ok
+SET search_path = 'app';
+
+statement ok
+CALL register_external_resource_type('sp@local', kind := 'catalog', create_function := 'sp_create', status_function := 'sp_status');
+
+# Change the search path after registration: resolution still uses the captured (registration-time) path.
+statement ok
+RESET search_path;
+
+query T
+SELECT uri FROM create_external_resource('sp@local');
+----
+quack:sp
+
 # On a post-create failure the provisioned resource must be torn down (no leak): destroy_function is
 # invoked. destroy advances a sequence, which lets us observe the call across the internal connection.
 statement ok

@@ -121,6 +121,16 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 
 	// Separate internal connection: the current connection's context lock is held here.
 	Connection con(DatabaseInstance::GetDatabase(context));
+	// Resolve the callbacks in the search path captured at registration, so unqualified names in a non-default
+	// schema/catalog keep resolving here (not against this fresh connection's default, nor the current path).
+	if (!type->search_path.empty()) {
+		auto set_res = con.Query("SET search_path = " + Value(type->search_path).ToSQLString());
+		if (set_res->HasError()) {
+			throw InvalidInputException(
+			    "create_external_resource: could not apply resource type \"%s\" registered search path (%s): %s",
+			    bind_data.type_name, type->search_path, set_res->GetError());
+		}
+	}
 	auto sql = "SELECT * FROM " + type->create_function + "(" + bind_data.params.ToSQLString() + ")";
 	auto result = con.Query(sql);
 	if (result->HasError()) {

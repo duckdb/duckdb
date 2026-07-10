@@ -1,6 +1,8 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/external_resource_type_registry.hpp"
 
 namespace duckdb {
@@ -30,6 +32,9 @@ static unique_ptr<FunctionData> RegisterExternalResourceTypeBind(ClientContext &
 	}
 	type.name = StringValue::Get(input.inputs[0]);
 	type.origin = "user";
+	// Capture the registration-time search path so the (by-name, lazily-resolved) callbacks keep resolving
+	// from create_external_resource's internal connection — the same reason views/macros record theirs.
+	type.search_path = CatalogSearchEntry::ListToString(ClientData::Get(context).catalog_search_path->GetSetPaths());
 
 	for (auto &np : input.named_parameters) {
 		auto key = StringUtil::Lower(np.first.GetIdentifierName());
