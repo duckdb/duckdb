@@ -140,7 +140,7 @@ public:
 	bool IsExternalInput() const {
 		return input_mode == PipelineInputMode::EXTERNAL_INPUT;
 	}
-	void SetExternalInputEvent(shared_ptr<Event> event);
+	void SetExternalInputEvent(const shared_ptr<Event> &event);
 	void CompleteExternalInput();
 	bool CanUseExternalInput() const;
 	bool CanStopSourceEarly() const;

@@ -502,7 +502,7 @@ void Pipeline::PreventBlocking() {
 	PreventSinkBlocking();
 }
 
-void Pipeline::SetExternalInputEvent(shared_ptr<Event> event) {
+void Pipeline::SetExternalInputEvent(const shared_ptr<Event> &event) {
 	if (!IsExternalInput()) {
 		throw InternalException("SetExternalInputEvent called for a pipeline that is not externally fed");
 	}
@@ -514,7 +514,7 @@ void Pipeline::SetExternalInputEvent(shared_ptr<Event> event) {
 	if (existing_event && existing_event.get() != event.get()) {
 		throw InternalException("External input pipeline event was registered more than once");
 	}
-	external_input_event = std::move(event);
+	external_input_event = event;
 	external_input_event_scheduled = false;
 	external_input_completed = false;
 }
