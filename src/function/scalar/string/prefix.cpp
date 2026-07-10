@@ -1,11 +1,10 @@
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
-
-#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -63,15 +62,16 @@ struct PrefixOperator {
 	}
 };
 
-// Find the next prefix of the given string
+// Update the prefix to be the next string of the given one, which is with less or equal length to the given prefix
 bool FindNextPrefix(string &prefix) {
 	for (idx_t idx = prefix.size(); idx > 0; idx--) {
 		auto c = static_cast<uint8_t>(prefix[idx - 1]);
-		if (c < 0xFF) {
-			prefix[idx - 1] = static_cast<char>(c + 1);
-			prefix.resize(idx);
-			return true;
+		if (c == 0xFF) {
+			continue;
 		}
+		prefix[idx - 1] = static_cast<char>(c + 1);
+		prefix.resize(idx);
+		return true;
 	}
 	return false;
 }
@@ -88,15 +88,16 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	if (!column_stats || column_stats->GetStatsType() != StatisticsType::STRING_STATS) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	// If all rows are null, always false
 	if (!column_stats->CanHaveNoNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-
+	// If the constant is null, always false
 	auto &constant = children[1]->Cast<BoundConstantExpression>().GetValue();
 	if (constant.IsNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-
+	// Handle empty prefix
 	auto prefix = StringValue::Get(constant);
 	if (prefix.empty()) {
 		return column_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
@@ -115,8 +116,8 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	const auto max = StringStats::Max(*column_stats);
 
 	// prefix > max, always false
-	if (StringStats::Compare(string_t(prefix.c_str(), prefix.size()), string_t(max.c_str(), max.size()),
-	                         StringStats::GetMaxType(*column_stats)) > 0) {
+	if (StringStats::CompareStringStats(string_t(prefix.c_str(), prefix.size()), string_t(max.c_str(), max.size()),
+	                                    StringStats::GetMaxType(*column_stats)) > 0) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 
@@ -124,8 +125,8 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	auto upper_bound = prefix;
 	if (FindNextPrefix(upper_bound)) {
 		const auto min_compare =
-		    StringStats::Compare(string_t(upper_bound.c_str(), upper_bound.size()), string_t(min.c_str(), min.size()),
-		                         StringStats::GetMinType(*column_stats));
+		    StringStats::CompareStringStats(string_t(upper_bound.c_str(), upper_bound.size()),
+		                                    string_t(min.c_str(), min.size()), StringStats::GetMinType(*column_stats));
 		if (min_compare < 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
