@@ -27,6 +27,21 @@ static bool MapTryGet(const Value &map_value, const string &key, string &out) {
 	return false;
 }
 
+//! The recipe's handle/result columns are part of the connect contract: they must be MAPs. Validate and
+//! normalize to MAP(VARCHAR, VARCHAR), so a recipe that returns something else (e.g. a scalar) gets a clear
+//! error instead of crashing when the value is later read or emitted.
+static Value RequireResourceMap(const Value &value, const string &function_name, const string &column) {
+	if (value.IsNull()) {
+		return value;
+	}
+	if (value.type().id() != LogicalTypeId::MAP) {
+		throw InvalidInputException(
+		    "create_external_resource: function \"%s\" must return a MAP in its '%s' column, got %s", function_name,
+		    column, value.type().ToString());
+	}
+	return value.DefaultCastAs(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+}
+
 //===--------------------------------------------------------------------===//
 // create_external_resource(type_name [, params := MAP])
 //
@@ -113,8 +128,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 		throw InvalidInputException("create_external_resource: create function \"%s\" returned no rows",
 		                            type->create_function);
 	}
-	// Contract: `create` returns a single 'handle' column.
-	auto handle = result->GetValue(0, 0);
+	// Contract: `create` returns a single 'handle' column (a MAP; opaque to us, passed back to status/destroy).
+	auto handle = RequireResourceMap(result->GetValue(0, 0), type->create_function, "handle");
 
 	if (type->status_function.empty()) {
 		throw InvalidInputException(
@@ -138,9 +153,9 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 			                            type->status_function);
 		}
 		auto state_val = sres->GetValue(0, 0);
-		auto status_state = state_val.IsNull() ? string() : StringValue::Get(state_val);
+		auto status_state = state_val.IsNull() ? string() : state_val.ToString();
 		if (status_state == "ready") {
-			status_result = sres->GetValue(1, 0);
+			status_result = RequireResourceMap(sres->GetValue(1, 0), type->status_function, "result");
 			break;
 		}
 		if (status_state == "failed") {
