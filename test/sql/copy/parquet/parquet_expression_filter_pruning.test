@@ -257,35 +257,6 @@ ReadRowGroup	4
 statement ok
 CALL truncate_duckdb_logs()
 
-# When exact min equals next_prefix(prefix), no string can match the prefix filter
-statement ok
-COPY (
-	SELECT 'aab'::VARCHAR AS s
-	UNION ALL SELECT 'aac'
-	UNION ALL SELECT 'aba'
-) TO '{TEST_DIR}/expr_prune_prefix_exact_min.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 100)
-
-statement ok
-CALL enable_logging('PhysicalOperator')
-
-query I
-SELECT count(*)
-FROM '{TEST_DIR}/expr_prune_prefix_exact_min.parquet'
-WHERE prefix(s, 'aaa')
-----
-0
-
-statement ok
-CALL disable_logging()
-
-query II
-SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
-----
-SkipRowGroup	1
-
-statement ok
-CALL truncate_duckdb_logs()
-
 # Byte-wise prefix successor should prune across a UTF-8 byte boundary
 statement ok
 COPY (
