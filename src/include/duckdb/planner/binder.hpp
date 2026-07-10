@@ -611,6 +611,8 @@ private:
 
 	BoundStatement BindDescribeQuery(ShowRef &ref);
 	BoundStatement BindDescribeTable(ShowRef &ref);
+	//! Describes a ShowRef target: its query if it has one, otherwise the named table
+	BoundStatement BindDescribe(ShowRef &ref);
 	//! Binds the Postgres-style "SHOW name" (settings-first, with a deprecated table/query describe fallback)
 	BoundStatement BindShow(ShowRef &ref);
 	//! Binds "SHOW name" to the value of the setting "name", returns false if no such setting exists

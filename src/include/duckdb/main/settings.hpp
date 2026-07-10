@@ -1873,6 +1873,19 @@ struct SecretDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ShowBehaviorSetting {
+	using RETURN_TYPE = ShowBehaviorType;
+	static constexpr const char *Name = "show_behavior";
+	static constexpr const char *Description =
+	    "How SHOW resolves a bare identifier: 'auto' (describe a table if one exists, else a setting; deprecated), "
+	    "'table' (always a table), or 'setting' (always a setting)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "AUTO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct StandardVectorSizeSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "standard_vector_size";

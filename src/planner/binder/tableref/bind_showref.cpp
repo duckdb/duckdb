@@ -15,6 +15,8 @@
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/common/enums/show_behavior.hpp"
 
 namespace duckdb {
 
@@ -247,8 +249,9 @@ bool Binder::TryBindShowSetting(ShowRef &ref, BoundStatement &result) {
 //! Warn that using "SHOW name" to describe a table is deprecated in favor of DESCRIBE
 static void WarnShowDescribesTable(ClientContext &context, const string &name) {
 	DUCKDB_LOG_WARNING(context,
-	                   "Using \"SHOW %s\" to describe a table is deprecated and will be removed in a future release, "
-	                   "use \"DESCRIBE %s\" instead.",
+	                   "\"SHOW %s\" resolved to a table. Describing a table with SHOW is deprecated and will be "
+	                   "removed in a future release - use \"DESCRIBE %s\" instead, or \"SET show_behavior='setting'\" "
+	                   "to make SHOW resolve settings only.",
 	                   name, name);
 }
 
@@ -261,32 +264,49 @@ static void WarnShowDescribesQuery(ClientContext &context) {
 BoundStatement Binder::BindShow(ShowRef &ref) {
 	BoundStatement result;
 	if (ref.GetTableName().empty()) {
-		// "SHOW (SELECT ...)": describe the columns of the query. Deprecated in favor of DESCRIBE.
+		// "SHOW (SELECT ...)": describe the columns of the query. Deprecated in favor of DESCRIBE, and not affected
+		// by show_behavior (a parenthesized query is neither a setting nor a named table).
 		WarnShowDescribesQuery(context);
 		return BindDescribeQuery(ref);
 	}
 
-	// "SHOW name" (Postgres-style): a bare (unqualified) name is settings-first. A qualified name
-	// ("SHOW schema.table") cannot be a setting, so it always describes a table.
-	bool qualified = !ref.GetSchemaName().empty() || !ref.GetCatalogName().empty();
-	if (!qualified && TryBindShowSetting(ref, result)) {
+	auto behavior = Settings::Get<ShowBehaviorSetting>(context);
+	auto name = ref.qualified_name.ToString();
+	// A qualified name ("SHOW schema.table") cannot be a setting, so it is only ever a table.
+	bool can_be_setting = ref.GetSchemaName().empty() && ref.GetCatalogName().empty();
+
+	switch (behavior) {
+	case ShowBehaviorType::SETTING:
+		// "SHOW name" only ever resolves a setting.
+		if (can_be_setting && TryBindShowSetting(ref, result)) {
+			return result;
+		}
+		throw CatalogException("Setting with name \"%s\" does not exist", name);
+	case ShowBehaviorType::TABLE:
+		// "SHOW name" only ever describes a table (the historical behavior). Describing a table via SHOW is
+		// deprecated, so warn whenever one is shown.
+		result = BindDescribe(ref);
+		WarnShowDescribesTable(context, name);
+		return result;
+	default:
+		// ShowBehaviorType::AUTO: describe a table if one exists (backwards-compatible, but deprecated - warn), and
+		// otherwise fall back to resolving a setting (silently - settings are the long-term behavior).
+		try {
+			result = BindDescribe(ref);
+		} catch (const std::exception &ex) {
+			if (can_be_setting && ErrorData(ex).Type() == ExceptionType::CATALOG && TryBindShowSetting(ref, result)) {
+				// No such table, but it is a setting - show its value silently.
+				return result;
+			}
+			throw;
+		}
+		WarnShowDescribesTable(context, name);
 		return result;
 	}
+}
 
-	// Not a setting: describe the table with this name. This still works but is deprecated. For an unqualified
-	// name a missing table is reported as a missing setting, since "SHOW name" is primarily for settings.
-	auto describe_name = ref.qualified_name.ToString();
-	try {
-		result = ref.query ? BindDescribeQuery(ref) : BindDescribeTable(ref);
-	} catch (const std::exception &ex) {
-		if (!qualified && ErrorData(ex).Type() == ExceptionType::CATALOG) {
-			throw CatalogException("Setting with name \"%s\" does not exist", describe_name);
-		}
-		throw;
-	}
-
-	WarnShowDescribesTable(context, describe_name);
-	return result;
+BoundStatement Binder::BindDescribe(ShowRef &ref) {
+	return ref.query ? BindDescribeQuery(ref) : BindDescribeTable(ref);
 }
 
 BoundStatement Binder::Bind(ShowRef &ref) {
@@ -296,11 +316,7 @@ BoundStatement Binder::Bind(ShowRef &ref) {
 	if (ref.show_type == ShowType::SHOW) {
 		return BindShow(ref);
 	}
-	if (ref.query) {
-		return BindDescribeQuery(ref);
-	} else {
-		return BindDescribeTable(ref);
-	}
+	return BindDescribe(ref);
 }
 
 } // namespace duckdb

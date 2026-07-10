@@ -70,6 +70,7 @@
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/enums/set_type.hpp"
+#include "duckdb/common/enums/show_behavior.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/common/enums/stream_execution_result.hpp"
@@ -5081,6 +5082,25 @@ const char* EnumUtil::ToChars<SettingScope>(SettingScope value) {
 template<>
 SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
 	return static_cast<SettingScope>(StringUtil::StringToEnum(GetSettingScopeValues(), 4, "SettingScope", value));
+}
+
+const StringUtil::EnumStringLiteral *GetShowBehaviorTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ShowBehaviorType::AUTO), "AUTO" },
+		{ static_cast<uint32_t>(ShowBehaviorType::SETTING), "SETTING" },
+		{ static_cast<uint32_t>(ShowBehaviorType::TABLE), "TABLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ShowBehaviorType>(ShowBehaviorType value) {
+	return StringUtil::EnumToString(GetShowBehaviorTypeValues(), 3, "ShowBehaviorType", static_cast<uint32_t>(value));
+}
+
+template<>
+ShowBehaviorType EnumUtil::FromString<ShowBehaviorType>(const char *value) {
+	return static_cast<ShowBehaviorType>(StringUtil::StringToEnum(GetShowBehaviorTypeValues(), 3, "ShowBehaviorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetShowTypeValues() {
