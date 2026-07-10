@@ -142,6 +142,9 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	Value status_result;
 	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(300);
 	while (true) {
+		// Cooperative cancellation: this blocking loop never yields back to the executor, so surface a
+		// pending Ctrl-C / max_execution_time ourselves (InterruptCheck throws InterruptException on either).
+		context.InterruptCheck();
 		auto status_sql = "SELECT state, result FROM " + type->status_function + "(" + handle.ToSQLString() + ")";
 		auto sres = con.Query(status_sql);
 		if (sres->HasError()) {
@@ -165,7 +168,14 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 			throw IOException("create_external_resource: timed out awaiting readiness for \"%s\" (last state '%s')",
 			                  bind_data.type_name, status_state);
 		}
-		std::this_thread::sleep_for(std::chrono::seconds(5));
+		// Interruptible wait: sleep the poll interval in short slices, checking for cancellation between them.
+		// The slice is small so InterruptCheck() is called often enough to honor max_execution_time promptly
+		// (its deadline check is throttled to run every Nth call).
+		auto poll_until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+		while (std::chrono::steady_clock::now() < poll_until) {
+			context.InterruptCheck();
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+		}
 	}
 
 	// Baseline enforcement: an catalog resource must expose 'uri' + 'attached_db_type' in its result.
