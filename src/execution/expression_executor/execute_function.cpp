@@ -109,6 +109,9 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		}
 		if (!output_dictionary || output_dictionary->data.size() != input_dictionary_size) {
 			output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
+			// the reused buffer holds different data every chunk, so it must not advertise the stable id that
+			// CreateReusableDictionary mints - downstream id-keyed caches would otherwise serve stale data
+			output_dictionary->id.clear();
 		}
 		if (dictionary_input_chunk.data.empty()) {
 			dictionary_input_chunk.InitializeEmpty(args.GetTypes()); // one-time allocation, reused across chunks
