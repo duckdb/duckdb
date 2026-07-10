@@ -274,3 +274,44 @@ query I
 SELECT nextval('teardown_calls_kept');
 ----
 1
+
+# Provisioning is a side effect of materializing a row: each create_external_resource invocation provisions
+# exactly once, independent of the outer query. A sequence bumped by the create callback counts provisions.
+statement ok
+RESET search_path;
+
+statement ok
+CREATE SEQUENCE prov_count;
+
+statement ok
+CREATE MACRO pc_create(p) AS TABLE SELECT MAP {'id': 'r' || nextval('prov_count')} AS handle;
+
+statement ok
+CREATE MACRO pc_status(h) AS TABLE SELECT 'ready' AS state, MAP {'uri':'u','attached_db_type':'quack'} AS result;
+
+statement ok
+CALL register_external_resource_type('pc@local', kind := 'catalog', create_function := 'pc_create', status_function := 'pc_status');
+
+# Single invocation -> exactly one provision (so the next value is 2).
+statement ok
+SELECT * FROM create_external_resource('pc@local');
+
+query I
+SELECT nextval('prov_count');
+----
+2
+
+# Each invocation provisions independently: a self-join provisions twice (so the next value advances to 5).
+statement ok
+SELECT a.uri, b.uri FROM create_external_resource('pc@local') a, create_external_resource('pc@local') b;
+
+query I
+SELECT nextval('prov_count');
+----
+5
+
+# LIMIT 0 runs cleanly; its provisioning is optimizer-dependent (pruned to an empty result with the optimizer,
+# runs once without it), so the count is intentionally not asserted -- use WITH EXTERNAL RESOURCE ... ATTACH
+# when provisioning must be guaranteed.
+statement ok
+SELECT * FROM create_external_resource('pc@local') LIMIT 0;
