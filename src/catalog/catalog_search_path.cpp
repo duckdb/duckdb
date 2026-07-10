@@ -275,6 +275,16 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 	return schemas;
 }
 
+vector<string> CatalogSearchPath::GetImplicitSearchCatalogs() const {
+	vector<string> catalogs;
+	for (auto &path : paths) {
+		if (path.schema.empty() && !path.catalog.empty()) {
+			catalogs.push_back(path.catalog);
+		}
+	}
+	return catalogs;
+}
+
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 	D_ASSERT(paths.size() >= 2);
 	D_ASSERT(!paths[1].schema.empty());

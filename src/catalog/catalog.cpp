@@ -986,6 +986,23 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
                                            const string &schema, const EntryLookupInfo &lookup_info,
                                            OnEntryNotFound if_not_found) {
 	auto entries = GetCatalogEntries(retriever, catalog, schema);
+	// For unqualified lookups of non-table entries (functions, macros, types), also fall back to the default schema
+	// of any catalog that was explicitly flagged in the search path (via an INVALID_SCHEMA entry, e.g. when binding
+	// the body of a view). This allows a view to reference a macro/type stored in its own catalog's default schema.
+	// Table lookups are intentionally excluded so that default-table resolution and ambiguity detection keep matching
+	// the top-level search-path behavior. The fallback entries are appended last, giving them the lowest priority.
+	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema) &&
+	    lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY) {
+		auto &search_path = retriever.GetSearchPath();
+		for (auto &implicit_catalog : search_path.GetImplicitSearchCatalogs()) {
+			auto catalog_entry = Catalog::GetCatalogEntry(retriever, implicit_catalog);
+			if (!catalog_entry) {
+				continue;
+			}
+			entries.emplace_back(implicit_catalog, catalog_entry->GetDefaultSchema());
+		}
+	}
+
 	vector<CatalogLookup> lookups;
 	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());

@@ -1,0 +1,44 @@
+# name: test/sql/attach/searchpath_fallback.test
+# description: Tryout
+# group: [attach]
+
+
+# Test with views over default tables
+query I
+ATTACH ':memory:' AS dt (DEFAULT_TABLE 'real_t');
+CREATE TABLE dt.main.real_t(i INT);
+INSERT INTO dt.main.real_t values (1);
+ATTACH ':memory:' AS c1;
+CREATE SCHEMA c1.s1;
+CREATE TABLE c1.main.dt(i INT);
+CREATE VIEW c1.s1.vv AS SELECT * FROM dt;
+FROM c1.s1.vv;
+----
+1
+
+
+# test with an alter column set type
+query I
+CREATE TYPE my_enum AS ENUM ('x');
+ATTACH ':memory:' AS c2;
+CREATE SCHEMA c2.s1;
+CREATE TYPE c2.my_enum AS ENUM ('y');
+CREATE TABLE c2.s1.t(a VARCHAR);
+INSERT INTO c2.s1.t VALUES ('x');
+ALTER TABLE c2.s1.t ALTER COLUMN a SET DATA TYPE my_enum;
+FROM c2.s1.t;
+----
+x
+
+# Declare macro and use it in different catalog
+query I
+ATTACH ':memory:' as test;
+use test;
+ATTACH ':memory:' as test2;
+CREATE OR REPLACE MACRO fn(a) as a+1;
+CREATE SCHEMA other_schema;
+CREATE VIEW other_schema.some_view AS SELECT fn(1) AS t;
+use test2;
+from test.other_schema.some_view;
+----
+2
