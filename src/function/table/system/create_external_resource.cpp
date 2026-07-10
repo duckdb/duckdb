@@ -17,6 +17,11 @@
 
 namespace duckdb {
 
+//! Defaults for the readiness poll loop, both overridable per call via named parameters. A timeout of 0
+//! means wait indefinitely (rely on a terminal status or query cancellation).
+static constexpr int64_t DEFAULT_READINESS_TIMEOUT_SECONDS = 300;
+static constexpr int64_t DEFAULT_POLL_INTERVAL_SECONDS = 5;
+
 //! Look up a key in a MAP(VARCHAR, VARCHAR) Value. Returns false if absent (or the map is NULL).
 static bool MapTryGet(const Value &map_value, const string &key, string &out) {
 	if (map_value.IsNull()) {
@@ -77,6 +82,8 @@ struct CreateExternalResourceBindData : public TableFunctionData {
 	string type_name;
 	Value params;
 	bool teardown_on_failure = true;
+	int64_t timeout_seconds = DEFAULT_READINESS_TIMEOUT_SECONDS;
+	int64_t poll_interval_seconds = DEFAULT_POLL_INTERVAL_SECONDS;
 };
 
 struct CreateExternalResourceState : public GlobalTableFunctionState {
@@ -97,6 +104,10 @@ static unique_ptr<FunctionData> CreateExternalResourceBind(ClientContext &contex
 			result->params = np.second;
 		} else if (key == "teardown_on_failure" && !np.second.IsNull()) {
 			result->teardown_on_failure = BooleanValue::Get(np.second);
+		} else if (key == "timeout_seconds" && !np.second.IsNull()) {
+			result->timeout_seconds = np.second.GetValue<int64_t>();
+		} else if (key == "poll_interval_seconds" && !np.second.IsNull()) {
+			result->poll_interval_seconds = np.second.GetValue<int64_t>();
 		}
 	}
 
@@ -198,7 +209,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	// Blocking: poll status(handle) until `state` is terminal ('ready' / 'failed'). A synchronous type's
 	// status simply returns 'ready' on the first poll.
 	Value status_result;
-	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(300);
+	bool has_deadline = bind_data.timeout_seconds > 0;
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(bind_data.timeout_seconds);
 	while (true) {
 		// Cooperative cancellation: this blocking loop never yields back to the executor, so surface a
 		// pending Ctrl-C / max_execution_time ourselves (InterruptCheck throws InterruptException on either).
@@ -223,14 +235,14 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 		if (status_state == "failed") {
 			throw IOException("create_external_resource: resource \"%s\" reported state 'failed'", bind_data.type_name);
 		}
-		if (std::chrono::steady_clock::now() >= deadline) {
+		if (has_deadline && std::chrono::steady_clock::now() >= deadline) {
 			throw IOException("create_external_resource: timed out awaiting readiness for \"%s\" (last state '%s')",
 			                  bind_data.type_name, status_state);
 		}
 		// Interruptible wait: sleep the poll interval in short slices, checking for cancellation between them.
 		// The slice is small so InterruptCheck() is called often enough to honor max_execution_time promptly
 		// (its deadline check is throttled to run every Nth call).
-		auto poll_until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+		auto poll_until = std::chrono::steady_clock::now() + std::chrono::seconds(bind_data.poll_interval_seconds);
 		while (std::chrono::steady_clock::now() < poll_until) {
 			context.InterruptCheck();
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -284,6 +296,8 @@ void CreateExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
 	                 CreateExternalResourceBind, CreateExternalResourceInit);
 	fn.named_parameters["params"] = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	fn.named_parameters["teardown_on_failure"] = LogicalType::BOOLEAN;
+	fn.named_parameters["timeout_seconds"] = LogicalType::BIGINT;
+	fn.named_parameters["poll_interval_seconds"] = LogicalType::BIGINT;
 	set.AddFunction(fn);
 }
 
