@@ -30,7 +30,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.children[0]->types);
 	shared_ptr<PipelineBroadcastExchange> exchange;
 	if (use_exchange) {
-		exchange = make_shared_ptr<PipelineBroadcastExchange>(context, op.children[0]->types, cte_body_is_dml);
+		auto completion_mode = cte_body_is_dml ? PipelineBroadcastExchangeCompletionMode::RUN_TO_COMPLETION
+		                                       : PipelineBroadcastExchangeCompletionMode::STOP_WHEN_UNCONSUMED;
+		exchange = make_shared_ptr<PipelineBroadcastExchange>(context, op.children[0]->types, completion_mode);
 	}
 
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator

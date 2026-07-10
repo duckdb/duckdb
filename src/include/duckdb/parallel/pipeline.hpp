@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -25,6 +26,7 @@ class PipelineExecutor;
 class Pipeline;
 
 enum class PipelineInputMode : uint8_t { SCHEDULED_SOURCE, EXTERNAL_INPUT };
+enum class ExternalInputEventState : uint8_t { UNSET, REGISTERED, SCHEDULED, COMPLETED_BEFORE_SCHEDULE, COMPLETED };
 
 class PipelineTask : public ExecutorTask {
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
@@ -164,9 +166,9 @@ private:
 	optional_ptr<PhysicalOperator> sink;
 
 	//! The global source state
-	shared_ptr<GlobalSourceState> source_state;
+	shared_ptr<GlobalSourceState> source_state DUCKDB_GUARDED_BY(source_state_lock);
 	//! Lock for resetting or inspecting the global source state pointer
-	mutex source_state_lock;
+	annotated_mutex source_state_lock;
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
@@ -182,11 +184,11 @@ private:
 	//! How this pipeline receives input chunks
 	PipelineInputMode input_mode = PipelineInputMode::SCHEDULED_SOURCE;
 	//! Event that represents execution of an externally fed pipeline
-	weak_ptr<Event> external_input_event;
-	bool external_input_event_scheduled = false;
-	bool external_input_completed = false;
+	weak_ptr<Event> external_input_event DUCKDB_GUARDED_BY(external_input_lock);
+	ExternalInputEventState
+	    external_input_event_state DUCKDB_GUARDED_BY(external_input_lock) = ExternalInputEventState::UNSET;
 	//! Lock for one-time external input initialization
-	mutex external_input_lock;
+	annotated_mutex external_input_lock;
 	//! Lock for accessing the set of batch indexes
 	mutex batch_lock;
 	//! The set of batch indexes that are currently being processed

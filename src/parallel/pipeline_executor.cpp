@@ -67,7 +67,7 @@ void PipelineExecutor::Reset() {
 	next_batch_blocked = false;
 	finished_processing_idx = -1;
 	source_profiling_finalized = false;
-	source_finished_notified = false;
+	source_finish_notification_state = SourceFinishNotificationState::PENDING;
 	should_flush_current_idx = true;
 	while (!in_process_operators.empty()) {
 		in_process_operators.pop();
@@ -282,9 +282,12 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			break;
 		} else if (remaining_sink_chunk) {
 			// The pipeline was interrupted by the Sink. We should retry sinking the final chunk.
-			result = ExecutePushInternal(final_chunk, chunk_budget);
-			D_ASSERT(result != OperatorResultType::HAVE_MORE_OUTPUT);
-			remaining_sink_chunk = false;
+			auto push_result = PushInputChunk(source_chunk, chunk_budget, PipelineInputChunkMode::RESUME_INPUT);
+			if (push_result == PipelineExecuteResult::INTERRUPTED) {
+				return PipelineExecuteResult::INTERRUPTED;
+			}
+			result = push_result == PipelineExecuteResult::FINISHED ? OperatorResultType::FINISHED
+			                                                        : OperatorResultType::NEED_MORE_INPUT;
 		} else if (!in_process_operators.empty() && !started_flushing) {
 			// Operator(s) in the pipeline have returned `HAVE_MORE_OUTPUT` in the last Execute call
 			// the operators have to be called with the same input chunk to produce the rest of the output
@@ -292,18 +295,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			result = ExecutePushInternal(source_chunk, chunk_budget);
 		} else if (exhausted_pipeline && !next_batch_blocked && !done_flushing) {
 			// The pipeline was exhausted, try flushing all operators
-			auto flush_completed = TryFlushCachingOperators(chunk_budget);
-			if (flush_completed) {
-				done_flushing = true;
-				break;
-			} else {
-				if (remaining_sink_chunk) {
-					return PipelineExecuteResult::INTERRUPTED;
-				} else {
-					D_ASSERT(chunk_budget.IsDepleted());
-					return PipelineExecuteResult::NOT_FINISHED;
-				}
-			}
+			return FlushAndFinalize(chunk_budget);
 		} else if (!exhausted_pipeline || next_batch_blocked) {
 			SourceResultType source_result = SourceResultType::BLOCKED;
 			if (!next_batch_blocked) {
@@ -371,40 +363,7 @@ PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input) {
 	}
 
 	ExecutionBudget chunk_budget(NumericLimits<idx_t>::Maximum());
-	while (true) {
-		context.client.InterruptCheck();
-
-		OperatorResultType result;
-		if (remaining_sink_chunk) {
-			result = ExecutePushInternal(final_chunk, chunk_budget);
-			if (result == OperatorResultType::BLOCKED) {
-				remaining_sink_chunk = true;
-				return PipelineExecuteResult::INTERRUPTED;
-			}
-			remaining_sink_chunk = false;
-			if (result == OperatorResultType::FINISHED) {
-				return PipelineExecuteResult::FINISHED;
-			}
-			if (in_process_operators.empty()) {
-				return PipelineExecuteResult::NOT_FINISHED;
-			}
-			continue;
-		}
-
-		result = ExecutePushInternal(input, chunk_budget);
-		if (result == OperatorResultType::BLOCKED) {
-			remaining_sink_chunk = true;
-			return PipelineExecuteResult::INTERRUPTED;
-		}
-		if (result == OperatorResultType::FINISHED) {
-			D_ASSERT(in_process_operators.empty());
-			return PipelineExecuteResult::FINISHED;
-		}
-		if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
-			continue;
-		}
-		return PipelineExecuteResult::NOT_FINISHED;
-	}
+	return PushInputChunk(input, chunk_budget, PipelineInputChunkMode::PUSH_INPUT);
 }
 
 PipelineExecuteResult PipelineExecutor::FinishExternal() {
@@ -415,31 +374,9 @@ PipelineExecuteResult PipelineExecutor::FinishExternal() {
 	}
 
 	ExecutionBudget chunk_budget(NumericLimits<idx_t>::Maximum());
-	if (remaining_sink_chunk) {
-		auto result = ExecutePushInternal(final_chunk, chunk_budget);
-		if (result == OperatorResultType::BLOCKED) {
-			remaining_sink_chunk = true;
-			return PipelineExecuteResult::INTERRUPTED;
-		}
-		remaining_sink_chunk = false;
-		if (result == OperatorResultType::FINISHED) {
-			exhausted_pipeline = true;
-		}
-	}
-
 	exhausted_source = true;
 	exhausted_pipeline = true;
-	if (!done_flushing) {
-		auto flush_completed = TryFlushCachingOperators(chunk_budget);
-		if (!flush_completed) {
-			if (remaining_sink_chunk) {
-				return PipelineExecuteResult::INTERRUPTED;
-			}
-			return PipelineExecuteResult::NOT_FINISHED;
-		}
-		done_flushing = true;
-	}
-	return PushFinalize();
+	return FlushAndFinalize(chunk_budget);
 }
 
 bool PipelineExecutor::IsFinishedProcessing() const {
@@ -454,10 +391,11 @@ void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 }
 
 void PipelineExecutor::NotifySourceFinished() {
-	if (source_finished_notified || pipeline.IsExternalInput() || !pipeline.GetSource() || !global_source_state) {
+	if (source_finish_notification_state == SourceFinishNotificationState::SENT || pipeline.IsExternalInput() ||
+	    !pipeline.GetSource() || !global_source_state) {
 		return;
 	}
-	source_finished_notified = true;
+	source_finish_notification_state = SourceFinishNotificationState::SENT;
 	pipeline.source->SourceFinished(context.client, *global_source_state);
 }
 
@@ -517,6 +455,69 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, Execu
 		}
 	} while (chunk_budget.Next());
 	return result;
+}
+
+PipelineExecuteResult PipelineExecutor::PushInputChunk(DataChunk &input, ExecutionBudget &chunk_budget,
+                                                       PipelineInputChunkMode mode) {
+	if (remaining_sink_chunk) {
+		auto result = ExecutePushInternal(final_chunk, chunk_budget);
+		D_ASSERT(result != OperatorResultType::HAVE_MORE_OUTPUT);
+		if (result == OperatorResultType::BLOCKED) {
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+		remaining_sink_chunk = false;
+		if (result == OperatorResultType::FINISHED) {
+			return PipelineExecuteResult::FINISHED;
+		}
+		if (mode == PipelineInputChunkMode::RESUME_INPUT || in_process_operators.empty()) {
+			return PipelineExecuteResult::NOT_FINISHED;
+		}
+	}
+	if (mode == PipelineInputChunkMode::RESUME_INPUT) {
+		return PipelineExecuteResult::NOT_FINISHED;
+	}
+
+	while (true) {
+		context.client.InterruptCheck();
+		auto result = ExecutePushInternal(input, chunk_budget);
+		if (result == OperatorResultType::BLOCKED) {
+			remaining_sink_chunk = true;
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+		if (result == OperatorResultType::FINISHED) {
+			D_ASSERT(in_process_operators.empty());
+			return PipelineExecuteResult::FINISHED;
+		}
+		if (result != OperatorResultType::HAVE_MORE_OUTPUT) {
+			return PipelineExecuteResult::NOT_FINISHED;
+		}
+	}
+}
+
+PipelineExecuteResult PipelineExecutor::FlushAndFinalize(ExecutionBudget &chunk_budget) {
+	if (remaining_sink_chunk) {
+		auto result = ExecutePushInternal(final_chunk, chunk_budget);
+		D_ASSERT(result != OperatorResultType::HAVE_MORE_OUTPUT);
+		if (result == OperatorResultType::BLOCKED) {
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+		remaining_sink_chunk = false;
+		if (result == OperatorResultType::FINISHED) {
+			exhausted_pipeline = true;
+		}
+	}
+	if (!done_flushing) {
+		auto flush_completed = TryFlushCachingOperators(chunk_budget);
+		if (!flush_completed) {
+			if (remaining_sink_chunk) {
+				return PipelineExecuteResult::INTERRUPTED;
+			}
+			D_ASSERT(chunk_budget.IsDepleted());
+			return PipelineExecuteResult::NOT_FINISHED;
+		}
+		done_flushing = true;
+	}
+	return PushFinalize();
 }
 
 PipelineExecuteResult PipelineExecutor::PushFinalize() {

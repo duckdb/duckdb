@@ -98,12 +98,12 @@ void MetaPipeline::Ready() const {
 }
 
 MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type,
-                                                    bool add_dependency) {
+                                                    MetaPipelineDependencyMode dependency_mode) {
 	children.push_back(make_shared_ptr<MetaPipeline>(executor, state, &op, type));
 	auto &child_meta_pipeline = *children.back().get();
 	// store the parent
 	child_meta_pipeline.parent = &current;
-	if (add_dependency) {
+	if (dependency_mode == MetaPipelineDependencyMode::ADD_DEPENDENCY) {
 		// child MetaPipeline must finish completely before this MetaPipeline can start
 		current.AddDependency(child_meta_pipeline.GetBasePipeline());
 	}
@@ -158,7 +158,8 @@ static bool PipelineExceedsThreadCount(Pipeline &pipeline, const idx_t thread_co
 }
 
 void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies,
-                                            const MetaPipeline &last_child, bool force, bool skip_dataflow_pipelines) {
+                                            const MetaPipeline &last_child, RecursiveDependencyMode dependency_mode,
+                                            DataflowDependencyMode dataflow_mode) {
 	if (recursive_cte) {
 		return; // let's not burn our fingers on this for now
 	}
@@ -177,20 +178,22 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 
 	// we try to limit the performance impact of these dependencies on smaller workloads,
 	// by only adding the dependencies if the source operator can likely keep all threads busy.
-	// when 'force' is true (e.g. for DML CTEs), we always add the dependencies regardless,
+	// when dependencies are forced (e.g. for DML CTEs), we always add them regardless,
 	// because the ordering is required for correctness, not just performance.
 	const auto thread_count = TaskScheduler::GetScheduler(executor.context).NumberOfThreads();
 	for (; it != child_meta_pipelines.end(); it++) {
 		for (auto &pipeline : it->get()->pipelines) {
-			if (skip_dataflow_pipelines && pipeline->HasDataflowDependencies()) {
+			if (dataflow_mode == DataflowDependencyMode::SKIP && pipeline->HasDataflowDependencies()) {
 				continue;
 			}
-			if (!force && !PipelineExceedsThreadCount(*pipeline, thread_count)) {
+			if (dependency_mode == RecursiveDependencyMode::RESPECT_PARALLELISM &&
+			    !PipelineExceedsThreadCount(*pipeline, thread_count)) {
 				continue;
 			}
 			auto &pipeline_deps = pipeline_dependencies[*pipeline];
 			for (auto &new_dependency : new_dependencies) {
-				if (!force && !PipelineExceedsThreadCount(*new_dependency, thread_count)) {
+				if (dependency_mode == RecursiveDependencyMode::RESPECT_PARALLELISM &&
+				    !PipelineExceedsThreadCount(*new_dependency, thread_count)) {
 					continue;
 				}
 				pipeline_deps.push_back(*new_dependency);

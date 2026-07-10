@@ -2,11 +2,42 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 
 namespace duckdb {
+
+static const char *GetCTEConsumerModeName(CTEConsumerMode mode) {
+	switch (mode) {
+	case CTEConsumerMode::DIRECT:
+		return "DIRECT";
+	case CTEConsumerMode::BUFFERED:
+		return "BUFFERED";
+	case CTEConsumerMode::MATERIALIZED:
+		return "MATERIALIZED";
+	default:
+		throw InternalException("Unknown CTE consumer mode");
+	}
+}
+
+static const char *GetCTEExecutionModeName(CTEExecutionMode mode) {
+	switch (mode) {
+	case CTEExecutionMode::MATERIALIZED:
+		return "MATERIALIZED";
+	case CTEExecutionMode::STREAMING_FANOUT:
+		return "STREAMING_FANOUT";
+	case CTEExecutionMode::HYBRID_FANOUT:
+		return "HYBRID_FANOUT";
+	default:
+		throw InternalException("Unknown CTE execution mode");
+	}
+}
+
+enum class CTESinkExecutionState : uint8_t { ACTIVE, BLOCKED, STOPPED };
+enum class CTECombineState : uint8_t { PENDING, COMBINED };
 
 class CTEConsumerGlobalSourceState : public GlobalSourceState {
 public:
@@ -74,7 +105,7 @@ void PhysicalCTEConsumerSource::SourceFinished(ClientContext &context, GlobalSou
 InsertionOrderPreservingMap<string> PhysicalCTEConsumerSource::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Index"] = StringUtil::Format("%llu", cte_index.index);
-	result["CTE Mode"] = direct_fanout ? "DIRECT_FANOUT" : "STREAMING_FANOUT";
+	result["CTE Mode"] = GetCTEConsumerModeName(consumer_mode);
 	result["Consumer"] = StringUtil::Format("%llu", consumer_idx);
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
@@ -99,22 +130,22 @@ class CTEGlobalState : public GlobalSinkState {
 public:
 	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op)
 	    : op(op), working_table_ref(op.working_table.get()),
-	      exchange(op.UseStreamingExchange() ? op.exchange : nullptr), materialize(op.RequiresMaterialization()) {
+	      exchange(op.UseStreamingExchange() ? op.exchange : nullptr), execution_mode(op.GetExecutionMode()) {
 		ResetState(context);
 	}
 	const PhysicalCTE &op;
 	optional_ptr<ColumnDataCollection> working_table_ref;
 	shared_ptr<PipelineBroadcastExchange> exchange;
-	bool materialize;
+	CTEExecutionMode execution_mode;
 
-	mutex lhs_lock;
+	annotated_mutex lhs_lock;
 
 private:
 	void ResetState(ClientContext &context) {
 		if (exchange) {
 			exchange->Reset();
 		}
-		if (materialize) {
+		if (execution_mode != CTEExecutionMode::STREAMING_FANOUT) {
 			D_ASSERT(op.working_table);
 			op.working_table->Reset();
 			working_table_ref = op.working_table.get();
@@ -134,21 +165,20 @@ public:
 	}
 
 	void MergeIT(ColumnDataCollection &input) {
-		lock_guard<mutex> guard(lhs_lock);
+		annotated_lock_guard<annotated_mutex> guard(lhs_lock);
 		working_table_ref->Combine(input);
 	}
 };
 
 class CTELocalState : public LocalSinkState {
 public:
-	explicit CTELocalState(ClientContext &context, const PhysicalCTE &op)
-	    : materialize(op.RequiresMaterialization()), use_exchange(op.UseStreamingExchange()) {
-		if (materialize) {
+	explicit CTELocalState(ClientContext &context, const PhysicalCTE &op) : execution_mode(op.GetExecutionMode()) {
+		if (execution_mode != CTEExecutionMode::STREAMING_FANOUT) {
 			D_ASSERT(op.working_table);
 			lhs_data = make_uniq<ColumnDataCollection>(context, op.working_table->Types());
 			lhs_data->InitializeAppend(append_state);
 		}
-		if (use_exchange) {
+		if (execution_mode != CTEExecutionMode::MATERIALIZED) {
 			D_ASSERT(op.exchange);
 			exchange_state = op.exchange->GetLocalState(context);
 		}
@@ -157,14 +187,14 @@ public:
 	unique_ptr<LocalSinkState> distinct_state;
 	unique_ptr<ColumnDataCollection> lhs_data;
 	ColumnDataAppendState append_state;
-	bool materialize;
-	bool use_exchange;
+	CTEExecutionMode execution_mode;
+	CTESinkExecutionState sink_execution_state = CTESinkExecutionState::ACTIVE;
 	// Combine can be retried after a blocked exchange finish.
-	bool combined = false;
+	CTECombineState combine_state = CTECombineState::PENDING;
 	unique_ptr<PipelineBroadcastExchangeLocalState> exchange_state;
 
 	void Append(DataChunk &input) {
-		D_ASSERT(materialize);
+		D_ASSERT(execution_mode != CTEExecutionMode::STREAMING_FANOUT);
 		D_ASSERT(lhs_data);
 		lhs_data->Append(append_state, input);
 	}
@@ -183,15 +213,27 @@ SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, Op
 	auto &gstate = input.global_state.Cast<CTEGlobalState>();
 	auto &lstate = input.local_state.Cast<CTELocalState>();
 	SinkResultType result = SinkResultType::NEED_MORE_INPUT;
-	if (lstate.use_exchange) {
+	if (lstate.execution_mode != CTEExecutionMode::MATERIALIZED) {
 		D_ASSERT(gstate.exchange);
 		D_ASSERT(lstate.exchange_state);
 		result = gstate.exchange->Push(chunk, *lstate.exchange_state, input.interrupt_state);
 		if (result == SinkResultType::BLOCKED) {
+			if (lstate.sink_execution_state != CTESinkExecutionState::BLOCKED) {
+				DUCKDB_LOG(context.client, PhysicalOperatorLogType, *this, "PhysicalCTE", "ExchangeBlocked",
+				           {{"mode", GetCTEExecutionModeName(lstate.execution_mode)}});
+				lstate.sink_execution_state = CTESinkExecutionState::BLOCKED;
+			}
 			return result;
 		}
+		if (result == SinkResultType::FINISHED && lstate.sink_execution_state != CTESinkExecutionState::STOPPED) {
+			DUCKDB_LOG(context.client, PhysicalOperatorLogType, *this, "PhysicalCTE", "ProducerStoppedEarly",
+			           {{"mode", GetCTEExecutionModeName(lstate.execution_mode)}});
+			lstate.sink_execution_state = CTESinkExecutionState::STOPPED;
+		} else if (result != SinkResultType::FINISHED) {
+			lstate.sink_execution_state = CTESinkExecutionState::ACTIVE;
+		}
 	}
-	if (lstate.materialize) {
+	if (lstate.execution_mode != CTEExecutionMode::STREAMING_FANOUT) {
 		// In hybrid mode, append only after a successful exchange push; blocked pushes retry the same chunk.
 		lstate.Append(chunk);
 		return SinkResultType::NEED_MORE_INPUT;
@@ -202,18 +244,19 @@ SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, Op
 
 SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<CTELocalState>();
-	if (lstate.use_exchange) {
+	if (lstate.execution_mode != CTEExecutionMode::MATERIALIZED) {
 		D_ASSERT(lstate.exchange_state);
 		auto result = exchange->FinishLocal(*lstate.exchange_state, input.interrupt_state);
 		if (result == SinkCombineResultType::BLOCKED) {
 			return result;
 		}
 	}
-	if (lstate.materialize && !lstate.combined) {
+	if (lstate.execution_mode != CTEExecutionMode::STREAMING_FANOUT &&
+	    lstate.combine_state == CTECombineState::PENDING) {
 		auto &gstate = input.global_state.Cast<CTEGlobalState>();
 		D_ASSERT(lstate.lhs_data);
 		gstate.MergeIT(*lstate.lhs_data);
-		lstate.combined = true;
+		lstate.combine_state = CTECombineState::COMBINED;
 	}
 
 	return SinkCombineResultType::FINISHED;
@@ -225,6 +268,8 @@ SinkFinalizeType PhysicalCTE::Finalize(Pipeline &pipeline, Event &event, ClientC
 		auto &gstate = input.global_state.Cast<CTEGlobalState>();
 		gstate.exchange->Finish();
 		gstate.exchange->FinishDirectConsumers();
+		DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalCTE", "ProducerFinished",
+		           {{"mode", GetCTEExecutionModeName(gstate.execution_mode)}});
 	}
 	return SinkFinalizeType::READY;
 }
@@ -236,17 +281,18 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	D_ASSERT(children.size() == 2);
 	op_state.reset();
 	sink_state.reset();
-	has_materialized_consumers = false;
 	materialized_consumer_count = 0;
 	if (exchange) {
+		exchange->SetLogOperator(*this);
 		// Prepared plans rebuild pipelines while keeping the physical CTE and consumer indexes.
 		exchange->ResetConsumerRegistrations();
 	}
 
 	auto &state = meta_pipeline.GetState();
 
-	auto &child_meta_pipeline =
-	    meta_pipeline.CreateChildMetaPipeline(current, *this, MetaPipelineType::REGULAR, !exchange);
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(
+	    current, *this, MetaPipelineType::REGULAR,
+	    exchange ? MetaPipelineDependencyMode::NO_DEPENDENCY : MetaPipelineDependencyMode::ADD_DEPENDENCY);
 	child_meta_pipeline.Build(children[0]);
 
 	for (auto &cte_scan : cte_scans) {
@@ -279,7 +325,9 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 		}
 	}
 	if (last_child_ptr) {
-		meta_pipeline.AddRecursiveDependencies(dml_pipelines, *last_child_ptr, true, !!exchange);
+		meta_pipeline.AddRecursiveDependencies(dml_pipelines, *last_child_ptr, RecursiveDependencyMode::FORCE,
+		                                       exchange ? DataflowDependencyMode::SKIP
+		                                                : DataflowDependencyMode::INCLUDE);
 	}
 }
 
@@ -306,17 +354,26 @@ void PhysicalCTE::RegisterMaterializedConsumer(idx_t consumer_idx) {
 	D_ASSERT(exchange);
 	// Materialized consumers must not keep the exchange producer active or force exchange buffering.
 	if (exchange->DisableConsumer(consumer_idx)) {
-		has_materialized_consumers = true;
 		materialized_consumer_count++;
 	}
 }
 
+CTEExecutionMode PhysicalCTE::GetExecutionMode() const {
+	if (!exchange || exchange->ConsumerCount() == 0) {
+		return CTEExecutionMode::MATERIALIZED;
+	}
+	if (materialized_consumer_count > 0) {
+		return CTEExecutionMode::HYBRID_FANOUT;
+	}
+	return CTEExecutionMode::STREAMING_FANOUT;
+}
+
 bool PhysicalCTE::UseStreamingExchange() const {
-	return exchange && exchange->ConsumerCount() > 0;
+	return GetExecutionMode() != CTEExecutionMode::MATERIALIZED;
 }
 
 bool PhysicalCTE::RequiresMaterialization() const {
-	return !exchange || has_materialized_consumers;
+	return GetExecutionMode() != CTEExecutionMode::STREAMING_FANOUT;
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
@@ -327,19 +384,12 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename.GetIdentifierName();
 	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
-	auto use_exchange = UseStreamingExchange();
-	auto materialize = RequiresMaterialization();
-	if (use_exchange && materialize) {
-		result["Execution Mode"] = "HYBRID_FANOUT";
-	} else if (use_exchange) {
-		result["Execution Mode"] = "STREAMING_FANOUT";
-	} else {
-		result["Execution Mode"] = "MATERIALIZED";
-	}
-	if (use_exchange && exchange->RunToCompletion()) {
+	auto execution_mode = GetExecutionMode();
+	result["Execution Mode"] = GetCTEExecutionModeName(execution_mode);
+	if (UseStreamingExchange() && exchange->RunToCompletion()) {
 		result["Run To Completion"] = "true";
 	}
-	if (use_exchange) {
+	if (UseStreamingExchange()) {
 		auto direct_count = exchange->DirectConsumerCount();
 		auto consumer_count = exchange->ConsumerCount();
 		D_ASSERT(direct_count <= consumer_count);
@@ -369,7 +419,7 @@ ProgressData PhysicalCTE::GetSinkProgress(ClientContext &context, GlobalSinkStat
 	if (state.exchange) {
 		return state.exchange->SinkProgress(source_progress, estimated_cardinality);
 	}
-	lock_guard<mutex> guard(state.lhs_lock);
+	annotated_lock_guard<annotated_mutex> guard(state.lhs_lock);
 	if (!state.working_table_ref) {
 		return ProgressData {0, 1, true};
 	}

@@ -213,9 +213,9 @@ bool Pipeline::IsOrderDependent() const {
 
 void Pipeline::SetExternalInput() {
 	input_mode = PipelineInputMode::EXTERNAL_INPUT;
-	external_input_event_scheduled = false;
-	external_input_completed = false;
+	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
 	external_input_event.reset();
+	external_input_event_state = ExternalInputEventState::UNSET;
 }
 
 static bool CanUseExternalInputOperator(const PhysicalOperator &op) {
@@ -430,7 +430,7 @@ void Pipeline::PrepareExternalInput() {
 	if (initialized) {
 		return;
 	}
-	lock_guard<mutex> guard(external_input_lock);
+	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
 	if (initialized) {
 		return;
 	}
@@ -439,12 +439,12 @@ void Pipeline::PrepareExternalInput() {
 }
 
 shared_ptr<GlobalSourceState> Pipeline::GetSourceState() {
-	lock_guard<mutex> guard(source_state_lock);
+	annotated_lock_guard<annotated_mutex> guard(source_state_lock);
 	return source_state;
 }
 
 void Pipeline::SetSourceState(shared_ptr<GlobalSourceState> state) {
-	lock_guard<mutex> guard(source_state_lock);
+	annotated_lock_guard<annotated_mutex> guard(source_state_lock);
 	source_state = std::move(state);
 }
 
@@ -509,20 +509,19 @@ void Pipeline::SetExternalInputEvent(const shared_ptr<Event> &event) {
 	if (!event) {
 		throw InternalException("SetExternalInputEvent called with a null event");
 	}
-	lock_guard<mutex> guard(external_input_lock);
+	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
 	auto existing_event = external_input_event.lock();
 	if (existing_event && existing_event.get() != event.get()) {
 		throw InternalException("External input pipeline event was registered more than once");
 	}
 	external_input_event = event;
-	external_input_event_scheduled = false;
-	external_input_completed = false;
+	external_input_event_state = ExternalInputEventState::REGISTERED;
 }
 
 void Pipeline::ScheduleExternalInputEvent(shared_ptr<Event> event) {
 	shared_ptr<Event> event_to_finish;
 	{
-		lock_guard<mutex> guard(external_input_lock);
+		annotated_lock_guard<annotated_mutex> guard(external_input_lock);
 		if (!IsExternalInput()) {
 			throw InternalException("ScheduleExternalInputEvent called for a pipeline that is not externally fed");
 		}
@@ -534,9 +533,19 @@ void Pipeline::ScheduleExternalInputEvent(shared_ptr<Event> event) {
 			throw InternalException("External input pipeline event was registered more than once");
 		}
 		external_input_event = event;
-		external_input_event_scheduled = true;
-		if (external_input_completed) {
+		switch (external_input_event_state) {
+		case ExternalInputEventState::COMPLETED_BEFORE_SCHEDULE:
+			external_input_event_state = ExternalInputEventState::COMPLETED;
 			event_to_finish = std::move(event);
+			break;
+		case ExternalInputEventState::COMPLETED:
+			event_to_finish = std::move(event);
+			break;
+		case ExternalInputEventState::UNSET:
+		case ExternalInputEventState::REGISTERED:
+		case ExternalInputEventState::SCHEDULED:
+			external_input_event_state = ExternalInputEventState::SCHEDULED;
+			break;
 		}
 	}
 	if (event_to_finish && !event_to_finish->IsFinished()) {
@@ -547,21 +556,24 @@ void Pipeline::ScheduleExternalInputEvent(shared_ptr<Event> event) {
 void Pipeline::CompleteExternalInput() {
 	shared_ptr<Event> event;
 	{
-		lock_guard<mutex> guard(external_input_lock);
+		annotated_lock_guard<annotated_mutex> guard(external_input_lock);
 		if (!IsExternalInput()) {
 			throw InternalException("CompleteExternalInput called for a pipeline that is not externally fed");
 		}
-		if (external_input_completed) {
+		if (external_input_event_state == ExternalInputEventState::COMPLETED ||
+		    external_input_event_state == ExternalInputEventState::COMPLETED_BEFORE_SCHEDULE) {
 			return;
 		}
 		event = external_input_event.lock();
 		if (!event) {
 			throw InternalException("Completing external input pipeline before its event was scheduled");
 		}
-		external_input_completed = true;
-		if (!external_input_event_scheduled) {
+		if (external_input_event_state == ExternalInputEventState::REGISTERED) {
+			external_input_event_state = ExternalInputEventState::COMPLETED_BEFORE_SCHEDULE;
 			return;
 		}
+		D_ASSERT(external_input_event_state == ExternalInputEventState::SCHEDULED);
+		external_input_event_state = ExternalInputEventState::COMPLETED;
 	}
 	if (!event->IsFinished()) {
 		event->Finish();
@@ -644,7 +656,7 @@ const vector<reference<PhysicalOperator>> &Pipeline::GetIntermediateOperators() 
 }
 
 void Pipeline::ClearSource() {
-	lock_guard<mutex> source_guard(source_state_lock);
+	annotated_lock_guard<annotated_mutex> source_guard(source_state_lock);
 	source_state.reset();
 	batch_indexes.clear();
 }
