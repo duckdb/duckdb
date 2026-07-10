@@ -4,6 +4,7 @@
 #include "duckdb/common/feature_query.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/tableref/feature_at_version_ref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {

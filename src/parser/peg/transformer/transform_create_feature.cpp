@@ -164,7 +164,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	auto timestamp_ref = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(7));
 	auto timestamp_column = timestamp_ref.name;
 	string timestamp_table;
-	if (timestamp_ref.schema != INVALID_SCHEMA) {
+	if (!timestamp_ref.schema.empty()) {
 		timestamp_table = timestamp_ref.schema;
 	}
 	// index 8: FeatureWindowClause? (default: 1 day)
