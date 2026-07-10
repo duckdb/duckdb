@@ -16,13 +16,8 @@ namespace duckdb {
 class DatabaseInstance;
 class ClientContext;
 
-//! An external resource type: a named kind of external resource DuckDB can provision and reap (a
-//! container, a cloud stack, ...), described purely by its lifecycle callbacks. Every field is a
-//! simple, SQL-expressible value — resource types are data, not C++ objects. The callbacks are
-//! referenced by name and resolved against the catalog lazily (when invoked), so they may be defined
-//! independently. `WITH EXTERNAL RESOURCE '<type>' ... ATTACH|CONNECT` is the first consumer, but a type
-//! says nothing about attaching — the backend/endpoint is what the `status` callback returns at
-//! provision time.
+//! A named kind of external resource DuckDB can provision and reap, described purely by lifecycle callbacks
+//! referenced by name. Every field is a simple string — resource types are data, resolved lazily when invoked.
 struct ExternalResourceType {
 	//! The type name, e.g. 'quack@aws:ec2'.
 	string name;
