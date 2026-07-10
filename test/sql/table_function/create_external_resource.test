@@ -133,3 +133,52 @@ query T
 SELECT result FROM create_external_resource('compute@local');
 ----
 {ip=10.0.0.1}
+
+# On a post-create failure the provisioned resource must be torn down (no leak): destroy_function is
+# invoked. destroy advances a sequence, which lets us observe the call across the internal connection.
+statement ok
+CREATE SEQUENCE teardown_calls;
+
+statement ok
+CREATE MACRO ok_handle(p) AS TABLE SELECT MAP {'id':'z'} AS handle;
+
+statement ok
+CREATE MACRO fails(h) AS TABLE SELECT 'failed' AS state, MAP {'x':'y'} AS result;
+
+statement ok
+CREATE MACRO record_teardown(h) AS TABLE SELECT nextval('teardown_calls') AS n;
+
+statement ok
+CALL register_external_resource_type('leaky@local', kind := 'compute', create_function := 'ok_handle', status_function := 'fails', destroy_function := 'record_teardown');
+
+statement error
+SELECT * FROM create_external_resource('leaky@local');
+----
+<REGEX>:.*state 'failed'.*
+
+# destroy ran once (consumed value 1), so the next value here is 2.
+query I
+SELECT nextval('teardown_calls');
+----
+2
+
+# teardown_on_failure := false leaves the resource for inspection: destroy is NOT invoked.
+statement ok
+CREATE SEQUENCE teardown_calls_kept;
+
+statement ok
+CREATE MACRO record_teardown_kept(h) AS TABLE SELECT nextval('teardown_calls_kept') AS n;
+
+statement ok
+CALL register_external_resource_type('kept@local', kind := 'compute', create_function := 'ok_handle', status_function := 'fails', destroy_function := 'record_teardown_kept');
+
+statement error
+SELECT * FROM create_external_resource('kept@local', teardown_on_failure := false);
+----
+<REGEX>:.*state 'failed'.*
+
+# destroy never ran, so the first value here is 1.
+query I
+SELECT nextval('teardown_calls_kept');
+----
+1

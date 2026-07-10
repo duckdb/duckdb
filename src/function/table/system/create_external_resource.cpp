@@ -55,6 +55,7 @@ static Value RequireResourceMap(const Value &value, const string &function_name,
 struct CreateExternalResourceBindData : public TableFunctionData {
 	string type_name;
 	Value params;
+	bool teardown_on_failure = true;
 };
 
 struct CreateExternalResourceState : public GlobalTableFunctionState {
@@ -73,6 +74,8 @@ static unique_ptr<FunctionData> CreateExternalResourceBind(ClientContext &contex
 		auto key = StringUtil::Lower(np.first.GetIdentifierName());
 		if (key == "params" && !np.second.IsNull()) {
 			result->params = np.second;
+		} else if (key == "teardown_on_failure" && !np.second.IsNull()) {
+			result->teardown_on_failure = BooleanValue::Get(np.second);
 		}
 	}
 
@@ -130,6 +133,28 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	}
 	// Contract: `create` returns a single 'handle' column (a MAP; opaque to us, passed back to status/destroy).
 	auto handle = RequireResourceMap(result->GetValue(0, 0), type->create_function, "handle");
+
+	// Ownership: the resource now exists. We own its teardown until we successfully hand back the deleter
+	// binding below; on any failure in between (status 'failed', timeout, cancellation, malformed result,
+	// baseline violation) tear it down best-effort — unless teardown_on_failure is disabled, e.g. to inspect
+	// a rolled-back resource. This guard runs the destroy on every exit path, including exception unwinding.
+	bool deleter_returned = false;
+	struct TeardownGuard {
+		Connection &con;
+		const string &destroy_function;
+		const Value &handle;
+		bool teardown;
+		const bool &done;
+		~TeardownGuard() {
+			if (done || !teardown || destroy_function.empty()) {
+				return;
+			}
+			try {
+				con.Query("SELECT * FROM " + destroy_function + "(" + handle.ToSQLString() + ")");
+			} catch (...) { // best-effort: never mask the original failure with a teardown error
+			}
+		}
+	} teardown_guard {con, type->destroy_function, handle, bind_data.teardown_on_failure, deleter_returned};
 
 	if (type->status_function.empty()) {
 		throw InvalidInputException(
@@ -202,6 +227,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	output.data[3].Append(status_result);
 	output.data[4].Append(type->destroy_function.empty() ? Value(LogicalType::VARCHAR) : Value(type->destroy_function));
 	output.data[5].Append(handle);
+	// The deleter binding is now handed to the caller: ownership transfers, so the guard must not tear down.
+	deleter_returned = true;
 	state.done = true;
 }
 
@@ -209,6 +236,7 @@ void CreateExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("create_external_resource", {LogicalType::VARCHAR}, CreateExternalResourceFunction,
 	                 CreateExternalResourceBind, CreateExternalResourceInit);
 	fn.named_parameters["params"] = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	fn.named_parameters["teardown_on_failure"] = LogicalType::BOOLEAN;
 	set.AddFunction(fn);
 }
 
