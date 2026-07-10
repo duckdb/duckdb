@@ -543,8 +543,8 @@ void Pipeline::ScheduleExternalInputEvent(shared_ptr<Event> event) {
 			break;
 		case ExternalInputEventState::UNSET:
 		case ExternalInputEventState::REGISTERED:
-		case ExternalInputEventState::SCHEDULED:
-			external_input_event_state = ExternalInputEventState::SCHEDULED;
+		case ExternalInputEventState::EVENT_SCHEDULED:
+			external_input_event_state = ExternalInputEventState::EVENT_SCHEDULED;
 			break;
 		}
 	}
@@ -572,7 +572,7 @@ void Pipeline::CompleteExternalInput() {
 			external_input_event_state = ExternalInputEventState::COMPLETED_BEFORE_SCHEDULE;
 			return;
 		}
-		D_ASSERT(external_input_event_state == ExternalInputEventState::SCHEDULED);
+		D_ASSERT(external_input_event_state == ExternalInputEventState::EVENT_SCHEDULED);
 		external_input_event_state = ExternalInputEventState::COMPLETED;
 	}
 	if (!event->IsFinished()) {

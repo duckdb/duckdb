@@ -134,7 +134,7 @@ private:
 	//! The map of ColumnBinding -> statistics for the various nodes
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	struct CTEStatistics {
-		vector<unique_ptr<BaseStatistics>> column_stats;
+		column_binding_map_t<unique_ptr<BaseStatistics>> column_stats;
 		unique_ptr<NodeStatistics> node_stats;
 	};
 	//! Statistics for materialized CTE definitions, keyed by their definition table index

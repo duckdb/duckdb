@@ -26,7 +26,13 @@ class PipelineExecutor;
 class Pipeline;
 
 enum class PipelineInputMode : uint8_t { SCHEDULED_SOURCE, EXTERNAL_INPUT };
-enum class ExternalInputEventState : uint8_t { UNSET, REGISTERED, SCHEDULED, COMPLETED_BEFORE_SCHEDULE, COMPLETED };
+enum class ExternalInputEventState : uint8_t {
+	UNSET,
+	REGISTERED,
+	EVENT_SCHEDULED,
+	COMPLETED_BEFORE_SCHEDULE,
+	COMPLETED
+};
 
 class PipelineTask : public ExecutorTask {
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;

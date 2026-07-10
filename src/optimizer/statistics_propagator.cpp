@@ -134,14 +134,17 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalMate
 	auto bindings = op.children[0]->GetColumnBindings();
 
 	CTEStatistics cte_stats;
-	cte_stats.column_stats.reserve(bindings.size());
-	for (auto &binding : bindings) {
+	auto column_count =
+	    MinValue<idx_t>(op.column_count, MinValue<idx_t>(bindings.size(), op.children[0]->types.size()));
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		auto &binding = bindings[col_idx];
 		auto entry = statistics_map.find(binding);
-		if (entry == statistics_map.end() || !entry->second) {
-			cte_stats.column_stats.push_back(nullptr);
-		} else {
-			cte_stats.column_stats.push_back(entry->second->ToUnique());
+		if (entry == statistics_map.end() || !entry->second ||
+		    entry->second->GetType() != op.children[0]->types[col_idx]) {
+			continue;
 		}
+		cte_stats.column_stats.emplace(ColumnBinding(op.table_index, ProjectionIndex(col_idx)),
+		                               entry->second->ToUnique());
 	}
 	if (cte_node_stats) {
 		cte_stats.node_stats = make_uniq<NodeStatistics>(*cte_node_stats);
@@ -159,14 +162,15 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCTER
 	}
 
 	auto &cte_stats = entry->second;
-	auto column_count = MinValue<idx_t>(op.chunk_types.size(), cte_stats.column_stats.size());
-	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		auto &stats = cte_stats.column_stats[col_idx];
-		if (!stats) {
+	for (idx_t col_idx = 0; col_idx < op.chunk_types.size(); col_idx++) {
+		auto cte_binding = ColumnBinding(op.cte_index, ProjectionIndex(col_idx));
+		auto stats_entry = cte_stats.column_stats.find(cte_binding);
+		if (stats_entry == cte_stats.column_stats.end() || !stats_entry->second ||
+		    stats_entry->second->GetType() != op.chunk_types[col_idx]) {
 			continue;
 		}
 		ColumnBinding binding(op.table_index, ProjectionIndex(col_idx));
-		statistics_map[binding] = stats->ToUnique();
+		statistics_map[binding] = stats_entry->second->ToUnique();
 	}
 
 	if (!cte_stats.node_stats) {
