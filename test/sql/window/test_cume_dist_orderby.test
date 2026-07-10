@@ -51,3 +51,22 @@ ORDER BY 1;
 7	3	0.6666666666666666
 8	4	1.0
 9	4	1.0
+
+# Test future peer
+query III
+WITH t(id) AS (
+  VALUES (1), (2), (3)
+)
+SELECT
+  id,
+  CUME_DIST(ORDER BY id) OVER (
+    ORDER BY id
+    ROWS BETWEEN 2 FOLLOWING AND 2 FOLLOWING
+  ) AS actual,
+  0.0 AS expected
+FROM t
+ORDER BY id;
+----
+1	0.0	0.0
+2	0.0	0.0
+3	0.0	0.0

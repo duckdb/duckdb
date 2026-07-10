@@ -342,6 +342,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// Mark this entry as being created by this transaction
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
+	// Preserve the oid across the alter: an altered entry is the same logical object as before
+	value->oid = entry->oid;
 
 	if (!StringUtil::CIEquals(value->name, entry->name)) {
 		if (!RenameEntryInternal(transaction, *entry, value->name, alter_info, read_lock)) {
@@ -443,7 +445,7 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEnt
 	// Make sure that we don't see any uncommitted changes
 	auto transaction_id = MAX_TRANSACTION_ID;
 	// This will allow us to see all committed changes made before this COMMIT happened
-	auto tx_start_time = commit_id;
+	auto tx_start_time = commit_id + 1;
 	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id, tx_start_time);
 
 	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);

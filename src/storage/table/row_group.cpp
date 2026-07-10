@@ -463,7 +463,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	}
 	if (has_per_column_metadata_blocks) {
 		row_group->per_column_metadata_blocks = per_column_metadata_blocks;
-		row_group->per_column_metadata_blocks.RemoveColumn(changed_idx);
+		row_group->per_column_metadata_blocks.ClearColumn(changed_idx);
 	}
 	lock.unlock();
 	row_group->Verify();
@@ -552,6 +552,8 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 	}
 	if (has_per_column_metadata_blocks) {
 		row_group->per_column_metadata_blocks = per_column_metadata_blocks;
+		// the columns after the removed one shift down by one position, so their
+		// metadata block entries (keyed by column index) must shift down as well
 		row_group->per_column_metadata_blocks.RemoveColumn(removed_column);
 	}
 	lock.unlock();

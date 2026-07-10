@@ -105,6 +105,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		D_ASSERT(op.children.size() == 1);
 		//! This binder is used to throw when the child expression is of a type that is not allowed.
 		TryOperatorBinder try_operator_binder(binder, context);
+		//! Propagate any lambda parameter bindings so lambda parameters can be referenced inside TRY(...)
+		try_operator_binder.lambda_bindings = lambda_bindings;
 		try_operator_binder.BindChild(op.children[0], depth, error);
 	} else {
 		for (idx_t i = 0; i < op.children.size(); i++) {

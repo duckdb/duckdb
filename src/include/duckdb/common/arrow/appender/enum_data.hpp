@@ -68,8 +68,15 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		result.GetMainBuffer().reserve(capacity * sizeof(TGT));
-		// construct the enum child data
-		auto enum_data = ArrowAppender::InitializeChild(LogicalType::VARCHAR, EnumType::GetSize(type), result.options);
+		// EnumAppendVector always writes the dictionary in the regular int32-offset string
+		// layout, so force a non-view, regular-offset child regardless of the connection's
+		// produce_arrow_string_view / arrow_large_buffer_size settings. Otherwise the child
+		// would be finalized as a view (4-buffer) or large (int64-offset) array over int32
+		// data, producing a malformed dictionary that consumers read as garbage.
+		ClientProperties dict_options = result.options;
+		dict_options.produce_arrow_string_view = false;
+		dict_options.arrow_offset_size = ArrowOffsetSize::REGULAR;
+		auto enum_data = ArrowAppender::InitializeChild(LogicalType::VARCHAR, EnumType::GetSize(type), dict_options);
 		EnumAppendVector(*enum_data, EnumType::GetValuesInsertOrder(type), EnumType::GetSize(type));
 		result.child_data.push_back(std::move(enum_data));
 	}

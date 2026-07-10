@@ -429,6 +429,8 @@ int ArrowSchemaDeepCopy(struct ArrowSchema *schema, struct ArrowSchema *schema_o
 		return result;
 	}
 
+	schema_out->flags = schema->flags;
+
 	result = ArrowSchemaSetName(schema_out, schema->name);
 	if (result != NANOARROW_OK) {
 		schema_out->release(schema_out);

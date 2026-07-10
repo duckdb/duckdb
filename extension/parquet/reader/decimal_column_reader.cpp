@@ -25,6 +25,10 @@ template <>
 double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size,
                                              const ParquetColumnSchema &schema_ele) {
 	double res = 0;
+	if (size == 0) {
+		// empty byte array - value is zero, and there is no sign byte to read
+		return res;
+	}
 	bool positive = (*pointer & 0x80) == 0;
 	for (idx_t i = 0; i < size; i += 8) {
 		auto byte_size = MinValue<idx_t>(sizeof(uint64_t), size - i);

@@ -36,7 +36,8 @@ SMART_PTR_TYPES = (
 )
 SMART_PTR_REGEX = r"^duckdb::(" + "|".join(SMART_PTR_TYPES) + r")<.+>$"
 PRINT_COMMAND_NAME = "duckdb-p"
-_ACTIVE_ROOT_EXPRESSIONS = []
+_LAST_ROOT_EXPRESSION = ""
+_LAST_ROOT_IS_SMART_PTR = False
 
 
 def __lldb_init_module(debugger, _internal_dict):
@@ -60,12 +61,11 @@ def __lldb_init_module(debugger, _internal_dict):
 
 
 def duckdb_print_command(debugger, command, result, _internal_dict):
-    normalized = _normalize_expression_text(command)
-    _ACTIVE_ROOT_EXPRESSIONS.append(normalized)
-    try:
-        debugger.HandleCommand(_build_expression_command(command))
-    finally:
-        _ACTIVE_ROOT_EXPRESSIONS.pop()
+    global _LAST_ROOT_EXPRESSION, _LAST_ROOT_IS_SMART_PTR
+    expr_text = _extract_expression_text(command)
+    _LAST_ROOT_EXPRESSION = _normalize_expression_text(expr_text)
+    _LAST_ROOT_IS_SMART_PTR = _expression_is_supported_smart_ptr(debugger, expr_text)
+    debugger.HandleCommand(_build_expression_command(command))
 
 
 def _build_expression_command(command):
@@ -74,9 +74,18 @@ def _build_expression_command(command):
         match = re.match(r"^/([A-Za-z]+)\s+(.*)$", stripped, re.DOTALL)
         if match:
             fmt, expr = match.groups()
-            return f"expression -f {fmt} -- {expr}"
+            return f"expression -d no-run-target -f {fmt} -- {expr}"
         return f"expression {command}"
-    return f"expression -- {command}"
+    return f"expression -d no-run-target -- {command}"
+
+
+def _extract_expression_text(command):
+    stripped = command.lstrip()
+    if stripped.startswith("/"):
+        match = re.match(r"^/([A-Za-z]+)\s+(.*)$", stripped, re.DOTALL)
+        if match:
+            return match.group(2)
+    return command
 
 
 def _handle_lldb_command(debugger, command, ignore_errors=False):
@@ -110,6 +119,12 @@ def duckdb_smart_ptr_summary(valobj, _internal_dict):
 
 
 def _get_pointee_name(valobj, pointer_value, pointee_value):
+    if pointee_value is not None and pointee_value.IsValid():
+        pointee_type = pointee_value.GetType()
+        dynamic_name = pointee_type.GetDisplayTypeName() or pointee_type.GetName()
+        if dynamic_name:
+            return dynamic_name
+
     template_type = _get_template_argument_type(valobj)
     if template_type is not None and template_type.IsValid():
         template_name = template_type.GetDisplayTypeName() or template_type.GetName()
@@ -161,11 +176,48 @@ def _is_supported_smart_ptr_type(type_name):
 def _should_expand_children(value):
     path = _normalize_expression_text(_get_expression_path(value))
     if not path:
-        return True
+        return False
 
-    if path in _ACTIVE_ROOT_EXPRESSIONS:
+    if path == _LAST_ROOT_EXPRESSION:
         return True
-    return _is_simple_expression_path(path)
+    if _LAST_ROOT_IS_SMART_PTR and path.startswith("$") and _is_expression_result(value):
+        return True
+    return False
+
+
+def _is_expression_result(value):
+    if value is None or not value.IsValid():
+        return False
+    return value.GetValueType() == getattr(lldb, "eValueTypeConstResult", 7)
+
+
+def _expression_is_supported_smart_ptr(debugger, expression_text):
+    if debugger is None or lldb is None:
+        return False
+
+    target = debugger.GetSelectedTarget()
+    if not target or not target.IsValid():
+        return False
+    process = target.GetProcess()
+    if not process or not process.IsValid():
+        return False
+    thread = process.GetSelectedThread()
+    if not thread or not thread.IsValid():
+        return False
+    frame = thread.GetSelectedFrame()
+    if not frame or not frame.IsValid():
+        return False
+
+    value = frame.EvaluateExpression(expression_text)
+    if value is None or not value.IsValid():
+        return False
+
+    type_obj = value.GetType()
+    if type_obj is None or not type_obj.IsValid():
+        return False
+
+    type_name = type_obj.GetUnqualifiedType().GetName() or ""
+    return _is_supported_smart_ptr_type(type_name)
 
 
 def _dereference_pointer(pointer_value):
@@ -178,7 +230,25 @@ def _dereference_pointer(pointer_value):
     error = pointee.GetError()
     if error.Fail():
         return None
+
+    dynamic_pointee = _get_dynamic_value(pointee)
+    if dynamic_pointee is not None and dynamic_pointee.IsValid():
+        return dynamic_pointee
     return pointee
+
+
+def _get_dynamic_value(value):
+    if value is None or not value.IsValid():
+        return None
+
+    try:
+        dynamic_value = value.GetDynamicValue(lldb.eDynamicDontRunTarget)
+    except Exception:
+        return None
+
+    if dynamic_value is None or not dynamic_value.IsValid():
+        return None
+    return dynamic_value
 
 
 def _find_pointer_descendant(value):
@@ -264,22 +334,6 @@ def _outer_parens_wrap_entire_expr(text):
     return depth == 0
 
 
-def _is_simple_expression_path(path):
-    if path.startswith("$"):
-        return "." not in path and "[" not in path
-    return "." not in path and "[" not in path
-
-
-def _describe_value(value):
-    stream = lldb.SBStream()
-    if value.GetDescription(stream):
-        return stream.GetData()
-
-    stream = lldb.SBStream()
-    value.GetData().GetDescription(stream, value.GetTarget())
-    return stream.GetData()
-
-
 class DuckDBSmartPtrSyntheticProvider:
     def __init__(self, valobj, _internal_dict):
         self.valobj = valobj
@@ -289,9 +343,11 @@ class DuckDBSmartPtrSyntheticProvider:
         self.update()
 
     def update(self):
-        self.pointer_value = _get_pointer_value(self.valobj)
-        self.pointee_value = _dereference_pointer(self.pointer_value)
         self.expand_children = _should_expand_children(self.valobj)
+        self.pointer_value = _get_pointer_value(self.valobj)
+        self.pointee_value = None
+        if self.expand_children:
+            self.pointee_value = _dereference_pointer(self.pointer_value)
         return False
 
     def has_children(self):
