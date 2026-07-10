@@ -815,6 +815,10 @@ idx_t ColumnReader::ReadInternal(ColumnReaderInput &input, Vector &result) {
 	}
 	FinishRead(num_values);
 
+	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
+		FlatVector::SetSize(result, num_values);
+	}
+
 	return num_values;
 }
 
