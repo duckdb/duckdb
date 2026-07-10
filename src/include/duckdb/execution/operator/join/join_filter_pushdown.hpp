@@ -33,6 +33,8 @@ enum class JoinFilterPushdownMode : uint8_t {
 	STORAGE_ONLY
 };
 
+enum class RuntimeFilterCastMode : uint8_t { DEFAULT_CAST, TRY_CAST };
+
 struct JoinFilterPushdownColumn {
 	//! Index into JoinFilterPushdownInfo::join_condition for this pushed column
 	idx_t join_filter_idx = DConstants::INVALID_INDEX;
@@ -45,8 +47,8 @@ struct JoinFilterPushdownColumn {
 	//! The original type of the pushed probe expression before rewriting to the LogicalGet storage column. Only used
 	//! when the mode allows reconstruction of the probe expression for BF/PRF runtime filters.
 	LogicalType runtime_filter_type;
-	//! Whether reconstruction depends on a compressed-materialization cast proven lossless for its direct input.
-	bool uses_lossless_cast = false;
+	//! The cast semantics required when reconstructing the runtime-filter input from the raw scan value.
+	RuntimeFilterCastMode cast_mode = RuntimeFilterCastMode::DEFAULT_CAST;
 };
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };

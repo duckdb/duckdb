@@ -1362,6 +1362,11 @@ static LogicalType GetRuntimeFilterInputType(const JoinFilterPushdownColumn &col
 	return column.runtime_filter_type.IsValid() ? column.runtime_filter_type : runtime_type;
 }
 
+static bool RuntimeFilterUsesTryCast(const JoinFilterPushdownColumn &column, const LogicalType &runtime_type) {
+	return column.storage_type != GetRuntimeFilterInputType(column, runtime_type) &&
+	       column.cast_mode == RuntimeFilterCastMode::TRY_CAST;
+}
+
 static unique_ptr<Expression> CreateRuntimeFilterInputExpression(ClientContext &context,
                                                                  const JoinFilterPushdownColumn &column,
                                                                  const LogicalType &runtime_type) {
@@ -1369,8 +1374,8 @@ static unique_ptr<Expression> CreateRuntimeFilterInputExpression(ClientContext &
 	auto input_type = GetRuntimeFilterInputType(column, runtime_type);
 	unique_ptr<Expression> input = make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0));
 	if (column.storage_type != input_type) {
-		// Lossless compressed casts are proven after filtering; runtime filters see raw scan values.
-		input = BoundCastExpression::AddCastToType(context, std::move(input), input_type, column.uses_lossless_cast);
+		input = BoundCastExpression::AddCastToType(context, std::move(input), input_type,
+		                                           RuntimeFilterUsesTryCast(column, runtime_type));
 	}
 	return input;
 }
@@ -1434,6 +1439,28 @@ static SelectivityOptionalFilterType GetSelectivityOptionalFilterType(DeferredRu
 	}
 }
 
+static const char *GetRuntimeFilterTypeName(DeferredRuntimeFilterType type) {
+	switch (type) {
+	case DeferredRuntimeFilterType::BLOOM_FILTER:
+		return "BLOOM_FILTER";
+	case DeferredRuntimeFilterType::PREFIX_RANGE:
+		return "PREFIX_RANGE";
+	default:
+		throw InternalException("Unknown deferred runtime filter type");
+	}
+}
+
+static const char *GetRuntimeFilterReconstructionModeName(JoinFilterPushdownMode mode) {
+	switch (mode) {
+	case JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION:
+		return "RECONSTRUCT_EXPRESSION";
+	case JoinFilterPushdownMode::STORAGE_ONLY:
+		return "STORAGE_ONLY";
+	default:
+		throw InternalException("Unknown join filter pushdown mode");
+	}
+}
+
 static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &context, JoinHashTable &ht,
                                                             const DeferredRuntimeFilterPushdown &deferred,
                                                             float selectivity_threshold, idx_t n_vectors_to_check) {
@@ -1492,6 +1519,12 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 		deferred.dynamic_filters->PushFilter(*deferred.op, deferred.filter_col_idx,
 		                                     CreateSelectivityOptionalExpressionFilter(
 		                                         std::move(filter_expr), deferred.column.storage_type, filter_type));
+		const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
+		DUCKDB_LOG(context, PhysicalOperatorLogType, *deferred.op, "PhysicalHashJoin", "PublishRuntimeFilter",
+		           {{"kind", GetRuntimeFilterTypeName(deferred.type)},
+		            {"storage_type", deferred.column.storage_type.ToString()},
+		            {"reconstruction_mode", GetRuntimeFilterReconstructionModeName(deferred.column.mode)},
+		            {"uses_try_cast", to_string(RuntimeFilterUsesTryCast(deferred.column, key_type))}});
 	}
 	gstate.deferred_runtime_filters.clear();
 }
@@ -1607,7 +1640,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			auto runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, min_val_before_cast.type());
 			const bool reconstruct_filter_expression =
 			    pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
-			    pushdown_column.storage_type.id() == LogicalTypeId::VARIANT &&
 			    runtime_filter_input_type != pushdown_column.storage_type;
 
 			// Cast to storage type, skip if fails

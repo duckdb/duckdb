@@ -234,7 +234,6 @@ bool BoundCastExpression::Equals(const BaseExpression &other_p) const {
 
 unique_ptr<Expression> BoundCastExpression::Copy() const {
 	auto copy = make_uniq<BoundCastExpression>(child->Copy(), return_type, bound_cast.Copy(), try_cast);
-	copy->lossless_cast = lossless_cast;
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }

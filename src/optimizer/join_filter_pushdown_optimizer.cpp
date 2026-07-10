@@ -72,6 +72,9 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 		if (!PushdownJoinFilterExpressionInternal(bound_cast.Child(), filter)) {
 			return false;
 		}
+		if (bound_cast.IsTryCast()) {
+			filter.cast_mode = RuntimeFilterCastMode::TRY_CAST;
+		}
 		if (variant_integral_cast) {
 			if (tgt.id() == LogicalTypeId::VARIANT) {
 				filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
@@ -79,21 +82,7 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 			}
 			return true;
 		}
-		const bool widening_signed_cast =
-		    src.IsSigned() == tgt.IsSigned() && GetTypeIdSize(tgt.InternalType()) >= GetTypeIdSize(src.InternalType());
-		const bool widening_unsigned_to_signed_cast =
-		    !src.IsSigned() && tgt.IsSigned() && GetTypeIdSize(tgt.InternalType()) > GetTypeIdSize(src.InternalType());
-		if (widening_signed_cast || widening_unsigned_to_signed_cast) {
-			filter.runtime_filter_type = expr.GetReturnType();
-		} else {
-			if (bound_cast.IsLosslessCast()) {
-				filter.runtime_filter_type = expr.GetReturnType();
-				filter.uses_lossless_cast = true;
-			} else {
-				filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
-				filter.runtime_filter_type = LogicalType::INVALID;
-			}
-		}
+		filter.runtime_filter_type = expr.GetReturnType();
 		return true;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {
@@ -105,17 +94,6 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 	}
 	default:
 		return false;
-	}
-}
-
-static void DisableRuntimeFiltersThroughLosslessCasts(vector<JoinFilterPushdownColumn> &columns) {
-	for (auto &column : columns) {
-		if (!column.uses_lossless_cast) {
-			continue;
-		}
-		column.mode = JoinFilterPushdownMode::STORAGE_ONLY;
-		column.runtime_filter_type = LogicalType::INVALID;
-		column.uses_lossless_cast = false;
 	}
 }
 
@@ -175,7 +153,6 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		DisableRuntimeFiltersThroughLosslessCasts(columns);
 		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST: {

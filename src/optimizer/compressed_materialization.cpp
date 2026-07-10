@@ -293,10 +293,7 @@ unique_ptr<CompressExpression> CMHelper::CreateIntegralCastCompress(ClientContex
                                                                     unique_ptr<Expression> input,
                                                                     const LogicalType &target_type,
                                                                     const BaseStatistics &stats) {
-	auto compress_expr = BoundCastExpression::AddCastToType(context, std::move(input), target_type);
-	if (compress_expr->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
-		compress_expr->Cast<BoundCastExpression>().SetLosslessCast();
-	}
+	auto compress_expr = BoundCastExpression::AddCastToType(context, std::move(input), target_type, true);
 	auto compress_stats = CreateIntegralCastStats(target_type, stats);
 	return make_uniq<CompressExpression>(std::move(compress_expr), std::move(compress_stats),
 	                                     CompressedMaterializationType::CAST);
