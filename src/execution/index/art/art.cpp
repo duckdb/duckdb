@@ -1233,7 +1233,7 @@ void ART::Vacuum(IndexLock &state) {
 		D_ASSERT(current.HasMetadata());
 		if (current.GetType() == NType::LEAF) {
 			if (indexes.find(Node::GetAllocatorIdx(NType::LEAF)) != indexes.end()) {
-				// Walks and vacuums the deprecated leaf chain, so it must run with no pins held.
+				// Vacuum the internal pointers in the deprecated leaf chain.
 				Leaf::DeprecatedVacuum(art, current);
 			}
 			return ARTScanNodeResult::SKIP;
