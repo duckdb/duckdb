@@ -189,13 +189,14 @@ unique_ptr<Expression> EnumCompareSimplificationRule::Apply(LogicalOperator &op,
 		cmp_children.emplace_back(make_uniq<BoundConstantExpression>(Value(enum_type)));
 	} else {
 		// Look up the string in the domain for the original ENUM
-		string_t s = v.ToString();
+		const auto s = v.ToString();
 		auto strings = FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(enum_type));
 		for (uint64_t i = 0; i < EnumType::GetSize(enum_type); ++i) {
-			if (s == strings[i]) {
+			if (strings[i] == s) {
 				//	The literal is in the ENUM domain, so translate it
 				cmp_children.emplace_back(make_uniq<BoundConstantExpression>(Value::ENUM(i, enum_type)));
 				if (cast_idx) {
+					// Restore the original orientation
 					std::swap(cmp_children[0], cmp_children[1]);
 				}
 				break;
