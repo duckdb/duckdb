@@ -81,6 +81,21 @@ SELECT * FROM create_external_resource('does_not_exist@local');
 ----
 <REGEX>:.*unknown resource type.*
 
+# Callback names that are keywords (or otherwise need quoting) are quoted when the callback SQL is built.
+statement ok
+CREATE MACRO "select"(p) AS TABLE SELECT MAP {'id':'r'} AS handle;
+
+statement ok
+CREATE MACRO plain_status(h) AS TABLE SELECT 'ready' AS state, MAP {'uri':'kw', 'attached_db_type':'quack'} AS result;
+
+statement ok
+CALL register_external_resource_type('kw@local', kind := 'catalog', create_function := 'select', status_function := 'plain_status');
+
+query T
+SELECT uri FROM create_external_resource('kw@local');
+----
+kw
+
 # A status function whose 'result' column is not a MAP is rejected with a clear error (not an internal crash).
 statement ok
 CREATE MACRO nonmap_result_status(h) AS TABLE SELECT 'ready' AS state, 42 AS result;

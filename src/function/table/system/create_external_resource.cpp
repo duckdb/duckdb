@@ -152,7 +152,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 			    bind_data.type_name, type->search_path, set_res->GetError());
 		}
 	}
-	auto sql = "SELECT * FROM " + type->create_function + "(" + bind_data.params.ToSQLString() + ")";
+	auto sql = "SELECT * FROM " + QualifiedName::Parse(type->create_function).ToString() + "(" +
+	           bind_data.params.ToSQLString() + ")";
 	auto result = con.Query(sql);
 	if (result->HasError()) {
 		throw IOException("create_external_resource: create function \"%s\" failed: %s", type->create_function,
@@ -181,7 +182,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				return;
 			}
 			try {
-				con.Query("SELECT * FROM " + destroy_function + "(" + handle.ToSQLString() + ")");
+				con.Query("SELECT * FROM " + QualifiedName::Parse(destroy_function).ToString() + "(" +
+				          handle.ToSQLString() + ")");
 			} catch (...) { // best-effort: never mask the original failure with a teardown error
 			}
 		}
@@ -201,7 +203,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 		// Cooperative cancellation: this blocking loop never yields back to the executor, so surface a
 		// pending Ctrl-C / max_execution_time ourselves (InterruptCheck throws InterruptException on either).
 		context.InterruptCheck();
-		auto status_sql = "SELECT state, result FROM " + type->status_function + "(" + handle.ToSQLString() + ")";
+		auto status_sql = "SELECT state, result FROM " + QualifiedName::Parse(type->status_function).ToString() + "(" +
+		                  handle.ToSQLString() + ")";
 		auto sres = con.Query(status_sql);
 		if (sres->HasError()) {
 			throw IOException("create_external_resource: status function \"%s\" failed: %s", type->status_function,
@@ -328,7 +331,8 @@ static void DestroyExternalResourceFunction(ClientContext &context, TableFunctio
 
 	// CALL <deleter_function>(<deleter_payload>) on a separate internal connection.
 	Connection con(DatabaseInstance::GetDatabase(context));
-	auto sql = "SELECT * FROM " + bind_data.deleter_function + "(" + bind_data.deleter_payload.ToSQLString() + ")";
+	auto sql = "SELECT * FROM " + QualifiedName::Parse(bind_data.deleter_function).ToString() + "(" +
+	           bind_data.deleter_payload.ToSQLString() + ")";
 	auto result = con.Query(sql);
 	if (result->HasError()) {
 		throw IOException("destroy_external_resource: deleter function \"%s\" failed: %s", bind_data.deleter_function,
