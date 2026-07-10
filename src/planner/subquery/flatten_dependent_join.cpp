@@ -497,7 +497,7 @@ static unique_ptr<LogicalOperator> CreateProjectionMapWrapper(unique_ptr<Logical
 	auto wrapper = make_uniq<LogicalFilter>();
 	wrapper->projection_map = std::move(projection_map);
 	wrapper->children.push_back(std::move(child));
-	return wrapper;
+	return std::move(wrapper);
 }
 
 static bool IsJoinWithProjectionMap(LogicalOperatorType type) {
