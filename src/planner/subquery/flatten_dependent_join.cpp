@@ -160,8 +160,12 @@ void FlattenDependentJoins::MergeCorrelatedAliases(const FlattenDependentJoins &
 		if (!GetCorrelatedIndex(entry.second).IsValid()) {
 			continue;
 		}
-		auto result = correlated_aliases.emplace(entry);
-		D_ASSERT(result.second || result.first->second == entry.second);
+		auto existing = correlated_aliases.find(entry.first);
+		if (existing == correlated_aliases.end()) {
+			correlated_aliases.emplace(entry);
+		} else {
+			D_ASSERT(existing->second == entry.second);
+		}
 	}
 }
 

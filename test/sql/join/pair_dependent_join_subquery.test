@@ -495,89 +495,79 @@ INSERT INTO pair_left_effect_l VALUES (1), (2);
 statement ok
 INSERT INTO pair_left_effect_r VALUES (1), (2), (3);
 
-query I
-SELECT count(*)::INTEGER
-FROM (SELECT a, nextval('pair_left_effect_seq') AS v FROM pair_left_effect_l) l
-LEFT JOIN pair_left_effect_r r ON EXISTS (
-	SELECT 1 WHERE l.v = r.b
-);
+query II
+WITH q AS (
+	SELECT count(*)::INTEGER AS count_value
+	FROM (SELECT a, nextval('pair_left_effect_seq') AS v FROM pair_left_effect_l) l
+	LEFT JOIN pair_left_effect_r r ON EXISTS (
+		SELECT 1 WHERE l.v = r.b
+	)
+)
+SELECT count_value, currval('pair_left_effect_seq') FROM q;
 ----
-2
-
-query I
-SELECT currval('pair_left_effect_seq');
-----
-2
+2	2
 
 # SEMI/ANTI pair-dependent rewrites route through dependent join decorrelation.
 # The exposed left input must still be evaluated only once.
 statement ok
 CREATE SEQUENCE pair_exists_effect_seq START 1;
 
-query I
-SELECT count(*)::INTEGER
-FROM (SELECT a, nextval('pair_exists_effect_seq') AS v FROM pair_left_effect_l) l
-SEMI JOIN pair_left_effect_r r ON EXISTS (
-	SELECT 1 WHERE l.v = r.b
-);
+query II
+WITH q AS (
+	SELECT count(*)::INTEGER AS count_value
+	FROM (SELECT a, nextval('pair_exists_effect_seq') AS v FROM pair_left_effect_l) l
+	SEMI JOIN pair_left_effect_r r ON EXISTS (
+		SELECT 1 WHERE l.v = r.b
+	)
+)
+SELECT count_value, currval('pair_exists_effect_seq') FROM q;
 ----
-2
-
-query I
-SELECT currval('pair_exists_effect_seq');
-----
-2
+2	2
 
 statement ok
 CREATE SEQUENCE pair_anti_effect_seq START 1;
 
-query I
-SELECT count(*)::INTEGER
-FROM (SELECT a, nextval('pair_anti_effect_seq') AS v FROM pair_left_effect_l) l
-ANTI JOIN pair_left_effect_r r ON EXISTS (
-	SELECT 1 WHERE l.v = r.b
-);
+query II
+WITH q AS (
+	SELECT count(*)::INTEGER AS count_value
+	FROM (SELECT a, nextval('pair_anti_effect_seq') AS v FROM pair_left_effect_l) l
+	ANTI JOIN pair_left_effect_r r ON EXISTS (
+		SELECT 1 WHERE l.v = r.b
+	)
+)
+SELECT count_value, currval('pair_anti_effect_seq') FROM q;
 ----
-0
-
-query I
-SELECT currval('pair_anti_effect_seq');
-----
-2
+0	2
 
 statement ok
 CREATE SEQUENCE pair_exists_right_effect_seq START 1;
 
-query I
-SELECT count(*)::INTEGER
-FROM pair_left_effect_l l
-SEMI JOIN (SELECT b, nextval('pair_exists_right_effect_seq') AS v FROM pair_left_effect_r) r ON EXISTS (
-	SELECT 1 WHERE l.a = r.v
-);
+query II
+WITH q AS (
+	SELECT count(*)::INTEGER AS count_value
+	FROM pair_left_effect_l l
+	SEMI JOIN (SELECT b, nextval('pair_exists_right_effect_seq') AS v FROM pair_left_effect_r) r ON EXISTS (
+		SELECT 1 WHERE l.a = r.v
+	)
+)
+SELECT count_value, currval('pair_exists_right_effect_seq') FROM q;
 ----
-2
-
-query I
-SELECT currval('pair_exists_right_effect_seq');
-----
-3
+2	3
 
 statement ok
 CREATE SEQUENCE pair_anti_right_effect_seq START 1;
 
-query I
-SELECT count(*)::INTEGER
-FROM pair_left_effect_l l
-ANTI JOIN (SELECT b, nextval('pair_anti_right_effect_seq') AS v FROM pair_left_effect_r) r ON EXISTS (
-	SELECT 1 WHERE l.a = r.v
-);
+query II
+WITH q AS (
+	SELECT count(*)::INTEGER AS count_value
+	FROM pair_left_effect_l l
+	ANTI JOIN (SELECT b, nextval('pair_anti_right_effect_seq') AS v FROM pair_left_effect_r) r ON EXISTS (
+		SELECT 1 WHERE l.a = r.v
+	)
+)
+SELECT count_value, currval('pair_anti_right_effect_seq') FROM q;
 ----
-0
-
-query I
-SELECT currval('pair_anti_right_effect_seq');
-----
-3
+0	3
 
 # RIGHT joins are normalized to LEFT joins before planning the pair-dependent predicate.
 query III

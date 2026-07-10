@@ -1656,16 +1656,14 @@ INSERT INTO pair_effect_l VALUES (1), (2);
 statement ok
 INSERT INTO pair_effect_r VALUES (1), (2), (3);
 
-query I
-SELECT count(*)::INTEGER
-FROM (SELECT a, nextval('pair_effect_seq') AS v FROM pair_effect_l) l
-FULL OUTER JOIN pair_effect_r r ON EXISTS (
-	SELECT 1 WHERE l.v = r.b
-);
+query II
+WITH q AS (
+	SELECT count(*)::INTEGER AS count_value
+	FROM (SELECT a, nextval('pair_effect_seq') AS v FROM pair_effect_l) l
+	FULL OUTER JOIN pair_effect_r r ON EXISTS (
+		SELECT 1 WHERE l.v = r.b
+	)
+)
+SELECT count_value, currval('pair_effect_seq') FROM q;
 ----
-3
-
-query I
-SELECT currval('pair_effect_seq');
-----
-2
+3	2
