@@ -1,0 +1,226 @@
+diff --git a/src/httpfs.cpp b/src/httpfs.cpp
+index fd30efb..082800b 100644
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -1043,14 +1043,29 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 	}
+ }
+ 
+-unique_ptr<HTTPClient> HTTPFileHandle::GetClient() {
+-	// Try to fetch a cached client
+-	auto cached_client = client_cache.GetClient();
+-	if (cached_client) {
+-		return cached_client;
++//! Whether clients are checked out from the shared connection pool instead of the per-handle cache.
++//! Only the curl util pools clients (one pool per database instance); every other configuration
++//! keeps per-handle reuse so it does not pay a fresh connection per request.
++static bool UseSharedConnectionPool(const HTTPParams &http_params) {
++#ifndef EMSCRIPTEN
++	auto &util = http_params.http_util;
++	if (util.GetName() == "HTTPFS-Curl") {
++		return static_cast<const HTTPFSCurlUtil &>(util).connection_caching_enabled;
+ 	}
++#endif
++	return false;
++}
+ 
+-	// Create a new client
++unique_ptr<HTTPClient> HTTPFileHandle::GetClient() {
++	if (!UseSharedConnectionPool(http_params)) {
++		// no shared pool for this configuration - reuse this handle's cached client
++		auto cached_client = client_cache.GetClient();
++		if (cached_client) {
++			return cached_client;
++		}
++	}
++	// with the shared pool enabled InitializeClient consults the pool, so that concurrent handles
++	// share connections instead of each hoarding a private pool
+ 	return CreateClient();
+ }
+ 
+@@ -1061,7 +1076,12 @@ unique_ptr<HTTPClient> HTTPFileHandle::CreateClient() {
+ }
+ 
+ void HTTPFileHandle::StoreClient(unique_ptr<HTTPClient> client) {
+-	client_cache.StoreClient(std::move(client));
++	if (!UseSharedConnectionPool(http_params)) {
++		client_cache.StoreClient(std::move(client));
++		return;
++	}
++	// return the client to the shared connection pool so other handles can reuse it
++	http_params.http_util.CloseClient(std::move(client));
+ }
+ 
+ HTTPFileHandle::~HTTPFileHandle() {
+diff --git a/src/httpfs_connection_caching.cpp b/src/httpfs_connection_caching.cpp
+index e2bf406..19eafe5 100644
+--- a/src/httpfs_connection_caching.cpp
++++ b/src/httpfs_connection_caching.cpp
+@@ -27,10 +27,9 @@ unique_ptr<HTTPClient> HTTPClientConnectionCache::Find(const string &base_url) {
+ 	for (size_t i = 0; i < POOL_COUNT; i++) {
+ 		const size_t idx = (start + i) & (POOL_COUNT - 1);
+ 		auto &pool = pools[idx];
+-		unique_lock<mutex> lock(pool.lock, std::try_to_lock);
+-		if (!lock) {
+-			continue;
+-		}
++		// block instead of skipping: a spurious miss dials a new connection (DNS + TLS),
++		// which is far more expensive than waiting for this short critical section
++		lock_guard<mutex> lock(pool.lock);
+ 		for (auto &entry : pool.entries) {
+ 			if (entry && entry->GetBaseUrl() == base_url) {
+ 				cache_pool_idx = idx;
+@@ -46,14 +45,11 @@ void HTTPClientConnectionCache::Store(unique_ptr<HTTPClient> &&client) {
+ 		return;
+ 	}
+ 	const size_t start = cache_pool_idx;
+-	// Pass 1: prefer an empty slot in any reachable pool
++	// Pass 1: prefer an empty slot in any pool
+ 	for (size_t i = 0; i < POOL_COUNT; i++) {
+ 		const size_t idx = (start + i) & (POOL_COUNT - 1);
+ 		auto &pool = pools[idx];
+-		unique_lock<mutex> lock(pool.lock, std::try_to_lock);
+-		if (!lock) {
+-			continue;
+-		}
++		lock_guard<mutex> lock(pool.lock);
+ 		for (auto &entry : pool.entries) {
+ 			if (!entry) {
+ 				entry = std::move(client);
+@@ -62,21 +58,12 @@ void HTTPClientConnectionCache::Store(unique_ptr<HTTPClient> &&client) {
+ 			}
+ 		}
+ 	}
+-	// Pass 2: every reachable pool is full — evict at random in the first lockable pool
++	// Pass 2: every pool is full — evict at random in the starting pool
+ 	RandomEngine engine;
+-	for (size_t i = 0; i < POOL_COUNT; i++) {
+-		const size_t idx = (start + i) & (POOL_COUNT - 1);
+-		auto &pool = pools[idx];
+-		unique_lock<mutex> lock(pool.lock, std::try_to_lock);
+-		if (!lock) {
+-			continue;
+-		}
+-		const size_t slot = engine.NextRandomInteger() % pool.entries.size();
+-		pool.entries[slot] = std::move(client);
+-		cache_pool_idx = idx;
+-		return;
+-	}
+-	// Every pool busy — drop the client; will reconnect next time.
++	auto &pool = pools[start];
++	lock_guard<mutex> lock(pool.lock);
++	const size_t slot = engine.NextRandomInteger() % pool.entries.size();
++	pool.entries[slot] = std::move(client);
+ }
+ 
+ void HTTPClientConnectionCache::Clear() {
+diff --git a/src/include/httpfs_client.hpp b/src/include/httpfs_client.hpp
+index 308ac1a..df06a58 100644
+--- a/src/include/httpfs_client.hpp
++++ b/src/include/httpfs_client.hpp
+@@ -58,7 +58,7 @@ struct HTTPFSParams : public HTTPParams {
+ class HTTPClientConnectionCache {
+ public:
+ 	static constexpr size_t POOL_COUNT = 16;
+-	static constexpr size_t POOL_SIZE = 16;
++	static constexpr size_t POOL_SIZE = 32;
+ 	static_assert((POOL_COUNT & (POOL_COUNT - 1)) == 0, "POOL_COUNT must be a power of two");
+ 
+ 	unique_ptr<HTTPClient> Find(const string &base_url);
+diff --git a/test/sql/connection_caching.test b/test/sql/connection_caching.test
+index 928c822..d342105 100644
+--- a/test/sql/connection_caching.test
++++ b/test/sql/connection_caching.test
+@@ -18,7 +18,7 @@ SET httpfs_connection_caching=true;
+ statement ok
+ CALL enable_logging('HTTPFSInfo');
+ 
+-# First request — should be a cache miss
++# First request — a single cold connection is dialed to the host (cache miss)
+ statement ok
+ FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
+ 
+@@ -27,23 +27,29 @@ SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_miss%';
+ ----
+ 1
+ 
+-# Second request to the same file — should be a cache hit
++# Second request to the same file — served from the process-wide pool. Every request checks a
++# connection out and back in, so reuse is logged as a hit and no new cold connection is dialed.
+ statement ok
+ FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
+ 
+ query I
+-SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_hit%';
++SELECT count(*) > 0 FROM duckdb_logs WHERE message LIKE '%connection_cache_hit%';
++----
++true
++
++query I
++SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_miss%';
+ ----
+ 1
+ 
+-# Different file on the same host — should still be a cache hit (same base_url)
++# Different file on the same host — still served by the pooled connection (keyed on base_url), no new cold connect
+ statement ok
+ SELECT * FROM 'https://github.com/duckdb/duckdb/raw/9cf66f950dde0173e1a863a7659b3ecf11bf3978/data/csv/customer.csv';
+ 
+ query I
+-SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_hit%';
++SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache_miss%';
+ ----
+-2
++1
+ 
+ # Clear of caching disabled temporarily
+ mode skip
+diff --git a/test/sql/connection_caching_httplib.test b/test/sql/connection_caching_httplib.test
+new file mode 100644
+index 0000000..e7843a9
+--- /dev/null
++++ b/test/sql/connection_caching_httplib.test
+@@ -0,0 +1,43 @@
++# name: test/sql/connection_caching_httplib.test
++# description: The httplib backend keeps per-handle connection reuse and never touches the shared pool
++# group: [sql]
++
++require httpfs
++
++require parquet
++
++# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
++set ignore_error_messages
++
++statement ok
++SET httpfs_client_implementation='httplib';
++
++statement ok
++SET enable_logging=true;
++
++statement ok
++CALL enable_logging('HTTPFSInfo');
++
++statement ok
++FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
++
++statement ok
++FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
++
++# the shared connection pool is curl-only: the httplib backend must not log any pool activity
++query I
++SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache%';
++----
++0
++
++# enabling connection caching does not reroute httplib to the pool either
++statement ok
++SET httpfs_connection_caching=true;
++
++statement ok
++FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet';
++
++query I
++SELECT count(*) FROM duckdb_logs WHERE message LIKE '%connection_cache%';
++----
++0
