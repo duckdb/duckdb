@@ -53,7 +53,7 @@ index 0000000..7bfb9f5
 +} // namespace duckdb
 diff --git a/src/quack_on_ec2_resource.cpp b/src/quack_on_ec2_resource.cpp
 new file mode 100644
-index 0000000..9fd99e8
+index 0000000..d4aa175
 --- /dev/null
 +++ b/src/quack_on_ec2_resource.cpp
 @@ -0,0 +1,189 @@
@@ -227,20 +227,20 @@ index 0000000..9fd99e8
 +	auto map_vv = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 +
 +	// Native callbacks (no SQL macros): thin adapters over cloudformation_*.
-+	TableFunction create_fn("quack_ec2_create", {map_vv}, QuackCreateFun, QuackCreateBind, QuackAdapterInit);
++	TableFunction create_fn("__aws__cloudformation__quack_on_ec2__create", {map_vv}, QuackCreateFun, QuackCreateBind, QuackAdapterInit);
 +	loader.RegisterFunction(create_fn);
-+	TableFunction status_fn("quack_ec2_status", {map_vv}, QuackStatusFun, QuackStatusBind, QuackAdapterInit);
++	TableFunction status_fn("__aws__cloudformation__quack_on_ec2__status", {map_vv}, QuackStatusFun, QuackStatusBind, QuackAdapterInit);
 +	loader.RegisterFunction(status_fn);
-+	TableFunction destroy_fn("quack_ec2_destroy", {map_vv}, QuackDestroyFun, QuackDestroyBind, QuackAdapterInit);
++	TableFunction destroy_fn("__aws__cloudformation__quack_on_ec2__destroy", {map_vv}, QuackDestroyFun, QuackDestroyBind, QuackAdapterInit);
 +	loader.RegisterFunction(destroy_fn);
 +
 +	// Register the resource type on the C++ side (origin = "extension"), so `LOAD aws;` is all a user needs.
 +	ExternalResourceType type;
 +	type.name = "aws:cloudformation:quack-on-ec2";
 +	type.kind = "catalog";
-+	type.create_function = "quack_ec2_create";
-+	type.status_function = "quack_ec2_status";
-+	type.destroy_function = "quack_ec2_destroy";
++	type.create_function = "__aws__cloudformation__quack_on_ec2__create";
++	type.status_function = "__aws__cloudformation__quack_on_ec2__status";
++	type.destroy_function = "__aws__cloudformation__quack_on_ec2__destroy";
 +	type.origin = "extension";
 +	ExternalResourceTypeRegistry::Get(loader.GetDatabaseInstance()).Add(std::move(type));
 +}
