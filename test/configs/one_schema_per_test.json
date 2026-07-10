@@ -9,6 +9,12 @@
   ],
   "skip_tests": [
     {
+      "reason": "Forced USE of a per-test schema puts the mock callback macros where create_external_resource's internal connection (default catalog) can't see them.",
+      "paths": [
+        "test/sql/table_function/create_external_resource.test"
+      ]
+    },
+    {
       "reason": "Tests that relies on specific DB/schema name",
       "paths": [
         "test/sql/attach/show_databases.test",

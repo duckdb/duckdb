@@ -11,6 +11,12 @@
   ],
   "skip_tests": [
     {
+      "reason": "Forced USE of the attached catalog puts the mock callback macros where create_external_resource's internal connection (default catalog) can't see them.",
+      "paths": [
+        "test/sql/table_function/create_external_resource.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
         "test/extension/test_tags.test",
