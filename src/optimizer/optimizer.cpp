@@ -33,6 +33,7 @@
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
+#include "duckdb/optimizer/scalar_fn_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -436,6 +437,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::TYPE_PUSHDOWN, [&] {
 		TypePushdown type_pushdown(context);
 		plan = type_pushdown.Optimize(std::move(plan));
+	});
+
+	// Pushdown scalar functions in SELECT like SELECT strlen(str) to readers
+	RunOptimizer(OptimizerType::SCALAR_FN_PUSHDOWN, [&] {
+		ScalarFnPushdown fn_pushdown(context);
+		plan = fn_pushdown.Optimize(std::move(plan));
 	});
 }
 
