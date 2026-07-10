@@ -7,7 +7,6 @@
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
-#include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
@@ -15,7 +14,6 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_alter.hpp"
-#include "duckdb/planner/operator/logical_transaction.hpp"
 
 namespace duckdb {
 
@@ -174,20 +172,6 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	}
 
 	return BindAlterAddIndex(result, *entry, std::move(stmt.info));
-}
-
-BoundStatement Binder::Bind(TransactionStatement &stmt) {
-	auto &properties = GetStatementProperties();
-
-	// Transaction statements do not require a valid transaction.
-	properties.requires_valid_transaction = stmt.info->type == TransactionType::BEGIN_TRANSACTION;
-
-	BoundStatement result;
-	result.names = {"Success"};
-	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_uniq<LogicalTransaction>(std::move(stmt.info));
-	properties.return_type = StatementReturnType::NOTHING;
-	return result;
 }
 
 } // namespace duckdb
