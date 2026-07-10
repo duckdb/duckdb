@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -148,8 +149,17 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
-	auto &schema = GetSchema(transaction, info.base->GetQualifiedName().Schema());
-	return CreateTable(transaction, schema, info);
+	auto &qname = info.base->GetQualifiedName();
+	auto &path = qname.Path();
+	optional_ptr<SchemaCatalogEntry> schema;
+	if (path.size() > 3) {
+		// nested table ([catalog, schema_path..., name]): navigate the (nested) schema path
+		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+		schema = GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
+	} else {
+		schema = GetSchema(transaction, qname.Schema());
+	}
+	return CreateTable(transaction, *schema, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -397,6 +407,27 @@ void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
 		return;
 	}
 
+	auto &path = info.GetQualifiedName().Path();
+	if (path.size() > 3) {
+		// nested target ([catalog, schema_path..., name]): navigate to the nested schema and drop from it
+		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+		auto schema = GetSchema(context, path.front(), schema_path, info.if_not_found);
+		if (!schema) {
+			return;
+		}
+		// verify the entry exists before dropping (DuckSchemaEntry::DropEntry requires it); respects IF EXISTS
+		auto entry = schema->GetEntry(GetCatalogTransaction(context), info.type, info.GetQualifiedName().Name());
+		if (!entry) {
+			if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(info.type),
+				                       info.GetQualifiedName().Name().GetIdentifierName());
+			}
+			return;
+		}
+		schema->DropEntry(context, info);
+		return;
+	}
+
 	CatalogEntryRetriever retriever(context);
 	EntryLookupInfo lookup_info(info.type, info.GetQualifiedName());
 	auto lookup = LookupEntry(retriever, lookup_info, info.if_not_found);
@@ -446,6 +477,42 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 	CatalogEntryRetriever retriever(context);
 	EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(catalog_name, Identifier(), schema));
 	return GetSchema(retriever, schema_lookup, if_not_found);
+}
+
+static optional_ptr<SchemaCatalogEntry> NavigateNestedSchema(CatalogTransaction transaction, SchemaCatalogEntry &parent,
+                                                             const Identifier &name, OnEntryNotFound if_not_found) {
+	auto entry = parent.Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY).GetEntry(transaction, name);
+	if (!entry) {
+		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			throw CatalogException("Schema with name \"%s\" does not exist!", name.GetIdentifierName());
+		}
+		return nullptr;
+	}
+	return entry->Cast<SchemaCatalogEntry>();
+}
+
+optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const Identifier &catalog_name,
+                                                    const vector<Identifier> &schema_path,
+                                                    OnEntryNotFound if_not_found) {
+	D_ASSERT(!schema_path.empty());
+	// resolve the outermost schema (this also resolves the catalog), then navigate the nested-schema chain
+	auto schema = GetSchema(context, catalog_name, schema_path[0], if_not_found);
+	for (idx_t i = 1; schema && i < schema_path.size(); i++) {
+		schema =
+		    NavigateNestedSchema(schema->catalog.GetCatalogTransaction(context), *schema, schema_path[i], if_not_found);
+	}
+	return schema;
+}
+
+optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogTransaction transaction,
+                                                    const vector<Identifier> &schema_path,
+                                                    OnEntryNotFound if_not_found) {
+	D_ASSERT(!schema_path.empty());
+	auto schema = GetSchema(transaction, schema_path[0], if_not_found);
+	for (idx_t i = 1; schema && i < schema_path.size(); i++) {
+		schema = NavigateNestedSchema(transaction, *schema, schema_path[i], if_not_found);
+	}
+	return schema;
 }
 
 SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const Identifier &catalog_name,

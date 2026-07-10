@@ -57,7 +57,42 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
-		BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
+		// resolve the catalog + (possibly nested) schema path. ResolveCatalog (via BindSchemaOrCatalog) decides which
+		// leading components form the catalog; default_catalog=false leaves the catalog empty when none is given.
+		auto resolved = ResolveCatalog(context, stmt.info->GetQualifiedName(), false);
+		auto &rpath = resolved.Path();
+		vector<Identifier> schema_path(rpath.begin() + 1, rpath.end() - 1);
+		if (schema_path.size() > 1) {
+			// a nested schema was given - navigate to it and drop from it. Keep the full resolved path so execution
+			// navigates the same nested schema (and no-ops for IF EXISTS).
+			auto catalog_name = rpath.front();
+			auto target_name = resolved.Name();
+			stmt.info->SetQualifiedName(std::move(resolved));
+			auto schema = Catalog::GetSchema(context, catalog_name, schema_path, stmt.info->if_not_found);
+			optional_ptr<CatalogEntry> entry;
+			if (schema) {
+				entry = schema->GetEntry(schema->catalog.GetCatalogTransaction(context), stmt.info->type, target_name);
+			}
+			if (!entry) {
+				if (stmt.info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+					throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(stmt.info->type),
+					                       target_name.GetIdentifierName());
+				}
+				break;
+			}
+			if (entry->internal) {
+				throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetIdentifierName());
+			}
+			properties.RegisterDBRead(schema->catalog, context);
+			if (!entry->temporary) {
+				properties.RegisterDBModify(schema->catalog, context, DatabaseModificationType::DROP_CATALOG_ENTRY);
+			}
+			break;
+		}
+		// unqualified or single-level: look the entry up through the search path. Feed the resolved (catalog, schema,
+		// name) to the lookup - no second BindSchemaOrCatalog call is needed.
+		stmt.info->SetQualifiedName(
+		    QualifiedName(rpath.front(), schema_path.empty() ? Identifier() : schema_path[0], resolved.Name()));
 		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->GetQualifiedName().Catalog());
 		if (catalog) {
 			// mark catalog as accessed

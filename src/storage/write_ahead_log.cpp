@@ -306,7 +306,9 @@ void WriteAheadLog::WriteCreateTable(const TableCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropTable(const TableCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::DROP_TABLE);
-	serializer.WriteEntry(WALDropTable {entry.schema.name, entry.name});
+	// the qualified name carries the (possibly nested) containing schema path + the table name; the legacy immediate
+	// schema name is derived from it when serializing for storage versions older than v2.0.0
+	serializer.WriteEntry(WALDropTable(QualifiedName(entry.schema.GetSchemaPath(), entry.name)));
 	serializer.End();
 }
 
