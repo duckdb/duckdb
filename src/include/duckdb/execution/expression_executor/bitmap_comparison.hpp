@@ -13,6 +13,7 @@
 #include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/vector/for_view.hpp"
 #include "duckdb/common/vector_operations/comparison_bitmap.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -24,7 +25,9 @@ namespace duckdb {
 
 struct BitmapComparisonInfo {
 	optional_ptr<const BoundReferenceExpression> ref;
+	//! exactly one of `constant` (ref <op> const) or `ref2` (ref <op> ref) is set
 	optional_ptr<const BoundConstantExpression> constant;
+	optional_ptr<const BoundReferenceExpression> ref2;
 	ExpressionType op;
 };
 
@@ -32,13 +35,14 @@ inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonI
 	if (!BoundComparisonExpression::IsComparison(expr)) {
 		return false;
 	}
-	auto op = expr.GetExpressionType();
-	if (op == ExpressionType::COMPARE_DISTINCT_FROM) {
+	const auto raw_op = expr.GetExpressionType();
+	if (raw_op == ExpressionType::COMPARE_DISTINCT_FROM) {
 		return false;
 	}
-	if (op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		op = ExpressionType::COMPARE_EQUAL;
-	}
+	// NOT DISTINCT FROM equals `=` only when a NULL can't meet a NULL. That holds against a (non-null) constant, but
+	// NOT for column-vs-column: two NULLs are "not distinct" (true) yet `=` AND-s out validity (false). So the col-col
+	// path must reject it - decorrelation matches correlated keys this way, and mapping it to `=` drops NULL matches.
+	const auto op = raw_op == ExpressionType::COMPARE_NOT_DISTINCT_FROM ? ExpressionType::COMPARE_EQUAL : raw_op;
 	auto &comparison = expr.Cast<BoundFunctionExpression>();
 	auto &left = BoundComparisonExpression::Left(comparison);
 	auto &right = BoundComparisonExpression::Right(comparison);
@@ -53,6 +57,14 @@ inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonI
 		info.ref = &right.Cast<BoundReferenceExpression>();
 		info.constant = &left.Cast<BoundConstantExpression>();
 		info.op = FlipComparisonExpression(op);
+	} else if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	           right.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		if (raw_op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			return false;
+		}
+		info.ref = &left.Cast<BoundReferenceExpression>();
+		info.ref2 = &right.Cast<BoundReferenceExpression>();
+		info.op = op;
 	} else {
 		return false;
 	}
@@ -67,9 +79,16 @@ inline bool IsBitmapComparisonCandidate(const Expression &expr) {
 	if (!TryGetBitmapComparisonInfo(expr, info)) {
 		return false;
 	}
-	const auto &value = info.constant->GetValue();
 	const auto pt = info.ref->GetReturnType().InternalType();
-	return !value.IsNull() && BitmapCmpTypeSupported(pt) && value.type().InternalType() == pt;
+	if (!BitmapCmpTypeSupported(pt)) {
+		return false;
+	}
+	if (info.ref2) {
+		// both sides of a bound comparison share the same type
+		return true;
+	}
+	const auto &value = info.constant->GetValue();
+	return !value.IsNull() && value.type().InternalType() == pt;
 }
 
 inline bool HasBitmapComparisonChild(const BoundConjunctionExpression &expr) {
@@ -94,43 +113,44 @@ inline bool IsBitmapSelectCandidate(const Expression &expr) {
 	return IsBitmapComparisonCandidate(expr);
 }
 
-//! FOR view technique: fill the true-side bitmap by running the comparison on the narrow stored payload that
-//! underlies a (bare) FOR vector, reusing the same bitmap kernels as the flat path. The rewritten constant and
-//! validity come from the ForView. Returns false if `col` is not a FOR-viewable column.
-inline bool FillForComparisonBitmap(const Vector &col, ExpressionType op, const Value &constant, idx_t span,
-                                    validity_t *t_bm) {
-	// only bare FOR vectors: other non-flat shapes (constant, dictionary, ...) must fall through to generic
-	if (col.GetVectorType() != VectorType::FOR_VECTOR) {
-		return false;
-	}
-	ForView view;
-	if (!TryResolveForView(col, op, constant, view) || view.kind != ForView::Kind::FOR) {
-		return false;
-	}
-	const validity_t *validity_data = view.original_validity ? view.original_validity->GetData() : nullptr;
+//! FOR column-vs-constant: fill the true bitmap from the narrow stored payload via a resolved ForView, reusing the
+//! flat bitmap kernels on raw pointers -- no Vector, no allocation. Range-proven uniform results short-circuit.
+inline void FillForConstView(const ForView &view, ExpressionType op, idx_t span, validity_t *t_bm) {
+	const validity_t *validity = view.original_validity ? view.original_validity->GetData() : nullptr;
 	if (view.always_false || view.always_true) {
-		WriteConstantBitmap(view.always_true, span, validity_data, t_bm);
-		return true;
+		WriteConstantBitmap(view.always_true, span, validity, t_bm);
+		return;
 	}
-	switch (view.narrow_type) {
-	case PhysicalType::UINT8:
-		DispatchCmpToBitmap<uint8_t>(op, reinterpret_cast<const uint8_t *>(view.data),
-		                             UnsafeNumericCast<uint8_t>(view.rewritten_constant), span, validity_data, t_bm);
-		return true;
-	case PhysicalType::UINT16:
-		DispatchCmpToBitmap<uint16_t>(op, reinterpret_cast<const uint16_t *>(view.data),
-		                              UnsafeNumericCast<uint16_t>(view.rewritten_constant), span, validity_data, t_bm);
-		return true;
-	case PhysicalType::UINT32:
-		DispatchCmpToBitmap<uint32_t>(op, reinterpret_cast<const uint32_t *>(view.data),
-		                              UnsafeNumericCast<uint32_t>(view.rewritten_constant), span, validity_data, t_bm);
-		return true;
-	default:
-		return false;
-	}
+	DispatchBitmapType(view.narrow_type, span, [&](auto tag) {
+		using T = decltype(tag);
+		const auto data = reinterpret_cast<const T *>(view.data);
+		// narrow_type is always uint8/16/32 for FOR; the float/double branches of DispatchBitmapType are dead but
+		// must compile, so use static_cast (the rewritten constant is range-checked into the narrow domain already)
+		const auto constant = static_cast<T>(view.rewritten_constant);
+		DispatchBitmapCmpOp<T>(
+		    op, [&](auto cmp) { NarrowCmpToBitmap<T, decltype(cmp)>(data, constant, span, validity, t_bm); });
+	});
 }
 
-//! General `ref <op> const` comparison selection fast path. Evaluates the comparison DENSELY over the input into a
+//! FOR column-vs-column (both bare FOR of the same stored width): compare the narrow payloads directly on raw
+//! pointers -- no Vector, no allocation. Differing widths / non-FOR shapes are rejected by the caller.
+inline void FillForColView(const Vector &lcol, const Vector &rcol, ExpressionType op, idx_t span, validity_t *t_bm) {
+	const auto ldata = FORVector::GetData(lcol);
+	const auto rdata = FORVector::GetData(rcol);
+	auto &lv = FORVector::Validity(lcol);
+	auto &rv = FORVector::Validity(rcol);
+	const validity_t *lval = lv.CanHaveNull() ? lv.GetData() : nullptr;
+	const validity_t *rval = rv.CanHaveNull() ? rv.GetData() : nullptr;
+	DispatchBitmapType(FORVector::GetStoredType(lcol), span, [&](auto tag) {
+		using T = decltype(tag);
+		DispatchBitmapCmpOp<T>(op, [&](auto cmp) {
+			NarrowColCmpToBitmap<T, decltype(cmp)>(reinterpret_cast<const T *>(ldata), reinterpret_cast<const T *>(rdata),
+			                                       span, lval, rval, t_bm);
+		});
+	});
+}
+
+//! General comparison selection fast path. Evaluates the comparison DENSELY over the input into a
 //! bitmap (branchless/autovec), then combines lazily: any input selection is AND-ed in as a bitmap, and the result
 //! is emitted to whatever the caller wants (a result bitmap, or a true and/or false selection vector). Returns false
 //! (nothing written) for shapes it does not handle, so the caller falls through to generic selection.
@@ -144,19 +164,46 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 	if (!TryGetBitmapComparisonInfo(expr, info)) {
 		return false;
 	}
-	auto &constant = info.constant->GetValue();
 	auto &col = chunk.data[info.ref->Index()];
 	const auto pt = col.GetType().InternalType();
-	// a bound comparison has both sides at the same type, so the constant needs no cast
-	if (constant.IsNull() || constant.type().InternalType() != pt) {
+	if (!BitmapCmpTypeSupported(pt)) {
 		return false;
 	}
-	// Only FLAT bitmap-comparable columns and bare FOR vectors are handled here; anything else bails before
-	// touching any bitmap state (identical early-out to the autovec path, extended only to admit FOR).
-	const bool col_flat = col.GetVectorType() == VectorType::FLAT_VECTOR;
-	const bool col_for = col.GetVectorType() == VectorType::FOR_VECTOR;
-	if ((col_flat && !BitmapCmpTypeSupported(pt)) || (!col_flat && !col_for)) {
+	// Left operand must be a dense narrow payload: bare FLAT or bare FOR. Dictionary/sliced/constant shapes bail to
+	// the generic path (a sliced input would need a per-row remap to build the selection, ~3x slower than the
+	// generic gather-select). FOR is admitted because its stored payload is dense, exactly like a flat column.
+	const bool l_flat = col.GetVectorType() == VectorType::FLAT_VECTOR;
+	const bool l_for = col.GetVectorType() == VectorType::FOR_VECTOR;
+	if (!l_flat && !l_for) {
 		return false;
+	}
+	optional_ptr<Vector> col2;
+	if (info.ref2) {
+		auto &right = chunk.data[info.ref2->Index()];
+		// both sides must share a representation (both flat, or both FOR): mixing would require widening one side
+		if ((l_flat && right.GetVectorType() != VectorType::FLAT_VECTOR) ||
+		    (l_for && right.GetVectorType() != VectorType::FOR_VECTOR)) {
+			return false;
+		}
+		col2 = right; // both sides of a bound comparison share pt
+	} else {
+		// a bound comparison has both sides at the same type, so the constant needs no cast
+		const auto &constant = info.constant->GetValue();
+		if (constant.IsNull() || constant.type().InternalType() != pt) {
+			return false;
+		}
+	}
+	// Resolve the FOR narrow view up front so an unhandled FOR shape bails before any bitmap state is touched.
+	ForView lview;
+	if (l_for) {
+		if (col2) {
+			if (FORVector::GetStoredType(col) != FORVector::GetStoredType(*col2)) {
+				return false; // differing stored widths: no widening here
+			}
+		} else if (!TryResolveForView(col, info.op, info.constant->GetValue(), lview) ||
+		           lview.kind != ForView::Kind::FOR) {
+			return false;
+		}
 	}
 
 	const bool have_sel = sel && sel->IsSet();
@@ -171,14 +218,25 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 	// dense comparison -> bitmap (the true side), in the caller's bitmap when one is requested else a scratch
 	SelectionResult &t = bitmap_sel ? *bitmap_sel : tmp_sel1;
 	auto t_bm = reinterpret_cast<validity_t *>(t.PrepareBitmap(span));
-	if (col_flat) {
-		auto &validity = FlatVector::Validity(col);
-		const validity_t *validity_data = validity.CanHaveNull() ? validity.GetData() : nullptr;
-		DispatchFlatCmpToBitmap(pt, info.op, col, span, validity_data, t_bm,
+	if (l_for) {
+		// FOR: run the flat kernels directly on the narrow stored payload (no Vector, no allocation)
+		if (col2) {
+			FillForColView(col, *col2, info.op, span, t_bm);
+		} else {
+			FillForConstView(lview, info.op, span, t_bm);
+		}
+	} else if (col2) {
+		auto &lvalidity = FlatVector::Validity(col);
+		const validity_t *lvalidity_data = lvalidity.CanHaveNull() ? lvalidity.GetData() : nullptr;
+		auto &rvalidity = FlatVector::Validity(*col2);
+		const validity_t *rvalidity_data = rvalidity.CanHaveNull() ? rvalidity.GetData() : nullptr;
+		DispatchFlatColCmpToBitmap(pt, info.op, col, *col2, span, lvalidity_data, rvalidity_data, t_bm);
+	} else {
+		auto &lvalidity = FlatVector::Validity(col);
+		const validity_t *lvalidity_data = lvalidity.CanHaveNull() ? lvalidity.GetData() : nullptr;
+		const auto &constant = info.constant->GetValue();
+		DispatchFlatCmpToBitmap(pt, info.op, col, span, lvalidity_data, t_bm,
 		                        [&](auto tag) { return constant.GetValueUnsafe<decltype(tag)>(); });
-	} else if (!FillForComparisonBitmap(col, info.op, constant, span, t_bm)) {
-		// FOR vector whose narrow view does not resolve (e.g. wider stored type): fall through to generic
-		return false;
 	}
 
 	// the false side is the complement; take it before folding in the input

@@ -71,11 +71,6 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 ExecuteFunctionState::~ExecuteFunctionState() {
 }
 
-bool ExecuteFunctionState::DictionaryExecutionPossible(DataChunk &args) const {
-	return !dictionary_input_indices.empty() &&
-	       args.data[dictionary_input_indices[0]].GetVectorType() == VectorType::DICTIONARY_VECTOR;
-}
-
 bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args,
                                                           ExpressionState &state, Vector &result) {
 	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
@@ -84,98 +79,88 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	if (dictionary_input_indices.empty()) {
 		return false; // This expression is not eligible for dictionary optimization
 	}
-
-	// Figure out if we can do the optimization
 	const auto first_input_idx = dictionary_input_indices[0];
 	const auto &first_input = args.data[first_input_idx];
 	if (first_input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
 		return false; // Not a dictionary
 	}
-
 	const auto input_dictionary_size_opt = DictionaryVector::DictionarySize(first_input);
-	const auto &first_dictionary_id = DictionaryVector::DictionaryId(first_input);
-	if (!input_dictionary_size_opt.IsValid() || first_dictionary_id.empty()) {
-		return false; // Not a dictionary that comes from storage
+	if (!input_dictionary_size_opt.IsValid()) {
+		return false;
 	}
-	string input_dictionary_id = first_dictionary_id;
-
 	const auto input_dictionary_size = input_dictionary_size_opt.GetIndex();
-	if (input_dictionary_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
-		return false; // Dictionary is too large, bail
-	}
-
 	auto &input_sel = DictionaryVector::SelVector(first_input);
-	for (idx_t idx = 1; idx < dictionary_input_indices.size(); idx++) {
-		const auto &input = args.data[dictionary_input_indices[idx]];
-		if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
-			return false;
+
+	// Autovec-friendly ops ignore the selection vector: run the kernel over the flat dictionary child in place and
+	// keep the input's selection on the result. The child is pointed at (no gather, no copy), the output buffer is
+	// reused, and the fill guard skips this when the selection is too sparse to pay for computing the whole child.
+	if (IsSafeAutoVecArithmetic(expr) && input_dictionary_size <= STANDARD_VECTOR_SIZE &&
+	    static_cast<double>(args.size()) >= CHUNK_FILL_RATIO_THRESHOLD * input_dictionary_size) {
+		for (idx_t idx = 1; idx < dictionary_input_indices.size(); idx++) {
+			const auto &input = args.data[dictionary_input_indices[idx]];
+			if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+				return false;
+			}
+			const auto sz = DictionaryVector::DictionarySize(input);
+			if (!sz.IsValid() || sz.GetIndex() != input_dictionary_size ||
+			    !SelectionVector::SameSelection(input_sel, DictionaryVector::SelVector(input))) {
+				return false;
+			}
 		}
-		const auto dictionary_size_opt = DictionaryVector::DictionarySize(input);
-		if (!dictionary_size_opt.IsValid() || dictionary_size_opt.GetIndex() != input_dictionary_size) {
-			return false;
+		if (!output_dictionary || output_dictionary->data.size() != input_dictionary_size) {
+			output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
 		}
-		const auto &dictionary_id = DictionaryVector::DictionaryId(input);
-		if (dictionary_id.empty()) {
-			return false;
+		if (dictionary_input_chunk.data.empty()) {
+			dictionary_input_chunk.InitializeEmpty(args.GetTypes()); // one-time allocation, reused across chunks
 		}
-		if (!SelectionVector::SameSelection(input_sel, DictionaryVector::SelVector(input))) {
-			return false;
+		for (idx_t i = 0; i < args.ColumnCount(); i++) {
+			// point dict inputs at their flat child, reference constants/flats as-is: only buffer refs, no allocation
+			dictionary_input_chunk.data[i].Reference(args.data[i]);
 		}
-		input_dictionary_id += "\n";
-		input_dictionary_id += dictionary_id;
+		for (auto idx : dictionary_input_indices) {
+			dictionary_input_chunk.data[idx].Reference(DictionaryVector::Child(args.data[idx]));
+		}
+		dictionary_input_chunk.SetChildCardinality(input_dictionary_size);
+		expr.Function().GetFunctionCallback()(dictionary_input_chunk, state, output_dictionary->data);
+		result.Dictionary(output_dictionary, input_sel, args.size());
+		return true;
 	}
 
+	// Otherwise (non-autovec functions over a single storage dictionary): execute the function over the whole
+	// dictionary once and cache the result by id, reusing it across chunks that reference the same dictionary.
+	const auto &input_dictionary_id = DictionaryVector::DictionaryId(first_input);
+	if (dictionary_input_indices.size() != 1 || input_dictionary_id.empty() ||
+	    input_dictionary_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
+		return false;
+	}
 	if (!output_dictionary || current_input_dictionary_id != input_dictionary_id) {
-		// We haven't seen this dictionary before
+		// We haven't seen this dictionary before. If it is bigger than a vector, only do the optimization when the
+		// chunk is more than 50% full - this protects it against selective filters.
 		const auto chunk_fill_ratio = static_cast<double>(args.size()) / STANDARD_VECTOR_SIZE;
 		if (input_dictionary_size > STANDARD_VECTOR_SIZE && chunk_fill_ratio <= CHUNK_FILL_RATIO_THRESHOLD) {
-			// If the dictionary size is <= STANDARD_VECTOR_SIZE, we always do the optimization
-			// If it's greater, we only do the optimization if the chunk is more than 50% full
-			// This protects the optimization against selective filters
 			return false;
 		}
-
-		// We can do dictionary optimization! Re-initialize
 		output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
 		current_input_dictionary_id = input_dictionary_id;
-
-		// Set up the input chunk
 		DataChunk input_chunk;
 		input_chunk.InitializeEmpty(args.GetTypes());
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-			bool dictionary_input = false;
-			for (auto input_idx : dictionary_input_indices) {
-				if (input_idx == col_idx) {
-					dictionary_input = true;
-					break;
-				}
-			}
-			if (!dictionary_input) {
+			if (col_idx != first_input_idx) {
 				input_chunk.data[col_idx].Reference(args.data[col_idx]);
 			}
 		}
-
 		// Loop over the dictionary, executing at most STANDARD_VECTOR_SIZE at a time
 		for (idx_t offset = 0; offset < input_dictionary_size; offset += STANDARD_VECTOR_SIZE) {
 			const auto count = MinValue<idx_t>(input_dictionary_size - offset, STANDARD_VECTOR_SIZE);
-
-			// Offset the input dictionary
-			for (auto input_idx : dictionary_input_indices) {
-				Vector offset_input(DictionaryVector::Child(args.data[input_idx]), offset, offset + count);
-				input_chunk.data[input_idx].Reference(offset_input);
-			}
+			Vector offset_input(DictionaryVector::Child(first_input), offset, offset + count);
+			input_chunk.data[first_input_idx].Reference(offset_input);
 			input_chunk.SetChildCardinality(count);
-
-			// Execute, storing the result in an intermediate vector, and copying it to the output dictionary
 			Vector output_intermediate(result.GetType());
 			expr.Function().GetFunctionCallback()(input_chunk, state, output_intermediate);
 			VectorOperations::Copy(output_intermediate, output_dictionary->data, count, 0, offset);
 		}
 	}
-
-	// Result references the dictionary
-	result.Dictionary(output_dictionary, DictionaryVector::SelVector(first_input), args.size());
-
+	result.Dictionary(output_dictionary, input_sel, args.size());
 	return true;
 }
 
@@ -290,7 +275,6 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.Function().HasFunctionCallback() && !all_constant &&
-	                           execute_function_state.DictionaryExecutionPossible(arguments) &&
 	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
 	if (!dictionary_executed) {
 		if (expr.Function().HasFunctionCallback()) {
@@ -379,9 +363,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		return SelectBooleanResult(result, sel, count, true_sel, false_sel);
 	}
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
-	// Only take the dictionary fast path when an input is actually a dictionary; otherwise we would allocate
-	// a throwaway boolean result and probe per vector for nothing (the common flat-column filter case).
-	if (expr.Function().HasFunctionCallback() && execute_function_state.DictionaryExecutionPossible(arguments)) {
+	if (expr.Function().HasFunctionCallback()) {
 		Vector result(LogicalType::BOOLEAN);
 		if (execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
 			return SelectBooleanResult(result, sel, count, true_sel, false_sel);

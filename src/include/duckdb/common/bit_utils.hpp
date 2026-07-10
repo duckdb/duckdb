@@ -98,17 +98,6 @@ struct CountOnes<uint64_t> {
 };
 
 template <>
-struct CountOnes<uint32_t> {
-	inline static idx_t Count(uint32_t value) {
-#if defined(_MSC_VER)
-		return idx_t(__popcnt(value));
-#else
-		return idx_t(__builtin_popcount(value));
-#endif
-	}
-};
-
-template <>
 struct CountZeros<hugeint_t> {
 	inline static idx_t Leading(hugeint_t value) {
 		const uint64_t upper = static_cast<uint64_t>(value.upper);
