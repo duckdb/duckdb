@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"

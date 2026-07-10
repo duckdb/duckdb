@@ -5,6 +5,8 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 

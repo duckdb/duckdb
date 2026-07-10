@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 

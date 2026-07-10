@@ -81,6 +81,7 @@ NULL	NULL
 statement error
 SELECT * FROM integers s1 LEFT OUTER JOIN integers s2 ON (SELECT CASE WHEN s1.i+s2.i>10 THEN TRUE ELSE FALSE END) ORDER BY s1.i;
 ----
+<REGEX>:.*Correlated subquery in a non-inner join condition cannot reference both sides of the join.*
 
 # left outer join on subquery only involving RHS works
 query TT
@@ -91,10 +92,33 @@ NULL	NULL
 2	NULL
 3	3
 
-# left outer join on subquery only involving LHS is not supported
-statement error
-SELECT * FROM integers s1 LEFT OUTER JOIN integers s2 ON s1.i=s2.i AND (SELECT CASE WHEN s1.i>2 THEN TRUE ELSE FALSE END) ORDER BY s1.i;
+# left outer join on subquery only involving LHS works
+query TT
+SELECT *
+FROM integers s1
+LEFT OUTER JOIN integers s2
+	ON s1.i=s2.i AND (SELECT CASE WHEN s1.i>2 THEN TRUE ELSE FALSE END)
+ORDER BY s1.i;
 ----
+NULL	NULL
+1	NULL
+2	NULL
+3	3
+
+# left outer join on subquery only involving outer query works
+query II
+SELECT i,
+	(SELECT SUM(s2.i)
+	 FROM integers s1
+	 LEFT OUTER JOIN integers s2
+	   ON s1.i=s2.i AND EXISTS(SELECT 1 WHERE i1.i > 1)) AS j
+FROM integers i1
+ORDER BY i;
+----
+NULL	NULL
+1	NULL
+2	6
+3	6
 
 # left outer join in correlated expression
 query II
@@ -163,4 +187,3 @@ NULL	NULL
 1	49.000000
 2	50.000000
 3	51.000000
-

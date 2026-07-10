@@ -54,6 +54,7 @@ RELEASE_JOBS = [
     "static-libs-linux",
     "static-libs-osx",
     "static-libs-windows-mingw",
+    "staged-extension-install",
 ]
 
 SKIP_TESTS_JOBS = {

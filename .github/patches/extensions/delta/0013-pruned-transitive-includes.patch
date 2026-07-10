@@ -1,0 +1,100 @@
+diff --git a/src/delta_extension.cpp b/src/delta_extension.cpp
+index 0fc18e9..befc89f 100644
+--- a/src/delta_extension.cpp
++++ b/src/delta_extension.cpp
+@@ -9,6 +9,8 @@
+ 
+ #include "duckdb.hpp"
+ #include "duckdb/common/exception.hpp"
++#include "duckdb/parser/parsed_data/attach_info.hpp"
++#include "duckdb/main/attached_database.hpp"
+ #include "duckdb/function/table_macro_function.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
+ #include "duckdb/main/extension_helper.hpp"
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index 5f86444..18c3897 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -3,6 +3,7 @@
+ #include "functions/delta_scan/delta_multi_file_reader.hpp"
+ 
+ #include "duckdb/common/local_file_system.hpp"
++#include "duckdb/logging/logger.hpp"
+ #include "duckdb/function/table_function.hpp"
+ #include "duckdb/main/client_data.hpp"
+ #include "duckdb/main/extension_helper.hpp"
+diff --git a/src/functions/delta_transaction_utils/idempotency_helpers.cpp b/src/functions/delta_transaction_utils/idempotency_helpers.cpp
+index 0f5896d..8bdd603 100644
+--- a/src/functions/delta_transaction_utils/idempotency_helpers.cpp
++++ b/src/functions/delta_transaction_utils/idempotency_helpers.cpp
+@@ -1,5 +1,7 @@
+ #include "delta_kernel_ffi.hpp"
+ #include "duckdb/execution/expression_executor.hpp"
++#include "duckdb/catalog/entry_lookup_info.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/execution/expression_executor.hpp"
+ #include "duckdb/function/scalar_function.hpp"
+ #include "duckdb/planner/expression/bound_constant_expression.hpp"
+diff --git a/src/include/delta_log_types.hpp b/src/include/delta_log_types.hpp
+index 36654d6..08ece94 100644
+--- a/src/include/delta_log_types.hpp
++++ b/src/include/delta_log_types.hpp
+@@ -11,6 +11,8 @@
+ #define DEFINE_DEFAULT_ENGINE_BASE 1
+ #include "delta_kernel_ffi.hpp"
+ #include "duckdb/main/database.hpp"
++#include "duckdb/logging/log_type.hpp"
++#include "duckdb/logging/log_manager.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/src/include/storage/delta_insert.hpp b/src/include/storage/delta_insert.hpp
+index ee30faa..838d69d 100644
+--- a/src/include/storage/delta_insert.hpp
++++ b/src/include/storage/delta_insert.hpp
+@@ -9,6 +9,8 @@
+ #pragma once
+ 
+ #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
++#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
++#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+ 
+ #include "duckdb/execution/physical_operator.hpp"
+ #include "duckdb/common/index_vector.hpp"
+diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
+index ee195e5..d652253 100644
+--- a/src/storage/delta_insert.cpp
++++ b/src/storage/delta_insert.cpp
+@@ -3,6 +3,7 @@
+ #include <duckdb/common/sorting/hashed_sort.hpp>
+ 
+ #include "duckdb/catalog/catalog_entry_retriever.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
+ #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+ #include "duckdb/main/client_data.hpp"
+ #include "duckdb/planner/operator/logical_copy_to_file.hpp"
+diff --git a/src/storage/delta_transaction.cpp b/src/storage/delta_transaction.cpp
+index 1ff75bc..b9442d8 100644
+--- a/src/storage/delta_transaction.cpp
++++ b/src/storage/delta_transaction.cpp
+@@ -7,6 +7,8 @@
+ 
+ #include "storage/delta_catalog.hpp"
+ #include "duckdb/main/client_properties.hpp"
++#include "duckdb/logging/logging.hpp"
++#include "duckdb/common/exception/transaction_exception.hpp"
+ #include "duckdb/common/arrow/arrow_converter.hpp"
+ #include "duckdb/common/arrow/arrow_appender.hpp"
+ #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+diff --git a/src/storage/delta_catalog.cpp b/src/storage/delta_catalog.cpp
+index 4427114..ace86df 100644
+--- a/src/storage/delta_catalog.cpp
++++ b/src/storage/delta_catalog.cpp
+@@ -5,6 +5,7 @@
+ #include "duckdb/parser/parsed_data/drop_info.hpp"
+ #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+ #include "duckdb/main/attached_database.hpp"
++#include "duckdb/planner/logical_operator.hpp"
+ 
+ #include "functions/delta_scan/delta_multi_file_list.hpp"
+ 

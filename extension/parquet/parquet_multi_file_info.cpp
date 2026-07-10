@@ -1,4 +1,5 @@
 #include "parquet_multi_file_info.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <stdint.h>
 #include <atomic>
@@ -90,6 +91,10 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t row_group_index;
 	//! (Optional) pointer to physical operator performing the scan
 	optional_ptr<const PhysicalOperator> op;
+	//! Row groups read but not yet reported to the profiler
+	atomic<idx_t> row_groups_scanned_unreported {0};
+	//! Total considered, across all scan states
+	atomic<idx_t> total_row_groups_to_scan {0};
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -328,18 +333,17 @@ static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_
 static void ParquetScanGetMetrics(TableFunctionGetMetricsInput &input) {
 	// emit the shared multi-file metrics (files read, filenames, rows scanned)
 	MultiFileFunction<ParquetMultiFileInfo>::MultiFileGetMetrics(input);
-	// report row groups read vs. considered as the standard per-thread row-group metrics: the profiler sums
-	// row_groups_scanned / total_row_groups_to_scan across threads, and "skipped" = total - scanned
-	if (!input.local_state) {
+	if (!input.global_state) {
 		return;
 	}
-	auto &local = input.local_state->Cast<MultiFileLocalState>();
-	if (!local.job.reader_scan_state) {
+	auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
+	if (!gstate.global_state) {
 		return;
 	}
-	auto &scan_state = local.job.reader_scan_state->Cast<ParquetReadLocalState>().scan_state;
-	input.operator_metrics.row_groups_scanned = scan_state.row_groups_read;
-	input.operator_metrics.total_row_groups_to_scan = scan_state.row_groups_read + scan_state.row_groups_skipped;
+	auto &parquet_gstate = gstate.global_state->Cast<ParquetReadGlobalState>();
+	// each local state drains the not-yet-reported count
+	input.operator_metrics.row_groups_scanned = parquet_gstate.row_groups_scanned_unreported.exchange(0);
+	input.operator_metrics.total_row_groups_to_scan = parquet_gstate.total_row_groups_to_scan.load();
 }
 
 ParquetMetadataCacheEntry::ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata_p,
@@ -746,7 +750,7 @@ unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState
 	return make_uniq<ParquetReadGlobalState>(global_state.op);
 }
 
-unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ExecutionContext &,
+unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ClientContext &,
                                                                                GlobalTableFunctionState &) {
 	return make_uniq<ParquetReadLocalState>();
 }
@@ -775,9 +779,17 @@ void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState
 
 AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                       LocalTableFunctionState &lstate_p) {
+	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
-	auto strategy = RegisterRowGroupReads(context, lstate.scan_state);
-	return ScheduleRowGroupReads(lstate.scan_state, strategy);
+	auto &scan_state = lstate.scan_state;
+	auto read_before = scan_state.row_groups_read;
+	auto skipped_before = scan_state.row_groups_skipped;
+	auto strategy = RegisterRowGroupReads(context, scan_state);
+	auto read = scan_state.row_groups_read - read_before;
+	auto skipped = scan_state.row_groups_skipped - skipped_before;
+	gstate.row_groups_scanned_unreported += read;
+	gstate.total_row_groups_to_scan += read + skipped;
+	return ScheduleRowGroupReads(scan_state, strategy);
 }
 
 void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {

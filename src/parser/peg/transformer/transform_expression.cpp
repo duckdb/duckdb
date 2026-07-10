@@ -1,6 +1,7 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/optimizer/rule/date_trunc_simplification.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
@@ -354,6 +355,18 @@ MethodArguments PEGTransformerFactory::TransformFunctionExpressionArgumentList(
 	return result;
 }
 
+MethodArguments
+PEGTransformerFactory::TransformFunctionExpressionArguments(PEGTransformer &transformer,
+                                                            MethodArguments function_expression_argument_list) {
+	return function_expression_argument_list;
+}
+
+vector<FunctionArgument>
+PEGTransformerFactory::TransformFunctionArgumentList(PEGTransformer &transformer,
+                                                     vector<FunctionArgument> function_argument) {
+	return function_argument;
+}
+
 vector<OrderByNode> PEGTransformerFactory::TransformWithinGroupClause(PEGTransformer &transformer,
                                                                       vector<OrderByNode> order_by_clause) {
 	return order_by_clause;
@@ -367,13 +380,9 @@ bool PEGTransformerFactory::TransformAllKeyword(PEGTransformer &transformer) {
 	return false;
 }
 
-QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,
-                                                                 ParseResult &choice_result) {
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		QualifiedName result(choice_result.Cast<IdentifierParseResult>().identifier);
-		return result;
-	}
-	return transformer.Transform<QualifiedName>(choice_result);
+QualifiedName PEGTransformerFactory::TransformFunctionNameAsQualifiedName(PEGTransformer &transformer,
+                                                                          const Identifier &function_name) {
+	return QualifiedName(function_name);
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTransformer &transformer,
@@ -570,6 +579,18 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTrans
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformExpression(PEGTransformer &transformer,
+                                           unique_ptr<ParsedExpression> lambda_arrow_expression) {
+	return lambda_arrow_expression;
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformColumnDefaultExpr(PEGTransformer &transformer,
+                                                  unique_ptr<ParsedExpression> col_def_or_expr) {
+	return col_def_or_expr;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLambdaArrowExpression(
     PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_or_expression,
     optional<vector<unique_ptr<ParsedExpression>>> single_arrow_pair) {
@@ -581,6 +602,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLambdaArrowExpressi
 		expr = make_uniq<LambdaExpression>(std::move(expr), std::move(right_expr));
 	}
 	return expr;
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformSingleArrowPair(PEGTransformer &transformer,
+                                                unique_ptr<ParsedExpression> logical_or_expression) {
+	return logical_or_expression;
 }
 
 static unique_ptr<ParsedExpression> FoldConjunctionExpression(PEGTransformer &transformer,
@@ -605,11 +632,23 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalOrExpression
 	                                 std::move(logical_or_expression_tail), ExpressionType::CONJUNCTION_OR);
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformLogicalOrExpressionTail(PEGTransformer &transformer,
+                                                        unique_ptr<ParsedExpression> logical_and_expression) {
+	return logical_and_expression;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalAndExpression(
     PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_not_expression,
     optional<vector<unique_ptr<ParsedExpression>>> logical_and_expression_tail) {
 	return FoldConjunctionExpression(transformer, std::move(logical_not_expression),
 	                                 std::move(logical_and_expression_tail), ExpressionType::CONJUNCTION_AND);
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformLogicalAndExpressionTail(PEGTransformer &transformer,
+                                                         unique_ptr<ParsedExpression> logical_not_expression) {
+	return logical_not_expression;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColDefOrExpr(
@@ -619,11 +658,23 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColDefOrExpr(
 	                                 ExpressionType::CONJUNCTION_OR);
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformColDefOrExpressionTail(PEGTransformer &transformer,
+                                                       unique_ptr<ParsedExpression> col_def_and_expr) {
+	return col_def_and_expr;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColDefAndExpr(
     PEGTransformer &transformer, unique_ptr<ParsedExpression> is_distinct_from_expression,
     optional<vector<unique_ptr<ParsedExpression>>> col_def_and_expression_tail) {
 	return FoldConjunctionExpression(transformer, std::move(is_distinct_from_expression),
 	                                 std::move(col_def_and_expression_tail), ExpressionType::CONJUNCTION_AND);
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformColDefAndExpressionTail(PEGTransformer &transformer,
+                                                        unique_ptr<ParsedExpression> is_distinct_from_expression) {
+	return is_distinct_from_expression;
 }
 
 unique_ptr<ParsedExpression>
@@ -639,6 +690,11 @@ PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer
 		expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
 	}
 	return expr;
+}
+
+vector<bool> PEGTransformerFactory::TransformNotExpression(PEGTransformer &transformer,
+                                                           const vector<bool> &not_keyword) {
+	return not_keyword;
 }
 
 unique_ptr<ParsedExpression>
@@ -687,6 +743,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNotNullOperator(PEG
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsNullOperator(PEGTransformer &transformer) {
 	return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, nullptr);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsNull(PEGTransformer &transformer,
+                                                                    unique_ptr<ParsedExpression> is_null_operator) {
+	return is_null_operator;
 }
 
 bool PEGTransformerFactory::TransformNotKeyword(PEGTransformer &transformer) {
@@ -1231,21 +1292,18 @@ OtherOperatorTail PEGTransformerFactory::TransformOtherOperatorTail(PEGTransform
 	return result;
 }
 
-ParsedOperator PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer, ParseResult &choice_result) {
+ParsedOperator PEGTransformerFactory::TransformAnyAllParsedOperator(PEGTransformer &transformer,
+                                                                    const pair<string, bool> &any_all_operator) {
 	ParsedOperator result;
-	// OperatorLiteral matches any operator token and produces an OperatorParseResult directly
-	if (choice_result.type == ParseResultType::OPERATOR) {
-		result.name = choice_result.Cast<OperatorParseResult>().operator_token;
-		return result;
-	}
-	if (StringUtil::CIEquals(choice_result.name, "AnyAllOperator")) {
-		auto any_all = transformer.Transform<pair<string, bool>>(choice_result);
-		result.name = any_all.first;
-		result.is_any_all = true;
-		result.is_any = any_all.second;
-		return result;
-	}
-	result.name = transformer.Transform<string>(choice_result);
+	result.name = any_all_operator.first;
+	result.is_any_all = true;
+	result.is_any = any_all_operator.second;
+	return result;
+}
+
+ParsedOperator PEGTransformerFactory::TransformNamedOtherOperator(PEGTransformer &transformer, const string &child) {
+	ParsedOperator result;
+	result.name = child;
 	return result;
 }
 
@@ -1412,6 +1470,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(
 	return expr;
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformCollateExpressionTail(PEGTransformer &transformer,
+                                                      unique_ptr<ParsedExpression> at_time_zone_expression) {
+	return at_time_zone_expression;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAtTimeZoneExpression(
     PEGTransformer &transformer, unique_ptr<ParsedExpression> prefix_expression,
     optional<vector<unique_ptr<ParsedExpression>>> at_time_zone_expression_tail) {
@@ -1427,6 +1491,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAtTimeZoneExpressio
 		expr = std::move(func_expr);
 	}
 	return expr;
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformAtTimeZoneExpressionTail(PEGTransformer &transformer,
+                                                         unique_ptr<ParsedExpression> prefix_expression) {
+	return prefix_expression;
 }
 
 bool IsNumberLiteral(ParseResult &pr) {
@@ -1511,6 +1581,70 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 		expr = std::move(func_expr);
 	}
 	return expr;
+}
+
+void PEGTransformerFactory::InitializePrefixExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &prefix_opt = list_pr.Child<OptionalParseResult>(0);
+	idx_t prefix_count = 0;
+	if (prefix_opt.HasResult()) {
+		auto &prefix_repeat = prefix_opt.GetResult().Cast<RepeatParseResult>();
+		auto prefix_children = prefix_repeat.GetChildren();
+		prefix_count = prefix_children.size();
+		frame.ReserveChildSlots(1 + prefix_count);
+		for (idx_t i = prefix_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			stack.PushFrame(prefix_children[child_idx].get(), PEGTransformerFactory::GetTrampolineOps("PrefixOperator"),
+			                TransformFrameResultTarget(frame.frame_index, 1 + child_idx));
+		}
+	} else {
+		frame.ReserveChildSlots(1);
+	}
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("BaseExpression"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePrefixExpressionTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &prefix_opt = list_pr.Child<OptionalParseResult>(0);
+	auto &base_expr_pr = list_pr.Child<ListParseResult>(1);
+	auto expr = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+
+	if (!prefix_opt.HasResult()) {
+		return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(expr));
+	}
+
+	auto &prefix_repeat = prefix_opt.GetResult().Cast<RepeatParseResult>();
+	vector<string> prefixes;
+	auto prefix_children = prefix_repeat.GetChildren();
+	for (idx_t i = 0; i < prefix_children.size(); i++) {
+		prefixes.push_back(frame.TakeResult<string>(1 + i));
+	}
+
+	if (prefixes.size() == 1 && prefixes[0] == "-" && IsNumberLiteral(base_expr_pr)) {
+		auto result = ConvertNumberToValue("-" + GetRawText(base_expr_pr));
+		return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+	}
+
+	for (auto it = prefixes.rbegin(); it != prefixes.rend(); ++it) {
+		const string &prefix = *it;
+		if (prefix == "-" && expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+			auto &const_expr = expr->Cast<ConstantExpression>();
+			if (auto negated_expr = TryNegateValue(const_expr)) {
+				expr = std::move(negated_expr);
+				continue;
+			}
+		}
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(std::move(expr));
+		auto func_expr = make_uniq<FunctionExpression>(Identifier(prefix), std::move(children));
+		func_expr->IsOperatorMutable() = true;
+		expr = std::move(func_expr);
+	}
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(expr));
 }
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(PEGTransformer &transformer) {
 	// AnonymousParameter <- '?'
@@ -1626,6 +1760,42 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_result);
 }
 
+void PEGTransformerFactory::InitializeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	unique_ptr<ParsedExpression> result;
+	if (choice_result.name == "StringLiteral") {
+		auto &string_literal = choice_result.Cast<StringLiteralParseResult>();
+		result = string_literal.ToExpression();
+	} else if (choice_result.name == "NumberLiteral") {
+		result = TransformNumberLiteral(transformer, choice_result);
+	} else {
+		auto &constant_list_pr = choice_result.Cast<ListParseResult>();
+		auto &constant_choice_pr = constant_list_pr.Child<ChoiceParseResult>(0);
+		auto &constant_result = constant_choice_pr.GetResult();
+		Value value;
+		if (constant_result.name == "NullLiteral") {
+			value = TransformNullLiteral(transformer);
+		} else if (constant_result.name == "TrueLiteral") {
+			value = TransformTrueLiteral(transformer);
+		} else if (constant_result.name == "FalseLiteral") {
+			value = TransformFalseLiteral(transformer);
+		} else {
+			throw InternalException("Unexpected literal expression trampoline child '%s'", constant_result.name);
+		}
+		result = TransformConstantLiteral(transformer, value);
+	}
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParensExpression(PEGTransformer &transformer,
                                                                               unique_ptr<ParsedExpression> expression) {
 	return expression;
@@ -1655,6 +1825,12 @@ Value PEGTransformerFactory::TransformUnknownLiteral(PEGTransformer &transformer
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPostfixOperator(PEGTransformer &transformer) {
 	vector<unique_ptr<ParsedExpression>> func_children;
 	return make_uniq<FunctionExpression>("factorial", std::move(func_children));
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformIndirectionList(PEGTransformer &transformer,
+                                                vector<unique_ptr<ParsedExpression>> indirection) {
+	return indirection;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCastOperator(PEGTransformer &transformer,
@@ -1805,6 +1981,12 @@ Identifier PEGTransformerFactory::TransformTableQualification(PEGTransformer &tr
 string PEGTransformerFactory::TransformColIdDot(PEGTransformer &transformer, const Identifier &col_id) {
 	return col_id.GetIdentifierName();
 }
+
+vector<string> PEGTransformerFactory::TransformStarQualifierList(PEGTransformer &transformer,
+                                                                 const vector<string> &col_id_dot) {
+	return col_id_dot;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(
     PEGTransformer &transformer, const optional<vector<string>> &star_qualifier_list,
     const optional<qualified_column_set_t> &exclude_list,
@@ -1897,13 +2079,29 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformOverClause(PEGTrans
 	return window_frame;
 }
 
-unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTransformer &transformer,
-                                                                         ParseResult &choice_result) {
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		auto window_name = choice_result.Cast<IdentifierParseResult>().identifier;
-		return transformer.GetWindowClause(window_name);
+void PEGTransformerFactory::InitializeOverClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	if (transformer.in_window_definition) {
+		throw ParserException("window functions are not allowed in window definitions");
 	}
-	return transformer.Transform<unique_ptr<WindowExpression>>(choice_result);
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	transformer.in_window_definition = true;
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("WindowFrame"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOverClauseTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<WindowExpression>>(0);
+	transformer.in_window_definition = false;
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
+}
+
+unique_ptr<WindowExpression> PEGTransformerFactory::TransformIdentifierWindowFrame(PEGTransformer &transformer,
+                                                                                   const Identifier &identifier) {
+	return transformer.GetWindowClause(identifier);
 }
 
 unique_ptr<WindowExpression> PEGTransformerFactory::TransformParensIdentifier(PEGTransformer &transformer,

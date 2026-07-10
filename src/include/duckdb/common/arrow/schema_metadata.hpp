@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "duckdb/main/query_result.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
-#include "duckdb/main/chunk_scan_state.hpp"
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
 
 namespace duckdb {

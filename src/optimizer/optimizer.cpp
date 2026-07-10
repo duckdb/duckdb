@@ -49,6 +49,7 @@
 #include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/optimizer/rule/contains_to_in_clause.hpp"
+#include "duckdb/optimizer/rule/monotone_preimage.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -72,7 +73,10 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<InEnumSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
 	rewriter.rules.push_back(make_uniq<MoveConstantsRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<MoveUnaryMinusRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<MonotonePreimageRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<LeftToPrefixRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<OrderedAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctWindowedOptimizer>(rewriter));
@@ -85,6 +89,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<PredicateFactoringRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ContainsToInClauseRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<NotComparisonSimplificationRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -207,16 +212,6 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
 		FilterPullup filter_pullup;
 		plan = filter_pullup.Rewrite(std::move(plan));
-	});
-
-	/* Push down type casts in SELECT e.g. SELECT num::UHUGEINT to file readers.
-	 * This pass must run before FILTER_PUSHDOWN. After filter pushdown
-	 * get.table_filters are populated because WHERE clauses may have been
-	 * pushed. This makes type pushdown much more complex.
-	 */
-	RunOptimizer(OptimizerType::TYPE_PUSHDOWN, [&] {
-		TypePushdown type_pushdown(context);
-		plan = type_pushdown.Optimize(std::move(plan));
 	});
 
 	// perform filter pushdown
@@ -434,6 +429,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::ROW_NUMBER_REWRITER, [&]() {
 		RowNumberRewriter window_rewriter;
 		plan = window_rewriter.Optimize(std::move(plan));
+	});
+
+	// Push down type casts in SELECT e.g. SELECT num::UHUGEINT to file readers.
+	RunOptimizer(OptimizerType::TYPE_PUSHDOWN, [&] {
+		TypePushdown type_pushdown(context);
+		plan = type_pushdown.Optimize(std::move(plan));
 	});
 }
 

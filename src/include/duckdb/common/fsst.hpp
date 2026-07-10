@@ -10,7 +10,6 @@
 
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/fsst.hpp"
 #include "fsst.h"

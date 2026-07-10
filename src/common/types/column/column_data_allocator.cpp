@@ -1,4 +1,5 @@
 #include "duckdb/common/types/column/column_data_allocator.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"

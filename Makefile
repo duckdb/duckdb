@@ -550,7 +550,8 @@ TEST_CONFIGS := \
 	test/configs/force_storage_mmap.json \
 	test/configs/verify_aggregate_state_export.json \
 	test/configs/verify_functions.json \
-	test/configs/shredded_vector.json
+	test/configs/shredded_vector.json \
+	test/configs/transformer_trampoline_style.json
 
 test_configs:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))
@@ -710,6 +711,10 @@ spell_tools:
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
 
+.PHONY: extension-patch-check
+extension-patch-check:
+	cmake -DCONFIG_DIR=.github/config -DPATCH_DIR=.github/patches/extensions -P scripts/check_extension_patches.cmake
+
 .PHONY: format_venv
 format_venv:
 	@if [ ! -x "$(FORMAT_PYTHON)" ]; then \
@@ -777,7 +782,15 @@ format-fix: $(FORMAT_SETUP_DEPS)
 format-parser-grammar: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/parser/peg/transformer/peg_transformer.hpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated_trampoline.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
+
+.PHONY: parser-grammar-tools parser-grammar
+parser-grammar-tools: $(FORMAT_SETUP_DEPS)
+	@$(FORMAT_PYTHON) -m pip show pyyaml >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install PyYAML
+
+parser-grammar: parser-grammar-tools
+	PYTHON="$(FORMAT_PYTHON)" ./scripts/parser/build_grammar.sh
 
 .PHONY: check-extension-entries
 check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
@@ -852,6 +865,7 @@ generate-files:
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_enum_util.py
 	$(PYTHON) scripts/generate_html_template.py
+	$(MAKE) parser-grammar
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 

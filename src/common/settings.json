@@ -356,13 +356,6 @@
         "default_value": "false"
     },
     {
-        "name": "debug_local_file_system_delay_ms",
-        "description": "DEBUG SETTING: time to sleep before local file system open/read/write operations",
-        "type": "UBIGINT",
-        "scope": "global",
-        "default_value": "0"
-    },
-    {
         "name": "debug_order_verification",
         "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
         "type": "ENUM<DebugOrderVerification>",
@@ -1220,6 +1213,16 @@
         "type": "BIGINT",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "read_ahead_depth",
+        "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
+        "type": "BIGINT",
+        "default_scope": "global",
+        "default_value": "-1",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "regex_match_operator_semantics",

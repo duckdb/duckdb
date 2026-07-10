@@ -25,10 +25,6 @@
  *
  * Example: SELECT ts::TIMESTAMP FROM file_reader();
  * We can push TIMESTAMP as ts's output type to file_reader();
- *
- * This pass runs before FILTER_PUSHDOWN so that WHERE conditions are still
- * visible as LOGICAL_FILTER nodes. That makes uncasted column usage detectable
- * by CollectFromOp without need to inspect table_filters.
  */
 
 namespace duckdb {
@@ -107,9 +103,17 @@ std::optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, con
 	return std::nullopt;
 }
 
-// A GET reachable through a single-child chain of filters/projections. A join
-// (or any other multi-child operator) breaks the chain.
-// See test/sql/copy/csv/test_insert_into_types.test (cast not pushed past a join)
+/**
+ * A GET reachable through a single-child chain of projections. A join or any
+ * other multi-child operator breaks the chain.
+ *
+ * LOGICAL_FILTER also breaks the chain. In SELECT CAST/TRY_CAST(x) WHERE g(x)
+ * we can't push down cast if g(x) isn't pushed. If g(x) filters some rows
+ * on which cast would fail, the query passed by default but fails if cast is pushed
+ * and runs before g(x).
+ *
+ * See test/sql/copy/csv/test_insert_into_types.test in duckdb (cast not pushed past a join)
+ */
 static bool ReachesPushdownGet(const LogicalOperator &op) {
 	const LogicalOperator *cur = &op;
 	while (cur->children.size() == 1) {
@@ -117,7 +121,6 @@ static bool ReachesPushdownGet(const LogicalOperator &op) {
 		switch (cur->type) {
 		case LogicalOperatorType::LOGICAL_GET:
 			return cur->Cast<LogicalGet>().function.projection_expression_pushdown != nullptr;
-		case LogicalOperatorType::LOGICAL_FILTER:
 		case LogicalOperatorType::LOGICAL_PROJECTION:
 			continue;
 		default:

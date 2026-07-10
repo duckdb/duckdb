@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -28,6 +29,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 

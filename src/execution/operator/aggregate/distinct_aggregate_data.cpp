@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"

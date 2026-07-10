@@ -1,4 +1,6 @@
 #include "shell_prompt.hpp"
+#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"

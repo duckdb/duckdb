@@ -9,17 +9,18 @@
 #pragma once
 
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
+class BaseStatistics;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 

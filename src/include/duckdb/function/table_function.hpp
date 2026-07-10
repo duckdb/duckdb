@@ -13,19 +13,17 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
-#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/column_index.hpp"
-#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
-#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
+enum class TablePartitionInfo : uint8_t;
+struct PartitionStatistics;
 
 //! Controls how a table function manages parallelism.
 enum class TableFunctionParallelism : uint8_t {
@@ -49,6 +47,9 @@ struct OperatorMetrics;
 enum class OrderByColumnType : uint8_t;
 enum class OrderType : uint8_t;
 enum class OrderByStatistics : uint8_t;
+struct RowGroupOrderOptions;
+class LogicalOperator;
+class Binder;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -185,6 +186,8 @@ public:
 	optional_ptr<GlobalTableFunctionState> global_state;
 	AsyncResult async_result {};
 	AsyncResultsExecutionMode results_execution_mode {AsyncResultsExecutionMode::SYNCHRONOUS};
+	//! Interrupt state of the calling task, so the function might park and wake-up by returning a taskless Blocked res
+	optional_ptr<const InterruptState> interrupt_state;
 };
 
 struct TableFunctionPartitionInput {
