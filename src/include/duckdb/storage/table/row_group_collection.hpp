@@ -198,6 +198,8 @@ private:
 	vector<MetaBlockPointer> metadata_pointers;
 	//! Controls whether the next append creates a new row group or reuses the existing one
 	RowGroupAppendMode row_group_append_mode;
+	//! Whether or not we can append to a checkpointed row group
+	bool can_append_to_checkpointed_row_group = true;
 };
 
 class RowGroupIterationHelper {
