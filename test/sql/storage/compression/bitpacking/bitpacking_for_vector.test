@@ -2,6 +2,12 @@
 # description: Test FOR vector production from bitpacking scan
 # group: [bitpacking]
 
+# This test asserts exact vector_type() results (FOR / FLAT / DICTIONARY) to validate FOR-vector production
+# from the bitpacking scan. Vector-verification modes deliberately re-wrap expression inputs (e.g. as
+# dictionaries), which changes the observed vector_type without changing the data, so they are incompatible
+# with these whitebox assertions.
+require no_vector_verification
+
 require block_size 262144
 
 load {TEST_DIR}/bitpacking_for_vector.db

@@ -169,15 +169,6 @@ unique_ptr<FunctionData> CMDecimalDeserialize(Deserializer &deserializer, BoundS
 	return nullptr;
 }
 
-// A representative DECIMAL for each physical int width, used only for catalog registration / name
-// resolution during deserialization. The concrete (precision, scale) is stamped by the optimizer at
-// construction time and carried through serialization, so the placeholder width is never load-bearing.
-const vector<LogicalType> &DecimalRepresentatives() {
-	static const vector<LogicalType> types {LogicalType::DECIMAL(4, 0), LogicalType::DECIMAL(9, 0),
-	                                        LogicalType::DECIMAL(18, 0), LogicalType::DECIMAL(38, 0)};
-	return types;
-}
-
 ScalarFunctionSet GetDecimalCompressFunctionSet(const LogicalType &result_type) {
 	ScalarFunctionSet set {Identifier(DecimalCompressFunctionName(result_type))};
 	// Register a single overload accepting ANY decimal (generic LogicalTypeId::DECIMAL). One concrete overload per

@@ -97,8 +97,10 @@ static void FORArithmeticDomainFunction(DataChunk &input, ExpressionState &state
 		return;
 	}
 	using EXEC_OP = typename FORExecutionOperator<OP>::type;
-	if (TryFORArithmetic<DOMAIN_T, EXEC_OP, FORBoundsSelector<OP>>(input.data[0], input.data[1], result, input.size()))
+	if (TryFORArithmetic<DOMAIN_T, EXEC_OP, FORBoundsSelector<OP>>(input.data[0], input.data[1], result,
+	                                                               input.size())) {
 		return;
+	}
 	GetScalarIntegerFunction<OP>(input.data[0].GetType().InternalType())(input, state, result);
 }
 
