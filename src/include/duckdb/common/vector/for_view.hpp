@@ -18,8 +18,6 @@
 namespace duckdb {
 
 class Vector;
-class Expression;
-class DataChunk;
 
 //! ForView: a narrow-payload view of a column-vs-constant comparison.
 //!
@@ -59,21 +57,5 @@ struct ForView {
 //! Returns false (kind = NONE) for any other vector type, wider integers, or
 //! unsupported operators.
 bool TryResolveForView(const Vector &col, ExpressionType op, const Value &constant, ForView &out);
-
-//! Evaluate a resolved ForView comparison, writing a flat int8 boolean result.
-//!
-//! Preconditions: view.kind != NONE; bool_result is a FLAT_VECTOR of BOOLEAN with
-//! capacity >= count. The kernel ignores the original validity; the caller folds it in.
-//!
-//! Short-circuit cases (view.always_false / view.always_true) write a constant
-//! 0 / 1 across the result buffer.
-void EvaluateForComparison(const ForView &view, ExpressionType op, idx_t count, Vector &bool_result);
-
-//! Expression-level entry point: pattern-match `expr` as `col <op> const` (with sides flipped
-//! if the constant is on the left), look up `col` in `input_chunk` via its BoundReferenceExpression
-//! index, and resolve a ForView for it. Returns true on success with `out_view` and `out_op` populated;
-//! returns false for any expression shape that doesn't match or any column that doesn't resolve.
-bool TryResolveForViewFromExpr(const Expression &expr, DataChunk &input_chunk, ForView &out_view,
-                               ExpressionType &out_op);
 
 } // namespace duckdb

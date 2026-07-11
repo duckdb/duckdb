@@ -180,11 +180,13 @@ const vector<LogicalType> &DecimalRepresentatives() {
 
 ScalarFunctionSet GetDecimalCompressFunctionSet(const LogicalType &result_type) {
 	ScalarFunctionSet set {Identifier(DecimalCompressFunctionName(result_type))};
-	for (const auto &input_type : DecimalRepresentatives()) {
-		if (GetTypeIdSize(result_type.InternalType()) < GetTypeIdSize(input_type.InternalType())) {
-			set.AddFunction(CMDecimalCompressFun::GetFunction(input_type, result_type));
-		}
-	}
+	// Register a single overload accepting ANY decimal (generic LogicalTypeId::DECIMAL). One concrete overload per
+	// physical width made plan-deserialization ambiguous (every scale-0 decimal is mutually castable at equal cost);
+	// a single concrete representative instead forced an implicit width cast that handed the wrong physical payload to
+	// the callback. A generic decimal parameter matches every concrete decimal with no cast and no ambiguity. The
+	// concrete physical dispatch is stamped by the optimizer at construction and re-derived from the serialized
+	// argument in CMDecimalDeserialize, so the registered overload is only a name-resolution placeholder.
+	set.AddFunction(CMDecimalCompressFun::GetFunction(LogicalType(LogicalTypeId::DECIMAL), result_type));
 	return set;
 }
 
@@ -193,8 +195,12 @@ ScalarFunctionSet GetDecimalDecompressFunctionSet() {
 	static const vector<LogicalType> narrow_types {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
 	                                               LogicalType::BIGINT};
 	for (const auto &input_type : narrow_types) {
-		// register against the widest representative decimal; the real target type is stamped per call
-		set.AddFunction(CMDecimalDecompressFun::GetFunction(input_type, LogicalType::DECIMAL(38, 0)));
+		// Register with a GENERIC decimal result (no width). This is required: a concrete result decimal has width
+		// info, so deserialization would NOT reassign it to the serialized concrete type (TypeRequiresAssignment is
+		// false for a width-carrying decimal), leaving the result vector's physical width out of sync with the
+		// callback (e.g. an int128 result vector fed by an int64 callback). A width-less decimal is reassigned to the
+		// concrete target that the optimizer stamped and carried through serialization.
+		set.AddFunction(CMDecimalDecompressFun::GetFunction(input_type, LogicalType(LogicalTypeId::DECIMAL)));
 	}
 	return set;
 }
@@ -202,8 +208,14 @@ ScalarFunctionSet GetDecimalDecompressFunctionSet() {
 } // namespace
 
 ScalarFunction CMDecimalCompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
-	ScalarFunction result(Identifier(DecimalCompressFunctionName(result_type)), {input_type}, result_type,
-	                      GetDecimalCompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
+	// A generic DECIMAL input (no width -> INVALID physical type) is the catalog-registration placeholder; its
+	// callback is never executed as-is (the optimizer stamps the concrete callback at construction and
+	// CMDecimalDeserialize re-derives it from the serialized argument), so any width serves as the placeholder.
+	const auto fn = input_type.InternalType() == PhysicalType::INVALID
+	                    ? GetDecimalCompressFunctionResultSwitch<hugeint_t>(result_type)
+	                    : GetDecimalCompressFunctionInputSwitch(input_type, result_type);
+	ScalarFunction result(Identifier(DecimalCompressFunctionName(result_type)), {input_type}, result_type, fn,
+	                      CMUtils::Bind);
 	result.SetSerializeCallback(CMDecimalCompressSerialize);
 	result.SetDeserializeCallback(CMDecimalDeserialize<GetDecimalCompressFunctionInputSwitch>);
 #if defined(D_ASSERT_IS_ENABLED)
@@ -215,8 +227,13 @@ ScalarFunction CMDecimalCompressFun::GetFunction(const LogicalType &input_type, 
 }
 
 ScalarFunction CMDecimalDecompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
+	// A generic DECIMAL result (no width -> INVALID physical type) is the catalog-registration placeholder; its
+	// callback is never executed as-is (CMDecimalDeserialize re-derives it from the serialized concrete return type),
+	// so any concrete width serves for the placeholder callback selection.
+	const auto &cb_result =
+	    result_type.InternalType() == PhysicalType::INVALID ? LogicalType::DECIMAL(38, 0) : result_type;
 	ScalarFunction result(Identifier(DecimalDecompressFunctionName()), {input_type}, result_type,
-	                      GetDecimalDecompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
+	                      GetDecimalDecompressFunctionInputSwitch(input_type, cb_result), CMUtils::Bind);
 	result.SetSerializeCallback(CMDecimalCompressSerialize);
 	result.SetDeserializeCallback(CMDecimalDeserialize<GetDecimalDecompressFunctionInputSwitch>);
 	return result;

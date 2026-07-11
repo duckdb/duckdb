@@ -38,6 +38,34 @@ inline bool BitmapCmpTypeSupported(PhysicalType pt) {
 	}
 }
 
+inline bool BitmapCmpOpSupported(ExpressionType op) {
+	switch (op) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return true;
+	default:
+		return false;
+	}
+}
+
+inline bool BitmapThinIntegralTypeSupported(PhysicalType pt) {
+	switch (pt) {
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+		return true;
+	default:
+		return false;
+	}
+}
+
 //! For a dictionary/selection input, choose between gathering only the `active_tuples` selected values (work ∝ the
 //! survivors) and a dense compare over the whole `child_len` child followed by a probe (work ∝ the child span, but
 //! branchless/SIMD). Gather wins once few tuples survive; the crossover scales with element width, since a dense pass

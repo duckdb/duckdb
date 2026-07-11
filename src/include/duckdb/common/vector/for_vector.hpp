@@ -10,24 +10,13 @@
 
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/for_vector_helpers.hpp"
 
 namespace duckdb {
 
 //! FORVector: compressed vector backed by smaller unsigned integer payload values.
 //! Stores non-negative logical values directly in the vector payload using UINT8/16/32/64.
-//!
-//! Layout: the narrow stored data lives inside the vector's existing buffer (e.g. a
-//! StandardVectorBuffer). The metadata (max value, stored type) lives in auxiliary data.
-//! This means FORVector::Create does NOT replace the buffer: it reuses whatever buffer
-//! the vector already has. This is critical for compatibility with VectorCache, which
-//! restores the original buffer between pipeline iterations.
-//! Result of range analysis: whether all FOR values are above or below a constant.
-struct FORRangeResult {
-	bool all_gt; //! all FOR values > constant
-	bool all_lt; //! all FOR values < constant
-};
-
 struct FORVector {
 	template <class T>
 	struct ScanData {
@@ -107,38 +96,6 @@ struct FORVector {
 		return dst;
 	}
 
-	template <class STORED_T, class T, class FUNC>
-	static inline void ForEachValue(const ScanData<T> &scan_data, idx_t lo, idx_t hi, FUNC &&func) {
-		auto data = reinterpret_cast<const STORED_T *>(scan_data.data);
-		if (!scan_data.sel) {
-			if (!scan_data.validity->CanHaveNull()) {
-				for (idx_t i = lo; i < hi; i++)
-					func(i, data[i]);
-			} else {
-				for (idx_t i = lo; i < hi; i++)
-					if (scan_data.validity->RowIsValid(i))
-						func(i, data[i]);
-			}
-		} else if (!scan_data.validity->CanHaveNull()) {
-			for (idx_t i = lo; i < hi; i++)
-				func(i, data[scan_data.sel->get_index(i)]);
-		} else {
-			for (idx_t i = lo; i < hi; i++) {
-				auto idx = scan_data.sel->get_index(i);
-				if (scan_data.validity->RowIsValid(idx))
-					func(i, data[idx]);
-			}
-		}
-	}
-
-	template <class INPUT_TYPE, class FUNC>
-	static inline bool DispatchStoredData(const ScanData<INPUT_TYPE> &scan_data, idx_t count, FUNC &func) {
-		FOR_SWITCH_STORED(scan_data.stored_type, STORED_T, {
-			ForEachValue<STORED_T>(scan_data, 0, count, func);
-			return true;
-		});
-	}
-
 	static inline data_ptr_t GetData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FOR_VECTOR);
 		return vector.buffer->GetData();
@@ -158,20 +115,12 @@ struct FORVector {
 	template <class T>
 	static void SetMetadata(Vector &vector, PhysicalType stored_type, T max_value);
 
-	//! Decompress a FOR vector into a flat vector
-	static void Decompress(const Vector &source, Vector &target, idx_t count);
-	//! Decompress a FOR vector into a flat vector with selection vector
-	static void Decompress(const Vector &source, Vector &target, const SelectionVector &sel, idx_t count);
 	//! Widen raw FOR payload into a flat target buffer.
 	static void WidenToFlat(const LogicalType &type, PhysicalType stored_type, const_data_ptr_t source,
 	                        data_ptr_t target, const SelectionVector &sel, idx_t count);
 	//! Widen a full-stride FOR buffer's payload in place (back-to-front) and mark the buffer FLAT.
 	//! Only valid for cache-owned buffers, whose allocation stride is the full logical type size.
 	static void WidenInPlace(const LogicalType &type, VectorBuffer &buffer);
-	//! Copy FOR narrow data directly to a FLAT target, widening per element.
-	//! Avoids the allocating Flatten path when use_count > 1.
-	static void CopyToFlat(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
-	                       idx_t target_offset, idx_t copy_count);
 	//! Read a single logical value from raw FOR payload.
 	static Value GetValue(const LogicalType &type, PhysicalType stored_type, const_data_ptr_t data, idx_t index);
 
@@ -191,6 +140,13 @@ struct FORVector {
 	static LogicalType StoredTypeToLogical(PhysicalType stored_type);
 	//! Create a temporary FLAT_VECTOR view over a narrow FOR payload buffer.
 	static Vector CreatePayloadView(PhysicalType stored_type, data_ptr_t payload, idx_t count);
+	static inline bool IsStoredType(PhysicalType stored_type) {
+		return stored_type == PhysicalType::UINT8 || stored_type == PhysicalType::UINT16 ||
+		       stored_type == PhysicalType::UINT32 || stored_type == PhysicalType::UINT64;
+	}
+	static inline bool IsThinStoredType(PhysicalType stored_type) {
+		return IsStoredType(stored_type) && GetTypeIdSize(stored_type) <= sizeof(uint32_t);
+	}
 
 	template <class LOGICAL_T>
 	static bool TryGetStoredTypeForMax(LOGICAL_T max_value, PhysicalType &stored_type) {
@@ -238,81 +194,9 @@ struct FORVector {
 		return false;
 	}
 
-	static inline bool PackedAccumulationSafe(const Vector &for_vec, uint8_t count_bits, uint8_t shift) {
-		auto range_bits = GetRangeBits(for_vec);
-		return range_bits + count_bits <= shift;
-	}
-
-	static inline bool PlainAccumulationSafe(const Vector &for_vec, uint8_t extra_bits) {
-		auto range_bits = GetRangeBits(for_vec);
-		return range_bits + extra_bits < 63;
-	}
-
-	//! Range analysis for a FOR vector representing values in [0..max_value].
-	template <class LOGICAL_T>
-	static FORRangeResult RangeAnalysis(LOGICAL_T constant, LOGICAL_T max_value) {
-		if (constant < LOGICAL_T(0)) {
-			return {true, false};
-		}
-		if (constant > max_value) {
-			return {false, true};
-		}
-		return {false, false};
-	}
-
-	template <class LOGICAL_T>
-	static FORRangeResult RangeAnalysis(const Vector &for_vec, LOGICAL_T constant) {
-		return RangeAnalysis<LOGICAL_T>(constant, GetMax<LOGICAL_T>(for_vec));
-	}
-
-	template <class OP, class LOGICAL_T>
-	static bool ShortCircuitComparison(const FORRangeResult &range, bool is_right, bool &res) {
-		if (!range.all_gt && !range.all_lt) {
-			return false;
-		}
-		if (range.all_gt) {
-			res = is_right ? OP::Operation(LOGICAL_T(0), LOGICAL_T(1)) : OP::Operation(LOGICAL_T(1), LOGICAL_T(0));
-		} else {
-			res = is_right ? OP::Operation(LOGICAL_T(1), LOGICAL_T(0)) : OP::Operation(LOGICAL_T(0), LOGICAL_T(1));
-		}
-		return true;
-	}
-
-	//! Try to create a FOR vector from decoded logical values.
-	template <class T>
-	static inline bool TryCreateFromArray(T *data, idx_t count, Vector &result) {
-		if (sizeof(T) <= 1) {
-			return false;
-		}
-		T max_value = data[0];
-		for (idx_t i = 0; i < count; i++) {
-			if (NumericLimits<T>::IsSigned() && data[i] < T(0)) {
-				return false;
-			}
-			max_value = MaxValue(max_value, data[i]);
-		}
-		PhysicalType stored_phys;
-		if (!TryGetStoredTypeForMax<T>(max_value, stored_phys)) {
-			return false;
-		}
-		Create<T>(result, stored_phys, max_value);
-		auto dst = GetData(result);
-		FOR_SWITCH_STORED(stored_phys, STORED_T, {
-			auto target = reinterpret_cast<STORED_T *>(dst);
-			for (idx_t i = 0; i < count; i++) {
-				target[i] = UnsafeNumericCast<STORED_T>(data[i]);
-			}
-		});
-		return true;
-	}
-
 	static inline bool HasSameMetadata(const Vector &left, const Vector &right) {
 		return GetStoredType(left) == GetStoredType(right);
 	}
-
-	//! Reference a flat vector containing FOR payload as a FOR vector without copying the data.
-	template <class T>
-	static bool TryReferencePayload(Vector &source, Vector &result, PhysicalType stored_type, T max_value, idx_t count);
 
 	//! Cast a FOR vector between plain integral types by re-typing the metadata over a zero-copy
 	//! view of the same narrow payload. Returns false if the FOR max does not fit the target type.

@@ -1,4 +1,3 @@
-#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -51,21 +50,12 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 		FlatVector::SetSize(child, 1ULL);
 		cast_count = 1;
 	}
-	if (child.GetVectorType() == VectorType::FOR_VECTOR && FORVector::TryCastType(child, result, cast_count)) {
+	if (FORVector::TryCastType(child, result, cast_count)) {
 		// integral cast of a FOR vector: re-typed over the same narrow payload, cannot fail
-		FlatVector::SetSize(result, count_t(count));
-		return;
-	}
-	if (child.GetVectorType() == VectorType::DICTIONARY_VECTOR &&
-	    DictionaryVector::Child(child).GetVectorType() == VectorType::FOR_VECTOR) {
-		// filtered scans emit dictionary-over-FOR: re-type the FOR child, keep the selection
-		auto &dict_child = DictionaryVector::Child(child);
-		Vector retyped(result.GetType(), buffer_ptr<VectorBuffer>());
-		if (FORVector::TryCastType(dict_child, retyped, dict_child.size())) {
-			auto entry = make_buffer<DictionaryEntry>(std::move(retyped));
-			result.Dictionary(std::move(entry), DictionaryVector::SelVector(child), cast_count);
-			return;
+		if (result.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			FlatVector::SetSize(result, count_t(count));
 		}
+		return;
 	}
 	expr.GetBoundCast().Cast(child, result, cast_count, parameters);
 	if (all_constant) {

@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/for_vector.hpp"
 
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -42,7 +43,6 @@ void FORVector::SetMetadata(Vector &vector, PhysicalType stored_type, T max_valu
 #define FOR_INSTANTIATE(T)                                                                                             \
 	template T FORVector::GetMax<T>(const Vector &);                                                                   \
 	template void FORVector::SetMetadata<T>(Vector &, PhysicalType, T);                                                \
-	template bool FORVector::TryReferencePayload<T>(Vector &, Vector &, PhysicalType, T, idx_t);                       \
 	template void FORVector::Create<T>(Vector &, PhysicalType, T);
 FOR_INSTANTIATE(int16_t)
 FOR_INSTANTIATE(int32_t)
@@ -78,31 +78,6 @@ Vector FORVector::CreatePayloadView(PhysicalType stored_type, data_ptr_t payload
 	return payload_vec;
 }
 
-//===--------------------------------------------------------------------===//
-// Decompress
-//===--------------------------------------------------------------------===//
-template <class LOGICAL_T>
-static void DecompressImpl(const Vector &source, Vector &target, idx_t count, const SelectionVector *sel = nullptr) {
-	auto src = FORVector::GetData(source);
-	auto dst = FlatVector::GetDataMutable(target);
-	FOR_SWITCH_STORED(FORVector::GetStoredType(source), S, {
-		auto stored = reinterpret_cast<const S *>(src);
-		auto target_data = reinterpret_cast<LOGICAL_T *>(dst);
-		for (idx_t i = 0; i < count; i++) {
-			target_data[i] = FORVector::WidenStored<LOGICAL_T>(stored[sel ? sel->get_index(i) : i]);
-		}
-	});
-}
-
-void FORVector::Decompress(const Vector &source, Vector &target, idx_t count) {
-	D_ASSERT(source.GetVectorType() == VectorType::FOR_VECTOR);
-	FOR_SWITCH_LOGICAL(source.GetType().InternalType(), T, { DecompressImpl<T>(source, target, count); });
-}
-void FORVector::Decompress(const Vector &source, Vector &target, const SelectionVector &sel, idx_t count) {
-	D_ASSERT(source.GetVectorType() == VectorType::FOR_VECTOR);
-	FOR_SWITCH_LOGICAL(source.GetType().InternalType(), T, { DecompressImpl<T>(source, target, count, &sel); });
-}
-
 template <class LOGICAL_T>
 static void WidenFORPayload(PhysicalType stored_type, const_data_ptr_t source, data_ptr_t target,
                             const SelectionVector &sel, idx_t count) {
@@ -135,23 +110,6 @@ void FORVector::WidenInPlace(const LogicalType &type, VectorBuffer &buffer) {
 		});
 	});
 	buffer.SetVectorTypeOnly(VectorType::FLAT_VECTOR);
-}
-
-void FORVector::CopyToFlat(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
-                           idx_t target_offset, idx_t copy_count) {
-	D_ASSERT(source.GetVectorType() == VectorType::FOR_VECTOR);
-	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto st = GetStoredType(source);
-	auto *src = GetData(source);
-	FOR_SWITCH_LOGICAL(source.GetType().InternalType(), LT, {
-		auto *dst = FlatVector::GetDataMutable<LT>(target);
-		FOR_SWITCH_STORED(st, ST, {
-			auto *s = reinterpret_cast<const ST *>(src);
-			for (idx_t i = 0; i < copy_count; i++) {
-				dst[target_offset + i] = WidenStored<LT>(s[sel.get_index(source_offset + i)]);
-			}
-		});
-	});
 }
 
 template <class LOGICAL_T>
@@ -217,25 +175,6 @@ void FORVector::PrepareAppend(Vector &target, const Vector &source, bool has_sel
 	}
 }
 
-template <class T>
-bool FORVector::TryReferencePayload(Vector &source, Vector &result, PhysicalType stored_type, T max_value,
-                                    idx_t count) {
-	if (source.GetVectorType() != VectorType::FLAT_VECTOR) {
-		return false;
-	}
-	if (source.GetType().InternalType() != stored_type) {
-		return false;
-	}
-	auto data = FlatVector::GetDataMutable(source);
-	auto buffer = make_buffer<StandardVectorBuffer>(data, count_t(count), GetTypeIdSize(stored_type));
-	buffer->SetVectorTypeOnly(VectorType::FOR_VECTOR);
-	buffer->AddAuxiliaryData(make_uniq<VectorBufferHolder>(source.GetBufferRef()));
-	result.SetBuffer(std::move(buffer));
-	FORVector::SetMetadata<T>(result, stored_type, max_value);
-	FORVector::Validity(result).Initialize(FlatVector::Validity(source));
-	return true;
-}
-
 template <class SRC_T, class DST_T>
 static bool TryCastFORMetadata(Vector &source, uhugeint_t &max_storage) {
 	DST_T max_value;
@@ -263,6 +202,16 @@ static bool IsPlainIntegral(const LogicalType &type) {
 }
 
 bool FORVector::TryCastType(Vector &source, Vector &result, idx_t count) {
+	if (source.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(source);
+		Vector retyped(result.GetType(), buffer_ptr<VectorBuffer>());
+		if (!TryCastType(child, retyped, child.size())) {
+			return false;
+		}
+		auto entry = make_buffer<DictionaryEntry>(std::move(retyped));
+		result.Dictionary(std::move(entry), DictionaryVector::SelVector(source), count);
+		return true;
+	}
 	if (source.GetVectorType() != VectorType::FOR_VECTOR) {
 		return false;
 	}
