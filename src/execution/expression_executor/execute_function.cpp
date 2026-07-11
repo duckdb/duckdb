@@ -95,7 +95,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	// keep the input's selection on the result. The child is pointed at (no gather, no copy), the output buffer is
 	// reused, and the fill guard skips this when the selection is too sparse to pay for computing the whole child.
 	if (IsSafeAutoVecArithmetic(expr) && input_dictionary_size <= STANDARD_VECTOR_SIZE &&
-	    static_cast<double>(args.size()) >= CHUNK_FILL_RATIO_THRESHOLD * input_dictionary_size) {
+	    static_cast<double>(args.size()) >= CHUNK_FILL_RATIO_THRESHOLD * static_cast<double>(input_dictionary_size)) {
 		for (idx_t idx = 1; idx < dictionary_input_indices.size(); idx++) {
 			const auto &input = args.data[dictionary_input_indices[idx]];
 			if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
