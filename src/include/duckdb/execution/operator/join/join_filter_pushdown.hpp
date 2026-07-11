@@ -123,8 +123,9 @@ public:
 	                                      optional_ptr<JoinFilterGlobalState> gstate = nullptr) const;
 
 private:
-	bool PushInFilter(const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column, JoinHashTable &ht,
-	                  const PhysicalOperator &op, idx_t filter_idx, ProjectionIndex filter_col_idx) const;
+	bool PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
+	                  const JoinFilterPushdownColumn &column, JoinHashTable &ht, const PhysicalOperator &op,
+	                  idx_t filter_idx, ProjectionIndex filter_col_idx) const;
 
 	void DeferRuntimeFilter(DeferredRuntimeFilterType type, const PhysicalOperator &op,
 	                        const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,

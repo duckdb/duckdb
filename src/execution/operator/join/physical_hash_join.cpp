@@ -1249,47 +1249,6 @@ bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, option
 	return ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold && cmp == ExpressionType::COMPARE_EQUAL;
 }
 
-bool JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,
-                                          JoinHashTable &ht, const PhysicalOperator &op, idx_t filter_idx,
-                                          ProjectionIndex filter_col_idx) const {
-	// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
-	// first scan the entire vector at the probe side
-	auto build_idx = join_condition[filter_idx];
-	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
-	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], ht.Count());
-	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, build_idx);
-	if (key_count == 0) {
-		return false;
-	}
-
-	// generate the OR-clause - note that we only need to consider unique values here (so we use a seT)
-	value_set_t unique_ht_values;
-	for (idx_t k = 0; k < key_count; k++) {
-		// Cast to storage type, only insert if it succeeds
-		auto value = build_vector.GetValue(k);
-		if (column.storage_type.IsValid() && !value.DefaultTryCastAs(column.storage_type)) {
-			return false; // it's all or nothing sadly
-		}
-		unique_ht_values.insert(value);
-	}
-	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
-
-	// generating the OR filter only makes sense if the range is
-	// not dense and that the range does not contain NULL
-	// i.e. if we have the values [0, 1, 2, 3, 4] - the min/max is fully equivalent to the OR filter
-	if (FilterCombiner::ContainsNull(in_list) || FilterCombiner::IsDenseRange(in_list)) {
-		return false;
-	}
-
-	// we push the OR filter as an OptionalFilter so that we can use it for zonemap pruning only
-	// the IN-list is expensive to execute otherwise
-	auto in_expr = ExpressionFilter::CreateInExpression(
-	    make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0)), std::move(in_list));
-	auto filter = make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(in_expr), column.storage_type));
-	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
-	return true;
-}
-
 bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op,
                                                const ExpressionType &cmp, optional_ptr<JoinHashTable> ht) const {
 	if (!ht) {
@@ -1606,6 +1565,9 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
                                       const ProjectionIndex &filter_col_idx, unique_ptr<Expression> filter_expr,
                                       const LogicalType &column_type, bool selectivity_optional) {
+	if (!filter_expr) {
+		return;
+	}
 	if (selectivity_optional) {
 		info.dynamic_filters->PushFilter(
 		    op, filter_col_idx,
@@ -1622,8 +1584,8 @@ static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType co
                                                                unique_ptr<Expression> input, const Value &constant,
                                                                const LogicalType &comparison_logical_type) {
 	auto constant_value = constant;
-	if (!constant_value.IsNull()) {
-		constant_value.DefaultTryCastAs(comparison_logical_type);
+	if (!constant_value.DefaultTryCastAs(comparison_logical_type)) {
+		return nullptr;
 	}
 	return BoundComparisonExpression::Create(comparison_type, std::move(input),
 	                                         make_uniq<BoundConstantExpression>(std::move(constant_value)));
@@ -1643,13 +1605,68 @@ CreateJoinFilterComparisonExpression(ClientContext &context, const JoinFilterPus
 		return CreateComparisonExpressionFilter(comparison_type, constant, comparison_logical_type);
 	}
 	auto input = CreateRuntimeFilterInputExpression(context, column, comparison_logical_type);
+	auto input_type = input.expression->GetReturnType();
 	unique_ptr<Expression> null_check_input;
 	if (input.mode == RuntimeFilterInputMode::TRY_CAST_PRESERVE_ERRORS) {
 		null_check_input = input.expression->Copy();
 	}
-	auto filter_expr = CreateComparisonExpressionFilter(comparison_type, std::move(input.expression), constant,
-	                                                    comparison_logical_type);
+	auto filter_expr =
+	    CreateComparisonExpressionFilter(comparison_type, std::move(input.expression), constant, input_type);
+	if (!filter_expr) {
+		return nullptr;
+	}
 	return PreserveRuntimeFilterCastErrors(std::move(filter_expr), std::move(null_check_input));
+}
+
+bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilterPushdownFilter &info,
+                                          const JoinFilterPushdownColumn &column, JoinHashTable &ht,
+                                          const PhysicalOperator &op, idx_t filter_idx,
+                                          ProjectionIndex filter_col_idx) const {
+	// Generate an IN filter by scanning the build-side key column.
+	auto build_idx = join_condition[filter_idx];
+	const auto &runtime_type = ht.conditions[build_idx].GetLHS().GetReturnType();
+	Vector tuples_addresses(LogicalType::POINTER, ht.Count());
+	Vector build_vector(ht.layout_ptr->GetTypes()[build_idx], ht.Count());
+	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, build_idx);
+	if (key_count == 0) {
+		return false;
+	}
+
+	const auto reconstruct_expression = RequiresRuntimeFilterExpressionReconstruction(column, runtime_type);
+	auto filter_input_type = column.storage_type;
+	unique_ptr<Expression> filter_input;
+	unique_ptr<Expression> null_check_input;
+	if (reconstruct_expression) {
+		auto input = CreateRuntimeFilterInputExpression(context, column, runtime_type);
+		filter_input_type = input.expression->GetReturnType();
+		if (input.mode == RuntimeFilterInputMode::TRY_CAST_PRESERVE_ERRORS) {
+			null_check_input = input.expression->Copy();
+		}
+		filter_input = std::move(input.expression);
+	} else {
+		filter_input = make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0));
+	}
+
+	value_set_t unique_ht_values;
+	for (idx_t k = 0; k < key_count; k++) {
+		auto value = build_vector.GetValue(k);
+		if (!value.DefaultTryCastAs(filter_input_type)) {
+			return false;
+		}
+		unique_ht_values.insert(std::move(value));
+	}
+	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
+
+	// An IN filter is only useful when the values are neither null nor dense.
+	if (FilterCombiner::ContainsNull(in_list) || FilterCombiner::IsDenseRange(in_list)) {
+		return false;
+	}
+
+	auto in_expr = ExpressionFilter::CreateInExpression(std::move(filter_input), std::move(in_list));
+	in_expr = PreserveRuntimeFilterCastErrors(std::move(in_expr), std::move(null_check_input));
+	auto filter = make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(in_expr), column.storage_type));
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+	return true;
 }
 
 static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
@@ -1717,7 +1734,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 
 			auto min_val = min_val_before_cast;
 			auto max_val = max_val_before_cast;
-			auto runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, min_val_before_cast.type());
 			const bool reconstruct_filter_expression =
 			    RequiresRuntimeFilterExpressionReconstruction(pushdown_column, min_val_before_cast.type());
 
@@ -1739,7 +1755,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			}
 
 			auto condition_type = min_val.type();
-			runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, condition_type);
+			auto runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, condition_type);
 			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
 			if (can_emit_runtime_filters && ht) {
 				can_emit_runtime_filters = runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();
@@ -1749,10 +1765,12 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				// min = max - single value
 				// generate a "one-sided" comparison filter for the LHS
 				// Note that this also works for equalities.
-				info.dynamic_filters->PushFilter(
-				    op, filter_col_idx,
-				    make_uniq<ExpressionFilter>(CreateJoinFilterComparisonExpression(
-				        context, pushdown_column, cmp, min_val, condition_type, reconstruct_filter_expression)));
+				auto filter_expr = CreateJoinFilterComparisonExpression(context, pushdown_column, cmp, min_val,
+				                                                        condition_type, reconstruct_filter_expression);
+				if (filter_expr) {
+					info.dynamic_filters->PushFilter(op, filter_col_idx,
+					                                 make_uniq<ExpressionFilter>(std::move(filter_expr)));
+				}
 			} else {
 				if (cmp != ExpressionType::COMPARE_EQUAL) {
 					// min != max - generate range filters for non-equality comparisons.
@@ -1770,7 +1788,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 
 				bool pushed_in_filter = false;
 				if (CanUseInFilter(context, ht, cmp)) {
-					pushed_in_filter = PushInFilter(info, pushdown_column, *ht, op, filter_idx, filter_col_idx);
+					pushed_in_filter =
+					    PushInFilter(context, info, pushdown_column, *ht, op, filter_idx, filter_col_idx);
 				}
 
 				static constexpr idx_t SMALL_EXACT_PRF_BITS = 1ULL << 26;
