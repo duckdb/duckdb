@@ -1865,4 +1865,51 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 	return funcs;
 }
 
+//===--------------------------------------------------------------------===//
+// binom(), C()
+//===--------------------------------------------------------------------===//
+namespace {
+struct BinomOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
+		if (left < 0 || right < 0) {
+			throw OutOfRangeException("binom with negative input is undefined");
+		}
+		if (left < right) {
+			return 0;
+		}
+		TR ret = 1;
+		TA n = left;
+		TA k = std::min(right, left - right);
+		for (TA i = 1; i <= k; i++) {
+			TR numerator = TR(n - k + i);
+			TR denominator = TR(i);
+
+			auto divisor = GreatestCommonDivisor(numerator, denominator);
+			numerator /= divisor;
+			denominator /= divisor;
+
+			divisor = GreatestCommonDivisor(ret, denominator);
+			ret /= divisor;
+			denominator /= divisor;
+
+			// After canceling common factors, the denominator should equal 1.
+			D_ASSERT(denominator == 1);
+
+			if (!TryMultiplyOperator::Operation(ret, numerator, ret)) {
+				throw OutOfRangeException("Value out of range");
+			}
+		}
+		return ret;
+	}
+};
+} // namespace
+
+ScalarFunction BinomFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::HUGEINT,
+	                        ScalarFunction::BinaryFunction<int32_t, int32_t, hugeint_t, BinomOperator>);
+	function.SetFallible();
+	return function;
+}
+
 } // namespace duckdb
