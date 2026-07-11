@@ -27,11 +27,11 @@ class Pipeline;
 
 enum class PipelineInputMode : uint8_t { SCHEDULED_SOURCE, EXTERNAL_INPUT };
 enum class ExternalInputEventState : uint8_t {
-	UNSET,
-	REGISTERED,
-	EVENT_SCHEDULED,
-	COMPLETED_BEFORE_SCHEDULE,
-	COMPLETED
+	EXTERNAL_INPUT_UNSET,
+	EXTERNAL_INPUT_REGISTERED,
+	EXTERNAL_INPUT_EVENT_SCHEDULED,
+	EXTERNAL_INPUT_COMPLETED_BEFORE_SCHEDULE,
+	EXTERNAL_INPUT_COMPLETED
 };
 
 class PipelineTask : public ExecutorTask {
@@ -191,8 +191,8 @@ private:
 	PipelineInputMode input_mode = PipelineInputMode::SCHEDULED_SOURCE;
 	//! Event that represents execution of an externally fed pipeline
 	weak_ptr<Event> external_input_event DUCKDB_GUARDED_BY(external_input_lock);
-	ExternalInputEventState
-	    external_input_event_state DUCKDB_GUARDED_BY(external_input_lock) = ExternalInputEventState::UNSET;
+	ExternalInputEventState external_input_event_state DUCKDB_GUARDED_BY(external_input_lock) =
+	    ExternalInputEventState::EXTERNAL_INPUT_UNSET;
 	//! Lock for one-time external input initialization
 	annotated_mutex external_input_lock;
 	//! Lock for accessing the set of batch indexes

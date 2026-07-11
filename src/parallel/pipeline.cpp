@@ -215,7 +215,7 @@ void Pipeline::SetExternalInput() {
 	input_mode = PipelineInputMode::EXTERNAL_INPUT;
 	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
 	external_input_event.reset();
-	external_input_event_state = ExternalInputEventState::UNSET;
+	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_UNSET;
 }
 
 static bool CanUseExternalInputOperator(const PhysicalOperator &op) {
@@ -515,7 +515,7 @@ void Pipeline::SetExternalInputEvent(const shared_ptr<Event> &event) {
 		throw InternalException("External input pipeline event was registered more than once");
 	}
 	external_input_event = event;
-	external_input_event_state = ExternalInputEventState::REGISTERED;
+	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_REGISTERED;
 }
 
 void Pipeline::ScheduleExternalInputEvent(shared_ptr<Event> event) {
@@ -534,17 +534,17 @@ void Pipeline::ScheduleExternalInputEvent(shared_ptr<Event> event) {
 		}
 		external_input_event = event;
 		switch (external_input_event_state) {
-		case ExternalInputEventState::COMPLETED_BEFORE_SCHEDULE:
-			external_input_event_state = ExternalInputEventState::COMPLETED;
+		case ExternalInputEventState::EXTERNAL_INPUT_COMPLETED_BEFORE_SCHEDULE:
+			external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_COMPLETED;
 			event_to_finish = std::move(event);
 			break;
-		case ExternalInputEventState::COMPLETED:
+		case ExternalInputEventState::EXTERNAL_INPUT_COMPLETED:
 			event_to_finish = std::move(event);
 			break;
-		case ExternalInputEventState::UNSET:
-		case ExternalInputEventState::REGISTERED:
-		case ExternalInputEventState::EVENT_SCHEDULED:
-			external_input_event_state = ExternalInputEventState::EVENT_SCHEDULED;
+		case ExternalInputEventState::EXTERNAL_INPUT_UNSET:
+		case ExternalInputEventState::EXTERNAL_INPUT_REGISTERED:
+		case ExternalInputEventState::EXTERNAL_INPUT_EVENT_SCHEDULED:
+			external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_EVENT_SCHEDULED;
 			break;
 		}
 	}
@@ -560,20 +560,20 @@ void Pipeline::CompleteExternalInput() {
 		if (!IsExternalInput()) {
 			throw InternalException("CompleteExternalInput called for a pipeline that is not externally fed");
 		}
-		if (external_input_event_state == ExternalInputEventState::COMPLETED ||
-		    external_input_event_state == ExternalInputEventState::COMPLETED_BEFORE_SCHEDULE) {
+		if (external_input_event_state == ExternalInputEventState::EXTERNAL_INPUT_COMPLETED ||
+		    external_input_event_state == ExternalInputEventState::EXTERNAL_INPUT_COMPLETED_BEFORE_SCHEDULE) {
 			return;
 		}
 		event = external_input_event.lock();
 		if (!event) {
 			throw InternalException("Completing external input pipeline before its event was scheduled");
 		}
-		if (external_input_event_state == ExternalInputEventState::REGISTERED) {
-			external_input_event_state = ExternalInputEventState::COMPLETED_BEFORE_SCHEDULE;
+		if (external_input_event_state == ExternalInputEventState::EXTERNAL_INPUT_REGISTERED) {
+			external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_COMPLETED_BEFORE_SCHEDULE;
 			return;
 		}
-		D_ASSERT(external_input_event_state == ExternalInputEventState::EVENT_SCHEDULED);
-		external_input_event_state = ExternalInputEventState::COMPLETED;
+		D_ASSERT(external_input_event_state == ExternalInputEventState::EXTERNAL_INPUT_EVENT_SCHEDULED);
+		external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_COMPLETED;
 	}
 	if (!event->IsFinished()) {
 		event->Finish();
