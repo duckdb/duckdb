@@ -5,6 +5,12 @@
 load {TEST_DIR}/feature_schedule_persistence.db
 
 statement ok
+CREATE TABLE customers (customer VARCHAR);
+
+statement ok
+INSERT INTO customers VALUES ('x'), ('y');
+
+statement ok
 CREATE TABLE events (customer VARCHAR, value INTEGER, event_time TIMESTAMP);
 
 statement ok
@@ -13,10 +19,10 @@ INSERT INTO events VALUES
     ('y', 30, '2024-01-01 12:00:00');
 
 statement ok
-CREATE FEATURE sched 
-    TIMESTAMP event_time 
+CREATE FEATURE sched
+    ENTITY customers
+    TIMESTAMP event_time
     WINDOW 24 HOURS
-    REFRESH INCREMENTAL
     EVERY INTERVAL 90 MINUTES
     RETAIN 3
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);

@@ -220,8 +220,6 @@ enum class ExtraPersistentColumnDataType : uint8_t;
 
 enum class ExtraTypeInfoType : uint8_t;
 
-enum class FeatureRefreshMode : uint8_t;
-
 enum class FileBufferType : uint8_t;
 
 enum class FileCompressionType : uint8_t;
@@ -832,9 +830,6 @@ const char* EnumUtil::ToChars<ExtraPersistentColumnDataType>(ExtraPersistentColu
 
 template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
-
-template<>
-const char* EnumUtil::ToChars<FeatureRefreshMode>(FeatureRefreshMode value);
 
 template<>
 const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value);
@@ -1610,9 +1605,6 @@ ExtraPersistentColumnDataType EnumUtil::FromString<ExtraPersistentColumnDataType
 
 template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);
-
-template<>
-FeatureRefreshMode EnumUtil::FromString<FeatureRefreshMode>(const char *value);
 
 template<>
 FileBufferType EnumUtil::FromString<FileBufferType>(const char *value);

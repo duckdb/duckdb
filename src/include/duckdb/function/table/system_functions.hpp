@@ -143,14 +143,6 @@ struct DuckDBFeaturesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct FeatureAtVersionFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct CurrentFeatureFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct DuckDBSettingsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

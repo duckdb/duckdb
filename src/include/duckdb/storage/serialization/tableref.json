@@ -278,6 +278,23 @@
     ]
   },
   {
+    "class": "FeatureAtVersionRef",
+    "base": "TableRef",
+    "enum": "FEATURE_AT_VERSION",
+    "members": [
+      {
+        "id": 200,
+        "name": "feature_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "version",
+        "type": "int64_t"
+      }
+    ]
+  },
+  {
     "class": "AtClause",
     "includes": [
       "duckdb/parser/tableref/at_clause.hpp"

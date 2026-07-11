@@ -365,6 +365,12 @@
         "name": "schedule_interval",
         "type": "interval_t",
         "default": "interval_t()"
+      },
+      {
+        "id": 303,
+        "name": "ttl_interval",
+        "type": "interval_t",
+        "default": "interval_t()"
       }
     ]
   },

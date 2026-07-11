@@ -1,0 +1,100 @@
+# name: test/sql/feature/test_feature_ttl.test
+# description: TTL is a serving staleness bound — if the ASOF-matched snapshot is older than the TTL relative
+# group: [feature]
+
+#              to the request timestamp, the feature columns serve as NULL.
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE users (user_id VARCHAR);
+
+statement ok
+INSERT INTO users VALUES ('alice'), ('bob');
+
+statement ok
+CREATE TABLE txns (user_id VARCHAR, amount INTEGER, ts TIMESTAMP);
+
+statement ok
+INSERT INTO txns VALUES
+    ('alice', 100, '2024-01-05 00:00:00'),
+    ('alice', 200, '2024-01-08 00:00:00'),
+    ('bob',    50, '2024-01-06 00:00:00');
+
+statement ok
+CREATE FEATURE act ENTITY users TIMESTAMP ts WINDOW 30 DAYS TTL 2 DAYS RETAIN 3
+    AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS cnt FROM txns GROUP BY user_id);
+
+# TTL surfaces in metadata as ttl_interval
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+2 days
+
+statement ok
+REFRESH FEATURE act AT '2024-01-10 00:00:00';
+
+statement ok
+CREATE TABLE spine (user_id VARCHAR, req_ts TIMESTAMP);
+
+statement ok
+INSERT INTO spine VALUES
+    ('alice', '2024-01-11 00:00:00'),
+    ('alice', '2024-01-13 00:00:00'),
+    ('bob',   '2024-01-10 12:00:00');
+
+# Snapshot is at 2024-01-10. alice @ Jan 11 (1 day) and bob @ Jan 10 12:00 (0.5 day) are within the 2-day
+# TTL -> real values; alice @ Jan 13 (3 days) exceeds it -> feature columns NULL.
+query IIII rowsort
+SERVE FEATURE act FOR spine ASOF req_ts;
+----
+alice	2024-01-11 00:00:00	300	2
+alice	2024-01-13 00:00:00	NULL	NULL
+bob	2024-01-10 12:00:00	50	1
+
+# ============================================================
+# TTL applies to the ASOF-matched version across multiple retained snapshots
+# ============================================================
+statement ok
+REFRESH FEATURE act AT '2024-01-15 00:00:00';
+
+statement ok
+DELETE FROM spine;
+
+statement ok
+INSERT INTO spine VALUES
+    ('alice', '2024-01-16 00:00:00'),
+    ('alice', '2024-01-13 00:00:00');
+
+# alice @ Jan 16 matches v2 (Jan 15, 1 day) -> real; alice @ Jan 13 matches v1 (Jan 10, 3 days, since v2 is
+# later than the request) -> NULL.
+query IIII rowsort
+SERVE FEATURE act FOR spine ASOF req_ts;
+----
+alice	2024-01-13 00:00:00	NULL	NULL
+alice	2024-01-16 00:00:00	300	2
+
+# ============================================================
+# A zero TTL (default) never nulls: every matched snapshot serves regardless of age
+# ============================================================
+statement ok
+CREATE FEATURE act_no_ttl ENTITY users TIMESTAMP ts WINDOW 30 DAYS RETAIN 1
+    AS (SELECT user_id, SUM(amount) AS total FROM txns GROUP BY user_id);
+
+statement ok
+REFRESH FEATURE act_no_ttl AT '2024-01-10 00:00:00';
+
+# alice @ Jan 13 is 3 days after the snapshot but there is no TTL -> value still served
+query III rowsort
+SERVE FEATURE act_no_ttl FOR spine ASOF req_ts;
+----
+alice	2024-01-13 00:00:00	300
+alice	2024-01-16 00:00:00	300
+
+statement ok
+DROP FEATURE act;
+
+statement ok
+DROP FEATURE act_no_ttl;

@@ -1,6 +1,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/feature_query.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -181,6 +185,23 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 	}
 	if (!table_or_view) {
+		// The name may refer to a FEATURE. Resolve it to its current-version snapshot (bound as a subquery
+		// over the denormalized store), so "FROM my_feature" works without a shadow view or table function.
+		EntryLookupInfo feature_lookup(CatalogType::FEATURE_ENTRY, ref.table_name, entry_at_clause, error_context);
+		auto feature_or_null =
+		    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, feature_lookup, OnEntryNotFound::RETURN_NULL);
+		if (feature_or_null) {
+			auto &feature = feature_or_null->Cast<FeatureCatalogEntry>();
+			if (feature.current_version < 1) {
+				throw CatalogException("Feature \"%s\" has not been refreshed yet — run REFRESH FEATURE %s first",
+				                       feature.name, feature.name);
+			}
+			auto feature_ref = BuildFeatureVersionRef(
+			    feature.ParentCatalog().GetName(), feature.ParentSchema().name, feature.name, feature.current_version,
+			    ref.alias.empty() ? ref.table_name : ref.alias, ref.column_name_alias);
+			return Bind(*feature_ref);
+		}
+
 		// table could not be found: try to bind a replacement scan
 		// Try replacement scan bind
 		auto replacement_scan_bind_result = BindWithReplacementScan(context, ref);

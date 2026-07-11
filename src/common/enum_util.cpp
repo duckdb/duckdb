@@ -173,7 +173,6 @@
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
@@ -460,19 +459,20 @@ const StringUtil::EnumStringLiteral *GetAlterFeatureTypeValues() {
 		{ static_cast<uint32_t>(AlterFeatureType::BUMP_VERSION), "BUMP_VERSION" },
 		{ static_cast<uint32_t>(AlterFeatureType::SET_SCHEDULE), "SET_SCHEDULE" },
 		{ static_cast<uint32_t>(AlterFeatureType::ENABLE_SCHEDULE), "ENABLE_SCHEDULE" },
-		{ static_cast<uint32_t>(AlterFeatureType::DISABLE_SCHEDULE), "DISABLE_SCHEDULE" }
+		{ static_cast<uint32_t>(AlterFeatureType::DISABLE_SCHEDULE), "DISABLE_SCHEDULE" },
+		{ static_cast<uint32_t>(AlterFeatureType::SET_TTL), "SET_TTL" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterFeatureType>(AlterFeatureType value) {
-	return StringUtil::EnumToString(GetAlterFeatureTypeValues(), 5, "AlterFeatureType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterFeatureTypeValues(), 6, "AlterFeatureType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterFeatureType EnumUtil::FromString<AlterFeatureType>(const char *value) {
-	return static_cast<AlterFeatureType>(StringUtil::StringToEnum(GetAlterFeatureTypeValues(), 5, "AlterFeatureType", value));
+	return static_cast<AlterFeatureType>(StringUtil::StringToEnum(GetAlterFeatureTypeValues(), 6, "AlterFeatureType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterForeignKeyTypeValues() {
@@ -2288,24 +2288,6 @@ const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value) {
 template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value) {
 	return static_cast<ExtraTypeInfoType>(StringUtil::StringToEnum(GetExtraTypeInfoTypeValues(), 15, "ExtraTypeInfoType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetFeatureRefreshModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(FeatureRefreshMode::FULL), "FULL" },
-		{ static_cast<uint32_t>(FeatureRefreshMode::INCREMENTAL), "INCREMENTAL" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<FeatureRefreshMode>(FeatureRefreshMode value) {
-	return StringUtil::EnumToString(GetFeatureRefreshModeValues(), 2, "FeatureRefreshMode", static_cast<uint32_t>(value));
-}
-
-template<>
-FeatureRefreshMode EnumUtil::FromString<FeatureRefreshMode>(const char *value) {
-	return static_cast<FeatureRefreshMode>(StringUtil::StringToEnum(GetFeatureRefreshModeValues(), 2, "FeatureRefreshMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFileBufferTypeValues() {
@@ -5515,19 +5497,20 @@ const StringUtil::EnumStringLiteral *GetTableReferenceTypeValues() {
 		{ static_cast<uint32_t>(TableReferenceType::SHOW_REF), "SHOW_REF" },
 		{ static_cast<uint32_t>(TableReferenceType::COLUMN_DATA), "COLUMN_DATA" },
 		{ static_cast<uint32_t>(TableReferenceType::DELIM_GET), "DELIM_GET" },
-		{ static_cast<uint32_t>(TableReferenceType::BOUND_TABLE_REF), "BOUND_TABLE_REF" }
+		{ static_cast<uint32_t>(TableReferenceType::BOUND_TABLE_REF), "BOUND_TABLE_REF" },
+		{ static_cast<uint32_t>(TableReferenceType::FEATURE_AT_VERSION), "FEATURE_AT_VERSION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
-	return StringUtil::EnumToString(GetTableReferenceTypeValues(), 13, "TableReferenceType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableReferenceTypeValues(), 14, "TableReferenceType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
-	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 13, "TableReferenceType", value));
+	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 14, "TableReferenceType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTaskExecutionModeValues() {

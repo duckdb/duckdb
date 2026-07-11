@@ -8,7 +8,7 @@ RefreshFeatureStatement::RefreshFeatureStatement() : SQLStatement(StatementType:
 }
 
 RefreshFeatureStatement::RefreshFeatureStatement(const RefreshFeatureStatement &other)
-    : SQLStatement(other), feature_name(other.feature_name) {
+    : SQLStatement(other), feature_name(other.feature_name), at_timestamp(other.at_timestamp) {
 }
 
 unique_ptr<SQLStatement> RefreshFeatureStatement::Copy() const {
@@ -16,7 +16,11 @@ unique_ptr<SQLStatement> RefreshFeatureStatement::Copy() const {
 }
 
 string RefreshFeatureStatement::ToString() const {
-	return "REFRESH FEATURE " + SQLIdentifier::ToString(feature_name) + ";";
+	string result = "REFRESH FEATURE " + SQLIdentifier::ToString(feature_name);
+	if (!at_timestamp.empty()) {
+		result += " AT '" + at_timestamp + "'";
+	}
+	return result + ";";
 }
 
 } // namespace duckdb

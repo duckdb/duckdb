@@ -1,0 +1,80 @@
+# name: test/sql/feature/test_feature_refresh_errors.test
+# description: Error handling for REFRESH FEATURE — malformed refreshes must produce a clean error, never a crash.
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE custs (cust VARCHAR);
+
+statement ok
+INSERT INTO custs VALUES ('alice'), ('bob');
+
+statement ok
+CREATE TABLE txns (cust VARCHAR, amt INTEGER, ts TIMESTAMP);
+
+statement ok
+INSERT INTO txns VALUES ('alice', 100, '2024-01-05 00:00:00'), ('bob', 50, '2024-01-05 00:00:00');
+
+statement ok
+CREATE FEATURE spend ENTITY custs TIMESTAMP ts WINDOW 30 DAYS RETAIN 1 AS (SELECT cust, SUM(amt) AS total FROM txns GROUP BY cust);
+
+# ============================================================
+# Parser-level errors
+# ============================================================
+
+# Missing feature name
+statement error
+REFRESH FEATURE;
+----
+syntax error
+
+# AT without a timestamp
+statement error
+REFRESH FEATURE spend AT;
+----
+syntax error
+
+# AT requires a string literal, not a bare number
+statement error
+REFRESH FEATURE spend AT 123;
+----
+syntax error
+
+# ============================================================
+# Binder / runtime errors
+# ============================================================
+
+# Refreshing a feature that does not exist
+statement error
+REFRESH FEATURE nope;
+----
+does not exist
+
+# AT with a malformed timestamp string
+statement error
+REFRESH FEATURE spend AT 'notadate';
+----
+invalid timestamp field format
+
+# AT with an out-of-range timestamp
+statement error
+REFRESH FEATURE spend AT '2024-13-45 00:00:00';
+----
+<REGEX>:.*(out of range|Conversion).*
+
+# ============================================================
+# Sanity: well-formed REFRESH still works (one snapshot row per entity)
+# ============================================================
+query I
+REFRESH FEATURE spend AT '2024-01-10 00:00:00';
+----
+2
+
+# A REFRESH with no AT clause uses the current time and still succeeds
+query I
+REFRESH FEATURE spend;
+----
+2

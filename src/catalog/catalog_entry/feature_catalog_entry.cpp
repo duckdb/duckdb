@@ -1,7 +1,6 @@
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
@@ -9,12 +8,13 @@
 namespace duckdb {
 
 FeatureCatalogEntry::FeatureCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateFeatureInfo &info)
-    : StandardEntry(CatalogType::FEATURE_ENTRY, schema, catalog, info.feature_name), source_table(info.source_table),
-      entity_columns(info.entity_columns), timestamp_column(info.timestamp_column),
-      window_interval(info.window_interval), watermark_interval(info.watermark_interval),
-      refresh_mode(info.refresh_mode), retain_versions(info.retain_versions), current_version(info.current_version),
-      last_refresh_timestamp(Timestamp::GetCurrentTimestamp()), has_schedule(info.has_schedule),
-      schedule_interval(info.schedule_interval), schedule_enabled(info.schedule_enabled) {
+    : StandardEntry(CatalogType::FEATURE_ENTRY, schema, catalog, info.feature_name), entity_table(info.entity_table),
+      entity_columns(info.entity_columns), entity_key_columns(info.entity_key_columns),
+      timestamp_column(info.timestamp_column), timestamp_table(info.timestamp_table),
+      window_interval(info.window_interval), ttl_interval(info.ttl_interval), retain_versions(info.retain_versions),
+      current_version(info.current_version), last_refresh_timestamp(Timestamp::GetCurrentTimestamp()),
+      has_schedule(info.has_schedule), schedule_interval(info.schedule_interval),
+      schedule_enabled(info.schedule_enabled) {
 	if (info.query) {
 		query = unique_ptr_cast<SQLStatement, SelectStatement>(info.query->Copy());
 	}
@@ -53,6 +53,9 @@ unique_ptr<CatalogEntry> FeatureCatalogEntry::AlterEntry(CatalogTransaction tran
 		cast_info.schedule_interval = feature_info.schedule_interval;
 		cast_info.schedule_enabled = true;
 		break;
+	case AlterFeatureType::SET_TTL:
+		cast_info.ttl_interval = feature_info.ttl_interval;
+		break;
 	case AlterFeatureType::ENABLE_SCHEDULE:
 		if (!cast_info.has_schedule) {
 			throw CatalogException("Feature \"%s\" has no schedule to enable", name);
@@ -74,12 +77,13 @@ unique_ptr<CatalogEntry> FeatureCatalogEntry::AlterEntry(CatalogTransaction tran
 unique_ptr<CreateInfo> FeatureCatalogEntry::GetInfo() const {
 	auto info = make_uniq<CreateFeatureInfo>();
 	info->feature_name = name;
-	info->source_table = source_table;
+	info->entity_table = entity_table;
 	info->entity_columns = entity_columns;
+	info->entity_key_columns = entity_key_columns;
 	info->timestamp_column = timestamp_column;
+	info->timestamp_table = timestamp_table;
 	info->window_interval = window_interval;
-	info->watermark_interval = watermark_interval;
-	info->refresh_mode = refresh_mode;
+	info->ttl_interval = ttl_interval;
 	info->retain_versions = retain_versions;
 	info->current_version = current_version;
 	info->has_schedule = has_schedule;

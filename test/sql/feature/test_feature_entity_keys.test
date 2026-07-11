@@ -1,0 +1,135 @@
+# name: test/sql/feature/test_feature_entity_keys.test
+# description: Entity key resolution — explicit ENTITY t (cols) wins, else the table's PRIMARY KEY, else the entity-table columns the query projects (no PRIMARY KEY required); no keys projected -> global feature. SELECT DISTINCT on the entity source keeps one row per entity even when the entity table has duplicate keys.
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+# Entity table with NO primary key, and a deliberate duplicate row for 'alice' to exercise the DISTINCT
+# dedup in the snapshot's entity source.
+statement ok
+CREATE TABLE users_nopk (user_id VARCHAR);
+
+statement ok
+INSERT INTO users_nopk VALUES ('alice'), ('bob'), ('carol'), ('alice');
+
+# The event table names its identifier column 'cust_id', NOT 'user_id'. The feature queries must alias it to
+# the entity key name ('user_id') for the mapping to resolve — proving the entity key is anchored on the
+# entity table / explicit clause, not on a name coincidence with the event table.
+statement ok
+CREATE TABLE txns (cust_id VARCHAR, amount INTEGER, ts TIMESTAMP);
+
+statement ok
+INSERT INTO txns VALUES
+    ('alice', 100, '2024-01-05 00:00:00'),
+    ('alice', 200, '2024-01-06 00:00:00'),
+    ('bob',    50, '2024-01-05 00:00:00');
+
+# ============================================================
+# Heuristic: no explicit keys, no PK -> keys are the entity-table columns the query projects (user_id).
+# The duplicate 'alice' row is deduped by DISTINCT, so REFRESH still produces one row per entity (3).
+# ============================================================
+statement ok
+CREATE FEATURE f_heur ENTITY users_nopk TIMESTAMP ts WINDOW 30 DAYS RETAIN 1
+    AS (SELECT cust_id AS user_id, SUM(amount) AS total FROM txns GROUP BY cust_id);
+
+query I
+SELECT entity_columns FROM duckdb_features() WHERE feature_name = 'f_heur';
+----
+user_id
+
+query I
+REFRESH FEATURE f_heur AT '2024-01-10 00:00:00';
+----
+3
+
+query II rowsort
+SELECT user_id, total FROM f_heur;
+----
+alice	300
+bob	50
+carol	0
+
+# ============================================================
+# Explicit keys: ENTITY tbl (user_id) on a PK-less table. ToString renders the resolved keys.
+# ============================================================
+statement ok
+CREATE FEATURE f_explicit ENTITY users_nopk (user_id) TIMESTAMP ts WINDOW 30 DAYS RETAIN 1
+    AS (SELECT cust_id AS user_id, COUNT(*) AS n FROM txns GROUP BY cust_id);
+
+# ToString renders the resolved (here, explicitly declared) entity keys as ENTITY tbl (keys)
+query I
+SELECT sql FROM duckdb_features() WHERE feature_name = 'f_explicit';
+----
+<REGEX>:.*ENTITY users_nopk \(user_id\).*
+
+statement ok
+REFRESH FEATURE f_explicit AT '2024-01-10 00:00:00';
+
+query II rowsort
+SELECT user_id, n FROM f_explicit;
+----
+alice	2
+bob	1
+carol	0
+
+# ============================================================
+# Global feature on a PK-less table: the query projects no entity-table column -> no keys -> global.
+# ============================================================
+statement ok
+CREATE FEATURE f_global ENTITY users_nopk TIMESTAMP ts WINDOW 30 DAYS RETAIN 1
+    AS (SELECT COUNT(*) AS c FROM txns);
+
+query I
+SELECT entity_columns FROM duckdb_features() WHERE feature_name = 'f_global';
+----
+(empty)
+
+statement ok
+REFRESH FEATURE f_global AT '2024-01-10 00:00:00';
+
+# One aggregate row over all events
+query I
+SELECT c FROM f_global;
+----
+3
+
+# ============================================================
+# PRIMARY KEY path: with a PK and no explicit clause, the PK columns are used as the entity keys.
+# ============================================================
+statement ok
+CREATE TABLE users_pk (user_id VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO users_pk VALUES ('alice'), ('bob');
+
+statement ok
+CREATE FEATURE f_pk ENTITY users_pk TIMESTAMP ts WINDOW 30 DAYS RETAIN 1
+    AS (SELECT cust_id AS user_id, SUM(amount) AS total FROM txns GROUP BY cust_id);
+
+query I
+SELECT entity_columns FROM duckdb_features() WHERE feature_name = 'f_pk';
+----
+user_id
+
+statement ok
+REFRESH FEATURE f_pk AT '2024-01-10 00:00:00';
+
+query II rowsort
+SELECT user_id, total FROM f_pk;
+----
+alice	300
+bob	50
+
+statement ok
+DROP FEATURE f_pk;
+
+statement ok
+DROP FEATURE f_heur;
+
+statement ok
+DROP FEATURE f_explicit;
+
+statement ok
+DROP FEATURE f_global;

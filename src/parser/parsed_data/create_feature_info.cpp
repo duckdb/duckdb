@@ -1,5 +1,5 @@
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
-#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/interval.hpp"
 
@@ -11,20 +11,22 @@ static bool IntervalEquals(const interval_t &left, const interval_t &right) {
 
 CreateFeatureInfo::CreateFeatureInfo()
     : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), window_interval(interval_t {0, 1, 0}),
-      watermark_interval(interval_t {0, 0, 0}), refresh_mode(FeatureRefreshMode::FULL), retain_versions(1),
-      current_version(0), has_schedule(false), schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
+      ttl_interval(interval_t {0, 0, 0}), retain_versions(1), current_version(0), has_schedule(false),
+      schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	auto result = make_uniq<CreateFeatureInfo>();
 	CopyProperties(*result);
 	result->feature_name = feature_name;
-	result->source_table = source_table;
+	result->entity_table = entity_table;
+	result->user_entity_keys = user_entity_keys;
 	result->entity_columns = entity_columns;
+	result->entity_key_columns = entity_key_columns;
 	result->timestamp_column = timestamp_column;
+	result->timestamp_table = timestamp_table;
 	result->window_interval = window_interval;
-	result->watermark_interval = watermark_interval;
-	result->refresh_mode = refresh_mode;
+	result->ttl_interval = ttl_interval;
 	result->retain_versions = retain_versions;
 	result->current_version = current_version;
 	result->has_schedule = has_schedule;
@@ -47,19 +49,22 @@ string CreateFeatureInfo::ToString() const {
 		result += "IF NOT EXISTS ";
 	}
 	result += feature_name;
-	result += " TIMESTAMP " + timestamp_column;
-	result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
-	if (!IntervalEquals(watermark_interval, interval_t {0, 0, 0})) {
-		result += " WATERMARK INTERVAL '" + Interval::ToString(watermark_interval) + "'";
+	result += " ENTITY " + entity_table;
+	// Render the resolved entity key columns explicitly, e.g. "ENTITY users (user_id)". A global feature has
+	// no entity keys, so it is rendered as bare "ENTITY users". Before binding, fall back to the user-provided
+	// keys (if any) so a round-tripped parse still reflects the clause.
+	auto &render_keys = entity_key_columns.empty() ? user_entity_keys : entity_key_columns;
+	if (!render_keys.empty()) {
+		result += " (" + StringUtil::Join(render_keys, ", ") + ")";
 	}
-	result += " REFRESH ";
-	switch (refresh_mode) {
-	case FeatureRefreshMode::FULL:
-		result += "FULL";
-		break;
-	case FeatureRefreshMode::INCREMENTAL:
-		result += "INCREMENTAL";
-		break;
+	result += " TIMESTAMP ";
+	if (!timestamp_table.empty()) {
+		result += timestamp_table + ".";
+	}
+	result += timestamp_column;
+	result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
+	if (!IntervalEquals(ttl_interval, interval_t {0, 0, 0})) {
+		result += " TTL INTERVAL '" + Interval::ToString(ttl_interval) + "'";
 	}
 	if (has_schedule) {
 		result += " EVERY INTERVAL '" + Interval::ToString(schedule_interval) + "'";

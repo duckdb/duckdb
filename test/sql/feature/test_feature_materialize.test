@@ -1,5 +1,5 @@
 # name: test/sql/feature/test_feature_materialize.test
-# description: Test PIT-correct materialization and direct querying of backing table
+# description: Test snapshot-correct materialization: one row per entity, windowed aggregation, defaults
 # group: [feature]
 
 require noforcestorage
@@ -7,8 +7,14 @@ require noforcestorage
 require skip_reload
 
 # ============================================================
-# Setup: source table with known data for deterministic results
+# Setup: entity table (incl. user 5 with no events) + event table
 # ============================================================
+statement ok
+CREATE TABLE users (user_id INTEGER);
+
+statement ok
+INSERT INTO users VALUES (1), (2), (3), (4), (5);
+
 statement ok
 CREATE TABLE transactions (user_id INTEGER, amount DOUBLE, ts TIMESTAMP);
 
@@ -27,228 +33,103 @@ INSERT INTO transactions VALUES
     (4,  30.0, '2024-01-02 07:00:00');
 
 # ============================================================
-# SUM feature: PIT-correct windowed aggregation
+# SUM: one snapshot row per entity; user 5 (no events) defaults to 0
 # ============================================================
 statement ok
-CREATE FEATURE total_spend TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total FROM transactions GROUP BY user_id);
+CREATE FEATURE total_spend ENTITY users TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT user_id, SUM(amount) AS total FROM transactions GROUP BY user_id);
 
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok
-REFRESH FEATURE total_spend;
+REFRESH FEATURE total_spend AT '2024-01-08 00:00:00';
 
-# PIT-correct results — no future data leakage. Each source timestamp anchors one feature timestamp.
-query ITR rowsort
-SELECT * FROM total_spend;
+query IR rowsort
+SELECT user_id, total FROM total_spend;
 ----
-1	2024-01-01 10:00:00	100.0
-1	2024-01-02 14:00:00	300.0
-1	2024-01-04 09:00:00	350.0
-2	2024-01-01 09:00:00	50.0
-2	2024-01-03 11:00:00	125.0
-2	2024-01-05 17:00:00	245.0
-3	2024-01-02 16:00:00	300.0
-3	2024-01-03 08:00:00	450.0
-4	2024-01-01 06:00:00	10.0
-4	2024-01-01 22:00:00	30.0
-4	2024-01-02 07:00:00	60.0
+1	350.0
+2	245.0
+3	450.0
+4	60.0
+5	0.0
 
-# Row count
 query I
 SELECT COUNT(*) FROM total_spend;
 ----
-11
-
-# Verify individual entity full timelines
-query TR rowsort
-SELECT feature_timestamp, total FROM total_spend WHERE user_id = 3;
-----
-2024-01-02 16:00:00	300.0
-2024-01-03 08:00:00	450.0
-
-query TR rowsort
-SELECT feature_timestamp, total FROM total_spend WHERE user_id = 4;
-----
-2024-01-01 06:00:00	10.0
-2024-01-01 22:00:00	30.0
-2024-01-02 07:00:00	60.0
+5
 
 # ============================================================
-# AVG feature: different aggregate on same source
+# AVG: non-additive aggregate; user 5 stays NULL (no natural zero)
 # ============================================================
 statement ok
-CREATE FEATURE avg_spend TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
+CREATE FEATURE avg_spend ENTITY users TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT user_id, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok
-REFRESH FEATURE avg_spend;
+REFRESH FEATURE avg_spend AT '2024-01-08 00:00:00';
 
-query ITR rowsort
-SELECT * FROM avg_spend;
+query IR rowsort
+SELECT user_id, avg_amt FROM avg_spend;
 ----
-1	2024-01-01 10:00:00	100.0
-1	2024-01-02 14:00:00	150.0
-1	2024-01-04 09:00:00	116.66666666666667
-2	2024-01-01 09:00:00	50.0
-2	2024-01-03 11:00:00	62.5
-2	2024-01-05 17:00:00	81.66666666666667
-3	2024-01-02 16:00:00	300.0
-3	2024-01-03 08:00:00	225.0
-4	2024-01-01 06:00:00	10.0
-4	2024-01-01 22:00:00	15.0
-4	2024-01-02 07:00:00	20.0
-
-query I
-SELECT COUNT(*) FROM avg_spend;
-----
-11
+1	116.66666666666667
+2	81.66666666666667
+3	225.0
+4	20.0
+5	NULL
 
 # ============================================================
 # Multiple aggregates in one feature
 # ============================================================
 statement ok
-CREATE FEATURE multi_agg TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS cnt, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
+CREATE FEATURE multi_agg ENTITY users TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS cnt, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok
-REFRESH FEATURE multi_agg;
+REFRESH FEATURE multi_agg AT '2024-01-08 00:00:00';
 
-# user 1 @ 01-02 14:00: total=300, cnt=2, avg=150 (aggregates Jan 1 + Jan 2 events)
-query ITRIR
-SELECT * FROM multi_agg WHERE user_id = 1 AND feature_timestamp = '2024-01-02 14:00:00'::TIMESTAMP;
+query IRIR
+SELECT user_id, total, cnt, avg_amt FROM multi_agg WHERE user_id = 1;
 ----
-1	2024-01-02 14:00:00	300.0	2	150.0
+1	350.0	3	116.66666666666667
 
-# user 1 @ 01-04 09:00: total=350, cnt=3, avg≈116.67 (Jan 1 + Jan 2 + Jan 4 events)
-query ITRIR
-SELECT * FROM multi_agg WHERE user_id = 1 AND feature_timestamp = '2024-01-04 09:00:00'::TIMESTAMP;
+# COUNT defaults to 0 for the entity with no events
+query I
+SELECT cnt FROM multi_agg WHERE user_id = 5;
 ----
-1	2024-01-04 09:00:00	350.0	3	116.66666666666667
-
-# user 4 @ 01-01 22:00: total=30, cnt=2, avg=15 (two Jan 1 events)
-query ITRIR
-SELECT * FROM multi_agg WHERE user_id = 4 AND feature_timestamp = '2024-01-01 22:00:00'::TIMESTAMP;
-----
-4	2024-01-01 22:00:00	30.0	2	15.0
-
-# user 4 @ 01-02 07:00: total=60, cnt=3, avg=20 (two Jan 1 + one Jan 2)
-query ITRIR
-SELECT * FROM multi_agg WHERE user_id = 4 AND feature_timestamp = '2024-01-02 07:00:00'::TIMESTAMP;
-----
-4	2024-01-02 07:00:00	60.0	3	20.0
+0
 
 # ============================================================
-# COUNT feature: verify row counts per event timestamp
+# MAX: NULL default for the no-event entity
 # ============================================================
 statement ok
-CREATE FEATURE event_count TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, COUNT(*) AS cnt FROM transactions GROUP BY user_id);
+CREATE FEATURE max_spend ENTITY users TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT user_id, MAX(amount) AS peak FROM transactions GROUP BY user_id);
 
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok
-REFRESH FEATURE event_count;
+REFRESH FEATURE max_spend AT '2024-01-08 00:00:00';
 
-query ITI rowsort
-SELECT user_id, feature_timestamp, cnt FROM event_count;
+query IR rowsort
+SELECT user_id, peak FROM max_spend;
 ----
-1	2024-01-01 10:00:00	1
-1	2024-01-02 14:00:00	2
-1	2024-01-04 09:00:00	3
-2	2024-01-01 09:00:00	1
-2	2024-01-03 11:00:00	2
-2	2024-01-05 17:00:00	3
-3	2024-01-02 16:00:00	1
-3	2024-01-03 08:00:00	2
-4	2024-01-01 06:00:00	1
-4	2024-01-01 22:00:00	2
-4	2024-01-02 07:00:00	3
+1	200.0
+2	120.0
+3	300.0
+4	30.0
+5	NULL
 
 # ============================================================
-# Window boundary: data outside window excluded
+# Window boundary: a 2-day window AT Jan 5 keeps only events in [Jan 3, Jan 5)
 # ============================================================
 statement ok
-CREATE TABLE narrow_window_src (eid VARCHAR, val INTEGER, ts TIMESTAMP);
+CREATE FEATURE narrow ENTITY users TIMESTAMP ts WINDOW 2 DAYS RETAIN 1 AS (SELECT user_id, SUM(amount) AS total FROM transactions GROUP BY user_id);
 
 statement ok
-INSERT INTO narrow_window_src VALUES
-    ('a', 10, '2024-01-01 08:00:00'),
-    ('a', 20, '2024-01-02 08:00:00'),
-    ('a', 30, '2024-01-03 08:00:00'),
-    ('a', 40, '2024-01-04 08:00:00'),
-    ('a', 50, '2024-01-05 08:00:00'),
-    ('b', 100, '2024-01-01 08:00:00'),
-    ('b', 200, '2024-01-03 08:00:00'),
-    ('b', 300, '2024-01-05 08:00:00');
+REFRESH FEATURE narrow AT '2024-01-05 00:00:00';
 
-# Window of 2 days: each timestamp includes rows in the preceding two-day lookback window.
-statement ok
-CREATE FEATURE narrow_feat TIMESTAMP ts  WINDOW 2 DAYS REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM narrow_window_src GROUP BY eid);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE narrow_feat;
-
-query TIR rowsort
-SELECT eid, feature_timestamp, total FROM narrow_feat;
+# user1: Jan4 (50); user2: Jan3 11:00 (75); user3: Jan3 08:00 (150);
+# user4: none in window (0); user5: none (0)
+query IR rowsort
+SELECT user_id, total FROM narrow;
 ----
-a	2024-01-01 08:00:00	10
-a	2024-01-02 08:00:00	30
-a	2024-01-03 08:00:00	60
-a	2024-01-04 08:00:00	90
-a	2024-01-05 08:00:00	120
-b	2024-01-01 08:00:00	100
-b	2024-01-03 08:00:00	300
-b	2024-01-05 08:00:00	500
-
-# ============================================================
-# Explicit interval window with hour units
-# ============================================================
-statement ok
-CREATE TABLE hour_window_src (eid VARCHAR, val INTEGER, ts TIMESTAMP);
-
-statement ok
-INSERT INTO hour_window_src VALUES
-    ('a', 10, '2024-01-01 00:00:00'),
-    ('a', 20, '2024-01-01 12:00:00'),
-    ('a', 30, '2024-01-02 06:00:00');
-
-statement ok
-CREATE FEATURE half_day_feat TIMESTAMP ts  WINDOW 12 HOURS REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM hour_window_src GROUP BY eid);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE half_day_feat;
-
-query TIR rowsort
-SELECT eid, feature_timestamp, total FROM half_day_feat;
-----
-a	2024-01-01 00:00:00	10
-a	2024-01-01 12:00:00	30
-a	2024-01-02 06:00:00	30
-
-# ============================================================
-# MIN/MAX features: non-sum aggregates
-# ============================================================
-statement ok
-CREATE FEATURE max_spend TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, MAX(amount) AS peak FROM transactions GROUP BY user_id);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE max_spend;
-
-# user 1: peak at each event timestamp
-query TR rowsort
-SELECT feature_timestamp, peak FROM max_spend WHERE user_id = 1;
-----
-2024-01-01 10:00:00	100.0
-2024-01-02 14:00:00	200.0
-2024-01-04 09:00:00	200.0
-
-# user 4: peak at each event timestamp (two events on Jan 1 = 20.0; adding Jan 2 = 30.0)
-query TR rowsort
-SELECT feature_timestamp, peak FROM max_spend WHERE user_id = 4;
-----
-2024-01-01 06:00:00	10.0
-2024-01-01 22:00:00	20.0
-2024-01-02 07:00:00	30.0
+1	50.0
+2	75.0
+3	150.0
+4	0.0
+5	0.0
 
 # ============================================================
 # Cleanup
@@ -256,26 +137,18 @@ SELECT feature_timestamp, peak FROM max_spend WHERE user_id = 4;
 statement ok
 DROP FEATURE total_spend;
 
-# Backing table gone after DROP FEATURE
 statement error
 SELECT * FROM total_spend;
 ----
 <REGEX>:.*does not exist.*
 
-# Other features unaffected
 query I
 SELECT COUNT(*) FROM avg_spend;
 ----
-11
+5
 
 statement ok
 DROP TABLE transactions CASCADE;
-
-statement ok
-DROP TABLE narrow_window_src CASCADE;
-
-statement ok
-DROP TABLE hour_window_src CASCADE;
 
 query I
 SELECT COUNT(*) FROM duckdb_features();

@@ -1,0 +1,287 @@
+# name: test/sql/feature/test_feature_serve.test
+# description: Test SERVE FEATURE — time-travel ASOF against the denormalized store
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+# ============================================================
+# Setup: entity table, event table, feature, one snapshot AT Jan 4
+# ============================================================
+statement ok
+CREATE TABLE cards (card_no VARCHAR);
+
+statement ok
+INSERT INTO cards VALUES ('C001'), ('C002');
+
+statement ok
+CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO transactions VALUES
+    ('C001', 100.00, '2024-01-01 10:00:00'),
+    ('C001', 200.00, '2024-01-01 14:00:00'),
+    ('C001', 50.00, '2024-01-02 09:00:00'),
+    ('C002', 75.00, '2024-01-01 11:00:00'),
+    ('C002', 300.00, '2024-01-02 16:00:00'),
+    ('C002', 25.00, '2024-01-03 08:00:00');
+
+statement ok
+CREATE FEATURE daily_txn ENTITY cards TIMESTAMP event_time WINDOW 7 DAYS RETAIN 3 AS (SELECT card_no, SUM(amount) AS total_amount, COUNT(amount) AS txn_count FROM transactions GROUP BY card_no);
+
+# Snapshot AT Jan 4: window [Dec 28, Jan 4) captures every event.
+# C001 = 350 (tx 3), C002 = 400 (tx 3)
+statement ok
+REFRESH FEATURE daily_txn AT '2024-01-04 00:00:00';
+
+# ============================================================
+# SERVE FEATURE: basic retrieval (same column names, no explicit ENTITY/ASOF)
+# ============================================================
+statement ok
+CREATE TABLE requests (card_no VARCHAR, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO requests VALUES
+    ('C001', '2024-01-05 12:00:00'),
+    ('C002', '2024-01-05 10:00:00');
+
+# Each spine row (Jan 5) resolves to the Jan 4 snapshot.
+query IIRI sort
+SERVE FEATURE daily_txn FOR requests;
+----
+C001	2024-01-05 12:00:00	350.00	3
+C002	2024-01-05 10:00:00	400.00	3
+
+# ============================================================
+# SERVE FEATURE: explicit ENTITY and ASOF (different column names)
+# ============================================================
+statement ok
+CREATE TABLE incoming (customer_id VARCHAR, request_time TIMESTAMP, payload VARCHAR);
+
+statement ok
+INSERT INTO incoming VALUES
+    ('C001', '2024-01-05 12:00:00', 'data1'),
+    ('C002', '2024-01-05 10:00:00', 'data2');
+
+query IIIRI sort
+SERVE FEATURE daily_txn FOR incoming ENTITY customer_id ASOF request_time;
+----
+C001	2024-01-05 12:00:00	data1	350.00	3
+C002	2024-01-05 10:00:00	data2	400.00	3
+
+# The preferred spelling scopes the entity mapping to the feature.
+query IIIRI sort
+SERVE FEATURE daily_txn ENTITY customer_id FOR incoming ASOF request_time;
+----
+C001	2024-01-05 12:00:00	data1	350.00	3
+C002	2024-01-05 10:00:00	data2	400.00	3
+
+# ============================================================
+# SERVE FEATURE: only ENTITY override (ASOF defaults to the feature's timestamp col name)
+# ============================================================
+statement ok
+CREATE TABLE requests2 (customer_id VARCHAR, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO requests2 VALUES
+    ('C001', '2024-01-05 12:00:00'),
+    ('C002', '2024-01-05 10:00:00');
+
+query IIRI sort
+SERVE FEATURE daily_txn FOR requests2 ENTITY customer_id;
+----
+C001	2024-01-05 12:00:00	350.00	3
+C002	2024-01-05 10:00:00	400.00	3
+
+# ============================================================
+# SERVE FEATURE: only ASOF override (ENTITY defaults to same col name)
+# ============================================================
+statement ok
+CREATE TABLE requests3 (card_no VARCHAR, ts TIMESTAMP);
+
+statement ok
+INSERT INTO requests3 VALUES
+    ('C001', '2024-01-05 12:00:00'),
+    ('C002', '2024-01-05 10:00:00');
+
+query IIRI sort
+SERVE FEATURE daily_txn FOR requests3 ASOF ts;
+----
+C001	2024-01-05 12:00:00	350.00	3
+C002	2024-01-05 10:00:00	400.00	3
+
+# ============================================================
+# SERVE FEATURE: global feature with no entity columns
+# ============================================================
+statement ok
+CREATE FEATURE global_txn_count ENTITY cards TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT COUNT(*) AS global_count FROM transactions);
+
+statement ok
+REFRESH FEATURE global_txn_count AT '2024-01-04 00:00:00';
+
+# Global features only use the ASOF timestamp predicate: all 6 events fall in the window.
+query III sort
+SERVE FEATURE global_txn_count FOR requests;
+----
+C001	2024-01-05 12:00:00	6
+C002	2024-01-05 10:00:00	6
+
+# Multiple-feature serving combines keyed and global features.
+query IIRII sort
+SERVE FEATURES daily_txn, global_txn_count FOR requests;
+----
+C001	2024-01-05 12:00:00	350.00	3	6
+C002	2024-01-05 10:00:00	400.00	3	6
+
+# ============================================================
+# SERVE FEATURE: composite entity columns
+# ============================================================
+statement ok
+CREATE TABLE merchants (card_no VARCHAR, merchant_id VARCHAR);
+
+statement ok
+INSERT INTO merchants VALUES ('C001', 'M1'), ('C001', 'M2'), ('C002', 'M1');
+
+statement ok
+CREATE TABLE merchant_transactions (card_no VARCHAR, merchant_id VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO merchant_transactions VALUES
+    ('C001', 'M1', 100.00, '2024-01-01 10:00:00'),
+    ('C001', 'M2', 200.00, '2024-01-01 12:00:00'),
+    ('C001', 'M1',  50.00, '2024-01-02 09:00:00'),
+    ('C002', 'M1',  75.00, '2024-01-01 11:00:00');
+
+statement ok
+CREATE FEATURE merchant_txn ENTITY merchants TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, merchant_id, SUM(amount) AS merchant_total FROM merchant_transactions GROUP BY card_no, merchant_id);
+
+statement ok
+REFRESH FEATURE merchant_txn AT '2024-01-04 00:00:00';
+
+statement ok
+CREATE TABLE merchant_requests (card_no VARCHAR, merchant_id VARCHAR, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO merchant_requests VALUES
+    ('C001', 'M1', '2024-01-05 00:00:00'),
+    ('C001', 'M2', '2024-01-05 00:00:00'),
+    ('C002', 'M1', '2024-01-05 00:00:00'),
+    ('C999', 'M1', '2024-01-05 00:00:00');
+
+query IIIR sort
+SERVE FEATURE merchant_txn FOR merchant_requests;
+----
+C001	M1	2024-01-05 00:00:00	150.00
+C001	M2	2024-01-05 00:00:00	200.00
+C002	M1	2024-01-05 00:00:00	75.00
+C999	M1	2024-01-05 00:00:00	NULL
+
+statement ok
+CREATE TABLE merchant_incoming (customer_id VARCHAR, shop_id VARCHAR, request_time TIMESTAMP);
+
+statement ok
+INSERT INTO merchant_incoming VALUES
+    ('C001', 'M1', '2024-01-05 00:00:00'),
+    ('C001', 'M2', '2024-01-05 00:00:00'),
+    ('C002', 'M1', '2024-01-05 00:00:00');
+
+query IIIR sort
+SERVE FEATURE merchant_txn ENTITY (card_no = customer_id, merchant_id = shop_id) FOR merchant_incoming ASOF request_time;
+----
+C001	M1	2024-01-05 00:00:00	150.00
+C001	M2	2024-01-05 00:00:00	200.00
+C002	M1	2024-01-05 00:00:00	75.00
+
+statement ok
+CREATE TABLE merchant_partial_incoming (card_no VARCHAR, shop_id VARCHAR, request_time TIMESTAMP);
+
+statement ok
+INSERT INTO merchant_partial_incoming VALUES
+    ('C001', 'M1', '2024-01-05 00:00:00'),
+    ('C001', 'M2', '2024-01-05 00:00:00');
+
+# Unspecified entity keys default to identity by name, so card_no maps to card_no here.
+query IIIR sort
+SERVE FEATURE merchant_txn ENTITY (merchant_id = shop_id) FOR merchant_partial_incoming ASOF request_time;
+----
+C001	M1	2024-01-05 00:00:00	150.00
+C001	M2	2024-01-05 00:00:00	200.00
+
+statement error
+SERVE FEATURE merchant_txn FOR incoming ENTITY customer_id ASOF request_time;
+----
+multiple entity columns
+
+# ============================================================
+# SERVE FEATURE: time-travel across versions
+# ============================================================
+statement ok
+INSERT INTO transactions VALUES ('C001', 999.00, '2024-01-06 10:00:00');
+
+# Second snapshot AT Jan 7: C001 now 350+999 = 1349
+statement ok
+REFRESH FEATURE daily_txn AT '2024-01-07 00:00:00';
+
+statement ok
+CREATE TABLE travel (card_no VARCHAR, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO travel VALUES
+    ('C001', '2024-01-05 00:00:00'),
+    ('C001', '2024-01-08 00:00:00');
+
+# Jan 5 -> version 1 (350); Jan 8 -> version 2 (1349)
+query IIRI sort
+SERVE FEATURE daily_txn FOR travel;
+----
+C001	2024-01-05 00:00:00	350.00	3
+C001	2024-01-08 00:00:00	1349.00	4
+
+# ============================================================
+# SERVE FEATURE: parser / catalog validation
+# ============================================================
+statement error
+SERVE FEATURE daily_txn ASOF event_time;
+----
+syntax error
+
+statement error
+SERVE FEATURE nonexistent FOR requests;
+----
+does not exist
+
+statement error
+SERVE FEATURE daily_txn FOR nonexistent_table;
+----
+does not exist
+
+# ============================================================
+# SERVE FEATURE: LEFT ASOF semantics — unmatched spine rows kept with NULL features
+# ============================================================
+statement ok
+CREATE TABLE mixed (card_no VARCHAR, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO mixed VALUES
+    ('C001', '2024-01-05 00:00:00'),
+    ('C001', '2024-01-01 00:00:00'),
+    ('C999', '2024-01-05 00:00:00');
+
+# C001 @ Jan 5 -> version 1 (350); C001 @ Jan 1 -> no version at or before Jan 1 -> NULL;
+# C999 is not an entity -> NULL.
+query IIRI sort
+SERVE FEATURE daily_txn FOR mixed;
+----
+C001	2024-01-01 00:00:00	NULL	NULL
+C001	2024-01-05 00:00:00	350.00	3
+C999	2024-01-05 00:00:00	NULL	NULL
+
+# ============================================================
+# Cleanup
+# ============================================================
+statement ok
+DROP TABLE transactions CASCADE;
+
+statement ok
+DROP TABLE merchant_transactions CASCADE;

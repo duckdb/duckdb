@@ -1,0 +1,7 @@
+# name: benchmark/feature/refresh.benchmark
+# description: Time a feature refresh (windowed group-by snapshot over the entity table)
+# group: [feature]
+
+template benchmark/feature/feature.benchmark.in
+BENCH_NAME=FeatureRefresh
+RUN_QUERY=REFRESH FEATURE user_activity AT '2016-01-01 00:00:00';

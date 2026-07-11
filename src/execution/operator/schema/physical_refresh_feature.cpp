@@ -3,7 +3,10 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/feature_query.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -11,12 +14,14 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
@@ -53,21 +58,26 @@ unique_ptr<GlobalSinkState> PhysicalRefreshFeature::GetGlobalSinkState(ClientCon
 	result->new_version = feat.current_version + 1;
 	result->retain_versions = feat.retain_versions;
 
-	// Create the new version table: feature_name__v{new_version}
-	auto versioned_table_name = feature_name + "__v" + duckdb::to_string(result->new_version);
-	auto table_info = make_uniq<CreateTableInfo>();
-	table_info->catalog = result->catalog_name;
-	table_info->schema = result->schema_name;
-	table_info->table = versioned_table_name;
-	table_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-	table_info->temporary = false;
-	for (idx_t i = 0; i < result_names.size(); i++) {
-		table_info->columns.AddColumn(ColumnDefinition(result_names[i], result_types[i]));
-	}
+	// Get-or-create the persistent store table. The first refresh creates it; later refreshes append to it.
+	auto store_name = FeatureStoreTableName(feature_name);
+	auto existing = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, store_name);
+	if (existing) {
+		result->table = &existing->Cast<DuckTableEntry>();
+	} else {
+		auto table_info = make_uniq<CreateTableInfo>();
+		table_info->catalog = result->catalog_name;
+		table_info->schema = result->schema_name;
+		table_info->table = store_name;
+		table_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		table_info->temporary = false;
+		for (idx_t i = 0; i < result_names.size(); i++) {
+			table_info->columns.AddColumn(ColumnDefinition(result_names[i], result_types[i]));
+		}
 
-	auto bound_info = make_uniq<BoundCreateTableInfo>(schema, std::move(table_info));
-	auto table_entry = catalog.CreateTable(transaction, schema, *bound_info);
-	result->table = &table_entry->Cast<DuckTableEntry>();
+		auto bound_info = make_uniq<BoundCreateTableInfo>(schema, std::move(table_info));
+		auto table_entry = catalog.CreateTable(transaction, schema, *bound_info);
+		result->table = &table_entry->Cast<DuckTableEntry>();
+	}
 
 	return std::move(result);
 }
@@ -79,25 +89,9 @@ SinkResultType PhysicalRefreshFeature::Sink(ExecutionContext &context, DataChunk
 	auto &storage = gstate.table->GetStorage();
 	chunk.Flatten();
 
-	// The child projects the feature columns plus a trailing boolean marker (TRUE for recomputed rows,
-	// FALSE for rows copied forward). Sum the marker to report only the recomputed rows as rows_affected,
-	// then append just the feature columns to the version table.
-	const idx_t feature_column_count = result_types.size();
-	auto &marker = chunk.data[feature_column_count];
-	auto marker_data = FlatVector::GetData<bool>(marker);
-	auto &marker_validity = FlatVector::Validity(marker);
-	for (idx_t i = 0; i < chunk.size(); i++) {
-		if (marker_validity.RowIsValid(i) && marker_data[i]) {
-			lstate.recomputed_count++;
-		}
-	}
-
-	DataChunk append_chunk;
-	append_chunk.InitializeEmpty(result_types);
-	for (idx_t c = 0; c < feature_column_count; c++) {
-		append_chunk.data[c].Reference(chunk.data[c]);
-	}
-	append_chunk.SetCardinality(chunk.size());
+	// The child projects exactly the feature columns: one snapshot row per entity. Every row is appended
+	// to the new version table and counted as an affected row.
+	lstate.recomputed_count += chunk.size();
 
 	// Lazily create a per-thread optimistic row group collection so that each pipeline thread appends
 	// to its own collection without contention.
@@ -113,7 +107,7 @@ SinkResultType PhysicalRefreshFeature::Sink(ExecutionContext &context, DataChunk
 
 	auto &optimistic_collection = storage.GetOptimisticCollection(context.client, lstate.collection_index);
 	auto &collection = *optimistic_collection.collection;
-	auto new_row_group = collection.Append(append_chunk, lstate.local_append_state);
+	auto new_row_group = collection.Append(chunk, lstate.local_append_state);
 	if (new_row_group) {
 		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection);
 	}
@@ -138,8 +132,7 @@ SinkCombineResultType PhysicalRefreshFeature::Combine(ExecutionContext &context,
 	auto append_count = collection.GetTotalRows();
 
 	lock_guard<mutex> l(gstate.lock);
-	// rows_affected reports the recomputed rows only; append_count (all rows, including those copied
-	// forward) still drives the append-path decision below.
+	// rows_affected is the number of snapshot rows appended (one per entity).
 	gstate.insert_count += lstate.recomputed_count;
 	vector<unique_ptr<BoundConstraint>> empty_constraints;
 	if (append_count < row_group_size) {
@@ -166,6 +159,58 @@ unique_ptr<LocalSinkState> PhysicalRefreshFeature::GetLocalSinkState(ExecutionCo
 	return make_uniq<RefreshFeatureLocalState>();
 }
 
+//! Delete every row of the store whose __feature_version has fallen at or below the retain cutoff.
+//! Collect the matching row ids in a first pass, then delete them — never delete while scanning.
+static void EvictOldVersions(ClientContext &context, DuckTableEntry &table, idx_t version_column_index,
+                             int64_t cutoff) {
+	auto &storage = table.GetStorage();
+	auto &transaction = DuckTransaction::Get(context, table.catalog);
+
+	// Scan just the version column and the row id.
+	vector<StorageIndex> column_ids;
+	column_ids.emplace_back(version_column_index);
+	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+
+	TableScanState scan_state;
+	storage.InitializeScan(context, transaction, scan_state, column_ids);
+
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(Allocator::Get(context), vector<LogicalType> {LogicalType::BIGINT, LogicalType::ROW_TYPE});
+
+	vector<row_t> evicted;
+	while (true) {
+		scan_chunk.Reset();
+		storage.Scan(transaction, scan_chunk, scan_state);
+		if (scan_chunk.size() == 0) {
+			break;
+		}
+		scan_chunk.Flatten();
+		auto versions = FlatVector::GetData<int64_t>(scan_chunk.data[0]);
+		auto row_ids = FlatVector::GetData<row_t>(scan_chunk.data[1]);
+		for (idx_t i = 0; i < scan_chunk.size(); i++) {
+			if (versions[i] <= cutoff) {
+				evicted.push_back(row_ids[i]);
+			}
+		}
+	}
+	if (evicted.empty()) {
+		return;
+	}
+
+	// Delete the collected row ids in vector-sized batches. The internal store has no delete constraints
+	// (no primary key, unique index, or foreign key), so a default TableDeleteState is sufficient.
+	TableDeleteState delete_state;
+	Vector row_id_vector(LogicalType::ROW_TYPE);
+	auto row_id_data = FlatVector::GetDataMutable<row_t>(row_id_vector);
+	for (idx_t offset = 0; offset < evicted.size(); offset += STANDARD_VECTOR_SIZE) {
+		idx_t count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, evicted.size() - offset);
+		for (idx_t i = 0; i < count; i++) {
+			row_id_data[i] = evicted[offset + i];
+		}
+		storage.Delete(delete_state, context, table, row_id_vector, count);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
@@ -174,24 +219,17 @@ SourceResultType PhysicalRefreshFeature::GetDataInternal(ExecutionContext &conte
 	auto &gstate = sink_state->Cast<RefreshFeatureGlobalState>();
 	auto &catalog = Catalog::GetCatalog(context.client, gstate.catalog_name);
 
-	// Garbage-collect the version table that just fell outside the retain_versions limit. Each refresh
-	// adds one version, so at most one table becomes newly evictable here. This runs after all rows have
-	// been appended (the source phase follows the sink), so dropping the previous version does not race
-	// the child that read from it.
-	int64_t evicted_version = gstate.new_version - gstate.retain_versions;
-	if (evicted_version >= 1) {
-		auto old_table_name = feature_name + "__v" + duckdb::to_string(evicted_version);
-		DropInfo drop_info;
-		drop_info.type = CatalogType::TABLE_ENTRY;
-		drop_info.catalog = gstate.catalog_name;
-		drop_info.schema = gstate.schema_name;
-		drop_info.name = old_table_name;
-		drop_info.if_not_found = OnEntryNotFound::RETURN_NULL;
-		catalog.DropEntry(context.client, drop_info);
+	// Evict versions that have fallen outside the retain window by deleting their rows from the store. This
+	// runs after all new rows have been appended (the source phase follows the sink); the just-appended rows
+	// carry the new version, which is above the cutoff, so they are never evicted. The __feature_version
+	// column is the second-to-last column of the store schema.
+	int64_t cutoff = gstate.new_version - gstate.retain_versions;
+	if (cutoff >= 1) {
+		EvictOldVersions(context.client, *gstate.table, result_types.size() - 2, cutoff);
 	}
 
 	// Bump the feature's current version through the catalog so it is recorded transactionally (WAL /
-	// checkpoint) and commits atomically with the new version table.
+	// checkpoint) and commits atomically with the appended snapshot and the eviction.
 	AlterEntryData alter_data(gstate.catalog_name, gstate.schema_name, feature_name, OnEntryNotFound::THROW_EXCEPTION);
 	AlterFeatureInfo alter_info(std::move(alter_data), gstate.new_version);
 	catalog.Alter(context.client, alter_info);

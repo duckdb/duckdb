@@ -1,0 +1,194 @@
+# name: test/sql/feature/test_feature_alter_ttl.test
+# description: Test ALTER FEATURE ... SET TTL (metadata, serving effect, and WAL/checkpoint round-trip)
+# group: [feature]
+
+load {TEST_DIR}/feature_alter_ttl.db
+
+statement ok
+CREATE TABLE users (user_id VARCHAR);
+
+statement ok
+INSERT INTO users VALUES ('alice'), ('bob');
+
+statement ok
+CREATE TABLE txns (user_id VARCHAR, amount INTEGER, ts TIMESTAMP);
+
+statement ok
+INSERT INTO txns VALUES
+    ('alice', 100, '2024-01-05 00:00:00'),
+    ('bob',    50, '2024-01-06 00:00:00');
+
+# ============================================================
+# Create a feature WITHOUT a TTL (zero interval = no staleness bound)
+# ============================================================
+statement ok
+CREATE FEATURE act
+    ENTITY users
+    TIMESTAMP ts
+    WINDOW 30 DAYS
+    RETAIN 3
+    AS (SELECT user_id, SUM(amount) AS total FROM txns GROUP BY user_id);
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+00:00:00
+
+# ============================================================
+# SET TTL attaches a staleness bound (INTERVAL form)
+# ============================================================
+statement ok
+ALTER FEATURE act SET TTL INTERVAL 2 DAYS;
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+2 days
+
+# ============================================================
+# SET TTL replaces the interval; shorthand and INTERVAL-string forms both work
+# ============================================================
+statement ok
+ALTER FEATURE act SET TTL 5 DAYS;
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+5 days
+
+statement ok
+ALTER FEATURE act SET TTL INTERVAL '12 hours';
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+12:00:00
+
+# ============================================================
+# The altered TTL actually governs serving staleness
+# ============================================================
+statement ok
+ALTER FEATURE act SET TTL 2 DAYS;
+
+statement ok
+REFRESH FEATURE act AT '2024-01-10 00:00:00';
+
+statement ok
+CREATE TABLE spine (user_id VARCHAR, req_ts TIMESTAMP);
+
+statement ok
+INSERT INTO spine VALUES
+    ('alice', '2024-01-11 00:00:00'),
+    ('bob',   '2024-01-13 00:00:00');
+
+# Snapshot is at 2024-01-10. alice @ Jan 11 (1 day) is within the 2-day TTL -> real value;
+# bob @ Jan 13 (3 days) exceeds it -> feature column NULL.
+query III rowsort
+SERVE FEATURE act FOR spine ASOF req_ts;
+----
+alice	2024-01-11 00:00:00	100
+bob	2024-01-13 00:00:00	NULL
+
+# Widening the TTL makes the previously-stale row serve its value
+statement ok
+ALTER FEATURE act SET TTL 30 DAYS;
+
+query III rowsort
+SERVE FEATURE act FOR spine ASOF req_ts;
+----
+alice	2024-01-11 00:00:00	100
+bob	2024-01-13 00:00:00	50
+
+# ============================================================
+# SET TTL 0 is allowed and fully disables the staleness bound (same as never setting a TTL) —
+# distinct from "widening" above, since it nulls nothing regardless of how stale a match is.
+# ============================================================
+statement ok
+ALTER FEATURE act SET TTL 0 SECONDS;
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+00:00:00
+
+query III rowsort
+SERVE FEATURE act FOR spine ASOF req_ts;
+----
+alice	2024-01-11 00:00:00	100
+bob	2024-01-13 00:00:00	50
+
+# The INTERVAL-string and INTERVAL-keyword-shorthand forms of zero also work
+statement ok
+ALTER FEATURE act SET TTL INTERVAL '0 days';
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+00:00:00
+
+statement ok
+ALTER FEATURE act SET TTL INTERVAL 0 DAYS;
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+00:00:00
+
+# ============================================================
+# Negative / non-integer intervals are still rejected (only zero-or-positive is allowed). Note: an
+# unquoted negative shorthand like "SET TTL -1 DAYS" is a parser-level syntax error (NumberLiteral does
+# not accept a leading '-' here) before it ever reaches this check — the quoted INTERVAL string form is
+# what actually exercises the semantic non-negative check.
+# ============================================================
+statement error
+ALTER FEATURE act SET TTL INTERVAL '-1 days';
+----
+<REGEX>:.*interval must be non-negative.*
+
+statement error
+ALTER FEATURE act SET TTL 1.5 DAYS;
+----
+<REGEX>:.*positive integer.*
+
+# ============================================================
+# IF EXISTS on a missing feature is a no-op; without it, a missing feature errors
+# ============================================================
+statement ok
+ALTER FEATURE IF EXISTS missing SET TTL INTERVAL 1 DAY;
+
+statement error
+ALTER FEATURE missing SET TTL INTERVAL 1 DAY;
+----
+<REGEX>:.*missing.*does not exist.*
+
+# ============================================================
+# TTL change survives a WAL replay restart
+# ============================================================
+statement ok
+ALTER FEATURE act SET TTL 7 DAYS;
+
+restart
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+7 days
+
+# ============================================================
+# And survive a checkpoint + restart
+# ============================================================
+statement ok
+ALTER FEATURE act SET TTL 3 DAYS;
+
+statement ok
+FORCE CHECKPOINT;
+
+restart
+
+query I
+SELECT ttl_interval FROM duckdb_features() WHERE feature_name = 'act';
+----
+3 days
+
+statement ok
+DROP FEATURE act;

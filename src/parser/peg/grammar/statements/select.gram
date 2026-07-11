@@ -42,7 +42,7 @@ DistinctAll <- 'ALL'
 DistinctOn <- 'DISTINCT' DistinctOnTargets?
 DistinctOnTargets <- 'ON' Parens(List(Expression))
 
-InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
+InnerTableRef <- ValuesRef / TableFunction / TableSubquery / FeatureAtVersionRef / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- Lateral? SubqueryReference TableAlias?
@@ -50,6 +50,7 @@ BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClaus
 TableAliasColon <- ColIdOrString ':'
 ValuesRef <- ValuesClause TableAlias?
 ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
+FeatureAtVersionRef <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral TableAlias?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 

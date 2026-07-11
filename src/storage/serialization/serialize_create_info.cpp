@@ -99,39 +99,41 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "feature_name", feature_name);
-	serializer.WritePropertyWithDefault<string>(201, "source_table", source_table);
+	serializer.WritePropertyWithDefault<string>(201, "entity_table", entity_table);
 	serializer.WritePropertyWithDefault<vector<string>>(202, "entity_columns", entity_columns);
-	serializer.WritePropertyWithDefault<string>(203, "timestamp_column", timestamp_column);
-	serializer.WriteProperty<FeatureRefreshMode>(204, "refresh_mode", refresh_mode);
-	serializer.WritePropertyWithDefault<int64_t>(205, "retain_versions", retain_versions);
-	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(206, "query", query);
-	serializer.WritePropertyWithDefault<vector<string>>(207, "result_names", result_names);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "result_types", result_types);
-	serializer.WritePropertyWithDefault<int64_t>(209, "current_version", current_version, 0);
-	serializer.WritePropertyWithDefault<bool>(210, "has_schedule", has_schedule, false);
-	serializer.WritePropertyWithDefault<interval_t>(211, "schedule_interval", schedule_interval, interval_t());
-	serializer.WritePropertyWithDefault<bool>(212, "schedule_enabled", schedule_enabled, true);
-	serializer.WritePropertyWithDefault<interval_t>(213, "window_interval", window_interval, interval_t());
-	serializer.WritePropertyWithDefault<interval_t>(214, "watermark_interval", watermark_interval, interval_t());
+	serializer.WritePropertyWithDefault<vector<string>>(203, "entity_key_columns", entity_key_columns);
+	serializer.WritePropertyWithDefault<string>(204, "timestamp_column", timestamp_column);
+	serializer.WritePropertyWithDefault<string>(205, "timestamp_table", timestamp_table);
+	serializer.WritePropertyWithDefault<int64_t>(206, "retain_versions", retain_versions);
+	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(207, "query", query);
+	serializer.WritePropertyWithDefault<vector<string>>(208, "result_names", result_names);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(209, "result_types", result_types);
+	serializer.WritePropertyWithDefault<int64_t>(210, "current_version", current_version, 0);
+	serializer.WritePropertyWithDefault<bool>(211, "has_schedule", has_schedule, false);
+	serializer.WritePropertyWithDefault<interval_t>(212, "schedule_interval", schedule_interval, interval_t());
+	serializer.WritePropertyWithDefault<bool>(213, "schedule_enabled", schedule_enabled, true);
+	serializer.WritePropertyWithDefault<interval_t>(214, "window_interval", window_interval, interval_t());
+	serializer.WritePropertyWithDefault<interval_t>(215, "ttl_interval", ttl_interval, interval_t());
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateFeatureInfo>(new CreateFeatureInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "feature_name", result->feature_name);
-	deserializer.ReadPropertyWithDefault<string>(201, "source_table", result->source_table);
+	deserializer.ReadPropertyWithDefault<string>(201, "entity_table", result->entity_table);
 	deserializer.ReadPropertyWithDefault<vector<string>>(202, "entity_columns", result->entity_columns);
-	deserializer.ReadPropertyWithDefault<string>(203, "timestamp_column", result->timestamp_column);
-	deserializer.ReadProperty<FeatureRefreshMode>(204, "refresh_mode", result->refresh_mode);
-	deserializer.ReadPropertyWithDefault<int64_t>(205, "retain_versions", result->retain_versions);
-	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(206, "query", result->query);
-	deserializer.ReadPropertyWithDefault<vector<string>>(207, "result_names", result->result_names);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(208, "result_types", result->result_types);
-	deserializer.ReadPropertyWithExplicitDefault<int64_t>(209, "current_version", result->current_version, 0);
-	deserializer.ReadPropertyWithExplicitDefault<bool>(210, "has_schedule", result->has_schedule, false);
-	deserializer.ReadPropertyWithExplicitDefault<interval_t>(211, "schedule_interval", result->schedule_interval, interval_t());
-	deserializer.ReadPropertyWithExplicitDefault<bool>(212, "schedule_enabled", result->schedule_enabled, true);
-	deserializer.ReadPropertyWithExplicitDefault<interval_t>(213, "window_interval", result->window_interval, interval_t());
-	deserializer.ReadPropertyWithExplicitDefault<interval_t>(214, "watermark_interval", result->watermark_interval, interval_t());
+	deserializer.ReadPropertyWithDefault<vector<string>>(203, "entity_key_columns", result->entity_key_columns);
+	deserializer.ReadPropertyWithDefault<string>(204, "timestamp_column", result->timestamp_column);
+	deserializer.ReadPropertyWithDefault<string>(205, "timestamp_table", result->timestamp_table);
+	deserializer.ReadPropertyWithDefault<int64_t>(206, "retain_versions", result->retain_versions);
+	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(207, "query", result->query);
+	deserializer.ReadPropertyWithDefault<vector<string>>(208, "result_names", result->result_names);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(209, "result_types", result->result_types);
+	deserializer.ReadPropertyWithExplicitDefault<int64_t>(210, "current_version", result->current_version, 0);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(211, "has_schedule", result->has_schedule, false);
+	deserializer.ReadPropertyWithExplicitDefault<interval_t>(212, "schedule_interval", result->schedule_interval, interval_t());
+	deserializer.ReadPropertyWithExplicitDefault<bool>(213, "schedule_enabled", result->schedule_enabled, true);
+	deserializer.ReadPropertyWithExplicitDefault<interval_t>(214, "window_interval", result->window_interval, interval_t());
+	deserializer.ReadPropertyWithExplicitDefault<interval_t>(215, "ttl_interval", result->ttl_interval, interval_t());
 	result->FinalizeDeserialization();
 	return std::move(result);
 }

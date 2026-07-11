@@ -8,7 +8,7 @@
 --
 -- Reduce the range(0, 100) below to download fewer Parquet files for a
 -- smaller, faster benchmark.
-CREATE TABLE hits AS
+CREATE TABLE hits_raw AS
 SELECT
     CAST(UserID AS BIGINT)     AS UserID,
     epoch_ms(EventTime * 1000) AS EventTime,
@@ -20,37 +20,55 @@ FROM read_parquet(
     binary_as_string = True
 );
 
--- FULL-refresh feature: hourly windowed aggregation per user over a 24h window.
--- Exercises the CREATE FEATURE / REFRESH FULL group-by aggregation path.
-CREATE FEATURE user_activity_full TIMESTAMP EventTime 
-    WINDOW 24 HOURS
-    REFRESH FULL
+-- Entity table: the distinct users. CREATE FEATURE requires the event table's
+-- entity columns to form a FOREIGN KEY into the declared entity table, so we
+-- populate the entities first and give hits a foreign key into them.
+CREATE TABLE users (UserID BIGINT PRIMARY KEY);
+
+INSERT INTO users SELECT DISTINCT UserID FROM hits_raw;
+
+CREATE TABLE hits (
+    UserID    BIGINT,
+    EventTime TIMESTAMP,
+    RegionID  INTEGER,
+    CounterID INTEGER,
+    FOREIGN KEY (UserID) REFERENCES users(UserID)
+);
+
+INSERT INTO hits SELECT UserID, EventTime, RegionID, CounterID FROM hits_raw;
+
+DROP TABLE hits_raw;
+
+-- Windowed aggregation per user. The window is wide enough that a snapshot AT the fixed refresh
+-- time (below) captures the whole dataset, so REFRESH exercises the group-by aggregation path.
+CREATE FEATURE user_activity ENTITY users TIMESTAMP EventTime
+    WINDOW 3650 DAYS
     RETAIN 1
     AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region FROM hits GROUP BY UserID);
 
--- INCREMENTAL-refresh feature: same shape, watermark-based incremental refresh.
--- A refresh recomputes the tail from max(feature_timestamp) minus one hour, so
--- it exercises the REFRESH INCREMENTAL watermark path even without new source rows.
-CREATE FEATURE user_activity_incr TIMESTAMP EventTime 
-    WINDOW 24 HOURS
-    WATERMARK 1 HOUR
-    REFRESH INCREMENTAL
+-- Same shape but RETAIN 5, used by the interleaved refresh/serve benchmark to exercise multi-version
+-- time-travel serving. TTL bounds serving staleness (a matched snapshot older than the request time by
+-- more than the TTL serves as NULL). It is set wide enough that the sampled spine stays within tolerance,
+-- so SERVE returns real values while still exercising the TTL projection path.
+CREATE FEATURE user_activity_retain5 ENTITY users TIMESTAMP EventTime
+    WINDOW 3650 DAYS
+    TTL 30 DAYS
     RETAIN 5
     AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
 
--- CREATE FEATURE only registers metadata; the first REFRESH materializes version 1. Refresh both
--- features here so the SERVE / REFRESH benchmarks (and the sanity assert in feature.benchmark.in)
--- have a materialized current version to read from.
-REFRESH FEATURE user_activity_full;
+-- CREATE FEATURE only registers metadata; the first REFRESH materializes version 1. Snapshot both
+-- features AT a fixed time so the SERVE / REFRESH benchmarks (and the sanity assert in
+-- feature.benchmark.in) have a materialized current version to read from.
+REFRESH FEATURE user_activity AT '2016-01-01 00:00:00';
 
-REFRESH FEATURE user_activity_incr;
+REFRESH FEATURE user_activity_retain5 AT '2016-01-01 00:00:00';
 
--- Serving spine: a sample of entities with a serving timestamp after all events.
--- SERVE benchmarks consume this table with SERVE FEATURE ... FOR serve_requests.
+-- Serving spine: a sample of entities with a serving timestamp after the snapshot time, so every
+-- spine row resolves to the current version. SERVE benchmarks consume it with SERVE FEATURE ... FOR.
 -- Column names match the feature key and timestamp, so SERVE needs no overrides.
 CREATE TABLE serve_requests AS
 SELECT DISTINCT
     UserID,
-    TIMESTAMP '2015-01-01 00:00:00' AS EventTime
+    TIMESTAMP '2016-01-02 00:00:00' AS EventTime
 FROM hits
 USING SAMPLE 100000 ROWS;

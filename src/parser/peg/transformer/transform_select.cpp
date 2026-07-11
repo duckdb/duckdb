@@ -12,6 +12,7 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/tableref/at_clause.hpp"
+#include "duckdb/parser/tableref/feature_at_version_ref.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
@@ -1096,6 +1097,27 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransform
 	}
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 3, subquery->sample);
 	return std::move(subquery);
+}
+
+//! FeatureAtVersionRef <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral TableAlias?
+unique_ptr<TableRef> PEGTransformerFactory::TransformFeatureAtVersionRef(PEGTransformer &transformer,
+                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1)).name;
+	auto &version_num = list_pr.Child<NumberParseResult>(4);
+	int64_t version = std::stoll(version_num.number);
+
+	auto result = make_uniq<FeatureAtVersionRef>();
+	result->feature_name = std::move(feature_name);
+	result->version = version;
+
+	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(5);
+	if (table_alias_opt.HasResult()) {
+		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
+		result->alias = table_alias.name;
+		result->column_name_alias = table_alias.column_name_alias;
+	}
+	return std::move(result);
 }
 
 unique_ptr<AtClause> PEGTransformerFactory::TransformAtClause(PEGTransformer &transformer, ParseResult &parse_result) {

@@ -6,6 +6,13 @@ require noforcestorage
 
 require skip_reload
 
+# The snapshot is built over the entity table; no primary/foreign key is required.
+statement ok
+CREATE TABLE customers (customer VARCHAR);
+
+statement ok
+INSERT INTO customers VALUES ('x'), ('y');
+
 statement ok
 CREATE TABLE events (customer VARCHAR, value INTEGER, event_time TIMESTAMP);
 
@@ -19,7 +26,7 @@ INSERT INTO events VALUES
 # CREATE FEATURE returns the created feature's name
 # ============================================================
 query I
-CREATE FEATURE f TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 2 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
+CREATE FEATURE f ENTITY customers TIMESTAMP event_time WINDOW 7 DAYS RETAIN 2 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
 ----
 f
 
@@ -29,9 +36,9 @@ SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name =
 ----
 f	0
 
-# No version table has been created yet
+# No store table has been created yet
 query I
-SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_%' ESCAPE '\';
 ----
 0
 
@@ -41,11 +48,11 @@ SELECT * FROM f;
 ----
 <REGEX>:.*has not been refreshed yet.*
 
-# feature_at_version for the (non-existent) v1 also fails clearly
+# FEATURE ... AT VERSION for the (non-existent) v1 also fails clearly
 statement error
-SELECT * FROM feature_at_version('f', 1);
+SELECT * FROM FEATURE f AT VERSION 1;
 ----
-<REGEX>:.*does not exist.*
+<REGEX>:.*has not been refreshed yet.*
 
 # ============================================================
 # SERVE FEATURE on an unrefreshed feature errors the same way
@@ -65,37 +72,37 @@ SERVE FEATURE f FOR spine;
 # After the first REFRESH the feature materializes v1 and becomes queryable
 # ============================================================
 statement ok
-REFRESH FEATURE f;
+REFRESH FEATURE f AT '2024-01-03 00:00:00';
 
 query II
 SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name = 'f';
 ----
 f	1
 
+# The store holds one snapshot row per entity (x, y)
 query I
-SELECT COUNT(*) FROM f__v1;
+SELECT COUNT(*) FROM f__store;
 ----
-3
+2
 
-query IIT rowsort
-SELECT customer, total, feature_timestamp FROM f;
+# The view resolves to the current snapshot: SUM over [Dec 27, Jan 3)
+query II rowsort
+SELECT customer, total FROM f;
 ----
-x	10	2024-01-01 08:00:00
-x	30	2024-01-02 08:00:00
-y	30	2024-01-01 12:00:00
+x	30
+y	30
 
-# SERVE now works: spine columns, then feature_timestamp, then the aggregate
-query IIII
+# SERVE resolves each spine row to the entity's snapshot at or before the spine time.
+query III
 SERVE FEATURE f FOR spine;
 ----
-x	2024-01-03 00:00:00	2024-01-02 08:00:00	30
+x	2024-01-03 00:00:00	30
 
 # ============================================================
-# INCREMENTAL feature's first refresh also bootstraps v1 (full materialization,
-# since there is no prior version to copy forward from)
+# A second feature on the same tables also bootstraps v1 on its first refresh
 # ============================================================
 statement ok
-CREATE FEATURE g TIMESTAMP event_time WINDOW 7 DAYS REFRESH INCREMENTAL RETAIN 1 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
+CREATE FEATURE g ENTITY customers TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
 
 statement error
 SELECT * FROM g;
@@ -103,12 +110,12 @@ SELECT * FROM g;
 <REGEX>:.*has not been refreshed yet.*
 
 statement ok
-REFRESH FEATURE g;
+REFRESH FEATURE g AT '2024-01-03 00:00:00';
 
 query I
 SELECT COUNT(*) FROM g;
 ----
-3
+2
 
 query I
 SELECT current_version FROM duckdb_features() WHERE feature_name = 'g';

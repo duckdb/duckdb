@@ -5,6 +5,12 @@
 load {TEST_DIR}/feature_alter_schedule.db
 
 statement ok
+CREATE TABLE users (UserID VARCHAR);
+
+statement ok
+INSERT INTO users VALUES ('a'), ('b');
+
+statement ok
 CREATE TABLE hits (UserID VARCHAR, EventTime TIMESTAMP);
 
 statement ok
@@ -16,10 +22,10 @@ INSERT INTO hits VALUES
 # Create a feature WITHOUT a schedule
 # ============================================================
 statement ok
-CREATE FEATURE f 
-    TIMESTAMP EventTime 
+CREATE FEATURE f
+    ENTITY users
+    TIMESTAMP EventTime
     WINDOW 24 HOURS
-    REFRESH INCREMENTAL
     RETAIN 5
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
 

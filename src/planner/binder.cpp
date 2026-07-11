@@ -187,6 +187,9 @@ BoundStatement Binder::Bind(TableRef &ref) {
 	case TableReferenceType::SHOW_REF:
 		result = Bind(ref.Cast<ShowRef>());
 		break;
+	case TableReferenceType::FEATURE_AT_VERSION:
+		result = Bind(ref.Cast<FeatureAtVersionRef>());
+		break;
 	case TableReferenceType::DELIM_GET:
 		result = Bind(ref.Cast<DelimGetRef>());
 		break;

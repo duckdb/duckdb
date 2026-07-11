@@ -16,7 +16,7 @@ group feature
 # Each timed run registers the feature metadata (resolver view + catalog entry); no version table is
 # materialized until the first REFRESH. Cleanup drops it so the next run starts from a clean slate.
 run
-CREATE FEATURE bench_create TIMESTAMP EventTime  WINDOW 24 HOURS REFRESH FULL RETAIN 1 AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region FROM hits GROUP BY UserID);
+CREATE FEATURE bench_create ENTITY users TIMESTAMP EventTime  WINDOW 24 HOURS RETAIN 1 AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region FROM hits GROUP BY UserID);
 
 cleanup
 DROP FEATURE IF EXISTS bench_create;
