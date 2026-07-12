@@ -27,7 +27,7 @@ struct SelectionResult : private SelectionVector {
 	using SelectionVector::RowSpan;
 	using SelectionVector::SelectionVector;
 
-	//! Materialize a bitmap (no-op if flat) and view as a plain, index-only SelectionVector.
+	//! Materialize a bitmap (no-op if already flat) and view as a plain, index-only SelectionVector.
 	SelectionVector &Flattened() {
 		Flatten();
 		return *this;
