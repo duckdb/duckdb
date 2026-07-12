@@ -633,8 +633,6 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 		return GetIntegralCompress(std::move(input), stats);
 	}
 	switch (type.id()) {
-	case LogicalTypeId::DECIMAL:
-		return GetDecimalCompress(std::move(input), stats);
 	case LogicalTypeId::VARCHAR:
 		return GetStringCompress(std::move(input), stats);
 	case LogicalTypeId::GEOMETRY:
@@ -673,72 +671,6 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(un
 	}
 
 	return CMHelper::CreateIntegralFunctionCompress(std::move(input), type, cast_type, min, range_value, stats);
-}
-
-// Smallest SIGNED integer type whose range covers [min_payload, max_payload], or INVALID if only INT128 fits.
-static LogicalType GetSignedTypeForRange(hugeint_t min_payload, hugeint_t max_payload) {
-	if (min_payload >= hugeint_t(NumericLimits<int8_t>::Minimum()) &&
-	    max_payload <= hugeint_t(NumericLimits<int8_t>::Maximum())) {
-		return LogicalType::TINYINT;
-	}
-	if (min_payload >= hugeint_t(NumericLimits<int16_t>::Minimum()) &&
-	    max_payload <= hugeint_t(NumericLimits<int16_t>::Maximum())) {
-		return LogicalType::SMALLINT;
-	}
-	if (min_payload >= hugeint_t(NumericLimits<int32_t>::Minimum()) &&
-	    max_payload <= hugeint_t(NumericLimits<int32_t>::Maximum())) {
-		return LogicalType::INTEGER;
-	}
-	if (min_payload >= hugeint_t(NumericLimits<int64_t>::Minimum()) &&
-	    max_payload <= hugeint_t(NumericLimits<int64_t>::Maximum())) {
-		return LogicalType::BIGINT;
-	}
-	return LogicalType::INVALID;
-}
-
-unique_ptr<CompressExpression> CompressedMaterialization::GetDecimalCompress(unique_ptr<Expression> input,
-                                                                             const BaseStatistics &stats) {
-	const auto &type = input->GetReturnType();
-	const auto phys_size = GetTypeIdSize(type.InternalType());
-
-	// Pick the narrow signed int type from the raw payload range (no scaling); the whole point is to shrink
-	// the physical width, so bail unless the target is strictly narrower than the decimal's physical int.
-	LogicalType narrow_type;
-	if (!stats.CanHaveNoNull()) {
-		narrow_type = LogicalType::TINYINT; // all NULL: any (smallest) target works
-	} else if (!NumericStats::HasMinMax(stats)) {
-		return nullptr;
-	} else {
-		const auto min_payload = IntegralValue::Get(NumericStats::Min(stats));
-		const auto max_payload = IntegralValue::Get(NumericStats::Max(stats));
-		if (max_payload < min_payload) {
-			return nullptr;
-		}
-		narrow_type = GetSignedTypeForRange(min_payload, max_payload);
-	}
-	if (!narrow_type.IsValid() || GetTypeIdSize(narrow_type.InternalType()) >= phys_size) {
-		return nullptr;
-	}
-
-	auto compress_function = CMDecimalCompressFun::GetFunction(type, narrow_type);
-	vector<unique_ptr<Expression>> arguments;
-	arguments.emplace_back(std::move(input));
-	BoundScalarFunction bound_function(compress_function);
-	bound_function.SetReturnType(narrow_type);
-	auto compress_expr = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
-
-	// The compressed value is the raw decimal payload downcast to the narrow int; carry the payload range as
-	// the narrow-typed min/max (a hugeint->narrow value cast is the identity on the integer value).
-	auto compress_stats = BaseStatistics::CreateEmpty(narrow_type);
-	compress_stats.CopyBase(stats);
-	if (stats.CanHaveNoNull() && NumericStats::HasMinMax(stats)) {
-		NumericStats::SetMin(compress_stats,
-		                     Value::HUGEINT(IntegralValue::Get(NumericStats::Min(stats))).DefaultCastAs(narrow_type));
-		NumericStats::SetMax(compress_stats,
-		                     Value::HUGEINT(IntegralValue::Get(NumericStats::Max(stats))).DefaultCastAs(narrow_type));
-	}
-	return make_uniq<CompressExpression>(std::move(compress_expr), compress_stats.ToUnique(),
-	                                     CompressedMaterializationType::FUNCTION);
 }
 
 unique_ptr<BaseStatistics> CMHelper::CreateStringCompressStats(const BaseStatistics &stats, LogicalType &target_type,
@@ -991,11 +923,6 @@ unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique
 	if (type.id() == LogicalTypeId::GEOMETRY) {
 		return GetGeometryDecompress(std::move(input), result_type, stats);
 	}
-	// DECIMAL must be checked before the integral branch: its internal type is INT16/32/64/128, which would
-	// otherwise misroute to GetIntegralDecompress (whose function switch has no DECIMAL case).
-	if (type.id() == LogicalTypeId::DECIMAL) {
-		return GetDecimalDecompress(std::move(input), result_type, stats);
-	}
 	if (TypeIsIntegral(type.InternalType())) {
 		return GetIntegralDecompress(std::move(input), result_type, stats);
 	}
@@ -1033,20 +960,6 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_p
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
 
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
-}
-
-unique_ptr<Expression> CompressedMaterialization::GetDecimalDecompress(unique_ptr<Expression> input,
-                                                                       const LogicalType &result_type,
-                                                                       const BaseStatistics &stats) {
-	D_ASSERT(result_type.id() == LogicalTypeId::DECIMAL);
-	// Raw widening of the narrow int back to the decimal's physical int, reinterpreted as DECIMAL(p,s) via the
-	// stamped return type. No min/offset argument - the compress side was a pure int-to-int cast.
-	auto decompress_function = CMDecimalDecompressFun::GetFunction(input->GetReturnType(), result_type);
-	vector<unique_ptr<Expression>> arguments;
-	arguments.emplace_back(std::move(input));
-	BoundScalarFunction bound_function(decompress_function);
-	bound_function.SetReturnType(result_type);
 	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
 }
 

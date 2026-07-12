@@ -66,7 +66,6 @@ struct FORVector {
 		return vector.buffer->GetData();
 	}
 	static PhysicalType GetStoredType(const Vector &vector);
-	static uint8_t GetRangeBits(const Vector &vector);
 	static inline ValidityMask &Validity(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FOR_VECTOR);
 		return vector.buffer->GetValidityMask();
@@ -101,18 +100,8 @@ struct FORVector {
 	// Shared helpers used by comparison, filter pushdown, and arithmetic.
 	//===--------------------------------------------------------------------===//
 
-	//! Map stored PhysicalType to its LogicalType.
-	static LogicalType StoredTypeToLogical(PhysicalType stored_type);
 	//! Create a temporary FLAT_VECTOR view over a narrow FOR payload buffer.
 	static Vector CreatePayloadView(PhysicalType stored_type, data_ptr_t payload, idx_t count);
-	static inline bool IsStoredType(PhysicalType stored_type) {
-		return stored_type == PhysicalType::UINT8 || stored_type == PhysicalType::UINT16 ||
-		       stored_type == PhysicalType::UINT32 || stored_type == PhysicalType::UINT64;
-	}
-	static inline bool IsThinStoredType(PhysicalType stored_type) {
-		return IsStoredType(stored_type) && GetTypeIdSize(stored_type) <= sizeof(uint64_t);
-	}
-
 	template <class LOGICAL_T>
 	static bool TryGetStoredTypeForMax(LOGICAL_T max_value, PhysicalType &stored_type) {
 		if (max_value < LOGICAL_T(0)) {
@@ -137,30 +126,6 @@ struct FORVector {
 			return true;
 		}
 		return false;
-	}
-
-	static inline bool TryGetStoredTypeForRangeBits(uint8_t range_bits, PhysicalType &stored_type) {
-		if (range_bits <= 8) {
-			stored_type = PhysicalType::UINT8;
-			return true;
-		}
-		if (range_bits <= 16) {
-			stored_type = PhysicalType::UINT16;
-			return true;
-		}
-		if (range_bits <= 32) {
-			stored_type = PhysicalType::UINT32;
-			return true;
-		}
-		if (range_bits <= 64) {
-			stored_type = PhysicalType::UINT64;
-			return true;
-		}
-		return false;
-	}
-
-	static inline bool HasSameMetadata(const Vector &left, const Vector &right) {
-		return GetStoredType(left) == GetStoredType(right);
 	}
 
 	//! Cast a FOR vector between plain integral types by re-typing the metadata over a zero-copy

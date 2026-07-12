@@ -16,16 +16,6 @@ PhysicalType FORVector::GetStoredType(const Vector &vector) {
 	return vector.buffer->for_stored_type;
 }
 
-uint8_t FORVector::GetRangeBits(const Vector &vector) {
-	auto delta = vector.buffer->for_max_value;
-	uint8_t result = 0;
-	while (delta != 0) {
-		result++;
-		delta >>= 1;
-	}
-	return result;
-}
-
 template <class T>
 T FORVector::GetMax(const Vector &vector) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FOR_VECTOR);
@@ -57,23 +47,26 @@ FOR_INSTANTIATE(uhugeint_t)
 //===--------------------------------------------------------------------===//
 // Shared helpers
 //===--------------------------------------------------------------------===//
-LogicalType FORVector::StoredTypeToLogical(PhysicalType stored_type) {
+
+Vector FORVector::CreatePayloadView(PhysicalType stored_type, data_ptr_t payload, idx_t count) {
+	LogicalType type;
 	switch (stored_type) {
 	case PhysicalType::UINT8:
-		return LogicalType::UTINYINT;
+		type = LogicalType::UTINYINT;
+		break;
 	case PhysicalType::UINT16:
-		return LogicalType::USMALLINT;
+		type = LogicalType::USMALLINT;
+		break;
 	case PhysicalType::UINT32:
-		return LogicalType::UINTEGER;
+		type = LogicalType::UINTEGER;
+		break;
 	case PhysicalType::UINT64:
-		return LogicalType::UBIGINT;
+		type = LogicalType::UBIGINT;
+		break;
 	default:
 		throw InternalException("Unsupported stored type for FOR vector");
 	}
-}
-
-Vector FORVector::CreatePayloadView(PhysicalType stored_type, data_ptr_t payload, idx_t count) {
-	Vector payload_vec(StoredTypeToLogical(stored_type), payload, count);
+	Vector payload_vec(type, payload, count);
 	payload_vec.SetVectorType(VectorType::FLAT_VECTOR);
 	return payload_vec;
 }
@@ -160,7 +153,7 @@ void FORVector::Create(Vector &vector, PhysicalType stored_type, T max_value) {
 void FORVector::PrepareAppend(Vector &target, const Vector &source, bool has_selection, idx_t target_size) {
 	if (!has_selection && source.GetVectorType() == VectorType::FOR_VECTOR) {
 		if (target.GetVectorType() == VectorType::FOR_VECTOR) {
-			if (!FORVector::HasSameMetadata(target, source)) {
+			if (FORVector::GetStoredType(target) != FORVector::GetStoredType(source)) {
 				target.Flatten();
 			}
 		} else if (target_size == 0) {

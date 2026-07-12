@@ -15,12 +15,6 @@
 
 namespace duckdb {
 
-//! Type tag for compile-time type dispatch in DispatchLogicalType.
-template <class T>
-struct FORTypeTag {
-	using type = T;
-};
-
 #define FOR_SWITCH_LOGICAL(TYPE, TYPE_NAME, ...)                                                                       \
 	switch (TYPE) {                                                                                                    \
 	case PhysicalType::INT16: {                                                                                        \
@@ -113,19 +107,6 @@ struct FORValueOps<T, false> {
 	static inline T FromUnsignedStorage(const uhugeint_t &value) {
 		return UnsafeNumericCast<T>(value.lower);
 	}
-	static inline T AddDelta(T min_value, uint64_t delta) {
-		return UnsafeNumericCast<T>(min_value + UnsafeNumericCast<T>(delta));
-	}
-	static inline bool TryGetDelta(T value, T min_value, uint64_t &delta) {
-		if (value < min_value) {
-			return false;
-		}
-		delta = UnsafeNumericCast<uint64_t>(value - min_value);
-		return true;
-	}
-	static inline uint64_t GetDeltaUnsafe(T value, T min_value) {
-		return UnsafeNumericCast<uint64_t>(value - min_value);
-	}
 };
 
 template <class T>
@@ -135,22 +116,6 @@ struct FORValueOps<T, true> {
 	}
 	static inline T FromUnsignedStorage(const uhugeint_t &value) {
 		return UnsafeNumericCast<T>(static_cast<hugeint_t>(value));
-	}
-	static inline T AddDelta(T min_value, uint64_t delta) {
-		using UNSIGNED_T = typename MakeUnsigned<T>::type;
-		return static_cast<T>(static_cast<UNSIGNED_T>(min_value) + static_cast<UNSIGNED_T>(delta));
-	}
-	static inline bool TryGetDelta(T value, T min_value, uint64_t &delta) {
-		if (value < min_value) {
-			return false;
-		}
-		using UNSIGNED_T = typename MakeUnsigned<T>::type;
-		delta = static_cast<uint64_t>(static_cast<UNSIGNED_T>(value) - static_cast<UNSIGNED_T>(min_value));
-		return true;
-	}
-	static inline uint64_t GetDeltaUnsafe(T value, T min_value) {
-		using UNSIGNED_T = typename MakeUnsigned<T>::type;
-		return static_cast<uint64_t>(static_cast<UNSIGNED_T>(value) - static_cast<UNSIGNED_T>(min_value));
 	}
 };
 
@@ -162,24 +127,6 @@ struct FORValueOps<hugeint_t, true> {
 	static inline hugeint_t FromUnsignedStorage(const uhugeint_t &value) {
 		return static_cast<hugeint_t>(value);
 	}
-	static inline hugeint_t AddDelta(hugeint_t min_value, uint64_t delta) {
-		return min_value + hugeint_t(0, delta);
-	}
-	static inline bool TryGetDelta(hugeint_t value, hugeint_t min_value, uint64_t &delta) {
-		if (value < min_value) {
-			return false;
-		}
-		auto udiff = static_cast<uhugeint_t>(value - min_value);
-		if (udiff.upper != 0) {
-			return false;
-		}
-		delta = udiff.lower;
-		return true;
-	}
-	static inline uint64_t GetDeltaUnsafe(hugeint_t value, hugeint_t min_value) {
-		auto udiff = static_cast<uhugeint_t>(value - min_value);
-		return udiff.lower;
-	}
 };
 
 template <>
@@ -189,24 +136,6 @@ struct FORValueOps<uhugeint_t, false> {
 	}
 	static inline uhugeint_t FromUnsignedStorage(const uhugeint_t &value) {
 		return value;
-	}
-	static inline uhugeint_t AddDelta(uhugeint_t min_value, uint64_t delta) {
-		return min_value + uhugeint_t(delta);
-	}
-	static inline bool TryGetDelta(uhugeint_t value, uhugeint_t min_value, uint64_t &delta) {
-		if (value < min_value) {
-			return false;
-		}
-		auto diff = value - min_value;
-		if (diff.upper != 0) {
-			return false;
-		}
-		delta = diff.lower;
-		return true;
-	}
-	static inline uint64_t GetDeltaUnsafe(uhugeint_t value, uhugeint_t min_value) {
-		auto diff = value - min_value;
-		return diff.lower;
 	}
 };
 

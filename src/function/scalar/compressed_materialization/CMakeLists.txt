@@ -1,6 +1,6 @@
 add_library_unity(
   duckdb_func_compressed_materialization OBJECT compress_integral.cpp
-  compress_decimal.cpp compress_string.cpp compress_geometry.cpp)
+  compress_string.cpp compress_geometry.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_compressed_materialization>
     PARENT_SCOPE)

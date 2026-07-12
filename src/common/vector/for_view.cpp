@@ -110,9 +110,6 @@ bool TryResolveForView(const Vector &col, ExpressionType op, const Value &consta
 		return false;
 	}
 	auto stored = FORVector::GetStoredType(col);
-	if (!FORVector::IsThinStoredType(stored)) {
-		return false;
-	}
 	int64_t for_max;
 	switch (stored) {
 	case PhysicalType::UINT8:

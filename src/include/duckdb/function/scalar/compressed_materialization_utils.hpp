@@ -33,14 +33,6 @@ struct CMIntegralDecompressFun {
 	static ScalarFunction GetFunction(const LogicalType &input_type, const LogicalType &result_type);
 };
 
-struct CMDecimalCompressFun {
-	static ScalarFunction GetFunction(const LogicalType &input_type, const LogicalType &result_type);
-};
-
-struct CMDecimalDecompressFun {
-	static ScalarFunction GetFunction(const LogicalType &input_type, const LogicalType &result_type);
-};
-
 struct CMStringCompressFun {
 	static ScalarFunction GetFunction(const LogicalType &result_type);
 };
