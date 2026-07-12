@@ -52,29 +52,6 @@ inline bool BitmapCmpOpSupported(ExpressionType op) {
 	}
 }
 
-inline bool BitmapThinIntegralTypeSupported(PhysicalType pt) {
-	switch (pt) {
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-		return true;
-	default:
-		return false;
-	}
-}
-
-//! For a dictionary/selection input, choose between gathering only the `active_tuples` selected values (work ∝ the
-//! survivors) and a dense compare over the whole `child_len` child followed by a probe (work ∝ the child span, but
-//! branchless/SIMD). Gather wins once few tuples survive; the crossover scales with element width, since a dense pass
-//! moves `sizeof(T)` bytes per child element whether or not it is needed. Normalized to a full vector so partial
-//! children scale the threshold down.
-inline bool PreferSelectionGather(idx_t active_tuples, idx_t child_len, idx_t type_size) {
-	return active_tuples * STANDARD_VECTOR_SIZE < child_len * (50 * type_size);
-}
-
 //! Pack a byte-per-row 0/1 array into a bit-per-row bitmap (validity_t word layout), zeroing the tail word.
 inline void PackBoolsToBitmap(const uint8_t *cmp, idx_t count, validity_t *__restrict bitmap) {
 	auto out = reinterpret_cast<uint8_t *>(bitmap);

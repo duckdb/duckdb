@@ -14,7 +14,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
-#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/vector/for_view.hpp"
@@ -50,12 +49,7 @@ inline const Vector *TryGetDictChild(const Vector &v, const SelectionVector *&se
 	if (v.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
 		return nullptr;
 	}
-	auto &child = DictionaryVector::Child(v);
-	if (child.GetVectorType() == VectorType::FOR_VECTOR) {
-		sel = &DictionaryVector::SelVector(v);
-		return &child;
-	}
-	return nullptr;
+	return FORVector::TryGetFOR(v, sel);
 }
 
 inline void FillConstView(const ForView &view, ExpressionType op, idx_t span, validity_t *t_bm) {
@@ -82,57 +76,6 @@ inline void FillNarrowCol(const NarrowCol &l, const NarrowCol &r, ExpressionType
 			                                       t_bm);
 		});
 	});
-}
-
-inline void GatherNarrowCol(const NarrowCol &l, const NarrowCol &r, ExpressionType op, const SelectionVector &dsel,
-                            idx_t count, uint8_t *cmp) {
-	DispatchBitmapType(l.type, count, [&](auto tag) {
-		using T = decltype(tag);
-		const auto ld = reinterpret_cast<const T *>(l.data);
-		const auto rd = reinterpret_cast<const T *>(r.data);
-		DispatchBitmapCmpOp<T>(op, [&](auto cmpop) {
-			for (idx_t i = 0; i < count; i++) {
-				const auto c = dsel.get_index(i);
-				cmp[i] = decltype(cmpop)::Operation(ld[c], rd[c]);
-			}
-		});
-	});
-	if (l.validity || r.validity) {
-		for (idx_t i = 0; i < count; i++) {
-			const auto c = dsel.get_index(i);
-			if ((l.validity && !((l.validity[c >> 6] >> (c & 63)) & 1)) ||
-			    (r.validity && !((r.validity[c >> 6] >> (c & 63)) & 1))) {
-				cmp[i] = 0;
-			}
-		}
-	}
-}
-
-inline void GatherConstView(const ForView &view, ExpressionType op, const SelectionVector &dsel, idx_t count,
-                            uint8_t *cmp) {
-	if (view.always_false || view.always_true) {
-		for (idx_t i = 0; i < count; i++) {
-			cmp[i] = view.always_true ? 1 : 0;
-		}
-	} else {
-		DispatchBitmapType(view.narrow_type, count, [&](auto tag) {
-			using T = decltype(tag);
-			const auto data = reinterpret_cast<const T *>(view.data);
-			const auto constant = static_cast<T>(view.rewritten_constant);
-			DispatchBitmapCmpOp<T>(op, [&](auto cmpop) {
-				for (idx_t i = 0; i < count; i++) {
-					cmp[i] = decltype(cmpop)::Operation(data[dsel.get_index(i)], constant);
-				}
-			});
-		});
-	}
-	if (view.original_validity && view.original_validity->CanHaveNull()) {
-		for (idx_t i = 0; i < count; i++) {
-			if (!view.original_validity->RowIsValid(dsel.get_index(i))) {
-				cmp[i] = 0;
-			}
-		}
-	}
 }
 
 inline idx_t EmitBitmapSelection(SelectionResult &t, validity_t *t_bm, idx_t len, const SelectionVector *sel,
@@ -186,9 +129,11 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 			if (child_len > STANDARD_VECTOR_SIZE || logical_span > STANDARD_VECTOR_SIZE) {
 				return false;
 			}
+			// Compare densely over the child, then project child-space result bits through the dictionary.
+			static constexpr idx_t NWORDS = (STANDARD_VECTOR_SIZE + 63) / 64;
+			validity_t child_bm[NWORDS];
 			NarrowCol l, r;
 			ForView view;
-			idx_t narrow_size;
 			if (info.ref2) {
 				const SelectionVector *rdsel = nullptr;
 				auto rchild = TryGetDictChild(chunk.data[info.ref2->Index()], rdsel);
@@ -197,50 +142,27 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 				    !ResolveNarrowCol(*rchild, r) || l.type != r.type) {
 					return false;
 				}
-				narrow_size = GetTypeIdSize(l.type);
+				FillNarrowCol(l, r, info.op, child_len, child_bm);
 			} else {
 				const auto &constant = info.constant->GetValue();
 				if (constant.IsNull() || constant.type().InternalType() != pt ||
-				    !TryResolveForView(*lchild, info.op, constant, view) || view.kind != ForView::Kind::FOR) {
+				    !TryResolveForView(*lchild, info.op, constant, view)) {
 					return false;
 				}
-				narrow_size = GetTypeIdSize(view.narrow_type);
-			}
-			const bool sparse = PreferSelectionGather(logical_span, child_len, narrow_size);
-			uint8_t cmp[STANDARD_VECTOR_SIZE];
-			if (sparse) {
-				if (info.ref2) {
-					GatherNarrowCol(l, r, info.op, *ldsel, logical_span, cmp);
-				} else {
-					GatherConstView(view, info.op, *ldsel, logical_span, cmp);
-				}
-			} else {
-				static constexpr idx_t NWORDS = (STANDARD_VECTOR_SIZE + 63) / 64;
-				validity_t child_bm[NWORDS];
-				if (info.ref2) {
-					FillNarrowCol(l, r, info.op, child_len, child_bm);
-				} else {
-					FillConstView(view, info.op, child_len, child_bm);
-				}
-				const auto child_bytes = reinterpret_cast<const uint8_t *>(child_bm);
-				for (idx_t i = 0; i < logical_span; i++) {
-					const auto c = ldsel->get_index(i);
-					cmp[i] = (child_bytes[c >> 3] >> (c & 7)) & 1;
-				}
-			}
-			if (true_sel && !bitmap_sel && !false_sel && !have_sel) {
-				idx_t k = 0;
-				for (idx_t i = 0; i < logical_span; i++) {
-					if (cmp[i]) {
-						true_sel->set_index(k++, i);
-					}
-				}
-				result = k;
-				return true;
+				FillConstView(view, info.op, child_len, child_bm);
 			}
 			SelectionResult &t = bitmap_sel ? *bitmap_sel : tmp_sel1;
 			auto t_bm = reinterpret_cast<validity_t *>(t.PrepareBitmap(logical_span));
-			PackBoolsToBitmap(cmp, logical_span, t_bm);
+			for (idx_t w = 0; w < (logical_span + 63) / 64; w++) {
+				const idx_t base = w * 64;
+				const idx_t n = MinValue<idx_t>(64, logical_span - base);
+				validity_t acc = 0;
+				for (idx_t j = 0; j < n; j++) {
+					const auto c = ldsel->get_index(base + j);
+					acc |= validity_t((child_bm[c >> 6] >> (c & 63)) & 1) << j;
+				}
+				t_bm[w] = acc;
+			}
 			result = EmitBitmapSelection(t, t_bm, logical_span, sel, count, bitmap_sel, true_sel, false_sel, tmp_sel2,
 			                             tmp_sel3);
 			return true;
@@ -255,7 +177,6 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 
 	NarrowCol r;
 	ForView view;
-	bool flat_const = false;
 	if (info.ref2) {
 		auto &right = chunk.data[info.ref2->Index()];
 		if (col.GetVectorType() != right.GetVectorType() || !ResolveNarrowCol(right, r) || l.type != r.type) {
@@ -267,11 +188,9 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 			return false;
 		}
 		if (l_for) {
-			if (!TryResolveForView(col, info.op, constant, view) || view.kind != ForView::Kind::FOR) {
+			if (!TryResolveForView(col, info.op, constant, view)) {
 				return false;
 			}
-		} else {
-			flat_const = true;
 		}
 	}
 
@@ -285,7 +204,7 @@ inline bool SelectComparisonFromChunk(const BoundFunctionExpression &expr, DataC
 	auto t_bm = reinterpret_cast<validity_t *>(t.PrepareBitmap(span));
 	if (info.ref2) {
 		FillNarrowCol(l, r, info.op, span, t_bm);
-	} else if (flat_const) {
+	} else if (!l_for) {
 		const auto &constant = info.constant->GetValue();
 		DispatchFlatCmpToBitmap(pt, info.op, col, span, l.validity, t_bm,
 		                        [&](auto tag) { return constant.GetValueUnsafe<decltype(tag)>(); });

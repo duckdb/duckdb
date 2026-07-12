@@ -61,41 +61,6 @@ struct FORVector {
 		return true;
 	}
 
-	template <class T>
-	static inline void CopyResultValidity(Vector &result, const ScanData<T> *left_scan, const ScanData<T> *right_scan,
-	                                      idx_t count) {
-		auto &result_validity = Validity(result);
-		result_validity.Reset(count);
-		auto apply_validity = [&](const ScanData<T> *scan_data) {
-			if (!scan_data || !scan_data->for_vec || !scan_data->validity->CanHaveNull()) {
-				return;
-			}
-			for (idx_t i = 0; i < count; i++) {
-				auto src_idx = scan_data->sel ? scan_data->sel->get_index(i) : i;
-				if (!scan_data->validity->RowIsValid(src_idx)) {
-					result_validity.SetInvalid(i);
-				}
-			}
-		};
-		apply_validity(left_scan);
-		apply_validity(right_scan);
-	}
-
-	template <class STORED_T, class T>
-	static inline const STORED_T *CompactData(const ScanData<T> &scan_data, idx_t count,
-	                                          unsafe_unique_array<data_t> &compact_buf) {
-		auto src = reinterpret_cast<const STORED_T *>(scan_data.data);
-		if (!scan_data.sel) {
-			return src;
-		}
-		compact_buf = make_unsafe_uniq_array_uninitialized<data_t>(count * sizeof(STORED_T));
-		auto dst = reinterpret_cast<STORED_T *>(compact_buf.get());
-		for (idx_t i = 0; i < count; i++) {
-			dst[i] = src[scan_data.sel->get_index(i)];
-		}
-		return dst;
-	}
-
 	static inline data_ptr_t GetData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FOR_VECTOR);
 		return vector.buffer->GetData();
@@ -145,7 +110,7 @@ struct FORVector {
 		       stored_type == PhysicalType::UINT32 || stored_type == PhysicalType::UINT64;
 	}
 	static inline bool IsThinStoredType(PhysicalType stored_type) {
-		return IsStoredType(stored_type) && GetTypeIdSize(stored_type) <= sizeof(uint32_t);
+		return IsStoredType(stored_type) && GetTypeIdSize(stored_type) <= sizeof(uint64_t);
 	}
 
 	template <class LOGICAL_T>

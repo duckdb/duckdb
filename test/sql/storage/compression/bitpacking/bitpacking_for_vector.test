@@ -2,10 +2,7 @@
 # description: Test FOR vector production from bitpacking scan
 # group: [bitpacking]
 
-# This test asserts exact vector_type() results (FOR / FLAT / DICTIONARY) to validate FOR-vector production
-# from the bitpacking scan. Vector-verification modes deliberately re-wrap expression inputs (e.g. as
-# dictionaries), which changes the observed vector_type without changing the data, so they are incompatible
-# with these whitebox assertions.
+# Exact vector_type() assertions are incompatible with verification modes that re-wrap inputs.
 require no_vector_verification
 
 require block_size 262144
@@ -41,43 +38,22 @@ SELECT min(val), max(val), sum(val) FROM t WHERE val >= 1025 AND val < 1030
 ----
 1025	1029	1027000
 
-query I
-SELECT DISTINCT vector_type(val + 7) FROM t
+query TT
+SELECT DISTINCT vector_type(val + 7), vector_type(val * 2) FROM t
 ----
-FOR_VECTOR
-
-query I
-SELECT DISTINCT vector_type(val * 2) FROM t
-----
-FOR_VECTOR
+FOR_VECTOR	FOR_VECTOR
 
 query I
 SELECT sum((val + 7) * 2) FROM t
 ----
 20630000
 
-# casting a FOR vector to a WIDER type re-types the metadata over the same narrow payload (stays FOR);
-# casting to a type the SAME width as the stored payload collapses to a zero-copy FLAT reinterpret
-# (val is stored as UINT16: max 1049; qty is stored as UINT8: max 49)
-query I
-SELECT DISTINCT vector_type(val::BIGINT) FROM t
+# Wider casts keep FOR; same-width casts collapse to a FLAT reinterpret.
+query TTTT
+SELECT DISTINCT vector_type(val::BIGINT), vector_type(val::SMALLINT), vector_type(val::USMALLINT),
+                vector_type(qty::INTEGER) FROM t
 ----
-FOR_VECTOR
-
-query I
-SELECT DISTINCT vector_type(val::SMALLINT) FROM t
-----
-FLAT_VECTOR
-
-query I
-SELECT DISTINCT vector_type(val::USMALLINT) FROM t
-----
-FLAT_VECTOR
-
-query I
-SELECT DISTINCT vector_type(qty::INTEGER) FROM t
-----
-FOR_VECTOR
+FOR_VECTOR	FLAT_VECTOR	FLAT_VECTOR	FOR_VECTOR
 
 query III
 SELECT min(val::SMALLINT), max(val::BIGINT), sum(val::HUGEINT) FROM t
@@ -100,6 +76,31 @@ SELECT sum(val::BIGINT) FROM t WHERE qty >= 10
 ----
 8236000
 
+# Actual NULLs stay on the FOR validity mask.
+statement ok
+CREATE TABLE nullable AS
+SELECT CASE WHEN range % 7 = 0 THEN NULL ELSE (1000 + (range % 50))::INTEGER END AS val,
+       (range % 50)::SMALLINT AS qty
+FROM range(10000)
+
+statement ok
+CHECKPOINT
+
+query TIIII
+SELECT vector_type(val), count(*), count(val), sum(val), sum((val + 7) * 2) FROM nullable GROUP BY 1
+----
+FOR_VECTOR	10000	8571	8780958	17681910
+
+query I
+SELECT count(*) FROM nullable WHERE val IS NULL
+----
+1429
+
+query I
+SELECT count(*) FROM nullable WHERE val >= 1010 AND val <= 1020
+----
+1885
+
 # out-of-range casts must keep their error semantics
 statement error
 SELECT val::UTINYINT FROM t
@@ -121,16 +122,11 @@ CREATE TABLE seq AS SELECT (1000000 + range // 3)::BIGINT AS k FROM range(10000)
 statement ok
 CHECKPOINT
 
-query I
-SELECT DISTINCT vector_type(k) FROM seq
+# k is stored UINT32, so INTEGER is a same-width FLAT reinterpret.
+query TT
+SELECT DISTINCT vector_type(k), vector_type(k::INTEGER) FROM seq
 ----
-FOR_VECTOR
-
-# k is stored UINT32 (max ~1003333); casting to INTEGER (same width) collapses to a FLAT reinterpret
-query I
-SELECT DISTINCT vector_type(k::INTEGER) FROM seq
-----
-FLAT_VECTOR
+FOR_VECTOR	FLAT_VECTOR
 
 query III
 SELECT min(k), max(k), sum(k) FROM seq
@@ -142,22 +138,42 @@ SELECT count(*) FROM seq WHERE k >= 1000100 AND k < 1000200
 ----
 300
 
+# HUGEINT values that fit int64 but not uint32 use a UINT64 FOR payload.
+statement ok
+PRAGMA force_bitpacking_mode='for'
+
+statement ok
+CREATE TABLE wide64 AS
+SELECT (5000000000::HUGEINT + (range % 50)::HUGEINT) AS h
+FROM range(10000)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT vector_type(h) FROM wide64
+----
+FOR_VECTOR
+
+query IIII
+SELECT count(*), min(h), max(h), sum(h) FROM wide64 WHERE h >= 5000000010::HUGEINT AND h < 5000000020::HUGEINT
+----
+2000	5000000010	5000000019	10000000029000
+
 # negative values in a delta run must fall back to FLAT
+statement ok
+PRAGMA force_bitpacking_mode='delta_for'
+
 statement ok
 CREATE TABLE negseq AS SELECT (-5000 + range)::BIGINT AS k FROM range(2048)
 
 statement ok
 CHECKPOINT
 
-query I
-SELECT DISTINCT vector_type(k) FROM negseq
+query TIII
+SELECT vector_type(k), min(k), max(k), sum(k) FROM negseq GROUP BY 1
 ----
-FLAT_VECTOR
-
-query III
-SELECT min(k), max(k), sum(k) FROM negseq
-----
--5000	-2953	-8143872
+FLAT_VECTOR	-5000	-2953	-8143872
 
 statement ok
 PRAGMA force_bitpacking_mode='for'
@@ -168,12 +184,7 @@ CREATE TABLE neg AS SELECT (-100 + (range % 50))::INTEGER AS val FROM range(2048
 statement ok
 CHECKPOINT
 
-query I
-SELECT DISTINCT vector_type(val) FROM neg
+query TIII
+SELECT vector_type(val), min(val), max(val), sum(val) FROM neg GROUP BY 1
 ----
-FLAT_VECTOR
-
-query III
-SELECT min(val), max(val), sum(val) FROM neg
-----
--100	-51	-154672
+FLAT_VECTOR	-100	-51	-154672

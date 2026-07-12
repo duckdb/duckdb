@@ -93,12 +93,10 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 
 template <class DOMAIN_T, class OP>
 static void FORArithmeticDomainFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	if (TryFORConstantAddSub<DOMAIN_T, OP>(input.data[0], input.data[1], result, input.size())) {
+	if (TryFORConstant<DOMAIN_T, OP>(input.data[0], input.data[1], result, input.size())) {
 		return;
 	}
-	using EXEC_OP = typename FORExecutionOperator<OP>::type;
-	if (TryFORArithmetic<DOMAIN_T, EXEC_OP, FORBoundsSelector<OP>>(input.data[0], input.data[1], result,
-	                                                               input.size())) {
+	if (TryFORColCol<DOMAIN_T, OP>(input.data[0], input.data[1], result, input.size())) {
 		return;
 	}
 	GetScalarIntegerFunction<OP>(input.data[0].GetType().InternalType())(input, state, result);
