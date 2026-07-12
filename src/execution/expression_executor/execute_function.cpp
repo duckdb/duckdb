@@ -124,6 +124,9 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 			dictionary_input_chunk.data[idx].Reference(DictionaryVector::Child(args.data[idx]));
 		}
 		dictionary_input_chunk.SetChildCardinality(input_dictionary_size);
+		output_dictionary->data.SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::SetSize(output_dictionary->data, input_dictionary_size);
+		FlatVector::ValidityMutable(output_dictionary->data).Reset(input_dictionary_size);
 		expr.Function().GetFunctionCallback()(dictionary_input_chunk, state, output_dictionary->data);
 		result.Dictionary(output_dictionary, input_sel, args.size());
 		return true;

@@ -52,6 +52,10 @@ inline bool BitmapCmpOpSupported(ExpressionType op) {
 	}
 }
 
+inline bool PreferSelectionGather(idx_t active_tuples, idx_t child_len, idx_t type_size) {
+	return active_tuples * STANDARD_VECTOR_SIZE < child_len * (50 * type_size);
+}
+
 //! Pack a byte-per-row 0/1 array into a bit-per-row bitmap (validity_t word layout), zeroing the tail word.
 inline void PackBoolsToBitmap(const uint8_t *cmp, idx_t count, validity_t *__restrict bitmap) {
 	auto out = reinterpret_cast<uint8_t *>(bitmap);

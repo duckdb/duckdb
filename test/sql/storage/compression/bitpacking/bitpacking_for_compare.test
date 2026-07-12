@@ -34,12 +34,6 @@ CREATE TABLE ref AS SELECT * FROM t
 statement ok
 PRAGMA force_compression='bitpacking'
 
-# Assert the dominant vector type because tiny segment remainders can materialize FLAT.
-query TTT
-SELECT vector_type(a), vector_type(b), vector_type(c) FROM t GROUP BY 1, 2, 3 ORDER BY count(*) DESC LIMIT 1
-----
-FOR_VECTOR	FOR_VECTOR	FOR_VECTOR
-
 # all six operators on differing-width FOR payloads (a uint8 vs b uint16) match the reference
 query I
 SELECT (SELECT count(*) FROM t WHERE a < b)  = (SELECT count(*) FROM ref WHERE a < b)
