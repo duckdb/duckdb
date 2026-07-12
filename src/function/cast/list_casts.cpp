@@ -225,16 +225,14 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		// We can just cast the child vector directly
 		// Note: Its worth doing a CheckAllValid here, the slow path is significantly more expensive
 		if (FlatVector::ValidityMutable(result).CheckAllValid(count)) {
-			Vector payload_vector(result_cc.GetType(), child_count);
+			Vector payload_vector(source_cc.GetType(), child_count);
+			VectorOperations::Copy(source_cc, payload_vector, child_sel, child_count, 0, 0);
 
-			bool ok = cast_data.child_cast_info.Cast(source_cc, payload_vector, child_count, child_parameters);
+			bool ok = cast_data.child_cast_info.Cast(payload_vector, result_cc, child_count, child_parameters);
 			if (all_ok && !ok) {
 				all_ok = false;
 				HandleCastError::AssignError(*child_parameters.error_message, parameters);
 			}
-			// Now do the actual copy onto the result vector, making sure to slice properly in case the lists are out of
-			// order
-			VectorOperations::Copy(payload_vector, result_cc, child_sel, child_count, 0, 0);
 			return all_ok;
 		}
 

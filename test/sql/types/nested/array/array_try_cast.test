@@ -6,6 +6,14 @@ SELECT TRY_CAST(array_value(1,2) as INTEGER[3]);
 ----
 NULL
 
+# List child values can be non-contiguous
+query II
+WITH t(l) AS (VALUES (['bad','1','2']), (['bad','3','4']))
+SELECT CAST(list_slice(l, 2, 3) AS INTEGER[2]), TRY_CAST(list_slice(l, 2, 3) AS INTEGER[2]) FROM t;
+----
+[1, 2]	[1, 2]
+[3, 4]	[3, 4]
+
 statement error
 SELECT CAST(array_value(1,2) as INTEGER[3]);
 ----
