@@ -1169,6 +1169,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_pool_max_connections", "postgres_scanner"},
     {"pg_pool_max_lifetime_millis", "postgres_scanner"},
     {"pg_pool_wait_timeout_millis", "postgres_scanner"},
+    {"pg_staleness_query", "postgres_scanner"},
+    {"pg_staleness_query_enabled", "postgres_scanner"},
     {"pg_statement_timeout_millis", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_use_ctid_scan", "postgres_scanner"},
