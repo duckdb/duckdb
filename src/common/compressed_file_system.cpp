@@ -1,4 +1,5 @@
 #include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 

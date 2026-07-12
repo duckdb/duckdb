@@ -1,4 +1,5 @@
 #include "shell_progress_bar.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "shell_state.hpp"

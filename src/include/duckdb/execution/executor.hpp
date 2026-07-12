@@ -183,7 +183,7 @@ private:
 	shared_ptr<Task> task;
 
 	//! Task that have been descheduled
-	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
+	reference_map_t<Task, shared_ptr<Task>> to_be_rescheduled_tasks;
 	//! The semaphore to signal task rescheduling
 	std::condition_variable task_reschedule;
 

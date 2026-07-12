@@ -17,7 +17,6 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 
 namespace duckdb {
 

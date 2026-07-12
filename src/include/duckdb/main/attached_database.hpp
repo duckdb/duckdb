@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
@@ -72,6 +73,8 @@ struct AttachOptions {
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	//! The file format type. The default type is a duckdb database file, but other file formats are possible.
 	string db_type;
+	//! The verbatim path before extension-prefix stripping. Unset if not from an ATTACH statement.
+	optional<string> original_path;
 	//! Set of remaining (key, value) options
 	unordered_map<string, Value> options;
 	//! (optionally) a catalog can be provided with a default table
@@ -158,6 +161,10 @@ public:
 		return attach_options;
 	}
 	string StoredPath() const;
+	//! The verbatim ATTACH path before extension-prefix stripping. Unset if not from an ATTACH statement.
+	const optional<string> &GetOriginalPath() const {
+		return original_path;
+	}
 	static bool NameIsReserved(const Identifier &name);
 	static Identifier ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 	// Invoke Close() on an attached database, if its use count is 1.
@@ -182,6 +189,7 @@ private:
 	shared_ptr<mutex> close_lock;
 	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
+	optional<string> original_path;
 
 private:
 	//! Clean any (shared) resources held by the database.

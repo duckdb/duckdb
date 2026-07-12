@@ -1,0 +1,28 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_starved_consumers.test
+# description: Consumers starved by a small read-ahead depth park and wake without losing or duplicating jobs
+# group: [read_ahead]
+
+require parquet
+
+statement ok
+SET threads=4
+
+statement ok
+SET read_ahead_depth=1
+
+statement ok
+COPY (SELECT range AS i FROM range(200000)) TO '{TEST_DIR}/starved.parquet' (FORMAT parquet, ROW_GROUP_SIZE 2048)
+
+loop x 0 5
+
+query II
+SELECT count(*), sum(i) FROM '{TEST_DIR}/starved.parquet'
+----
+200000	19999900000
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/starved.parquet' WHERE i % 10 = 3
+----
+20000
+
+endloop

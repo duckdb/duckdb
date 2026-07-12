@@ -144,7 +144,7 @@ int itodec(decimal_t *dest, int src) {
  * TODO: None
  */
 int ftodec(decimal_t *dest, double f) {
-	static char valbuf[20];
+	static thread_local char valbuf[20];
 
 	sprintf(valbuf, "%f", f);
 
@@ -210,7 +210,7 @@ int strtodec(decimal_t *dest, char *s) {
 int dectostr(char *dest, decimal_t *d) {
 	ds_key_t number;
 	int i;
-	static char szFormat[20];
+	static thread_local char szFormat[20];
 
 	if (!InitConstants::dectostr_init) {
 		sprintf(szFormat, "%s.%s", HUGE_FORMAT, HUGE_FORMAT);

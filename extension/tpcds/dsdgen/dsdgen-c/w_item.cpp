@@ -51,7 +51,7 @@
 
 /* extern tdef w_tdefs[]; */
 
-struct W_ITEM_TBL g_w_item, g_OldValues;
+thread_local struct W_ITEM_TBL g_w_item, g_OldValues;
 
 /*
  * mk_item
@@ -59,7 +59,7 @@ struct W_ITEM_TBL g_w_item, g_OldValues;
 int mk_w_item(void *info_arr, ds_key_t index) {
 	/* begin locals declarations */
 	decimal_t dMinPrice, dMaxPrice, dMarkdown;
-	static decimal_t dMinMarkdown, dMaxMarkdown;
+	static thread_local decimal_t dMinMarkdown, dMaxMarkdown;
 	int32_t bUseSize, bFirstRecord = 0, nFieldChangeFlags, nMin, nMax, nIndex, nTemp;
 	char *cp;
 	struct W_ITEM_TBL *r;
