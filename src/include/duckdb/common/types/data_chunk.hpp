@@ -55,17 +55,7 @@ public:
 		if (count.IsValid()) {
 			return count.GetIndex();
 		}
-		for (const auto &v : data) {
-			if (v.GetBufferRef()) {
-				return v.size();
-			}
-		}
-		if (data.empty()) {
-			// a column-less chunk has nothing to derive a cardinality from; without an explicit count it is empty
-			return 0;
-		}
-		throw InternalException(
-		    "DataChunk::size() called but neither count was set, nor any vectors with valid counts were set");
+		return DeriveSize();
 	}
 	inline idx_t ColumnCount() const {
 		return data.size();
@@ -200,5 +190,8 @@ private:
 
 private:
 	void VerifyInternal(DebugVerificationMode mode, optional_ptr<DatabaseInstance> db);
+	//! Derives the cardinality from the child vectors when no explicit count is set.
+	//! Kept out-of-line so that ::size() inlines down to a load and a branch.
+	DUCKDB_API idx_t DeriveSize() const;
 };
 } // namespace duckdb
