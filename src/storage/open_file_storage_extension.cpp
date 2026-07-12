@@ -1,9 +1,11 @@
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "json_common.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 #include "json_enums.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"

@@ -8,13 +8,15 @@
 
 #pragma once
 
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 class FunctionSerializer {
 public:

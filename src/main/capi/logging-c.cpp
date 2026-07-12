@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/log_storage.hpp"
 
 namespace duckdb {

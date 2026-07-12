@@ -75,6 +75,20 @@ void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &type
 	}
 }
 
+idx_t DataChunk::DeriveSize() const {
+	for (const auto &v : data) {
+		if (v.GetBufferRef()) {
+			return v.size();
+		}
+	}
+	if (data.empty()) {
+		// a column-less chunk has nothing to derive a cardinality from; without an explicit count it is empty
+		return 0;
+	}
+	throw InternalException(
+	    "DataChunk::size() called but neither count was set, nor any vectors with valid counts were set");
+}
+
 idx_t DataChunk::GetDataSize() const {
 	idx_t total_size = 0;
 	for (auto &vec : data) {

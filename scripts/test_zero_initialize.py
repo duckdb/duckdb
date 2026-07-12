@@ -140,11 +140,27 @@ success = True
 for test in test_list:
     print(f"Running test {test}")
     clear_directories(test_dirs)
-    standard_args = [args.unittest, '--test-temp-dir', args.standard_dir, '--one-initialize', '--single-threaded', test]
+    # TEMP_DIR must BE the given dir exactly and survive for the post-run byte diff below,
+    # so pin the base with both levels off and destroy=never (the dirs are pre-rmtree'd
+    # above, so the default create=on-absent is fine). --database-destroy off keeps the
+    # generated DB files (otherwise the harness deletes loaded DBs under TEMP_DIR, leaving
+    # the retained dir empty and the compare with nothing to diff).
+    temp_dir_flags = lambda d: [
+        '--temp-dir-base',
+        d,
+        '--temp-dir-run-id',
+        'off',
+        '--temp-dir-test-id',
+        'off',
+        '--temp-dir-destroy',
+        'never',
+        '--database-destroy',
+        'off',
+    ]
+    standard_args = [args.unittest, *temp_dir_flags(args.standard_dir), '--one-initialize', '--single-threaded', test]
     zero_init_args = [
         args.unittest,
-        '--test-temp-dir',
-        args.zero_init_dir,
+        *temp_dir_flags(args.zero_init_dir),
         '--zero-initialize',
         '--single-threaded',
         test,

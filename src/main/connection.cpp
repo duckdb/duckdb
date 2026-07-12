@@ -15,6 +15,7 @@
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 
 namespace duckdb {
 
