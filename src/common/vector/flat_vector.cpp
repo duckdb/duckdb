@@ -1,13 +1,12 @@
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/types/bignum.hpp"
 
 namespace duckdb {
-
 StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capacity_p, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count_t(0)), data_ptr(nullptr),
       type_size(type_size_p), capacity(capacity_p) {
@@ -21,16 +20,13 @@ StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capa
 		validity.Resize(capacity);
 	}
 }
-
 StandardVectorBuffer::StandardVectorBuffer(capacity_t capacity, idx_t type_size_p)
     : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size_p) {
 }
-
 StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_ptr_p),
       type_size(type_size_p), capacity(count) {
 }
-
 StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_p.get()),
       type_size(type_size_p), capacity(data_p.GetSize() / type_size), allocated_data(std::move(data_p)) {

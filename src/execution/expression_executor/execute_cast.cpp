@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
+
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCastExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExecuteFunctionState>(expr, root);
