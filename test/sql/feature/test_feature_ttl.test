@@ -93,8 +93,44 @@ SERVE FEATURE act_no_ttl FOR spine ASOF req_ts;
 alice	2024-01-13 00:00:00	300
 alice	2024-01-16 00:00:00	300
 
+# ============================================================
+# TTL in latest mode (no ASOF): staleness is measured against wall-clock now(), not a request timestamp.
+# ============================================================
+
+# In time-travel mode alice @ Jan 16 matched v2 (Jan 15) within the 2-day TTL and served 300. In latest mode
+# the same rows are gated against now() instead — the retained snapshots are years old, so every column NULLs.
+query IIII rowsort
+SERVE FEATURE act FOR spine;
+----
+alice	2024-01-13 00:00:00	NULL	NULL
+alice	2024-01-16 00:00:00	NULL	NULL
+
+# A TTL wide enough to still cover the snapshot relative to now() serves the latest version.
+statement ok
+CREATE FEATURE act_long_ttl ENTITY users TIMESTAMP ts WINDOW 30 DAYS TTL 100000 DAYS RETAIN 1
+    AS (SELECT user_id, SUM(amount) AS total FROM txns GROUP BY user_id);
+
+statement ok
+REFRESH FEATURE act_long_ttl AT '2024-01-10 00:00:00';
+
+query III rowsort
+SERVE FEATURE act_long_ttl FOR spine;
+----
+alice	2024-01-13 00:00:00	300
+alice	2024-01-16 00:00:00	300
+
+# No TTL in latest mode always serves the latest version.
+query III rowsort
+SERVE FEATURE act_no_ttl FOR spine;
+----
+alice	2024-01-13 00:00:00	300
+alice	2024-01-16 00:00:00	300
+
 statement ok
 DROP FEATURE act;
 
 statement ok
 DROP FEATURE act_no_ttl;
+
+statement ok
+DROP FEATURE act_long_ttl;

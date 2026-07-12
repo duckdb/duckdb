@@ -151,11 +151,11 @@ INSERT INTO spine VALUES
     ('bob',   '2024-01-03 00:00:00'),
     ('dave',  '2024-01-07 00:00:00');
 
-# alice @ Jan 4 -> version 2 (600); alice @ Jan 7 -> version 3 (600);
+# Time-travel (explicit ASOF): alice @ Jan 4 -> version 2 (600); alice @ Jan 7 -> version 3 (600);
 # bob @ Jan 3 -> no retained version at or before Jan 3 (v2=Jan 4, v3=Jan 6) -> NULL;
 # dave is not an entity -> NULL.
 query IIRI rowsort
-SERVE FEATURE total_spend FOR spine;
+SERVE FEATURE total_spend FOR spine ASOF ts;
 ----
 alice	2024-01-04 12:00:00	600.00	3
 alice	2024-01-07 00:00:00	600.00	3

@@ -92,7 +92,7 @@ SELECT customer, total FROM f;
 x	30
 y	30
 
-# SERVE resolves each spine row to the entity's snapshot at or before the spine time.
+# SERVE (no ASOF) resolves each spine row to the entity's latest snapshot; only v1 exists here.
 query III
 SERVE FEATURE f FOR spine;
 ----

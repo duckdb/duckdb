@@ -5,9 +5,11 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
@@ -18,8 +20,13 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
+
+//! Synthetic spine column injected in "latest" serving mode (no explicit ASOF clause): a constant +infinity
+//! timestamp used as the ASOF probe so the join resolves each entity to its most recent snapshot.
+static constexpr const char *SERVE_ASOF_PROBE_COLUMN = "__serve_asof_probe";
 
 static optional_ptr<FeatureCatalogEntry> LookupFeature(ClientContext &context, const string &feature_name) {
 	auto schemas = Catalog::GetAllSchemas(context);
@@ -192,23 +199,33 @@ static vector<string> FeatureValueColumns(ClientContext &context, const FeatureC
 	return result;
 }
 
+//! The staleness reference the TTL is measured against. In time-travel mode (explicit ASOF) this is the
+//! spine request timestamp; in latest mode (no ASOF, the probe is +infinity) it is wall-clock now().
+static unique_ptr<ParsedExpression> TTLReferenceTime(const string &spine_ts, bool latest_mode) {
+	if (!latest_mode) {
+		return ColumnRef("spine", spine_ts);
+	}
+	// CAST(now() AS TIMESTAMP) — now() is TIMESTAMPTZ; the store timestamp is TIMESTAMP, so cast to match.
+	auto now_call = make_uniq<FunctionExpression>("now", vector<unique_ptr<ParsedExpression>>());
+	return make_uniq<CastExpression>(LogicalType::TIMESTAMP, std::move(now_call));
+}
+
 //! Append the projected feature columns for one served feature. With no TTL configured this is a single
 //! star (excluding the entity keys and internal columns). With a TTL, each value column is wrapped so that a
-//! snapshot older than the TTL relative to the request timestamp resolves to NULL:
-//!   CASE WHEN f.__feature_timestamp >= spine.<asof> - INTERVAL <ttl> THEN f.<col> END AS <col>
-//! The ASOF join already picks the freshest snapshot at/before the request time, so testing that single
-//! matched timestamp is sufficient.
+//! snapshot older than the TTL relative to the reference time resolves to NULL:
+//!   CASE WHEN f.__feature_timestamp >= <ttl_reference> - INTERVAL <ttl> THEN f.<col> END AS <col>
+//! The ASOF join already picks the freshest matched snapshot, so testing that single timestamp is sufficient.
 static void AddFeatureProjections(vector<unique_ptr<ParsedExpression>> &select_list, ClientContext &context,
                                   const FeatureCatalogEntry &feat, const string &feature_alias,
-                                  const string &spine_ts) {
+                                  const string &spine_ts, bool latest_mode) {
 	if (!IsPositiveInterval(feat.ttl_interval)) {
 		select_list.push_back(FeatureStar(feature_alias, feat.entity_columns));
 		return;
 	}
 	for (auto &value_column : FeatureValueColumns(context, feat)) {
-		// spine.<asof> - INTERVAL <ttl>
+		// <ttl_reference> - INTERVAL <ttl>
 		vector<unique_ptr<ParsedExpression>> minus_children;
-		minus_children.push_back(ColumnRef("spine", spine_ts));
+		minus_children.push_back(TTLReferenceTime(spine_ts, latest_mode));
 		minus_children.push_back(make_uniq<ConstantExpression>(Value::INTERVAL(feat.ttl_interval)));
 		auto stale_threshold =
 		    make_uniq<FunctionExpression>("-", std::move(minus_children), nullptr, nullptr, false, true);
@@ -228,18 +245,13 @@ static void AddFeatureProjections(vector<unique_ptr<ParsedExpression>> &select_l
 	}
 }
 
-//! The spine column the ASOF join and the TTL freshness test compare against: the request timestamp.
-static string ServeSpineTimestamp(const FeatureCatalogEntry &feat, const string &as_of_override) {
-	return as_of_override.empty() ? feat.timestamp_column : as_of_override;
-}
-
 static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatalogEntry &feat,
                             const string &feature_alias, const vector<FeatureServeEntityMapping> &feature_mappings,
-                            const string &spine_entity_override, const string &as_of_override) {
+                            const string &spine_entity_override, const string &spine_ts) {
 	// Serve from the denormalized store table via an ASOF join: every retained version is present, and the
-	// join resolves each spine row to the entity's latest snapshot at or before the spine's as-of time.
+	// join resolves each spine row to the entity's latest snapshot at or before the spine's as-of time (in
+	// latest mode the as-of time is the +infinity probe, so this resolves to the entity's newest snapshot).
 	auto store_table = FeatureStoreTableName(feat.name);
-	auto spine_ts = ServeSpineTimestamp(feat, as_of_override);
 	auto entity_mappings = ResolveEntityMappings(feat, feature_mappings, spine_entity_override);
 
 	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
@@ -248,6 +260,35 @@ static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatal
 	join->right = BaseTable(store_table, feature_alias);
 	join->condition = ServeJoinCondition(feature_alias, entity_mappings, spine_ts);
 	from_table = std::move(join);
+}
+
+//! The spine relation the features are served for. In time-travel mode this is just the spine table. In latest
+//! mode we wrap it so it carries a synthetic +infinity ASOF probe column: SELECT *, TIMESTAMP 'infinity' AS
+//! __serve_asof_probe FROM <spine>. A DuckDB ASOF inequality must reference a column from each side, so the
+//! probe has to be a real column rather than an inline constant.
+static unique_ptr<TableRef> SpineTableRef(const string &spine_table, bool latest_mode) {
+	if (!latest_mode) {
+		return BaseTable(spine_table, "spine");
+	}
+	auto inner = make_uniq<SelectNode>();
+	inner->select_list.push_back(make_uniq<StarExpression>());
+	auto probe = make_uniq<ConstantExpression>(Value::TIMESTAMP(timestamp_t::infinity()));
+	probe->SetAlias(SERVE_ASOF_PROBE_COLUMN);
+	inner->select_list.push_back(std::move(probe));
+	inner->from_table = BaseTable(spine_table, string());
+
+	auto stmt = make_uniq<SelectStatement>();
+	stmt->node = std::move(inner);
+	return make_uniq<SubqueryRef>(std::move(stmt), "spine");
+}
+
+//! The spine passthrough projection (spine.*), excluding the synthetic probe column in latest mode.
+static unique_ptr<StarExpression> SpineStar(bool latest_mode) {
+	auto star = make_uniq<StarExpression>("spine");
+	if (latest_mode) {
+		star->exclude_list.insert(QualifiedColumnName(SERVE_ASOF_PROBE_COLUMN));
+	}
+	return star;
 }
 
 unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, const vector<ServeFeatureRequest> &features,
@@ -267,34 +308,22 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		throw CatalogException("Spine table \"%s\" does not exist", spine_table);
 	}
 
-	if (features.size() == 1) {
-		auto &request = features[0];
-		auto &feat = ResolveServableFeature(context, request.feature_name);
-
-		auto select = make_uniq<SelectNode>();
-		select->select_list.push_back(make_uniq<StarExpression>("spine"));
-		select->from_table = BaseTable(spine_table, "spine");
-		AddFeatureProjections(select->select_list, context, feat, "f", ServeSpineTimestamp(feat, spine_asof_column));
-		AttachServeJoin(select->from_table, feat, "f", request.entity_mappings, spine_entity_override,
-		                spine_asof_column);
-
-		auto result = make_uniq<SelectStatement>();
-		result->node = std::move(select);
-		return result;
-	}
+	// With an explicit ASOF clause we time-travel against that spine column; without one we serve the latest
+	// version of each feature by probing the ASOF join with a synthetic +infinity timestamp column.
+	bool latest_mode = spine_asof_column.empty();
+	string spine_ts = latest_mode ? SERVE_ASOF_PROBE_COLUMN : spine_asof_column;
 
 	auto select = make_uniq<SelectNode>();
-	select->select_list.push_back(make_uniq<StarExpression>("spine"));
-	select->from_table = BaseTable(spine_table, "spine");
+	select->select_list.push_back(SpineStar(latest_mode));
+	select->from_table = SpineTableRef(spine_table, latest_mode);
 
 	for (idx_t i = 0; i < features.size(); i++) {
 		auto &request = features[i];
 		auto &feat = ResolveServableFeature(context, request.feature_name);
-		auto alias = "f" + duckdb::to_string(i);
+		auto alias = features.size() == 1 ? string("f") : "f" + duckdb::to_string(i);
 
-		AddFeatureProjections(select->select_list, context, feat, alias, ServeSpineTimestamp(feat, spine_asof_column));
-		AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override,
-		                spine_asof_column);
+		AddFeatureProjections(select->select_list, context, feat, alias, spine_ts, latest_mode);
+		AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override, spine_ts);
 	}
 
 	auto result = make_uniq<SelectStatement>();

@@ -231,12 +231,49 @@ INSERT INTO travel VALUES
     ('C001', '2024-01-05 00:00:00'),
     ('C001', '2024-01-08 00:00:00');
 
-# Jan 5 -> version 1 (350); Jan 8 -> version 2 (1349)
+# Time-travel requires an explicit ASOF: Jan 5 -> version 1 (350); Jan 8 -> version 2 (1349)
 query IIRI sort
-SERVE FEATURE daily_txn FOR travel;
+SERVE FEATURE daily_txn FOR travel ASOF event_time;
 ----
 C001	2024-01-05 00:00:00	350.00	3
 C001	2024-01-08 00:00:00	1349.00	4
+
+# ============================================================
+# SERVE FEATURE: latest-version serving (no ASOF) — every spine row gets the newest snapshot (v2),
+# regardless of any timestamp column the spine happens to carry.
+# ============================================================
+query IIRI sort
+SERVE FEATURE daily_txn FOR travel;
+----
+C001	2024-01-05 00:00:00	1349.00	4
+C001	2024-01-08 00:00:00	1349.00	4
+
+# ============================================================
+# SERVE FEATURE: spine with NO timestamp column — the headline usage from issue #31.
+# With no timestamp available and no ASOF clause, SERVE returns each entity's latest snapshot.
+# ============================================================
+statement ok
+CREATE TABLE users (card_no VARCHAR, gender VARCHAR);
+
+statement ok
+INSERT INTO users VALUES ('C001', 'Male'), ('C002', 'Female'), ('C999', 'Male');
+
+# Single feature: each user gets the newest snapshot (v2); C999 is not an entity -> NULL.
+query IIRI rowsort
+SERVE FEATURE daily_txn FOR users;
+----
+C001	Male	1349.00	4
+C002	Female	400.00	3
+C999	Male	NULL	NULL
+
+# Multiple features against a timestamp-less spine: keyed (daily_txn) and global (global_txn_count) combine.
+# C999 has no daily_txn snapshot (NULL) but still receives the global count.
+query IIRII rowsort
+SERVE FEATURES daily_txn, global_txn_count FOR users;
+----
+C001	Male	1349.00	4	6
+C002	Female	400.00	3	6
+C999	Male	NULL	NULL	6
 
 # ============================================================
 # SERVE FEATURE: parser / catalog validation
@@ -269,12 +306,20 @@ INSERT INTO mixed VALUES
     ('C999', '2024-01-05 00:00:00');
 
 # C001 @ Jan 5 -> version 1 (350); C001 @ Jan 1 -> no version at or before Jan 1 -> NULL;
-# C999 is not an entity -> NULL.
+# C999 is not an entity -> NULL. (The Jan 1 -> NULL case is a time-travel property, so ASOF is explicit.)
 query IIRI sort
-SERVE FEATURE daily_txn FOR mixed;
+SERVE FEATURE daily_txn FOR mixed ASOF event_time;
 ----
 C001	2024-01-01 00:00:00	NULL	NULL
 C001	2024-01-05 00:00:00	350.00	3
+C999	2024-01-05 00:00:00	NULL	NULL
+
+# In latest mode (no ASOF) the request timestamps are ignored: matched entities get v2, C999 stays NULL.
+query IIRI sort
+SERVE FEATURE daily_txn FOR mixed;
+----
+C001	2024-01-01 00:00:00	1349.00	4
+C001	2024-01-05 00:00:00	1349.00	4
 C999	2024-01-05 00:00:00	NULL	NULL
 
 # ============================================================
