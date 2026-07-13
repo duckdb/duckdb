@@ -462,13 +462,26 @@ vector<SimilarCatalogEntry> Catalog::SimilarEntriesInSchemas(ClientContext &cont
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog,
-                                             const string &schema) {
+                                             const string &schema, bool include_implicit_search_catalogs = false) {
 	auto &context = retriever.GetContext();
 	vector<CatalogSearchEntry> entries;
 	auto &search_path = retriever.GetSearchPath();
 	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
 		// no catalog or schema provided - scan the entire search path
 		entries = search_path.Get();
+
+		// Also include catch-all entries, if requested.
+		if (include_implicit_search_catalogs) {
+			auto implicit_search_catalogs = search_path.GetImplicitSearchCatalogs();
+			for (auto &entry : implicit_search_catalogs) {
+				auto catalog_entry = Catalog::GetCatalogEntry(retriever, entry.catalog);
+
+				if (!catalog_entry) {
+					continue;
+				}
+				entries.emplace_back(entry.catalog, catalog_entry->GetDefaultSchema());
+			}
+		}
 	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
@@ -985,23 +998,8 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                            const string &schema, const EntryLookupInfo &lookup_info,
                                            OnEntryNotFound if_not_found) {
-	auto entries = GetCatalogEntries(retriever, catalog, schema);
-	// For unqualified lookups of non-table entries (functions, macros, types), also fall back to the default schema
-	// of any catalog that was explicitly flagged in the search path (via an INVALID_SCHEMA entry, e.g. when binding
-	// the body of a view). This allows a view to reference a macro/type stored in its own catalog's default schema.
-	// Table lookups are intentionally excluded so that default-table resolution and ambiguity detection keep matching
-	// the top-level search-path behavior. The fallback entries are appended last, giving them the lowest priority.
-	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema) &&
-	    lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY) {
-		auto &search_path = retriever.GetSearchPath();
-		for (auto &implicit_catalog : search_path.GetImplicitSearchCatalogs()) {
-			auto catalog_entry = Catalog::GetCatalogEntry(retriever, implicit_catalog);
-			if (!catalog_entry) {
-				continue;
-			}
-			entries.emplace_back(implicit_catalog, catalog_entry->GetDefaultSchema());
-		}
-	}
+	auto entries =
+	    GetCatalogEntries(retriever, catalog, schema, lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY);
 
 	vector<CatalogLookup> lookups;
 	vector<CatalogLookup> final_lookups;

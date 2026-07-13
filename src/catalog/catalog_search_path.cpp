@@ -275,11 +275,11 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 	return schemas;
 }
 
-vector<string> CatalogSearchPath::GetImplicitSearchCatalogs() const {
-	vector<string> catalogs;
+vector<CatalogSearchEntry> CatalogSearchPath::GetImplicitSearchCatalogs() const {
+	vector<CatalogSearchEntry> catalogs;
 	for (auto &path : paths) {
 		if (path.schema.empty() && !path.catalog.empty()) {
-			catalogs.push_back(path.catalog);
+			catalogs.push_back(path);
 		}
 	}
 	return catalogs;

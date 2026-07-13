@@ -62,7 +62,7 @@ public:
 	DUCKDB_API vector<string> GetCatalogsForSchema(const string &schema) const;
 	//! Returns the catalogs that were added to the path with an INVALID (empty) schema. Such an entry signals that
 	//! the entire catalog should be considered during lookup (e.g. when binding the body of a view).
-	DUCKDB_API vector<string> GetImplicitSearchCatalogs() const;
+	DUCKDB_API vector<CatalogSearchEntry> GetImplicitSearchCatalogs() const;
 
 	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const string &catalog_name,
 	                                   const string &schema_name) const;
