@@ -1,0 +1,56 @@
+# name: test/sql/explain/order_by_topn_explain_fqn.test
+# description: Test fully qualified names in EXPLAIN output for ORDER BY and TOP N
+# group: [explain]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TABLE date_table (d DATE);
+
+statement ok
+INSERT INTO date_table (d)
+SELECT
+    DATE '2025-01-01' + CAST(RANDOM() * 364 AS INT)
+FROM generate_series(1, 2500);
+
+query II
+EXPLAIN SELECT * from date_table ORDER BY d;
+----
+physical_plan	<REGEX>:.*Order By: memory\.main\.date_table\.d ASC.*
+
+query II
+EXPLAIN SELECT * from date_table ORDER BY d LIMIT 10;
+----
+physical_plan	<REGEX>:.*Order By: memory\.main\.date_table\.d ASC.*
+
+query II
+EXPLAIN SELECT * from date_table dt ORDER BY d;
+----
+physical_plan	<REGEX>:.*Order By: dt\.d ASC.*
+
+query II
+EXPLAIN SELECT * from date_table dt ORDER BY d LIMIT 10;
+----
+physical_plan	<REGEX>:.*Order By: dt\.d ASC.*
+
+query II
+EXPLAIN SELECT * from date_table dt ORDER BY dt.d;
+----
+physical_plan	<REGEX>:.*Order By: dt\.d ASC.*
+
+query II
+EXPLAIN SELECT * from date_table ORDER BY date_table.d;
+----
+physical_plan	<REGEX>:.*Order By: memory\.main\.date_table\.d ASC.*
+
+query II
+EXPLAIN SELECT d dc from date_table dt ORDER BY dc;
+----
+physical_plan	<REGEX>:.*Order By: dt.d ASC.*
+
+# Using FORMAT JSON because otherwise the explain output has a line break after "Order By:"
+query II
+EXPLAIN (FORMAT JSON) SELECT dayofweek(d) dw from date_table ORDER BY dw;
+----
+physical_plan	<REGEX>:.*"Order By": "dayofweek\(memory\.main\.date_table\.d\) ASC".*
