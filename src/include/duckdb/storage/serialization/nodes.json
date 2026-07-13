@@ -1,5 +1,43 @@
 [
   {
+    "class": "FeatureServeEntityMapping",
+    "includes": [
+      "duckdb/common/feature_serve.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "feature_column",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "spine_column",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ServeFeatureRequest",
+    "includes": [
+      "duckdb/common/feature_serve.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "feature_name",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "entity_mappings",
+        "type": "vector<FeatureServeEntityMapping>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "CommonTableExpressionInfo",
     "includes": [
       "duckdb/parser/common_table_expression_info.hpp"

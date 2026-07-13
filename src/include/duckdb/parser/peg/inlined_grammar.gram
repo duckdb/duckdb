@@ -867,7 +867,7 @@ DistinctAll <- 'ALL'
 DistinctOn <- 'DISTINCT' DistinctOnTargets?
 DistinctOnTargets <- 'ON' Parens(List(Expression))
 
-InnerTableRef <- ValuesRef / TableFunction / TableSubquery / FeatureAtVersionRef / BaseTableRef / ParensTableRef
+InnerTableRef <- ValuesRef / TableFunction / TableSubquery / FeatureAtVersionRef / ServeFeatureRef / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- Lateral? SubqueryReference TableAlias?
@@ -1124,6 +1124,7 @@ FeatureRefreshAtClause <- 'AT' StringLiteral
 FeatureAtVersionStatement <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral
 
 ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf?
+ServeFeatureRef <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf? TableAlias?
 
 ServeFeatureKw <- 'FEATURES' / 'FEATURE'
 ServeFeatureItem <- IdentifierOrStringLiteral ServeFeatureItemEntity?

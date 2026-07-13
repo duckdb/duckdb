@@ -42,7 +42,7 @@ DistinctAll <- 'ALL'
 DistinctOn <- 'DISTINCT' DistinctOnTargets?
 DistinctOnTargets <- 'ON' Parens(List(Expression))
 
-InnerTableRef <- ValuesRef / TableFunction / TableSubquery / FeatureAtVersionRef / BaseTableRef / ParensTableRef
+InnerTableRef <- ValuesRef / TableFunction / TableSubquery / FeatureAtVersionRef / ServeFeatureRef / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- Lateral? SubqueryReference TableAlias?

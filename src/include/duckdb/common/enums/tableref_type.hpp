@@ -28,8 +28,9 @@ enum class TableReferenceType : uint8_t {
 	SHOW_REF = 10,          // SHOW statement
 	COLUMN_DATA = 11,       // column data collection
 	DELIM_GET = 12,         // Delim get ref
-	BOUND_TABLE_REF = 13,   // Bound table ref
-	FEATURE_AT_VERSION = 14 // FEATURE <name> AT VERSION <n>
+	BOUND_TABLE_REF = 13,    // Bound table ref
+	FEATURE_AT_VERSION = 14, // FEATURE <name> AT VERSION <n>
+	SERVE_FEATURE = 15       // SERVE FEATURE(S) <name>[, ...] FOR <spine>
 };
 
 } // namespace duckdb
