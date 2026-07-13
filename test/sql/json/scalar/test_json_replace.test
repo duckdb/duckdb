@@ -1,0 +1,162 @@
+# name: test/sql/json/scalar/test_json_replace.test
+# description: Test JSON replace (replace value at path only if it already exists)
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# Basic: replace existing key
+query T
+SELECT json_replace('{"a":1}', '$.a', '99')
+----
+{"a":99}
+
+# Missing key is not created
+query T
+SELECT json_replace('{"a":1}', '$.b', '2')
+----
+{"a":1}
+
+# JSON Pointer syntax works too
+query T
+SELECT json_replace('{"a":1}', '/a', '99')
+----
+{"a":99}
+
+# Nested path: replace inside nested object
+query T
+SELECT json_replace('{"a":{"x":1}}', '$.a.x', '99')
+----
+{"a":{"x":99}}
+
+# Nested path: missing nested key is not created
+query T
+SELECT json_replace('{"a":{"x":1}}', '$.a.y', '2')
+----
+{"a":{"x":1}}
+
+# No intermediate parents are created
+query T
+SELECT json_replace('{}', '$.a.b', '1')
+----
+{}
+
+# Array index: replace element
+query T
+SELECT json_replace('[1,2,3]', '$[1]', '99')
+----
+[1,99,3]
+
+# Array: index beyond length is a no-op
+query T
+SELECT json_replace('[1,2]', '$[5]', '9')
+----
+[1,2]
+
+# Append syntax refers to a nonexistent element, so it is a no-op
+query T
+SELECT json_replace('[1,2]', '/-', '3')
+----
+[1,2]
+
+# Replace the root
+query T
+SELECT json_replace('{"a":1}', '$', '{"b":2}')
+----
+{"b":2}
+
+# Replace with different type (object to scalar)
+query T
+SELECT json_replace('{"a":{"x":1}}', '$.a', '42')
+----
+{"a":42}
+
+# Replace with different value types
+query T
+SELECT json_replace('{"s":1}', '$.s', '"hello"')
+----
+{"s":"hello"}
+
+query T
+SELECT json_replace('{"a":1}', '$.a', 'null')
+----
+{"a":null}
+
+# Replace preserves other keys
+query T
+SELECT json_replace('{"a":1,"b":2,"c":3}', '$.b', '99')
+----
+{"a":1,"b":99,"c":3}
+
+# Deeply nested replace
+query T
+SELECT json_replace('{"a":{"b":{"c":1}}}', '$.a.b.c', '99')
+----
+{"a":{"b":{"c":99}}}
+
+# Replace on nested array path with JSON Pointer
+query T
+SELECT json_replace('{"a":[1,[2,3],4]}', '/a/1/0', '99')
+----
+{"a":[1,[99,3],4]}
+
+# NULL handling: NULL in any argument produces NULL
+query T
+SELECT json_replace(NULL, '$.a', '1')
+----
+NULL
+
+query T
+SELECT json_replace('{"a":1}', NULL, '1')
+----
+NULL
+
+query T
+SELECT json_replace('{"a":1}', '$.a', NULL)
+----
+NULL
+
+# Bare key name (treated as top-level key)
+query T
+SELECT json_replace('{"a":1}', 'a', '2')
+----
+{"a":2}
+
+# Explicit ::JSON cast also works
+query T
+SELECT json_replace('{"a":1}', '$.a', '2'::JSON)
+----
+{"a":2}
+
+# Constant vector test
+query T
+SELECT json_replace('{"a":1}', '$.a', '2') FROM range(3)
+----
+{"a":2}
+{"a":2}
+{"a":2}
+
+# Table-based test: update a field only where it is present
+statement ok
+CREATE TABLE events (id INTEGER, payload JSON);
+
+statement ok
+INSERT INTO events VALUES
+    (1, '{"status":"old","x":1}'),
+    (2, '{"x":2}'),
+    (3, '{"status":"stale"}');
+
+query IT
+SELECT id, json_replace(payload, '$.status', '"done"') FROM events ORDER BY id
+----
+1	{"status":"done","x":1}
+2	{"x":2}
+3	{"status":"done"}
+
+# Composability: replace then normalize
+query T
+SELECT json_normalize(json_replace('{"z":1,"a":2}', '$.z', '9'))
+----
+{"a":2,"z":9}
