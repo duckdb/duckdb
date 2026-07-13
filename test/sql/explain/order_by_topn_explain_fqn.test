@@ -1,5 +1,5 @@
 # name: test/sql/explain/order_by_topn_explain_fqn.test
-# description: Test fully qualified names in EXPLAIN output for ORDER BY and TOP N
+# description: Test EXPLAIN output for ORDER BY and TOP N not having fully qualified names
 # group: [explain]
 
 statement ok
@@ -17,40 +17,39 @@ FROM generate_series(1, 2500);
 query II
 EXPLAIN SELECT * from date_table ORDER BY d;
 ----
-physical_plan	<REGEX>:.*Order By: memory\.main\.date_table\.d ASC.*
+physical_plan	<REGEX>:.*Order By: d ASC.*
 
 query II
 EXPLAIN SELECT * from date_table ORDER BY d LIMIT 10;
 ----
-physical_plan	<REGEX>:.*Order By: memory\.main\.date_table\.d ASC.*
+physical_plan	<REGEX>:.*Order By: d ASC.*
 
 query II
 EXPLAIN SELECT * from date_table dt ORDER BY d;
 ----
-physical_plan	<REGEX>:.*Order By: dt\.d ASC.*
+physical_plan	<REGEX>:.*Order By: d ASC.*
 
 query II
 EXPLAIN SELECT * from date_table dt ORDER BY d LIMIT 10;
 ----
-physical_plan	<REGEX>:.*Order By: dt\.d ASC.*
+physical_plan	<REGEX>:.*Order By: d ASC.*
 
 query II
 EXPLAIN SELECT * from date_table dt ORDER BY dt.d;
 ----
-physical_plan	<REGEX>:.*Order By: dt\.d ASC.*
+physical_plan	<REGEX>:.*Order By: d ASC.*
 
 query II
 EXPLAIN SELECT * from date_table ORDER BY date_table.d;
 ----
-physical_plan	<REGEX>:.*Order By: memory\.main\.date_table\.d ASC.*
+physical_plan	<REGEX>:.*Order By: d ASC.*
 
 query II
 EXPLAIN SELECT d dc from date_table dt ORDER BY dc;
 ----
-physical_plan	<REGEX>:.*Order By: dt.d ASC.*
+physical_plan	<REGEX>:.*Order By: dc ASC.*
 
-# Using FORMAT JSON because otherwise the explain output has a line break after "Order By:"
 query II
-EXPLAIN (FORMAT JSON) SELECT dayofweek(d) dw from date_table ORDER BY dw;
+EXPLAIN  SELECT dayofweek(d) dw from date_table ORDER BY dw;
 ----
-physical_plan	<REGEX>:.*"Order By": "dayofweek\(memory\.main\.date_table\.d\) ASC".*
+physical_plan	<REGEX>:.*Order By: dw ASC.*
