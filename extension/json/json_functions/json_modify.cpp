@@ -1,3 +1,4 @@
+#include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
@@ -91,9 +92,8 @@ static void JsonSetFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
-	TernaryExecutor::ExecuteWithNulls<string_t, string_t, string_t, string_t>(
-	    args.data[0], args.data[1], args.data[2], result, args.size(),
-	    [&](string_t doc_str, string_t path_str, string_t val_str, ValidityMask &mask, idx_t idx) {
+	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
+	    args.data[0], args.data[1], args.data[2], result, [&](string_t doc_str, string_t path_str, string_t val_str) {
 		    auto doc = JSONCommon::ReadDocument(doc_str, JSONCommon::READ_FLAG, alc);
 		    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
 
@@ -109,10 +109,6 @@ static void JsonSetFunction(DataChunk &args, ExpressionState &state, Vector &res
 		    }
 
 		    auto root = yyjson_mut_doc_get_root(mut_doc);
-		    if (!root) {
-			    mask.SetInvalid(idx);
-			    return string_t {};
-		    }
 		    return JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
 	    });
 
@@ -121,7 +117,7 @@ static void JsonSetFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 ScalarFunctionSet JSONFunctions::GetSetFunction() {
 	ScalarFunction fun("json_set", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
-	                   LogicalType::JSON(), JsonSetFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
+	                   LogicalType::JSON(), JsonSetFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
 
 	return ScalarFunctionSet(fun);
 }
