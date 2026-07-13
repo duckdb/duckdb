@@ -216,8 +216,8 @@ static unique_ptr<ParsedExpression> TTLReferenceTime(const string &spine_ts, boo
 //!   CASE WHEN f.__feature_timestamp >= <ttl_reference> - INTERVAL <ttl> THEN f.<col> END AS <col>
 //! The ASOF join already picks the freshest matched snapshot, so testing that single timestamp is sufficient.
 static void AddFeatureProjections(vector<unique_ptr<ParsedExpression>> &select_list, ClientContext &context,
-                                  const FeatureCatalogEntry &feat, const string &feature_alias,
-                                  const string &spine_ts, bool latest_mode) {
+                                  const FeatureCatalogEntry &feat, const string &feature_alias, const string &spine_ts,
+                                  bool latest_mode) {
 	if (!IsPositiveInterval(feat.ttl_interval)) {
 		select_list.push_back(FeatureStar(feature_alias, feat.entity_columns));
 		return;
