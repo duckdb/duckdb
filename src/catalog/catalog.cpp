@@ -462,26 +462,13 @@ vector<SimilarCatalogEntry> Catalog::SimilarEntriesInSchemas(ClientContext &cont
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog,
-                                             const string &schema, bool include_implicit_search_catalogs = false) {
+                                             const string &schema) {
 	auto &context = retriever.GetContext();
 	vector<CatalogSearchEntry> entries;
 	auto &search_path = retriever.GetSearchPath();
 	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
 		// no catalog or schema provided - scan the entire search path
 		entries = search_path.Get();
-
-		// Also include catch-all entries, if requested.
-		if (include_implicit_search_catalogs) {
-			auto implicit_search_catalogs = search_path.GetImplicitSearchCatalogs();
-			for (auto &entry : implicit_search_catalogs) {
-				auto catalog_entry = Catalog::GetCatalogEntry(retriever, entry.catalog);
-
-				if (!catalog_entry) {
-					continue;
-				}
-				entries.emplace_back(entry.catalog, catalog_entry->GetDefaultSchema());
-			}
-		}
 	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
@@ -931,6 +918,18 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		}
 	}
 
+	// Special case for non-table entries (functions, macros, types): mirroring the default-table fallback above, if
+	// the entry could not be resolved through the regular search path we fall back to the default schema of any
+	// catalog flagged as an implicit search catalog (added to the path with an INVALID_SCHEMA entry, e.g. a view's
+	// own catalog while binding its body). Like the default-table lookup, this only kicks in when the entry is
+	// otherwise unresolved, so the search is never widened when it is not needed.
+	if (lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY && allow_default_table_lookup && !result.Found()) {
+		result = TryLookupDefaultSchema(retriever, lookup_info);
+		if (result.error.HasError()) {
+			error_data = std::move(result.error);
+		}
+	}
+
 	if (result.Found()) {
 		return result;
 	}
@@ -995,12 +994,30 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 	return {nullptr, nullptr, ErrorData()};
 }
 
+CatalogEntryLookup Catalog::TryLookupDefaultSchema(CatalogEntryRetriever &retriever,
+                                                   const EntryLookupInfo &lookup_info) {
+	// look for the entry in the default schema of every catalog that was flagged as an implicit search catalog
+	// (added to the search path with an INVALID_SCHEMA entry, e.g. a view's own catalog while binding its body)
+	auto &search_path = retriever.GetSearchPath();
+	for (auto &implicit_catalog : search_path.GetImplicitSearchCatalogs()) {
+		auto catalog_entry = GetCatalogEntry(retriever, implicit_catalog.catalog);
+		if (!catalog_entry) {
+			continue;
+		}
+		auto transaction = catalog_entry->GetCatalogTransaction(retriever.GetContext());
+		auto result = catalog_entry->TryLookupEntryInternal(transaction, catalog_entry->GetDefaultSchema(), lookup_info);
+		if (result.Found()) {
+			return result;
+		}
+	}
+
+	return {nullptr, nullptr, ErrorData()};
+}
+
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                            const string &schema, const EntryLookupInfo &lookup_info,
                                            OnEntryNotFound if_not_found) {
-	auto entries =
-	    GetCatalogEntries(retriever, catalog, schema, lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY);
-
+	auto entries = GetCatalogEntries(retriever, catalog, schema);
 	vector<CatalogLookup> lookups;
 	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());
