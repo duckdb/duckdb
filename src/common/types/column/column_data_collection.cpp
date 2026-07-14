@@ -886,6 +886,18 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 	// copy the NULL values for the main struct vector
 	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
+	// check if the copied range contains any NULL rows
+	bool parent_has_nulls = false;
+	if (source_data.validity.IsMaskSet()) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = source_data.sel->get_index(offset + i);
+			if (!source_data.validity.RowIsValid(source_idx)) {
+				parent_has_nulls = true;
+				break;
+			}
+		}
+	}
+
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	// now copy all the child vectors
 	D_ASSERT(meta_data.GetVectorMetaData().child_index.IsValid());
@@ -897,6 +909,19 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 
 		UnifiedVectorFormat child_data;
 		child_vectors[child_idx].ToUnifiedFormat(child_data);
+
+		if (parent_has_nulls) {
+			D_ASSERT(!child_data.sel->IsSet());
+			// Broadcast and sync the validity of the struct vector to the child vector
+			// This requires creating a copy of the validity mask: we cannot modify the input validity
+			child_data.validity = ValidityMask(child_data.validity, child_data.validity.Capacity());
+			for (idx_t i = 0; i < copy_count; i++) {
+				auto source_idx = source_data.sel->get_index(offset + i);
+				if (!source_data.validity.RowIsValid(source_idx)) {
+					child_data.validity.SetInvalid(offset + i);
+				}
+			}
+		}
 
 		child_function.function(child_meta_data, child_data, child_vectors[child_idx], offset, copy_count);
 	}
@@ -935,6 +960,7 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	// This requires creating a copy of the validity mask: we cannot modify the input validity
 	child_vector_data.validity = ValidityMask(child_vector_data.validity, child_vector_data.validity.Capacity());
 	if (source_data.validity.IsMaskSet()) {
+		D_ASSERT(!child_vector_data.sel->IsSet());
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
 			if (!source_data.validity.RowIsValid(source_idx)) {

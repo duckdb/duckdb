@@ -67,6 +67,23 @@ idx_t VectorArrayBuffer::GetAllocationSize() const {
 
 void VectorArrayBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
+	// a child slot under a NULL array row must be NULL as well, we check before reading any child payload
+	if (child->GetVectorType() == VectorType::FLAT_VECTOR || child->GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		auto child_validity = child->Validity();
+		for (idx_t i = 0; i < count; i++) {
+			auto item_idx = sel.get_index(i);
+			if (validity.RowIsValid(item_idx)) {
+				continue;
+			}
+			for (idx_t r = 0; r < array_size; r++) {
+				if (child_validity.IsValid(item_idx * array_size + r)) {
+					throw InternalException("A child of a NULL array must always be NULL"
+					                        "\nArray type: %s\nRow: %llu, Element: %llu",
+					                        type.ToString(), (uint64_t)item_idx, (uint64_t)r);
+				}
+			}
+		}
+	}
 	if (!sel.IsSet() && count == Size()) {
 		child->Verify();
 		return;
@@ -90,7 +107,6 @@ void VectorArrayBuffer::VerifyInternal(const LogicalType &type, const SelectionV
 		}
 	}
 	child->Verify(child_sel, child_count);
-	// FIXME: verify NULL-ness in child
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type) const {
@@ -174,16 +190,35 @@ void VectorArrayBuffer::CopyInternal(const Vector &source, const SelectionVector
 
 	auto &source_child = ArrayVector::GetChild(source);
 
-	// Create a selection vector for the child elements
+	// Copy only non-NULL rows to avoid copying garbage if the child entry for some reason wasn't NULLed
 	SelectionVector child_sel(copy_count * array_size);
+	auto copy_valid_slice = [&](idx_t start, idx_t end) {
+		if (end == start) {
+			return;
+		}
+		auto rows = end - start;
+		for (idx_t r = 0; r < rows; r++) {
+			auto source_idx = source_sel.get_index(source_offset + start + r);
+			for (idx_t j = 0; j < array_size; j++) {
+				child_sel.set_index(r * array_size + j, source_idx * array_size + j);
+			}
+		}
+		child->Copy(source_child, child_sel, source_count * array_size, 0, (target_offset + start) * array_size,
+		            rows * array_size);
+	};
+	idx_t start_idx = 0;
 	for (idx_t i = 0; i < copy_count; i++) {
-		auto source_idx = source_sel.get_index(source_offset + i);
+		if (validity.RowIsValid(target_offset + i)) {
+			continue;
+		}
+		copy_valid_slice(start_idx, i);
+		start_idx = i + 1;
 		for (idx_t j = 0; j < array_size; j++) {
-			child_sel.set_index(i * array_size + j, source_idx * array_size + j);
+			// recursive: descendants of a skipped slot must read NULL too
+			FlatVector::SetNull(*child, (target_offset + i) * array_size + j, true);
 		}
 	}
-	child->Copy(source_child, child_sel, source_count * array_size, 0, target_offset * array_size,
-	            copy_count * array_size);
+	copy_valid_slice(start_idx, copy_count);
 }
 
 void VectorArrayBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

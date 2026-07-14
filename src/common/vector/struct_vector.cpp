@@ -254,9 +254,29 @@ void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVecto
                                       idx_t source_offset, idx_t target_offset, idx_t copy_count) {
 	auto &source_children = StructVector::GetEntries(source);
 	D_ASSERT(source_children.size() == children.size());
-	for (idx_t i = 0; i < source_children.size(); i++) {
-		children[i].Copy(source_children[i], source_sel, source_count, source_offset, target_offset, copy_count);
+	// Copy only non-NULL rows to avoid copying garbage if the child entry for some reason wasn't NULLed
+	auto copy_valid_slice = [&](idx_t start, idx_t end) {
+		if (end == start) {
+			return;
+		}
+		for (idx_t i = 0; i < source_children.size(); i++) {
+			children[i].Copy(source_children[i], source_sel, source_count, source_offset + start, target_offset + start,
+			                 end - start);
+		}
+	};
+	idx_t start_idx = 0;
+	for (idx_t i = 0; i < copy_count; i++) {
+		if (validity.RowIsValid(target_offset + i)) {
+			continue;
+		}
+		copy_valid_slice(start_idx, i);
+		start_idx = i + 1;
+		for (idx_t j = 0; j < children.size(); j++) {
+			// recursive: see VectorArrayBuffer::CopyInternal
+			FlatVector::SetNull(children[j], target_offset + i, true);
+		}
 	}
+	copy_valid_slice(start_idx, copy_count);
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type) const {
