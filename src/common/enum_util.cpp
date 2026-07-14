@@ -216,7 +216,6 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_order_options.hpp"
-#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
@@ -6473,3 +6472,4 @@ WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *valu
 }
 
 }
+
