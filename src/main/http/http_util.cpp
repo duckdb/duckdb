@@ -125,6 +125,14 @@ bool HTTPResponse::ShouldRetry() const {
 	}
 }
 
+bool HTTPUtil::IsIdempotent(RequestType type) {
+	return type != RequestType::POST_REQUEST;
+}
+
+bool HTTPUtil::ShouldRetry(const BaseRequest &request, const HTTPResponse &response) {
+	return response.ShouldRetry();
+}
+
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
 	unique_ptr<HTTPClient> client;
 	return SendRequest(request, client);
@@ -420,7 +428,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		}
 
 		// Note: request errors will always be retried
-		bool should_retry = !response || response->ShouldRetry();
+		bool should_retry = !response || params.http_util.ShouldRetry(request, *response);
 		if (!should_retry) {
 			auto response_code = static_cast<uint16_t>(response->status);
 			if (response_code >= 200 && response_code < 300) {
