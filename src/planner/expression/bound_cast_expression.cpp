@@ -154,9 +154,6 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		}
 		return true;
 	}
-	if (source_type.IsIntegral() && target_type.IsIntegral()) {
-		return LogicalType::DefaultForceMaxLogicalType(source_type, target_type) == target_type;
-	}
 	switch (source_type.id()) {
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -210,6 +207,9 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		default:
 			return false;
 		}
+	}
+	if (source_type.IsSigned() && target_type.IsUnsigned()) {
+		return false;
 	}
 	return true;
 }

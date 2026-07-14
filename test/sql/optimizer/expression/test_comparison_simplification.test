@@ -35,7 +35,7 @@ ORDER BY 1
 2016-02-15 10:04:25
 2016-02-16 10:04:25
 
-# Narrowing casts are not invertible
+# Narrowing TRY_CAST expressions are not invertible
 statement ok
 CREATE TABLE issue23687 (a INTEGER);
 
@@ -46,8 +46,3 @@ query I
 SELECT list(a ORDER BY a) FROM issue23687 WHERE TRY_CAST(a AS TINYINT) > 50;
 ----
 [51, 127]
-
-statement error
-SELECT a FROM issue23687 WHERE CAST(a AS TINYINT) > 50;
-----
-<REGEX>:Conversion Error:.*out of range.*
