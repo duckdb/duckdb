@@ -152,6 +152,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
 	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
+	auto &dependencies = info.Base().dependencies;
 
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
@@ -163,13 +164,13 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name));
+		dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name));
 	}
-	for (auto &dep : info.dependencies.Set()) {
+	for (auto &dep : dependencies.Set()) {
 		table->dependencies.AddDependency(dep);
 	}
 
-	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, info.dependencies);
+	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, dependencies);
 	if (!entry) {
 		return nullptr;
 	}
