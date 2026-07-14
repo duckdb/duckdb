@@ -12,10 +12,10 @@
 #include "duckdb/common/string.hpp"
 #include <stdint.h>
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 class StringHeap;
+class ArenaAllocator;
 
 struct bignum_t {
 	string_t data;

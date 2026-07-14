@@ -146,7 +146,7 @@ public:
 	//! Drops every row group and immediately marks the blocks as modified.
 	void CommitDropTable();
 
-	vector<PartitionStatistics> GetPartitionStats() const;
+	vector<PartitionStatistics> GetPartitionStats(TransactionData transaction) const;
 	vector<ColumnSegmentInfo>
 	GetColumnSegmentInfo(const QueryContext &context,
 	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {}) const;

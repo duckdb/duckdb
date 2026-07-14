@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <thread>
 

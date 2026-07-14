@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/logging/log_storage.hpp"
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
 

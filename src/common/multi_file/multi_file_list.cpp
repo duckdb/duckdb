@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 #include <algorithm>
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 

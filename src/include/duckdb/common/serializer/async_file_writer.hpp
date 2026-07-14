@@ -12,7 +12,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/serializer/async_write_queue.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
-#include "duckdb/main/query_context.hpp"
+#include "duckdb/common/query_context.hpp"
 
 namespace duckdb {
 

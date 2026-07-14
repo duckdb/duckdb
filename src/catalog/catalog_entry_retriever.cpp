@@ -8,6 +8,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 

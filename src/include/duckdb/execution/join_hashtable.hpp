@@ -21,6 +21,7 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 
@@ -562,7 +563,6 @@ public:
 	void SetBuildBloomFilter(const bool should_build) {
 		this->should_build_bloom_filter = should_build;
 	}
-	void PrepareBuildBloomFilter(idx_t estimated_row_count);
 	void PrepareBloomFilterForFinalize();
 
 	BloomFilter &GetBloomFilter() {

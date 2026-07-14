@@ -63,7 +63,7 @@ const char *DuckDB::LibraryVersion() {
 
 const char *DuckDB::ReleaseCodename() {
 	// dev releases have no name
-	if (StringUtil::Contains(DUCKDB_VERSION, "-dev")) {
+	if (!VersioningUtils::IsReleaseVersion(DUCKDB_VERSION)) {
 		return "Development Version";
 	}
 	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.2.")) {

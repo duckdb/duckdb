@@ -159,11 +159,15 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 				state.is_set = true;
 				state.value = Hugeint::Add(state.value, local64);
 			} else if (!state.is_set) { // rare: we added 0 -- were all values NULL?
-				for (idx_t k = 0; k < run_count; k++) {
-					const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
-					if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
-						state.is_set = true;
-						break;
+				if (!validity.CanHaveNull()) {
+					state.is_set = true;
+				} else {
+					for (idx_t k = 0; k < run_count; k++) {
+						const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
+						if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
+							state.is_set = true;
+							break;
+						}
 					}
 				}
 			}

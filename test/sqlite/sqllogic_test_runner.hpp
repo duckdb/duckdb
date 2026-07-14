@@ -88,6 +88,24 @@ public:
 	HashLabelMap hash_label_map;
 	mutex log_lock;
 
+	//! Per-test statement tallies for --emit-test-events. Atomic: concurrent loops run the countable
+	//! commands on multiple threads; the begin/end events are emitted single-threaded at boundaries.
+	atomic<idx_t> test_stat_passes {0};
+	atomic<idx_t> test_stat_fails {0};
+	atomic<idx_t> test_stat_skip_mode {0};
+	//! Whole-test verdict, set at the terminal (test_sqllogictest.cpp) before this runner is destroyed.
+	//! The destructor's DB cleanup consults it for --database-destroy on-success. Defaults to false so
+	//! an abort/unwind path that never reaches the terminal retains DB files (treated as a failure).
+	bool test_succeeded = false;
+	//! Whole-test skip disposition (require/require-env/config/tag), recorded by SkipTest and read at
+	//! the terminal to emit end{status:"skip-requirement"}.
+	bool test_skipped_requirement = false;
+	string test_skip_reason;
+	//! Locator for the failing command (file:line), stashed at the throw site for --emit-test-events.
+	//! A Catch FAIL carries no message; consumers get this anchor to correlate with captured output.
+	//! Written single-threaded: serial fails throw directly; concurrent fails are re-raised post-join.
+	string test_failure_locator;
+
 public:
 	void ExecuteFile(string script);
 	void ExecuteStream(std::istream &input, const string &source_name);
@@ -107,6 +125,11 @@ public:
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 	void SkipTest(const string &reason);
 	static string GetSkipReasonSummary();
+	//! --emit-test-events: statement tallies (counted, not emitted) + the begin/end JSON events.
+	void CountStatement(bool passed);
+	void CountSkipMode();
+	void EmitBegin(const string &test_name);
+	void EmitEnd(const string &test_name, const string &status, const string &data);
 	NewDatabaseConnection CreateDatabase(const string &db_path, bool load_database);
 	unique_ptr<Connection> ConnectToDatabase(DuckDB &db_ref);
 	bool IsVariableReplacement(const string &token_name);

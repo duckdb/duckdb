@@ -1,0 +1,11 @@
+diff --git a/extension/fts/fts_indexing.cpp b/extension/fts/fts_indexing.cpp
+index a63ed4e..b0000000 100644
+--- a/extension/fts/fts_indexing.cpp
++++ b/extension/fts/fts_indexing.cpp
+@@ -1,5 +1,6 @@
+ #include "fts_indexing.hpp"
+ 
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "duckdb/catalog/catalog_search_path.hpp"
+ #include "duckdb/common/exception.hpp"

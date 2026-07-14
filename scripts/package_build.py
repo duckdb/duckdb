@@ -171,6 +171,8 @@ def get_git_describe():
             )
         except subprocess.CalledProcessError:
             return "v0.0.0-0-gdeadbeeff"
+    if is_explicit_prerelease_version(override_git_describe):
+        return override_git_describe
     if len(override_git_describe.split('-')) == 3:
         return override_git_describe
     if len(override_git_describe.split('-')) == 1:
@@ -186,11 +188,17 @@ def get_git_describe():
         return override_git_describe + "-g" + "deadbeeff"
 
 
+def is_explicit_prerelease_version(version):
+    return re.match(r"^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|rc)[0-9]+$", version) is not None
+
+
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
         return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
         git_describe = get_git_describe()
+        if is_explicit_prerelease_version(git_describe):
+            return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
         hash = git_describe.split('-')[2].lstrip('g')
         return hash
     except:
@@ -209,6 +217,8 @@ def git_dev_version():
         return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
     try:
         long_version = get_git_describe()
+        if is_explicit_prerelease_version(long_version):
+            return long_version
         version_splits = long_version.split('-')[0].lstrip('v').split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:

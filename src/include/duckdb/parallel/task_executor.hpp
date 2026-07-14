@@ -9,14 +9,13 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/parallel/task.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/common/enums/task_scheduler_type.hpp"
 
 namespace duckdb {
-class TaskScheduler;
 
 //! The TaskExecutor is a helper class that enables parallel scheduling and execution of tasks
 class TaskExecutor {
@@ -39,18 +38,26 @@ public:
 
 	//! Work on tasks until all tasks are finished. Throws an exception if any error occurred while executing the tasks.
 	void WorkOnTasks();
+	//! Cancel tasks that have not started yet and work on tasks until all tasks are finished. Does not throw.
+	void CancelAndDrain();
 
 	//! Get a task - returns true if a task was found
 	bool GetTask(shared_ptr<Task> &task);
 
 private:
+	//! Work on tasks until all tasks are finished
+	void DrainTasks();
+
+private:
+	friend class BaseExecutorTask;
+
 	TaskScheduler &scheduler;
 	const TaskSchedulerType type;
 	TaskErrorManager error_manager;
 	unique_ptr<ProducerToken> token;
-	atomic<idx_t> completed_tasks;
-	atomic<idx_t> total_tasks;
-	friend class BaseExecutorTask;
+	idx_t completed_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
+	idx_t total_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
+	atomic<bool> cancelled {false};
 	optional_ptr<ClientContext> context;
 };
 

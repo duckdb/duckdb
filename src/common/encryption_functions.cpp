@@ -1,4 +1,5 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/main/attached_database.hpp"

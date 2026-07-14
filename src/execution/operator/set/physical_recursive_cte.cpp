@@ -5,6 +5,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 

@@ -160,6 +160,16 @@ MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult RunManual(ShellState &state, const vector<string> &args) {
+	// show the manual page and exit; unlike -c we keep interactive detection so the output stays colored
+	state.readStdin = false;
+	if (state.DisplayManual(args) == MetadataResult::FAIL) {
+		ShellState::Exit(1);
+		return MetadataResult::EXIT;
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult FormatStdin(ShellState &state, const vector<string> &args) {
 	state.readStdin = false;
 
@@ -226,6 +236,7 @@ static const CommandLineOption command_line_options[] = {
      "use light mode colors"},
     {"line", 0, "", nullptr, ToggleOutputMode<RenderMode::LINE>, "set output mode to 'line'"},
     {"list", 0, "", nullptr, ToggleOutputMode<RenderMode::LIST>, "set output mode to 'list'"},
+    {"manual", 1, "FUNCTION", nullptr, RunManual, "show the manual page for a SQL function and exit"},
     {"markdown", 0, "", nullptr, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},
     {"newline", 1, "SEP", nullptr, SetNewlineSeparator, "set output row separator. Default: '\\n'"},
     {"no-init", 0, "", SkipInit, nullptr, "skip processing the init file"},

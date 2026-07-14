@@ -1,0 +1,36 @@
+diff --git a/src/azure_blob_filesystem.cpp b/src/azure_blob_filesystem.cpp
+index 9ef49e7..18ba1ab 100644
+--- a/src/azure_blob_filesystem.cpp
++++ b/src/azure_blob_filesystem.cpp
+@@ -11,6 +11,7 @@
+ #include "duckdb/common/types/timestamp.hpp"
+ #include "duckdb/function/scalar/string_common.hpp"
+ #include "duckdb/logging/file_system_logger.hpp"
++#include "duckdb/logging/logger.hpp"
+ #include "duckdb/main/client_data.hpp"
+ #include "include/azure_blob_filesystem.hpp"
+ 
+diff --git a/src/azure_dfs_filesystem.cpp b/src/azure_dfs_filesystem.cpp
+index 2071257..33221ea 100644
+--- a/src/azure_dfs_filesystem.cpp
++++ b/src/azure_dfs_filesystem.cpp
+@@ -10,6 +10,7 @@
+ #include "duckdb/common/types/timestamp.hpp"
+ #include "duckdb/function/scalar/string_common.hpp"
+ #include "duckdb/logging/file_system_logger.hpp"
++#include "duckdb/logging/logger.hpp"
+ 
+ #include <algorithm>
+ #include <azure/storage/blobs/blob_options.hpp>
+diff --git a/src/azure_filesystem.cpp b/src/azure_filesystem.cpp
+index 976d53d..75249f4 100644
+--- a/src/azure_filesystem.cpp
++++ b/src/azure_filesystem.cpp
+@@ -4,6 +4,7 @@
+ #include "duckdb/common/shared_ptr.hpp"
+ #include "duckdb/common/types/value.hpp"
+ #include "duckdb/logging/file_system_logger.hpp"
++#include "duckdb/logging/logger.hpp"
+ #include "duckdb/main/client_context.hpp"
+ 
+ #include <azure/storage/common/storage_exception.hpp>
