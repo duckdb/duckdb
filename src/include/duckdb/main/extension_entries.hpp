@@ -1186,6 +1186,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"quack_authorization_function", "quack"},
     {"quack_fetch_batch_chunks", "quack"},
     {"quack_loaded_at_us", "quack"},
+    {"rtree_index_scan_min_rows", "spatial"},
+    {"rtree_index_scan_ratio", "spatial"},
     {"s3_access_key_id", "httpfs"},
     {"s3_allow_recursive_globbing", "httpfs"},
     {"s3_endpoint", "httpfs"},
