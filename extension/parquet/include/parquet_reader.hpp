@@ -296,6 +296,24 @@ struct ParquetUnionData : public BaseUnionData {
 	unique_ptr<ParquetColumnSchema> root_schema;
 };
 
+enum class ParquetReaderProjectionExpressionType : uint8_t {
+	BYTE_LENGTH,
+};
+
+template <>
+const char *EnumUtil::ToChars<ParquetReaderProjectionExpressionType>(ParquetReaderProjectionExpressionType value);
+
+template <>
+ParquetReaderProjectionExpressionType EnumUtil::FromString<ParquetReaderProjectionExpressionType>(const char *value);
+
+struct ParquetReaderProjectionExpression {
+	ParquetReaderProjectionExpressionType type;
+	LogicalType return_type;
+
+	void Serialize(Serializer &serializer) const;
+	static ParquetReaderProjectionExpression Deserialize(Deserializer &deserializer);
+};
+
 class ParquetReader : public BaseFileReader {
 public:
 	//! Virtual column identifier for the "file_row_group_number" column (the file-relative row group index of each row)
@@ -303,7 +321,8 @@ public:
 
 public:
 	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
-	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
+	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr,
+	              unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions = {});
 	~ParquetReader() override;
 
 	mutable CachingFileSystem fs;
@@ -314,6 +333,8 @@ public:
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! How many rows have been read from this file
 	atomic<idx_t> rows_read;
+	//! Storage indices of columns where expressions like strlen/octet_length are pushed down
+	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;
 
 public:
 	string GetReaderType() const override {
