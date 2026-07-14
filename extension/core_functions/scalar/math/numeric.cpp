@@ -147,7 +147,11 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 			}
 
 			double min_val, max_val;
-			if (current_min < 0 && current_max < 0) {
+			if (current_min == 0 || current_max == 0) {
+				// Unlike integers, floating point abs cannot be removed for zero: abs(-0.0) clears the sign bit.
+				min_val = AbsOperator::Operation<double, double>(current_min);
+				max_val = AbsOperator::Operation<double, double>(current_max);
+			} else if (current_min < 0 && current_max < 0) {
 				min_val = AbsOperator::Operation<double, double>(current_max);
 				max_val = AbsOperator::Operation<double, double>(current_min);
 			} else if (current_min < 0) {
