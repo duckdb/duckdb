@@ -148,13 +148,24 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 			return false;
 		}
 
+		// Now cur_pos points to the first digit after the decimal point.
+		bool has_digit_after_decimal = false;
 		while (cur_pos < end_pos) {
 			if (std::isdigit(int_value_char[cur_pos])) {
+				has_digit_after_decimal = true;
 				cur_pos++;
 			} else {
 				// By now we can only have numbers, otherwise this is invalid.
 				return false;
 			}
+		}
+		// No integer digits before the decimal (e.g. ".5", "0.5" after leading zero trim, "0.").
+		if (possible_end == start_pos) {
+			if (!at_least_one_zero && !has_digit_after_decimal) {
+				return false;
+			}
+			is_zero = true;
+			return true;
 		}
 		// Floor cast this boy
 		end_pos = possible_end;

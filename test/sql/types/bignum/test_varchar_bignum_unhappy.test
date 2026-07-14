@@ -68,6 +68,41 @@ select '0010.4999'::BIGNUM
 ----
 10
 
+query I
+select '0.5'::BIGNUM
+----
+0
+
+query I
+select '-0.5'::BIGNUM
+----
+0
+
+query I
+select '+0.5'::BIGNUM
+----
+0
+
+query I
+select '0.'::BIGNUM
+----
+0
+
+query I
+select '.5'::BIGNUM
+----
+0
+
+query I
+select '-.5'::BIGNUM
+----
+0
+
+statement error
+select '.'::BIGNUM
+----
+Conversion Error: Could not convert string '.'
+
 statement error
 select '00-0010'::BIGNUM
 ----

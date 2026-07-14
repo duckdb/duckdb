@@ -1,0 +1,43 @@
+# name: test/sql/types/bignum/test_bignum_try_cast.test
+# description: Test TRY_CAST to BIGNUM
+# group: [bignum]
+
+query I
+SELECT TRY_CAST('123456789012345678901234567890' AS BIGNUM)::VARCHAR
+----
+123456789012345678901234567890
+
+query I
+SELECT TRY_CAST('0.5' AS BIGNUM)::VARCHAR
+----
+0
+
+query I
+SELECT TRY_CAST('-0.5' AS BIGNUM)::VARCHAR
+----
+0
+
+query I
+SELECT TRY_CAST('+0.5' AS BIGNUM)::VARCHAR
+----
+0
+
+query I
+SELECT TRY_CAST('.5' AS BIGNUM)::VARCHAR
+----
+0
+
+query I
+SELECT TRY_CAST('-.5' AS BIGNUM)::VARCHAR
+----
+0
+
+query I
+SELECT TRY_CAST('.' AS BIGNUM)
+----
+NULL
+
+statement error
+SELECT CAST('hello' AS BIGNUM)
+----
+Could not convert string 'hello'
