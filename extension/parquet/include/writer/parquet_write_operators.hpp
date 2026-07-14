@@ -10,6 +10,7 @@
 
 #include "writer/parquet_write_stats.hpp"
 #include "zstd/common/xxhash.hpp"
+#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
@@ -284,7 +285,7 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 struct ParquetTimeTZOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		return input.time().micros;
+		return Time::NormalizeTimeTZ(input).micros;
 	}
 };
 
