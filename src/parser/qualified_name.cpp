@@ -35,6 +35,10 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 	return result;
 }
 
+//! This parses a superset of the strings that the actual SQL parser accepts: it allows whitespace, most special
+//! characters like ()'- and keywords without requiring double quotes. It only requires double quotes around .
+//! characters and doubled double quotes (which collapse into a single double quote). It's only possible to fully
+//! double quote a component or not quote it at all.
 vector<Identifier> QualifiedName::ParseComponents(const string &input) {
 	vector<Identifier> result;
 	idx_t idx = 0;
