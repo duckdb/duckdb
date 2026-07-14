@@ -12,6 +12,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/winapi.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -273,6 +274,12 @@ public:
 
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
 	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
+
+	//! Whether a failed request should be retried, possibly using HTTPResponse information, and allowing overrides
+	DUCKDB_API virtual bool ShouldRetry(const BaseRequest &request, const HTTPResponse &response);
+
+	//! Whether replaying this request is safe. POST is the only method we cannot assume is idempotent.
+	DUCKDB_API static bool IsIdempotent(RequestType type);
 
 	static void ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port = 80);
 	static void DecomposeURL(const string &url, string &path_out, string &proto_host_port_out);

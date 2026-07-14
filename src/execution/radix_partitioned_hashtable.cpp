@@ -461,6 +461,21 @@ void DecideAdaptation(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lst
 	}
 }
 
+// Grow abandoned_data (frozen at the radix bits of when we first went external) up to the current radix bits, so it
+// never has fewer partitions than the data merged into it - Repartition/Combine only handle new >= old.
+void GrowAbandonedDataToRadixBits(ClientContext &context, RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate,
+                                  const idx_t radix_bits) {
+	if (!lstate.abandoned_data ||
+	    lstate.abandoned_data->PartitionCount() >= RadixPartitioning::NumberOfPartitions(radix_bits)) {
+		return;
+	}
+	auto new_abandoned_data = make_uniq<RadixPartitionedTupleData>(
+	    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayoutPtr(), MemoryTag::HASH_TABLE, radix_bits,
+	    gstate.radix_ht.GetLayout().ColumnCount() - 1);
+	lstate.abandoned_data->Repartition(context, *new_abandoned_data);
+	lstate.abandoned_data = std::move(new_abandoned_data);
+}
+
 void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate,
                       const bool combine) {
 	auto &config = gstate.config;
@@ -490,12 +505,15 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	if (total_size > gstate.GetThreadLimit()) {
 		if (gstate.config.SetRadixBitsToExternal()) {
 			// We're approaching the memory limit, unpin the data
+			const auto external_radix_bits = config.GetRadixBits();
 			if (!lstate.abandoned_data) {
 				lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
 				    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayoutPtr(), MemoryTag::HASH_TABLE,
-				    config.GetRadixBits(), gstate.radix_ht.GetLayout().ColumnCount() - 1);
+				    external_radix_bits, gstate.radix_ht.GetLayout().ColumnCount() - 1);
+			} else {
+				GrowAbandonedDataToRadixBits(context, gstate, lstate, external_radix_bits);
 			}
-			ht.SetRadixBits(gstate.config.GetRadixBits());
+			ht.SetRadixBits(external_radix_bits);
 			ht.AcquirePartitionedData()->Repartition(context, *lstate.abandoned_data);
 		}
 	}
@@ -600,6 +618,8 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	auto lstate_data = ht.AcquirePartitionedData();
 	if (lstate.abandoned_data) {
 		D_ASSERT(gstate.external);
+		// The global radix bits may have grown after we last sized abandoned_data - grow it to match before combining
+		GrowAbandonedDataToRadixBits(context.client, gstate, lstate, gstate.config.GetRadixBits());
 		D_ASSERT(lstate.abandoned_data->PartitionCount() == lstate.ht->GetPartitionedData().PartitionCount());
 		D_ASSERT(lstate.abandoned_data->PartitionCount() ==
 		         RadixPartitioning::NumberOfPartitions(gstate.config.GetRadixBits()));

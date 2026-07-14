@@ -277,6 +277,13 @@ void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleD
 		return;
 	}
 
+	// Repartitioning only ever goes to more partitions - fewer would underflow the partition math and index
+	// out of bounds, so throw instead of corrupting memory.
+	if (partitions.size() > new_partitioned_data.partitions.size()) {
+		throw InternalException("PartitionedTupleData::Repartition into fewer partitions (%llu -> %llu)",
+		                        partitions.size(), new_partitioned_data.partitions.size());
+	}
+
 	PartitionedTupleDataAppendState append_state;
 	new_partitioned_data.InitializeAppendState(append_state);
 

@@ -172,7 +172,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
           python scripts/amalgamation.py
-          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h src/include/duckdb_extension.h
 
           mkdir build/release_arm64 build/release_amd64
           lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb
