@@ -148,7 +148,14 @@ void Binder::SearchSchema(CreateInfo &info) {
 	auto &path = resolved.Path();
 	Identifier name = path.back();
 	Identifier catalog = path.front();
-	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	// the schema components sit between the catalog and the name; skip empty placeholders (e.g. from
+	// QualifiedName(catalog, "", name)) so that "no schema given" applies the default schema below
+	vector<Identifier> schema_path;
+	for (idx_t i = 1; i + 1 < path.size(); i++) {
+		if (!path[i].empty()) {
+			schema_path.push_back(path[i]);
+		}
+	}
 
 	if (IsInvalidCatalog(catalog) && info.temporary) {
 		catalog = Identifier::TempCatalog();
@@ -193,13 +200,22 @@ QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName
 	Identifier trailing = std::move(path.back());
 	path.pop_back();
 	Identifier catalog;
-	if (!path.empty()) {
-		// try to interpret the leading component as a catalog (i.e. an attached database)
+	if (path.size() == 1) {
+		// a single qualifier ("x.name"): x may be a schema, or a catalog - and if it names both it is ambiguous
 		Identifier candidate;
 		Identifier first = path[0];
 		BindSchemaOrCatalog(context, candidate, first);
 		if (!candidate.empty()) {
 			catalog = std::move(candidate);
+			path.erase(path.begin());
+		}
+	} else if (path.size() > 1) {
+		// multiple qualifiers ("cat.schema.name" or a nested "s1.s2.name"): the leading component is the catalog when
+		// it names an attached database. It is positionally unambiguous, so we do not run the catalog/schema ambiguity
+		// check (which is only relevant for a lone qualifier).
+		auto &db_manager = DatabaseManager::Get(context);
+		if (db_manager.GetDatabase(context, path[0])) {
+			catalog = std::move(path[0]);
 			path.erase(path.begin());
 		}
 	}
