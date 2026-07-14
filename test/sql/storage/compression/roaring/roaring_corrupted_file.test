@@ -16,4 +16,4 @@ USE db2;
 statement error
 SELECT * FROM t LIMIT 1;
 ----
-invalid container count in RoaringScanState
+Corrupted Roaring segment
