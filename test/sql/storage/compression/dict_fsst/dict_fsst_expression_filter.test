@@ -1,0 +1,68 @@
+# name: test/sql/storage/compression/dict_fsst/dict_fsst_expression_filter.test
+# description: Test expression filters over DICT_FSST strings
+# group: [dict_fsst]
+
+require vector_size 2048
+
+load {TEST_DIR}/dict_fsst_expression_filter.db readwrite v2.0.0
+
+statement ok
+CREATE TABLE partial_segment AS
+SELECT concat('HumanEval/', i::VARCHAR) AS task_id
+FROM range(0, 164) tbl(i)
+
+statement ok
+CREATE TABLE full_vector AS
+SELECT concat('HumanEval/', i::VARCHAR) AS task_id
+FROM range(0, 2048) tbl(i)
+
+statement ok
+CHECKPOINT
+
+restart
+
+query I
+SELECT count(*) FROM pragma_storage_info('partial_segment')
+WHERE column_name = 'task_id'
+  AND segment_type = 'VARCHAR'
+  AND compression = 'DICT_FSST'
+----
+1
+
+query I
+SELECT count(*) FROM pragma_storage_info('full_vector')
+WHERE column_name = 'task_id'
+  AND segment_type = 'VARCHAR'
+  AND compression = 'DICT_FSST'
+----
+1
+
+query I
+SELECT count(*) FROM partial_segment
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10
+----
+154
+
+statement ok
+DELETE FROM partial_segment
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10
+
+query I
+SELECT count(*) FROM partial_segment
+----
+10
+
+query I
+SELECT count(*) FROM full_vector
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10
+----
+2038
+
+statement ok
+DELETE FROM full_vector
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10
+
+query I
+SELECT count(*) FROM full_vector
+----
+10
