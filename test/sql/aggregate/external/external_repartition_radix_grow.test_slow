@@ -1,0 +1,48 @@
+# name: test/sql/aggregate/external/external_repartition_radix_grow.test_slow
+# description: External hash aggregate must not crash when the global radix bits grow after going external
+# group: [external]
+
+# Stress guard for a segfault in TupleDataCollection::FinalizePinState, reached via
+# RadixPartitionedTupleData::RepartitionFinalizeStates <- PartitionedTupleData::Repartition <- MaybeRepartition.
+# A thread's abandoned_data is frozen at the radix bits of the moment it first goes external, but the global radix
+# bits can keep growing afterwards and the local HT data grows with them. Repartitioning the (now larger) HT data
+# into the (smaller, stale) abandoned_data made new_radix_bits - old_radix_bits underflow, indexing partitions[]
+# out of bounds. Triggering the exact interleaving depends on inter-operator memory dynamics and is not
+# deterministic, so this exercises the external hash-aggregate repartition path hard (many distinct wide groups +
+# tight memory limit + many threads) and asserts the result stays correct.
+
+load __TEST_DIR__/external_repartition_radix_grow.db
+
+# many threads: the repartition path is only taken above the grow-strategy thread threshold
+statement ok
+set threads=8
+
+# don't compress the materialized rows, otherwise the size estimates don't reflect what we want to test
+statement ok
+set disabled_optimizers to 'compressed_materialization'
+
+statement ok
+create table t as
+select (i % 3000000) as g,
+       concat((i % 3000000)::VARCHAR, repeat('x', 60)) as g_wide,
+       i as v
+from range(24000000) t(i)
+
+# go external at a low radix bit count, then let the many wide groups keep growing the radix bits
+statement ok
+pragma memory_limit='300MB'
+
+# sum(cnt) counts every input row exactly once  -> equals the number of rows (24000000)
+# sum(vsum) sums v over all groups              -> equals sum(i) for i in [0, 24000000)
+query II
+WITH cte AS (
+    SELECT g, g_wide, count(*) AS cnt, sum(v) AS vsum
+    FROM t
+    GROUP BY g, g_wide
+)
+SELECT sum(cnt), sum(vsum) FROM cte
+----
+24000000	287999988000000
+
+statement ok
+reset memory_limit
