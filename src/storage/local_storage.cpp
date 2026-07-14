@@ -1,4 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
@@ -283,14 +284,16 @@ OptimisticDataWriter &LocalTableStorage::GetOptimisticWriter() {
 void LocalTableStorage::Rollback() {
 	optimistic_writer.Rollback();
 
+	CommitDropState drop_state(&row_groups->collection->GetBlockManager());
 	for (auto &collection : optimistic_collections) {
 		if (!collection) {
 			continue;
 		}
-		collection->collection->CommitDropTable();
+		collection->collection->CommitDropTable(drop_state);
 	}
 	optimistic_collections.clear();
-	row_groups->collection->CommitDropTable();
+	row_groups->collection->CommitDropTable(drop_state);
+	drop_state.FinalizeCommit();
 }
 
 //===--------------------------------------------------------------------===//

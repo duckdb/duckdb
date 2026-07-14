@@ -1,4 +1,5 @@
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -262,6 +263,12 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 
 	UndoBuffer::IteratorState iterator_state;
+	optional_ptr<BlockManager> block_manager;
+	if (db.HasStorageManager()) {
+		block_manager = db.GetStorageManager().GetBlockManager();
+	}
+	CommitDropState drop_state(block_manager);
+	commit_info.drop_state = &drop_state;
 	try {
 		storage->Commit(commit_state.get());
 		undo_buffer.Commit(iterator_state, commit_info);
@@ -272,6 +279,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			// if we have written to the WAL - flush after the commit has been successful
 			commit_state->FlushCommit();
 		}
+		drop_state.FinalizeCommit();
 		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
