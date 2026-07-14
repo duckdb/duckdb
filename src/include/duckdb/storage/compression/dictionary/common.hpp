@@ -46,7 +46,7 @@ protected:
 	// Performs a lookup of str, storing the result internally
 	virtual bool LookupString(string_t str) = 0;
 	// Add the most recently looked up str to compression state
-	virtual void AddLastLookup() = 0;
+	virtual void AddLastLookup(string_t str) = 0;
 	// Add string to the state that is known to not be seen yet
 	virtual void AddNewString(string_t str) = 0;
 	// Add a null value to the compression state
