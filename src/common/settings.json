@@ -115,6 +115,13 @@
         "custom_implementation": true
     },
     {
+        "name": "approximate_join_order_threshold",
+        "description": "The minimum number of tables in a join to determine the optimal join order approximately instead of exactly.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "12"
+    },
+    {
         "name": "arrow_large_buffer_size",
         "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
@@ -347,13 +354,6 @@
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "false"
-    },
-    {
-        "name": "debug_local_file_system_delay_ms",
-        "description": "DEBUG SETTING: time to sleep before local file system open/read/write operations",
-        "type": "UBIGINT",
-        "scope": "global",
-        "default_value": "0"
     },
     {
         "name": "debug_order_verification",
@@ -1213,6 +1213,16 @@
         "type": "BIGINT",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "read_ahead_depth",
+        "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
+        "type": "BIGINT",
+        "default_scope": "global",
+        "default_value": "-1",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "regex_match_operator_semantics",

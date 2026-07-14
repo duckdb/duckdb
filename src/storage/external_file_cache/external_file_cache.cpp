@@ -34,7 +34,18 @@ public:
 	}
 
 	optional_idx GetEstimatedCacheMemory() const override {
-		return cached_file->path.size() * 2;
+		idx_t file_size = 0;
+		{
+			const annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
+			file_size = cached_file->file_size;
+		}
+		const idx_t block_size = cache.GetCacheBlockSize(cached_file->path);
+		const idx_t num_blocks = (file_size + block_size - 1) / block_size;
+		// Estimated memory consumption for each block metadata.
+		static constexpr idx_t BLOCK_METADATA_SIZE = sizeof(CacheBlock);
+		// Filepath is stored at two places: in the object cache key and in the cached file object.
+		// We do over-estimation on memory consumption, which assumes the whole file is cached.
+		return cached_file->path.size() * 2 + num_blocks * BLOCK_METADATA_SIZE;
 	}
 
 	shared_ptr<CachedFile> GetCachedFile() const {
@@ -254,7 +265,7 @@ void ExternalFileCache::SetEnabled(bool enable_p) {
 		if (!enable) {
 			keys_to_delete.reserve(cached_file_keys.size());
 			for (auto &key : cached_file_keys) {
-				keys_to_delete.emplace_back(key);
+				keys_to_delete.emplace_back(key.first);
 			}
 		}
 	}
@@ -271,7 +282,7 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 		const annotated_lock_guard<annotated_mutex> files_guard(lock);
 		keys.reserve(cached_file_keys.size());
 		for (auto &key : cached_file_keys) {
-			keys.emplace_back(key);
+			keys.emplace_back(key.first);
 		}
 	}
 
@@ -352,15 +363,17 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 
 void ExternalFileCache::InsertCachedFileKey(const string &path) {
 	const annotated_lock_guard<annotated_mutex> guard(lock);
-	auto inserted = cached_file_keys.insert(path);
-	ALWAYS_ASSERT(inserted.second);
+	cached_file_keys[path]++;
 }
 
 void ExternalFileCache::EraseCachedFileKey(const string &path) {
 	const annotated_lock_guard<annotated_mutex> guard(lock);
 	auto entry = cached_file_keys.find(path);
 	ALWAYS_ASSERT(entry != cached_file_keys.end());
-	cached_file_keys.erase(entry);
+	D_ASSERT(entry->second > 0);
+	if (--entry->second == 0) {
+		cached_file_keys.erase(entry);
+	}
 }
 
 } // namespace duckdb

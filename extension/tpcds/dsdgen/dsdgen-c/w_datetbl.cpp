@@ -47,7 +47,7 @@
 
 #include <stdio.h>
 
-struct W_DATE_TBL g_w_date;
+thread_local struct W_DATE_TBL g_w_date;
 /* extern tdef w_tdefs[]; */
 
 /*
@@ -68,7 +68,7 @@ int mk_w_date(void *info_arr, ds_key_t index) {
 	int res = 0;
 
 	/* begin locals declarations */
-	static date_t base_date;
+	static thread_local date_t base_date;
 	int day_index, nTemp;
 	date_t temp_date, dTemp2;
 	struct W_DATE_TBL *r;

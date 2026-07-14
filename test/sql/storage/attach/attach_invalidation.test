@@ -123,8 +123,10 @@ SET wal_autocheckpoint = '1KB';
 statement ok
 PRAGMA debug_checkpoint_abort = '{abort_mode}';
 
-statement ok
+statement error
 INSERT INTO a.tbl SELECT (range + 1000)::INTEGER FROM range(10000);
+----
+<REGEX>:IO Error:.*Transaction COMMIT succeeded.*autocheckpoint failed.*
 
 statement error
 SELECT COUNT(*) FROM a.tbl;

@@ -20,7 +20,7 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 	}
 	if (parse_result.type == ParseResultType::CHOICE) {
 		auto &choice_pr = parse_result.Cast<ChoiceParseResult>();
-		return transformer.Transform<string>(choice_pr.GetResult());
+		return TransformIdentifierOrKeyword(transformer, choice_pr.GetResult());
 	}
 	if (parse_result.type == ParseResultType::LIST) {
 		auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -31,16 +31,16 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 			}
 			if (child.get().type == ParseResultType::CHOICE) {
 				auto &choice_result = child.get().Cast<ChoiceParseResult>().GetResult();
-				if (choice_result.type == ParseResultType::IDENTIFIER) {
-					return choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
-				}
-				if (choice_result.type == ParseResultType::KEYWORD) {
-					return choice_result.Cast<KeywordParseResult>().keyword;
-				}
-				return transformer.Transform<string>(choice_result);
+				return TransformIdentifierOrKeyword(transformer, choice_result);
+			}
+			if (child.get().type == ParseResultType::LIST) {
+				return TransformIdentifierOrKeyword(transformer, child.get());
 			}
 			if (child.get().type == ParseResultType::IDENTIFIER) {
 				return child.get().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+			}
+			if (child.get().type == ParseResultType::KEYWORD) {
+				return child.get().Cast<KeywordParseResult>().keyword;
 			}
 			throw InternalException("Unexpected IdentifierOrKeyword type encountered %s.",
 			                        ParseResultToString(child.get().type));
@@ -301,6 +301,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransfor
 	map_children.push_back(UnboundType::GetTypeExpression(type[0])->Copy());
 	map_children.push_back(UnboundType::GetTypeExpression(type[1])->Copy());
 	return make_uniq<TypeExpression>(Identifier("MAP"), std::move(map_children));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTupleType(PEGTransformer &transformer,
+                                                                       const vector<LogicalType> &type) {
+	vector<unique_ptr<ParsedExpression>> tuple_children;
+	for (auto &child : type) {
+		tuple_children.push_back(UnboundType::GetTypeExpression(child)->Copy());
+	}
+	return make_uniq<TypeExpression>(Identifier("TUPLE"), std::move(tuple_children));
 }
 
 unique_ptr<ParsedExpression>

@@ -1,0 +1,176 @@
+--- a/src/include/quack_client.hpp
++++ b/src/include/quack_client.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include "duckdb/common/http_util.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/logging/logger.hpp"
+ #include "duckdb/common/serializer/memory_stream.hpp"
+ 
+--- a/src/include/quack_server.hpp
++++ b/src/include/quack_server.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include <thread>
++#include "duckdb/main/client_context.hpp"
+ 
+ #include "duckdb/common/optional_ptr.hpp"
+ #include "duckdb/common/shared_ptr.hpp"
+--- a/src/include/quack_storage.hpp
++++ b/src/include/quack_storage.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include "duckdb/storage/storage_extension.hpp"
++#include "duckdb/main/client_context.hpp"
+ 
+ #include "quack_server.hpp"
+ 
+--- a/src/include/storage/quack_catalog.hpp
++++ b/src/include/storage/quack_catalog.hpp
+@@ -9,6 +9,8 @@
+ #pragma once
+ 
+ #include "duckdb/catalog/catalog.hpp"
++#include "duckdb/main/attached_database.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "storage/quack_schema.hpp"
+ #include "quack_uri.hpp"
+ 
+--- a/src/include/storage/quack_insert.hpp
++++ b/src/include/storage/quack_insert.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/execution/physical_operator.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/common/index_vector.hpp"
+ 
+ namespace duckdb {
+--- a/src/include/storage/quack_schema.hpp
++++ b/src/include/storage/quack_schema.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/catalog/catalog.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+ #include "duckdb/catalog/default/default_table_functions.hpp"
+ #include "storage/quack_catalog_set.hpp"
+--- a/src/include/storage/quack_table.hpp
++++ b/src/include/storage/quack_table.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/catalog/catalog.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ 
+ namespace duckdb {
+--- a/src/include/storage/quack_transaction.hpp
++++ b/src/include/storage/quack_transaction.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/catalog/catalog.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/transaction/transaction.hpp"
+ #include "storage/quack_schema.hpp"
+ 
+--- a/src/include/storage/quack_transaction_manager.hpp
++++ b/src/include/storage/quack_transaction_manager.hpp
+@@ -9,6 +9,8 @@
+ #pragma once
+ 
+ #include "storage/quack_transaction.hpp"
++#include "duckdb/main/attached_database.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/common/error_data.hpp"
+ #include "duckdb/transaction/transaction_manager.hpp"
+ 
+--- a/src/quack_client.cpp
++++ b/src/quack_client.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/main/database.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/common/error_data.hpp"
+ #include "duckdb/main/extension_helper.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+--- a/src/quack_http_server.cpp
++++ b/src/quack_http_server.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/common/serializer/memory_stream.hpp"
++#include "duckdb/main/client_context.hpp"
+ 
+ #include "quack_server.hpp"
+ #include "quack_message.hpp"
+--- a/src/quack_scan.cpp
++++ b/src/quack_scan.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/function/table_function.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/main/database_manager.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/main/extension_helper.hpp"
+--- a/src/quack_start_stop.cpp
++++ b/src/quack_start_stop.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/main/database.hpp"
++#include "duckdb/main/client_context.hpp"
+ 
+ #include "quack_startstop.hpp"
+ #include "quack_storage.hpp"
+--- a/src/quack_storage.cpp
++++ b/src/quack_storage.cpp
+@@ -1,4 +1,7 @@
+ #include <thread>
++#include "duckdb/main/attached_database.hpp"
++#include "duckdb/parser/parsed_data/attach_info.hpp"
++#include "duckdb/main/client_context.hpp"
+ 
+ #include "duckdb/main/database.hpp"
+ 
+--- a/src/storage/quack_catalog.cpp
++++ b/src/storage/quack_catalog.cpp
+@@ -1,4 +1,6 @@
+ #include "duckdb/common/exception.hpp"
++#include "duckdb/main/attached_database.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/main/connection.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/main/secret/secret.hpp"
+--- a/src/storage/quack_insert.cpp
++++ b/src/storage/quack_insert.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/planner/operator/logical_create_table.hpp"
+ #include "duckdb/planner/operator/logical_insert.hpp"
+ #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+--- a/src/storage/quack_schema.cpp
++++ b/src/storage/quack_schema.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/quack_catalog.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "storage/quack_schema.hpp"
+ #include "storage/quack_table.hpp"
+ #include "quack_client.hpp"
+--- a/src/storage/quack_table.cpp
++++ b/src/storage/quack_table.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/quack_catalog.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "storage/quack_table.hpp"
+ #include "quack_scan.hpp"
+ #include "duckdb/parser/parser.hpp"
+--- a/src/storage/quack_transaction_manager.cpp
++++ b/src/storage/quack_transaction_manager.cpp
+@@ -1,4 +1,6 @@
+ #include "storage/quack_transaction_manager.hpp"
++#include "duckdb/main/attached_database.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/common/error_data.hpp"
+ 
+ namespace duckdb {

@@ -14,6 +14,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
@@ -300,6 +301,62 @@ string QueryProfiler::ToString(const string &profiler_format_name) const {
 	return RenderProfilerOutput(renderer.get());
 }
 
+//! Strip a leading EXPLAIN [ANALYZE] [(...)] wrapper so only the underlying query remains.
+static string StripExplainPrefix(const string &sql) {
+	auto is_space = [](char c) {
+		return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+	};
+	idx_t start = 0;
+	while (start < sql.size() && is_space(sql[start])) {
+		start++;
+	}
+	string rest = sql.substr(start);
+	if (!StringUtil::StartsWith(StringUtil::Upper(rest), "EXPLAIN")) {
+		return sql;
+	}
+	idx_t pos = 7; // past "EXPLAIN"
+	while (pos < rest.size() && is_space(rest[pos])) {
+		pos++;
+	}
+	if (StringUtil::StartsWith(StringUtil::Upper(rest.substr(pos)), "ANALYZE")) {
+		pos += 7;
+		while (pos < rest.size() && is_space(rest[pos])) {
+			pos++;
+		}
+	}
+	if (pos < rest.size() && rest[pos] == '(') {
+		idx_t depth = 0;
+		while (pos < rest.size()) {
+			char c = rest[pos++];
+			if (c == '(') {
+				depth++;
+			} else if (c == ')' && --depth == 0) {
+				break;
+			}
+		}
+		while (pos < rest.size() && is_space(rest[pos])) {
+			pos++;
+		}
+	}
+	return rest.substr(pos);
+}
+
+string QueryProfiler::GetQuerySQL() const {
+	auto sql = StripExplainPrefix(query_metrics.query_sql);
+	return sql.empty() ? query_metrics.query_sql : sql;
+}
+
+string QueryProfiler::RenderProfile(const string &format) const {
+	auto renderer = CreateProfiler(format);
+	if (!renderer) {
+		return string();
+	}
+	StringTreeRenderer ss;
+	renderer->RenderProfiler(*this, ss);
+	renderer->Finish();
+	return ss.str();
+}
+
 string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
 	if (!renderer) {
 		// "no_output" format: nothing is rendered, enabled or not
@@ -310,6 +367,7 @@ string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) 
 	}
 	StringTreeRenderer ss;
 	renderer->RenderProfiler(*this, ss);
+	renderer->Finish();
 	return ss.str();
 }
 
@@ -325,6 +383,7 @@ void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) con
 		return;
 	}
 	renderer->RenderProfiler(*this, *sink);
+	renderer->Finish();
 }
 
 void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const {

@@ -24,7 +24,7 @@ STRUCT(a INTEGER, b VARCHAR)
 statement error
 SELECT make_type('STRUCT', make_type('INTEGER'), b := make_type('VARCHAR'));
 ----
-Binder Error: STRUCT type arguments must either all have names or all be anonymous
+Binder Error: STRUCT type arguments must have names
 
 query I
 SELECT make_type('LIST', make_type('STRUCT', a := make_type('STRUCT', x := make_type('INTEGER')), b := make_type('VARCHAR')));

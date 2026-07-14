@@ -16,6 +16,7 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/clustered_aggregate.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 

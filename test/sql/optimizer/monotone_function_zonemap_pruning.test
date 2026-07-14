@@ -1,0 +1,84 @@
+# name: test/sql/optimizer/monotone_function_zonemap_pruning.test
+# description: Monotone functions (ArgProperties) prune row groups via the base column zonemap
+# group: [optimizer]
+
+# 500k rows -> 5 row groups (122880 rows each). x increases with the row id, so each row
+# group covers a contiguous, disjoint range of x.
+statement ok
+CREATE TABLE t AS SELECT range::INTEGER AS x FROM range(500000);
+
+# floor() carries ArgProperties (non-decreasing) but has no dedicated statistics callback, so
+# these prune purely through the monotone corner-eval wired into scan-time filter pruning.
+
+# tail: floor(x) > 495000 -> only the last row group can contain matches
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE floor(x::DOUBLE) > 495000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM t WHERE floor(x::DOUBLE) > 495000;
+----
+4999
+
+# head: floor(x) < 5000 -> only the first row group
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE floor(x::DOUBLE) < 5000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM t WHERE floor(x::DOUBLE) < 5000;
+----
+5000
+
+# a >= filter prunes the row groups strictly below the threshold. sum(x), not
+# count(*), so the retained groups are actually scanned instead of answered from
+# row-group metadata -- the exact stats on persistent storage make the count a
+# metadata-only lookup (0 scans) when the threshold is row-group aligned.
+query II
+EXPLAIN ANALYZE SELECT sum(x) FROM t WHERE floor(x::DOUBLE) >= 245760;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 5.*
+
+# range query (BETWEEN) confined to a single middle row group prunes the other four
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE floor(x::DOUBLE) BETWEEN 245760 AND 249999;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM t WHERE floor(x::DOUBLE) BETWEEN 245760 AND 249999;
+----
+4240
+
+# impossible range folds away entirely (no matching row group)
+query I
+SELECT count(*) FROM t WHERE floor(x::DOUBLE) BETWEEN 600000 AND 700000;
+----
+0
+
+# year() maps DATE -> INT and is non-decreasing: prunes on the date zonemap
+statement ok
+CREATE TABLE d AS SELECT (DATE '1970-01-01' + INTERVAL (range) DAY)::DATE AS dt FROM range(500000);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM d WHERE year(dt) < 1971;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM d WHERE year(dt) < 1971;
+----
+365
+
+# correctness: derived pruning never drops matching rows (full-table equivalence)
+query I
+SELECT count(*) FROM t WHERE floor(x::DOUBLE) > 495000;
+----
+4999
+
+query I
+SELECT count(*) FROM d WHERE year(dt) BETWEEN 1975 AND 1976;
+----
+731

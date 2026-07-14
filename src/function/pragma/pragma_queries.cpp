@@ -13,6 +13,7 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 

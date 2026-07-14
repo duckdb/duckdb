@@ -1,6 +1,6 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/planner/operator/logical_drop.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -147,7 +147,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	default:
 		throw BinderException("Unknown catalog type for drop statement: '%s'", CatalogTypeToString(stmt.info->type));
 	}
-	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, std::move(stmt.info));
+	result.plan = make_uniq<LogicalDrop>(std::move(stmt.info));
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 

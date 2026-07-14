@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_duckdb.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -8,6 +9,8 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
 
 namespace duckdb {
 
@@ -31,7 +34,7 @@ struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 	                MultiFileBindData &bind_data) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
-	unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &) override;
+	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        BaseUnionData &union_data, const MultiFileBindData &bind_data_p) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -437,7 +440,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBMultiFileInfo::InitializeGlobalState(
 	return make_uniq<DuckDBReadGlobalState>();
 }
 
-unique_ptr<LocalTableFunctionState> DuckDBMultiFileInfo::InitializeLocalState(ExecutionContext &,
+unique_ptr<LocalTableFunctionState> DuckDBMultiFileInfo::InitializeLocalState(ClientContext &,
                                                                               GlobalTableFunctionState &) {
 	return make_uniq<DuckDBReadLocalState>();
 }

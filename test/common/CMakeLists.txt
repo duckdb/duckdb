@@ -16,7 +16,9 @@ add_library_unity(
   test_lru_cache.cpp
   test_numeric_cast.cpp
   test_parse_expression.cpp
+  test_parse_load_statement.cpp
   test_parse_logical_type.cpp
+  test_logical_type_is_complete.cpp
   test_utf.cpp
   test_allocator_debug_info.cpp
   test_buffer_pool_reservation.cpp
@@ -24,6 +26,7 @@ add_library_unity(
   test_strftime.cpp
   test_string_util.cpp
   test_substring_oob.cpp
+  test_utf8_codepoint_oob.cpp
   test_temporary_memory_manager.cpp
   test_value_to_sql_string.cpp)
 

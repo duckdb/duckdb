@@ -35,12 +35,12 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(LogicalTypeId::STRUCT == child_type.id());
+	D_ASSERT(StructType::IsStruct(child_type));
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
 		throw BinderException("Can't extract something from an empty struct");
 	}
-	if (StructType::IsUnnamed(child_type)) {
+	if (child_type.id() == LogicalTypeId::TUPLE) {
 		throw BinderException(
 		    "struct_extract with a string key cannot be used on an unnamed struct, use a numeric index instead");
 	}
@@ -99,12 +99,12 @@ static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(LogicalTypeId::STRUCT == child_type.id());
+	D_ASSERT(StructType::IsStruct(child_type));
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
 		throw BinderException("Can't extract something from an empty struct");
 	}
-	if (struct_extract && !StructType::IsUnnamed(child_type)) {
+	if (struct_extract && child_type.id() != LogicalTypeId::TUPLE) {
 		throw BinderException(
 		    "struct_extract with an integer key can only be used on unnamed structs, use a string key instead");
 	}
@@ -161,7 +161,7 @@ ScalarFunction GetKeyExtractFunction() {
 }
 
 ScalarFunction GetIndexExtractFunction() {
-	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
+	return ScalarFunction("struct_extract", {LogicalTypeId::TUPLE, LogicalType::BIGINT}, LogicalType::ANY,
 	                      StructExtractFunction, StructExtractBindIndex, PropagateStructExtractStats);
 }
 

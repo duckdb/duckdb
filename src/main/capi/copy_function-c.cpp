@@ -6,6 +6,7 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/capi/capi_internal_table.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 //----------------------------------------------------------------------------------------------------------------------
 // Common Copy Function Info
@@ -66,12 +67,12 @@ Value MakeValueFromCopyOptions(const case_insensitive_map_t<vector<Value>> &opti
 			continue;
 		}
 
-		// Different types: create an unnamed struct
-		child_list_t<Value> children;
+		// Different types: create an unnamed TUPLE
+		vector<Value> children;
 		for (auto &val : values) {
-			children.emplace_back("", val);
+			children.push_back(val);
 		}
-		option_list.emplace_back(std::move(name), Value::STRUCT(children));
+		option_list.emplace_back(std::move(name), Value::TUPLE(std::move(children)));
 	}
 
 	if (option_list.empty()) {

@@ -62,6 +62,7 @@
         "parameters": "arg",
         "description": "Combines exported aggregate states",
         "example": "combine_aggr(state_column)",
-        "type": "aggregate_function"
+        "type": "aggregate_function_set",
+        "extra_functions": ["static AggregateFunction GetFunction();"]
     }
 ]

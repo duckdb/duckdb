@@ -12,7 +12,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/render_tree.hpp"
 #include "duckdb/common/tree_renderer/base_tree_renderer.hpp"
 
@@ -20,6 +19,8 @@ namespace duckdb {
 
 class ClientContext;
 class QueryProfiler;
+class ProfilingNode;
+struct ProfilerPrintFormat;
 
 //! TreeRenderer renders a plan/operator tree (for EXPLAIN) or a query profiler's output in a particular format.
 //! It is the single renderer abstraction: each format (text, JSON, HTML, GraphViz, Mermaid, YAML) is one subclass
@@ -35,6 +36,17 @@ public:
 	//! Render the tree into a BaseTreeRenderer (e.g. a StringTreeRenderer, or a highlighting-aware sink)
 	void ToStream(RenderTree &root, BaseTreeRenderer &ss);
 	virtual void ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) = 0;
+
+	//! Called once after this renderer has produced its output (end of ToStream, and after RenderProfiler). Lets a
+	//! renderer perform a one-shot side effect for the render (e.g. open the rendered result in a browser).
+	virtual void Finish() {
+	}
+
+	//! Whether this format produces a single standalone artifact (e.g. one HTML page opened in a browser). For such
+	//! formats EXPLAIN renders only the final plan instead of every stage, so a single artifact is produced.
+	virtual bool RendersSinglePlan() {
+		return false;
+	}
 
 	//! Returns the sink to render into when printing this format's output directly. Only invoked when we are about
 	//! to print (the default renderer writes straight to the output stream), so it is never created for the

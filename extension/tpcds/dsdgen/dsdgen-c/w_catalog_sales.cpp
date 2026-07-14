@@ -57,14 +57,15 @@
 
 #include <stdio.h>
 
-struct W_CATALOG_SALES_TBL g_w_catalog_sales;
+thread_local struct W_CATALOG_SALES_TBL g_w_catalog_sales;
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 
-static ds_key_t kNewDateIndex = 0;
-static ds_key_t jDate;
-static int nTicketItemBase = 1;
-static int *pItemPermutation;
-static int nItemCount;
+static thread_local ds_key_t kNewDateIndex = 0;
+static thread_local ds_key_t jDate;
+static thread_local int nTicketItemBase = 1;
+static thread_local int *pItemPermutation;
+static thread_local int nItemCount;
+static thread_local int nItemPermutationSize;
 
 /*
  * the validation process requires generating a single lineitem
@@ -72,7 +73,7 @@ static int nItemCount;
  * and a detail/lineitem portion.
  */
 static void mk_master(void *info_arr, ds_key_t index) {
-	static decimal_t dZero, dHundred, dOne, dOneHalf;
+	static thread_local decimal_t dZero, dHundred, dOne, dOneHalf;
 	int nGiftPct;
 	struct W_CATALOG_SALES_TBL *r;
 
@@ -84,7 +85,14 @@ static void mk_master(void *info_arr, ds_key_t index) {
 		strtodec(&dOne, "1.00");
 		strtodec(&dOneHalf, "0.50");
 		jDate = skipDays(CATALOG_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(NULL, (nItemCount = (int)getIDCount(ITEM)), CS_PERMUTE);
+		nItemCount = (int)getIDCount(ITEM);
+		// A cached permutation is only reusable if it is at least as large as the
+		// current scale requires; otherwise re-allocate to avoid overflowing it.
+		if (nItemCount > nItemPermutationSize) {
+			pItemPermutation = NULL;
+			nItemPermutationSize = nItemCount;
+		}
+		pItemPermutation = makePermutation(pItemPermutation, nItemCount, CS_PERMUTE);
 
 		InitConstants::mk_master_catalog_sales_init = 1;
 	}
@@ -137,11 +145,11 @@ static void mk_master(void *info_arr, ds_key_t index) {
 }
 
 static void mk_detail(void *info_arr, int bPrint) {
-	static decimal_t dZero, dHundred, dOne, dOneHalf;
+	static thread_local decimal_t dZero, dHundred, dOne, dOneHalf;
 	int nShipLag, nTemp;
 	ds_key_t kItem;
-	static ds_key_t kNewDateIndex = 0;
-	static ds_key_t jDate;
+	static thread_local ds_key_t kNewDateIndex = 0;
+	static thread_local ds_key_t jDate;
 	struct W_CATALOG_SALES_TBL *r;
 	tdef *pTdef = getSimpleTdefsByNumber(CATALOG_SALES);
 

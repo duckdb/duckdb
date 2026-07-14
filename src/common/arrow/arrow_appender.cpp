@@ -1,4 +1,5 @@
 #include "duckdb/common/arrow/arrow_appender.hpp"
+#include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/common/arrow/arrow_buffer.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/array.hpp"
@@ -274,6 +275,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowUnionData>(append_data);
 		break;
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 		InitializeAppenderForType<ArrowStructData>(append_data);
 		break;
 	case LogicalTypeId::ARRAY:

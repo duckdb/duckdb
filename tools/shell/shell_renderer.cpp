@@ -905,11 +905,14 @@ public:
 			return;
 		}
 		out.Print(data[1]);
-		// the pretty EXPLAIN ANALYZE tree folds low-impact operators - point users at the full (expanded) tree.
-		// only shown in interactive mode (where the user can type ".last") and only when something was folded
+		// after EXPLAIN ANALYZE (interactive), point users at the full (expanded) tree when the pretty tree folded
+		// low-impact operators, and always at the ".web" command which opens the profile in a browser.
+		// (skip it for EXPLAIN ANALYZE (FORMAT WEB), whose result value is empty and which already opened the profile)
 		if (out.SupportsHighlight() && state.stdin_is_interactive && state.stdout_is_console &&
-		    state.last_explain_hid_content && data[0].GetString() == "analyzed_plan") {
-			string hint = "\ntype .last to view the full query tree\n";
+		    !data[1].GetString().empty() && data[0].GetString() == "analyzed_plan") {
+			string hint = state.last_explain_hid_content
+			                  ? "\ntype .last to show the full tree, .web to open it in a browser\n"
+			                  : "\ntype .web to open the query profile in a browser\n";
 			ShellHighlight highlight(state);
 			highlight.PrintText(hint, PrintOutput::STDOUT, HighlightElementType::FOOTER);
 		}

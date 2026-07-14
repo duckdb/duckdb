@@ -140,6 +140,10 @@ ShowType PEGTransformerFactory::TransformSummarizeRule(PEGTransformer &transform
 	return ShowType::SUMMARY;
 }
 
+ShowType PEGTransformerFactory::TransformSummarize(PEGTransformer &transformer, const ShowType &summarize_rule) {
+	return summarize_rule;
+}
+
 ShowType PEGTransformerFactory::TransformShowRule(PEGTransformer &transformer) {
 	return ShowType::DESCRIBE;
 }

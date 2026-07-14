@@ -272,6 +272,14 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult OpenProfileWeb(ShellState &state, const vector<string> &args) {
+	if (state.safe_mode) {
+		state.Print(PrintOutput::STDERR, ".web cannot be used in -safe mode\n");
+		return MetadataResult::FAIL;
+	}
+	return OpenProfileInBrowser(state) ? MetadataResult::SUCCESS : MetadataResult::FAIL;
+}
+
 MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
 	// if the last query produced a profiling tree (e.g. EXPLAIN ANALYZE), show the full expanded query tree
 	if (RenderExpandedQueryTree(state)) {
@@ -564,6 +572,10 @@ MetadataResult SetWidths(ShellState &state, const vector<string> &args) {
 
 MetadataResult ShowIndexes(ShellState &state, const vector<string> &args) {
 	return state.DisplayEntries(args, 'i');
+}
+
+MetadataResult ShowManual(ShellState &state, const vector<string> &args) {
+	return state.DisplayManual(args);
 }
 
 MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
@@ -927,6 +939,9 @@ static const MetadataCommand metadata_commands[] = {
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
+    {"manual", 2, ShowManual, "FUNCTION", "Show the manual page for a SQL function", 0,
+     "Displays the signatures, descriptions and examples of all overloads of FUNCTION.\n"
+     "FUNCTION may be qualified: [database.][schema.]function."},
     {"maxrows", 0, SetMaxRows, "COUNT",
      "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0, ""},
     {"maxwidth", 0, SetMaxWidth, "COUNT",
@@ -993,6 +1008,7 @@ static const MetadataCommand metadata_commands[] = {
     {"timer", 2, ShellState::ToggleTimer, "on|off", "Turn SQL timer on or off", 0, ""},
     {"ui_command", 0, SetUICommand, "[command]", "Set the UI command", 0, ""},
     {"version", 1, ShowVersion, "", "Show the version", 0, ""},
+    {"web", 1, OpenProfileWeb, "", "Open the last query profile (EXPLAIN ANALYZE) in a web browser", 0, ""},
     {"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0,
      "Negative values right-justify"},
 #if defined(_WIN32) || defined(WIN32)

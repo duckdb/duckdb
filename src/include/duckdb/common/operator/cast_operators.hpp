@@ -22,7 +22,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
-#include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
 struct CastParameters;

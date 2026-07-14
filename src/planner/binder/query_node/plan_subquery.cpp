@@ -12,7 +12,11 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
@@ -402,6 +406,144 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	}
 }
 
+static JoinSide GetCurrentJoinSide(TableIndex table_binding, const unordered_set<TableIndex> &left_bindings,
+                                   const unordered_set<TableIndex> &right_bindings) {
+	if (left_bindings.find(table_binding) != left_bindings.end()) {
+		D_ASSERT(right_bindings.find(table_binding) == right_bindings.end());
+		return JoinSide::LEFT;
+	}
+	if (right_bindings.find(table_binding) != right_bindings.end()) {
+		return JoinSide::RIGHT;
+	}
+	return JoinSide::NONE;
+}
+
+static JoinSide GetCurrentJoinSide(const Expression &expr, const unordered_set<TableIndex> &left_bindings,
+                                   const unordered_set<TableIndex> &right_bindings) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
+		if (colref.Depth() > 0) {
+			return JoinSide::NONE;
+		}
+		return GetCurrentJoinSide(colref.Binding().table_index, left_bindings, right_bindings);
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		auto &subquery = expr.Cast<BoundSubqueryExpression>();
+		JoinSide side = JoinSide::NONE;
+		for (auto &child : subquery.GetChildren()) {
+			auto child_side = GetCurrentJoinSide(*child, left_bindings, right_bindings);
+			side = JoinSide::CombineJoinSide(side, child_side);
+		}
+		for (auto &corr : subquery.GetBinder()->correlated_columns) {
+			if (corr.depth > 1) {
+				continue;
+			}
+			auto corr_side = GetCurrentJoinSide(corr.binding.table_index, left_bindings, right_bindings);
+			side = JoinSide::CombineJoinSide(side, corr_side);
+		}
+		return side;
+	}
+
+	JoinSide join_side = JoinSide::NONE;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		auto child_side = GetCurrentJoinSide(child, left_bindings, right_bindings);
+		join_side = JoinSide::CombineJoinSide(join_side, child_side);
+	});
+	return join_side;
+}
+
+static JoinSide GetCurrentJoinSide(LogicalJoin &join, const Expression &expr) {
+	unordered_set<TableIndex> left_bindings;
+	unordered_set<TableIndex> right_bindings;
+	LogicalJoin::GetTableReferences(*join.children[0], left_bindings);
+	LogicalJoin::GetTableReferences(*join.children[1], right_bindings);
+	return GetCurrentJoinSide(expr, left_bindings, right_bindings);
+}
+
+static unique_ptr<LogicalOperator> &GetJoinSideRoot(LogicalJoin &join, JoinSide side) {
+	if (side == JoinSide::LEFT || side == JoinSide::NONE) {
+		return join.children[0];
+	}
+	if (side == JoinSide::RIGHT) {
+		return join.children[1];
+	}
+	throw NotImplementedException("Correlated subquery in a non-inner join condition cannot reference both sides of "
+	                              "the join");
+}
+
+static bool HasJoinConditionExpressions(LogicalOperatorType type) {
+	switch (type) {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void RecursiveDependentJoinPlanner::PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr) {
+	if (!expr) {
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(*expr,
+	                                      [&](unique_ptr<Expression> &child) { PlanJoinSubqueries(join, child); });
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_SUBQUERY) {
+		return;
+	}
+
+	auto side = GetCurrentJoinSide(join, *expr);
+	auto &root = GetJoinSideRoot(join, side);
+	auto &subquery = expr->Cast<BoundSubqueryExpression>();
+	expr = binder.PlanSubquery(subquery, root);
+}
+
+void RecursiveDependentJoinPlanner::PlanJoinExpressions(LogicalOperator &op) {
+	if (!HasJoinConditionExpressions(op.type)) {
+		return;
+	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		for (auto &cond : join.conditions) {
+			if (cond.IsComparison()) {
+				PlanJoinSubqueries(join, cond.LeftReference());
+				PlanJoinSubqueries(join, cond.RightReference());
+			} else {
+				PlanJoinSubqueries(join, cond.JoinExpressionReference());
+			}
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+		auto &join = op.Cast<LogicalAnyJoin>();
+		PlanJoinSubqueries(join, join.condition);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void RecursiveDependentJoinPlanner::PlanJoinChildFilters(LogicalOperator &op) {
+	if (!HasJoinConditionExpressions(op.type)) {
+		return;
+	}
+
+	auto &join = op.Cast<LogicalJoin>();
+	for (auto &child : join.children) {
+		if (child->type != LogicalOperatorType::LOGICAL_FILTER) {
+			continue;
+		}
+		auto &filter = child->Cast<LogicalFilter>();
+		D_ASSERT(filter.children.size() == 1);
+		for (auto &expr : filter.expressions) {
+			binder.PlanSubqueries(expr, filter.children[0]);
+		}
+	}
+}
+
 void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 	if (!op.children.empty()) {
 		// Collect all recursive CTEs during recursive descend
@@ -410,11 +552,15 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 			auto &rec_cte = op.Cast<LogicalCTE>();
 			binder.recursive_ctes[rec_cte.table_index] = &op;
 		}
-		for (idx_t i = 0; i < op.children.size(); i++) {
-			root = std::move(op.children[i]);
-			D_ASSERT(root);
-			VisitOperatorExpressions(op);
-			op.children[i] = std::move(root);
+		if (HasJoinConditionExpressions(op.type)) {
+			PlanJoinExpressions(op);
+		} else {
+			for (idx_t i = 0; i < op.children.size(); i++) {
+				root = std::move(op.children[i]);
+				D_ASSERT(root);
+				VisitOperatorExpressions(op);
+				op.children[i] = std::move(root);
+			}
 		}
 
 		for (idx_t i = 0; i < op.children.size(); i++) {
@@ -427,6 +573,12 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 void RecursiveDependentJoinPlanner::Plan(Binder &binder, LogicalOperator &op) {
 	RecursiveDependentJoinPlanner planner(binder);
 	planner.VisitOperator(op);
+}
+
+void RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(Binder &binder, LogicalOperator &op) {
+	RecursiveDependentJoinPlanner planner(binder);
+	planner.PlanJoinChildFilters(op);
+	planner.PlanJoinExpressions(op);
 }
 
 unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubqueryExpression &expr,

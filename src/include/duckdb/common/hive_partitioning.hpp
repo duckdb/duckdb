@@ -9,11 +9,6 @@
 #pragma once
 
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/optimizer/filter_combiner.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/original/std/sstream.hpp"
 

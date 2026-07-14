@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_parquet_readers
   OBJECT
+  byte_array_length_column_reader.cpp
   decimal_column_reader.cpp
   expression_column_reader.cpp
   list_column_reader.cpp

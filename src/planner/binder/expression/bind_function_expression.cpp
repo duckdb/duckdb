@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
@@ -32,7 +33,8 @@ static bool TypeContainsDecimal(const LogicalType &type) {
 		return TypeContainsDecimal(ListType::GetChildType(type));
 	case LogicalTypeId::ARRAY:
 		return TypeContainsDecimal(ArrayType::GetChildType(type));
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		for (const auto &child : StructType::GetChildTypes(type)) {
 			if (TypeContainsDecimal(child.second)) {
 				return true;

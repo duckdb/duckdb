@@ -7,7 +7,8 @@ FunctionExpressionArguments <- Parens(FunctionExpressionArgumentList)
 FunctionExpressionArgumentList <- DistinctOrAll? FunctionArgumentList? OrderByClause? IgnoreOrRespectNulls?
 FunctionArgumentList <- List(FunctionArgument)
 
-FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionName
+FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionNameAsQualifiedName
+FunctionNameAsQualifiedName <- FunctionName
 CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
 SchemaReservedFunctionName <- SchemaQualification ReservedFunctionName
 
@@ -23,7 +24,7 @@ IgnoreOrRespectNulls <- IgnoreNulls / RespectNulls
 IgnoreNulls <- 'IGNORE' 'NULLS'
 RespectNulls <- 'RESPECT' 'NULLS'
 
-ParenthesisExpression <- Parens(List(Expression))
+ParenthesisExpression <- Parens(List(Expression)?)
 LiteralExpression <- StringLiteral / NumberLiteral / ConstantLiteral
 ConstantLiteral <- NullLiteral / TrueLiteral / FalseLiteral
 NullLiteral <- 'NULL'
@@ -87,7 +88,8 @@ ExcludeGroup <- 'GROUP'
 ExcludeTies <- 'TIES'
 ExcludeNoOthers <- 'NO' 'OTHERS'
 OverClause <- 'OVER' WindowFrame
-WindowFrame <- ParensIdentifier / WindowFrameDefinition / Identifier
+WindowFrame <- ParensIdentifier / WindowFrameDefinition / IdentifierWindowFrame
+IdentifierWindowFrame <- Identifier
 ParensIdentifier <- Parens(Identifier)
 WindowFrameDefinition <- WindowFrameNameContentsParens / WindowFrameContentsParens
 WindowFrameNameContentsParens <- Parens(WindowFrameNameContents)
@@ -100,7 +102,7 @@ ListExpression <- ArrayBoundedListExpression / ArrayParensSelect
 ArrayBoundedListExpression <- 'ARRAY'? BoundedListExpression
 ArrayParensSelect <- 'ARRAY' Parens(SelectStatementInternal)
 BoundedListExpression <- '[' List(Expression)? ']'
-StructExpression <- '{' List(StructField) '}'
+StructExpression <- '{' List(StructField)? '}'
 StructField <- ColIdOrString ':' Expression
 MapExpression <- 'MAP' MapStructExpression
 MapStructExpression <- '{' List(MapStructField)? '}'
@@ -225,7 +227,10 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 OtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
 OtherOperatorTail <- OtherOperator BitwiseExpression
 OtherOperator <-
-    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
+    AnyAllParsedOperator / NamedOtherOperator
+AnyAllParsedOperator <- AnyAllOperator
+NamedOtherOperator <-
+    QualifiedOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
 OperatorLiteral <- Identifier
 AnyAllOperator <- AnyOp AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
@@ -301,7 +306,7 @@ LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression
 NullIfExpression <- 'NULLIF' Parens(NullIfArguments)
 NullIfArguments <- Expression ',' Expression
 PositionExpression <- 'POSITION' Parens(PositionArguments)
-PositionArguments <- SingleExpression 'IN' SingleExpression
+PositionArguments <- OtherOperatorExpression 'IN' Expression
 RowExpression <- 'ROW' Parens(List(Expression)?)
 SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
 SubstringArguments <- SubstringParameters / SubstringExpressionList

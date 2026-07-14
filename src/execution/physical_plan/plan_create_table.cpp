@@ -12,6 +12,7 @@
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 

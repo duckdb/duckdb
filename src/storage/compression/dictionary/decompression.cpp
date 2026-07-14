@@ -1,17 +1,53 @@
 #include "duckdb/storage/compression/dictionary/decompression.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
+void CompressedStringScanState::ValidateDictionaryIndex(sel_t index) {
+	if (index >= index_buffer_count) {
+		throw IOException("Failed to scan dictionary string - dictionary index was out of range. Database file appears "
+		                  "to be corrupted.");
+	}
+}
+
+void CompressedStringScanState::ValidateDictionaryOffset(uint32_t dict_offset) {
+	if (dict_offset > dict.size) {
+		throw IOException(
+		    "Failed to scan dictionary string - dictionary offset was out of range. Database file appears "
+		    "to be corrupted.");
+	}
+}
+
 uint16_t CompressedStringScanState::GetStringLength(sel_t index) {
+	ValidateDictionaryIndex(index);
 	if (index == 0) {
 		return 0;
 	} else {
-		return UnsafeNumericCast<uint16_t>(index_buffer_ptr[index] - index_buffer_ptr[index - 1]);
+		auto dict_offset = index_buffer_ptr[index];
+		auto previous_dict_offset = index_buffer_ptr[index - 1];
+		ValidateDictionaryOffset(dict_offset);
+		ValidateDictionaryOffset(previous_dict_offset);
+		if (dict_offset < previous_dict_offset) {
+			throw IOException("Failed to scan dictionary string - dictionary offset was out of range. Database file "
+			                  "appears to be corrupted.");
+		}
+		auto string_length = dict_offset - previous_dict_offset;
+		if (string_length > NumericLimits<uint16_t>::Maximum()) {
+			throw IOException("Failed to scan dictionary string - dictionary offset was out of range. Database file "
+			                  "appears to be corrupted.");
+		}
+		return UnsafeNumericCast<uint16_t>(string_length);
 	}
 }
 
 string_t CompressedStringScanState::FetchStringFromDict(int32_t dict_offset, uint16_t string_len) {
-	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(block_size));
+	if (dict_offset < 0) {
+		throw IOException(
+		    "Failed to scan dictionary string - dictionary offset was out of range. Database file appears "
+		    "to be corrupted.");
+	}
+	ValidateDictionaryOffset(UnsafeNumericCast<uint32_t>(dict_offset));
 	if (dict_offset == 0) {
 		return string_t(nullptr, 0);
 	}
@@ -43,6 +79,12 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	block_size = segment.GetBlockSize();
 
 	dict = DictionaryCompression::GetDictionary(segment, *handle);
+	auto index_buffer_end = index_buffer_offset + sizeof(uint32_t) * index_buffer_count;
+	if (dict.size > block_size || dict.end > block_size || dict.size > dict.end || index_buffer_count == 0 ||
+	    dict.end - dict.size < index_buffer_end) {
+		throw IOException(
+		    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
+	}
 	if (!initialize_dictionary) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
 		return;
@@ -81,6 +123,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 	for (idx_t i = 0; i < scan_count; i++) {
 		// Lookup dict offset in index buffer
 		auto string_number = sel_vec->get_index(i + start_offset);
+		ValidateDictionaryIndex(string_number);
 		auto dict_offset = index_buffer_ptr[string_number];
 		auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_number));
 		result_data.WriteStringRef(FetchStringFromDict(UnsafeNumericCast<int32_t>(dict_offset), str_len));
@@ -111,6 +154,9 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 		for (idx_t i = 0; i < scan_count; i++) {
 			sel_vec->set_index(i, sel_vec->get_index(i + start_offset));
 		}
+	}
+	for (idx_t i = 0; i < scan_count; i++) {
+		ValidateDictionaryIndex(sel_vec->get_index(i));
 	}
 
 	result.Dictionary(dictionary, *sel_vec, scan_count);

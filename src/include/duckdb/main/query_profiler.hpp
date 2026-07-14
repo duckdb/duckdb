@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/profiling_coverage.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/main/profiler/profiler_print_format.hpp"
@@ -38,8 +39,6 @@ class TreeRenderer;
 class SQLStatement;
 struct MetricsTimer;
 class OperatorProfiler;
-
-enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
 //! A JSON-like recursive profiling value.
 //! FIXME: this should at some point be replaced by a "Value" - but that's not easily possible until our VARIANT Value
@@ -210,6 +209,17 @@ public:
 	const TreeMap &GetTreeMap() const {
 		return tree_map;
 	}
+	//! Top-level query metrics (total/CPU time, bytes read/written, ...), for renderers that surface a query summary.
+	const QueryMetrics &GetQueryMetrics() const {
+		return query_metrics;
+	}
+	//! The query text with any EXPLAIN [ANALYZE] wrapper stripped. Used by renderers that show the query;
+	//! pretty-printing and highlighting are left to the renderer (e.g. HTMLTreeRenderer) so this stays catalog-free.
+	DUCKDB_API string GetQuerySQL() const;
+	//! Render the current profiling tree in the given format (text/json/html/...) to a string. Unlike ToString this
+	//! only requires a tree to exist (HasRoot()), not that profiling is currently enabled - so it can re-render the
+	//! last profile after the query has finished (e.g. the shell's ".web" command).
+	DUCKDB_API string RenderProfile(const string &format) const;
 
 private:
 	void FinalizeMetricsInternal();

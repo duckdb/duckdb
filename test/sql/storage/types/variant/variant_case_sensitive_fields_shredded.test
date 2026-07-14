@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/variant/variant_case_sensitive_fields_shredded.test
 # group: [variant]
 
-load __TEST_DIR__/variant_checkpoint_issue.db readwrite v1.5.3
+load {TEST_DIR}/variant_checkpoint_issue.db readwrite v1.5.3
 
 statement ok
 set variant_minimum_shredding_size = 0;

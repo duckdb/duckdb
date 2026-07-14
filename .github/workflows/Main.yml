@@ -93,6 +93,7 @@ jobs:
       save_cache: ${{ steps.config.outputs.save_cache }}
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
+      effective_git_describe: ${{ steps.version.outputs.effective_git_describe }}
     env:
       GEN: ninja
     steps:
@@ -111,6 +112,14 @@ jobs:
           fi
           echo "git_sha=$resolved_sha" >> "$GITHUB_OUTPUT"
           echo "Using git_sha=$resolved_sha"
+
+      - name: Resolve version override
+        id: version
+        shell: bash
+        run: |
+          effective_git_describe="${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}"
+          echo "effective_git_describe=$effective_git_describe" >> "$GITHUB_OUTPUT"
+          echo "Using effective_git_describe=$effective_git_describe"
 
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
@@ -227,7 +236,7 @@ jobs:
 
       - name: Check format
         run: |
-          make format-check-silent enum-integrity-check -j -Otarget
+          make format-check-silent enum-integrity-check extension-patch-check -j -Otarget
           echo "::group::Check generated files"
           make generate-files
           git diff --exit-code
@@ -407,7 +416,7 @@ jobs:
       - linux-relassert
       - linux-release
     with:
-      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
@@ -451,6 +460,8 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
     - name: "Checkout"
@@ -509,6 +520,60 @@ jobs:
         zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
+ codecov:
+    name: Code Coverage
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'codecov') }}
+    needs:
+      - prepare
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      CC: clang-20
+      CXX: clang++-20
+      GEN: ninja
+
+    steps:
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
+        ref: ${{ needs.prepare.outputs.git_sha }}
+
+    - name: Install tools
+      timeout-minutes: 10
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq lcov llvm-20
+        echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
+
+    - uses: ./.github/actions/ccache-action
+      with:
+        key: codecov
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Build DuckDB
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
+      with:
+        build-type: codecov
+        build: python3 scripts/ci/retry.py -- make codecov
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        cache-suffix: codecov
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Generate coverage report
+      run: build/codecov/test/run --coverage-report coverage/linux-release-default-tests
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-linux-release-default-tests
+        path: coverage/linux-release-default-tests
+        if-no-files-found: error
+
  linux-release-tests:
     name: Linux Release Tests
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-tests') }}
@@ -554,6 +619,8 @@ jobs:
       matrix:
         config: ${{ fromJson(needs.prepare.outputs.linux_cli_matrix) }}
     runs-on: ${{ matrix.config.runner }}
+    env:
+      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
     - uses: actions/checkout@v6
@@ -592,6 +659,7 @@ jobs:
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
+        -e OVERRIDE_GIT_DESCRIBE                                               \
         quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
         bash -c "
           set -e
@@ -653,6 +721,28 @@ jobs:
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
+ staged-extension-install:
+    name: Staged Extension Install
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'staged-extension-install') }}
+    needs:
+      - prepare
+      - extensions
+      - linux-release-cli
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
+
+    - name: Check staged extension install/load
+      timeout-minutes: 10
+      run: |
+        python3 scripts/ci/check_staged_extensions.py \
+          --git-sha "${{ needs.prepare.outputs.git_sha }}" \
+          --version "${{ needs.prepare.outputs.effective_git_describe }}" \
+          --extensions "httpfs,json,parquet,ducklake,iceberg,icu"
+
  linux-musl-release-cli:
     name: Linux CLI (${{ matrix.config.arch }}-musl)
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-musl-release-cli') }}
@@ -664,6 +754,8 @@ jobs:
       matrix:
         config: ${{ fromJson(needs.prepare.outputs.linux_musl_cli_matrix) }}
     runs-on: ${{ matrix.config.runner }}
+    env:
+      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
     - uses: actions/checkout@v6
@@ -697,6 +789,7 @@ jobs:
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
         -e BUILD_BENCHMARK=1                                                \
         -e FORCE_WARN_UNUSED=1                                              \
+        -e OVERRIDE_GIT_DESCRIBE                                            \
         alpine:3.22                                                         \
         sh -c "
           set -e
@@ -846,7 +939,7 @@ jobs:
       - prepare
       - linux-relassert
     with:
-      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       runners: ${{ needs.prepare.outputs.runners }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
@@ -858,7 +951,7 @@ jobs:
     secrets: inherit
     needs: prepare
     with:
-      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
@@ -880,7 +973,7 @@ jobs:
       EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
-      OVERRIDE_GIT_DESCRIBE: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
       GEN: ninja
 
     steps:
@@ -959,6 +1052,7 @@ jobs:
       GEN: ninja
       OSX_BUILD_ARCH: ${{ matrix.xcode_target_flag }}
       DUCKDB_PLATFORM: osx_${{ matrix.architecture }}
+      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
       - name: "Checkout"
@@ -1017,6 +1111,7 @@ jobs:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
+      OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
     steps:
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
@@ -1298,8 +1393,10 @@ jobs:
       - extensions
       - wasm-eh
       - linux-release
+      - codecov
       - linux-release-tests
       - linux-release-cli
+      - staged-extension-install
       - linux-musl-release-cli
       - main_julia
       - swift
@@ -1338,7 +1435,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           GIT_REF: ${{ github.ref }}
           INPUT_GIT_REF: ${{ inputs.git_ref }}
-          OVERRIDE_GIT_DESCRIBE: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+          OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
         run: |
           is_release_event=false

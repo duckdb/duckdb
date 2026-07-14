@@ -22,6 +22,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 
 namespace duckdb {
 

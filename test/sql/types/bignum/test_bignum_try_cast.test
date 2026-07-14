@@ -1,0 +1,56 @@
+# name: test/sql/types/bignum/test_bignum_try_cast.test
+# description: Test TRY_CAST to BIGNUM
+# group: [bignum]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT TRY_CAST('hello' AS BIGNUM)
+----
+NULL
+
+query I
+SELECT TRY_CAST('1e+24' AS BIGNUM)
+----
+NULL
+
+query I
+SELECT TRY_CAST('123456789012345678901234567890' AS BIGNUM)::VARCHAR
+----
+123456789012345678901234567890
+
+query I
+SELECT TRY_CAST('0.5' AS BIGNUM)::VARCHAR
+----
+1
+
+query I
+SELECT TRY_CAST('-0.5' AS BIGNUM)::VARCHAR
+----
+-1
+
+query I
+SELECT TRY_CAST('+0.5' AS BIGNUM)::VARCHAR
+----
+1
+
+query I
+SELECT TRY_CAST('.5' AS BIGNUM)::VARCHAR
+----
+1
+
+query I
+SELECT TRY_CAST('-.5' AS BIGNUM)::VARCHAR
+----
+-1
+
+query I
+SELECT TRY_CAST('.' AS BIGNUM)
+----
+NULL
+
+statement error
+SELECT CAST('hello' AS BIGNUM)
+----
+Could not convert

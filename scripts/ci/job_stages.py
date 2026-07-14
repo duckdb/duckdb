@@ -37,6 +37,7 @@ NIGHTLY_ONLY_JOBS = [
     "main_julia",
     "static-libs-osx",
     "static-libs-windows-mingw",
+    "codecov",
 ]
 
 NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
@@ -53,6 +54,7 @@ RELEASE_JOBS = [
     "static-libs-linux",
     "static-libs-osx",
     "static-libs-windows-mingw",
+    "staged-extension-install",
 ]
 
 SKIP_TESTS_JOBS = {

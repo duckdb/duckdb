@@ -84,6 +84,10 @@ void RegisterProfilerHighlighting(duckdb::DBConfig &config);
 //! back to rendering the last result).
 bool RenderExpandedQueryTree(ShellState &state);
 
+//! Render the last query's profile as a self-contained HTML page, write it to a temp file and open it in the default
+//! browser (start/open/xdg-open). Returns false if there is no query tree available or the browser could not launch.
+bool OpenProfileInBrowser(ShellState &state);
+
 struct HighlightColorInfo {
 	const char *color_name;
 	uint8_t code;

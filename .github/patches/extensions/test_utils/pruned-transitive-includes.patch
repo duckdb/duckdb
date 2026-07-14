@@ -1,0 +1,14 @@
+diff --git a/src/utils/misc.cpp b/src/utils/misc.cpp
+index 1ce689f..87f610c 100644
+--- a/src/utils/misc.cpp
++++ b/src/utils/misc.cpp
+@@ -2,7 +2,9 @@
+ 
+ #include <duckdb/common/types/uuid.hpp>
+ #include <duckdb/main/attached_database.hpp>
++#include <duckdb/main/database_manager.hpp>
+ #include <duckdb/parser/parsed_data/transaction_info.hpp>
++#include <duckdb/transaction/meta_transaction.hpp>
+ 
+ #include "utils/compatibility.hpp"
+ #include "utils/logger.hpp"

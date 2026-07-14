@@ -37,6 +37,7 @@ class BenchmarkRunnerConfig:
     max_timeout: int = MAX_TIMEOUT
     root_dir: str = ""
     no_summary: bool = False
+    timed_runs: Optional[int] = None
 
     @classmethod
     def from_params(cls, benchmark_runner, benchmark_file, **kwargs) -> "BenchmarkRunnerConfig":
@@ -47,6 +48,7 @@ class BenchmarkRunnerConfig:
         max_timeout = kwargs.get("max_timeout", MAX_TIMEOUT)
         root_dir = kwargs.get("root_dir", "")
         no_summary = kwargs.get("no_summary", False)
+        timed_runs = kwargs.get("timed_runs", None)
 
         config = cls(
             benchmark_runner=benchmark_runner,
@@ -58,6 +60,7 @@ class BenchmarkRunnerConfig:
             max_timeout=max_timeout,
             root_dir=root_dir,
             no_summary=no_summary,
+            timed_runs=timed_runs,
         )
         return config
 
@@ -79,6 +82,7 @@ class BenchmarkRunnerConfig:
         parser.add_argument(
             "--no-summary", type=str, default=False, help="No failures summary is outputted when passing this flag."
         )
+        parser.add_argument("--timed-runs", type=int, help="Number of timed runs per benchmark.")
 
         # Parse arguments
         parsed_args = parser.parse_args()
@@ -94,6 +98,7 @@ class BenchmarkRunnerConfig:
             max_timeout=parsed_args.max_timeout,
             root_dir=parsed_args.root_dir,
             no_summary=parsed_args.no_summary,
+            timed_runs=parsed_args.timed_runs,
         )
         return config
 
@@ -105,6 +110,23 @@ class BenchmarkRunner:
         self.benchmark_list: List[str] = []
         with open(self.config.benchmark_file, 'r') as f:
             self.benchmark_list = [x.strip() for x in f.read().split('\n') if len(x) > 0]
+        self.supports_timed_runs = self.detect_timed_runs_support()
+
+    def detect_timed_runs_support(self):
+        if self.config.timed_runs is None:
+            return False
+        benchmark_args = [self.config.benchmark_runner]
+        if self.config.root_dir:
+            benchmark_args.extend(['--root-dir', self.config.root_dir])
+        benchmark_args.extend(["--help"])
+        try:
+            proc = subprocess.run(
+                benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=DEFAULT_TIMEOUT
+            )
+            output = proc.stdout.decode('utf8') + proc.stderr.decode('utf8')
+            return "--timed-runs" in output
+        except:
+            return False
 
     def construct_args(self, benchmark_path):
         benchmark_args = []
@@ -119,9 +141,11 @@ class BenchmarkRunner:
             benchmark_args.extend(["--disable-timeout"])
         if self.config.no_summary:
             benchmark_args.extend(["--no-summary"])
+        if self.config.timed_runs is not None and self.supports_timed_runs:
+            benchmark_args.extend(["--timed-runs", str(self.config.timed_runs)])
         return benchmark_args
 
-    def run_benchmark(self, benchmark) -> Tuple[Union[float, str], Optional[str]]:
+    def run_benchmark_once(self, benchmark) -> Tuple[Optional[List[float]], Optional[str]]:
         benchmark_args = self.construct_args(benchmark)
         timeout_seconds = DEFAULT_TIMEOUT
         if self.config.disable_timeout:
@@ -137,10 +161,7 @@ class BenchmarkRunner:
         except subprocess.TimeoutExpired:
             print("Failed to run benchmark " + benchmark)
             print(f"Aborted due to exceeding the limit of {timeout_seconds} seconds")
-            return (
-                'Failed to run benchmark ' + benchmark,
-                f"Aborted due to exceeding the limit of {timeout_seconds} seconds",
-            )
+            return None, f"Aborted due to exceeding the limit of {timeout_seconds} seconds"
         if returncode != 0:
             print("Failed to run benchmark " + benchmark)
             print(STDERR_HEADER)
@@ -150,7 +171,7 @@ class BenchmarkRunner:
             if 'HTTP' in err:
                 print("Ignoring HTTP error and terminating the running of the regression tests")
                 exit(0)
-            return 'Failed to run benchmark ' + benchmark, err
+            return None, err
         if self.config.verbose:
             print(err)
         # read the input CSV
@@ -165,13 +186,27 @@ class BenchmarkRunner:
                 if header:
                     header = False
                 else:
-                    timings.append(row[2])
-                    self.complete_timings.append(row[2])
-            return float(statistics.median(timings)), None
+                    timings.append(float(row[2]))
+            return timings, None
         except:
             print("Failed to run benchmark " + benchmark)
             print(err)
-            return 'Failed to run benchmark ' + benchmark, err
+            return None, err
+
+    def run_benchmark(self, benchmark) -> Tuple[Union[float, str], Optional[str]]:
+        requested_runs = self.config.timed_runs if self.config.timed_runs is not None else 0
+        timings = []
+        while True:
+            run_timings, failure_message = self.run_benchmark_once(benchmark)
+            if failure_message:
+                return 'Failed to run benchmark ' + benchmark, failure_message
+            if not run_timings:
+                return 'Failed to run benchmark ' + benchmark, "Benchmark did not produce any timings"
+            timings.extend(run_timings)
+            if self.supports_timed_runs or len(timings) >= requested_runs:
+                break
+        self.complete_timings.extend(timings)
+        return float(statistics.median(timings)), None
 
     def run_benchmarks(self, benchmark_list: List[str]):
         results = {}
@@ -186,7 +221,7 @@ class BenchmarkRunner:
 def main():
     config = BenchmarkRunnerConfig.from_args()
     runner = BenchmarkRunner(config)
-    runner.run_benchmarks()
+    runner.run_benchmarks(runner.benchmark_list)
 
 
 if __name__ == "__main__":

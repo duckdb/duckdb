@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -164,18 +165,10 @@ bool ExpressionFilter::EvaluateWithConstant(ExpressionExecutor &executor, const 
 }
 
 FilterPropagateResult ExpressionFilter::CheckStatistics(const BaseStatistics &stats) const {
-	if (stats.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
-		// Delegate to GeometryStats for geometry types
-		return GeometryStats::CheckZonemap(stats, expr);
-	}
 	return CheckExpressionStatistics(*expr, stats);
 }
 
 FilterPropagateResult ExpressionFilter::CheckStatistics(ClientContext &context, const BaseStatistics &stats) const {
-	if (stats.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
-		// Delegate to GeometryStats for geometry types
-		return GeometryStats::CheckZonemap(stats, expr);
-	}
 	return CheckExpressionStatistics(&context, *expr, stats);
 }
 
@@ -248,28 +241,47 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 				owned_stats.push_back(StructStats::GetChildStats(*child_stats, child_idx).ToUnique());
 				return owned_stats.back().get();
 			}
-		}
-
-		if (!context_p || !func.Function().HasStatisticsCallback()) {
 			return nullptr;
 		}
 
-		vector<BaseStatistics> child_stats;
-		child_stats.reserve(func.GetChildren().size());
-		for (auto &child_expr : func.GetChildren()) {
-			auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
-			if (!child_stat) {
-				return nullptr;
+		if (func.Function().HasStatisticsCallback()) {
+			vector<BaseStatistics> child_stats;
+			child_stats.reserve(func.GetChildren().size());
+			for (auto &child_expr : func.GetChildren()) {
+				auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
+				if (!child_stat) {
+					return nullptr;
+				}
+				child_stats.push_back(child_stat->Copy());
 			}
-			child_stats.push_back(child_stat->Copy());
+
+			// Use copy to avoid expression rewritten
+			auto expr_copy = func.Copy();
+			auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
+			FunctionStatisticsInput input(func_copy, func_copy.BindInfo(), child_stats, &expr_copy);
+			owned_stats.push_back(func.Function().GetStatisticsCallback()(*context_p, input));
+			return owned_stats.back().get();
 		}
 
-		// Use copy to avoid expression rewritten
-		auto expr_copy = func.Copy();
-		auto &func_copy = expr_copy->Cast<BoundFunctionExpression>();
-		FunctionStatisticsInput input(func_copy, func_copy.BindInfo(), child_stats, &expr_copy);
-		owned_stats.push_back(func.Function().GetStatisticsCallback()(*context_p, input));
-		return owned_stats.back().get();
+		// No custom callback: fall back to the declared monotonicity (ArgProperties) and derive output
+		// bounds by evaluating the function at the corners of each argument's range. This lets a
+		// f(col) OP const filter prune row groups via the zonemap of the base column.
+		if (func.Function().HasArgProperties()) {
+			vector<BaseStatistics> child_stats;
+			child_stats.reserve(func.GetChildren().size());
+			for (auto &child_expr : func.GetChildren()) {
+				auto child_stat = TryGetFilterStats(context_p, *child_expr, stats, owned_stats);
+				child_stats.push_back(child_stat ? child_stat->Copy()
+				                                 : BaseStatistics::CreateUnknown(child_expr->GetReturnType()));
+			}
+			auto derived = StatisticsPropagator::PropagateMonotoneBounds(*context_p, func, child_stats);
+			if (derived) {
+				owned_stats.push_back(std::move(derived));
+				return owned_stats.back().get();
+			}
+		}
+
+		return nullptr;
 	}
 	default:
 		return nullptr;
@@ -386,25 +398,71 @@ static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContex
 	return result;
 }
 
+//! `input BETWEEN lower AND upper` prunes when the input's derived range is entirely outside
+//! [lower, upper] (always-false) or entirely inside it (always-true). Mirrors the null-handling of
+//! CheckComparisonStatistics. `input` may itself be a monotone function whose stats are derived.
+static FilterPropagateResult CheckBetweenStatistics(optional_ptr<ClientContext> context_p,
+                                                    const BoundFunctionExpression &between,
+                                                    const BaseStatistics &stats) {
+	auto &lower = BoundBetweenExpression::LowerBound(between);
+	auto &upper = BoundBetweenExpression::UpperBound(between);
+	if (lower.GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+	    upper.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &lower_val = lower.Cast<BoundConstantExpression>().GetValue();
+	auto &upper_val = upper.Cast<BoundConstantExpression>().GetValue();
+	if (lower_val.IsNull() || upper_val.IsNull()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	vector<unique_ptr<BaseStatistics>> owned_stats;
+	auto input_stats = TryGetFilterStats(context_p, BoundBetweenExpression::Input(between), stats, owned_stats);
+	if (!input_stats || input_stats->GetType().id() == LogicalTypeId::VARIANT) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!input_stats->CanHaveNoNull()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	auto lower_res = CheckZonemapAgainstConstants(*input_stats, BoundBetweenExpression::LowerComparisonType(between),
+	                                              array_ptr<const Value>(&lower_val, 1));
+	auto upper_res = CheckZonemapAgainstConstants(*input_stats, BoundBetweenExpression::UpperComparisonType(between),
+	                                              array_ptr<const Value>(&upper_val, 1));
+	if (input_stats->CanHaveNull()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (lower_res == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+	    upper_res == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (lower_res == FilterPropagateResult::FILTER_ALWAYS_TRUE &&
+	    upper_res == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
 static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext> context_p,
                                                      const BoundFunctionExpression &func_expr,
                                                      const BaseStatistics &stats) {
+	if (func_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		return CheckBetweenStatistics(context_p, func_expr, stats);
+	}
 	if (BoundComparisonExpression::IsComparison(func_expr.GetExpressionType())) {
 		return CheckComparisonStatistics(context_p, func_expr, stats);
 	}
 	if (!func_expr.Function().HasFilterPruneCallback()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	// Derive the statistics of each argument. This lets a callback prune regardless of which argument is the column and
+	// which is the constant (e.g. `foo(col, const)` vs `foo(const, col`).
+	// Entries are null when an argument's stats can't be derived.
 	vector<unique_ptr<BaseStatistics>> owned_stats;
-	auto filter_stats = &stats;
-	if (!func_expr.GetChildren().empty()) {
-		auto child_stats = TryGetFilterStats(context_p, *func_expr.GetChildren()[0], stats, owned_stats);
-		if (!child_stats) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-		filter_stats = child_stats.get();
+	vector<optional_ptr<const BaseStatistics>> child_stats;
+	child_stats.reserve(func_expr.GetChildren().size());
+	for (auto &child : func_expr.GetChildren()) {
+		child_stats.push_back(TryGetFilterStats(context_p, *child, stats, owned_stats));
 	}
-	FunctionStatisticsPruneInput input(func_expr.BindInfo().get(), *filter_stats);
+	FunctionStatisticsPruneInput input(func_expr, func_expr.BindInfo().get(), child_stats);
 	return func_expr.Function().GetFilterPruneCallback()(input);
 }
 

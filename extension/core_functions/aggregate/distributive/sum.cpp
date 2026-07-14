@@ -159,11 +159,15 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 				state.is_set = true;
 				state.value = Hugeint::Add(state.value, local64);
 			} else if (!state.is_set) { // rare: we added 0 -- were all values NULL?
-				for (idx_t k = 0; k < run_count; k++) {
-					const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
-					if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
-						state.is_set = true;
-						break;
+				if (!validity.CanHaveNull()) {
+					state.is_set = true;
+				} else {
+					for (idx_t k = 0; k < run_count; k++) {
+						const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
+						if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
+							state.is_set = true;
+							break;
+						}
 					}
 				}
 			}
@@ -173,6 +177,11 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 
 struct IntegerSumOperation
     : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set) {
@@ -183,10 +192,21 @@ struct IntegerSumOperation
 	}
 };
 
-using SumToHugeintOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddOp<AddToHugeint>>;
-using NumericSumOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>>;
+struct SumToHugeintOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddOp<AddToHugeint>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
+
+struct NumericSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
 
 struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAdd> {
 	template <class T, class STATE>
@@ -199,8 +219,13 @@ struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAd
 	}
 };
 
-using HugeintSumOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>>;
+struct HugeintSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
 
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	throw BinderException("sum_no_overflow is for internal use only!");
@@ -405,8 +430,9 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
-	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	sum.AddFunction(sum_double);
 	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
 	    LogicalType::BIGNUM, LogicalType::BIGNUM));
 	return sum;

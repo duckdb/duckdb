@@ -147,7 +147,15 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalSample &op);
 	PhysicalOperator &CreatePlan(LogicalSet &op);
 	PhysicalOperator &CreatePlan(LogicalReset &op);
-	PhysicalOperator &CreatePlan(LogicalSimple &op);
+	PhysicalOperator &CreatePlan(LogicalAlter &op);
+	PhysicalOperator &CreatePlan(LogicalAttach &op);
+	PhysicalOperator &CreatePlan(LogicalConnect &op);
+	PhysicalOperator &CreatePlan(LogicalDetach &op);
+	PhysicalOperator &CreatePlan(LogicalDisconnect &op);
+	PhysicalOperator &CreatePlan(LogicalDrop &op);
+	PhysicalOperator &CreatePlan(LogicalLoad &op);
+	PhysicalOperator &CreatePlan(LogicalTransaction &op);
+	PhysicalOperator &CreatePlan(LogicalUpdateExtensions &op);
 	PhysicalOperator &CreatePlan(LogicalVacuum &op);
 	PhysicalOperator &CreatePlan(LogicalUnnest &op);
 	PhysicalOperator &CreatePlan(LogicalRecursiveCTE &op);

@@ -33,14 +33,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEG
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto &choice_result = choice_pr.GetResult();
-	auto &ops_map = GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(choice_result.name);
-	if (ops_entry == ops_map.end()) {
-		throw NotImplementedException("No trampoline transformer for statement rule '%s'", choice_result.name);
-	}
 
 	TransformStack stack(transformer);
-	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, *ops_entry->second);
+	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, GetTrampolineOps(choice_result.name));
 	if (!transformer.named_parameter_map.empty()) {
 		result->named_param_map = transformer.named_parameter_map;
 	}
@@ -56,6 +51,15 @@ PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &tran
 
 void PEGTransformerFactory::RegisterGeneratedTrampoline() {
 	trampoline_transform_functions["Statement"] = &PEGTransformerFactory::TransformStatementTrampolineInternal;
+}
+
+const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const string &rule_name) {
+	auto &ops_map = GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(rule_name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+	}
+	return *ops_entry->second;
 }
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
@@ -92,9 +96,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 	}
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
+	ParserPackratCache packrat_cache;
 	idx_t max_token_index = token_cursor;
 	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case,
-	                 token_cursor);
+	                 token_cursor, &packrat_cache);
 	auto match_result = root_matcher.MatchParseResult(state);
 	if (match_result == nullptr) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
@@ -148,11 +153,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
 
-void PEGTransformerFactory::RegisterComment() {
-	// comment.gram
-	REGISTER_TRANSFORM(TransformCommentValue);
-}
-
 void PEGTransformerFactory::RegisterCommon() {
 	// common.gram
 	REGISTER_TRANSFORM(TransformNumberLiteral);
@@ -162,13 +162,11 @@ void PEGTransformerFactory::RegisterCommon() {
 
 void PEGTransformerFactory::RegisterCreateTable() {
 	// create_table.gram
-	REGISTER_TRANSFORM(TransformColLabelOrString);
 	REGISTER_TRANSFORM(TransformIdentifier);
 }
 
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
-	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
 	REGISTER_TRANSFORM(TransformOverClause);
 }
@@ -192,7 +190,6 @@ void PEGTransformerFactory::RegisterSelect() {
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("PragmaName", &TransformIdentifierOrKeyword);
 	Register("TypeName", &TransformIdentifierOrKeyword);
-	Register("ColLabel", &TransformIdentifierOrKeyword);
 	Register("PlainIdentifier", &TransformIdentifierOrKeyword);
 	Register("QuotedIdentifier", &TransformIdentifierOrKeyword);
 	Register("ReservedKeyword", &TransformIdentifierOrKeyword);
@@ -208,7 +205,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterGenerated();
 	RegisterGeneratedTrampoline();
 	REGISTER_TRANSFORM(TransformStatement);
-	RegisterComment();
 	RegisterCommon();
 	RegisterCreateTable();
 	RegisterExpression();
@@ -371,10 +367,15 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			return false;
 		}
 
+		auto cast_type = UnboundType::TryDefaultBind(cast.TargetType());
+		if (cast_type == LogicalType::INVALID || cast_type == LogicalTypeId::UNBOUND) {
+			return false;
+		}
+
 		string error_message;
-		if (!dummy_value.DefaultTryCastAs(cast.TargetType(), value, &error_message)) {
+		if (!dummy_value.DefaultTryCastAs(cast_type, value, &error_message)) {
 			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
-			                          EnumUtil::ToString(cast.TargetType().id()));
+			                          EnumUtil::ToString(cast_type.id()));
 		}
 		return true;
 	}

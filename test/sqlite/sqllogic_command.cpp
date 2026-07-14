@@ -1,4 +1,5 @@
 #include "sqllogic_command.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "result_helper.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -185,7 +186,7 @@ void Command::RestartDatabase(ExecuteContext &context, reference<Connection> &co
 	}
 	bool query_fail = false;
 	try {
-		connection.get().context->ParseStatements(sql_query);
+		connection.get().ExtractStatements(sql_query);
 	} catch (...) {
 		query_fail = true;
 	}
@@ -311,18 +312,39 @@ void Command::Execute(ExecuteContext &context) const {
 		return;
 	}
 	if (!CheckLoopCondition(context, conditions)) {
-		// condition excludes this file
+		// a loop-variable onlyif/skipif excludes this statement — a per-execution skip, counted like
+		// a mode-skip so the tally accounts for it instead of dropping it
+		if (IsCountableStatement()) {
+			runner.CountSkipMode();
+		}
 		return;
 	}
 	if (context.running_loops.empty()) {
 		context.sql_query = base_sql_query;
+	} else {
+		// perform the string replacement
+		context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
+	}
+	// Per-statement outcome events (--emit-test-events): count + emit pass/fail for the countable
+	// command kinds (statement/query); infrastructure commands run untracked. A failing statement
+	// throws (Catch FAIL) — record the fail, then rethrow so the failure still propagates.
+	if (!IsCountableStatement()) {
 		ExecuteInternal(context);
 		return;
 	}
-	// perform the string replacement
-	context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
-	// execute the iterated statement
-	ExecuteInternal(context);
+	// In parallel (concurrentloop) execution a failing statement does NOT throw — the worker records
+	// the failure into the context (error_file) and unwinds normally, to be re-raised after join. So
+	// besides the throwing (serial) path, treat a newly-set error_file as a fail; otherwise a
+	// concurrent failure is miscounted as a pass.
+	const bool had_error = !context.error_file.empty();
+	try {
+		ExecuteInternal(context);
+	} catch (...) {
+		runner.CountStatement(false);
+		throw;
+	}
+	const bool newly_failed = !had_error && !context.error_file.empty();
+	runner.CountStatement(!newly_failed);
 }
 
 Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
@@ -666,6 +688,10 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		}
 		for (auto &execute_context : contexts) {
 			if (!execute_context.success) {
+				// error_file/error_line hold the failing command's location on both the thrown and the
+				// error_file paths — same source as the serial fail sites, so the locator is consistent
+				runner.test_failure_locator =
+				    StringUtil::Format("%s:%d", execute_context.error_file, execute_context.error_line);
 				if (!execute_context.error_message.empty()) {
 					FAIL(execute_context.error_message);
 				} else {
@@ -741,6 +767,7 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 			context.error_file = file_name;
 			context.error_line = query_line;
 		} else {
+			runner.test_failure_locator = StringUtil::Format("%s:%d", file_name, query_line);
 			FAIL_LINE(file_name, query_line, 0);
 		}
 	}
@@ -855,6 +882,7 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			context.error_file = file_name;
 			context.error_line = query_line;
 		} else {
+			runner.test_failure_locator = StringUtil::Format("%s:%d", file_name, query_line);
 			FAIL_LINE(file_name, query_line, 0);
 		}
 	}

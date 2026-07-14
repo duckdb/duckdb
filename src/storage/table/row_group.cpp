@@ -384,7 +384,7 @@ void CollectionScanState::Initialize(const QueryContext &context_p, const vector
 bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
 	auto &column_ids = state.GetColumnIds();
 	auto &filters = state.GetFilterInfo();
-	if (!CheckZonemap(state.context.GetClientContext(), filters)) {
+	if (!CheckZonemap(state.context.GetClientContext(), filters, node.GetRowStart())) {
 		return false;
 	}
 	if (!RefersToSameObject(node.GetNode(), *this)) {
@@ -413,7 +413,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node) {
 	auto &column_ids = state.GetColumnIds();
 	auto &filters = state.GetFilterInfo();
-	if (!CheckZonemap(state.context.GetClientContext(), filters)) {
+	if (!CheckZonemap(state.context.GetClientContext(), filters, node.GetRowStart())) {
 		return false;
 	}
 	if (!RefersToSameObject(node.GetNode(), *this)) {
@@ -705,7 +705,7 @@ FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_
 	return expr_filter.CheckStatistics(dummy_stats);
 }
 
-bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters) {
+bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters, idx_t row_start) {
 	auto &filter_list = filters.GetFilterList();
 	// new row group - label all filters as up for grabs again
 	filters.CheckAllFilters();
@@ -714,7 +714,13 @@ bool RowGroup::CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo 
 		auto &filter = entry.filter;
 		const auto &base_column_index = entry.table_column_index;
 
-		auto prune_result = GetColumn(base_column_index).CheckZonemap(context, base_column_index, filter);
+		FilterPropagateResult prune_result;
+		if (base_column_index.IsRowIdColumn()) {
+			// the row ids in this row group span exactly [row_start, row_start + count)
+			prune_result = CheckRowIdFilter(filter, row_start, row_start + count);
+		} else {
+			prune_result = GetColumn(base_column_index).CheckZonemap(context, base_column_index, filter);
+		}
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
@@ -1900,28 +1906,39 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 		return row_group->GetStatistics(storage_index);
 	}
 
-	bool MinMaxIsExact(const BaseStatistics &stats, const StorageIndex &) override {
-		if (!is_exact || row_group->HasChanges()) {
-			return false;
-		}
-		return true;
+	bool MinMaxIsExact(const StorageIndex &) override {
+		return is_exact;
+	}
+
+	bool HasPendingWrites() override {
+		return row_group->HasChanges();
 	}
 };
 
-PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group) {
+PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group, TransactionData transaction) {
 	auto &row_group_ref = row_group.GetNode();
 
 	PartitionStatistics result;
 	result.row_start = row_group.GetRowStart();
-	result.count = row_group_ref.count;
-	if (row_group_ref.HasUnloadedDeletes() || row_group_ref.GetVersionInfoIfLoaded()) {
-		// we have version info - approx count
+	if (row_group_ref.HasUnloadedDeletes()) {
+		result.count = row_group_ref.count;
 		result.count_type = CountType::COUNT_APPROXIMATE;
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), false);
-	} else {
-		result.count_type = CountType::COUNT_EXACT;
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), true);
+		result.partition_row_group =
+		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), /*is_exact_p=*/false);
+		return result;
 	}
+
+	auto vinfo = row_group_ref.GetVersionInfoIfLoaded();
+	bool has_uncommitted_changes = false;
+	if (vinfo) {
+		result.count = row_group_ref.GetVisibleRowCount(transaction);
+		has_uncommitted_changes = vinfo->HasUncommittedChanges();
+	} else {
+		result.count = row_group_ref.count;
+	}
+	result.count_type = has_uncommitted_changes ? CountType::COUNT_APPROXIMATE : CountType::COUNT_EXACT;
+	const bool is_exact = result.count == row_group_ref.count && (!vinfo || !vinfo->HasDeletes());
+	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact);
 
 	return result;
 }

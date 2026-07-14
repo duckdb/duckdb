@@ -13,6 +13,8 @@
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 
+#include "duckdb/storage/table/row_group_order_options.hpp"
+
 namespace duckdb {
 class DynamicTableFilterSet;
 
@@ -92,7 +94,13 @@ public:
 	vector<TableIndex> GetTableIndex() const override;
 	//! Skips the serialization check in VerifyPlan
 	bool SupportSerialization() const override {
-		return function.verify_serialization;
+		if (!function.verify_serialization) {
+			return false;
+		}
+		if (function.HasSerializationCallbacks()) {
+			return true;
+		}
+		return function.bind && (!bind_data || bind_data->SupportStatementCache());
 	}
 
 	void Serialize(Serializer &serializer) const override;

@@ -23,6 +23,10 @@ static const TestConfigOption test_config_options[] = {
     {"description", "Config description", LogicalType::VARCHAR, nullptr},
     {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
+    {"data_dir",
+     "Root dir for test data (DATA_DIR / {DATA_DIR}); default {WORKING_DIR}/data. Relative values "
+     "resolve per test cwd; absolute/remote (e.g. az://...) values are used verbatim.",
+     LogicalType::VARCHAR, nullptr},
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
     {"max_test_threads", "Max threads to be used by the test runner itself (for e.g. concurrent loop)",
      LogicalType::BIGINT, nullptr},
@@ -113,7 +117,10 @@ void TestConfiguration::Initialize() {
 
 	working_dir = FileSystem::GetWorkingDirectory();
 	test_uuid = UUID::ToString(UUID::GenerateRandomUUID());
-	UpdateEnvironment();
+	// NOTE: UpdateEnvironment() is intentionally NOT called here. It runs once in main()
+	// after PrepareTempDir(), so TEMP_DIR/TEMP_DIR_BASE reflect the final --temp-dir-*
+	// context. test_env is consumed only at test-run time, so deferring is safe.
+	// (ChangeWorkingDirectory still refreshes it on an actual cwd change.)
 }
 
 void TestConfiguration::UpdateEnvironment() {
@@ -122,8 +129,12 @@ void TestConfiguration::UpdateEnvironment() {
 	// XXX: UUID used by ducklake to avoid collisions, is there a better way?
 	test_env["TEST_UUID"] = test_uuid;
 	test_env["BUILD_DIR"] = string(DUCKDB_BUILD_DIRECTORY);
-	test_env["WORKING_DIR"] = working_dir;        // can be overridden per runner
-	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
+	test_env["WORKING_DIR"] = working_dir; // can be overridden per runner
+	// DATA_DIR: an explicit override (--data-dir / DUCKDB_TEST_DATA_DIR / config data_dir) is read fresh
+	// here, so it survives cwd changes -- an absolute/remote value stays put, a relative value is resolved
+	// per test cwd. Absent an override, default to <cwd>/data, which re-anchors on an extension chdir.
+	auto data_dir_override = GetOptionOrDefault("data_dir", string());
+	test_env["DATA_DIR"] = data_dir_override.empty() ? working_dir + "/data" : data_dir_override;
 
 	string temp_dir = TestDirectoryPath();
 	auto fs = FileSystem::CreateLocal();
@@ -131,9 +142,17 @@ void TestConfiguration::UpdateEnvironment() {
 	if (!fs->IsPathAbsolute(temp_dir_absolute)) {
 		temp_dir_absolute = fs->JoinPath(working_dir, temp_dir_absolute);
 	}
-	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
-	test_env["TEMP_DIR_ABSOLUTE"] = temp_dir_absolute;    // default: {WORKING_DIR}/duckdb_unittest_tempdir/$PID
+	// TEMP_DIR here is the run-id root ($BASE/[RUN_ID]); the per-test path overrides it per
+	// runner with the full $BASE/[RUN_ID]/[TEST_ID] once a test name is known.
+	test_env["TEMP_DIR"] = temp_dir;                      // run-root ($BASE/$RUN_ID); per-test gets +=$TEST_ID
+	test_env["TEMP_DIR_ABSOLUTE"] = temp_dir_absolute;    // absolute form of TEMP_DIR
+	test_env["TEMP_DIR_BASE"] = GetTempDirBase();         // $BASE; default duckdb_unittest_tempdir
+	test_env["RUN_ID"] = GetTempDirRunId();               // RUN_ID (--run-id, or generated); always set
 	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
+
+	// Re-overlay caller `test_env` config entries so they win over the standard defaults just recomputed
+	// above (important when a cwd change re-runs UpdateEnvironment).
+	LoadTestEnvFromConfig();
 }
 
 string TestConfiguration::GetWorkingDirectory() {
@@ -226,7 +245,20 @@ bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
 		return false;
 	}
 	auto &test_config = test_config_options[config_index.GetIndex()];
-	auto parameter = value.DefaultCastAs(test_config.type);
+	// Config values arrive as strings, parsed as SQL types. Lists in particular are
+	// user-unfriendly, requiring [] wrappers instead of just-plain-commas.
+	// Help out here, and add [] for list params. This intentionally also
+	// allows a meaningful '' empty arg to work for list-type params,
+	// eg --skip-error-messages '' -> [], and 'HTTP' -> [HTTP]
+	Value to_cast = value;
+	if (test_config.type.id() == LogicalTypeId::LIST && value.type().id() == LogicalTypeId::VARCHAR &&
+	    !value.IsNull()) {
+		auto str = value.GetValue<string>();
+		if (str.empty() || str[0] != '[') {
+			to_cast = Value("[" + str + "]");
+		}
+	}
+	auto parameter = to_cast.DefaultCastAs(test_config.type);
 	if (test_config.on_set_option) {
 		test_config.on_set_option(parameter);
 	}
@@ -464,27 +496,43 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 }
 
 void TestConfiguration::LoadTestEnvFromConfig() {
-	if (test_env_from_config_loaded) {
-		return;
+	if (!test_env_from_config_loaded) {
+		test_env_from_config_loaded = true;
+		test_env_from_config_keys.clear();
+		config_test_env.clear();
+		auto entry = options.find("test_env");
+		if (entry != options.end()) {
+			auto list_children = ListValue::GetChildren(entry->second);
+			for (const auto &value : list_children) {
+				auto &struct_children = StructValue::GetChildren(value);
+				auto &env = StringValue::Get(struct_children[0]);
+				auto &env_value = StringValue::Get(struct_children[1]);
+				test_env_from_config_keys.insert(env);
+				config_test_env[env] = env_value;
+			}
+		}
 	}
-	test_env_from_config_loaded = true;
-	test_env_from_config_keys.clear();
-	auto entry = options.find("test_env");
-	if (entry == options.end()) {
-		return;
-	}
-	auto list_children = ListValue::GetChildren(entry->second);
-	for (const auto &value : list_children) {
-		auto &struct_children = StructValue::GetChildren(value);
-		auto &env = StringValue::Get(struct_children[0]);
-		auto &env_value = StringValue::Get(struct_children[1]);
-		test_env_from_config_keys.insert(env);
-		test_env[env] = env_value;
+	// Caller-provided test_env entries are authoritative: (re)overlay them onto test_env each call, so an
+	// explicit override survives UpdateEnvironment recomputing the standard defaults on a cwd change.
+	for (auto &kv : config_test_env) {
+		test_env[kv.first] = kv.second;
 	}
 }
 
+void TestConfiguration::SetTestDirOverride(const string &absolute_test_dir) {
+	test_dir_override = absolute_test_dir;
+}
+
+void TestConfiguration::ClearTestDirOverride() {
+	test_dir_override.clear();
+}
+
 void TestConfiguration::ProcessPath(string &path, const string &test_name) {
-	path = StringUtil::Replace(path, "{TEST_DIR}", TestDirectoryPath());
+	// {TEST_DIR} normally follows the current cwd (TestDirectoryPath()); an active override pins it to
+	// the absolute, main-cwd-anchored temp dir instead (extension runner, post-chdir -- see the header).
+	// See also test/README.md for context on this switch.
+	const string test_dir = test_dir_override.empty() ? TestDirectoryPath() : test_dir_override;
+	path = StringUtil::Replace(path, "{TEST_DIR}", test_dir);
 	path = StringUtil::Replace(path, "{WORKING_DIRECTORY}", FileSystem::GetWorkingDirectory());
 	path = StringUtil::Replace(path, "{UUID}", UUID::ToString(UUID::GenerateRandomUUID()));
 	path = StringUtil::Replace(path, "{TEST_NAME}", test_name);
@@ -494,7 +542,7 @@ void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 	if (StringUtil::Contains(path, "__TEST_DIR__")) {
 		Printer::PrintF("Replacing deprecated string __TEST_DIR__ in path \"%s\" - please replace with {TEST_DIR}",
 		                path);
-		path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
+		path = StringUtil::Replace(path, "__TEST_DIR__", test_dir);
 	}
 	if (StringUtil::Contains(path, "__WORKING_DIRECTORY__")) {
 		Printer::PrintF("Replacing deprecated string __WORKING_DIRECTORY__ in path \"%s\" - please replace with "
