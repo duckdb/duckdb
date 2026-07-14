@@ -31,12 +31,21 @@ public:
 	static unique_ptr<LogicalOperator> DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan);
 
 private:
+	struct UnnestingState {
+		UnnestingState() = default;
+		explicit UnnestingState(vector<ColumnBinding> bindings_p) : bindings(std::move(bindings_p)) {
+		}
+
+		vector<ColumnBinding> bindings;
+		vector<ReplacementBinding> binding_replacements;
+	};
+
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
 	vector<ColumnBinding> CreateContiguousState(ColumnBinding base_binding) const;
 
-	vector<ColumnBinding> DecorrelateSubtree(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                         vector<ColumnBinding> state);
+	UnnestingState DecorrelateSubtree(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                  vector<ColumnBinding> state);
 	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
 	                                      const CorrelatedColumns &correlated_columns,
 	                                      const vector<ColumnBinding> &state, bool perform_delim);
@@ -45,9 +54,9 @@ private:
 	bool DependsOnCorrelated(LogicalOperator &op) const;
 	idx_t GetDelimKeyIndex(idx_t index) const;
 
-	vector<ColumnBinding> PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan, bool propagate_null_values = true);
-	vector<ColumnBinding> PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                             vector<ColumnBinding> state);
+	UnnestingState PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan, bool propagate_null_values = true);
+	UnnestingState PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                      vector<ColumnBinding> state);
 	optional_ptr<const ColumnBinding> GetCorrelatedBase(const ColumnBinding &binding) const;
 	optional_idx GetCorrelatedIndex(const ColumnBinding &binding) const;
 	void MergeCorrelatedAliases(const FlattenDependentJoins &source);
@@ -61,8 +70,12 @@ private:
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
 	mutable reference_map_t<LogicalOperator, bool> dependency_cache;
-	//! Payload bindings projected above decorrelated FULL OUTER joins.
-	vector<ReplacementBinding> payload_binding_replacements;
+	static ColumnBinding ResolveBinding(ColumnBinding binding, const vector<ReplacementBinding> &replacements);
+	static void AddBindingReplacement(UnnestingState &state, ColumnBinding old_binding, ColumnBinding new_binding);
+	static void MergeBindingReplacements(UnnestingState &target, const UnnestingState &source);
+	static void RewriteOperatorBindings(LogicalOperator &op, const UnnestingState &state);
+	static UnnestingState RebaseOutputBindings(const vector<ColumnBinding> &original_bindings,
+	                                           const vector<ColumnBinding> &current_bindings, UnnestingState state);
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
 	                             bool include_names) const;
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
@@ -72,46 +85,44 @@ private:
 	                             const vector<ColumnBinding> &state) const;
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const vector<ColumnBinding> &left_state,
 	                                 const vector<ColumnBinding> &right_state) const;
-	void AddPayloadBindingReplacement(ColumnBinding old_binding, ColumnBinding new_binding);
-	void RewritePayloadBindingReferences(LogicalOperator &op);
 	vector<ColumnBinding> CreateDelimCrossProduct(unique_ptr<LogicalOperator> &plan,
 	                                              unique_ptr<LogicalOperator> delim_scan,
 	                                              vector<ColumnBinding> state) const;
 	void PatchAccessingOperators(LogicalOperator &subtree_root, TableIndex table_index,
 	                             const CorrelatedColumns &correlated_columns);
-	vector<ColumnBinding> PrepareDependentJoinLeft(LogicalDependentJoin &op, bool propagate_null_values,
-	                                               vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                    vector<ColumnBinding> state, bool rewrite_parent = true, idx_t child_idx = 0);
-	vector<ColumnBinding> FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> outer_state,
-	                                            const vector<ColumnBinding> &right_state);
-	vector<ColumnBinding> AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left, LogicalJoin &join);
-	vector<ColumnBinding> PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                                    vector<ColumnBinding> state, bool correlated_left);
-	vector<ColumnBinding> PushDownProjection(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                         vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownAggregate(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	UnnestingState PrepareDependentJoinLeft(LogicalDependentJoin &op, bool propagate_null_values,
 	                                        vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownCrossProduct(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                           vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownFullOuterJoin(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                            vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownJoin(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                   vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownLimit(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	UnnestingState PushDownChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                             vector<ColumnBinding> state, bool rewrite_parent = true, idx_t child_idx = 0);
+	UnnestingState FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, UnnestingState outer_state,
+	                                     const UnnestingState &right_state);
+	vector<ColumnBinding> AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left, LogicalJoin &join);
+	UnnestingState PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                             vector<ColumnBinding> state, bool correlated_left);
+	UnnestingState PushDownProjection(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                  vector<ColumnBinding> state);
+	UnnestingState PushDownAggregate(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                 vector<ColumnBinding> state);
+	UnnestingState PushDownCrossProduct(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                    vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownWindow(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	UnnestingState PushDownFullOuterJoin(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                     vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownSetOperation(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownDistinct(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownExpressionGet(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                            vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownDML(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                  vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownGet(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownCTE(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                  vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownCTERef(unique_ptr<LogicalOperator> &plan);
+	UnnestingState PushDownJoin(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                            vector<ColumnBinding> state);
+	UnnestingState PushDownLimit(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                             vector<ColumnBinding> state);
+	UnnestingState PushDownWindow(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                              vector<ColumnBinding> state);
+	UnnestingState PushDownSetOperation(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
+	UnnestingState PushDownDistinct(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
+	UnnestingState PushDownExpressionGet(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                     vector<ColumnBinding> state);
+	UnnestingState PushDownDML(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                           vector<ColumnBinding> state);
+	UnnestingState PushDownGet(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
+	UnnestingState PushDownCTE(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                           vector<ColumnBinding> state);
+	UnnestingState PushDownCTERef(unique_ptr<LogicalOperator> &plan);
 };
 
 } // namespace duckdb

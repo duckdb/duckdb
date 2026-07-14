@@ -86,6 +86,10 @@ void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	VisitOperatorChildren(op);
+	VisitOperatorBindings(op);
+}
+
+void ColumnBindingReplacer::VisitOperatorBindings(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 }
 
@@ -115,6 +119,11 @@ void CorrelatedColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 	if (stop_operator && stop_operator.get() == &op) {
 		return;
 	}
+	VisitOperatorChildren(op);
+	VisitOperatorBindings(op);
+}
+
+void CorrelatedColumnBindingReplacer::VisitOperatorBindings(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
 		ReplaceCorrelatedColumns(op.Cast<LogicalDependentJoin>().correlated_columns, replacement_bindings);
@@ -126,7 +135,7 @@ void CorrelatedColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 	default:
 		break;
 	}
-	ColumnBindingReplacer::VisitOperator(op);
+	ColumnBindingReplacer::VisitOperatorBindings(op);
 }
 
 unique_ptr<Expression> CorrelatedColumnBindingReplacer::VisitReplace(BoundSubqueryExpression &expr,

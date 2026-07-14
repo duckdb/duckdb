@@ -36,6 +36,8 @@ public:
 public:
 	//! Update each operator of the plan
 	void VisitOperator(LogicalOperator &op) override;
+	//! Update bindings owned by this operator without visiting its children
+	virtual void VisitOperatorBindings(LogicalOperator &op);
 	//! Visit an expression and update its column bindings
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 	//! Add a binding replacement
@@ -66,6 +68,7 @@ public:
 class CorrelatedColumnBindingReplacer : public ColumnBindingReplacer {
 public:
 	void VisitOperator(LogicalOperator &op) override;
+	void VisitOperatorBindings(LogicalOperator &op) override;
 
 protected:
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;

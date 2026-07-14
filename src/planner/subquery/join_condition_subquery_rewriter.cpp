@@ -115,10 +115,14 @@ unique_ptr<LogicalOperator> RecursiveDependentJoinPlanner::PlanPairDependentLate
 	                                                                  correlated_columns)) {
 		throw InternalException("Pair-dependent join condition did not produce lateral correlations");
 	}
+	auto right_payload_bindings = right->GetColumnBindings();
 	AddPairDependentFilterToLateralChild(right, std::move(condition));
 	auto planned = binder.PlanLateralJoin(std::move(left), std::move(right), correlated_columns, join_type, nullptr);
 	if (!planned) {
 		throw InternalException("Failed to plan pair-dependent join condition");
+	}
+	if (join_type == JoinType::LEFT) {
+		planned->Cast<LogicalDependentJoin>().right_payload_bindings = std::move(right_payload_bindings);
 	}
 	return planned;
 }

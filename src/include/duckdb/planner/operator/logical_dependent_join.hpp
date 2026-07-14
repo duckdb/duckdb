@@ -48,6 +48,8 @@ public:
 	vector<LogicalType> child_types;
 	vector<LogicalType> child_targets;
 	ExpressionType comparison_type;
+	//! Bindings from the right side that a lateral join exposes after decorrelation.
+	vector<ColumnBinding> right_payload_bindings;
 
 public:
 	static unique_ptr<LogicalOperator> Create(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
