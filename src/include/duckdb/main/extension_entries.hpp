@@ -110,6 +110,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"bar", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"base64", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"bin", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"binom", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"bit_and", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"bit_count", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"bit_or", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
