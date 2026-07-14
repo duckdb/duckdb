@@ -601,8 +601,6 @@ public:
 		    context, bind_data.file_options, bind_data.reader_bind, file_list, global_columns, input.column_indexes);
 
 		if (file_list.IsEmpty()) {
-			// clear() rather than '= {}': the latter's temporary vector odr-uses a destructor that is not
-			// emitted here once MultiFileGlobalState's destructor is out-of-line, breaking the link at -O3
 			result->readers.clear();
 		} else if (!bind_data.union_readers.empty()) {
 			for (auto &reader : bind_data.union_readers) {
