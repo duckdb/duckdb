@@ -98,8 +98,8 @@ static void SetDescribeQuery(ShowRef &showref, unique_ptr<BaseTableRef> relation
 }
 
 // True when nothing follows the keyword (bare "SHOW" / "DESCRIBE" / "SUMMARIZE").
-static bool HasNoTarget(const optional<DescribeTarget> &target) {
-	return !target || (!target->is_table_name && !target->table_ref);
+static bool HasNoTarget(const DescribeTarget &target) {
+	return !target.is_table_name && !target.table_ref;
 }
 
 //! Build the ShowRef for "SHOW <target>". SHOW is settings-first: a bare name is offered to the binder as a setting
@@ -108,7 +108,7 @@ static unique_ptr<ShowRef> BuildShowByName(ShowType show_type, optional<Describe
 	auto showref = make_uniq<ShowRef>();
 	showref->show_type = show_type;
 
-	if (HasNoTarget(show_target)) {
+	if (!show_target || HasNoTarget(*show_target)) {
 		// Bare "SHOW" lists all tables.
 		SetShowAllTables(*showref);
 		return showref;
@@ -145,7 +145,7 @@ static unique_ptr<ShowRef> BuildDescribeByName(ShowType show_type, optional<Desc
 	auto showref = make_uniq<ShowRef>();
 	showref->show_type = show_type;
 
-	if (HasNoTarget(describe_target)) {
+	if (!describe_target || HasNoTarget(*describe_target)) {
 		// Bare "DESCRIBE" lists all tables; "SUMMARIZE" requires a target.
 		if (show_type == ShowType::SUMMARY) {
 			throw ParserException("Expected table name with SUMMARIZE");
