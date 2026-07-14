@@ -101,8 +101,7 @@ public:
 
 class InUniformExpressionMatcher : public ExpressionMatcher {
 public:
-	InUniformExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_OPERATOR) {
-	}
+	InUniformExpressionMatcher();
 
 	//! The matchers for the probe and child expressions
 	unique_ptr<ExpressionMatcher> probe_matcher;

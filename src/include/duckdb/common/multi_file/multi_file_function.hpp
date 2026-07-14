@@ -1114,17 +1114,6 @@ public:
 		}
 	}
 
-	static bool PushdownProjectionExpression(ClientContext &context, TableFunctionProjectionExpressionInput &input) {
-		if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
-			return false;
-		}
-		auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
-		const auto &cast = input.expr.Cast<BoundCastExpression>();
-		bind_data.types[input.proj_index] = cast.GetReturnType();
-		bind_data.columns[input.proj_index].type = cast.GetReturnType();
-		return true;
-	}
-
 private:
 	static bool HasFilesToRead(MultiFileGlobalState &gstate, unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());

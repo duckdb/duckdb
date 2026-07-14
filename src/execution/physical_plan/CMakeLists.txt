@@ -37,7 +37,15 @@ add_library_unity(
   plan_set.cpp
   plan_reset.cpp
   plan_sample.cpp
-  plan_simple.cpp
+  plan_alter.cpp
+  plan_attach.cpp
+  plan_connect.cpp
+  plan_detach.cpp
+  plan_disconnect.cpp
+  plan_drop.cpp
+  plan_load.cpp
+  plan_transaction.cpp
+  plan_update_extensions.cpp
   plan_top_n.cpp
   plan_update.cpp
   plan_window.cpp
