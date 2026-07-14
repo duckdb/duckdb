@@ -878,7 +878,7 @@ static void ThrowDefaultTableAmbiguityException(CatalogEntryLookup &base_lookup,
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
                                            const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-                                           bool allow_default_table_lookup) {
+                                           bool allow_default_lookup) {
 	auto &context = retriever.GetContext();
 	reference_set_t<SchemaCatalogEntry> schemas;
 	bool all_errors = true;
@@ -902,7 +902,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 
 	// Special case for tables: we do a second lookup searching for catalogs with default tables that also match this
 	// lookup
-	if (lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY && allow_default_table_lookup) {
+	if (lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY && allow_default_lookup) {
 		if (!result.Found()) {
 			result = TryLookupDefaultTable(retriever, lookup_info, false);
 			if (result.error.HasError()) {
@@ -923,7 +923,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	// catalog flagged as an implicit search catalog (added to the path with an INVALID_SCHEMA entry, e.g. a view's
 	// own catalog while binding its body). Like the default-table lookup, this only kicks in when the entry is
 	// otherwise unresolved, so the search is never widened when it is not needed.
-	if (lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY && allow_default_table_lookup && !result.Found()) {
+	if (lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY && allow_default_lookup && !result.Found()) {
 		result = TryLookupDefaultSchema(retriever, lookup_info);
 		if (result.error.HasError()) {
 			error_data = std::move(result.error);
@@ -1005,8 +1005,9 @@ CatalogEntryLookup Catalog::TryLookupDefaultSchema(CatalogEntryRetriever &retrie
 			continue;
 		}
 		auto transaction = catalog_entry->GetCatalogTransaction(retriever.GetContext());
-		auto result = catalog_entry->TryLookupEntryInternal(transaction, catalog_entry->GetDefaultSchema(), lookup_info);
-		if (result.Found()) {
+		auto result =
+		    catalog_entry->TryLookupEntryInternal(transaction, catalog_entry->GetDefaultSchema(), lookup_info);
+		if (result.Found() || result.error.HasError()) {
 			return result;
 		}
 	}
@@ -1044,9 +1045,9 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		lookups.emplace_back(std::move(lookup));
 	}
 
-	bool allow_default_table_lookup = catalog.empty() && schema.empty();
+	bool allow_default_lookup = catalog.empty() && schema.empty();
 
-	return TryLookupEntry(retriever, lookups, lookup_info, if_not_found, allow_default_table_lookup);
+	return TryLookupEntry(retriever, lookups, lookup_info, if_not_found, allow_default_lookup);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &catalog_name,

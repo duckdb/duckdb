@@ -1,5 +1,5 @@
 # name: test/sql/attach/searchpath_fallback.test
-# description: Tryout
+# description: Test the default schema fallback for queries.
 # group: [attach]
 
 
