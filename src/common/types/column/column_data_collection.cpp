@@ -891,7 +891,7 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 	if (source_data.validity.IsMaskSet()) {
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
-			if (!source_data.validity.RowIsValid(source_idx)) {
+			if (!source_data.validity.RowIsValidUnsafe(source_idx)) {
 				parent_has_nulls = true;
 				break;
 			}
@@ -915,10 +915,11 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 			// Broadcast and sync the validity of the struct vector to the child vector
 			// This requires creating a copy of the validity mask: we cannot modify the input validity
 			child_data.validity = ValidityMask(child_data.validity, child_data.validity.Capacity());
+			child_data.validity.EnsureWritable();
 			for (idx_t i = 0; i < copy_count; i++) {
 				auto source_idx = source_data.sel->get_index(offset + i);
-				if (!source_data.validity.RowIsValid(source_idx)) {
-					child_data.validity.SetInvalid(offset + i);
+				if (!source_data.validity.RowIsValidUnsafe(source_idx)) {
+					child_data.validity.SetInvalidUnsafe(offset + i);
 				}
 			}
 		}
@@ -960,12 +961,13 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	// This requires creating a copy of the validity mask: we cannot modify the input validity
 	child_vector_data.validity = ValidityMask(child_vector_data.validity, child_vector_data.validity.Capacity());
 	if (source_data.validity.IsMaskSet()) {
+		child_vector_data.validity.EnsureWritable();
 		D_ASSERT(!child_vector_data.sel->IsSet());
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
 			if (!source_data.validity.RowIsValid(source_idx)) {
 				for (idx_t j = 0; j < array_size; j++) {
-					child_vector_data.validity.SetInvalid(source_idx * array_size + j);
+					child_vector_data.validity.SetInvalidUnsafe(source_idx * array_size + j);
 				}
 			}
 		}

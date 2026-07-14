@@ -206,9 +206,14 @@ void VectorArrayBuffer::CopyInternal(const Vector &source, const SelectionVector
 		child->Copy(source_child, child_sel, source_count * array_size, 0, (target_offset + start) * array_size,
 		            rows * array_size);
 	};
+	// no NULL rows in the copied range - one wholesale copy
+	if (validity.CheckAllValid(target_offset + copy_count, target_offset)) {
+		copy_valid_slice(0, copy_count);
+		return;
+	}
 	idx_t start_idx = 0;
 	for (idx_t i = 0; i < copy_count; i++) {
-		if (validity.RowIsValid(target_offset + i)) {
+		if (validity.RowIsValidUnsafe(target_offset + i)) {
 			continue;
 		}
 		copy_valid_slice(start_idx, i);

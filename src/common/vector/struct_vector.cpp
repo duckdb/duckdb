@@ -264,9 +264,14 @@ void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVecto
 			                 end - start);
 		}
 	};
+	// no NULL rows in the copied range - one wholesale copy
+	if (validity.CheckAllValid(target_offset + copy_count, target_offset)) {
+		copy_valid_slice(0, copy_count);
+		return;
+	}
 	idx_t start_idx = 0;
 	for (idx_t i = 0; i < copy_count; i++) {
-		if (validity.RowIsValid(target_offset + i)) {
+		if (validity.RowIsValidUnsafe(target_offset + i)) {
 			continue;
 		}
 		copy_valid_slice(start_idx, i);

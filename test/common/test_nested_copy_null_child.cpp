@@ -332,6 +332,10 @@ TEST_CASE("Verify rejects non-NULL children under a NULL ARRAY row", "[copy]") {
 	// the provoked InternalException aborts instead of throwing in crash-on-assert builds
 	return;
 #endif
+	if (STANDARD_VECTOR_SIZE < 8) {
+		// the fixtures exceed the default vector capacity at tiny vector sizes
+		return;
+	}
 	const idx_t row_count = 4;
 	const idx_t null_row = 1;
 
