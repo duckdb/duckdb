@@ -72,6 +72,10 @@ quoted:
 				idx++;
 				continue;
 			}
+			if (entry.empty()) {
+				//! the SQL parser also rejects "" as a zero-length delimited identifier
+				throw ParserException("Zero-length delimited identifier in qualified name! (input: %s)", input);
+			}
 			//! unquote; a closing quote must end the component, e.g. "abc"xyz is not a valid identifier
 			idx++;
 			if (idx < input.size() && input[idx] != '.') {

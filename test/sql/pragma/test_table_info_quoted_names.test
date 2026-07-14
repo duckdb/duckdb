@@ -61,3 +61,17 @@ statement error
 SELECT * FROM pragma_table_info('"abc"xyz')
 ----
 Unexpected character after a quoted identifier
+
+statement ok
+CREATE TABLE t(i INTEGER)
+
+# an empty quoted component is a parser error, not an absent schema
+statement error
+SELECT * FROM pragma_table_info('""."t"')
+----
+Zero-length delimited identifier
+
+statement error
+SELECT * FROM pragma_table_info('""')
+----
+Zero-length delimited identifier
