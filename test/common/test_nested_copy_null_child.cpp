@@ -275,6 +275,10 @@ void RunAppendCase(Shape shape, const duckdb::vector<bool> &is_null) {
 }
 
 void RunCorpus(Shape shape) {
+	if (STANDARD_VECTOR_SIZE < 8) {
+		// the fixtures exceed the default vector capacity at tiny vector sizes
+		return;
+	}
 	duckdb::vector<duckdb::vector<bool>> patterns = {
 	    {true, false, false, false, false}, // start
 	    {false, false, true, false, false}, // middle
