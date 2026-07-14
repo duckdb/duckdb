@@ -44,6 +44,12 @@ static const TestConfigOption test_config_options[] = {
     {"debug_initialize", "Initialize buffers with all 0 or all 1", LogicalType::VARCHAR, nullptr},
     {"autoloading", "Loading strategy for extensions not bundled in", LogicalType::VARCHAR, nullptr},
     {"init_script", "Script to execute on init", LogicalType::VARCHAR, TestConfiguration::ParseConnectScript},
+    {"init_sqllogic",
+     "Path to a sqllogic script run (through the full test runner) after the database is "
+     "created, before the test body",
+     LogicalType::VARCHAR, nullptr},
+    {"cleanup_sqllogic", "Path to a sqllogic script run (through the full test runner) after the test body",
+     LogicalType::VARCHAR, nullptr},
     {"on_cleanup", "SQL statements to execute on test end", LogicalType::VARCHAR, nullptr},
     {"on_init", "SQL statements to execute on init", LogicalType::VARCHAR, nullptr},
     {"on_load", "SQL statements to execute on explicit load", LogicalType::VARCHAR, nullptr},
@@ -310,6 +316,14 @@ bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 
 string TestConfiguration::OnInitCommand() {
 	return GetOptionOrDefault("on_init", string());
+}
+
+string TestConfiguration::GetInitSqllogic() {
+	return GetOptionOrDefault("init_sqllogic", string());
+}
+
+string TestConfiguration::GetCleanupSqllogic() {
+	return GetOptionOrDefault("cleanup_sqllogic", string());
 }
 
 string TestConfiguration::OnLoadCommand() {
