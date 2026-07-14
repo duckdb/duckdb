@@ -91,6 +91,89 @@
         },
         "return_value": "True, if the error data contains an exception, else false."
       }
+    },
+    {
+      "name": "duckdb_error_data_extra_info_count",
+      "return_type": "idx_t",
+      "params": [
+        {
+          "type": "duckdb_error_data",
+          "name": "error_data"
+        }
+      ],
+      "comment": {
+        "description": "Returns the number of ExtraInfo key/value pairs attached to the error data.\n\n",
+        "param_comments": {
+          "error_data": "The error data."
+        },
+        "return_value": "The number of ExtraInfo entries, or 0 if error_data is NULL."
+      }
+    },
+    {
+      "name": "duckdb_error_data_extra_info_key",
+      "return_type": "const char *",
+      "params": [
+        {
+          "type": "duckdb_error_data",
+          "name": "error_data"
+        },
+        {
+          "type": "idx_t",
+          "name": "index"
+        }
+      ],
+      "comment": {
+        "description": "Returns the ExtraInfo key at the given index. Must not be freed.\nThe returned pointer is invalidated by `duckdb_destroy_error_data`.\n\n",
+        "param_comments": {
+          "error_data": "The error data.",
+          "index": "The ExtraInfo entry index."
+        },
+        "return_value": "The key at the given index, or NULL if the index is out of range or error_data is NULL."
+      }
+    },
+    {
+      "name": "duckdb_error_data_extra_info_value",
+      "return_type": "const char *",
+      "params": [
+        {
+          "type": "duckdb_error_data",
+          "name": "error_data"
+        },
+        {
+          "type": "idx_t",
+          "name": "index"
+        }
+      ],
+      "comment": {
+        "description": "Returns the ExtraInfo value at the given index. Must not be freed.\nThe returned pointer is invalidated by `duckdb_destroy_error_data`.\n\n",
+        "param_comments": {
+          "error_data": "The error data.",
+          "index": "The ExtraInfo entry index."
+        },
+        "return_value": "The value at the given index, or NULL if the index is out of range or error_data is NULL."
+      }
+    },
+    {
+      "name": "duckdb_error_data_extra_info_get",
+      "return_type": "const char *",
+      "params": [
+        {
+          "type": "duckdb_error_data",
+          "name": "error_data"
+        },
+        {
+          "type": "const char *",
+          "name": "key"
+        }
+      ],
+      "comment": {
+        "description": "Returns the ExtraInfo value for the given key (for example \"status_code\"). Must not be freed.\nThe returned pointer is invalidated by `duckdb_destroy_error_data`.\n\n",
+        "param_comments": {
+          "error_data": "The error data.",
+          "key": "The ExtraInfo key to look up."
+        },
+        "return_value": "The value for the key, or NULL if the key is absent or error_data/key is NULL."
+      }
     }
   ]
 }

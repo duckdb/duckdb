@@ -6,6 +6,10 @@
     "duckdb_destroy_error_data",
     "duckdb_error_data_error_type",
     "duckdb_error_data_message",
-    "duckdb_error_data_has_error"
+    "duckdb_error_data_has_error",
+    "duckdb_error_data_extra_info_count",
+    "duckdb_error_data_extra_info_key",
+    "duckdb_error_data_extra_info_value",
+    "duckdb_error_data_extra_info_get"
   ]
 }

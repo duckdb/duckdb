@@ -545,6 +545,19 @@ duckdb_error_type duckdb_result_error_type(duckdb_result *result) {
 	return duckdb::ErrorTypeToC(result_data.result->GetErrorType());
 }
 
+duckdb_error_data duckdb_result_error_data(duckdb_result *result) {
+	if (!result || !result->internal_data) {
+		return nullptr;
+	}
+	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
+	if (!result_data.result->HasError()) {
+		return nullptr;
+	}
+	auto wrapper = new duckdb::ErrorDataWrapper();
+	wrapper->error_data = result_data.result->GetErrorObject();
+	return reinterpret_cast<duckdb_error_data>(wrapper);
+}
+
 idx_t duckdb_result_chunk_count(duckdb_result result) {
 	if (!result.internal_data) {
 		return 0;
