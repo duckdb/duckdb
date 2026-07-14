@@ -366,8 +366,8 @@ dtime_ns_t Timestamp::GetTimeNs(timestamp_ns_t input) {
 		throw ConversionException("Can't get TIME_NS of infinite TIMESTAMP");
 	}
 	// Compute the date at nanosecond precision to avoid truncating pre-epoch values through microseconds.
-	date_t date(UnsafeNumericCast<int32_t>((input.value + (input.value < 0)) / Interval::NANOS_PER_DAY -
-	                                       (input.value < 0)));
+	date_t date(
+	    UnsafeNumericCast<int32_t>((input.value + (input.value < 0)) / Interval::NANOS_PER_DAY - (input.value < 0)));
 	int64_t nanos;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::NANOS_PER_DAY, nanos)) {
 		throw ConversionException("Overflow extracting TIME_NS of TIMESTAMP");
