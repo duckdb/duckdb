@@ -6746,6 +6746,81 @@ DUCKDB_C_API const char *duckdb_error_data_message(duckdb_error_data error_data)
 DUCKDB_C_API bool duckdb_error_data_has_error(duckdb_error_data error_data);
 #endif
 
+#if DUCKDB_API_ALLOW_UNSTABLE
+/*!
+ * Returns the number of ExtraInfo key/value pairs attached to the error data.
+ *
+ * history:
+ * - unstable: v1.5.6
+ *
+ * @param error_data The error data.
+ * @return idx_t
+ */
+DUCKDB_C_API idx_t duckdb_error_data_extra_info_count(duckdb_error_data error_data);
+#endif
+
+#if DUCKDB_API_ALLOW_UNSTABLE
+/*!
+ * Returns the ExtraInfo key at the given index. Must not be freed. The returned pointer is invalidated by
+ * `duckdb_destroy_error_data`.
+ *
+ * history:
+ * - unstable: v1.5.6
+ *
+ * @param error_data The error data.
+ * @param index The ExtraInfo entry index.
+ * @return const char*
+ */
+DUCKDB_C_API const char *duckdb_error_data_extra_info_key(duckdb_error_data error_data, idx_t index);
+#endif
+
+#if DUCKDB_API_ALLOW_UNSTABLE
+/*!
+ * Returns the ExtraInfo value at the given index. Must not be freed. The returned pointer is invalidated by
+ * `duckdb_destroy_error_data`.
+ *
+ * history:
+ * - unstable: v1.5.6
+ *
+ * @param error_data The error data.
+ * @param index The ExtraInfo entry index.
+ * @return const char*
+ */
+DUCKDB_C_API const char *duckdb_error_data_extra_info_value(duckdb_error_data error_data, idx_t index);
+#endif
+
+#if DUCKDB_API_ALLOW_UNSTABLE
+/*!
+ * Returns the ExtraInfo value for the given key (for example "status_code"). Must not be freed. The returned pointer is
+ * invalidated by `duckdb_destroy_error_data`.
+ *
+ * history:
+ * - unstable: v1.5.6
+ *
+ * @param error_data The error data.
+ * @param key The ExtraInfo key to look up.
+ * @return const char*
+ */
+DUCKDB_C_API const char *duckdb_error_data_extra_info_get(duckdb_error_data error_data, const char *key);
+#endif
+
+#if DUCKDB_API_ALLOW_UNSTABLE
+/*!
+ * Returns a copy of the full error data contained within the result, including ExtraInfo. The error is only set if
+ * `duckdb_query` returns `DuckDBError`.
+ *
+ * Must be destroyed with `duckdb_destroy_error_data`. Prefer this over `duckdb_result_error` /
+ * `duckdb_result_error_type` when structured error details are needed.
+ *
+ * history:
+ * - unstable: v1.5.6
+ *
+ * @param result The result object to fetch the error from.
+ * @return duckdb_error_data
+ */
+DUCKDB_C_API duckdb_error_data duckdb_result_error_data(duckdb_result *result);
+#endif
+
 #if DUCKDB_API_VERSION_AT_LEAST(0, 2, 7)
 /*!
  * Allocate `size` bytes of memory using the duckdb internal malloc function. Any memory allocated in this manner should
