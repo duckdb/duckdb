@@ -1,0 +1,49 @@
+# name: test/sql/catalog/dependencies/test_drop_default_referencing_sequence.test
+# group: [dependencies]
+
+load __TEST_DIR__/alter_sequence_dependency.db readwrite v1.5.4
+
+statement ok
+set wal_autocheckpoint = '10gb';
+
+# Create a sequence entry
+statement ok
+CREATE SEQUENCE seq_ledger_id START 1;
+
+# Establish a dependency between the created table and the sequence entry
+statement ok
+CREATE TABLE position_ledger(
+	id BIGINT DEFAULT nextval('seq_ledger_id'),
+	v VARCHAR
+);
+
+statement ok
+INSERT INTO position_ledger(v) VALUES
+	('a'),
+	('b');
+
+# Logically drop the dependency on the sequence
+statement ok
+ALTER TABLE position_ledger ALTER COLUMN id DROP DEFAULT;
+
+# Drop the sequence
+statement ok
+DROP SEQUENCE IF EXISTS seq_ledger_id;
+
+statement ok
+checkpoint
+
+restart
+
+# Alter the table
+statement ok
+ALTER TABLE position_ledger ALTER COLUMN id SET NOT NULL;
+
+statement ok
+INSERT INTO position_ledger(id, v) VALUES
+	(99, 'c');
+
+statement ok
+checkpoint;
+
+restart
