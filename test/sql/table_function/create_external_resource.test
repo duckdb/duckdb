@@ -145,6 +145,28 @@ SELECT * FROM create_external_resource('stuck@local', timeout_seconds := 1, poll
 ----
 <REGEX>:.*timed out awaiting readiness.*
 
+# Both are range-checked at bind time. A negative timeout would silently mean 'wait forever' and a huge one
+# would overflow the poll loop's deadline arithmetic; a poll interval below 1s would busy-spin on status.
+statement error
+SELECT * FROM create_external_resource('stuck@local', timeout_seconds := -1);
+----
+<REGEX>:.*'timeout_seconds' must be between 0 and 2592000.*
+
+statement error
+SELECT * FROM create_external_resource('stuck@local', timeout_seconds := 9223372036854775807);
+----
+<REGEX>:.*'timeout_seconds' must be between 0 and 2592000.*
+
+statement error
+SELECT * FROM create_external_resource('stuck@local', poll_interval_seconds := 0);
+----
+<REGEX>:.*'poll_interval_seconds' must be between 1 and 2592000.*
+
+statement error
+SELECT * FROM create_external_resource('stuck@local', poll_interval_seconds := 9223372036854775807);
+----
+<REGEX>:.*'poll_interval_seconds' must be between 1 and 2592000.*
+
 # A non-catalog (compute) resource is not subject to the uri baseline; a well-formed map result is fine.
 statement ok
 CREATE MACRO compute_status(h) AS TABLE SELECT 'ready' AS state, MAP {'ip': '10.0.0.1'} AS result;

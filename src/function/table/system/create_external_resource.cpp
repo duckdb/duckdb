@@ -21,6 +21,9 @@ namespace duckdb {
 //! means wait indefinitely (rely on a terminal status or query cancellation).
 static constexpr int64_t DEFAULT_READINESS_TIMEOUT_SECONDS = 300;
 static constexpr int64_t DEFAULT_POLL_INTERVAL_SECONDS = 5;
+//! Upper bound for both. Far longer than any plausible provisioning wait, and far below the point where
+//! adding the duration to a steady_clock time point would overflow.
+static constexpr int64_t MAX_READINESS_SECONDS = 30LL * 24 * 60 * 60;
 
 //! Look up a key in a MAP(VARCHAR, VARCHAR) Value. Returns false if absent (or the map is NULL).
 static bool MapTryGet(const Value &map_value, const string &key, string &out) {
@@ -78,6 +81,17 @@ static string QualifyTableCallback(ClientContext &context, const string &name) {
 // therefore be non-TEMP (visible instance-wide).
 //===--------------------------------------------------------------------===//
 
+//! Read a seconds-valued named parameter, rejecting anything outside [minimum, MAX_READINESS_SECONDS]. The
+//! upper bound keeps the poll loop's steady_clock arithmetic from overflowing.
+static int64_t ReadSecondsParameter(const string &key, const Value &value, int64_t minimum) {
+	auto seconds = value.GetValue<int64_t>();
+	if (seconds < minimum || seconds > MAX_READINESS_SECONDS) {
+		throw InvalidInputException("create_external_resource: '%s' must be between %lld and %lld, got %lld", key,
+		                            minimum, MAX_READINESS_SECONDS, seconds);
+	}
+	return seconds;
+}
+
 struct CreateExternalResourceBindData : public TableFunctionData {
 	string type_name;
 	Value params;
@@ -105,9 +119,9 @@ static unique_ptr<FunctionData> CreateExternalResourceBind(ClientContext &contex
 		} else if (key == "teardown_on_failure" && !np.second.IsNull()) {
 			result->teardown_on_failure = BooleanValue::Get(np.second);
 		} else if (key == "timeout_seconds" && !np.second.IsNull()) {
-			result->timeout_seconds = np.second.GetValue<int64_t>();
+			result->timeout_seconds = ReadSecondsParameter(key, np.second, 0);
 		} else if (key == "poll_interval_seconds" && !np.second.IsNull()) {
-			result->poll_interval_seconds = np.second.GetValue<int64_t>();
+			result->poll_interval_seconds = ReadSecondsParameter(key, np.second, 1);
 		}
 	}
 

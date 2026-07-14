@@ -51,12 +51,8 @@ static unique_ptr<FunctionData> RegisterExternalResourceTypeBind(ClientContext &
 			type.resolve_function = value;
 		}
 	}
-	if (type.kind.empty()) {
-		throw InvalidInputException("register_external_resource_type: 'kind' is required");
-	}
-	if (type.create_function.empty()) {
-		throw InvalidInputException("register_external_resource_type: 'create_function' is required");
-	}
+	// The entry itself (required fields, well-formed callback names) is validated by the registry, which
+	// enforces the same invariants for extensions registering types directly.
 
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
