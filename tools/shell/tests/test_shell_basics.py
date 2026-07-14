@@ -1060,6 +1060,24 @@ def test_duckbox(shell):
     result = test.run()
     result.check_stdout('0 rows')
 
+def test_duckbox_malformed_json(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("select union_value(\"c1\" := '}');")
+    )
+    result = test.run()
+    result.check_stdout('}')
+
+    # nested object
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("select union_value(\"c1\" := '[\"a\", {]');")
+    )
+    result = test.run()
+    result.check_stdout('[\"a\", {]')
+
 # Original comment: #5411 - with maxrows=2, we still display all 4 rows (hiding them would take up more space)
 def test_maxrows(shell):
     test = (
