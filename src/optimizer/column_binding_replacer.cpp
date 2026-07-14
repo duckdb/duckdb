@@ -24,8 +24,9 @@ void ColumnBindingReplacer::AddReplacement(ColumnBinding old_binding, ColumnBind
 	}
 }
 
-void ColumnBindingReplacer::AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding, LogicalType new_type) {
-	replacement_bindings.emplace_back(old_binding, new_binding, std::move(new_type));
+void ColumnBindingReplacer::AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding,
+                                           const LogicalType &new_type) {
+	replacement_bindings.emplace_back(old_binding, new_binding, new_type);
 }
 
 void ColumnBindingReplacer::AddReplacements(const vector<ColumnBinding> &old_bindings,

@@ -41,7 +41,7 @@ public:
 	//! Add a binding replacement
 	void AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding);
 	//! Add a binding replacement and update the target type
-	void AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding, LogicalType new_type);
+	void AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding, const LogicalType &new_type);
 	//! Add binding replacements by position
 	void AddReplacements(const vector<ColumnBinding> &old_bindings, const vector<ColumnBinding> &new_bindings);
 	//! Replace a binding using a replacement list

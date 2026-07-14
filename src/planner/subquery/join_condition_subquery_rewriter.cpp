@@ -354,7 +354,7 @@ static unique_ptr<LogicalOperator> CreateDistinctMatchProjection(Binder &binder,
 	projection->children.push_back(std::move(distinct));
 	projection->ResolveOperatorTypes();
 	match_types = projection->types;
-	return std::move(projection);
+	return projection;
 }
 
 static bool CanUseDirectSideCTERef(const PairDependentJoinSide &side) {
@@ -401,7 +401,7 @@ static unique_ptr<LogicalOperator> CreateSideBindingLayoutSource(Binder &binder,
 	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
 	projection->children.push_back(std::move(cte_ref));
 	projection->ResolveOperatorTypes();
-	return std::move(projection);
+	return projection;
 }
 
 static void CreateSideBindingLayoutCTEs(Binder &binder, PairDependentJoinSide &side, const string &name_prefix) {
@@ -537,7 +537,7 @@ unique_ptr<LogicalOperator> PairDependentFullOuterJoinBuilder::CreateFullJoin() 
 	final_join->ResolveOperatorTypes();
 	auto actual_bindings = final_join->GetColumnBindings();
 	D_ASSERT(actual_bindings == expected_bindings);
-	return std::move(final_join);
+	return final_join;
 }
 
 static unique_ptr<LogicalOperator> WrapSideBindingLayoutCTEs(PairDependentJoinSide &side,
