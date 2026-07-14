@@ -76,7 +76,8 @@ void TransactionContext::Commit() {
 			// throw fatal / internal exceptions directly
 			error.Throw();
 		}
-		throw TransactionException("Failed to commit: %s", error.RawMessage());
+		// Keep TRANSACTION envelope; copy ExtraInfo (e.g. HTTP status_code) instead of dropping it
+		throw TransactionException(error.ExtraInfo(), "Failed to commit: %s", error.RawMessage());
 	}
 	for (auto &state : context.registered_state->States()) {
 		state->TransactionCommit(*transaction, context);

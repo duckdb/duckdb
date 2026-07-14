@@ -251,6 +251,10 @@ TypeMismatchException::TypeMismatchException(const string &msg) : Exception(Exce
 TransactionException::TransactionException(const string &msg) : Exception(ExceptionType::TRANSACTION, msg) {
 }
 
+TransactionException::TransactionException(const unordered_map<string, string> &extra_info, const string &msg)
+    : Exception(extra_info, ExceptionType::TRANSACTION, msg) {
+}
+
 NotImplementedException::NotImplementedException(const string &msg) : Exception(ExceptionType::NOT_IMPLEMENTED, msg) {
 }
 
