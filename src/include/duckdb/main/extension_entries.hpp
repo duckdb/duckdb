@@ -1102,6 +1102,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_read_transfer_concurrency", "azure"},
     {"azure_storage_connection_string", "azure"},
     {"azure_transport_option_type", "azure"},
+    {"azure_write_block_size", "azure"},
+    {"azure_write_staged_blocks_per_commit", "azure"},
     {"binary_as_string", "parquet"},
     {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},
