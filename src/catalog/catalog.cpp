@@ -407,27 +407,6 @@ void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
 		return;
 	}
 
-	auto &path = info.GetQualifiedName().Path();
-	if (path.size() > 3) {
-		// nested target ([catalog, schema_path..., name]): navigate to the nested schema and drop from it
-		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
-		auto schema = GetSchema(context, path.front(), schema_path, info.if_not_found);
-		if (!schema) {
-			return;
-		}
-		// verify the entry exists before dropping (DuckSchemaEntry::DropEntry requires it); respects IF EXISTS
-		auto entry = schema->GetEntry(GetCatalogTransaction(context), info.type, info.GetQualifiedName().Name());
-		if (!entry) {
-			if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(info.type),
-				                       info.GetQualifiedName().Name().GetIdentifierName());
-			}
-			return;
-		}
-		schema->DropEntry(context, info);
-		return;
-	}
-
 	CatalogEntryRetriever retriever(context);
 	EntryLookupInfo lookup_info(info.type, info.GetQualifiedName());
 	auto lookup = LookupEntry(retriever, lookup_info, info.if_not_found);
@@ -893,7 +872,10 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
 		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
 	}
-	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, lookup_info.GetSchema());
+	// the (possibly nested) schema qualification is everything up to the entry name; LookupSchema resolves it
+	auto &full_path = lookup_info.GetQualifiedName().Path();
+	vector<Identifier> schema_path(full_path.begin(), full_path.end() - 1);
+	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, std::move(schema_path));
 	auto schema_entry = LookupSchema(transaction, schema_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
 		return {nullptr, nullptr, ErrorData()};

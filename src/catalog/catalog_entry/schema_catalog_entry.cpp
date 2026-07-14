@@ -61,7 +61,7 @@ CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransacti
 
 vector<Identifier> SchemaCatalogEntry::GetSchemaPath() const {
 	vector<Identifier> path;
-	const SchemaCatalogEntry *schema = this;
+	optional_ptr<const SchemaCatalogEntry> schema = this;
 	while (schema) {
 		path.push_back(schema->name);
 		schema = schema->GetParentSchema().get();
