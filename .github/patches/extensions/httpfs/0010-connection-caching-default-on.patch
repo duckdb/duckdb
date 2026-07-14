@@ -1,0 +1,44 @@
+diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
+index 280becd..63c2f06 100644
+--- a/src/httpfs_extension.cpp
++++ b/src/httpfs_extension.cpp
+@@ -167,7 +167,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ #endif
+ 	};
+ 	config.AddExtensionOption("httpfs_connection_caching", "Enable connection caching for HTTP requests",
+-	                          LogicalType::BOOLEAN, Value::BOOLEAN(false), callback_httpfs_connection_caching);
++	                          LogicalType::BOOLEAN, Value::BOOLEAN(true), callback_httpfs_connection_caching);
+ 
+ 	config.AddExtensionOption("enable_global_s3_configuration",
+ 	                          "Automatically fetch AWS credentials from environment variables.", LogicalType::BOOLEAN,
+diff --git a/src/include/httpfs_client.hpp b/src/include/httpfs_client.hpp
+index df06a58..be56729 100644
+--- a/src/include/httpfs_client.hpp
++++ b/src/include/httpfs_client.hpp
+@@ -103,7 +103,7 @@ public:
+ 	string GetName() const override;
+ 
+ 	//! Whether connection caching is enabled
+-	bool connection_caching_enabled = false;
++	bool connection_caching_enabled = true;
+ 
+ private:
+ 	//! Send request with connection caching (acquire from pool, run, store back)
+diff --git a/test/sql/connection_caching.test b/test/sql/connection_caching.test
+index d342105..4744209 100644
+--- a/test/sql/connection_caching.test
++++ b/test/sql/connection_caching.test
+@@ -12,8 +12,11 @@ set ignore_error_messages
+ statement ok
+ SET enable_logging=true;
+ 
+-statement ok
+-SET httpfs_connection_caching=true;
++# connection caching is on by default
++query I
++SELECT current_setting('httpfs_connection_caching');
++----
++true
+ 
+ statement ok
+ CALL enable_logging('HTTPFSInfo');

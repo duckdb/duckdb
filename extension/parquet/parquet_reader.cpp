@@ -9,6 +9,7 @@
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
 #include "column_reader.hpp"
+#include "reader/byte_array_length_column_reader.hpp"
 #include "reader/expression_column_reader.hpp"
 #include "parquet_geometry.hpp"
 #include "reader/list_column_reader.hpp"
@@ -1060,9 +1061,11 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
-                             shared_ptr<ParquetFileMetadataCache> metadata_p)
+                             shared_ptr<ParquetFileMetadataCache> metadata_p,
+                             unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions_p)
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
-      allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
+      allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)),
+      projection_expressions(std::move(projection_expressions_p)) {
 	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
@@ -1106,6 +1109,15 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 	}
 	InitializeSchema(context_p);
+	// Length-pushdown rewrites these columns to BIGINT, update the local schema
+	for (const auto &[idx, expr] : projection_expressions) {
+		if (idx < columns.size()) {
+			columns[idx].type = expr.return_type;
+		}
+		if (idx < root_schema->children.size()) {
+			root_schema->children[idx].type = expr.return_type;
+		}
+	}
 }
 
 bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
@@ -1450,6 +1462,24 @@ ParquetScanFilter::ParquetScanFilter(ClientContext &context, ProjectionIndex fil
 ParquetScanFilter::~ParquetScanFilter() {
 }
 
+unique_ptr<CachingFileHandle> ParquetReader::OpenScanHandle(ClientContext &context) const {
+	auto flags = FileFlags::FILE_FLAGS_READ;
+	if (ShouldAndCanPrefetch(context, *file_handle)) {
+		flags |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
+		if (file_handle->IsRemoteFile()) {
+			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+		}
+	}
+	return fs.OpenFile(context, file, flags);
+}
+
+void ParquetReader::PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &) {
+	// pre-open the scan handle while the file is opened, so the first InitializeScan skips its file-open
+	auto handle = OpenScanHandle(context);
+	lock_guard<mutex> guard(prewarm_lock);
+	prewarmed_scan_handle = std::move(handle);
+}
+
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
 	state.resuming_payload = false;
 	state.offset_in_group = 0;
@@ -1457,18 +1487,18 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.group_index = group_to_read;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
-		auto flags = FileFlags::FILE_FLAGS_READ;
-		if (ShouldAndCanPrefetch(context, *file_handle)) {
-			state.prefetch_mode = true;
-			flags |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-			if (file_handle->IsRemoteFile()) {
-				flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+		state.prefetch_mode = ShouldAndCanPrefetch(context, *file_handle);
+		// all scan states share one handle (opened with parallel access), so open handles and
+		// connections scale with the number of readers instead of the number of row-group jobs
+		lock_guard<mutex> guard(prewarm_lock);
+		if (!shared_scan_handle) {
+			if (prewarmed_scan_handle) {
+				shared_scan_handle = std::move(prewarmed_scan_handle);
+			} else {
+				shared_scan_handle = OpenScanHandle(context);
 			}
-		} else {
-			state.prefetch_mode = false;
 		}
-
-		state.file_handle = fs.OpenFile(context, file, flags);
+		state.file_handle = shared_scan_handle;
 	}
 	state.scan_filters.clear();
 	if (filters) {
@@ -1489,6 +1519,13 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	for (idx_t i = 0; i < column_indexes.size(); i++) {
 		auto &index = column_indexes[i];
 		auto column_id = index.GetPrimaryIndex();
+		if (auto it = projection_expressions.find(column_id);
+		    it != projection_expressions.end() &&
+		    it->second.type == ParquetReaderProjectionExpressionType::BYTE_LENGTH) {
+			auto &schema = root_schema->children[column_id];
+			state.column_readers[i] = make_uniq<ByteArrayLengthColumnReader>(*this, schema);
+			continue;
+		}
 		auto it = expression_map.find(column_id);
 		if (it != expression_map.end()) {
 			auto &expression_data = it->second;
@@ -1548,7 +1585,7 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		return column_stats->PushdownExtract(storage_index.GetChildIndex(0));
 	}
 
-	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
+	bool MinMaxIsExact(const StorageIndex &storage_index) override {
 		const idx_t primary_index = storage_index.GetPrimaryIndex();
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
 		D_ASSERT(root_schema->children.size() > primary_index);
@@ -1568,6 +1605,11 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 			const auto &stats = column_chunk.meta_data.statistics;
 			return stats.is_min_value_exact && stats.is_max_value_exact;
 		}
+		return false;
+	}
+
+	bool HasPendingWrites() override {
+		// Parquet row groups are read directly from a file, so there is no notion of pending/uncheckpointed writes.
 		return false;
 	}
 };
@@ -1600,6 +1642,10 @@ public:
 
 	void Execute() override {
 		read_head->Fetch(*file_handle);
+	}
+
+	idx_t GetIOSize() const override {
+		return read_head->size;
 	}
 
 private:
@@ -1830,6 +1876,8 @@ void ParquetReader::FinishRowGroup(ClientContext &context, ParquetReaderScanStat
 		LogRowGroupPrefetch(context, file.path, state.group_index, state);
 	}
 	state.prefetch_metrics.FinalizeRowGroupSelectivity();
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+	trans.ClearPrefetch();
 }
 
 idx_t ParquetReader::EvaluateFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count,
