@@ -1538,8 +1538,11 @@ public:
 		if (JSONParser::Process(value)) {
 			return true;
 		}
-		render_value.annotations.erase(render_value.annotations.begin() + annotation_count,
-		                               render_value.annotations.end());
+
+		while (render_value.annotations.size() > annotation_count) {
+			render_value.annotations.pop_back();
+		}
+
 		return false;
 	}
 
