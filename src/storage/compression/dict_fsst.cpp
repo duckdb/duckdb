@@ -233,7 +233,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 			auto dict_offset = dict_sel.get_index(row_idx);
 			// Evaluate NULL only when slot zero is referenced by an actual row.
 			if (dict_offset == 0 && !scan_state.null_filter_result_initialized) {
-				Vector null_data(scan_state.dictionary->data, /*offset=*/0, /*count=*/1);
+				Vector null_data(scan_state.dictionary->data, /*offset=*/0, /*end=*/1);
 				SelectionVector null_sel;
 				idx_t null_filter_count = 1;
 				ColumnSegment::FilterSelection(null_sel, null_data, dictionary_filter_state, 1, null_filter_count);
