@@ -929,18 +929,33 @@ static void ExecuteHashJoinTableInitTask(HashJoinGlobalSinkState &sink, idx_t en
 	sink.hash_table->InitializePointerTable(entry_idx_from, entry_idx_to);
 }
 
+struct PrefixRangeBuildLane {
+	explicit PrefixRangeBuildLane(unique_ptr<PrefixRangeFilter::BuildState> state_p) : state(std::move(state_p)) {
+	}
+
+	unique_ptr<PrefixRangeFilter::BuildState> state;
+	idx_t task_count = 0;
+};
+
 static void ExecuteHashJoinFinalizeTask(HashJoinGlobalSinkState &sink, optional_idx partition_idx,
-                                        optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state) {
+                                        optional_ptr<PrefixRangeBuildLane> prefix_range_lane) {
 	const auto &data_collection = sink.hash_table->GetDataCollection();
+	optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state;
+	bool prefix_range_parallel = false;
+	if (prefix_range_lane) {
+		prefix_range_state = *prefix_range_lane->state;
+		prefix_range_parallel = prefix_range_lane->task_count > 1;
+	}
 	if (!partition_idx.IsValid() || sink.hash_table->GetRadixBits() == 0) {
 		// Unpartitioned builds still finalize over the full chunk range even if the scheduler created a
 		// single "partition 0" task, because tuple-data segments are not tagged with partition ids there.
-		sink.hash_table->Finalize(0U, data_collection.ChunkCount(), false, prefix_range_state);
+		sink.hash_table->Finalize(0U, data_collection.ChunkCount(), false, prefix_range_state, prefix_range_parallel);
 	} else {
 		// Parallel finalize - each thread processes one partition
 		const auto chunk_ranges = data_collection.GetChunkRangesForPartition(partition_idx.GetIndex());
 		for (auto &chunk_range : chunk_ranges) {
-			sink.hash_table->Finalize(chunk_range.first, chunk_range.second, true, prefix_range_state);
+			sink.hash_table->Finalize(chunk_range.first, chunk_range.second, true, prefix_range_state,
+			                          prefix_range_parallel);
 		}
 	}
 }
@@ -1016,13 +1031,13 @@ public:
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(HashJoinGlobalSinkState &sink_p, shared_ptr<Event> event, optional_idx partition_idx_p,
-	                     optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state_p = nullptr)
+	                     optional_ptr<PrefixRangeBuildLane> prefix_range_lane_p = nullptr)
 	    : ExecutorTask(sink_p.context, std::move(event), sink_p.op), sink(sink_p), partition_idx(partition_idx_p),
-	      prefix_range_state(prefix_range_state_p) {
+	      prefix_range_lane(prefix_range_lane_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		ExecuteHashJoinFinalizeTask(sink, partition_idx, prefix_range_state);
+		ExecuteHashJoinFinalizeTask(sink, partition_idx, prefix_range_lane);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -1033,7 +1048,7 @@ public:
 private:
 	HashJoinGlobalSinkState &sink;
 	optional_idx partition_idx;
-	optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state;
+	optional_ptr<PrefixRangeBuildLane> prefix_range_lane;
 };
 
 class HashJoinFinalizeEvent : public BasePipelineEvent {
@@ -1047,33 +1062,44 @@ public:
 public:
 	vector<shared_ptr<Task>> GetTasks() {
 		auto &ht = *sink.hash_table;
-		const auto build_prefix_range_filter = ht.ShouldBuildPrefixRangeFilter();
-		vector<shared_ptr<Task>> finalize_tasks;
+		vector<optional_idx> finalize_partitions;
 		if (FinalizeSingleThreaded(sink, false)) {
-			auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
-			finalize_tasks.push_back(
-			    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), optional_idx(), prefix_range_state));
-			return finalize_tasks;
+			finalize_partitions.emplace_back();
+		} else {
+			const auto num_partitions = RadixPartitioning::NumberOfPartitions(ht.GetRadixBits());
+			const auto &current_partitions = ht.GetCurrentPartitions();
+			for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+				if (sink.external && !current_partitions.RowIsValidUnsafe(partition_idx)) {
+					continue; // Partition is not being built on
+				}
+				finalize_partitions.emplace_back(partition_idx);
+			}
 		}
 
-		// Parallel finalize
-		const auto num_partitions = RadixPartitioning::NumberOfPartitions(ht.GetRadixBits());
-		const auto &current_partitions = ht.GetCurrentPartitions();
-		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-			if (sink.external && !current_partitions.RowIsValidUnsafe(partition_idx)) {
-				continue; // Partition is not being built on
+		InitializePrefixRangeLanes(ht, finalize_partitions.size());
+		vector<shared_ptr<Task>> finalize_tasks;
+		finalize_tasks.reserve(finalize_partitions.size());
+		for (idx_t task_idx = 0; task_idx < finalize_partitions.size(); task_idx++) {
+			optional_ptr<PrefixRangeBuildLane> lane;
+			if (!prefix_range_lanes.empty()) {
+				lane = *prefix_range_lanes[task_idx % prefix_range_lanes.size()];
+				lane->task_count++;
 			}
-			auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
-			finalize_tasks.push_back(
-			    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), partition_idx, prefix_range_state));
+			finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(),
+			                                                        finalize_partitions[task_idx], lane));
 		}
 		return finalize_tasks;
 	}
 
 	void ExecuteDirectly() {
 		auto &ht = *sink.hash_table;
-		auto prefix_range_state = ht.ShouldBuildPrefixRangeFilter() ? RegisterPrefixRangeState(ht) : nullptr;
-		ExecuteHashJoinFinalizeTask(sink, optional_idx(), prefix_range_state);
+		InitializePrefixRangeLanes(ht, 1);
+		optional_ptr<PrefixRangeBuildLane> lane;
+		if (!prefix_range_lanes.empty()) {
+			lane = *prefix_range_lanes[0];
+			lane->task_count = 1;
+		}
+		ExecuteHashJoinFinalizeTask(sink, optional_idx(), lane);
 		FinishTasks();
 	}
 
@@ -1089,8 +1115,8 @@ public:
 
 private:
 	void FinishTasks() {
-		for (auto &prefix_range_state : prefix_range_states) {
-			sink.hash_table->MergePrefixRangeBuildState(*prefix_range_state);
+		for (auto &lane : prefix_range_lanes) {
+			sink.hash_table->MergePrefixRangeBuildState(*lane->state);
 		}
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 
@@ -1107,12 +1133,23 @@ private:
 		sink.hash_table->finalized = true;
 	}
 
-	optional_ptr<PrefixRangeFilter::BuildState> RegisterPrefixRangeState(JoinHashTable &ht) {
-		prefix_range_states.push_back(ht.InitializePrefixRangeBuildState());
-		return *prefix_range_states.back();
+	void InitializePrefixRangeLanes(JoinHashTable &ht, idx_t task_count) {
+		if (!ht.ShouldBuildPrefixRangeFilter() || task_count == 0) {
+			return;
+		}
+		// Bound replicated PRF state independently of the number of radix partitions.
+		static constexpr idx_t MAX_PREFIX_RANGE_BUILD_MEMORY = 16ULL * 1024ULL * 1024ULL;
+		const auto state_size = ht.GetPrefixRangeBuildStateSize();
+		D_ASSERT(state_size > 0);
+		const auto lanes_within_budget = MaxValue<idx_t>(MAX_PREFIX_RANGE_BUILD_MEMORY / state_size, 1);
+		const auto lane_count = MinValue<idx_t>(task_count, lanes_within_budget);
+		prefix_range_lanes.reserve(lane_count);
+		for (idx_t lane_idx = 0; lane_idx < lane_count; lane_idx++) {
+			prefix_range_lanes.push_back(make_uniq<PrefixRangeBuildLane>(ht.InitializePrefixRangeBuildState()));
+		}
 	}
 
-	vector<unique_ptr<PrefixRangeFilter::BuildState>> prefix_range_states;
+	vector<unique_ptr<PrefixRangeBuildLane>> prefix_range_lanes;
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
@@ -1492,10 +1529,8 @@ static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &conte
 	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
 	auto filter_input_type = GetRuntimeFilterInputType(deferred.column, key_type);
 	auto input = CreateRuntimeFilterInputExpression(context, deferred.column, key_type);
-	unique_ptr<Expression> null_check_input;
-	if (input.mode == RuntimeFilterInputMode::TRY_CAST_PRESERVE_ERRORS) {
-		null_check_input = input.expression->Copy();
-	}
+	const auto filters_null_values =
+	    input.mode != RuntimeFilterInputMode::TRY_CAST_PRESERVE_ERRORS && !ht.NullValuesAreEqual(0);
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(input.expression));
 
@@ -1506,7 +1541,6 @@ static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &conte
 		if (!ht.GetBloomFilter().IsInitialized()) {
 			return nullptr;
 		}
-		const auto filters_null_values = !ht.NullValuesAreEqual(0);
 		filter_expr = make_uniq<BoundFunctionExpression>(
 		    BoundScalarFunction(BloomFilterScalarFun::GetFunction(filter_input_type)), std::move(children),
 		    make_uniq<BloomFilterFunctionData>(ht.GetBloomFilter(), filters_null_values, key_name, key_type,
@@ -1521,14 +1555,15 @@ static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &conte
 		}
 		filter_expr = make_uniq<BoundFunctionExpression>(
 		    BoundScalarFunction(PrefixRangeScalarFun::GetFunction(filter_input_type)), std::move(children),
-		    make_uniq<PrefixRangeFunctionData>(prefix_range_filter, key_name, key_type, selectivity_threshold,
+		    make_uniq<PrefixRangeFunctionData>(prefix_range_filter, filters_null_values, key_name, key_type,
+		                                       selectivity_threshold,
 		                                       n_vectors_to_check));
 		break;
 	}
 	default:
 		throw InternalException("Unknown deferred runtime filter type");
 	}
-	return PreserveRuntimeFilterCastErrors(std::move(filter_expr), std::move(null_check_input));
+	return filter_expr;
 }
 
 static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate) {
