@@ -167,7 +167,13 @@ bignum_t HugeintCastToBignum::Operation(hugeint_t int_value, Vector &result) {
 template <>
 bool TryCastToBignum::Operation(string_t input_value, bignum_t &result_value, Vector &result,
                                 CastParameters &parameters) {
-	auto blob_string = Bignum::VarcharToBignum(input_value);
+	idx_t start_pos, end_pos;
+	bool is_negative, is_zero;
+	if (!Bignum::VarcharFormatting(input_value, start_pos, end_pos, is_negative, is_zero)) {
+		return false;
+	}
+
+	auto blob_string = Bignum::EncodeBignum(input_value, start_pos, end_pos, is_negative, is_zero);
 
 	uint32_t blob_size = static_cast<uint32_t>(blob_string.size());
 	result_value = bignum_t(StringVector::EmptyString(result, blob_size));

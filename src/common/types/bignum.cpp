@@ -264,12 +264,7 @@ string Bignum::BignumToVarchar(const bignum_t &blob) {
 	return decimal_string;
 }
 
-string Bignum::VarcharToBignum(const string_t &value) {
-	idx_t start_pos, end_pos;
-	bool is_negative, is_zero;
-	if (!VarcharFormatting(value, start_pos, end_pos, is_negative, is_zero)) {
-		throw ConversionException("Could not convert string \'%s\' to Bignum", value.GetString());
-	}
+string Bignum::EncodeBignum(const string_t &value, idx_t start_pos, idx_t end_pos, bool is_negative, bool is_zero) {
 	if (is_zero) {
 		// Return Value 0
 		return InitializeBignumZero();
@@ -326,6 +321,15 @@ string Bignum::VarcharToBignum(const string_t &value) {
 	// Set header after we know the size of the bignum
 	SetHeader(&result[0], result.size() - BIGNUM_HEADER_SIZE, is_negative);
 	return result;
+}
+
+string Bignum::VarcharToBignum(const string_t &value) {
+	idx_t start_pos, end_pos;
+	bool is_negative, is_zero;
+	if (!VarcharFormatting(value, start_pos, end_pos, is_negative, is_zero)) {
+		throw ConversionException("Could not convert string \'%s\' to Bignum", value.GetString());
+	}
+	return EncodeBignum(value, start_pos, end_pos, is_negative, is_zero);
 }
 
 bool Bignum::BignumToDouble(const bignum_t &blob, double &result, bool &strict) {
