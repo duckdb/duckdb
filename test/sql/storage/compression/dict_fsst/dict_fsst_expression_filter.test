@@ -43,6 +43,12 @@ WHERE split_part(task_id, '/', 2)::INTEGER >= 10
 ----
 154
 
+query I
+SELECT count(*) FROM partial_segment
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10000
+----
+0
+
 statement ok
 DELETE FROM partial_segment
 WHERE split_part(task_id, '/', 2)::INTEGER >= 10
@@ -57,6 +63,12 @@ SELECT count(*) FROM full_vector
 WHERE split_part(task_id, '/', 2)::INTEGER >= 10
 ----
 2038
+
+query I
+SELECT count(*) FROM full_vector
+WHERE split_part(task_id, '/', 2)::INTEGER >= 10000
+----
+0
 
 statement ok
 DELETE FROM full_vector

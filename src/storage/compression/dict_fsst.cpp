@@ -179,7 +179,11 @@ void DictFSSTSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
-static void PrepareValidityFilterState(CompressedStringScanState &scan_state, TableFilterState &filter_state) {
+// DICT_FSST applies the real filter inside DictFSSTFilter so it can filter on dictionary entries and handle
+// the synthetic NULL dictionary slot. Afterwards, StandardColumnData::Filter can still pass the same filter
+// state to the validity column filter, so replace that state with a constant-true expression once the real
+// filter has been applied.
+static void ReplaceValidityFilterWithNoop(CompressedStringScanState &scan_state, TableFilterState &filter_state) {
 	if (scan_state.noop_validity_filter) {
 		return;
 	}
@@ -198,7 +202,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
                            TableFilterState &filter_state) {
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 	if (!scan_state.dictionary_filter_state) {
-		// Validity filtering can evaluate the shared state with a synthetic NULL.
+		// Keep the real filter state before replacing the original with a noop.
 		auto &expression_state = filter_state.Cast<ExpressionFilterState>();
 		scan_state.dictionary_filter_state = TableFilterState::Initialize(expression_state.GetContext(), filter);
 	}
@@ -215,11 +219,11 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 			idx_t non_null_count = scan_state.dict_count - 1;
 			Vector dict_data(scan_state.dictionary->data, /*offset=*/1, scan_state.dict_count);
 			SelectionVector dict_sel;
-			ColumnSegment::FilterSelection(dict_sel, dict_data, dictionary_filter_state, non_null_count,
-			                               non_null_count);
+			idx_t filter_count = non_null_count;
+			ColumnSegment::FilterSelection(dict_sel, dict_data, dictionary_filter_state, non_null_count, filter_count);
 
 			// now set all matching tuples to true
-			for (idx_t i = 0; i < non_null_count; i++) {
+			for (idx_t i = 0; i < filter_count; i++) {
 				auto idx = dict_sel.get_index(i) + 1;
 				scan_state.filter_result[idx] = true;
 			}
@@ -253,13 +257,13 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		sel_count = approved_tuple_count;
 
 		result.Dictionary(scan_state.dictionary, dict_sel, vector_count);
-		PrepareValidityFilterState(scan_state, filter_state);
+		ReplaceValidityFilterWithNoop(scan_state, filter_state);
 		return;
 	}
 	// fallback: scan + filter
 	DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
 	ColumnSegment::FilterSelection(sel, result, dictionary_filter_state, vector_count, sel_count);
-	PrepareValidityFilterState(scan_state, filter_state);
+	ReplaceValidityFilterWithNoop(scan_state, filter_state);
 }
 
 } // namespace dict_fsst
