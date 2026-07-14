@@ -1,0 +1,35 @@
+# name: test/sql/types/geo/geometry_shred_pk_append.test
+# description: Append into a re-shredded rowgroup through the index append path
+# group: [geo]
+
+# Ensure that when appending to a rowgroup, the presence and state of an index does not impact the decision wether
+# a new row segment is created or not. If the row group has a non-updateable type (like GEOMETRY), new segments should
+# be created regardless, and the rowgroup should not be marked as updateable.
+
+load __TEST_DIR__/geometry_shred_pk_append.db readwrite v1.5.0
+
+statement ok
+SET geometry_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE t(id UUID PRIMARY KEY, g GEOMETRY);
+
+statement ok
+INSERT INTO t VALUES (uuidv7(), 'POINT (0 1)'::GEOMETRY);
+
+statement ok
+CHECKPOINT
+
+statement ok
+INSERT INTO t VALUES (uuidv7(), 'POINT (0 1)'::GEOMETRY);
+
+statement ok
+CHECKPOINT
+
+statement ok
+INSERT INTO t VALUES (uuidv7(), 'POINT (0 1)'::GEOMETRY);
+
+query I
+SELECT COUNT(*) FROM t WHERE g::VARCHAR = 'POINT (0 1)';
+----
+3
