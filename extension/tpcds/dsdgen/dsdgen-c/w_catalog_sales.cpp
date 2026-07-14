@@ -65,6 +65,7 @@ static thread_local ds_key_t jDate;
 static thread_local int nTicketItemBase = 1;
 static thread_local int *pItemPermutation;
 static thread_local int nItemCount;
+static thread_local int nItemPermutationSize;
 
 /*
  * the validation process requires generating a single lineitem
@@ -84,7 +85,14 @@ static void mk_master(void *info_arr, ds_key_t index) {
 		strtodec(&dOne, "1.00");
 		strtodec(&dOneHalf, "0.50");
 		jDate = skipDays(CATALOG_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(pItemPermutation, (nItemCount = (int)getIDCount(ITEM)), CS_PERMUTE);
+		nItemCount = (int)getIDCount(ITEM);
+		// A cached permutation is only reusable if it is at least as large as the
+		// current scale requires; otherwise re-allocate to avoid overflowing it.
+		if (nItemCount > nItemPermutationSize) {
+			pItemPermutation = NULL;
+			nItemPermutationSize = nItemCount;
+		}
+		pItemPermutation = makePermutation(pItemPermutation, nItemCount, CS_PERMUTE);
 
 		InitConstants::mk_master_catalog_sales_init = 1;
 	}
