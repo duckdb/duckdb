@@ -15,6 +15,9 @@ statement ok
 COPY (SELECT range::DOUBLE AS d FROM range(102400)) TO '{TEST_DIR}/expr_prune_double.parquet' (ROW_GROUP_SIZE 10240)
 
 statement ok
+COPY (SELECT range::FLOAT AS f FROM range(102400)) TO '{TEST_DIR}/expr_prune_float.parquet' (ROW_GROUP_SIZE 10240)
+
+statement ok
 COPY (SELECT CASE WHEN range = 95000 THEN 'nan'::DOUBLE ELSE range::DOUBLE END AS d FROM range(102400)) TO '{TEST_DIR}/expr_prune_nan.parquet' (ROW_GROUP_SIZE 10240)
 
 # constants are not divisible by the multiplier, so the optimizer keeps the expression filter
@@ -85,6 +88,47 @@ CALL disable_logging()
 query II
 SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
 ----
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# abs(d) is not globally monotone, but row-group stats can still prune ranges that are known to be nonnegative
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_double.parquet' WHERE abs(d) = 42.0
+----
+1
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_float.parquet' WHERE abs(f) = 42.0::FLOAT
+----
+1
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
 
 statement ok
 CALL truncate_duckdb_logs()

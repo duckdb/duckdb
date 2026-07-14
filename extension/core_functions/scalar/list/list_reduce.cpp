@@ -1,6 +1,7 @@
 #include "core_functions/scalar/list_functions.hpp"
 
 #include "duckdb/function/lambda_functions.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
@@ -310,6 +311,7 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	idx_t loops = 0;
 	bool end = false;
 	while (!end) {
+		state.GetContext().InterruptCheck();
 		auto &result_chunk = loops % 2 ? odd_result_chunk : even_result_chunk;
 		auto &spare_result_chunk = loops % 2 ? even_result_chunk : odd_result_chunk;
 
