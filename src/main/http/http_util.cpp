@@ -1,7 +1,10 @@
 #include "duckdb/common/http_util.hpp"
 
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
@@ -405,6 +408,8 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		std::exception_ptr caught_e = nullptr;
 		unique_ptr<HTTPResponse> response;
 		string exception_error;
+		string caught_status;
+		string caught_retry_after;
 
 		try {
 			response = on_request();
@@ -417,6 +422,16 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		} catch (HTTPException &e) {
 			exception_error = e.what();
 			caught_e = std::current_exception();
+			// handlers turn error statuses into exceptions; recover the status for throttle detection
+			ErrorData error_data(e);
+			auto entry = error_data.ExtraInfo().find("status_code");
+			if (entry != error_data.ExtraInfo().end()) {
+				caught_status = entry->second;
+			}
+			auto retry_entry = error_data.ExtraInfo().find("header_Retry-After");
+			if (retry_entry != error_data.ExtraInfo().end()) {
+				caught_retry_after = retry_entry->second;
+			}
 		}
 
 		// Note: request errors will always be retried
@@ -439,11 +454,44 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 		}
 
 		tries += 1;
-		if (tries <= params.retries) {
-			if (tries > 1) {
+		// throttle responses get extra, capped, jittered backoff so bursts degrade instead of failing queries
+		const bool throttled = (response && (response->status == HTTPStatusCode::TooManyRequests_429 ||
+		                                     response->status == HTTPStatusCode::ServiceUnavailable_503)) ||
+		                       caught_status == "429" || caught_status == "503";
 #ifndef DUCKDB_NO_THREADS
-				uint64_t sleep_amount = (uint64_t)((double)params.retry_wait_ms *
-				                                   pow(params.retry_backoff, static_cast<double>(tries - 2)));
+		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 5;
+#else
+		// without threads we cannot sleep between retries, so do not add zero-delay retries
+		static constexpr idx_t THROTTLE_EXTRA_RETRIES = 0;
+#endif
+		static constexpr uint64_t THROTTLE_MAX_BACKOFF_MS = 10000;
+		const idx_t max_tries = params.retries + (throttled ? THROTTLE_EXTRA_RETRIES : 0);
+		if (tries <= max_tries) {
+			if (tries > 1 || throttled) {
+#ifndef DUCKDB_NO_THREADS
+				const auto backoff_exp = static_cast<double>(throttled ? tries - 1 : tries - 2);
+				const auto backoff_ms = (double)params.retry_wait_ms * pow(params.retry_backoff, backoff_exp);
+				// cap in the double domain to avoid overflow in the cast
+				uint64_t sleep_amount =
+				    (uint64_t)MinValue<double>(backoff_ms, (double)NumericLimits<int64_t>::Maximum());
+				if (throttled) {
+					sleep_amount = MinValue<uint64_t>(sleep_amount, THROTTLE_MAX_BACKOFF_MS);
+					string retry_after = caught_retry_after;
+					if (response && response->headers.HasHeader("Retry-After")) {
+						retry_after = response->headers.GetHeaderValue("Retry-After");
+					}
+					if (!retry_after.empty()) {
+						// honor a numeric Retry-After (seconds), capped like the backoff
+						uint64_t retry_after_s = 0;
+						if (TryCast::Operation<string_t, uint64_t>(string_t(retry_after), retry_after_s)) {
+							retry_after_s = MinValue<uint64_t>(retry_after_s, THROTTLE_MAX_BACKOFF_MS / 1000);
+							sleep_amount = MaxValue<uint64_t>(sleep_amount, retry_after_s * 1000);
+						}
+					}
+					// subtractive jitter ([base/2, base]) de-synchronizes retry bursts while honoring the cap
+					RandomEngine random;
+					sleep_amount -= random.NextRandomInteger64() % (sleep_amount / 2 + 1);
+				}
 				std::this_thread::sleep_for(std::chrono::milliseconds(sleep_amount));
 #endif
 			}

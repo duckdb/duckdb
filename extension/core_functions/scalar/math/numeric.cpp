@@ -110,6 +110,10 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	bool potential_overflow = true;
 	if (NumericStats::HasMinMax(lstats)) {
 		switch (expr.GetReturnType().InternalType()) {
+		case PhysicalType::FLOAT:
+		case PhysicalType::DOUBLE:
+			potential_overflow = false;
+			break;
 		case PhysicalType::INT8:
 			potential_overflow = NumericStats::Min(lstats).GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();
 			break;
@@ -133,27 +137,63 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		// no potential overflow
 
 		// compute stats
-		auto current_min = NumericStats::Min(lstats).GetValue<int64_t>();
-		auto current_max = NumericStats::Max(lstats).GetValue<int64_t>();
+		switch (expr.GetReturnType().InternalType()) {
+		case PhysicalType::FLOAT:
+		case PhysicalType::DOUBLE: {
+			auto current_min = NumericStats::Min(lstats).GetValue<double>();
+			auto current_max = NumericStats::Max(lstats).GetValue<double>();
+			if (Value::IsNan(current_min) || Value::IsNan(current_max)) {
+				return nullptr;
+			}
 
-		int64_t min_val, max_val;
-
-		if (current_min < 0 && current_max < 0) {
-			// if both min and max are below zero, then min=abs(cur_max) and max=abs(cur_min)
-			min_val = AbsValue(current_max);
-			max_val = AbsValue(current_min);
-		} else if (current_min < 0) {
-			D_ASSERT(current_max >= 0);
-			// if min is below zero and max is above 0, then min=0 and max=max(cur_max, abs(cur_min))
-			min_val = 0;
-			max_val = MaxValue(AbsValue(current_min), current_max);
-		} else {
-			// if both current_min and current_max are > 0, then the abs is a no-op and can be removed entirely
-			*input.expr_ptr = std::move(input.expr.GetChildrenMutable()[0]);
-			return child_stats[0].ToUnique();
+			double min_val, max_val;
+			if (current_min == 0 || current_max == 0) {
+				// Unlike integers, floating point abs cannot be removed for zero: abs(-0.0) clears the sign bit.
+				min_val = AbsOperator::Operation<double, double>(current_min);
+				max_val = AbsOperator::Operation<double, double>(current_max);
+			} else if (current_min < 0 && current_max < 0) {
+				min_val = AbsOperator::Operation<double, double>(current_max);
+				max_val = AbsOperator::Operation<double, double>(current_min);
+			} else if (current_min < 0) {
+				D_ASSERT(current_max >= 0);
+				min_val = 0;
+				max_val = MaxValue(AbsOperator::Operation<double, double>(current_min), current_max);
+			} else {
+				*input.expr_ptr = std::move(input.expr.GetChildrenMutable()[0]);
+				return child_stats[0].ToUnique();
+			}
+			new_min = expr.GetReturnType().InternalType() == PhysicalType::FLOAT
+			              ? Value::FLOAT(static_cast<float>(min_val))
+			              : Value::DOUBLE(min_val);
+			new_max = expr.GetReturnType().InternalType() == PhysicalType::FLOAT
+			              ? Value::FLOAT(static_cast<float>(max_val))
+			              : Value::DOUBLE(max_val);
+			break;
 		}
-		new_min = Value::Numeric(expr.GetReturnType(), min_val);
-		new_max = Value::Numeric(expr.GetReturnType(), max_val);
+		default: {
+			auto current_min = NumericStats::Min(lstats).GetValue<int64_t>();
+			auto current_max = NumericStats::Max(lstats).GetValue<int64_t>();
+
+			int64_t min_val, max_val;
+			if (current_min < 0 && current_max < 0) {
+				// if both min and max are below zero, then min=abs(cur_max) and max=abs(cur_min)
+				min_val = AbsValue(current_max);
+				max_val = AbsValue(current_min);
+			} else if (current_min < 0) {
+				D_ASSERT(current_max >= 0);
+				// if min is below zero and max is above 0, then min=0 and max=max(cur_max, abs(cur_min))
+				min_val = 0;
+				max_val = MaxValue(AbsValue(current_min), current_max);
+			} else {
+				// if both current_min and current_max are > 0, then the abs is a no-op and can be removed entirely
+				*input.expr_ptr = std::move(input.expr.GetChildrenMutable()[0]);
+				return child_stats[0].ToUnique();
+			}
+			new_min = Value::Numeric(expr.GetReturnType(), min_val);
+			new_max = Value::Numeric(expr.GetReturnType(), max_val);
+			break;
+		}
+		}
 		expr.FunctionMutable().SetFunctionCallback(
 		    ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.GetReturnType()));
 	}
@@ -201,6 +241,13 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT: {
 			ScalarFunction function({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
+			function.SetStatisticsCallback(PropagateAbsStats);
+			abs.AddFunction(function);
+			break;
+		}
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE: {
+			ScalarFunction function({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type));
 			function.SetStatisticsCallback(PropagateAbsStats);
 			abs.AddFunction(function);
 			break;
@@ -1875,6 +1922,53 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 		function.SetFallible();
 	}
 	return funcs;
+}
+
+//===--------------------------------------------------------------------===//
+// binom(), C()
+//===--------------------------------------------------------------------===//
+namespace {
+struct BinomOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
+		if (left < 0 || right < 0) {
+			throw OutOfRangeException("binom with negative input is undefined");
+		}
+		if (left < right) {
+			return 0;
+		}
+		TR ret = 1;
+		TA n = left;
+		TA k = std::min(right, left - right);
+		for (TA i = 1; i <= k; i++) {
+			TR numerator = TR(n - k + i);
+			TR denominator = TR(i);
+
+			auto divisor = GreatestCommonDivisor(numerator, denominator);
+			numerator /= divisor;
+			denominator /= divisor;
+
+			divisor = GreatestCommonDivisor(ret, denominator);
+			ret /= divisor;
+			denominator /= divisor;
+
+			// After canceling common factors, the denominator should equal 1.
+			D_ASSERT(denominator == 1);
+
+			if (!TryMultiplyOperator::Operation(ret, numerator, ret)) {
+				throw OutOfRangeException("Value out of range");
+			}
+		}
+		return ret;
+	}
+};
+} // namespace
+
+ScalarFunction BinomFun::GetFunction() {
+	ScalarFunction function({LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::HUGEINT,
+	                        ScalarFunction::BinaryFunction<int32_t, int32_t, hugeint_t, BinomOperator>);
+	function.SetFallible();
+	return function;
 }
 
 } // namespace duckdb

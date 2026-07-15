@@ -1,0 +1,35 @@
+diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
+index 6ee3cb5..136d17f 100644
+--- a/src/avro_multi_file_info.cpp
++++ b/src/avro_multi_file_info.cpp
+@@ -82,14 +82,14 @@ unique_ptr<GlobalTableFunctionState> AvroMultiFileInfo::InitializeGlobalState(Cl
+ //! This is done by calling the Avro Scan directly on one file.
+ struct AvroFileLocalState : public LocalTableFunctionState {
+ public:
+-	explicit AvroFileLocalState(ExecutionContext &execution_context) : execution_context(execution_context) {};
++	explicit AvroFileLocalState(ClientContext &context) : context(context) {};
+ 
+ public:
+ 	shared_ptr<AvroReader> file_scan;
+-	ExecutionContext &execution_context;
++	ClientContext &context;
+ };
+ 
+-unique_ptr<LocalTableFunctionState> AvroMultiFileInfo::InitializeLocalState(ExecutionContext &context,
++unique_ptr<LocalTableFunctionState> AvroMultiFileInfo::InitializeLocalState(ClientContext &context,
+                                                                             GlobalTableFunctionState &function_state) {
+ 	return make_uniq<AvroFileLocalState>(context);
+ }
+diff --git a/src/include/avro_multi_file_info.hpp b/src/include/avro_multi_file_info.hpp
+index ef0e7bc..4c43fed 100644
+--- a/src/include/avro_multi_file_info.hpp
++++ b/src/include/avro_multi_file_info.hpp
+@@ -41,7 +41,7 @@ struct AvroMultiFileInfo : MultiFileReaderInterface {
+ 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
+ 	                                                           MultiFileGlobalState &global_state) override;
+ 
+-	unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &context,
++	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &context,
+ 	                                                         GlobalTableFunctionState &function_state) override;
+ 
+ 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
