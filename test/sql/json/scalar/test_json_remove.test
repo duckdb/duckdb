@@ -150,3 +150,57 @@ query T
 SELECT json_normalize(json_remove('{"z":1,"a":2}', '$.z'))
 ----
 {"a":2}
+
+# Quoted key with an escaped quote removes the key a"b, not its sibling
+query T
+SELECT json_remove('{"a\"b":1,"a\\":2}', '$."a\"b"')
+----
+{"a\\":2}
+
+# Quoted key with an escaped backslash removes the key a\
+query T
+SELECT json_remove('{"a\\":1,"b":2}', '$."a\\"')
+----
+{"b":2}
+
+# Quoted key containing a tilde
+query T
+SELECT json_remove('{"a~b":1,"c":2}', '$."a~b"')
+----
+{"c":2}
+
+# Empty quoted key removes the empty string key
+query T
+SELECT json_remove('{"":1,"a":2}', '$.""')
+----
+{"a":2}
+
+# [#-1] removes the last array element
+query T
+SELECT json_remove('[1,2,3]', '$[#-1]')
+----
+[1,2]
+
+# [#-2] removes the second element from the end
+query T
+SELECT json_remove('[1,2,3]', '$[#-2]')
+----
+[1,3]
+
+# [#] is the array length, where no element exists, so this is a no-op
+query T
+SELECT json_remove('[1,2]', '$[#]')
+----
+[1,2]
+
+# Reverse index beyond the array length is a no-op
+query T
+SELECT json_remove('[1,2]', '$[#-5]')
+----
+[1,2]
+
+# Reverse index into an empty array is a no-op
+query T
+SELECT json_remove('[]', '$[#-1]')
+----
+[]

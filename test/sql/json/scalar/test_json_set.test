@@ -191,3 +191,111 @@ query T
 SELECT json_normalize(json_set('{"z":1}', '$.a', '2'))
 ----
 {"a":2,"z":1}
+
+# Quoted key with an escaped quote addresses the key a"b, not its sibling
+query T
+SELECT json_set('{"a\"b":1,"a\\":2}', '$."a\"b"', '9')
+----
+{"a\"b":9,"a\\":2}
+
+# Quoted key with an escaped backslash addresses the key a\
+query T
+SELECT json_set('{"a\\":1,"b":2}', '$."a\\"', '9')
+----
+{"a\\":9,"b":2}
+
+# Empty quoted key addresses the empty string key
+query T
+SELECT json_set('{"":1,"a":2}', '$.""', '9')
+----
+{"":9,"a":2}
+
+# Quoted key containing a tilde
+query T
+SELECT json_set('{"a~b":1}', '$."a~b"', '9')
+----
+{"a~b":9}
+
+# Unicode key
+query T
+SELECT json_set('{}', '$.日本', '1')
+----
+{"日本":1}
+
+# Set at the root replaces the whole document
+query T
+SELECT json_set('{"a":1}', '$', '{"b":2}')
+----
+{"b":2}
+
+# [#-1] addresses the last array element
+query T
+SELECT json_set('[1,2]', '$[#-1]', '9')
+----
+[1,9]
+
+# [#-1] works below the top level
+query T
+SELECT json_set('{"log":[{"v":1},{"v":2}]}', '$.log[#-1].v', '9')
+----
+{"log":[{"v":1},{"v":9}]}
+
+# Chained reverse indexes
+query T
+SELECT json_set('[[1,2],[3,4]]', '$[#-1][#-1]', '9')
+----
+[[1,2],[3,9]]
+
+# [#-0] is the array length, so set appends
+query T
+SELECT json_set('[1,2]', '$[#-0]', '9')
+----
+[1,2,9]
+
+# Setting at an index equal to the length also appends
+query T
+SELECT json_set('[1,2]', '$[2]', '9')
+----
+[1,2,9]
+
+# Reverse index beyond the array length is a no-op
+query T
+SELECT json_set('[1,2]', '$[#-5]', '9')
+----
+[1,2]
+
+# Reverse index into an empty array is a no-op
+query T
+SELECT json_set('[]', '$[#-1]', '9')
+----
+[]
+
+# Reverse index into something that is not an array is a no-op
+query T
+SELECT json_set('{"a":{"x":1}}', '$.a[#-1]', '9')
+----
+{"a":{"x":1}}
+
+# Literal negative indexes are not valid
+query T
+SELECT json_set('[1,2]', '$[-1]', '9')
+----
+[1,2]
+
+# Setting a key inside a null root is a no-op
+query T
+SELECT json_set('null', '$.a', '1')
+----
+null
+
+# Setting a key inside a scalar root is a no-op
+query T
+SELECT json_set('1', '$.a', '2')
+----
+1
+
+# Setting below a scalar does not replace it
+query T
+SELECT json_set('{"a":1}', '$.a.b', '2')
+----
+{"a":1}

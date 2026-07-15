@@ -164,3 +164,39 @@ query T
 SELECT json_normalize(json_insert('{"z":1}', '$.a', '2'))
 ----
 {"a":2,"z":1}
+
+# Quoted key with an escaped quote: the key a"b exists, so this is a no-op
+query T
+SELECT json_insert('{"a\"b":1}', '$."a\"b"', '9')
+----
+{"a\"b":1}
+
+# Quoted key with an escaped quote: the key a"b is missing, so it is inserted
+query T
+SELECT json_insert('{"a\\":2}', '$."a\"b"', '9')
+----
+{"a\\":2,"a\"b":9}
+
+# [#-1] addresses the last element, which exists, so this is a no-op
+query T
+SELECT json_insert('[1,2]', '$[#-1]', '9')
+----
+[1,2]
+
+# [#-0] is the array length, so insert appends
+query T
+SELECT json_insert('[1,2]', '$[#-0]', '9')
+----
+[1,2,9]
+
+# Reverse index beyond the array length is a no-op
+query T
+SELECT json_insert('[1,2]', '$[#-5]', '9')
+----
+[1,2]
+
+# Append into a nested array
+query T
+SELECT json_insert('{"a":[1]}', '$.a[#]', '2')
+----
+{"a":[1,2]}

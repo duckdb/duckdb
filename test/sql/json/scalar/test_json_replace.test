@@ -160,3 +160,33 @@ query T
 SELECT json_normalize(json_replace('{"z":1,"a":2}', '$.z', '9'))
 ----
 {"a":2,"z":9}
+
+# Quoted key with an escaped quote addresses the key a"b, not its sibling
+query T
+SELECT json_replace('{"a\"b":1,"a\\":2}', '$."a\"b"', '9')
+----
+{"a\"b":9,"a\\":2}
+
+# [#-1] addresses the last array element
+query T
+SELECT json_replace('[1,2]', '$[#-1]', '9')
+----
+[1,9]
+
+# [#-2] works below the top level
+query T
+SELECT json_replace('{"a":[1,2,3]}', '$.a[#-2]', '9')
+----
+{"a":[1,9,3]}
+
+# [#-0] is the array length, where no element exists, so this is a no-op
+query T
+SELECT json_replace('[1,2]', '$[#-0]', '9')
+----
+[1,2]
+
+# Reverse index into an empty array is a no-op
+query T
+SELECT json_replace('[]', '$[#-1]', '9')
+----
+[]
