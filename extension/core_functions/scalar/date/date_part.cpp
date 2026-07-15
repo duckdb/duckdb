@@ -2246,10 +2246,8 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, tstz_stats));
 	auto tsns_func = DatePart::UnaryFunction<timestamp_ns_t, int64_t, OP>;
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP_NS}, LogicalType::BIGINT, tsns_func));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP_TZ_NS}, LogicalType::BIGINT, tsns_func));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS}, LogicalType::BIGINT, tsns_func));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS}, LogicalType::BIGINT, tsns_func));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return operator_set;
 }
