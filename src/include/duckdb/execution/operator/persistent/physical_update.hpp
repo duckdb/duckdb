@@ -25,7 +25,7 @@ public:
 	PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> types, DuckTableEntry &tableref, DataTable &table,
 	               vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
 	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<BoundConstraint>> bound_constraints,
-	               idx_t estimated_cardinality, bool return_chunk, bool capture_old_rows, idx_t old_row_offset);
+	               idx_t estimated_cardinality, bool return_chunk, bool capture_old_rows, vector<idx_t> old_row_columns);
 
 	DuckTableEntry &tableref;
 	DataTable &table;
@@ -38,8 +38,8 @@ public:
 	bool return_chunk;
 	//! If set, also emit the pre-update (OLD) row image after the NEW image
 	bool capture_old_rows;
-	//! Input-chunk offset at which the captured OLD physical columns begin (only when capture_old_rows)
-	idx_t old_row_offset;
+	//! Input-chunk index of each captured OLD physical column, in physical table order (only when capture_old_rows)
+	vector<idx_t> old_row_columns;
 	//! Set to true, if we are updating an index column.
 	bool index_update;
 

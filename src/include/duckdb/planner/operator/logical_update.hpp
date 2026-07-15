@@ -32,8 +32,8 @@ public:
 	bool return_chunk;
 	//! if set, the operator also emits the pre-update (OLD) row image after the NEW image
 	bool capture_old_rows = false;
-	//! input-chunk offset at which the captured OLD physical columns begin (only set when capture_old_rows)
-	idx_t old_row_offset = 0;
+	//! input-chunk index of each captured OLD physical column, in physical table order (only when capture_old_rows)
+	vector<idx_t> old_row_columns;
 	vector<PhysicalIndex> columns;
 	vector<unique_ptr<Expression>> bound_defaults;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;

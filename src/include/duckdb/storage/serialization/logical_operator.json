@@ -853,9 +853,8 @@
       },
       {
         "id": 208,
-        "name": "old_row_offset",
-        "type": "idx_t",
-        "default": "0"
+        "name": "old_row_columns",
+        "type": "vector<idx_t>"
       }
     ],
     "constructor": [

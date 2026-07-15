@@ -151,11 +151,11 @@ string Binder::TriggerOldCaptureColumnName(const TableCatalogEntry &table, idx_t
 
 void Binder::BindOldRowCapture(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
                                LogicalUpdate &update) {
-	// Append a reference to each physical column's scanned pre-update value, in table order, and record where the
-	// OLD block starts in the UPDATE input chunk. rowid is appended afterwards, so it stays the last input column.
-	// A column that is SET to a constant is not otherwise scanned, so we add it to the scan here.
+	// Append a reference to each physical column's scanned pre-update value, in table order, recording the
+	// input-chunk index of each so the operator can locate the OLD image without assuming a contiguous layout.
+	// rowid is appended afterwards, so it stays the last input column. A column that is SET to a constant is not
+	// otherwise scanned, so we add it to the scan here.
 	auto &column_ids = get.GetColumnIds();
-	update.old_row_offset = proj.expressions.size();
 	for (auto &column : table.GetColumns().Physical()) {
 		auto logical_index = column.Logical().index;
 		optional_idx get_pos;
@@ -169,6 +169,7 @@ void Binder::BindOldRowCapture(TableCatalogEntry &table, LogicalGet &get, Logica
 			get_pos = column_ids.size();
 			get.AddColumnId(logical_index);
 		}
+		update.old_row_columns.push_back(proj.expressions.size());
 		proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 		    column.Type(), ColumnBinding(get.table_index, ProjectionIndex(get_pos.GetIndex()))));
 	}
