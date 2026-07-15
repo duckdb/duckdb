@@ -218,11 +218,15 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
 
+	// Trigger expansion flags its generated base UPDATE for OLD capture via scoped binder state (keyed by node
+	// identity), so the parsed AST carries no trigger-internal state.
+	bool capture_old_rows = global_binder_state->trigger_old_capture_nodes.count(node) > 0;
+
 	// set return_chunk boolean early because it needs uses update_is_del_and_insert logic
-	if (!node.returning_list.empty() || node.capture_old_rows) {
+	if (!node.returning_list.empty() || capture_old_rows) {
 		update->return_chunk = true;
 	}
-	update->capture_old_rows = node.capture_old_rows;
+	update->capture_old_rows = capture_old_rows;
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;

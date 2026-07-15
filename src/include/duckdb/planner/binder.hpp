@@ -193,6 +193,9 @@ struct GlobalBinderState {
 	optional_ptr<BoundParameterMap> parameters;
 	//! Tables whose triggers have already been expanded in this query (recursion detection)
 	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
+	//! Generated base-UPDATE nodes that must also capture the pre-update (OLD) row image. Internal
+	//! trigger-expansion state, keyed by node identity; never set by SQL parsing and never serialized.
+	reference_set_t<QueryNode> trigger_old_capture_nodes;
 	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)

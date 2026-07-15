@@ -348,7 +348,8 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
                                                 const vector<const_reference<TriggerCatalogEntry>> &after_triggers,
                                                 const string &uuid_suffix, const Identifier &base_cte_name,
                                                 bool has_returning,
-                                                const vector<pair<column_t, Identifier>> &injected_virtuals) {
+                                                const vector<pair<column_t, Identifier>> &injected_virtuals,
+                                                optional_ptr<QueryNode> &out_capture_base) {
 	auto outer = make_uniq<SelectNode>();
 	if (has_returning) {
 		outer->select_list.push_back(make_uniq<StarExpression>());
@@ -380,9 +381,6 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 	// Base CTE: the DML with RETURNING * (full rows for transition tables), plus referenced
 	// virtual columns appended so they are materialised for the RETURNING projection.
 	auto base_node = node.Copy();
-	if (update_old_capture) {
-		base_node->Cast<UpdateQueryNode>().capture_old_rows = true;
-	}
 	auto &base_returning = GetDMLReturningList(*base_node);
 	base_returning.push_back(make_uniq<StarExpression>());
 	identifier_set_t injected_names;
@@ -394,6 +392,11 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 	base_cte->query_node = std::move(base_node);
 	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 	base_cte->is_trigger_generated = true;
+	// Expose the base UPDATE node so ExpandTriggers can flag it for OLD capture in scoped binder state
+	// (instead of a transient field on the parsed AST).
+	if (update_old_capture) {
+		out_capture_base = base_cte->query_node.get();
+	}
 	outer->cte_map.map[base_cte_name] = std::move(base_cte);
 
 	AddAfterTriggerCTEs(*outer, after_triggers, base_cte_name, uuid_suffix, injected_names, table, update_old_capture);
@@ -418,9 +421,18 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	auto uuid_suffix = UUID::ToString(UUID::GenerateRandomUUID());
 	Identifier base_cte_name(TRIGGER_BASE_CTE_PREFIX + uuid_suffix);
 
+	optional_ptr<QueryNode> capture_base;
 	auto outer = BuildTriggerChain(node, table, before_triggers, after_triggers, uuid_suffix, base_cte_name,
-	                               has_returning, injected_virtuals);
+	                               has_returning, injected_virtuals, capture_base);
+	// Flag the generated base UPDATE for OLD capture in scoped binder state, active only while binding this
+	// chain. BindNode(UpdateQueryNode) reads it by node identity, so it never touches the parsed AST.
+	if (capture_base) {
+		global_binder_state->trigger_old_capture_nodes.insert(*capture_base);
+	}
 	auto chain = Bind(*outer);
+	if (capture_base) {
+		global_binder_state->trigger_old_capture_nodes.erase(*capture_base);
+	}
 
 	if (!has_returning) {
 		auto &properties = GetStatementProperties();

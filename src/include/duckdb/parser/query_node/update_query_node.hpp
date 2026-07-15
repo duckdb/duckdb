@@ -36,9 +36,6 @@ public:
 	unique_ptr<UpdateSetInfo> set_info;
 	//! bind the same way as ALTER TABLE expressions (table catalog preferred)
 	bool prioritize_table_when_binding = false;
-	//! internal marker (never set by SQL parsing): trigger expansion sets this on its generated base UPDATE
-	//! CTE when an AFTER UPDATE trigger references OLD, so the update also captures the pre-update row image
-	bool capture_old_rows = false;
 
 public:
 	string ToString() const override;
