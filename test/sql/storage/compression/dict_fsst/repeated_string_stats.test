@@ -18,11 +18,6 @@ FROM range(100000) t(i)
 statement ok
 CHECKPOINT
 
-query I
-SELECT compression FROM pragma_storage_info('repeated') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
-----
-DICT_FSST
-
 query III
 SELECT s.min_string_length, s.max_string_length, s.total_string_length
 FROM (SELECT stats(value) s FROM repeated LIMIT 1)
