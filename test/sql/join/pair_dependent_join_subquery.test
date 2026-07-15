@@ -194,6 +194,21 @@ ANTI JOIN pair_r r ON EXISTS (
 ORDER BY ALL;
 ----
 
+# A condition that depends only on the local side is planned independently.
+query III
+SELECT l.a, l.x, count(r.b)
+FROM pair_l l
+LEFT JOIN pair_r r ON EXISTS (
+	SELECT 1 FROM pair_s s WHERE s.b = r.b
+)
+GROUP BY l.a, l.x
+ORDER BY ALL;
+----
+1	10	3
+1	11	3
+2	20	3
+3	30	3
+
 # Pair-dependent LEFT joins are represented as dependent joins, and still
 # support inputs that expose more than one binding group on either side.
 statement ok

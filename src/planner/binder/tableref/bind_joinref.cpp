@@ -11,8 +11,10 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
@@ -32,6 +34,48 @@ static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder 
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
 	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
+}
+
+static JoinSide GetReferencedJoinSide(Expression &expression, const unordered_set<TableIndex> &left_bindings,
+                                      const unordered_set<TableIndex> &right_bindings) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto table_index = expression.Cast<BoundColumnRefExpression>().Binding().table_index;
+		if (left_bindings.count(table_index)) {
+			return JoinSide::LEFT;
+		}
+		if (right_bindings.count(table_index)) {
+			return JoinSide::RIGHT;
+		}
+		return JoinSide::NONE;
+	}
+	JoinSide result = JoinSide::NONE;
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
+		result = JoinSide::CombineJoinSide(result, GetReferencedJoinSide(child, left_bindings, right_bindings));
+	});
+	return result;
+}
+
+static bool HasPairDependentSubquery(Expression &expression, const unordered_set<TableIndex> &left_bindings,
+                                     const unordered_set<TableIndex> &right_bindings) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		auto &subquery = expression.Cast<BoundSubqueryExpression>();
+		auto side = GetReferencedJoinSide(expression, left_bindings, right_bindings);
+		for (auto &column : subquery.GetBinder()->correlated_columns) {
+			if (left_bindings.count(column.binding.table_index)) {
+				side = JoinSide::CombineJoinSide(side, JoinSide::LEFT);
+			} else if (right_bindings.count(column.binding.table_index)) {
+				side = JoinSide::CombineJoinSide(side, JoinSide::RIGHT);
+			}
+		}
+		if (side == JoinSide::BOTH) {
+			return true;
+		}
+	}
+	bool result = false;
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
+		result = result || HasPairDependentSubquery(child, left_bindings, right_bindings);
+	});
+	return result;
 }
 
 bool Binder::TryFindBinding(const Identifier &using_column, const string &join_side, BindingAlias &result) {
@@ -170,15 +214,36 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	auto &left_binder = *result->left_binder;
 	auto &right_binder = *result->right_binder;
 
+	auto is_right_join =
+	    ref.type == JoinType::RIGHT || ref.type == JoinType::RIGHT_SEMI || ref.type == JoinType::RIGHT_ANTI;
+	result->inputs_flipped =
+	    is_right_join && ref.ref_type == JoinRefType::REGULAR && ref.condition && ref.condition->HasSubquery();
 	result->type = ref.type;
-	result->left = left_binder.BindJoin(*this, *ref.left);
+	if (result->inputs_flipped) {
+		switch (ref.type) {
+		case JoinType::RIGHT:
+			result->type = JoinType::LEFT;
+			break;
+		case JoinType::RIGHT_SEMI:
+			result->type = JoinType::SEMI;
+			break;
+		case JoinType::RIGHT_ANTI:
+			result->type = JoinType::ANTI;
+			break;
+		default:
+			throw InternalException("Unexpected right join type during lateral condition normalization");
+		}
+	}
+	auto &left_ref = result->inputs_flipped ? *ref.right : *ref.left;
+	auto &right_ref = result->inputs_flipped ? *ref.left : *ref.right;
+	result->left = left_binder.BindJoin(*this, left_ref);
 	result->delim_flipped = ref.delim_flipped;
 
 	{
 		LateralBinder lateral_binder(left_binder, context);
 
 		right_binder.BeginSubqueryBind(left_binder, lateral_binder);
-		result->right = right_binder.BindJoin(*this, *ref.right);
+		result->right = right_binder.BindJoin(*this, right_ref);
 		if (!ref.duplicate_eliminated_columns.empty()) {
 			if (ref.delim_flipped) {
 				// We gotta use the expression binder of the right side
@@ -210,7 +275,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		result->lateral = is_lateral;
 		if (result->lateral) {
 			// lateral join: can only be an INNER or LEFT join
-			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
+			if (result->type != JoinType::INNER && result->type != JoinType::LEFT) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
 			}
 		}
@@ -331,18 +396,70 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 
 			AddUsingBindings(*set, left_using_binding, left_binding);
 			AddUsingBindings(*set, right_using_binding, right_binding);
-			SetPrimaryBinding(*set, ref.type, left_binding, right_binding);
+			SetPrimaryBinding(*set, result->type, left_binding, right_binding);
 			bind_context.TransferUsingBinding(left_binder.bind_context, left_using_binding, *set, using_column);
 			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, *set, using_column);
 			AddUsingBindingSet(std::move(set));
 		}
 	}
 
+	for (auto &condition : extra_conditions) {
+		if (ref.condition) {
+			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
+			                                                 std::move(condition));
+		} else {
+			ref.condition = std::move(condition);
+		}
+	}
+	auto normalize_condition =
+	    ref.condition && ref.condition->HasSubquery() && ref.ref_type == JoinRefType::REGULAR &&
+	    (result->type == JoinType::LEFT || result->type == JoinType::SEMI || result->type == JoinType::ANTI);
+	unique_ptr<ParsedExpression> ordinary_condition;
+	if (normalize_condition) {
+		ordinary_condition = ref.condition->Copy();
+		auto correlated_columns_before_condition = right_binder.correlated_columns;
+		LateralBinder lateral_binder(left_binder, context);
+		right_binder.BeginSubqueryBind(left_binder, lateral_binder);
+		WhereBinder condition_binder(right_binder, context);
+		result->condition = condition_binder.Bind(ref.condition);
+		right_binder.FinishSubqueryBind();
+
+		unordered_set<TableIndex> left_table_bindings;
+		unordered_set<TableIndex> right_table_bindings;
+		for (auto &binding : left_binder.bind_context.GetBindingsList()) {
+			left_table_bindings.insert(binding->GetIndex());
+		}
+		for (auto &binding : right_binder.bind_context.GetBindingsList()) {
+			right_table_bindings.insert(binding->GetIndex());
+		}
+		result->condition_lateral =
+		    HasPairDependentSubquery(*result->condition, left_table_bindings, right_table_bindings);
+		if (result->condition_lateral) {
+			result->correlated_columns = right_binder.correlated_columns;
+		} else {
+			// Discard the probe binding and bind one-sided subqueries in the ordinary final join scope below.
+			right_binder.correlated_columns = std::move(correlated_columns_before_condition);
+		}
+	}
+
 	auto right_bindings = right_binder.bind_context.GetBindingAliases();
 	auto left_bindings = left_binder.bind_context.GetBindingAliases();
-
-	bind_context.AddContext(std::move(left_binder.bind_context));
-	bind_context.AddContext(std::move(right_binder.bind_context));
+	if (result->inputs_flipped) {
+		bind_context.AddContext(std::move(right_binder.bind_context));
+		bind_context.AddContext(std::move(left_binder.bind_context));
+	} else {
+		bind_context.AddContext(std::move(left_binder.bind_context));
+		bind_context.AddContext(std::move(right_binder.bind_context));
+	}
+	if (ref.condition && (!normalize_condition || !result->condition_lateral)) {
+		WhereBinder condition_binder(*this, context);
+		auto &condition = normalize_condition ? ordinary_condition : ref.condition;
+		result->condition = condition_binder.Bind(condition);
+		if (result->type != JoinType::INNER && result->type != JoinType::LEFT &&
+		    HasLateralCorrelatedColumns(*result->condition, *this)) {
+			throw NotImplementedException("Non-inner join on correlated columns not supported");
+		}
+	}
 
 	// Update the correlated columns for the parent binder
 	// For the left binder, depth >= 1 indicates correlations from the parent binder
@@ -361,23 +478,6 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		}
 	}
 
-	for (auto &condition : extra_conditions) {
-		if (ref.condition) {
-			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
-			                                                 std::move(condition));
-		} else {
-			ref.condition = std::move(condition);
-		}
-	}
-	if (ref.condition) {
-		WhereBinder binder(*this, context);
-		result->condition = binder.Bind(ref.condition);
-		if (result->type != JoinType::INNER && result->type != JoinType::LEFT &&
-		    HasLateralCorrelatedColumns(*result->condition, *this)) {
-			throw NotImplementedException("Non-inner join on correlated columns not supported");
-		}
-	}
-
 	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI || result->type == JoinType::MARK) {
 		bind_context.RemoveContext(right_bindings);
 		if (result->type == JoinType::MARK) {
@@ -393,10 +493,12 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	}
 
 	BoundStatement result_stmt;
-	result_stmt.types.insert(result_stmt.types.end(), result->left.types.begin(), result->left.types.end());
-	result_stmt.types.insert(result_stmt.types.end(), result->right.types.begin(), result->right.types.end());
-	result_stmt.names.insert(result_stmt.names.end(), result->left.names.begin(), result->left.names.end());
-	result_stmt.names.insert(result_stmt.names.end(), result->right.names.begin(), result->right.names.end());
+	auto &first = result->inputs_flipped ? result->right : result->left;
+	auto &second = result->inputs_flipped ? result->left : result->right;
+	result_stmt.types.insert(result_stmt.types.end(), first.types.begin(), first.types.end());
+	result_stmt.types.insert(result_stmt.types.end(), second.types.begin(), second.types.end());
+	result_stmt.names.insert(result_stmt.names.end(), first.names.begin(), first.names.end());
+	result_stmt.names.insert(result_stmt.names.end(), second.names.begin(), second.names.end());
 	result_stmt.plan = CreatePlan(*result);
 	return result_stmt;
 }

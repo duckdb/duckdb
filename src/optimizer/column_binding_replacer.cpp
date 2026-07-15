@@ -35,16 +35,6 @@ void ColumnBindingReplacer::AddReplacements(const vector<ColumnBinding> &old_bin
 	}
 }
 
-static void ReplaceBindings(vector<ColumnBinding> &bindings, const vector<ReplacementBinding> &replacement_bindings) {
-	for (auto &binding : bindings) {
-		for (auto &replacement : replacement_bindings) {
-			if (binding == replacement.old_binding) {
-				binding = replacement.new_binding;
-			}
-		}
-	}
-}
-
 static void ReplaceCorrelatedColumns(CorrelatedColumns &columns,
                                      const vector<ReplacementBinding> &replacement_bindings) {
 	for (auto &column : columns) {
@@ -91,7 +81,6 @@ void CorrelatedColumnBindingReplacer::VisitOperatorBindings(LogicalOperator &op)
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
 		auto &dependent_join = op.Cast<LogicalDependentJoin>();
 		ReplaceCorrelatedColumns(dependent_join.correlated_columns, replacement_bindings);
-		ReplaceBindings(dependent_join.right_payload_binding_seeds, replacement_bindings);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:

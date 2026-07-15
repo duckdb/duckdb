@@ -32,7 +32,9 @@ void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding
 }
 
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
-	VisitOperatorChildren(op);
+	if (op.type != LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		VisitOperatorChildren(op);
+	}
 	// update the bindings in the correlated columns of the dependent join
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		auto &plan = op.Cast<LogicalDependentJoin>();
@@ -62,10 +64,15 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	auto current_entry = current_binding_map.find(alias_entry->second);
 	D_ASSERT(current_entry != current_binding_map.end());
 	auto original_binding = expr.Binding();
+	if (original_binding == current_entry->second) {
+		expr.DepthMutable() = 0;
+		return nullptr;
+	}
 	expr.BindingMutable() = current_entry->second;
 	RegisterCorrelatedBinding(original_binding, expr.Binding());
-	D_ASSERT(expr.Depth() > 0);
-	expr.DepthMutable()--;
+	// The current representative is produced inside the converted algebra. Once a
+	// reference points at it, it is local regardless of the original binder depth.
+	expr.DepthMutable() = 0;
 	return nullptr;
 }
 

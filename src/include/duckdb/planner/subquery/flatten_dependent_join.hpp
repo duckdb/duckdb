@@ -50,6 +50,7 @@ private:
 	                                      const CorrelatedColumns &correlated_columns,
 	                                      const vector<ColumnBinding> &state, bool perform_delim);
 	column_binding_map_t<ColumnBinding> GetCurrentBindings(const vector<ColumnBinding> &state) const;
+	void RewriteCorrelatedBindings(LogicalOperator &op, const vector<ColumnBinding> &state);
 	//! Checks whether a subtree contains any correlated expressions that reference this flattener's correlated columns.
 	bool DependsOnCorrelated(LogicalOperator &op) const;
 	idx_t GetDelimKeyIndex(idx_t index) const;
@@ -60,6 +61,7 @@ private:
 	optional_ptr<const ColumnBinding> GetCorrelatedBase(const ColumnBinding &binding) const;
 	optional_idx GetCorrelatedIndex(const ColumnBinding &binding) const;
 	void MergeCorrelatedAliases(const FlattenDependentJoins &source);
+	void AddReplacementAliases(const vector<ReplacementBinding> &replacements);
 	Binder &binder;
 	column_binding_map_t<ColumnBinding> correlated_aliases;
 	column_binding_map_t<idx_t> replacement_map;
@@ -74,7 +76,8 @@ private:
 	static void AddBindingReplacement(UnnestingState &state, ColumnBinding old_binding, ColumnBinding new_binding);
 	static void MergeBindingReplacements(UnnestingState &target, const UnnestingState &source);
 	static void RewriteOperatorBindings(LogicalOperator &op, const UnnestingState &state);
-	static vector<ColumnBinding> GetRightPayloadBindings(LogicalDependentJoin &op);
+	static void RewriteChildProjectionMap(LogicalOperator &op, idx_t child_index,
+	                                      vector<ColumnBinding> projected_bindings, const UnnestingState &state);
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
 	                             bool include_names) const;
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
@@ -95,8 +98,10 @@ private:
 	                             vector<ColumnBinding> state, bool rewrite_parent = true, idx_t child_idx = 0);
 	UnnestingState FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, UnnestingState outer_state,
 	                                     const UnnestingState &right_state,
-	                                     vector<ColumnBinding> right_payload_bindings);
-	vector<ColumnBinding> AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left, LogicalJoin &join);
+	                                     vector<ColumnBinding> public_output_bindings);
+	UnnestingState ProjectDependentJoinOutput(unique_ptr<LogicalOperator> &plan, UnnestingState state,
+	                                          vector<ColumnBinding> public_output_bindings);
+	UnnestingState AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left, LogicalJoin &join);
 	UnnestingState PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                             vector<ColumnBinding> state, bool correlated_left);
 	UnnestingState PushDownProjection(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,

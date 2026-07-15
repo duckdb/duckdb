@@ -60,6 +60,7 @@ public:
 	void VisitOperatorBindings(LogicalOperator &op) override;
 
 protected:
+	using ColumnBindingReplacer::VisitReplace;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };
 

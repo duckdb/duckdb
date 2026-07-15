@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
@@ -24,19 +25,16 @@ class LogicalJoin;
  */
 class RecursiveDependentJoinPlanner : public LogicalOperatorVisitor {
 public:
-	static void Plan(Binder &binder, LogicalOperator &op);
+	static void Plan(Binder &binder, unique_ptr<LogicalOperator> &op);
 	static void PlanJoinConditionSubqueries(Binder &binder, unique_ptr<LogicalOperator> &op);
 	static bool CanRewritePairDependentJoinCondition(LogicalOperator &op);
 
 private:
 	explicit RecursiveDependentJoinPlanner(Binder &binder) : binder(binder) {
 	}
-	static bool TryRewritePairDependentJoinCondition(Binder &binder, unique_ptr<LogicalOperator> &op);
-	static unique_ptr<LogicalOperator>
-	PlanPairDependentLateralJoin(Binder &binder, unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-	                             unique_ptr<Expression> condition, const unordered_set<TableIndex> &left_bindings,
-	                             const unordered_set<TableIndex> &right_bindings, JoinType join_type);
-	void VisitOperator(LogicalOperator &op) override;
+	static bool TryRewritePairDependentJoinCondition(Binder &binder, unique_ptr<LogicalOperator> &op,
+	                                                 vector<ReplacementBinding> &replacements);
+	vector<ReplacementBinding> PlanOperator(unique_ptr<LogicalOperator> &op);
 	void PlanJoinChildFilters(LogicalOperator &op);
 	void PlanJoinExpressions(LogicalOperator &op);
 	void PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr, JoinSide uncorrelated_side);

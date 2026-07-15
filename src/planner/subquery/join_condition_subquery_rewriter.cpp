@@ -1,29 +1,25 @@
-#include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/joinside.hpp"
-#include "duckdb/planner/logical_operator_deep_copy.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
-
-#include <algorithm>
 
 namespace duckdb {
 
@@ -42,184 +38,267 @@ static vector<Identifier> GenerateInternalColumnNames(idx_t column_count, const 
 	return result;
 }
 
-static void AddPairDependentFilterToLateralChild(unique_ptr<LogicalOperator> &lateral_child,
-                                                 unique_ptr<Expression> condition) {
-	auto filter = make_uniq<LogicalFilter>(std::move(condition));
-	if (lateral_child->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
-	    lateral_child->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-		auto &cte = lateral_child->Cast<LogicalCTE>();
-		filter->AddChild(std::move(cte.children[1]));
-		cte.children[1] = std::move(filter);
-		return;
-	}
-	filter->AddChild(std::move(lateral_child));
-	lateral_child = std::move(filter);
-}
-
-unique_ptr<LogicalOperator> RecursiveDependentJoinPlanner::PlanPairDependentLateralJoin(
-    Binder &binder, unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-    unique_ptr<Expression> condition, const unordered_set<TableIndex> &left_bindings,
-    const unordered_set<TableIndex> &right_bindings, JoinType join_type) {
-	CorrelatedColumns correlated_columns;
-	if (!LateralBinder::ExtractPairDependentJoinConditionCorrelations(*right, condition, left_bindings, right_bindings,
-	                                                                  correlated_columns)) {
-		throw InternalException("Pair-dependent join condition did not produce lateral correlations");
-	}
-	AddPairDependentFilterToLateralChild(right, std::move(condition));
-	auto planned = binder.PlanLateralJoin(std::move(left), std::move(right), correlated_columns, join_type, nullptr);
-	if (!planned) {
-		throw InternalException("Failed to plan pair-dependent join condition");
-	}
-	return planned;
-}
-
-// FULL OUTER pair-dependent predicates are planned through a match-domain CTE. The match domain evaluates the
-// original predicate over generated CTE refs for both sides, then the outer join is reconstructed from the distinct
-// matched side payloads plus unmatched rows from each original side.
-
-static unique_ptr<LogicalWindow> CreatePairRowNumberWindow(Binder &binder, unique_ptr<LogicalOperator> child,
-                                                           TableIndex table_index) {
-	auto window = make_uniq<LogicalWindow>(table_index);
-
-	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
-	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
-	row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
-	row_number->SetAlias("__duckdb_pair_rowid");
-
-	window->expressions.push_back(std::move(row_number));
-	window->AddChild(std::move(child));
-	return window;
-}
-
-struct BoundColumnPayload {
-	BoundColumnPayload() = default;
-
-	BoundColumnPayload(const vector<LogicalType> &types, const vector<ColumnBinding> &source_bindings) : types(types) {
-		D_ASSERT(source_bindings.size() >= types.size());
-		bindings.reserve(types.size());
-		for (idx_t i = 0; i < types.size(); i++) {
-			bindings.push_back(source_bindings[i]);
-		}
-	}
-
-	idx_t ColumnCount() const {
-		return bindings.size();
-	}
-
-	BoundColumnPayload Slice(idx_t offset, idx_t count) const {
-		D_ASSERT(offset + count <= types.size());
-		D_ASSERT(offset + count <= bindings.size());
-		BoundColumnPayload result;
-		result.types.reserve(count);
-		result.bindings.reserve(count);
-		for (idx_t i = 0; i < count; i++) {
-			result.types.push_back(types[offset + i]);
-			result.bindings.push_back(bindings[offset + i]);
-		}
-		return result;
-	}
-
-	void Append(const BoundColumnPayload &other) {
-		types.insert(types.end(), other.types.begin(), other.types.end());
-		bindings.insert(bindings.end(), other.bindings.begin(), other.bindings.end());
-	}
-
-	vector<LogicalType> types;
-	vector<ColumnBinding> bindings;
-};
-
-struct SideBindingLayout {
-	TableIndex table_index;
-	vector<idx_t> payload_indices;
-	vector<ProjectionIndex> column_indices;
-	idx_t column_count = 0;
-	ProjectionIndex row_id_column_index;
-	TableIndex cte_index;
-	vector<LogicalType> cte_types;
-	vector<Identifier> names;
-	unique_ptr<LogicalOperator> cte_source;
-};
+// FULL OUTER pair-dependent predicates use the paper's D_R x D_S construction. Each side is projected to the
+// bindings referenced by the predicate and independently deduplicated before the domain product is formed.
 
 struct PairDependentJoinSide {
 	TableIndex cte_index;
 	vector<ColumnBinding> bindings;
 	vector<LogicalType> types;
-	vector<LogicalType> cte_types;
 	vector<Identifier> names;
-	vector<SideBindingLayout> binding_layouts;
-	bool has_row_id = false;
-	idx_t row_id_offset = DConstants::INVALID_INDEX;
+	vector<idx_t> domain_positions;
+	bool domain_is_duplicate_free = false;
+	unique_ptr<LogicalOperator> source;
 };
 
-struct PairDependentJoinMatch {
-	TableIndex cte_index;
+struct PairDependentDomain {
+	unique_ptr<LogicalOperator> plan;
+	vector<ColumnBinding> original_bindings;
+	vector<ColumnBinding> bindings;
 	vector<LogicalType> types;
-	vector<Identifier> names;
 };
 
 struct PairDependentSideRef {
 	unique_ptr<LogicalOperator> plan;
-	BoundColumnPayload payload;
+	vector<ColumnBinding> payload_bindings;
+	vector<ColumnBinding> domain_bindings;
 	ColumnBindingLayout output;
 };
 
-struct PairDependentSideLayoutRef {
+struct PairDependentFullOuterJoinResult {
 	unique_ptr<LogicalOperator> plan;
-	BoundColumnPayload payload;
-	ColumnBinding row_id_binding;
-	ColumnBindingLayout output;
+	vector<ReplacementBinding> replacements;
 };
 
-class PairDependentFullOuterJoinBuilder {
-public:
-	PairDependentFullOuterJoinBuilder(Binder &binder, unique_ptr<Expression> condition,
-	                                  unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right)
-	    : binder(binder), condition(std::move(condition)), left(std::move(left)), right(std::move(right)) {
+static void AddCurrentJoinBinding(const ColumnBinding &binding, const unordered_set<TableIndex> &left_bindings,
+                                  const unordered_set<TableIndex> &right_bindings,
+                                  column_binding_set_t &left_references, column_binding_set_t &right_references) {
+	if (left_bindings.count(binding.table_index)) {
+		left_references.insert(binding);
+	} else if (right_bindings.count(binding.table_index)) {
+		right_references.insert(binding);
 	}
-
-	unique_ptr<LogicalOperator> Build();
-
-private:
-	bool CreateMatchSet();
-	unique_ptr<LogicalOperator> CreateFullJoin();
-	unique_ptr<LogicalOperator> WrapCTEs(unique_ptr<LogicalOperator> final_join);
-
-private:
-	Binder &binder;
-	unique_ptr<Expression> condition;
-	unique_ptr<LogicalOperator> left;
-	unique_ptr<LogicalOperator> right;
-	PairDependentJoinSide left_side;
-	PairDependentJoinSide right_side;
-	PairDependentJoinMatch match;
-	unique_ptr<LogicalOperator> match_source;
-};
-
-static SideBindingLayout &GetOrCreateBindingLayout(vector<SideBindingLayout> &layouts, TableIndex table_index) {
-	for (auto &layout : layouts) {
-		if (layout.table_index == table_index) {
-			return layout;
-		}
-	}
-	SideBindingLayout layout;
-	layout.table_index = table_index;
-	layouts.push_back(std::move(layout));
-	return layouts.back();
 }
 
-static vector<SideBindingLayout> BuildSideBindingLayouts(const vector<ColumnBinding> &bindings) {
-	vector<SideBindingLayout> layouts;
-	for (idx_t payload_index = 0; payload_index < bindings.size(); payload_index++) {
-		auto &binding = bindings[payload_index];
-		auto &layout = GetOrCreateBindingLayout(layouts, binding.table_index);
-		layout.payload_indices.push_back(payload_index);
-		layout.column_indices.push_back(binding.column_index);
-		layout.column_count = std::max(layout.column_count, binding.column_index.GetIndex() + 1);
+static void CollectPairDependentBindings(Expression &expression, const unordered_set<TableIndex> &left_bindings,
+                                         const unordered_set<TableIndex> &right_bindings,
+                                         column_binding_set_t &left_references,
+                                         column_binding_set_t &right_references) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
+		if (colref.Depth() == 0) {
+			AddCurrentJoinBinding(colref.Binding(), left_bindings, right_bindings, left_references, right_references);
+		}
+		return;
 	}
-	for (auto &layout : layouts) {
-		layout.row_id_column_index = ProjectionIndex(layout.column_count);
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		auto &subquery = expression.Cast<BoundSubqueryExpression>();
+		for (auto &column : subquery.GetBinder()->correlated_columns) {
+			if (column.depth == 1) {
+				AddCurrentJoinBinding(column.binding, left_bindings, right_bindings, left_references, right_references);
+			}
+		}
 	}
-	return layouts;
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
+		CollectPairDependentBindings(child, left_bindings, right_bindings, left_references, right_references);
+	});
+}
+
+static bool ContainsAllBindings(const column_binding_set_t &bindings, const vector<ColumnBinding> &required) {
+	for (auto &binding : required) {
+		if (!bindings.count(binding)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool ReturnsAtMostOneRow(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		return true;
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		return op.Cast<LogicalAggregate>().groups.empty() && op.Cast<LogicalAggregate>().grouping_sets.size() <= 1;
+	case LogicalOperatorType::LOGICAL_LIMIT: {
+		auto &limit = op.Cast<LogicalLimit>();
+		return limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE && limit.limit_val.GetConstantValue() <= 1;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		return op.children.size() == 1 && ReturnsAtMostOneRow(*op.children[0]);
+	default:
+		return false;
+	}
+}
+
+static bool IsDuplicateFreeOn(LogicalOperator &op, const column_binding_set_t &bindings) {
+	if (ReturnsAtMostOneRow(op)) {
+		return true;
+	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto &aggregate = op.Cast<LogicalAggregate>();
+		if (!aggregate.grouping_functions.empty() || aggregate.grouping_sets.size() > 1) {
+			return false;
+		}
+		vector<ColumnBinding> group_bindings;
+		group_bindings.reserve(aggregate.groups.size());
+		for (idx_t i = 0; i < aggregate.groups.size(); i++) {
+			group_bindings.emplace_back(aggregate.group_index, ProjectionIndex(i));
+		}
+		return ContainsAllBindings(bindings, group_bindings);
+	}
+	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		auto &distinct = op.Cast<LogicalDistinct>();
+		vector<ColumnBinding> distinct_bindings;
+		if (distinct.distinct_targets.empty()) {
+			distinct_bindings = op.GetColumnBindings();
+		} else {
+			for (auto &target : distinct.distinct_targets) {
+				if (target->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+					return false;
+				}
+				distinct_bindings.push_back(target->Cast<BoundColumnRefExpression>().Binding());
+			}
+		}
+		return ContainsAllBindings(bindings, distinct_bindings);
+	}
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		auto &set_operation = op.Cast<LogicalSetOperation>();
+		return !set_operation.setop_all && ContainsAllBindings(bindings, op.GetColumnBindings());
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &projection = op.Cast<LogicalProjection>();
+		column_binding_set_t child_bindings;
+		for (auto &binding : bindings) {
+			if (binding.table_index != projection.table_index ||
+			    binding.column_index.GetIndex() >= projection.expressions.size()) {
+				return false;
+			}
+			auto &expression = projection.expressions[binding.column_index.GetIndex()];
+			if (expression->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				return false;
+			}
+			child_bindings.insert(expression->Cast<BoundColumnRefExpression>().Binding());
+		}
+		return IsDuplicateFreeOn(*op.children[0], child_bindings);
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		return op.children.size() == 1 && IsDuplicateFreeOn(*op.children[0], bindings);
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		column_binding_set_t left_bindings;
+		column_binding_set_t right_bindings;
+		auto left_output = ColumnBindingLayout(op.children[0]->GetColumnBindings());
+		auto right_output = ColumnBindingLayout(op.children[1]->GetColumnBindings());
+		for (auto &binding : bindings) {
+			if (left_output.positions.count(binding)) {
+				left_bindings.insert(binding);
+			} else if (right_output.positions.count(binding)) {
+				right_bindings.insert(binding);
+			} else {
+				return false;
+			}
+		}
+		auto left_unique = left_bindings.empty() ? ReturnsAtMostOneRow(*op.children[0])
+		                                         : IsDuplicateFreeOn(*op.children[0], left_bindings);
+		auto right_unique = right_bindings.empty() ? ReturnsAtMostOneRow(*op.children[1])
+		                                           : IsDuplicateFreeOn(*op.children[1], right_bindings);
+		return left_unique && right_unique;
+	}
+	default:
+		return false;
+	}
+}
+
+static PairDependentJoinSide PreparePairDependentJoinSide(Binder &binder, unique_ptr<LogicalOperator> source,
+                                                          const column_binding_set_t &domain_bindings,
+                                                          const string &name_prefix) {
+	source->ResolveOperatorTypes();
+	PairDependentJoinSide result;
+	result.bindings = source->GetColumnBindings();
+	result.types = source->types;
+	result.names = GenerateInternalColumnNames(result.types.size(), name_prefix);
+	result.cte_index = binder.GenerateTableIndex();
+	result.source = std::move(source);
+	for (idx_t i = 0; i < result.bindings.size(); i++) {
+		if (domain_bindings.count(result.bindings[i])) {
+			result.domain_positions.push_back(i);
+		}
+	}
+	if (result.domain_positions.empty()) {
+		throw InternalException("Pair-dependent FULL OUTER join side has no domain bindings");
+	}
+	column_binding_set_t projected_domain_bindings;
+	for (auto position : result.domain_positions) {
+		projected_domain_bindings.insert(result.bindings[position]);
+	}
+	result.domain_is_duplicate_free = IsDuplicateFreeOn(*result.source, projected_domain_bindings);
+	return result;
+}
+
+static PairDependentDomain CreatePairDependentDomain(Binder &binder, const PairDependentJoinSide &side) {
+	auto cte_ref = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), side.cte_index, side.types, side.names);
+	auto cte_bindings = cte_ref->GetColumnBindings();
+
+	PairDependentDomain result;
+	vector<unique_ptr<Expression>> domain_expressions;
+	for (auto position : side.domain_positions) {
+		result.original_bindings.push_back(side.bindings[position]);
+		result.types.push_back(side.types[position]);
+		domain_expressions.push_back(make_uniq<BoundColumnRefExpression>(side.types[position], cte_bindings[position]));
+	}
+	if (side.domain_is_duplicate_free) {
+		auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(domain_expressions));
+		projection->children.push_back(std::move(cte_ref));
+		result.plan = std::move(projection);
+	} else {
+		auto group_index = binder.GenerateTableIndex();
+		auto aggregate_index = binder.GenerateTableIndex();
+		vector<unique_ptr<Expression>> aggregates;
+		auto distinct = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
+		distinct->groups = std::move(domain_expressions);
+		distinct->children.push_back(std::move(cte_ref));
+		result.plan = std::move(distinct);
+	}
+	result.bindings = result.plan->GetColumnBindings();
+	return result;
+}
+
+static PairDependentSideRef CreatePairDependentSideRef(Binder &binder, const PairDependentJoinSide &side) {
+	auto cte_ref = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), side.cte_index, side.types, side.names);
+	auto bindings = cte_ref->GetColumnBindings();
+	PairDependentSideRef result;
+	result.payload_bindings = bindings;
+	for (auto position : side.domain_positions) {
+		result.domain_bindings.push_back(bindings[position]);
+	}
+	result.plan = std::move(cte_ref);
+	result.output = ColumnBindingLayout(result.payload_bindings, "pair-dependent FULL OUTER join side");
+	return result;
+}
+
+static void AddNotDistinctConditions(vector<JoinCondition> &conditions, const vector<LogicalType> &types,
+                                     const vector<ColumnBinding> &left_bindings,
+                                     const vector<ColumnBinding> &right_bindings) {
+	D_ASSERT(types.size() == left_bindings.size());
+	D_ASSERT(types.size() == right_bindings.size());
+	for (idx_t i = 0; i < types.size(); i++) {
+		conditions.emplace_back(make_uniq<BoundColumnRefExpression>(types[i], left_bindings[i]),
+		                        make_uniq<BoundColumnRefExpression>(types[i], right_bindings[i]),
+		                        ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+	}
+}
+
+static void AddMarkerCondition(vector<JoinCondition> &conditions, ColumnBinding marker_binding) {
+	auto marker = make_uniq<BoundColumnRefExpression>(LogicalType::BOOLEAN, marker_binding);
+	auto marker_true = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+	conditions.emplace_back(BoundComparisonExpression::Create(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+	                                                          std::move(marker), std::move(marker_true)));
 }
 
 static void SetJoinProjectionMaps(LogicalOperator &join, const ColumnBindingLayout &left_output,
@@ -227,356 +306,130 @@ static void SetJoinProjectionMaps(LogicalOperator &join, const ColumnBindingLayo
                                   const ColumnBindingLayout &right_output,
                                   const vector<ColumnBinding> &selected_right_bindings) {
 	auto &logical_join = join.Cast<LogicalJoin>();
-	if (selected_left_bindings.empty()) {
-		throw InternalException("Cannot create an empty left projection map for a pair-dependent join");
-	}
-	if (selected_right_bindings.empty()) {
-		throw InternalException("Cannot create an empty right projection map for a pair-dependent join");
-	}
 	logical_join.left_projection_map = left_output.CreateProjectionMap(selected_left_bindings);
 	logical_join.right_projection_map = right_output.CreateProjectionMap(selected_right_bindings);
 }
 
-static void AddNotDistinctConditions(vector<JoinCondition> &conditions, const BoundColumnPayload &left_payload,
-                                     const BoundColumnPayload &right_payload) {
-	D_ASSERT(left_payload.ColumnCount() == right_payload.ColumnCount());
-	for (idx_t i = 0; i < left_payload.ColumnCount(); i++) {
-		auto left = make_uniq<BoundColumnRefExpression>(left_payload.types[i], left_payload.bindings[i]);
-		auto right = make_uniq<BoundColumnRefExpression>(right_payload.types[i], right_payload.bindings[i]);
-		conditions.emplace_back(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-	}
-}
-
-static bool PreparePairDependentJoinSide(Binder &binder, unique_ptr<LogicalOperator> &side, PairDependentJoinSide &info,
-                                         const string &name_prefix) {
-	side->ResolveOperatorTypes();
-
-	info.bindings = side->GetColumnBindings();
-	info.types = side->types;
-	D_ASSERT(info.bindings.size() == info.types.size());
-	if (info.bindings.empty()) {
-		return false;
-	}
-	info.binding_layouts = BuildSideBindingLayouts(info.bindings);
-	info.has_row_id = info.binding_layouts.size() > 1;
-	if (info.has_row_id) {
-		// Multiple binding layouts are stitched back together after reading the side CTE.
-		// The row number is part of that CTE source, so all layout refs share the same identity.
-		info.row_id_offset = info.types.size();
-		side = CreatePairRowNumberWindow(binder, std::move(side), binder.GenerateTableIndex());
-		side->ResolveOperatorTypes();
-		D_ASSERT(side->types.size() == info.types.size() + 1);
-	}
-	info.cte_types = side->types;
-	info.names = GenerateInternalColumnNames(info.cte_types.size(), name_prefix);
-	return true;
-}
-
-static unique_ptr<LogicalOperator> CreateDistinctMatchProjection(Binder &binder, unique_ptr<LogicalOperator> match,
-                                                                 const BoundColumnPayload &payload,
-                                                                 vector<LogicalType> &match_types) {
-	match->ResolveOperatorTypes();
-	auto match_bindings = match->GetColumnBindings();
-
-	auto group_index = binder.GenerateTableIndex();
-	auto aggregate_index = binder.GenerateTableIndex();
-	vector<unique_ptr<Expression>> aggregates;
-	auto distinct = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
-	for (idx_t i = 0; i < payload.bindings.size(); i++) {
-		D_ASSERT(std::find(match_bindings.begin(), match_bindings.end(), payload.bindings[i]) != match_bindings.end());
-		distinct->groups.push_back(make_uniq<BoundColumnRefExpression>(payload.types[i], payload.bindings[i]));
-	}
-	distinct->children.push_back(std::move(match));
-	distinct->ResolveOperatorTypes();
-
-	auto distinct_bindings = distinct->GetColumnBindings();
-	vector<unique_ptr<Expression>> projections;
-	projections.reserve(distinct_bindings.size() + 1);
-	for (idx_t i = 0; i < distinct_bindings.size(); i++) {
-		projections.push_back(make_uniq<BoundColumnRefExpression>(distinct->types[i], distinct_bindings[i]));
-	}
-	projections.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
-	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(projections));
-	projection->children.push_back(std::move(distinct));
-	projection->ResolveOperatorTypes();
-	match_types = projection->types;
-	return projection;
-}
-
-static bool CanUseDirectSideCTERef(const PairDependentJoinSide &side) {
-	// A single contiguous binding layout can read the side CTE directly using
-	// the original table index. Extra layout CTEs are only needed when one side
-	// exposes multiple table-index layouts that must be stitched back together.
-	if (side.has_row_id || side.binding_layouts.size() != 1) {
-		return false;
-	}
-	for (idx_t i = 0; i < side.bindings.size(); i++) {
-		if (side.bindings[i] != ColumnBinding(side.binding_layouts[0].table_index, ProjectionIndex(i))) {
-			return false;
-		}
-	}
-	return true;
-}
-
-static unique_ptr<LogicalOperator> CreateSideBindingLayoutSource(Binder &binder, const PairDependentJoinSide &side,
-                                                                 const SideBindingLayout &layout, bool include_row_id) {
-	auto cte_ref = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), side.cte_index, side.cte_types, side.names);
-	auto source_bindings = cte_ref->GetColumnBindings();
-	auto expression_count = layout.column_count + (include_row_id ? 1 : 0);
-
-	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(expression_count);
-	for (idx_t i = 0; i < expression_count; i++) {
-		expressions.push_back(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
-	}
-	for (idx_t layout_idx = 0; layout_idx < layout.payload_indices.size(); layout_idx++) {
-		auto payload_index = layout.payload_indices[layout_idx];
-		auto column_index = layout.column_indices[layout_idx];
-		D_ASSERT(column_index.GetIndex() < expressions.size());
-		expressions[column_index.GetIndex()] =
-		    make_uniq<BoundColumnRefExpression>(side.types[payload_index], source_bindings[payload_index]);
-	}
-	if (include_row_id) {
-		D_ASSERT(side.has_row_id);
-		D_ASSERT(side.row_id_offset < side.cte_types.size());
-		D_ASSERT(layout.row_id_column_index.GetIndex() < expressions.size());
-		expressions[layout.row_id_column_index.GetIndex()] = make_uniq<BoundColumnRefExpression>(
-		    side.cte_types[side.row_id_offset], source_bindings[side.row_id_offset]);
+class PairDependentFullOuterJoinBuilder {
+public:
+	PairDependentFullOuterJoinBuilder(Binder &binder, unique_ptr<Expression> condition,
+	                                  unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
+	                                  const unordered_set<TableIndex> &left_bindings,
+	                                  const unordered_set<TableIndex> &right_bindings)
+	    : binder(binder), condition(std::move(condition)), left(std::move(left)), right(std::move(right)),
+	      left_table_bindings(left_bindings), right_table_bindings(right_bindings) {
 	}
 
-	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-	projection->children.push_back(std::move(cte_ref));
-	projection->ResolveOperatorTypes();
-	return projection;
-}
+	PairDependentFullOuterJoinResult Build();
 
-static void CreateSideBindingLayoutCTEs(Binder &binder, PairDependentJoinSide &side, const string &name_prefix) {
-	if (CanUseDirectSideCTERef(side)) {
-		return;
+private:
+	Binder &binder;
+	unique_ptr<Expression> condition;
+	unique_ptr<LogicalOperator> left;
+	unique_ptr<LogicalOperator> right;
+	const unordered_set<TableIndex> &left_table_bindings;
+	const unordered_set<TableIndex> &right_table_bindings;
+};
+
+PairDependentFullOuterJoinResult PairDependentFullOuterJoinBuilder::Build() {
+	column_binding_set_t left_references;
+	column_binding_set_t right_references;
+	CollectPairDependentBindings(*condition, left_table_bindings, right_table_bindings, left_references,
+	                             right_references);
+
+	auto left_side = PreparePairDependentJoinSide(binder, std::move(left), left_references, "__duckdb_full_l_");
+	auto right_side = PreparePairDependentJoinSide(binder, std::move(right), right_references, "__duckdb_full_r_");
+	auto left_domain = CreatePairDependentDomain(binder, left_side);
+	auto right_domain = CreatePairDependentDomain(binder, right_side);
+
+	CorrelatedColumnBindingReplacer condition_replacer;
+	condition_replacer.AddReplacements(left_domain.original_bindings, left_domain.bindings);
+	condition_replacer.AddReplacements(right_domain.original_bindings, right_domain.bindings);
+	condition_replacer.VisitExpression(&condition);
+
+	auto match_root = LogicalCrossProduct::Create(std::move(left_domain.plan), std::move(right_domain.plan));
+
+	vector<unique_ptr<Expression>> match_expressions;
+	for (idx_t i = 0; i < left_domain.bindings.size(); i++) {
+		match_expressions.push_back(make_uniq<BoundColumnRefExpression>(left_domain.types[i], left_domain.bindings[i]));
 	}
-	for (idx_t layout_idx = 0; layout_idx < side.binding_layouts.size(); layout_idx++) {
-		auto &layout = side.binding_layouts[layout_idx];
-		layout.cte_index = binder.GenerateTableIndex();
-		layout.cte_source = CreateSideBindingLayoutSource(binder, side, layout, side.has_row_id);
-		layout.cte_types = layout.cte_source->types;
-		layout.names = GenerateInternalColumnNames(layout.cte_types.size(), name_prefix);
+	for (idx_t i = 0; i < right_domain.bindings.size(); i++) {
+		match_expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(right_domain.types[i], right_domain.bindings[i]));
 	}
-}
+	match_expressions.push_back(std::move(condition));
+	unique_ptr<LogicalOperator> match_projection =
+	    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(match_expressions));
+	match_projection->children.push_back(std::move(match_root));
+	RecursiveDependentJoinPlanner::Plan(binder, match_projection);
+	match_projection->ResolveOperatorTypes();
+	auto match_bindings = match_projection->GetColumnBindings();
+	auto left_domain_count = NumericCast<vector<ColumnBinding>::difference_type>(left_domain.bindings.size());
+	auto left_match_bindings =
+	    vector<ColumnBinding>(match_bindings.begin(), match_bindings.begin() + left_domain_count);
+	auto right_match_bindings =
+	    vector<ColumnBinding>(match_bindings.begin() + left_domain_count, match_bindings.end() - 1);
+	auto marker_binding = match_bindings.back();
 
-static PairDependentSideLayoutRef CreateSideBindingLayoutRef(const PairDependentJoinSide &side,
-                                                             const SideBindingLayout &layout, bool include_row_id) {
-	D_ASSERT(layout.cte_source);
-	auto cte_ref = make_uniq<LogicalCTERef>(layout.table_index, layout.cte_index, layout.cte_types, layout.names);
-	auto source_bindings = cte_ref->GetColumnBindings();
+	// S LEFT JOIN match emits every matching S row for each R domain and emits an unmatched S row only once.
+	auto right_ref = CreatePairDependentSideRef(binder, right_side);
+	vector<JoinCondition> right_match_conditions;
+	AddNotDistinctConditions(right_match_conditions, right_domain.types, right_ref.domain_bindings,
+	                         right_match_bindings);
+	AddMarkerCondition(right_match_conditions, marker_binding);
+	auto right_with_match =
+	    LogicalComparisonJoin::CreateJoin(JoinType::LEFT, JoinRefType::REGULAR, std::move(right_ref.plan),
+	                                      std::move(match_projection), std::move(right_match_conditions));
+	auto match_output = ColumnBindingLayout(match_bindings, "pair-dependent FULL OUTER join match");
+	auto selected_match_bindings = left_match_bindings;
+	selected_match_bindings.push_back(marker_binding);
+	SetJoinProjectionMaps(*right_with_match, right_ref.output, right_ref.payload_bindings, match_output,
+	                      selected_match_bindings);
+	auto right_with_match_output =
+	    ColumnBindingLayout(right_with_match->GetColumnBindings(), "pair-dependent FULL OUTER join match");
 
-	PairDependentSideLayoutRef result;
-	result.payload.types.reserve(layout.payload_indices.size());
-	result.payload.bindings.reserve(layout.payload_indices.size());
-	for (idx_t i = 0; i < layout.payload_indices.size(); i++) {
-		result.payload.types.push_back(side.types[layout.payload_indices[i]]);
-		auto column_index = layout.column_indices[i].GetIndex();
-		D_ASSERT(column_index < source_bindings.size());
-		result.payload.bindings.push_back(source_bindings[column_index]);
-	}
-	if (include_row_id) {
-		auto row_id_index = layout.row_id_column_index.GetIndex();
-		D_ASSERT(row_id_index < source_bindings.size());
-		result.row_id_binding = source_bindings[row_id_index];
-	}
-	result.plan = std::move(cte_ref);
-	result.output = ColumnBindingLayout(result.plan->GetColumnBindings(), "pair-dependent join side");
-	return result;
-}
-
-static PairDependentSideRef CreatePairDependentSideRef(const PairDependentJoinSide &side) {
-	if (CanUseDirectSideCTERef(side)) {
-		auto plan =
-		    make_uniq<LogicalCTERef>(side.binding_layouts[0].table_index, side.cte_index, side.cte_types, side.names);
-		auto output = ColumnBindingLayout(plan->GetColumnBindings(), "pair-dependent join side");
-		return PairDependentSideRef {std::move(plan), BoundColumnPayload(side.types, side.bindings), std::move(output)};
-	}
-
-	if (!side.has_row_id) {
-		D_ASSERT(side.binding_layouts.size() == 1);
-		auto layout_ref = CreateSideBindingLayoutRef(side, side.binding_layouts[0], false);
-		return PairDependentSideRef {std::move(layout_ref.plan), std::move(layout_ref.payload),
-		                             std::move(layout_ref.output)};
-	}
-
-	auto current_ref = CreateSideBindingLayoutRef(side, side.binding_layouts[0], true);
-	auto current = std::move(current_ref.plan);
-	auto current_payload = std::move(current_ref.payload);
-	auto current_row_id_binding = current_ref.row_id_binding;
-	auto current_output = std::move(current_ref.output);
-	auto row_id_type = side.cte_types[side.row_id_offset];
-
-	for (idx_t layout_idx = 1; layout_idx < side.binding_layouts.size(); layout_idx++) {
-		auto next_ref = CreateSideBindingLayoutRef(side, side.binding_layouts[layout_idx], true);
-		current->ResolveOperatorTypes();
-		next_ref.plan->ResolveOperatorTypes();
-
-		vector<JoinCondition> conditions;
-		auto left_row_id = make_uniq<BoundColumnRefExpression>(row_id_type, current_row_id_binding);
-		auto right_row_id = make_uniq<BoundColumnRefExpression>(row_id_type, next_ref.row_id_binding);
-		conditions.emplace_back(std::move(left_row_id), std::move(right_row_id),
-		                        ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-
-		// These joins only stitch together different projections of the same side CTE.
-		// A match must exist for every row id, and keeping this as a LEFT join prevents
-		// filter pullup from lifting the stitching predicate above the public side shape.
-		auto joined = LogicalComparisonJoin::CreateJoin(JoinType::LEFT, JoinRefType::REGULAR, std::move(current),
-		                                                std::move(next_ref.plan), std::move(conditions));
-		auto left_outputs = current_payload.bindings;
-		left_outputs.push_back(current_row_id_binding);
-		SetJoinProjectionMaps(*joined, current_output, left_outputs, next_ref.output, next_ref.payload.bindings);
-		joined->ResolveOperatorTypes();
-		current_output = ColumnBindingLayout(joined->GetColumnBindings(), "pair-dependent join side");
-		current = std::move(joined);
-		current_payload.types.insert(current_payload.types.end(), next_ref.payload.types.begin(),
-		                             next_ref.payload.types.end());
-		current_payload.bindings.insert(current_payload.bindings.end(), next_ref.payload.bindings.begin(),
-		                                next_ref.payload.bindings.end());
-	}
-
-	return PairDependentSideRef {std::move(current), BoundColumnPayload(side.types, side.bindings),
-	                             std::move(current_output)};
-}
-
-unique_ptr<LogicalOperator> PairDependentFullOuterJoinBuilder::CreateFullJoin() {
-	auto final_left = CreatePairDependentSideRef(left_side);
-	auto final_right = CreatePairDependentSideRef(right_side);
-	auto left_match_index = binder.GenerateTableIndex();
-	auto left_match = make_uniq<LogicalCTERef>(left_match_index, match.cte_index, match.types, match.names);
-
-	auto left_match_payload = BoundColumnPayload(match.types, left_match->GetColumnBindings());
-	auto left_match_output = ColumnBindingLayout(left_match->GetColumnBindings(), "pair-dependent join side");
-
-	vector<JoinCondition> left_match_conditions;
-	AddNotDistinctConditions(left_match_conditions, final_left.payload,
-	                         left_match_payload.Slice(0, left_side.types.size()));
-	auto left_with_matches =
-	    LogicalComparisonJoin::CreateJoin(JoinType::LEFT, JoinRefType::REGULAR, std::move(final_left.plan),
-	                                      std::move(left_match), std::move(left_match_conditions));
-	SetJoinProjectionMaps(*left_with_matches, final_left.output, left_side.bindings, left_match_output,
-	                      left_match_payload.bindings);
-	auto left_with_matches_output =
-	    ColumnBindingLayout(left_with_matches->GetColumnBindings(), "pair-dependent join side");
-
-	auto marker_binding = left_match_payload.bindings[match.types.size() - 1];
-
+	// R FULL JOIN the matching domain restores matching pairs and the unmatched R rows.
+	auto left_ref = CreatePairDependentSideRef(binder, left_side);
 	vector<JoinCondition> final_conditions;
-	AddNotDistinctConditions(final_conditions,
-	                         left_match_payload.Slice(left_side.types.size(), right_side.types.size()),
-	                         final_right.payload);
-	auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::BOOLEAN, marker_binding);
-	auto marker_true = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-	final_conditions.emplace_back(BoundComparisonExpression::Create(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-	                                                                std::move(marker_ref), std::move(marker_true)));
+	AddNotDistinctConditions(final_conditions, left_domain.types, left_ref.domain_bindings, left_match_bindings);
+	AddMarkerCondition(final_conditions, marker_binding);
+	auto final_join = LogicalComparisonJoin::CreateJoin(JoinType::OUTER, JoinRefType::REGULAR, std::move(left_ref.plan),
+	                                                    std::move(right_with_match), std::move(final_conditions));
+	SetJoinProjectionMaps(*final_join, left_ref.output, left_ref.payload_bindings, right_with_match_output,
+	                      right_ref.payload_bindings);
 
-	auto final_join =
-	    LogicalComparisonJoin::CreateJoin(JoinType::OUTER, JoinRefType::REGULAR, std::move(left_with_matches),
-	                                      std::move(final_right.plan), std::move(final_conditions));
-	auto expected_bindings = left_side.bindings;
-	expected_bindings.insert(expected_bindings.end(), right_side.bindings.begin(), right_side.bindings.end());
-	SetJoinProjectionMaps(*final_join, left_with_matches_output, left_side.bindings, final_right.output,
-	                      right_side.bindings);
-	final_join->ResolveOperatorTypes();
-	auto actual_bindings = final_join->GetColumnBindings();
-	D_ASSERT(actual_bindings == expected_bindings);
-	return final_join;
-}
-
-static unique_ptr<LogicalOperator> WrapSideBindingLayoutCTEs(PairDependentJoinSide &side,
-                                                             unique_ptr<LogicalOperator> result) {
-	for (idx_t layout_idx = side.binding_layouts.size(); layout_idx > 0; layout_idx--) {
-		auto &layout = side.binding_layouts[layout_idx - 1];
-		if (!layout.cte_source) {
-			continue;
-		}
-		auto cte_name = Identifier("__duckdb_pair_layout_" + to_string(layout.cte_index.index));
-		result = make_uniq<LogicalMaterializedCTE>(cte_name, layout.cte_index, layout.cte_types.size(),
-		                                           std::move(layout.cte_source), std::move(result),
-		                                           CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	vector<unique_ptr<Expression>> output_expressions;
+	for (idx_t i = 0; i < left_ref.payload_bindings.size(); i++) {
+		output_expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(left_side.types[i], left_ref.payload_bindings[i]));
 	}
+	for (idx_t i = 0; i < right_ref.payload_bindings.size(); i++) {
+		output_expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(right_side.types[i], right_ref.payload_bindings[i]));
+	}
+	auto output = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(output_expressions));
+	output->children.push_back(std::move(final_join));
+	auto output_bindings = output->GetColumnBindings();
+
+	PairDependentFullOuterJoinResult result;
+	result.replacements.reserve(output_bindings.size());
+	for (idx_t i = 0; i < left_side.bindings.size(); i++) {
+		result.replacements.emplace_back(left_side.bindings[i], output_bindings[i]);
+	}
+	for (idx_t i = 0; i < right_side.bindings.size(); i++) {
+		result.replacements.emplace_back(right_side.bindings[i], output_bindings[left_side.bindings.size() + i]);
+	}
+
+	unique_ptr<LogicalOperator> plan = std::move(output);
+	plan =
+	    make_uniq<LogicalMaterializedCTE>(Identifier("__duckdb_pair_right_" + to_string(right_side.cte_index.index)),
+	                                      right_side.cte_index, right_side.types.size(), std::move(right_side.source),
+	                                      std::move(plan), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	plan = make_uniq<LogicalMaterializedCTE>(Identifier("__duckdb_pair_left_" + to_string(left_side.cte_index.index)),
+	                                         left_side.cte_index, left_side.types.size(), std::move(left_side.source),
+	                                         std::move(plan), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	result.plan = std::move(plan);
 	return result;
-}
-
-unique_ptr<LogicalOperator> PairDependentFullOuterJoinBuilder::WrapCTEs(unique_ptr<LogicalOperator> final_join) {
-	auto match_cte_index = match.cte_index;
-	auto match_cte_name = Identifier("__duckdb_pair_match_" + to_string(match_cte_index.index));
-	unique_ptr<LogicalOperator> result =
-	    make_uniq<LogicalMaterializedCTE>(match_cte_name, match_cte_index, match.types.size(), std::move(match_source),
-	                                      std::move(final_join), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	result = WrapSideBindingLayoutCTEs(right_side, std::move(result));
-	result = WrapSideBindingLayoutCTEs(left_side, std::move(result));
-	auto right_cte_index = right_side.cte_index;
-	auto right_cte_name = Identifier("__duckdb_pair_right_" + to_string(right_cte_index.index));
-	result =
-	    make_uniq<LogicalMaterializedCTE>(right_cte_name, right_cte_index, right_side.cte_types.size(),
-	                                      std::move(right), std::move(result), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	auto left_cte_index = left_side.cte_index;
-	auto left_cte_name = Identifier("__duckdb_pair_left_" + to_string(left_cte_index.index));
-	result =
-	    make_uniq<LogicalMaterializedCTE>(left_cte_name, left_cte_index, left_side.cte_types.size(), std::move(left),
-	                                      std::move(result), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	return result;
-}
-
-bool PairDependentFullOuterJoinBuilder::CreateMatchSet() {
-	left->ResolveOperatorTypes();
-	right->ResolveOperatorTypes();
-
-	if (!PreparePairDependentJoinSide(binder, left, left_side, "__duckdb_full_l_") ||
-	    !PreparePairDependentJoinSide(binder, right, right_side, "__duckdb_full_r_")) {
-		return false;
-	}
-
-	left_side.cte_index = binder.GenerateTableIndex();
-	right_side.cte_index = binder.GenerateTableIndex();
-	match.cte_index = binder.GenerateTableIndex();
-	CreateSideBindingLayoutCTEs(binder, left_side, "__duckdb_full_l_");
-	CreateSideBindingLayoutCTEs(binder, right_side, "__duckdb_full_r_");
-
-	// The original side table indexes become the public bindings of the CTE refs
-	// used to reconstruct the join. Remap the CTE definitions themselves so the
-	// source plans cannot collide with those public bindings.
-	LogicalOperatorDeepCopy left_remapper(binder, nullptr);
-	left_remapper.RemapTableIndexesInPlace(*left);
-	LogicalOperatorDeepCopy right_remapper(binder, nullptr);
-	right_remapper.RemapTableIndexesInPlace(*right);
-
-	auto match_left = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), left_side.cte_index, left_side.cte_types,
-	                                           left_side.names);
-	auto match_right = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), right_side.cte_index, right_side.cte_types,
-	                                            right_side.names);
-	auto match_left_bindings = match_left->GetColumnBindings();
-	auto match_right_bindings = match_right->GetColumnBindings();
-	auto match_left_payload = BoundColumnPayload(left_side.types, match_left_bindings);
-	auto match_right_payload = BoundColumnPayload(right_side.types, match_right_bindings);
-	auto match_payload = match_left_payload;
-	match_payload.Append(match_right_payload);
-
-	CorrelatedColumnBindingReplacer replace_condition;
-	replace_condition.AddReplacements(left_side.bindings, match_left_payload.bindings);
-	replace_condition.AddReplacements(right_side.bindings, match_right_payload.bindings);
-	replace_condition.VisitExpression(&condition);
-
-	auto match_join = LogicalCrossProduct::Create(std::move(match_left), std::move(match_right));
-	auto match_filter = make_uniq<LogicalFilter>(std::move(condition));
-	match_filter->AddChild(std::move(match_join));
-
-	// Match existing decorrelation behavior: volatile predicates are evaluated on the decorrelated match domain,
-	// so duplicate-equivalent row pairs can share one predicate result.
-	match_source = CreateDistinctMatchProjection(binder, std::move(match_filter), match_payload, match.types);
-	match.names = GenerateInternalColumnNames(match.types.size(), "__duckdb_full_match_");
-	return true;
-}
-
-unique_ptr<LogicalOperator> PairDependentFullOuterJoinBuilder::Build() {
-	if (!CreateMatchSet()) {
-		throw InternalException("Failed to create pair-dependent FULL OUTER join match set");
-	}
-	return WrapCTEs(CreateFullJoin());
 }
 
 static bool HasPairDependentSubquery(Expression &expression, const unordered_set<TableIndex> &left_bindings,
@@ -620,25 +473,12 @@ static bool HasPairDependentSubquery(LogicalOperator &op, const unordered_set<Ta
 	}
 }
 
-static bool SupportsPairDependentRewrite(JoinType join_type) {
-	switch (join_type) {
-	case JoinType::LEFT:
-	case JoinType::RIGHT:
-	case JoinType::SEMI:
-	case JoinType::ANTI:
-	case JoinType::OUTER:
-		return true;
-	default:
-		return false;
-	}
-}
-
 bool RecursiveDependentJoinPlanner::CanRewritePairDependentJoinCondition(LogicalOperator &op) {
 	if (op.children.size() != 2 ||
 	    (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN)) {
 		return false;
 	}
-	if (!SupportsPairDependentRewrite(op.Cast<LogicalJoin>().join_type)) {
+	if (op.Cast<LogicalJoin>().join_type != JoinType::OUTER) {
 		return false;
 	}
 	unordered_set<TableIndex> left_bindings;
@@ -660,53 +500,32 @@ static unique_ptr<Expression> MoveJoinCondition(LogicalOperator &op) {
 }
 
 bool RecursiveDependentJoinPlanner::TryRewritePairDependentJoinCondition(Binder &binder,
-                                                                         unique_ptr<LogicalOperator> &op) {
+                                                                         unique_ptr<LogicalOperator> &op,
+                                                                         vector<ReplacementBinding> &replacements) {
 	if (!op || !CanRewritePairDependentJoinCondition(*op)) {
 		return false;
 	}
 
-	auto &join = op->Cast<LogicalJoin>();
 	unordered_set<TableIndex> left_bindings;
 	unordered_set<TableIndex> right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
-	if (join.join_type == JoinType::OUTER) {
-		op->children[0]->ResolveOperatorTypes();
-		op->children[1]->ResolveOperatorTypes();
-		if (op->children[0]->GetColumnBindings().empty() || op->children[1]->GetColumnBindings().empty()) {
-			return false;
-		}
+	op->children[0]->ResolveOperatorTypes();
+	op->children[1]->ResolveOperatorTypes();
+	if (op->children[0]->GetColumnBindings().empty() || op->children[1]->GetColumnBindings().empty()) {
+		return false;
 	}
 
 	auto condition = MoveJoinCondition(*op);
 	auto left = std::move(op->children[0]);
 	auto right = std::move(op->children[1]);
 
-	switch (join.join_type) {
-	case JoinType::LEFT: {
-		op = PlanPairDependentLateralJoin(binder, std::move(left), std::move(right), std::move(condition),
-		                                  left_bindings, right_bindings, JoinType::LEFT);
-		return true;
-	}
-	case JoinType::RIGHT: {
-		op = PlanPairDependentLateralJoin(binder, std::move(right), std::move(left), std::move(condition),
-		                                  right_bindings, left_bindings, JoinType::LEFT);
-		return true;
-	}
-	case JoinType::SEMI:
-	case JoinType::ANTI: {
-		op = PlanPairDependentLateralJoin(binder, std::move(left), std::move(right), std::move(condition),
-		                                  left_bindings, right_bindings, join.join_type);
-		return true;
-	}
-	case JoinType::OUTER: {
-		PairDependentFullOuterJoinBuilder builder(binder, std::move(condition), std::move(left), std::move(right));
-		op = builder.Build();
-		return true;
-	}
-	default:
-		return false;
-	}
+	PairDependentFullOuterJoinBuilder builder(binder, std::move(condition), std::move(left), std::move(right),
+	                                          left_bindings, right_bindings);
+	auto result = builder.Build();
+	op = std::move(result.plan);
+	replacements = std::move(result.replacements);
+	return true;
 }
 
 } // namespace duckdb

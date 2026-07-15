@@ -88,17 +88,12 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			return;
 		}
 
-		// A join's predicates can reference columns from its children without
-		// exposing those columns above the join. Count those references before
-		// deciding which child outputs can be pruned.
-		VisitOperatorExpressions(op);
-
 		column_binding_set_t lhs_unused;
 		column_binding_set_t rhs_unused;
 		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), lhs_unused);
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), rhs_unused);
 
-		VisitOperatorChildren(op);
+		StandardVisitOperator(op);
 
 		// then generate the projection map
 		if (op.type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {

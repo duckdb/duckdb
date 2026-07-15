@@ -29,8 +29,6 @@ public:
 	LogicalOperatorDeepCopy(Binder &binder, optional_ptr<bound_parameter_map_t> parameter_data);
 
 	unique_ptr<LogicalOperator> DeepCopy(unique_ptr<LogicalOperator> &op);
-	//! Replaces all table indexes in a logical operator in place and rewrites matching column references.
-	void RemapTableIndexesInPlace(LogicalOperator &op);
 
 private:
 	void VisitOperator(LogicalOperator &op) override;

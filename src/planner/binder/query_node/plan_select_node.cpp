@@ -240,7 +240,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = std::move(prune);
 	}
 	if (has_unplanned_dependent_joins) {
-		RecursiveDependentJoinPlanner::Plan(*this, *root);
+		RecursiveDependentJoinPlanner::Plan(*this, root);
 		has_unplanned_dependent_joins = false;
 	}
 	return root;

@@ -29,11 +29,6 @@ public:
 	}
 
 	static void ReduceExpressionDepth(LogicalOperator &op, const CorrelatedColumns &info);
-	static bool ExtractPairDependentJoinConditionCorrelations(LogicalOperator &lateral_child,
-	                                                          unique_ptr<Expression> &condition,
-	                                                          const unordered_set<TableIndex> &left_bindings,
-	                                                          const unordered_set<TableIndex> &right_bindings,
-	                                                          CorrelatedColumns &correlated_columns);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,

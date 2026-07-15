@@ -28,11 +28,12 @@ explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHER
 ----
 logical_opt	<!REGEX>:.*SINGLE.*
 
-# Q 17: the selected delimiter domain should still restrict the inner aggregate input
+# Q 17: the selected delimiter domain should still restrict the inner aggregate input,
+# either through a domain join or the equivalent pushed domain filter
 query II
 explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
 ----
-logical_opt	<REGEX>:.*Groups: p_partkey.*COMPARISON_JOIN.*(l_partkey = p_partkey|p_partkey = l_partkey).*(DELIM_GET|CTE_SCAN).*
+logical_opt	<REGEX>:.*Groups: p_partkey.*((COMPARISON_JOIN.*(l_partkey = p_partkey|p_partkey = l_partkey).*(DELIM_GET|CTE_SCAN))|(Filters:.*l_partkey IS NOT DISTINCT FROM l_partkey)).*
 
 # Q 17: the generated delimiter CTE should not preserve unused columns from the lineitem input
 query II

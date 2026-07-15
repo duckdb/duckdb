@@ -21,6 +21,7 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
@@ -496,13 +497,45 @@ void RecursiveDependentJoinPlanner::PlanJoinChildFilters(LogicalOperator &op) {
 		}
 		auto &filter = child->Cast<LogicalFilter>();
 		D_ASSERT(filter.children.size() == 1);
+		auto original_output =
+		    ColumnBindingLayout(filter.children[0]->GetColumnBindings()).ProjectBindings(filter.projection_map);
 		for (auto &expr : filter.expressions) {
 			binder.PlanSubqueries(expr, filter.children[0]);
+		}
+		auto current_output = filter.children[0]->GetColumnBindings();
+		if (original_output != current_output) {
+			filter.projection_map = ColumnBindingLayout(std::move(current_output)).CreateProjectionMap(original_output);
 		}
 	}
 }
 
-void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
+static void ApplyBindingReplacements(LogicalOperator &op, const vector<ReplacementBinding> &replacements) {
+	if (replacements.empty()) {
+		return;
+	}
+	CorrelatedColumnBindingReplacer replacer;
+	replacer.replacement_bindings = replacements;
+	replacer.VisitOperatorBindings(op);
+}
+
+static vector<ReplacementBinding> CreateOutputBindingReplacements(const vector<ColumnBinding> &old_bindings,
+                                                                  const vector<ColumnBinding> &new_bindings) {
+	if (new_bindings.size() < old_bindings.size()) {
+		throw InternalException("Dependent-join planning reduced an operator's public output from %d to %d columns",
+		                        old_bindings.size(), new_bindings.size());
+	}
+	vector<ReplacementBinding> result;
+	for (idx_t i = 0; i < old_bindings.size(); i++) {
+		if (old_bindings[i] != new_bindings[i]) {
+			result.emplace_back(old_bindings[i], new_bindings[i]);
+		}
+	}
+	return result;
+}
+
+vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<LogicalOperator> &op_ptr) {
+	auto old_output = op_ptr->GetColumnBindings();
+	auto &op = *op_ptr;
 	if (!op.children.empty()) {
 		// Collect all recursive CTEs during recursive descend
 		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
@@ -523,23 +556,29 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 
 		for (idx_t i = 0; i < op.children.size(); i++) {
 			D_ASSERT(op.children[i]);
-			if (!TryRewritePairDependentJoinCondition(binder, op.children[i])) {
-				PlanJoinChildFilters(*op.children[i]);
-			}
-			VisitOperator(*op.children[i]);
+			vector<ReplacementBinding> child_replacements;
+			TryRewritePairDependentJoinCondition(binder, op.children[i], child_replacements);
+			PlanJoinChildFilters(*op.children[i]);
+			auto recursive_replacements = PlanOperator(op.children[i]);
+			child_replacements.insert(child_replacements.end(), recursive_replacements.begin(),
+			                          recursive_replacements.end());
+			ApplyBindingReplacements(op, child_replacements);
 		}
 	}
+	return CreateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings());
 }
 
-void RecursiveDependentJoinPlanner::Plan(Binder &binder, LogicalOperator &op) {
+void RecursiveDependentJoinPlanner::Plan(Binder &binder, unique_ptr<LogicalOperator> &op) {
 	RecursiveDependentJoinPlanner planner(binder);
-	planner.VisitOperator(op);
+	planner.PlanJoinChildFilters(*op);
+	planner.PlanOperator(op);
 }
 
 void RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(Binder &binder, unique_ptr<LogicalOperator> &op) {
 	RecursiveDependentJoinPlanner planner(binder);
-	if (planner.TryRewritePairDependentJoinCondition(binder, op)) {
-		planner.VisitOperator(*op);
+	vector<ReplacementBinding> replacements;
+	if (planner.TryRewritePairDependentJoinCondition(binder, op, replacements)) {
+		planner.PlanOperator(op);
 		return;
 	}
 	planner.PlanJoinChildFilters(*op);
@@ -571,7 +610,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	IncreaseDepth();
 	// finally, we recursively plan the nested subqueries (if there are any)
 	if (sub_binder->has_unplanned_dependent_joins) {
-		RecursiveDependentJoinPlanner::Plan(*this, *root);
+		RecursiveDependentJoinPlanner::Plan(*this, root);
 	}
 	return result_expression;
 }
@@ -595,7 +634,6 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
                                                     CorrelatedColumns &correlated, JoinType join_type,
                                                     unique_ptr<Expression> condition) {
-	auto right_payload_binding_seeds = right->GetColumnBindings();
 	// scan the right operator for correlated columns
 	// correlated LATERAL JOIN
 	vector<JoinCondition> conditions;
@@ -628,7 +666,6 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	delim_join->is_lateral_join = true;
 	delim_join->arbitrary_expressions = std::move(non_comparison_conditions);
 	delim_join->conditions = std::move(comparison_conditions);
-	delim_join->right_payload_binding_seeds = std::move(right_payload_binding_seeds);
 	delim_join->AddChild(std::move(right));
 	return std::move(delim_join);
 }

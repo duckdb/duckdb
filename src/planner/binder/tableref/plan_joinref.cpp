@@ -364,7 +364,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	auto has_join_condition_subquery = ref.condition && ref.condition->HasSubquery();
 	auto old_is_outside_flattened = is_outside_flattened;
 	// Plan laterals from outermost to innermost
-	if (ref.lateral) {
+	if (ref.lateral || ref.condition_lateral) {
 		// Set the flag to ensure that children do not flatten before the root
 		is_outside_flattened = false;
 	}
@@ -386,11 +386,23 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		ref.type = JoinType::LEFT;
 		std::swap(left, right);
 	}
+	if (ref.condition_lateral) {
+		PushFilterToChild(right, ref.condition);
+		if (ref.correlated_columns.empty()) {
+			RecursiveDependentJoinPlanner::Plan(*this, right);
+			vector<JoinCondition> conditions;
+			return LogicalComparisonJoin::CreateJoin(ref.type, JoinRefType::REGULAR, std::move(left), std::move(right),
+			                                         std::move(conditions));
+		}
+		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type, nullptr);
+		RecursiveDependentJoinPlanner::Plan(*this, new_plan);
+		return new_plan;
+	}
 	if (ref.lateral) {
 		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                                std::move(ref.condition));
 		if (has_unplanned_dependent_joins) {
-			RecursiveDependentJoinPlanner::Plan(*this, *new_plan);
+			RecursiveDependentJoinPlanner::Plan(*this, new_plan);
 		}
 		return new_plan;
 	}
@@ -429,10 +441,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
 	}
-	if (has_join_condition_subquery && ref.duplicate_eliminated_columns.empty() &&
+	if (ref.type == JoinType::OUTER && has_join_condition_subquery && ref.duplicate_eliminated_columns.empty() &&
 	    RecursiveDependentJoinPlanner::CanRewritePairDependentJoinCondition(*join)) {
-		// The SELECT list can bind additional columns from either join input. Delay rewriting until the query block is
-		// fully bound so pair-dependent rewrites capture the complete public output of both sides.
+		// The rewrite changes this join's public bindings. Delay it until the owning query-block plan exists so the
+		// recursive planner can propagate those replacements through every parent expression.
 		has_unplanned_dependent_joins = true;
 	} else {
 		RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(*this, result);
