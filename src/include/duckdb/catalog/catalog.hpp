@@ -439,7 +439,7 @@ private:
 	                                                const EntryLookupInfo &lookup_info,
 	                                                bool allow_ignore_at_clause = false);
 
-	//! Looks for a non-table entry (function, macro, type) in the default schema of any implicit search catalog
+	//! Looks for a non-table entry in the default schema of any implicit search catalog
 	static CatalogEntryLookup TryLookupDefaultSchema(CatalogEntryRetriever &retriever,
 	                                                 const EntryLookupInfo &lookup_info);
 

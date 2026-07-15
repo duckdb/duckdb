@@ -2,6 +2,57 @@
 # description: Test the default schema fallback for queries.
 # group: [attach]
 
+
+# A view's owning catalog should take precedence over the caller's search path
+# for unqualified non-table entries in the catalog's default schema.
+# Validate the use of the correct macro.
+statement ok
+ATTACH ':memory:' AS view_path_c1;
+
+statement ok
+CREATE SCHEMA view_path_c1.s1;
+
+statement ok
+CREATE MACRO view_path_c1.main.fn() AS 1;
+
+statement ok
+ATTACH ':memory:' AS view_path_c2;
+
+statement ok
+CREATE MACRO view_path_c2.main.fn() AS 'caller';
+
+statement ok
+SET search_path = 'view_path_c2.main';
+
+statement ok
+CREATE VIEW view_path_c1.s1.v AS SELECT fn() AS result;
+
+# Verify CREATE VIEW used the owning catalog's INTEGER-returning macro.
+query T
+SELECT data_type
+FROM duckdb_columns()
+WHERE database_name = 'view_path_c1'
+  AND schema_name = 's1'
+  AND table_name = 'v'
+  AND column_name = 'result';
+----
+INTEGER
+
+# Verify rebinding the view also uses the owning catalog.
+query I
+FROM view_path_c1.s1.v;
+----
+1
+
+statement ok
+RESET search_path;
+
+statement ok
+DETACH view_path_c2;
+
+statement ok
+DETACH view_path_c1;
+
 # A view's owning catalog should take precedence over the caller's search path
 # for unqualified non-table entries in the catalog's default schema.
 statement ok
@@ -30,6 +81,16 @@ FROM view_path_c1.s1.v;
 ----
 1
 
+statement ok
+RESET search_path;
+
+statement ok
+DETACH view_path_c2;
+
+statement ok
+DETACH view_path_c1;
+
+
 # Test with views over default tables
 statement ok
 ATTACH ':memory:' AS dt (DEFAULT_TABLE 'real_t');
@@ -56,6 +117,9 @@ query I
 FROM c1.s1.vv;
 ----
 1
+
+statement ok
+DETACH dt;
 
 
 # Test with an alter column set type
@@ -84,6 +148,9 @@ query I
 FROM c2.s1.t;
 ----
 x
+
+statement ok
+DETACH c2;
 
 # Declare macro and use it in different catalog
 statement ok

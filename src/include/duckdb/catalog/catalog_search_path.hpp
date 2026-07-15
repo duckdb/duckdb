@@ -23,10 +23,9 @@ struct CatalogSearchEntry {
 
 	string catalog;
 	string schema;
-	//! Only meaningful for implicit entries (added with an INVALID/empty schema, e.g. a view's own catalog while
-	//! binding its body). When true, the catalog's default schema is searched in place at this entry's position
-	//! (taking precedence over lower-priority entries such as the caller's SET search_path); when false the catalog
-	//! is only consulted as a last-resort fallback.
+
+	// For unqualified non-table lookups, search this implicit catalog's default schema at its position in the search
+	// path rather than as a fallback.
 	bool default_schema_precedence;
 
 public:
@@ -65,14 +64,9 @@ public:
 
 	DUCKDB_API vector<string> GetSchemasForCatalog(const string &catalog) const;
 	DUCKDB_API vector<string> GetCatalogsForSchema(const string &schema) const;
-	//! Returns the catalogs that were added to the path with an INVALID (empty) schema and are only consulted as a
-	//! last-resort fallback (i.e. not flagged with default_schema_precedence). Such an entry signals that the entire
-	//! catalog should be considered during lookup (e.g. when binding the body of a view).
+
 	DUCKDB_API vector<CatalogSearchEntry> GetImplicitSearchCatalogs() const;
-	//! Returns the search path entries in order, with implicit entries flagged with default_schema_precedence
-	//! resolved to the corresponding catalog's default schema in place, so they retain their priority. Other
-	//! implicit (INVALID/empty schema) entries are omitted (they are handled as a fallback, see
-	//! GetImplicitSearchCatalogs).
+
 	DUCKDB_API vector<CatalogSearchEntry> GetWithPrecedenceSchemas(ClientContext &context) const;
 
 	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const string &catalog_name,

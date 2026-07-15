@@ -305,8 +305,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 
-		// when binding a view, we always look into the catalog/schema where the view is stored first, and the view's
-		// own catalog takes precedence over the caller's search path when resolving unqualified entries
+		// when binding a view, we always look into the catalog/schema where the view is stored first
 		auto view_search_path =
 		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name, true);
 		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));

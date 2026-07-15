@@ -277,8 +277,7 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 }
 
 vector<CatalogSearchEntry> CatalogSearchPath::GetImplicitSearchCatalogs() const {
-	// Get the implicit entries that were not resolved in place (i.e. those that are not flagged with
-	// default_schema_precedence)
+	// Get the implicit entries that were not already resolved by the precedence flag.
 	vector<CatalogSearchEntry> catalogs;
 	for (auto &path : paths) {
 		if (path.schema.empty() && !path.catalog.empty() && !path.default_schema_precedence) {
@@ -291,11 +290,8 @@ vector<CatalogSearchEntry> CatalogSearchPath::GetImplicitSearchCatalogs() const 
 vector<CatalogSearchEntry> CatalogSearchPath::GetWithPrecedenceSchemas(ClientContext &context) const {
 	vector<CatalogSearchEntry> res;
 	for (auto &path : paths) {
+		// Resolve implicit entries with default_schema_precedence to the catalog's default schema.
 		if (path.schema.empty()) {
-			// implicit entry (the whole catalog should be considered). Only entries flagged with
-			// default_schema_precedence are resolved to the catalog's default schema in place, keeping their
-			// position in the search path so they retain their priority. The remaining implicit entries are only
-			// consulted as a last-resort fallback (see Catalog::TryLookupDefaultSchema)
 			if (path.catalog.empty() || !path.default_schema_precedence) {
 				continue;
 			}
