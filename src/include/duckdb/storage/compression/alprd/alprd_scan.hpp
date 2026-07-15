@@ -243,6 +243,14 @@ public:
 			memcpy(vector_state.exceptions_positions, (void *)vector_ptr, exceptions_positions_copy_size);
 			vector_ptr += exceptions_positions_copy_size;
 			read_bytes += exceptions_positions_copy_size;
+
+			//! The exception positions index into the decoded vector, so they must stay within its bounds
+			for (idx_t i = 0; i < vector_state.exceptions_count; i++) {
+				if (vector_state.exceptions_positions[i] >= vector_size) {
+					throw IOException("Corrupted ALPRD segment: exception position (%d) exceeds vector_size (%d)",
+					                  vector_state.exceptions_positions[i], vector_size);
+				}
+			}
 		}
 
 		// Decode all the vector values to the specified 'value_buffer'
