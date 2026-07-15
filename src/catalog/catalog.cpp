@@ -462,13 +462,23 @@ vector<SimilarCatalogEntry> Catalog::SimilarEntriesInSchemas(ClientContext &cont
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog,
-                                             const string &schema) {
+                                             const string &schema, CatalogType lookup_type = CatalogType::INVALID) {
 	auto &context = retriever.GetContext();
 	vector<CatalogSearchEntry> entries;
 	auto &search_path = retriever.GetSearchPath();
 	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
-		// no catalog or schema provided - scan the entire search path
-		entries = search_path.Get();
+		// no catalog or schema provided - scan the entire search path. For non-table lookups, implicit catalogs that
+		// requested precedence (e.g. a view's own catalog while binding its body) are resolved to their default
+		// schema in place so they keep their priority; tables use the separate default-table mechanism instead.
+		//
+		// lookup_type is optional (CatalogType::INVALID means the caller did not specify one, e.g. callers that
+		// only ever pass a concrete catalog/schema); when unknown we treat it like a table lookup and skip the
+		// precedence resolution.
+		if (lookup_type == CatalogType::INVALID || lookup_type == CatalogType::TABLE_ENTRY) {
+			entries = search_path.Get();
+		} else {
+			entries = search_path.GetWithPrecedenceSchemas(context);
+		}
 	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
@@ -920,9 +930,9 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 
 	// Special case for non-table entries (functions, macros, types): mirroring the default-table fallback above, if
 	// the entry could not be resolved through the regular search path we fall back to the default schema of any
-	// catalog flagged as an implicit search catalog (added to the path with an INVALID_SCHEMA entry, e.g. a view's
-	// own catalog while binding its body). Like the default-table lookup, this only kicks in when the entry is
-	// otherwise unresolved, so the search is never widened when it is not needed.
+	// catalog flagged as an implicit search catalog (added to the path with an INVALID_SCHEMA entry), but only
+	// if the catalog did not request precedence. Catalogs that requested precedence were already searched at their
+	// position in the search path.
 	if (lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY && allow_default_lookup && !result.Found()) {
 		result = TryLookupDefaultSchema(retriever, lookup_info);
 		if (result.error.HasError()) {
@@ -1018,7 +1028,9 @@ CatalogEntryLookup Catalog::TryLookupDefaultSchema(CatalogEntryRetriever &retrie
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                            const string &schema, const EntryLookupInfo &lookup_info,
                                            OnEntryNotFound if_not_found) {
-	auto entries = GetCatalogEntries(retriever, catalog, schema);
+	// GetCatalogEntries resolves the search path, inlining the default schema of any implicit catalog that requested
+	// precedence (e.g. a view's own catalog while binding its body) for non-table lookups.
+	auto entries = GetCatalogEntries(retriever, catalog, schema, lookup_info.GetCatalogType());
 	vector<CatalogLookup> lookups;
 	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());

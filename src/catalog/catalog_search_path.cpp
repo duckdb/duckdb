@@ -12,8 +12,9 @@
 
 namespace duckdb {
 
-CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p)
-    : catalog(std::move(catalog_p)), schema(std::move(schema_p)) {
+CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p, bool default_schema_precedence_p)
+    : catalog(std::move(catalog_p)), schema(std::move(schema_p)),
+      default_schema_precedence(default_schema_precedence_p) {
 }
 
 string CatalogSearchEntry::ToString() const {
@@ -276,13 +277,38 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 }
 
 vector<CatalogSearchEntry> CatalogSearchPath::GetImplicitSearchCatalogs() const {
+	// Get the implicit entries that were not resolved in place (i.e. those that are not flagged with
+	// default_schema_precedence)
 	vector<CatalogSearchEntry> catalogs;
 	for (auto &path : paths) {
-		if (path.schema.empty() && !path.catalog.empty()) {
+		if (path.schema.empty() && !path.catalog.empty() && !path.default_schema_precedence) {
 			catalogs.push_back(path);
 		}
 	}
 	return catalogs;
+}
+
+vector<CatalogSearchEntry> CatalogSearchPath::GetWithPrecedenceSchemas(ClientContext &context) const {
+	vector<CatalogSearchEntry> res;
+	for (auto &path : paths) {
+		if (path.schema.empty()) {
+			// implicit entry (the whole catalog should be considered). Only entries flagged with
+			// default_schema_precedence are resolved to the catalog's default schema in place, keeping their
+			// position in the search path so they retain their priority. The remaining implicit entries are only
+			// consulted as a last-resort fallback (see Catalog::TryLookupDefaultSchema)
+			if (path.catalog.empty() || !path.default_schema_precedence) {
+				continue;
+			}
+			auto catalog_entry = Catalog::GetCatalogEntry(context, path.catalog);
+			if (!catalog_entry) {
+				continue;
+			}
+			res.emplace_back(path.catalog, catalog_entry->GetDefaultSchema());
+		} else {
+			res.emplace_back(path);
+		}
+	}
+	return res;
 }
 
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
