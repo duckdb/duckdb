@@ -186,6 +186,9 @@ static const TransformFrameOps COMMENT_VALUE_OPS = {"CommentValue",
 static const TransformFrameOps STRING_LITERAL_VALUE_OPS = {
     "StringLiteralValue", &PEGTransformerFactory::InitializeStringLiteralValueTrampoline,
     &PEGTransformerFactory::FinalizeStringLiteralValueTrampoline};
+static const TransformFrameOps ANALYZE_KEYWORD_OPS = {"AnalyzeKeyword",
+                                                      &PEGTransformerFactory::InitializeAnalyzeKeywordTrampoline,
+                                                      &PEGTransformerFactory::FinalizeAnalyzeKeywordTrampoline};
 static const TransformFrameOps EXPRESSION_STATEMENT_OPS = {
     "ExpressionStatement", &PEGTransformerFactory::InitializeExpressionStatementTrampoline,
     &PEGTransformerFactory::FinalizeExpressionStatementTrampoline};
@@ -1144,9 +1147,6 @@ static const TransformFrameOps EXECUTE_STATEMENT_OPS = {"ExecuteStatement",
 static const TransformFrameOps EXPLAIN_STATEMENT_OPS = {"ExplainStatement",
                                                         &PEGTransformerFactory::InitializeExplainStatementTrampoline,
                                                         &PEGTransformerFactory::FinalizeExplainStatementTrampoline};
-static const TransformFrameOps EXPLAIN_ANALYZE_OPS = {"ExplainAnalyze",
-                                                      &PEGTransformerFactory::InitializeExplainAnalyzeTrampoline,
-                                                      &PEGTransformerFactory::FinalizeExplainAnalyzeTrampoline};
 static const TransformFrameOps EXPLAIN_OPTION_LIST_OPS = {"ExplainOptionList",
                                                           &PEGTransformerFactory::InitializeExplainOptionListTrampoline,
                                                           &PEGTransformerFactory::FinalizeExplainOptionListTrampoline};
@@ -2854,6 +2854,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CommentColumn", &COMMENT_COLUMN_OPS},
 	    {"CommentValue", &COMMENT_VALUE_OPS},
 	    {"StringLiteralValue", &STRING_LITERAL_VALUE_OPS},
+	    {"AnalyzeKeyword", &ANALYZE_KEYWORD_OPS},
 	    {"ExpressionStatement", &EXPRESSION_STATEMENT_OPS},
 	    {"ExpressionAlias", &EXPRESSION_ALIAS_OPS},
 	    {"IndexName", &INDEX_NAME_OPS},
@@ -3196,7 +3197,6 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"DropSecretStorage", &DROP_SECRET_STORAGE_OPS},
 	    {"ExecuteStatement", &EXECUTE_STATEMENT_OPS},
 	    {"ExplainStatement", &EXPLAIN_STATEMENT_OPS},
-	    {"ExplainAnalyze", &EXPLAIN_ANALYZE_OPS},
 	    {"ExplainOptionList", &EXPLAIN_OPTION_LIST_OPS},
 	    {"ExplainOption", &EXPLAIN_OPTION_OPS},
 	    {"ExplainOptionName", &EXPLAIN_OPTION_NAME_OPS},
@@ -4640,31 +4640,33 @@ PEGTransformerFactory::FinalizeAlterDatabaseStmtTrampoline(PEGTransformer &trans
 void PEGTransformerFactory::InitializeAnalyzeStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                  TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	frame.ReserveChildSlots(2);
+	frame.ReserveChildSlots(3);
 	auto &analyze_target_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (analyze_target_opt.HasResult()) {
 		stack.PushFrame(analyze_target_opt.GetResult(), ANALYZE_TARGET_OPS,
-		                TransformFrameResultTarget(frame.frame_index, 1));
+		                TransformFrameResultTarget(frame.frame_index, 2));
 	}
 	auto &analyze_verbose_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (analyze_verbose_opt.HasResult()) {
 		stack.PushFrame(analyze_verbose_opt.GetResult(), ANALYZE_VERBOSE_OPS,
-		                TransformFrameResultTarget(frame.frame_index, 0));
+		                TransformFrameResultTarget(frame.frame_index, 1));
 	}
+	stack.PushFrame(list_pr.GetChild(0), ANALYZE_KEYWORD_OPS, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeAnalyzeStatementTrampoline(PEGTransformer &transformer,
                                                                                            TransformStack &stack,
                                                                                            TransformStackFrame &frame) {
+	auto analyze_keyword = frame.TakeResult<Identifier>(0);
 	optional<bool> analyze_verbose {};
-	if (frame.child_results[0]) {
-		analyze_verbose = frame.TakeResult<bool>(0);
+	if (frame.child_results[1]) {
+		analyze_verbose = frame.TakeResult<bool>(1);
 	}
 	optional<AnalyzeTarget> analyze_target {};
-	if (frame.child_results[1]) {
-		analyze_target = frame.TakeResult<AnalyzeTarget>(1);
+	if (frame.child_results[2]) {
+		analyze_target = frame.TakeResult<AnalyzeTarget>(2);
 	}
-	auto result = TransformAnalyzeStatement(transformer, analyze_verbose, std::move(analyze_target));
+	auto result = TransformAnalyzeStatement(transformer, analyze_keyword, analyze_verbose, std::move(analyze_target));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
@@ -5068,6 +5070,18 @@ PEGTransformerFactory::FinalizeStringLiteralValueTrampoline(PEGTransformer &tran
 	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(0));
 	auto result = TransformStringLiteralValue(transformer, string_literal);
 	return make_uniq<TypedTransformResult<Value>>(result);
+}
+
+void PEGTransformerFactory::InitializeAnalyzeKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeAnalyzeKeywordTrampoline(PEGTransformer &transformer,
+                                                                                         TransformStack &stack,
+                                                                                         TransformStackFrame &frame) {
+	auto result = TransformAnalyzeKeyword(transformer);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
 void PEGTransformerFactory::InitializeExpressionStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -12056,9 +12070,9 @@ void PEGTransformerFactory::InitializeExplainStatementTrampoline(PEGTransformer 
 		stack.PushFrame(explain_option_list_opt.GetResult(), EXPLAIN_OPTION_LIST_OPS,
 		                TransformFrameResultTarget(frame.frame_index, 1));
 	}
-	auto &explain_analyze_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
-	if (explain_analyze_opt.HasResult()) {
-		stack.PushFrame(explain_analyze_opt.GetResult(), EXPLAIN_ANALYZE_OPS,
+	auto &analyze_keyword_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (analyze_keyword_opt.HasResult()) {
+		stack.PushFrame(analyze_keyword_opt.GetResult(), ANALYZE_KEYWORD_OPS,
 		                TransformFrameResultTarget(frame.frame_index, 0));
 	}
 }
@@ -12066,9 +12080,9 @@ void PEGTransformerFactory::InitializeExplainStatementTrampoline(PEGTransformer 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExplainStatementTrampoline(PEGTransformer &transformer,
                                                                                            TransformStack &stack,
                                                                                            TransformStackFrame &frame) {
-	optional<bool> explain_analyze {};
+	optional<Identifier> analyze_keyword {};
 	if (frame.child_results[0]) {
-		explain_analyze = frame.TakeResult<bool>(0);
+		analyze_keyword = frame.TakeResult<Identifier>(0);
 	}
 	optional<vector<GenericCopyOption>> explain_option_list {};
 	if (frame.child_results[1]) {
@@ -12076,20 +12090,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExplainStatement
 	}
 	auto explainable_statements = frame.TakeResult<unique_ptr<SQLStatement>>(2);
 	auto result =
-	    TransformExplainStatement(transformer, explain_analyze, explain_option_list, std::move(explainable_statements));
+	    TransformExplainStatement(transformer, analyze_keyword, explain_option_list, std::move(explainable_statements));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
-}
-
-void PEGTransformerFactory::InitializeExplainAnalyzeTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                               TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExplainAnalyzeTrampoline(PEGTransformer &transformer,
-                                                                                         TransformStack &stack,
-                                                                                         TransformStackFrame &frame) {
-	auto result = TransformExplainAnalyze(transformer);
-	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
 void PEGTransformerFactory::InitializeExplainOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -12159,7 +12161,7 @@ void PEGTransformerFactory::InitializeExplainOptionNameTrampoline(PEGTransformer
 		return;
 	}
 	if (ops_entry == ops_map.end()) {
-		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+		return;
 	}
 	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
 }
@@ -12167,21 +12169,13 @@ void PEGTransformerFactory::InitializeExplainOptionNameTrampoline(PEGTransformer
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeExplainOptionNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                            TransformStackFrame &frame) {
-	Identifier result;
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+	Identifier result {};
 	if (frame.child_results[0]) {
 		result = frame.TakeResult<Identifier>(0);
 	} else {
-		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
-		if (choice_result.type == ParseResultType::IDENTIFIER) {
-			result = choice_result.Cast<IdentifierParseResult>().identifier;
-		} else if (choice_result.type == ParseResultType::KEYWORD) {
-			result = Identifier(choice_result.Cast<KeywordParseResult>().keyword);
-		} else if (choice_result.type == ParseResultType::STRING) {
-			result = Identifier(choice_result.Cast<StringLiteralParseResult>().result);
-		} else {
-			result = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));
-		}
+		result = TransformExplainOptionName(transformer, choice_result);
 	}
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
@@ -23880,13 +23874,16 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeVacuumOptionTram
 
 void PEGTransformerFactory::InitializeOptAnalyzeTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                            TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), ANALYZE_KEYWORD_OPS, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOptAnalyzeTrampoline(PEGTransformer &transformer,
                                                                                      TransformStack &stack,
                                                                                      TransformStackFrame &frame) {
-	auto result = TransformOptAnalyze(transformer);
+	auto analyze_keyword = frame.TakeResult<Identifier>(0);
+	auto result = TransformOptAnalyze(transformer, analyze_keyword);
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
