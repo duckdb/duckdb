@@ -810,9 +810,25 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	}
 
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto.getTransport());
-	transport.SetLocation(column_meta_data.bloom_filter_offset);
-	if (column_meta_data.__isset.bloom_filter_length && column_meta_data.bloom_filter_length > 0) {
-		transport.Prefetch(column_meta_data.bloom_filter_offset, column_meta_data.bloom_filter_length);
+	auto bloom_filter_start = UnsafeNumericCast<idx_t>(column_meta_data.bloom_filter_offset);
+	if (bloom_filter_start >= transport.GetSize()) {
+		return false;
+	}
+	idx_t bloom_filter_length = 0;
+	if (column_meta_data.__isset.bloom_filter_length) {
+		if (column_meta_data.bloom_filter_length <= 0) {
+			return false;
+		}
+		bloom_filter_length = UnsafeNumericCast<idx_t>(column_meta_data.bloom_filter_length);
+		if (bloom_filter_length > transport.GetSize() ||
+		    bloom_filter_start > transport.GetSize() - bloom_filter_length) {
+			return false;
+		}
+	}
+
+	transport.SetLocation(bloom_filter_start);
+	if (bloom_filter_length > 0) {
+		transport.Prefetch(bloom_filter_start, bloom_filter_length);
 	}
 
 	duckdb_parquet::BloomFilterHeader filter_header;
@@ -825,7 +841,6 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	if (filter_header.numBytes <= 0) {
 		return false;
 	}
-	auto bloom_filter_start = UnsafeNumericCast<idx_t>(column_meta_data.bloom_filter_offset);
 	auto bloom_filter_data_start = transport.GetLocation();
 	auto bloom_filter_data_size = UnsafeNumericCast<idx_t>(filter_header.numBytes);
 	if (bloom_filter_data_size % sizeof(ParquetBloomBlock) != 0) {
@@ -835,11 +850,10 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	    bloom_filter_data_start > transport.GetSize() - bloom_filter_data_size) {
 		return false;
 	}
-	if (column_meta_data.__isset.bloom_filter_length && column_meta_data.bloom_filter_length > 0) {
-		auto bloom_filter_length = UnsafeNumericCast<idx_t>(column_meta_data.bloom_filter_length);
+	if (bloom_filter_length > 0) {
 		auto bloom_filter_header_size = bloom_filter_data_start - bloom_filter_start;
 		if (bloom_filter_header_size > bloom_filter_length ||
-		    bloom_filter_data_size > bloom_filter_length - bloom_filter_header_size) {
+		    bloom_filter_data_size != bloom_filter_length - bloom_filter_header_size) {
 			return false;
 		}
 	}
