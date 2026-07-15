@@ -272,7 +272,7 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 		}
 		auto &input_val = input.inputs[i];
 		if (TypeVisitor::Contains(input_val.type(), LogicalTypeId::VARIANT)) {
-			throw NotImplementedException("Unimplemented type \"%s\" for test_vector_types");
+			throw NotImplementedException("Unimplemented type for test_vector_types");
 		}
 
 		names.emplace_back(name);
