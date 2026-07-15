@@ -808,7 +808,6 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	    column_meta_data.bloom_filter_offset <= 0) {
 		return false;
 	}
-	// TODO check length against file length!
 
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto.getTransport());
 	transport.SetLocation(column_meta_data.bloom_filter_offset);
@@ -823,9 +822,30 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	    !filter_header.hash.__isset.XXHASH) {
 		return false;
 	}
+	if (filter_header.numBytes <= 0) {
+		return false;
+	}
+	auto bloom_filter_start = UnsafeNumericCast<idx_t>(column_meta_data.bloom_filter_offset);
+	auto bloom_filter_data_start = transport.GetLocation();
+	auto bloom_filter_data_size = UnsafeNumericCast<idx_t>(filter_header.numBytes);
+	if (bloom_filter_data_size % sizeof(ParquetBloomBlock) != 0) {
+		return false;
+	}
+	if (bloom_filter_data_start < bloom_filter_start || bloom_filter_data_size > transport.GetSize() ||
+	    bloom_filter_data_start > transport.GetSize() - bloom_filter_data_size) {
+		return false;
+	}
+	if (column_meta_data.__isset.bloom_filter_length && column_meta_data.bloom_filter_length > 0) {
+		auto bloom_filter_length = UnsafeNumericCast<idx_t>(column_meta_data.bloom_filter_length);
+		auto bloom_filter_header_size = bloom_filter_data_start - bloom_filter_start;
+		if (bloom_filter_header_size > bloom_filter_length ||
+		    bloom_filter_data_size > bloom_filter_length - bloom_filter_header_size) {
+			return false;
+		}
+	}
 
-	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, filter_header.numBytes);
-	transport.read(new_buffer->ptr, filter_header.numBytes);
+	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, bloom_filter_data_size);
+	transport.read(new_buffer->ptr, UnsafeNumericCast<uint32_t>(bloom_filter_data_size));
 	ParquetBloomFilter bloom_filter(std::move(new_buffer));
 	return ApplyBloomFilter(duckdb_filter, bloom_filter);
 }
