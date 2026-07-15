@@ -95,6 +95,8 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	FilterVector(state, result, target_count, sel, count, filter, filter_state);
 	if (!filter_includes_validity) {
 		validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+	} else {
+		validity->Skip(state.child_states[0], target_count);
 	}
 }
 
