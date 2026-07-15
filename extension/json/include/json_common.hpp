@@ -126,11 +126,11 @@ enum class JSONPathElementType : uint8_t {
 
 //! A single element of a JSON path
 struct JSONPathElement {
-	JSONPathElementType type;
+	JSONPathElementType type = JSONPathElementType::KEY;
 	//! Key for KEY elements
 	string key;
 	//! Index for INDEX and REVERSE_INDEX elements
-	idx_t index;
+	idx_t index = 0;
 };
 
 //! Iterates over the elements of a JSON path ($.field[index]... syntax)
