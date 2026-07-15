@@ -25,6 +25,7 @@ blacklist = [
     "BatchDrainMode",
     "PendingTaskCountMode",
     "PartitionKeyTrackerState",
+    "ForbiddenReason",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")

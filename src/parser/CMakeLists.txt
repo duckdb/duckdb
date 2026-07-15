@@ -1,3 +1,4 @@
+add_subdirectory(connect_mode)
 add_subdirectory(constraints)
 add_subdirectory(expression)
 add_subdirectory(parsed_data)

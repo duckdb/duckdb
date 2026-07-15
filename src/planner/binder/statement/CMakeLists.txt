@@ -5,6 +5,7 @@ add_library_unity(
   bind_attach.cpp
   bind_call.cpp
   bind_connect.cpp
+  bind_passthrough.cpp
   bind_copy.cpp
   bind_copy_database.cpp
   bind_create.cpp

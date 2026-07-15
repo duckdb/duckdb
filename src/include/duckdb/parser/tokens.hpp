@@ -23,6 +23,7 @@ class CopyStatement;
 class CreateStatement;
 class DetachStatement;
 class DisconnectStatement;
+class PassthroughStatement;
 class DeleteStatement;
 class DropStatement;
 class ExtensionStatement;

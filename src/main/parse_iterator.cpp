@@ -1,17 +1,71 @@
 #include "duckdb/main/parse_iterator.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/parser/connect_mode/connect_mode_parser.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/passthrough_statement.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
+
+//! Layer-1 connect-mode pre-pass. Returns true and fills `out` only when the input contains a
+//! `CONNECT <name> EXECUTE <payload>` form; returns false to let the normal SQL parser handle the
+//! whole query unchanged. EXECUTE chunks become a PassthroughStatement carrying the verbatim
+//! payload — the SQL parser never sees the payload text, so arbitrary (even non-SQL) payloads
+//! survive intact. Every other chunk shape (plain CONNECT/DISCONNECT, malformed control
+//! statements, ordinary SQL) is left to the normal parser so its grammar/binder error messages
+//! are preserved.
+static bool TryParseConnectMode(const ParserOptions &options, const string &query,
+                                vector<unique_ptr<SQLStatement>> &out) {
+	// Cheap gate: only `CONNECT … EXECUTE` is special. Skip the Layer-1 pass otherwise.
+	auto lowered = StringUtil::Lower(query);
+	if (!StringUtil::Contains(lowered, "connect") || !StringUtil::Contains(lowered, "execute")) {
+		return false;
+	}
+	vector<ConnectModeChunk> chunks;
+	try {
+		ConnectModeParser layer1(query);
+		chunks = layer1.AllRemaining();
+	} catch (...) {
+		// Layer-1 couldn't classify the input — let the normal SQL parser produce its (better) error.
+		return false;
+	}
+	bool has_execute = false;
+	for (auto &chunk : chunks) {
+		if (chunk.type == ConnectModeChunk::Type::EXECUTE) {
+			has_execute = true;
+			break;
+		}
+	}
+	if (!has_execute) {
+		// No EXECUTE form present — let the normal parser handle the whole query (it owns the error
+		// messages for plain/malformed CONNECT and DISCONNECT).
+		return false;
+	}
+	for (auto &chunk : chunks) {
+		if (chunk.type == ConnectModeChunk::Type::EXECUTE) {
+			auto stmt = make_uniq<PassthroughStatement>(chunk.target, chunk.payload);
+			stmt->query = chunk.text;
+			out.push_back(std::move(stmt));
+			continue;
+		}
+		// Everything else (CONTROL / RAW / malformed): hand the chunk's text to the normal parser.
+		Parser parser(options);
+		parser.ParseQuery(chunk.text);
+		for (auto &s : parser.statements) {
+			out.push_back(std::move(s));
+		}
+	}
+	return true;
+}
 
 ParseIterator::ParseIterator(ClientContext &context_p, const string &sql_p)
     : context(context_p), sql(Parser::NormalizeSQLString(sql_p)) {
@@ -42,7 +96,15 @@ bool ParseIterator::Peek() {
 	// query. If one does, we yield its statements one at a time and skip the PEG path entirely.
 	if (!override_resolved) {
 		override_resolved = true;
-		if (options.extensions) {
+		// Built-in Layer-1 connect-mode override: `CONNECT <name> EXECUTE <payload>` forms are claimed
+		// here and turned into PassthroughStatements, so the PEG parser never sees the payload text.
+		{
+			vector<unique_ptr<SQLStatement>> connect_statements;
+			if (TryParseConnectMode(options, sql, connect_statements)) {
+				overridden_statements = make_uniq<vector<unique_ptr<SQLStatement>>>(std::move(connect_statements));
+			}
+		}
+		if (!overridden_statements && options.extensions) {
 			bool has_strict_extension_error = false;
 			ErrorData last_strict_extension_error;
 			for (auto &ext : options.extensions->ParserExtensions()) {

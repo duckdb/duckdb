@@ -71,6 +71,8 @@ string StatementTypeToString(StatementType type) {
 		return "CONNECT";
 	case StatementType::DISCONNECT_STATEMENT:
 		return "DISCONNECT";
+	case StatementType::PASSTHROUGH_STATEMENT:
+		return "PASSTHROUGH";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}
