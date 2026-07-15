@@ -13,11 +13,9 @@ ProfilerPrintFormat ParseProfilerPrintFormat(const Value &val) {
 	return ProfilerPrintFormat(StringUtil::Lower(val.GetValue<string>()));
 }
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer,
-                                                 const optional<Identifier> &analyze_keyword,
-                                                 const optional<vector<GenericCopyOption>> &explain_option_list,
-                                                 unique_ptr<SQLStatement> explainable_statements) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(
+    PEGTransformer &transformer, const optional<Identifier> &analyze_keyword,
+    const optional<vector<GenericCopyOption>> &explain_option_list, unique_ptr<SQLStatement> explainable_statements) {
 	auto explain_type = analyze_keyword ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
 	auto format = ProfilerPrintFormat::Default();
