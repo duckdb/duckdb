@@ -196,3 +196,21 @@ query T
 SELECT json_replace('{"a":1}', '', '2')
 ----
 2
+
+# Malformed paths raise an error rather than falling through to the root
+statement error
+SELECT json_replace('{"a":1}', '$not_a_path', '2')
+----
+JSON path error
+
+# Negative indexes count from the back, same as json_extract
+query T
+SELECT json_replace('[1,2,3]', '$[-2]', '9')
+----
+[1,9,3]
+
+# Replace never creates missing array legs
+query T
+SELECT json_replace('{}', '$.a[0]', '1')
+----
+{}

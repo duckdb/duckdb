@@ -206,3 +206,21 @@ query T
 SELECT json_insert('{"a":1}', '', '2')
 ----
 {"a":1}
+
+# Malformed paths raise an error rather than falling through to the root
+statement error
+SELECT json_insert('{"a":1}', '$not_a_path', '2')
+----
+JSON path error
+
+# Wildcards are not supported in modification functions
+statement error
+SELECT json_insert('{"a":1}', '$.*', '9')
+----
+not supported
+
+# A missing array leg is created
+query T
+SELECT json_insert('{}', '$.a[0]', '1')
+----
+{"a":[1]}

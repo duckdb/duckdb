@@ -169,9 +169,15 @@ SELECT json_remove('{"a~b":1,"c":2}', '$."a~b"')
 ----
 {"c":2}
 
-# Empty quoted key removes the empty string key
-query T
+# Empty quoted keys are not valid JSONPath, same as json_extract
+statement error
 SELECT json_remove('{"":1,"a":2}', '$.""')
+----
+JSON path error
+
+# The empty string key is addressable with a JSON Pointer
+query T
+SELECT json_remove('{"":1,"a":2}', '/')
 ----
 {"a":2}
 
@@ -205,9 +211,27 @@ SELECT json_remove('[]', '$[#-1]')
 ----
 []
 
-# A reverse offset too large to represent must not wrap around
-query T
+# A reverse offset too large to represent is not a valid path
+statement error
 SELECT json_remove('[1,2]', '$[#-18446744073709551617]')
+----
+JSON path error
+
+# Malformed paths raise an error rather than falling through to the root
+statement error
+SELECT json_remove('{"a":1}', '$not_a_path')
+----
+JSON path error
+
+# Wildcards are not supported in modification functions
+statement error
+SELECT json_remove('{"a":[1,2]}', '$.a[*]')
+----
+not supported
+
+# Negative indexes count from the back, same as json_extract
+query T
+SELECT json_remove('[1,2,3]', '$[-1]')
 ----
 [1,2]
 

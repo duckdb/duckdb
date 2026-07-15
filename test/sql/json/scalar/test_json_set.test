@@ -204,9 +204,15 @@ SELECT json_set('{"a\\":1,"b":2}', '$."a\\"', '9')
 ----
 {"a\\":9,"b":2}
 
-# Empty quoted key addresses the empty string key
-query T
+# Empty quoted keys are not valid JSONPath, same as json_extract
+statement error
 SELECT json_set('{"":1,"a":2}', '$.""', '9')
+----
+JSON path error
+
+# The empty string key is addressable with a JSON Pointer
+query T
+SELECT json_set('{"":1,"a":2}', '/', '9')
 ----
 {"":9,"a":2}
 
@@ -276,11 +282,11 @@ SELECT json_set('{"a":{"x":1}}', '$.a[#-1]', '9')
 ----
 {"a":{"x":1}}
 
-# Literal negative indexes are not valid
+# Negative indexes count from the back, same as json_extract
 query T
 SELECT json_set('[1,2]', '$[-1]', '9')
 ----
-[1,2]
+[1,9]
 
 # Setting a key inside a null root is a no-op
 query T
@@ -307,16 +313,64 @@ SELECT json_set('[1,2]', '$[#]', '3')
 [1,2,3]
 
 # [#-] without digits is not a valid path
-query T
+statement error
 SELECT json_set('[1,2]', '$[#-]', '9')
 ----
-[1,2]
+JSON path error
 
-# A reverse offset too large to represent must not wrap around
-query T
+# A reverse offset too large to represent is not a valid path
+statement error
 SELECT json_set('[1,2]', '$[#-18446744073709551617]', '9')
 ----
-[1,2]
+JSON path error
+
+# Malformed paths raise an error rather than falling through to the root
+statement error
+SELECT json_set('{"a":1}', '$not_a_path', '2')
+----
+JSON path error
+
+# Wildcards are not supported in modification functions
+statement error
+SELECT json_set('{"a":[1,2]}', '$.a[*]', '9')
+----
+not supported
+
+# A missing array leg is created
+query T
+SELECT json_set('{}', '$.a[0]', '1')
+----
+{"a":[1]}
+
+# Created containers nest further
+query T
+SELECT json_set('{}', '$.a[0].b', '1')
+----
+{"a":[{"b":1}]}
+
+# Only index 0 is valid in a newly created array
+query T
+SELECT json_set('{}', '$.a[2]', '1')
+----
+{}
+
+# Append also creates a missing array leg
+query T
+SELECT json_set('{}', '$.a[#]', '1')
+----
+{"a":[1]}
+
+# An array leg does not convert an object root
+query T
+SELECT json_set('{}', '$[0]', '1')
+----
+{}
+
+# An array leg does not replace a scalar
+query T
+SELECT json_set('{"a":1}', '$.a[0]', '2')
+----
+{"a":1}
 
 # The empty path is the JSON Pointer for the whole document, like $
 query T
