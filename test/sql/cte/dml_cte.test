@@ -31,7 +31,7 @@ EXPLAIN WITH ins AS MATERIALIZED (
 )
 SELECT * FROM ins LIMIT 1;
 ----
-physical_plan	<REGEX>:.*STREAMING_FANOUT.*Run To Completion.*true.*CTE( Scan|_SCAN).*
+physical_plan	<REGEX>:.*PIPELINE_DEPENDENT.*Run To Completion.*true.*CTE( Scan|_SCAN).*
 
 statement ok
 PRAGMA threads=1

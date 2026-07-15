@@ -209,7 +209,6 @@ private:
 	void ResetSinkAndOperators();
 	shared_ptr<GlobalSourceState> GetSourceState();
 	void SetSourceState(shared_ptr<GlobalSourceState> state);
-	void FinishSource(ClientContext &context);
 	void FinishSourceAndPreventBlocking(ClientContext &context);
 	void PreventSourceBlocking();
 	void PreventSinkBlocking();

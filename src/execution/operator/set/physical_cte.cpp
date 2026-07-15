@@ -12,6 +12,8 @@ namespace duckdb {
 
 static const char *GetCTEConsumerModeName(CTEConsumerMode mode) {
 	switch (mode) {
+	case CTEConsumerMode::UNRESOLVED:
+		return "UNRESOLVED";
 	case CTEConsumerMode::DIRECT:
 		return "DIRECT";
 	case CTEConsumerMode::BUFFERED:
@@ -132,6 +134,12 @@ public:
 	    : op(op), working_table_ref(op.working_table.get()),
 	      exchange(op.UseStreamingExchange() ? op.exchange : nullptr), execution_mode(op.GetExecutionMode()) {
 		ResetState(context);
+	}
+
+	~CTEGlobalState() override {
+		if (exchange) {
+			exchange->Cancel();
+		}
 	}
 	const PhysicalCTE &op;
 	optional_ptr<ColumnDataCollection> working_table_ref;
@@ -279,6 +287,7 @@ SinkFinalizeType PhysicalCTE::Finalize(Pipeline &pipeline, Event &event, ClientC
 //===--------------------------------------------------------------------===//
 void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	D_ASSERT(children.size() == 2);
+	pipeline_selection_state = CTEPipelineSelectionState::UNRESOLVED;
 	op_state.reset();
 	sink_state.reset();
 	materialized_consumer_count = 0;
@@ -303,7 +312,7 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	// created while building children[1] (the query side) must run after the DML completes.
 	// We follow the same pattern as PhysicalJoin::BuildJoinPipelines: capture the DML pipelines
 	// and the current last child before building children[1], then call AddRecursiveDependencies
-	// with force=true so that ordering is always enforced (not just when pipelines exceed the
+	// with RecursiveDependencyMode::FORCE so ordering is always enforced (not just when pipelines exceed the
 	// thread count, as is the case for join build dependencies).
 	vector<shared_ptr<Pipeline>> dml_pipelines;
 	optional_ptr<MetaPipeline> last_child_ptr;
@@ -313,6 +322,7 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	}
 
 	children[1].get().BuildPipelines(current, meta_pipeline);
+	pipeline_selection_state = CTEPipelineSelectionState::RESOLVED;
 
 	if (exchange && !UseStreamingExchange()) {
 		// All exchange consumers were converted to materialized scans during pipeline construction.
@@ -372,10 +382,6 @@ bool PhysicalCTE::UseStreamingExchange() const {
 	return GetExecutionMode() != CTEExecutionMode::MATERIALIZED;
 }
 
-bool PhysicalCTE::RequiresMaterialization() const {
-	return GetExecutionMode() != CTEExecutionMode::STREAMING_FANOUT;
-}
-
 vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
 	return children[1].get().GetSources();
 }
@@ -384,6 +390,14 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename.GetIdentifierName();
 	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
+	if (exchange && pipeline_selection_state == CTEPipelineSelectionState::UNRESOLVED) {
+		result["Execution Mode"] = "PIPELINE_DEPENDENT";
+		if (exchange->RunToCompletion()) {
+			result["Run To Completion"] = "true";
+		}
+		SetEstimatedCardinality(result, estimated_cardinality);
+		return result;
+	}
 	auto execution_mode = GetExecutionMode();
 	result["Execution Mode"] = GetCTEExecutionModeName(execution_mode);
 	if (UseStreamingExchange() && exchange->RunToCompletion()) {

@@ -85,7 +85,6 @@ public:
 	idx_t RegisteredConsumerCount() const;
 	idx_t ConsumerCount() const;
 	idx_t DirectConsumerCount() const;
-	bool HasBufferedConsumers() const;
 
 private:
 	struct ChunkPool;
@@ -96,17 +95,15 @@ private:
 
 	enum class ConsumerMode : uint8_t { BUFFERED, DIRECT, MATERIALIZED };
 	enum class ConsumerLifecycle : uint8_t { ACTIVE, INACTIVE };
-	enum class ConsumerBufferMode : uint8_t { SHARED, DETACHED };
 	enum class ConsumerReadState : uint8_t { IDLE, READING };
 	enum class ProducerState : uint8_t { ACTIVE, FINISHED, CANCELLED };
 	enum class AppendReservationState : uint8_t { IDLE, RESERVED };
 	enum class WatermarkState : uint8_t { BELOW_HIGH_WATERMARK, ABOVE_HIGH_WATERMARK };
 	enum class WriterWakeMode : uint8_t { LOW_WATERMARK, FORCE };
-	enum class AppendAdmission : uint8_t { READY, BLOCKED, FINISHED };
-	enum class BufferedPushState : uint8_t { NONE, APPENDED, FINISHED };
+	enum class AppendAdmission : uint8_t { READY, BLOCKED, UNCONSUMED, CANCELLED };
+	enum class BufferedPushState : uint8_t { NOT_REQUIRED, APPENDED, BLOCKED, UNCONSUMED, CANCELLED };
 	enum class ExchangeLogEvent : uint8_t {
 		SPOOL_CREATED,
-		CONSUMERS_DETACHED,
 		HIGH_WATERMARK_BLOCKED,
 		LOW_WATERMARK_WAKE,
 		CONSUMER_UNREGISTERED
@@ -134,22 +131,18 @@ private:
 		idx_t rows_read = 0;
 		ConsumerMode mode = ConsumerMode::BUFFERED;
 		ConsumerLifecycle lifecycle = ConsumerLifecycle::ACTIVE;
-		ConsumerBufferMode buffer_mode = ConsumerBufferMode::SHARED;
 		ConsumerReadState read_state = ConsumerReadState::IDLE;
 		idx_t read_position = 0;
-		shared_ptr<BroadcastSpool> detached_spool;
 		shared_ptr<BroadcastSpoolReader> shared_reader;
-		shared_ptr<BroadcastSpoolReader> detached_reader;
 	};
 
 public:
 	~PipelineBroadcastExchange();
 
 private:
-	SinkResultType Append(DataChunk &chunk, const InterruptState &interrupt_state);
+	BufferedPushState Append(DataChunk &chunk, const InterruptState &interrupt_state);
 	SinkResultType CompletePush(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,
 	                            BufferedPushState buffered_state);
-	void RecordDirectConsumerProgress();
 	void RecordProducedRows(idx_t count);
 	SinkResultType PushDirectConsumers(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,
 	                                   const InterruptState &interrupt_state);
@@ -165,9 +158,10 @@ private:
 	    DUCKDB_REQUIRES(lock);
 	AppendAdmission ReserveAppendLocked(const InterruptState &interrupt_state, AppendReservation &reservation,
 	                                    vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
-	void CompleteAppendLocked(const AppendReservation &reservation, shared_ptr<DataChunk> copy, idx_t row_count,
-	                          vector<InterruptState> &readers, vector<InterruptState> &appenders,
-	                          vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
+	BufferedPushState CompleteAppendLocked(const AppendReservation &reservation, shared_ptr<DataChunk> copy,
+	                                       idx_t row_count, vector<InterruptState> &readers,
+	                                       vector<InterruptState> &appenders, vector<ExchangeLogEntry> &log_entries)
+	    DUCKDB_REQUIRES(lock);
 	void AbortAppendReservation(vector<InterruptState> &readers, vector<InterruptState> &writers,
 	                            vector<InterruptState> &appenders) DUCKDB_REQUIRES(lock);
 	SourceResultType ReserveScanLocked(idx_t consumer_idx, const InterruptState &interrupt_state,
@@ -180,14 +174,11 @@ private:
 	shared_ptr<DataChunk> CopyChunk(DataChunk &chunk);
 	bool ShouldStopProducerLocked() const DUCKDB_REQUIRES(lock);
 	bool ShouldThrottleProducerLocked() const DUCKDB_REQUIRES(lock);
-	bool HasActiveSharedConsumersLocked() const DUCKDB_REQUIRES(lock);
 	bool ShouldCreateSharedSpoolLocked() const DUCKDB_REQUIRES(lock);
 	void CreateSharedSpoolLocked(vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
-	void DetachLaggingConsumersLocked(vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
-	void DetachConsumerLocked(ConsumerState &consumer) DUCKDB_REQUIRES(lock);
 	void RetireChunksLocked() DUCKDB_REQUIRES(lock);
-	void RetireDetachedBufferLocked(ConsumerState &consumer) DUCKDB_REQUIRES(lock);
-	void ClearDetachedBufferLocked(ConsumerState &consumer) DUCKDB_REQUIRES(lock);
+	void TryReleaseBufferedStorageLocked() DUCKDB_REQUIRES(lock);
+	void DeactivateAllConsumersLocked() DUCKDB_REQUIRES(lock);
 	void WakeReadersLocked(vector<InterruptState> &readers) DUCKDB_REQUIRES(lock);
 	void WakeWritersLocked(vector<InterruptState> &writers, vector<ExchangeLogEntry> &log_entries,
 	                       WriterWakeMode mode = WriterWakeMode::LOW_WATERMARK) DUCKDB_REQUIRES(lock);
@@ -216,7 +207,6 @@ private:
 	idx_t active_consumers = 0;
 	idx_t shared_buffered_chunks = 0;
 	atomic<idx_t> produced_rows {0};
-	atomic<bool> direct_consumer_progress {false};
 	ProducerState producer_state = ProducerState::ACTIVE;
 	WatermarkState watermark_state = WatermarkState::BELOW_HIGH_WATERMARK;
 	optional_ptr<const PhysicalOperator> log_operator;

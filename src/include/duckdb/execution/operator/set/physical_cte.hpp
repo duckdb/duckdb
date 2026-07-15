@@ -17,8 +17,9 @@ class Pipeline;
 class PipelineBroadcastExchange;
 class RecursiveCTEState;
 
-enum class CTEConsumerMode : uint8_t { DIRECT, BUFFERED, MATERIALIZED };
+enum class CTEConsumerMode : uint8_t { UNRESOLVED, DIRECT, BUFFERED, MATERIALIZED };
 enum class CTEExecutionMode : uint8_t { MATERIALIZED, STREAMING_FANOUT, HYBRID_FANOUT };
+enum class CTEPipelineSelectionState : uint8_t { UNRESOLVED, RESOLVED };
 
 class PhysicalCTEConsumerSource : public PhysicalOperator {
 public:
@@ -50,7 +51,7 @@ public:
 	TableIndex cte_index;
 	shared_ptr<PipelineBroadcastExchange> exchange;
 	idx_t consumer_idx;
-	CTEConsumerMode consumer_mode = CTEConsumerMode::BUFFERED;
+	CTEConsumerMode consumer_mode = CTEConsumerMode::UNRESOLVED;
 };
 
 class PhysicalCTE : public PhysicalOperator {
@@ -71,6 +72,7 @@ public:
 	Identifier ctename;
 	bool cte_body_is_dml = false;
 	idx_t materialized_consumer_count = 0;
+	CTEPipelineSelectionState pipeline_selection_state = CTEPipelineSelectionState::UNRESOLVED;
 
 public:
 	// Sink interface
@@ -107,7 +109,6 @@ public:
 	void RegisterMaterializedConsumer(idx_t consumer_idx);
 	CTEExecutionMode GetExecutionMode() const;
 	bool UseStreamingExchange() const;
-	bool RequiresMaterialization() const;
 
 	vector<const_reference<PhysicalOperator>> GetSources() const override;
 };

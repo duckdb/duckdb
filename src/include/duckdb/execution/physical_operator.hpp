@@ -36,6 +36,8 @@ class PhysicalPlan;
 
 enum class TableFunctionParallelism : uint8_t;
 enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
+enum class PipelineExternalInputSupport : uint8_t { UNSUPPORTED, SUPPORTED };
+enum class PipelineSourceConsumption : uint8_t { ALL_INPUT, MAY_STOP_EARLY };
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
 class PhysicalOperator {
@@ -108,6 +110,14 @@ public:
 
 	virtual bool ParallelOperator() const {
 		return false;
+	}
+
+	virtual PipelineExternalInputSupport GetExternalInputSupport() const {
+		return PipelineExternalInputSupport::UNSUPPORTED;
+	}
+
+	virtual PipelineSourceConsumption GetSourceConsumption() const {
+		return PipelineSourceConsumption::ALL_INPUT;
 	}
 
 	virtual bool RequiresFinalExecute() const {

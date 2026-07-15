@@ -218,34 +218,11 @@ void Pipeline::SetExternalInput() {
 	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_UNSET;
 }
 
-static bool CanUseExternalInputOperator(const PhysicalOperator &op) {
-	switch (op.type) {
-	case PhysicalOperatorType::FILTER:
-	case PhysicalOperatorType::PROJECTION:
-	case PhysicalOperatorType::STREAMING_LIMIT:
-	case PhysicalOperatorType::VERIFY_VECTOR:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static bool CanUseExternalInputSink(const PhysicalOperator &op) {
-	switch (op.type) {
-	case PhysicalOperatorType::UNGROUPED_AGGREGATE:
-	case PhysicalOperatorType::HASH_GROUP_BY:
-	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
-		return true;
-	default:
-		return false;
-	}
-}
-
 bool Pipeline::CanUseExternalInput() const {
 	if (!sink || !sink->ParallelSink() || sink->SinkOrderDependent()) {
 		return false;
 	}
-	if (!CanUseExternalInputSink(*sink)) {
+	if (sink->GetExternalInputSupport() != PipelineExternalInputSupport::SUPPORTED) {
 		return false;
 	}
 	if (sink->RequiredPartitionInfo().AnyRequired()) {
@@ -253,7 +230,7 @@ bool Pipeline::CanUseExternalInput() const {
 	}
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
-		if (!CanUseExternalInputOperator(op)) {
+		if (op.GetExternalInputSupport() != PipelineExternalInputSupport::SUPPORTED) {
 			return false;
 		}
 		if (!op.ParallelOperator()) {
@@ -266,32 +243,13 @@ bool Pipeline::CanUseExternalInput() const {
 	return true;
 }
 
-static bool CanStopSourceEarlyOperator(const PhysicalOperator &op) {
-	switch (op.type) {
-	case PhysicalOperatorType::STREAMING_LIMIT:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static bool CanStopSourceEarlySink(const PhysicalOperator &op) {
-	switch (op.type) {
-	case PhysicalOperatorType::LIMIT:
-	case PhysicalOperatorType::LIMITED_DISTINCT:
-		return true;
-	default:
-		return false;
-	}
-}
-
 bool Pipeline::CanStopSourceEarly() const {
 	// Used by CTE fanout selection to keep streaming only when the consumer may finish early.
-	if (sink && CanStopSourceEarlySink(*sink)) {
+	if (sink && sink->GetSourceConsumption() == PipelineSourceConsumption::MAY_STOP_EARLY) {
 		return true;
 	}
 	for (auto &op_ref : operators) {
-		if (CanStopSourceEarlyOperator(op_ref.get())) {
+		if (op_ref.get().GetSourceConsumption() == PipelineSourceConsumption::MAY_STOP_EARLY) {
 			return true;
 		}
 	}
@@ -446,17 +404,6 @@ shared_ptr<GlobalSourceState> Pipeline::GetSourceState() {
 void Pipeline::SetSourceState(shared_ptr<GlobalSourceState> state) {
 	annotated_lock_guard<annotated_mutex> guard(source_state_lock);
 	source_state = std::move(state);
-}
-
-void Pipeline::FinishSource(ClientContext &context) {
-	if (IsExternalInput() || !source) {
-		return;
-	}
-	auto source_state = GetSourceState();
-	if (!source_state) {
-		return;
-	}
-	source->SourceFinished(context, *source_state);
 }
 
 void Pipeline::FinishSourceAndPreventBlocking(ClientContext &context) {

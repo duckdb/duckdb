@@ -361,6 +361,10 @@ PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input) {
 	if (IsFinished()) {
 		return PipelineExecuteResult::FINISHED;
 	}
+	if (!remaining_sink_chunk) {
+		context.thread.profiler.StartOperator(pipeline.source.get());
+		context.thread.profiler.EndOperator(&input);
+	}
 
 	ExecutionBudget chunk_budget(NumericLimits<idx_t>::Maximum());
 	return PushInputChunk(input, chunk_budget, PipelineInputChunkMode::PUSH_INPUT);

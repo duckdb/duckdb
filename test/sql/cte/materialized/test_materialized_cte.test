@@ -11,13 +11,19 @@ query II
 EXPLAIN WITH t AS MATERIALIZED (SELECT i FROM range(3) tbl(i))
 SELECT * FROM t LIMIT 1;
 ----
-physical_plan	<REGEX>:.*STREAMING_FANOUT.*CTE( Scan|_SCAN).*
+physical_plan	<REGEX>:.*PIPELINE_DEPENDENT.*CTE( Scan|_SCAN).*
 
 query II
 EXPLAIN ANALYZE WITH d AS (SELECT i AS a, i AS b FROM range(10) tbl(i))
 SELECT (SELECT sum(a) FROM d), (SELECT sum(b) FROM d);
 ----
 analyzed_plan	<REGEX>:.*Fanout Mode: DIRECT.*Direct Consumers: 2.*Buffered Consumers: 0.*
+
+query II
+EXPLAIN ANALYZE WITH d AS MATERIALIZED (SELECT i FROM range(10000) tbl(i))
+SELECT sum(i) FROM d;
+----
+analyzed_plan	<REGEX>:.*CTE Mode: DIRECT.*10,000 rows.*
 
 query II
 EXPLAIN ANALYZE WITH d AS MATERIALIZED (SELECT i FROM range(10) tbl(i))
