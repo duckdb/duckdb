@@ -136,6 +136,25 @@ static identifier_set_t UpdateOldCaptureNames(const TableCatalogEntry &table) {
 	return names;
 }
 
+// Recursively replace references to generated columns with a copy of their generated expression, so the result
+// references only physical columns. This makes the recomputation independent of generated-column declaration
+// order (a generated column may reference another generated column declared later).
+static void InlineGeneratedColumnRefs(unique_ptr<ParsedExpression> &expr, const TableCatalogEntry &table) {
+	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+		auto &colref = expr->Cast<ColumnRefExpression>();
+		if (!colref.IsQualified() && table.GetColumns().ColumnExists(colref.GetColumnName())) {
+			auto &column = table.GetColumns().GetColumn(colref.GetColumnName());
+			if (column.Generated()) {
+				expr = column.GeneratedExpression().Copy();
+				InlineGeneratedColumnRefs(expr, table);
+				return;
+			}
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { InlineGeneratedColumnRefs(child, table); });
+}
+
 // OLD transition alias for UPDATE: the base CTE exposes the pre-update physical columns under internal names.
 // Rename them back to the real column names and (re)compute generated columns over those OLD values. The result
 // exposes exactly the logical table columns, in table order — no rowid, physical-only, or capture columns.
@@ -173,6 +192,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeUpdateOldAliasCTE(const TableCa
 	for (auto &column : table.GetColumns().Logical()) {
 		if (column.Generated()) {
 			auto expr = column.GeneratedExpression().Copy();
+			InlineGeneratedColumnRefs(expr, table);
 			expr->SetAlias(column.Name());
 			outer->select_list.push_back(std::move(expr));
 		} else {

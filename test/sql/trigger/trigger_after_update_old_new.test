@@ -280,6 +280,36 @@ SELECT id, old_a, old_total, new_a, new_total FROM t_gen_log;
 ----
 1	5	10	7	14
 
+# Generated columns that reference each other, declared out of dependency order (g2 before g1):
+# the OLD image must still recompute them correctly, independent of declaration order
+statement ok
+CREATE TABLE t_gen_order (
+    x INTEGER,
+    g2 INTEGER GENERATED ALWAYS AS (g1 + 1),
+    g1 INTEGER GENERATED ALWAYS AS (x + 1)
+);
+
+statement ok
+CREATE TABLE t_gen_order_log (x INTEGER, g2 INTEGER, g1 INTEGER);
+
+statement ok
+INSERT INTO t_gen_order (x) VALUES (1);
+
+statement ok
+CREATE TRIGGER trg_gen_order AFTER UPDATE ON t_gen_order
+REFERENCING OLD TABLE AS o
+FOR EACH STATEMENT
+    INSERT INTO t_gen_order_log SELECT * FROM o;
+
+statement ok
+UPDATE t_gen_order SET x = 10;
+
+# OLD image of the single row: x=1, g1=x+1=2, g2=g1+1=3
+query III
+SELECT x, g2, g1 FROM t_gen_order_log;
+----
+1	3	2
+
 # RETURNING binds against the NEW image and coexists with both transition aliases
 statement ok
 CREATE TABLE t_ret (id INTEGER, val INTEGER);
