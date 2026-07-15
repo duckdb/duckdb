@@ -2236,19 +2236,6 @@ ScalarFunctionSet EpochFun::GetFunctions() {
 	return set;
 }
 
-struct GetEpochNanosOperator {
-	static int64_t Operation(timestamp_ns_t timestamp) {
-		return Timestamp::GetEpochNanoSeconds(timestamp);
-	}
-};
-
-static void ExecuteGetNanosFromTimestampNs(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.ColumnCount() == 1);
-
-	auto func = GetEpochNanosOperator::Operation;
-	UnaryExecutor::Execute<timestamp_ns_t, int64_t>(input.data[0], result, func);
-}
-
 ScalarFunctionSet EpochNsFun::GetFunctions() {
 	using OP = DatePart::EpochNanosecondsOperator;
 	auto operator_set = GetTimePartFunction<OP>();
@@ -2258,10 +2245,11 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, tstz_stats));
+	auto tsns_func = DatePart::UnaryFunction<timestamp_ns_t, int64_t, OP>;
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP_NS}, LogicalType::BIGINT, ExecuteGetNanosFromTimestampNs));
+	    ScalarFunction({LogicalType::TIMESTAMP_NS}, LogicalType::BIGINT, tsns_func));
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP_TZ_NS}, LogicalType::BIGINT, ExecuteGetNanosFromTimestampNs));
+	    ScalarFunction({LogicalType::TIMESTAMP_TZ_NS}, LogicalType::BIGINT, tsns_func));
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return operator_set;
 }
