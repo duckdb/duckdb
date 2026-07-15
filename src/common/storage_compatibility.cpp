@@ -49,7 +49,7 @@ StorageCompatibility StorageCompatibility::Default() {
 	res.manually_set = false;
 	return res;
 #else
-	auto res = FromString("v0.10.2");
+	auto res = FromIndex(StorageVersionInfo::GetStorageVersionDefault());
 	res.duckdb_version = "latest";
 	res.manually_set = false;
 	return res;
