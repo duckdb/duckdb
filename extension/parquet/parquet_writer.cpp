@@ -751,16 +751,43 @@ struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 		if (stats.empty()) {
 			return string();
 		}
-
 		auto stats_data = const_data_ptr_cast(stats.data());
-
 		if (sizeof(T) == sizeof(hugeint_t)) {
-			auto _schema = ParquetColumnSchema();
-			auto numeric_val = ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), _schema);
+			auto schema = ParquetColumnSchema(); // schema unused for FLBA/hugeint_t
+			auto numeric_val = ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema);
 			return Value::DECIMAL(numeric_val, width, scale).ToString();
 		} else {
-			auto numeric_val = Load<T>(stats_data);
-			return Value::DECIMAL(numeric_val, width, scale).ToString();
+			return Value::DECIMAL(Load<T>(stats_data), width, scale).ToString();
+		}
+	}
+
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+		if (sizeof(T) != sizeof(hugeint_t)) {
+			// INT32/INT64-backed decimals are little-endian; the base compare is correct.
+			BaseNumericStatsUnifier<T>::UnifyMinMax(new_min, new_max);
+		} else {
+			// FLBA decimal stats are big-endian two's complement (most significant byte
+			// first), so a native little-endian Load would compare the wrong value; decode
+			// the bytes into a hugeint_t before comparing.
+			auto decode = [](const string &stats) {
+				auto schema = ParquetColumnSchema(); // schema unused for FLBA/hugeint_t
+				return ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(const_data_ptr_cast(stats.data()), stats.size(),
+				                                                        schema);
+			};
+
+			if (!this->min_is_set) {
+				this->global_min = new_min;
+				this->min_is_set = true;
+			} else if (LessThan::Operation(decode(new_min), decode(this->global_min))) {
+				this->global_min = new_min;
+			}
+
+			if (!this->max_is_set) {
+				this->global_max = new_max;
+				this->max_is_set = true;
+			} else if (GreaterThan::Operation(decode(new_max), decode(this->global_max))) {
+				this->global_max = new_max;
+			}
 		}
 	}
 };
