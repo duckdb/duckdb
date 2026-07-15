@@ -4,7 +4,7 @@
 
 # set threshold at 5 X rowgroup size
 statement ok
-ATTACH '{TEST_DIR}/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 614400)
+ATTACH '{TEST_DIR}/attach_vacuum_indexed.db' AS db1 (STORAGE_VERSION 'v1.5.0', vacuum_rebuild_indexes 614400)
 
 statement ok
 CREATE TABLE db1.t(i INTEGER);

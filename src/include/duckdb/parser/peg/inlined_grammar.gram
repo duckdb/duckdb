@@ -38,6 +38,8 @@ Statement <-
 	DisconnectStatement /
 	ExpressionStatement
 
+AnalyzeKeyword <- 'ANALYZE' / 'ANALYSE'
+
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
 
@@ -767,9 +769,10 @@ SetSequenceOption <- SequenceOption+
 
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
 
-AnalyzeStatement <- 'ANALYZE' AnalyzeVerbose? AnalyzeTarget?
+AnalyzeStatement <- AnalyzeKeyword AnalyzeVerbose? AnalyzeTarget?
 AnalyzeTarget <- BaseTableName NameList?
 AnalyzeVerbose <- 'VERBOSE'
+
 AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
 Database <- 'DATABASE'
@@ -1141,11 +1144,10 @@ IfExists <- 'IF' 'EXISTS'
 DropSecretStorage <- 'FROM' Identifier
 
 ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?
-ExplainStatement <- 'EXPLAIN' ExplainAnalyze? ExplainOptionList? ExplainableStatements
-ExplainAnalyze <- 'ANALYZE'
+ExplainStatement <- 'EXPLAIN' AnalyzeKeyword? ExplainOptionList? ExplainableStatements
 ExplainOptionList <- Parens(List(ExplainOption))
 ExplainOption <- ExplainOptionName Expression?
-ExplainOptionName <- 'ANALYZE' / 'ANALYSE' / ColId / FuncNameKeyword / TypeNameKeyword
+ExplainOptionName <- AnalyzeKeyword / ColId / FuncNameKeyword / TypeNameKeyword
 
 ExplainSelectStatement <- SelectStatementInternal
 
@@ -1171,6 +1173,7 @@ ExplainableStatements <-
     VacuumStatement /
     SetStatement /
     ResetStatement
+
 ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
 ExportSource <- CatalogName 'TO'
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
@@ -1891,9 +1894,10 @@ VacuumParensOptions <- Parens(List(VacuumOption))
 VacuumLegacyOptions <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
 VacuumOption <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier
 
-OptAnalyze <- 'ANALYZE'
+OptAnalyze <- AnalyzeKeyword
 OptFull <- 'FULL'
 OptFreeze <- 'FREEZE'
 OptVerbose <- 'VERBOSE'
 
 NameList <- Parens(List(ColId))
+

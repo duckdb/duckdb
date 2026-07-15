@@ -125,6 +125,10 @@ bool ChunkConstantInfo::HasDeletes(transaction_t transaction_id) const {
 	return is_deleted;
 }
 
+bool ChunkConstantInfo::HasUncommittedChanges() const {
+	return insert_id >= TRANSACTION_ID_START || (delete_id != NOT_DELETED_ID && delete_id >= TRANSACTION_ID_START);
+}
+
 bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction) const {
 	if (delete_id != NOT_DELETED_ID) {
 		// the chunk info is labeled as deleted - we need to keep it around
@@ -452,6 +456,33 @@ bool ChunkVectorInfo::HasDeletes(transaction_t transaction_id) const {
 
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		if (deleted[i] <= transaction_id) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ChunkVectorInfo::HasUncommittedChanges() const {
+	if (HasConstantInsertionId()) {
+		if (ConstantInsertId() >= TRANSACTION_ID_START) {
+			return true;
+		}
+	} else {
+		auto insert_segment = allocator.GetHandle(GetInsertedPointer());
+		auto inserted = insert_segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			if (inserted[i] >= TRANSACTION_ID_START) {
+				return true;
+			}
+		}
+	}
+	if (!AnyDeleted()) {
+		return false;
+	}
+	auto delete_segment = allocator.GetHandle(GetDeletedPointer());
+	auto deleted = delete_segment.GetPtr<transaction_t>();
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		if (deleted[i] != NOT_DELETED_ID && deleted[i] >= TRANSACTION_ID_START) {
 			return true;
 		}
 	}

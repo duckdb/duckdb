@@ -1,0 +1,58 @@
+# name: test/sql/storage/compression/dictionary/invalid_dictionary_metadata.test
+# group: [dictionary]
+
+require vector_size 2048
+
+unzip data/storage/dictionary_invalid_offset.db.gz {TEST_DIR}/dictionary_invalid_offset.db
+
+unzip data/storage/dictionary_invalid_index.db.gz {TEST_DIR}/dictionary_invalid_index.db
+
+unzip data/storage/dictionary_invalid_dict_end.db.gz {TEST_DIR}/dictionary_invalid_dict_end.db
+
+statement ok
+ATTACH '{TEST_DIR}/dictionary_invalid_offset.db' AS offset_db
+
+statement ok
+USE offset_db
+
+query I
+SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='Dictionary'
+----
+6
+
+statement error
+SELECT sum(length(STREET)) FROM tbl
+----
+IO Error: Failed to scan dictionary string - dictionary offset was out of range. Database file appears to be corrupted.
+
+statement ok
+ATTACH '{TEST_DIR}/dictionary_invalid_index.db' AS index_db
+
+statement ok
+USE index_db
+
+query I
+SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='Dictionary'
+----
+6
+
+statement error
+SELECT sum(length(STREET)) FROM tbl
+----
+IO Error: Failed to scan dictionary string - dictionary index was out of range. Database file appears to be corrupted.
+
+statement ok
+ATTACH '{TEST_DIR}/dictionary_invalid_dict_end.db' AS dict_end_db
+
+statement ok
+USE dict_end_db
+
+query I
+SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='Dictionary'
+----
+6
+
+statement error
+SELECT sum(length(STREET)) FROM tbl
+----
+IO Error: Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.

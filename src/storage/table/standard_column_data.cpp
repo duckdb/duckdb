@@ -80,8 +80,9 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	// the compression functions need to support this
 	auto compression = GetCompressionFunction();
 	bool has_filter = compression && compression->filter;
+	bool filter_includes_validity = compression && compression->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
 	auto validity_compression = validity->GetCompressionFunction();
-	bool validity_has_filter = validity_compression && validity_compression->filter;
+	bool validity_has_filter = filter_includes_validity || (validity_compression && validity_compression->filter);
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
@@ -92,7 +93,11 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 		return;
 	}
 	FilterVector(state, result, target_count, sel, count, filter, filter_state);
-	validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+	if (!filter_includes_validity) {
+		validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+	} else {
+		validity->Skip(state.child_states[0], target_count);
+	}
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

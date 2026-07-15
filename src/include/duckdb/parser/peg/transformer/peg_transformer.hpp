@@ -739,6 +739,10 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeStringLiteralValueTrampoline(PEGTransformer &transformer,
 	                                                                             TransformStack &stack,
 	                                                                             TransformStackFrame &frame);
+	static void InitializeAnalyzeKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeAnalyzeKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeExpressionStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeExpressionStatementTrampoline(PEGTransformer &transformer,
@@ -2206,10 +2210,6 @@ public:
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeExplainStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeExplainAnalyzeTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                               TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeExplainAnalyzeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeExplainOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -4862,6 +4862,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformAnalyzeStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
+	                                                          const Identifier &analyze_keyword,
 	                                                          const optional<bool> &analyze_verbose,
 	                                                          optional<AnalyzeTarget> analyze_target);
 	static unique_ptr<TransformResultValue> TransformAnalyzeTargetInternal(PEGTransformer &transformer,
@@ -4948,6 +4949,9 @@ public:
 	static unique_ptr<TransformResultValue> TransformStringLiteralValueInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static Value TransformStringLiteralValue(PEGTransformer &transformer, const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformAnalyzeKeywordInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static Identifier TransformAnalyzeKeyword(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformExpressionStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformExpressionStatement(PEGTransformer &transformer,
@@ -6132,12 +6136,9 @@ public:
 	static unique_ptr<TransformResultValue> TransformExplainStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
-	TransformExplainStatement(PEGTransformer &transformer, const optional<bool> &explain_analyze,
+	TransformExplainStatement(PEGTransformer &transformer, const optional<Identifier> &analyze_keyword,
 	                          const optional<vector<GenericCopyOption>> &explain_option_list,
 	                          unique_ptr<SQLStatement> explainable_statements);
-	static unique_ptr<TransformResultValue> TransformExplainAnalyzeInternal(PEGTransformer &transformer,
-	                                                                        ParseResult &parse_result);
-	static bool TransformExplainAnalyze(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformExplainOptionListInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static vector<GenericCopyOption> TransformExplainOptionList(PEGTransformer &transformer,
@@ -6146,6 +6147,9 @@ public:
 	                                                                       ParseResult &parse_result);
 	static GenericCopyOption TransformExplainOption(PEGTransformer &transformer, const Identifier &explain_option_name,
 	                                                optional<unique_ptr<ParsedExpression>> expression);
+	static unique_ptr<TransformResultValue> TransformExplainOptionNameInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static Identifier TransformExplainOptionName(PEGTransformer &transformer, ParseResult &choice_result);
 	static unique_ptr<TransformResultValue> TransformExplainSelectStatementInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
@@ -8191,7 +8195,7 @@ public:
 	                                                                      ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformOptAnalyzeInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
-	static string TransformOptAnalyze(PEGTransformer &transformer);
+	static string TransformOptAnalyze(PEGTransformer &transformer, const Identifier &analyze_keyword);
 	static unique_ptr<TransformResultValue> TransformOptFullInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static string TransformOptFull(PEGTransformer &transformer);

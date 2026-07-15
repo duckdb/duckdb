@@ -1474,8 +1474,11 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 
 	SelectionVector sel;
 	if (has_nulls) {
-		ValidityMask indices_validity;
-		GetValidityMask(indices_validity, array, chunk_offset, size, NumericCast<int64_t>(parent_offset));
+		// size may exceed STANDARD_VECTOR_SIZE, so the scratch mask must be sized for it.
+		ValidityMask indices_validity(size);
+		// validity must be read from the same effective offset as the indices
+		GetValidityMask(indices_validity, array, chunk_offset, size, NumericCast<int64_t>(parent_offset),
+		                nested_offset);
 		if (parent_mask && parent_mask->CanHaveNull()) {
 			auto &struct_validity_mask = *parent_mask;
 			for (idx_t i = 0; i < size; i++) {

@@ -8,31 +8,26 @@
 
 #pragma once
 #include "duckdb/common/optional.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
 class ClientContext;
 
-class TypePushdown {
-public:
-	explicit TypePushdown(ClientContext &ctx);
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
-
-private:
-	ClientContext &context;
-};
-
 struct GetAnalysis {
 	LogicalGet &get;
 	/**
-	 * for CAST(col), mapping of "col scan index" -> "CAST expression".
-	 * "CAST expression" is nullptr iff column is used with a different function
-	 * or without function application in the query plan.
+	 * for CAST(col), mapping of "col scan index" -> "expression".
+	 * "expression" is nullptr iff column is used with a different expression
+	 * or without expression in the query plan.
 	 */
-	unordered_map<ProjectionIndex, const BoundCastExpression *> col_to_cast;
+	unordered_map<ProjectionIndex, const Expression *> col_to_expr;
+
+	idx_t StorageIndex(ProjectionIndex idx) const;
 };
 
 using Analyses = unordered_map<TableIndex, GetAnalysis>;
@@ -103,5 +98,57 @@ struct GetBinding {
  * Returns nullopt for virtual columns and columns which are neither part of
  * GET nor part of PROJECTION wrapping a GET.
  */
-std::optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Projections &projections);
+optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Projections &projections);
+
+template <class Collect, class Replace>
+unique_ptr<LogicalOperator> PushdownOptimize(ClientContext &context, unique_ptr<LogicalOperator> op) {
+	Analyses analyses;
+	Projections projections;
+	FindGetsAndProjections(*op, analyses, projections);
+	if (analyses.empty()) {
+		return op;
+	}
+	Collect(analyses, projections).VisitOperator(*op);
+
+	bool any_pushed = false;
+	for (auto &[_, analysis] : analyses) {
+		for (auto &[column_index, expr] : analysis.col_to_expr) {
+			if (expr == nullptr) { // Conflict for column
+				continue;
+			}
+			if (analysis.get.GetColumnIds()[column_index].IsVirtualColumn()) {
+				continue;
+			}
+			TableFunctionProjectionExpressionInput input {analysis.get, *expr, column_index};
+			if (analysis.get.function.projection_expression_pushdown(context, input)) {
+				analysis.get.returned_types[analysis.StorageIndex(column_index)] = expr->GetReturnType();
+				if (!analysis.get.types.empty()) {
+					analysis.get.ResolveOperatorTypes();
+				}
+				any_pushed = true;
+			} else { // failed to push down expression, can't replace it
+				expr = nullptr;
+			}
+		}
+	}
+
+	if (any_pushed) {
+		Replace(analyses, projections).VisitOperator(*op);
+	}
+	return op;
+}
+
+class TypePushdown {
+public:
+	explicit inline TypePushdown(ClientContext &context) : context(context) {
+	}
+	inline unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op) {
+		return PushdownOptimize<CastCollect, CastReplace>(context, std::move(op));
+	}
+
+private:
+	ClientContext &context;
+};
+
+bool CanPushdownColumn(const GetAnalysis &analysis, ProjectionIndex idx);
 } // namespace duckdb
