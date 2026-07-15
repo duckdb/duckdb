@@ -218,6 +218,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		AddCast(casts, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ);
 		AddCast(casts, LogicalType::TIMESTAMP_MS, LogicalType::TIMESTAMP_TZ);
 		AddCast(casts, LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ);
+		AddCast(casts, LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ_NS);
 		AddCast(casts, LogicalType::TIMESTAMP_S, LogicalType::TIMESTAMP_TZ);
 		AddCast(casts, LogicalType::DATE, LogicalType::TIMESTAMP_TZ);
 	}
