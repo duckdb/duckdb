@@ -14,10 +14,11 @@ ProfilerPrintFormat ParseProfilerPrintFormat(const Value &val) {
 }
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, const optional<bool> &explain_analyze,
+PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer,
+                                                 const optional<Identifier> &analyze_keyword,
                                                  const optional<vector<GenericCopyOption>> &explain_option_list,
                                                  unique_ptr<SQLStatement> explainable_statements) {
-	auto explain_type = explain_analyze ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
+	auto explain_type = analyze_keyword ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
 	auto format = ProfilerPrintFormat::Default();
 	if (explain_option_list) {
@@ -40,8 +41,8 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
 	return make_uniq<ExplainStatement>(std::move(statement), explain_type, format);
 }
 
-bool PEGTransformerFactory::TransformExplainAnalyze(PEGTransformer &transformer) {
-	return true;
+Identifier PEGTransformerFactory::TransformExplainOptionName(PEGTransformer &transformer, ParseResult &choice_result) {
+	return transformer.Transform<Identifier>(choice_result);
 }
 
 unique_ptr<SQLStatement>
