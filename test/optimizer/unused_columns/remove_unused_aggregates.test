@@ -1,0 +1,501 @@
+# name: test/optimizer/unused_columns/remove_unused_aggregates.test
+# description: Test pruning of unreferenced groups from an aggregate below a not-distinct-dependent aggregate
+# group: [unused_columns]
+
+statement ok
+create table t0 as select range%3 col0, range%2 col1, range%5 col2 from range(1000);
+
+query I
+SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0 ORDER BY col0
+----
+0
+1
+2
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# the outer GROUP BY does not care about duplicate rows, so the inner GROUP BY only needs to group by col0
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<!REGEX>:.*col1.*
+
+# after which the inner GROUP BY only eliminates duplicates the outer GROUP BY ignores, so it is removed entirely
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+# min is marked NOT_DISTINCT_DEPENDENT (not affected by duplicate input rows), so col1 can still be pruned
+query II
+EXPLAIN SELECT col0, min(col2) FROM (SELECT col0, col1, col2 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<!REGEX>:.*col1.*
+
+query II
+SELECT col0, min(col2) FROM (SELECT col0, col1, col2 FROM t0 GROUP BY ALL) GROUP BY col0 ORDER BY col0
+----
+0	0
+1	0
+2	0
+
+# count is DISTINCT_DEPENDENT, but with DISTINCT it is not affected by duplicate input rows either
+query II
+EXPLAIN SELECT col0, count(DISTINCT col2) FROM (SELECT col0, col1, col2 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<!REGEX>:.*col1.*
+
+query II
+SELECT col0, count(DISTINCT col2) FROM (SELECT col0, col1, col2 FROM t0 GROUP BY ALL) GROUP BY col0 ORDER BY col0
+----
+0	5
+1	5
+2	5
+
+# count(*) is DISTINCT_DEPENDENT (affected by duplicate input rows): col1 must be kept in the inner GROUP BY
+query II
+EXPLAIN SELECT col0, count(*) FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+query II
+SELECT col0, count(*) FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0 ORDER BY col0
+----
+0	2
+1	2
+2	2
+
+# and the inner GROUP BY itself must also stay
+query II
+EXPLAIN SELECT col0, count(*) FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+# a single DISTINCT_DEPENDENT aggregate blocks the pruning, even combined with a NOT_DISTINCT_DEPENDENT one
+query II
+EXPLAIN SELECT col0, min(col2), count(*) FROM (SELECT col0, col1, col2 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+query III
+SELECT col0, min(col2), count(*) FROM (SELECT col0, col1, col2 FROM t0 GROUP BY ALL) GROUP BY col0 ORDER BY col0
+----
+0	0	10
+1	0	10
+2	0	10
+
+# a (non-volatile) filter in between does not block the pruning
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) WHERE col0 > 0 GROUP BY col0
+----
+logical_opt	<!REGEX>:.*col1.*
+
+query I
+SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) WHERE col0 > 0 GROUP BY col0 ORDER BY col0
+----
+1
+2
+
+# a volatile filter does block the pruning
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) WHERE random() < 0.5 GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+# a projection with a (referenced) volatile expression also blocks the pruning,
+# even though min itself is NOT_DISTINCT_DEPENDENT
+query II
+EXPLAIN SELECT col0, min(r) FROM (SELECT col0, random() r FROM (SELECT col0, col1 FROM t0 GROUP BY ALL)) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+# but an unreferenced volatile expression is itself pruned, so it does not block the pruning
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, random() r FROM (SELECT col0, col1 FROM t0 GROUP BY ALL)) GROUP BY col0
+----
+logical_opt	<!REGEX>:.*col1.*
+
+# only filters and projections propagate the not-distinct-dependent property: a LIMIT in between
+# blocks it, since duplicate rows count against the limit
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL LIMIT 5) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+# same for a window function: its result depends on how many (duplicate) rows it receives
+query II
+EXPLAIN SELECT col0, min(rn) FROM (SELECT col0, row_number() OVER () rn FROM (SELECT col0, col1 FROM t0 GROUP BY ALL)) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+# a join in between also resets the propagation, so the inner GROUP BY keeps col1; propagating through
+# join types that emit duplicates independently per input row (e.g. inner joins) would be a valid
+# future optimization
+statement ok
+CREATE TABLE tj(col0 bigint);
+
+statement ok
+INSERT INTO tj VALUES (0), (1), (1);
+
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) JOIN tj USING (col0) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+query I
+SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) JOIN tj USING (col0) GROUP BY col0 ORDER BY col0
+----
+0
+1
+
+# a correlated subquery flattens into a join against deduplicating aggregates that later plan stages
+# rely on, so there the reset at the join is load-bearing: the inner GROUP BY keeps col1 and stays
+query II
+EXPLAIN SELECT m FROM (SELECT (SELECT count(*) FROM t0 i WHERE i.col0 = g.col0) m FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) g) GROUP BY m
+----
+logical_opt	<REGEX>:.*col1.*
+
+query I
+SELECT m FROM (SELECT (SELECT count(*) FROM t0 i WHERE i.col0 = g.col0) m FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) g) GROUP BY m ORDER BY m
+----
+333
+334
+
+# a referenced aggregate in the inner GROUP BY blocks pruning: merging groups would change its value
+# (the outer min being NOT_DISTINCT_DEPENDENT does not help here)
+query II
+EXPLAIN SELECT col0, min(cnt) FROM (SELECT col0, col1, count(*) cnt FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+query II
+SELECT col0, min(cnt) FROM (SELECT col0, col1, count(*) cnt FROM t0 GROUP BY ALL) GROUP BY col0 ORDER BY col0
+----
+0	167
+1	166
+2	166
+
+# but an unreferenced aggregate in the inner GROUP BY is itself pruned first, after which the groups can be pruned
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1, count(*) cnt FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<!REGEX>:.*col1.*
+
+query I
+SELECT col0 FROM (SELECT col0, col1, count(*) cnt FROM t0 GROUP BY ALL) GROUP BY col0 ORDER BY col0
+----
+0
+1
+2
+
+# with three stacked GROUP BYs under a count(*), only the innermost one is removed: the middle GROUP BY must
+# stay because count(*) depends on its duplicate elimination, but the middle GROUP BY itself lets the
+# innermost one be removed
+query II
+EXPLAIN SELECT col0, count(*) FROM (SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0) GROUP BY col0
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+query II
+EXPLAIN SELECT col0, count(*) FROM (SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0) GROUP BY col0
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*Aggregate.*
+
+query II
+SELECT col0, count(*) FROM (SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0) GROUP BY col0 ORDER BY col0
+----
+0	1
+1	1
+2	1
+
+# a volatile group expression does not block the removal: grouping evaluates the group key once per input row,
+# exactly like the replacement projection does
+query II
+EXPLAIN SELECT u FROM (SELECT col0, gen_random_uuid() u FROM t0 GROUP BY col0, u) GROUP BY u
+----
+logical_opt	<!REGEX>:.*col0.*
+
+query II
+EXPLAIN SELECT u FROM (SELECT col0, gen_random_uuid() u FROM t0 GROUP BY col0, u) GROUP BY u
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+# but the projection that replaces such an aggregate contains the volatile expression, so it must stop
+# the not-distinct-dependent propagation like any other volatile projection: the innermost GROUP BY must
+# stay, otherwise gen_random_uuid() draws a value per raw row (1000) instead of per group (3)
+query I
+SELECT count(*) FROM (SELECT u FROM (SELECT gen_random_uuid() u FROM (SELECT col0 FROM t0 GROUP BY col0) GROUP BY u) GROUP BY u)
+----
+3
+
+# the aggregate is also removed when there is nothing to prune because all groups are referenced
+query II
+EXPLAIN SELECT col0, col1 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0, col1
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+query II
+SELECT col0, col1 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0, col1 ORDER BY col0, col1
+----
+0	0
+0	1
+1	0
+1	1
+2	0
+2	1
+
+# and also when no group is referenced at all (the outer GROUP BY groups by a constant)
+query II
+EXPLAIN SELECT 1 FROM (SELECT col0 FROM t0 GROUP BY col0) GROUP BY 1
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+# in which case the group expressions are dead and disappear from the plan entirely
+query II
+EXPLAIN SELECT 1 FROM (SELECT col0 FROM t0 GROUP BY col0) GROUP BY 1
+----
+logical_opt	<!REGEX>:.*col0.*
+
+query I
+SELECT 1 FROM (SELECT col0 FROM t0 GROUP BY col0) GROUP BY 1
+----
+1
+
+# multiple grouping sets cannot be pruned
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ROLLUP (col0, col1)) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+query I
+SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ROLLUP (col0, col1)) GROUP BY col0 ORDER BY col0 NULLS FIRST
+----
+NULL
+0
+1
+2
+
+# a GROUPING() call also blocks the removal, even when its result is unreferenced
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, grouping(col0) g FROM t0 GROUP BY col0) GROUP BY col0
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT col0 FROM (SELECT col0, grouping(col0) g FROM t0 GROUP BY col0) GROUP BY col0 ORDER BY col0
+----
+0
+1
+2
+
+# a volatile group expression on the consuming GROUP BY means duplicates DO matter below it:
+# every duplicate row gets its own random() group, so the inner GROUP BY must stay (3, not 1000)
+query I
+SELECT count(*) FROM (SELECT random() r FROM (SELECT col0 FROM t0 GROUP BY col0) GROUP BY 1)
+----
+3
+
+query II
+EXPLAIN SELECT count(*) FROM (SELECT random() r FROM (SELECT col0 FROM t0 GROUP BY col0) GROUP BY 1)
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*Aggregate.*
+
+# also when the volatile expression is spelled directly in the GROUP BY clause: it makes the consumer
+# DISTINCT_DEPENDENT even though it is unreferenced and sits alongside a referenced group
+query II
+EXPLAIN SELECT col0 FROM (SELECT col0, col1 FROM t0 GROUP BY ALL) GROUP BY col0, random() < 0.5
+----
+logical_opt	<REGEX>:.*col1.*
+
+# same for a volatile aggregate argument on the consumer: it draws a new value per duplicate row
+query II
+EXPLAIN SELECT col0, min(col2 + random()) FROM (SELECT col0, col2 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+# a volatile FILTER clause is just as unsafe, even though min itself is NOT_DISTINCT_DEPENDENT
+query II
+EXPLAIN SELECT col0, min(col2) FILTER (WHERE random() < 0.5) FROM (SELECT col0, col1, col2 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+# DISTINCT does not make a volatile argument safe: the duplicates each produce a distinct value
+query II
+EXPLAIN SELECT col0, count(DISTINCT col2 + random()) FROM (SELECT col0, col1, col2 FROM t0 GROUP BY ALL) GROUP BY col0
+----
+logical_opt	<REGEX>:.*col1.*
+
+# a scalar aggregate produces exactly one row instead of eliminating duplicates: it cannot be removed
+statement ok
+CREATE TABLE t_empty(a bigint);
+
+query II
+EXPLAIN SELECT 1 FROM (SELECT count(*) cnt FROM t_empty) GROUP BY 1
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT 1 FROM (SELECT count(*) cnt FROM t_empty) GROUP BY 1
+----
+1
+
+# while removal of a grouped aggregate preserves emptiness
+query II
+EXPLAIN SELECT 1 FROM (SELECT a FROM t_empty GROUP BY a) GROUP BY 1
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT 1 FROM (SELECT a FROM t_empty GROUP BY a) GROUP BY 1
+----
+
+# -0.0 and 0.0 group together but are distinguishable through 1/a, so the inner GROUP BY must keep
+# outputting a single representative per group and cannot be removed
+statement ok
+CREATE TABLE tf(a double);
+
+statement ok
+INSERT INTO tf VALUES (0.0::double), (-(0.0::double));
+
+query II
+EXPLAIN SELECT (1/a)::varchar x FROM (SELECT a FROM tf GROUP BY a) GROUP BY 1/a
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT (1/a)::varchar x FROM (SELECT a FROM tf GROUP BY a) GROUP BY 1/a
+----
+inf
+
+# the same holds for floating point values nested inside another type
+statement ok
+CREATE TABLE tn(s struct(d double));
+
+statement ok
+INSERT INTO tn VALUES ({'d': 0.0::double}), ({'d': -(0.0::double)});
+
+query II
+EXPLAIN SELECT (1/s.d)::varchar x FROM (SELECT s FROM tn GROUP BY s) GROUP BY 1
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT (1/s.d)::varchar x FROM (SELECT s FROM tn GROUP BY s) GROUP BY 1
+----
+inf
+
+# but an unreferenced floating point group does not block the removal: its values are never observed
+statement ok
+CREATE TABLE tf2(i bigint, fcol double);
+
+statement ok
+INSERT INTO tf2 VALUES (1, 0.0::double), (1, -(0.0::double)), (2, 1.5);
+
+query II
+EXPLAIN SELECT i FROM (SELECT i, fcol FROM tf2 GROUP BY ALL) GROUP BY i
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+# and the pruned float group disappears from the plan entirely
+query II
+EXPLAIN SELECT i FROM (SELECT i, fcol FROM tf2 GROUP BY ALL) GROUP BY i
+----
+logical_opt	<!REGEX>:.*fcol.*
+
+query I
+SELECT i FROM (SELECT i, fcol FROM tf2 GROUP BY ALL) GROUP BY i ORDER BY i
+----
+1
+2
+
+# the same holds when the float group is the only group and nothing references it at all
+query II
+EXPLAIN SELECT 1 FROM (SELECT fcol FROM tf2 GROUP BY fcol) GROUP BY 1
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+query II
+EXPLAIN SELECT 1 FROM (SELECT fcol FROM tf2 GROUP BY fcol) GROUP BY 1
+----
+logical_opt	<!REGEX>:.*fcol.*
+
+query I
+SELECT 1 FROM (SELECT fcol FROM tf2 GROUP BY fcol) GROUP BY 1
+----
+1
+
+# string-based types with bytewise equality (e.g. BIGNUM) only merge identical values: removal is safe
+statement ok
+CREATE TABLE tv(v bignum, i int);
+
+statement ok
+INSERT INTO tv VALUES (100::bignum, 1), (100::bignum, 2), (200::bignum, 1);
+
+query II
+EXPLAIN SELECT v FROM (SELECT v, i FROM tv GROUP BY ALL) GROUP BY v
+----
+logical_opt	<!REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT v::varchar FROM (SELECT v, i FROM tv GROUP BY ALL) GROUP BY v ORDER BY 1
+----
+100
+200
+
+# INTERVAL has the same representative problem (1 month = 30 days), but the binder already groups it
+# through a hidden __collated_group aggregate expression, which blocks the removal by itself
+statement ok
+CREATE TABLE ti(a interval);
+
+statement ok
+INSERT INTO ti VALUES (interval '1 month'), (interval '30 days');
+
+query II
+EXPLAIN SELECT a::varchar x FROM (SELECT a FROM ti GROUP BY a) GROUP BY 1
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT a::varchar x FROM (SELECT a FROM ti GROUP BY a) GROUP BY 1
+----
+1 month
+
+# a collated VARCHAR group also merges distinguishable values ('a' and 'A' under NOCASE), and is also
+# grouped through a hidden __collated_group aggregate expression that blocks the removal by itself
+statement ok
+CREATE TABLE tc(s varchar COLLATE nocase);
+
+statement ok
+INSERT INTO tc VALUES ('a'), ('A');
+
+query II
+EXPLAIN SELECT ascii(s) x FROM (SELECT s FROM tc GROUP BY s) GROUP BY 1
+----
+logical_opt	<REGEX>:.*Aggregate.*Aggregate.*
+
+query I
+SELECT ascii(s) x FROM (SELECT s FROM tc GROUP BY s) GROUP BY 1
+----
+97
+
+# the not-distinct-dependent property is currently not propagated across materialized CTE boundaries at
+# all; if that is ever added, it must consider all readers, not just one (count(*) here needs duplicates)
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT col0, col1 FROM t0 GROUP BY ALL) SELECT * FROM (SELECT col0 FROM c GROUP BY col0) JOIN (SELECT col0, count(*) cnt FROM c GROUP BY col0) USING (col0)
+----
+logical_opt	<REGEX>:.*col1.*
+
+query II
+WITH c AS MATERIALIZED (SELECT col0, col1 FROM t0 GROUP BY ALL) SELECT * FROM (SELECT col0 FROM c GROUP BY col0) JOIN (SELECT col0, count(*) cnt FROM c GROUP BY col0) USING (col0) ORDER BY col0
+----
+0	2
+1	2
+2	2
+
+# even when ALL readers of the CTE are not-distinct-dependent we currently keep the aggregate in the
+# CTE plan intact; pruning it in that case would be a valid future optimization
+query II
+EXPLAIN WITH c AS MATERIALIZED (SELECT col0, col1 FROM t0 GROUP BY ALL) SELECT * FROM (SELECT col0 FROM c GROUP BY col0) JOIN (SELECT col0 FROM c GROUP BY col0) USING (col0)
+----
+logical_opt	<REGEX>:.*col1.*
