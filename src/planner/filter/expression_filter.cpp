@@ -571,6 +571,9 @@ static FilterPropagateResult CheckConjunctionStatistics(optional_ptr<ClientConte
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			}
+			if (prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+				return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+			}
 			if (prune_result != result) {
 				result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			}
