@@ -2,7 +2,8 @@
   {
     "class": "CommonTableExpressionInfo",
     "includes": [
-      "duckdb/parser/common_table_expression_info.hpp"
+      "duckdb/parser/common_table_expression_info.hpp",
+      "duckdb/parser/statement/select_statement.hpp"
     ],
     "members": [
       {
