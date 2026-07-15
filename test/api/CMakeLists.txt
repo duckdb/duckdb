@@ -11,6 +11,7 @@ add_subdirectory(capi)
 set(TEST_API_OBJECTS
     test_api.cpp
     test_bind_statement.cpp
+    test_scalar_function_decimal_return.cpp
     test_config.cpp
     test_custom_allocator.cpp
     test_extension_setting_autoload.cpp
