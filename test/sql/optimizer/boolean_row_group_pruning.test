@@ -13,18 +13,18 @@ statement ok
 CREATE TABLE bt AS SELECT (range >= 2048) AS b FROM range(4096);
 
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM bt WHERE b = true;
+EXPLAIN ANALYZE SELECT sum(rowid) FROM bt WHERE b = true;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
 # b = false prunes the all-true row group
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM bt WHERE b = false;
+EXPLAIN ANALYZE SELECT sum(rowid) FROM bt WHERE b = false;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
 # b IN (true) prunes symmetrically to equality
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM bt WHERE b IN (true);
+EXPLAIN ANALYZE SELECT sum(rowid) FROM bt WHERE b IN (true);
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
