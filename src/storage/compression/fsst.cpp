@@ -797,6 +797,10 @@ char *FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t
 	if (dict_offset == 0) {
 		return nullptr;
 	}
+	if (dict_offset < 0 || dict.end < dict.size || UnsafeNumericCast<uint32_t>(dict_offset) > dict.end) {
+		throw IOException("Failed to scan FSST string segment - dictionary offset was out of range. Database file "
+		                  "appears to be corrupted.");
+	}
 
 	auto dict_end = baseptr + dict.end;
 	auto dict_pos = dict_end - dict_offset;
