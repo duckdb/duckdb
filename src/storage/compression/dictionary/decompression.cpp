@@ -67,7 +67,8 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
 	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
 	index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
-	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
+	auto stored_width = Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width));
+	current_width = (bitpacking_width_t)stored_width;
 	if (segment.GetBlockOffset() + index_buffer_offset + sizeof(uint32_t) * index_buffer_count >
 	    segment.GetBlockSize()) {
 		throw IOException(
@@ -84,6 +85,12 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	    dict.end - dict.size < index_buffer_end) {
 		throw IOException(
 		    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
+	}
+	auto expected_width = BitpackingPrimitives::MinimumBitWidth(index_buffer_count - 1);
+	if (stored_width != expected_width) {
+		throw IOException(
+		    "Failed to scan dictionary string - bitpacking width was invalid. Database file appears to be "
+		    "corrupted.");
 	}
 	if (!initialize_dictionary) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
