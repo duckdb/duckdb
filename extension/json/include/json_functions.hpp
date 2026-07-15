@@ -118,6 +118,7 @@ private:
 	static ScalarFunctionSet GetInsertFunction();
 	static ScalarFunctionSet GetRemoveFunction();
 	static ScalarFunctionSet GetReplaceFunction();
+	static ScalarFunctionSet GetSetFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 

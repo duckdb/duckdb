@@ -88,6 +88,34 @@ static string ConvertToJsonPointer(const string_t &path_str) {
 	return result;
 }
 
+//! Set a value at a path in a JSON document (create if missing, overwrite if exists)
+static void JsonSetFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator->GetYYAlc();
+
+	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
+	    args.data[0], args.data[1], args.data[2], result, [&](string_t doc_str, string_t path_str, string_t val_str) {
+		    auto doc = JSONCommon::ReadDocument(doc_str, JSONCommon::READ_FLAG, alc);
+		    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
+
+		    auto val_doc = JSONCommon::ReadDocument(val_str, JSONCommon::READ_FLAG, alc);
+		    auto new_val = yyjson_val_mut_copy(mut_doc, val_doc->root);
+
+		    auto pointer = ConvertToJsonPointer(path_str);
+
+		    // Try set first (overwrites existing, creates missing).
+		    // Fall back to add for cases set cannot handle (e.g. appending with /-).
+		    if (!yyjson_mut_doc_ptr_setx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr)) {
+			    yyjson_mut_doc_ptr_addx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr);
+		    }
+
+		    auto root = yyjson_mut_doc_get_root(mut_doc);
+		    return JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
+	    });
+
+	JSONAllocator::AddBuffer(result, alc);
+}
+
 //! Insert a value at a path in a JSON document (no-op if a value already exists at the path)
 static void JsonInsertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
@@ -163,6 +191,12 @@ static void JsonRemoveFunction(DataChunk &args, ExpressionState &state, Vector &
 	    });
 
 	JSONAllocator::AddBuffer(result, alc);
+}
+
+ScalarFunctionSet JSONFunctions::GetSetFunction() {
+	ScalarFunction fun("json_set", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
+	                   LogicalType::JSON(), JsonSetFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetInsertFunction() {
