@@ -43,6 +43,12 @@ struct ConstraintState;
 struct TableUpdateState;
 enum class VerifyExistenceType : uint8_t;
 struct OptimisticWriteCollection;
+struct ColumnFetchState;
+struct DataTableInfo;
+struct LocalAppendState;
+struct ParallelTableScanState;
+struct TableAppendState;
+class CommitDropState;
 
 enum class DataTableVersion {
 	MAIN_TABLE, // this is the newest version of the table - it has not been altered or dropped
@@ -230,8 +236,10 @@ public:
 	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
-	void CommitDropTable();
-	void CommitDropColumn(const idx_t column_index);
+	//! Accumulates the table's on-disk blocks for reclamation into the drop state.
+	void CommitDropTable(CommitDropState &drop_state);
+	//! Accumulates the column's on-disk blocks for reclamation into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;

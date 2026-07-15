@@ -609,7 +609,7 @@ void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<Con
 // Drop and Delete
 //===--------------------------------------------------------------------===//
 
-void ART::CommitDrop(IndexLock &index_lock) {
+void ART::ResetStorage(IndexLock &index_lock) {
 	for (auto &allocator : *allocators) {
 		allocator->Reset();
 	}
