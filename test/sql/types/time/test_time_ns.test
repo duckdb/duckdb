@@ -347,3 +347,25 @@ query I
 SELECT '1962-05-20 15:30:00.123456789'::TIMESTAMP_NS::TIME_NS t;
 ----
 15:30:00.123456789
+
+# pre-epoch timestamps within a microsecond of midnight: the time-of-day is the
+# wall-clock time, not a negative value carried over from the truncated date
+query I
+SELECT (TIMESTAMP_NS '1969-12-31 23:59:59.999999999'::TIME_NS)::VARCHAR t;
+----
+23:59:59.999999999
+
+query I
+SELECT '1969-12-31 23:59:59.999999'::TIMESTAMP_NS::TIME_NS t;
+----
+23:59:59.999999
+
+query I
+SELECT '1969-12-31 23:59:59.000000001'::TIMESTAMP_NS::TIME_NS t;
+----
+23:59:59.000000001
+
+query I
+SELECT '1969-06-15 08:30:15.123456789'::TIMESTAMP_NS::TIME_NS t;
+----
+08:30:15.123456789

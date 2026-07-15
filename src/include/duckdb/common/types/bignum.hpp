@@ -55,6 +55,9 @@ public:
 	//! Returns false if this is an invalid varchar
 	DUCKDB_API static bool VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &end_pos, bool &is_negative,
 	                                         bool &is_zero);
+	//! Encodes a VARCHAR into a BIGNUM blob using formatting information returned by VarcharFormatting.
+	DUCKDB_API static string EncodeBignum(const string_t &value, idx_t start_pos, idx_t end_pos, bool is_negative,
+	                                      bool is_zero);
 
 	//! Converts a char to a Digit
 	DUCKDB_API static int CharToDigit(char c);

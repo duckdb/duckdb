@@ -249,3 +249,29 @@ SELECT *
 FROM issue3588
 WHERE (SELECT 0) BETWEEN 0 AND issue3588.c0;
 
+statement ok
+CREATE TABLE between_pushdown_t2(a INT, b INT, c INT);
+
+statement ok
+INSERT INTO between_pushdown_t2 VALUES
+	(1, 0, 10),
+	(5, 5, 5),
+	(3, 1, 2),
+	(8, 0, 100),
+	(10, 1, 10),
+	(15, 0, 20),
+	(0, -5, 100),
+	(7, 8, 20);
+
+query I
+SELECT a
+FROM between_pushdown_t2
+WHERE (random() * 0 + a) BETWEEN b AND 10
+ORDER BY a;
+----
+0
+1
+3
+5
+8
+10

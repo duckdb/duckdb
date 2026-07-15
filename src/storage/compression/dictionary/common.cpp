@@ -78,7 +78,7 @@ bool DictionaryCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		} else if (new_string) {
 			AddNewString(data[idx]);
 		} else {
-			AddLastLookup();
+			AddLastLookup(data[idx]);
 		}
 
 		Verify();

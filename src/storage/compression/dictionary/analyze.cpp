@@ -23,7 +23,7 @@ void DictionaryAnalyzeState::AddNewString(string_t str) {
 	current_width = next_width;
 }
 
-void DictionaryAnalyzeState::AddLastLookup() {
+void DictionaryAnalyzeState::AddLastLookup(string_t str) {
 	current_tuple_count++;
 }
 

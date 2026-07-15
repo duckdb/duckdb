@@ -16,7 +16,7 @@ public:
 public:
 	bool LookupString(string_t str) override;
 	void AddNewString(string_t str) override;
-	void AddLastLookup() override;
+	void AddLastLookup(string_t str) override;
 	void AddNull() override;
 	bool CalculateSpaceRequirements(bool new_string, idx_t string_size) override;
 	void Flush(bool final = false) override;

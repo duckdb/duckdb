@@ -867,10 +867,10 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 				result = AddConstantComparison(info_list, info);
 			} else {
 				D_ASSERT(upper_is_scalar);
-				const auto type = comparison.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
-				                                             : ExpressionType::COMPARE_LESSTHAN;
-				auto left = comparison.lower->Copy();
-				auto right = comparison.input->Copy();
+				const auto type = comparison.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+				                                             : ExpressionType::COMPARE_GREATERTHAN;
+				auto left = comparison.input->Copy();
+				auto right = comparison.lower->Copy();
 				auto lower_comp = make_uniq<BoundComparisonExpression>(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(*lower_comp);
 			}

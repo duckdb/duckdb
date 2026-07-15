@@ -184,7 +184,7 @@ void ExternalFileCache::SetEnabled(bool enable_p) {
 		if (!enable) {
 			keys_to_delete.reserve(cached_file_keys.size());
 			for (auto &key : cached_file_keys) {
-				keys_to_delete.emplace_back(key);
+				keys_to_delete.emplace_back(key.first);
 			}
 		}
 	}
@@ -201,7 +201,7 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 		const lock_guard<mutex> files_guard(lock);
 		keys.reserve(cached_file_keys.size());
 		for (auto &key : cached_file_keys) {
-			keys.emplace_back(key);
+			keys.emplace_back(key.first);
 		}
 	}
 
@@ -273,15 +273,17 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 
 void ExternalFileCache::InsertCachedFileKey(const string &path) {
 	const lock_guard<mutex> guard(lock);
-	auto inserted = cached_file_keys.insert(path);
-	ALWAYS_ASSERT(inserted.second);
+	cached_file_keys[path]++;
 }
 
 void ExternalFileCache::EraseCachedFileKey(const string &path) {
 	const lock_guard<mutex> guard(lock);
 	auto entry = cached_file_keys.find(path);
 	ALWAYS_ASSERT(entry != cached_file_keys.end());
-	cached_file_keys.erase(entry);
+	D_ASSERT(entry->second > 0);
+	if (--entry->second == 0) {
+		cached_file_keys.erase(entry);
+	}
 }
 
 } // namespace duckdb

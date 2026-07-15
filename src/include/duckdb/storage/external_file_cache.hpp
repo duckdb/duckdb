@@ -13,7 +13,6 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -127,9 +126,9 @@ private:
 	atomic<bool> enable;
 	//! Generation counter, incremented whenever cache enablement changes.
 	atomic<idx_t> generation;
-	//! Paths of the cached files tracked in the ObjectCache.
-	//! Entries should only be inserted at `GetOrCreateCachedFile` and deleted at object cache entry deletion.
-	unordered_set<string> cached_file_keys;
+	//! Maps from path to the number of live entries for that path.
+	//! A path can have multiple live entries while an evicted entry is still referenced.
+	unordered_map<string, idx_t> cached_file_keys;
 	//! Lock for accessing cached_file_keys.
 	mutable mutex lock;
 };
