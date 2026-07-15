@@ -2,7 +2,6 @@
 # description: Test the default schema fallback for queries.
 # group: [attach]
 
-
 # A view's owning catalog should take precedence over the caller's search path
 # for unqualified non-table entries in the catalog's default schema.
 # Validate the use of the correct macro.
