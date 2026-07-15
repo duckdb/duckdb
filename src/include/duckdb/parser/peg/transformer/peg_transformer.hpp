@@ -5981,7 +5981,8 @@ public:
 	                                                 unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<TransformResultValue> TransformShowAllTablesInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
-	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer, const ShowType &show_or_describe);
+	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer, const ShowType &show_or_describe,
+	                                                    const bool &has_result);
 	static unique_ptr<TransformResultValue> TransformShowQualifiedNameInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<QueryNode> TransformShowQualifiedName(PEGTransformer &transformer,

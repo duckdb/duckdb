@@ -3733,7 +3733,10 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowAllTablesIn
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto show_or_describe = transformer.Transform<ShowType>(list_pr.GetChild(0));
-	auto result = TransformShowAllTables(transformer, show_or_describe);
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto result = TransformShowAllTables(transformer, show_or_describe, has_result);
 	return make_uniq<TypedTransformResult<unique_ptr<QueryNode>>>(std::move(result));
 }
 

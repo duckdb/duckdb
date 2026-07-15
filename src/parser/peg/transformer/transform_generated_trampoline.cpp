@@ -11156,8 +11156,12 @@ void PEGTransformerFactory::InitializeShowAllTablesTrampoline(PEGTransformer &tr
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeShowAllTablesTrampoline(PEGTransformer &transformer,
                                                                                         TransformStack &stack,
                                                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto show_or_describe = frame.TakeResult<ShowType>(0);
-	auto result = TransformShowAllTables(transformer, show_or_describe);
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto result = TransformShowAllTables(transformer, show_or_describe, has_result);
 	return make_uniq<TypedTransformResult<unique_ptr<QueryNode>>>(std::move(result));
 }
 

@@ -998,7 +998,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"DeleteUsingClause <- 'USING' List(TableRef)\n"
 	"DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName\n"
 	"ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal\n"
-	"ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'\n"
+	"ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'?\n"
 	"ShowQualifiedName <- ShowOrDescribeOrSummarize DescribeTarget?\n"
 	"ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName\n"
 	"DescribeTarget <- DescribeBaseTableName / DescribeStringLiteral\n"
