@@ -296,28 +296,25 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                             SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,
                             TableFilterState &filter_state) {
-	const auto &stats = segment.GetStats();
-	if (!stats.CanHaveNull()) {
-		// All values are valid; avoid probing arbitrary filters with a synthetic NULL.
-		bool filters_nulls, filters_valid_values;
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ConstantFilterValidity");
-		if (TryExpressionFiltersNullValues(*expr_filter.expr, filters_nulls, filters_valid_values) &&
-		    filters_valid_values) {
-			sel_count = 0;
-			return;
-		}
-		ConstantScanFunctionValidity(segment, state, vector_count, result);
-		return;
-	}
-
 	// check what effect the filter has on NULL values
 	bool filters_nulls, filters_valid_values;
 	ConstantFun::FiltersNullValues(result.GetType(), filter, filters_nulls, filters_valid_values, filter_state);
 
-	// all values are NULL
-	if (filters_nulls) {
-		sel_count = 0;
-		return;
+	const auto &stats = segment.GetStats();
+	if (stats.CanHaveNull()) {
+		// all values are NULL
+		if (filters_nulls) {
+			// ... and the filter removes NULL values
+			sel_count = 0;
+			return;
+		}
+	} else {
+		// all values are valid
+		if (filters_valid_values) {
+			// ... and the filter removes valid values
+			sel_count = 0;
+			return;
+		}
 	}
 	ConstantScanFunctionValidity(segment, state, vector_count, result);
 }

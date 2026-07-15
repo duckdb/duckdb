@@ -43,15 +43,12 @@ WHERE split_part(task_id, '/', 2)::INTEGER >= 10
 ----
 154
 
-<<<<<<< HEAD
-=======
 query I
 SELECT count(*) FROM partial_segment
 WHERE split_part(task_id, '/', 2)::INTEGER >= 10000
 ----
 0
 
->>>>>>> main
 statement ok
 DELETE FROM partial_segment
 WHERE split_part(task_id, '/', 2)::INTEGER >= 10
@@ -67,15 +64,12 @@ WHERE split_part(task_id, '/', 2)::INTEGER >= 10
 ----
 2038
 
-<<<<<<< HEAD
-=======
 query I
 SELECT count(*) FROM full_vector
 WHERE split_part(task_id, '/', 2)::INTEGER >= 10000
 ----
 0
 
->>>>>>> main
 statement ok
 DELETE FROM full_vector
 WHERE split_part(task_id, '/', 2)::INTEGER >= 10
@@ -84,8 +78,6 @@ query I
 SELECT count(*) FROM full_vector
 ----
 10
-<<<<<<< HEAD
-=======
 
 # Exercise the generic filter fallback after a specialized DICT_FSST scan.
 # The segment boundaries are not vector-aligned, so some vectors span segments.
@@ -134,4 +126,3 @@ SELECT count(*), sum(i) FROM multi_segment
 WHERE split_part(comment, ' ', 3)::INTEGER % 2 = 0
 ----
 25000	624975000
->>>>>>> main
