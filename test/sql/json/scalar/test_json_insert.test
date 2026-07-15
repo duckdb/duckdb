@@ -200,3 +200,9 @@ query T
 SELECT json_insert('{"a":[1]}', '$.a[#]', '2')
 ----
 {"a":[1,2]}
+
+# The empty path is the whole document, which always exists, so this is a no-op
+query T
+SELECT json_insert('{"a":1}', '', '2')
+----
+{"a":1}

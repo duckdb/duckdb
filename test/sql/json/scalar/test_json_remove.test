@@ -204,3 +204,46 @@ query T
 SELECT json_remove('[]', '$[#-1]')
 ----
 []
+
+# A reverse offset too large to represent must not wrap around
+query T
+SELECT json_remove('[1,2]', '$[#-18446744073709551617]')
+----
+[1,2]
+
+# The empty path is the whole document, so removal produces NULL
+query T
+SELECT json_remove('{"a":1}', '')
+----
+NULL
+
+# Removing the root of an array document also produces NULL
+query T
+SELECT json_remove('[1,2]', '$')
+----
+NULL
+
+# Raw JSON Pointer escape ~0 addresses a tilde
+query T
+SELECT json_remove('{"a~b":1,"c":2}', '/a~0b')
+----
+{"c":2}
+
+# Raw JSON Pointer escape ~1 addresses a slash
+query T
+SELECT json_remove('{"a/b":1,"c":2}', '/a~1b')
+----
+{"c":2}
+
+# Bare key name containing a tilde
+query T
+SELECT json_remove('{"a~b":1,"c":2}', 'a~b')
+----
+{"c":2}
+
+# Vectorized execution with NULLs mixed in
+query T
+SELECT json_remove(d, '$.x') FROM (VALUES ('{"x":1,"y":2}'), (NULL)) t(d)
+----
+{"y":2}
+NULL

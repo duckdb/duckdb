@@ -190,3 +190,9 @@ query T
 SELECT json_replace('[]', '$[#-1]', '9')
 ----
 []
+
+# The empty path is the JSON Pointer for the whole document, like $
+query T
+SELECT json_replace('{"a":1}', '', '2')
+----
+2

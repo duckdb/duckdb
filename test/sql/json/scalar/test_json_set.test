@@ -299,3 +299,47 @@ query T
 SELECT json_set('{"a":1}', '$.a.b', '2')
 ----
 {"a":1}
+
+# [#] is the array length, so set appends
+query T
+SELECT json_set('[1,2]', '$[#]', '3')
+----
+[1,2,3]
+
+# [#-] without digits is not a valid path
+query T
+SELECT json_set('[1,2]', '$[#-]', '9')
+----
+[1,2]
+
+# A reverse offset too large to represent must not wrap around
+query T
+SELECT json_set('[1,2]', '$[#-18446744073709551617]', '9')
+----
+[1,2]
+
+# The empty path is the JSON Pointer for the whole document, like $
+query T
+SELECT json_set('{"a":1}', '', '2')
+----
+2
+
+# Vectorized execution with NULLs mixed in
+query T
+SELECT json_set(d, '$.a', '1') FROM (VALUES ('{"x":1}'), (NULL), ('{}')) t(d)
+----
+{"x":1,"a":1}
+NULL
+{"a":1}
+
+# Malformed document
+statement error
+SELECT json_set('{bad', '$.a', '1')
+----
+Malformed JSON
+
+# Malformed value
+statement error
+SELECT json_set('{}', '$.a', '{bad')
+----
+Malformed JSON
