@@ -5,34 +5,42 @@
 
 namespace duckdb {
 
+//! Append a character to a JSON Pointer, escaping ~ and / as required by RFC 6901
+static void AppendPointerCharacter(string &result, char c) {
+	if (c == '~') {
+		result += "~0";
+	} else if (c == '/') {
+		result += "~1";
+	} else {
+		result += c;
+	}
+}
+
 //! Convert a JSONPath ($.key[0].nested) to a JSON Pointer (/key/0/nested).
 //! Paths starting with '/' are returned as-is. Bare key names are wrapped as /key.
-static string ConvertToJsonPointer(const string_t &path_str) {
+//! Array indexes may be # (the array length) or #-N (the N-th element from the end),
+//! both resolved against the document. Returns false if the path cannot be resolved.
+static bool ConvertToJsonPointer(const string_t &path_str, yyjson_mut_doc *doc, string &result) {
 	auto ptr = path_str.GetData();
 	auto len = path_str.GetSize();
+	result = "";
 	if (len == 0) {
-		return "";
+		return true;
 	}
 	// Already a JSON Pointer
 	if (*ptr == '/') {
-		return string(ptr, len);
+		result = string(ptr, len);
+		return true;
 	}
 	// Bare key name
 	if (*ptr != '$') {
-		string result = "/";
+		result = "/";
 		for (idx_t i = 0; i < len; i++) {
-			if (ptr[i] == '~') {
-				result += "~0";
-			} else if (ptr[i] == '/') {
-				result += "~1";
-			} else {
-				result += ptr[i];
-			}
+			AppendPointerCharacter(result, ptr[i]);
 		}
-		return result;
+		return true;
 	}
 	// JSONPath: convert $.key[0].nested to /key/0/nested
-	string result;
 	idx_t i = 1; // Skip '$'
 	while (i < len) {
 		auto c = ptr[i++];
@@ -41,13 +49,12 @@ static string ConvertToJsonPointer(const string_t &path_str) {
 			if (i < len && ptr[i] == '"') {
 				i++; // Skip opening quote
 				while (i < len && ptr[i] != '"') {
-					if (ptr[i] == '~') {
-						result += "~0";
-					} else if (ptr[i] == '/') {
-						result += "~1";
-					} else {
-						result += ptr[i];
+					auto k = ptr[i];
+					if (k == '\\' && i + 1 < len) {
+						i++; // \" and \\ address the escaped character itself
+						k = ptr[i];
 					}
+					AppendPointerCharacter(result, k);
 					i++;
 				}
 				if (i < len) {
@@ -55,25 +62,41 @@ static string ConvertToJsonPointer(const string_t &path_str) {
 				}
 			} else {
 				while (i < len && ptr[i] != '.' && ptr[i] != '[') {
-					if (ptr[i] == '~') {
-						result += "~0";
-					} else if (ptr[i] == '/') {
-						result += "~1";
-					} else {
-						result += ptr[i];
-					}
+					AppendPointerCharacter(result, ptr[i]);
 					i++;
 				}
 			}
 		} else if (c == '[') {
 			result += '/';
 			if (i < len && ptr[i] == '#') {
-				// $[#] -> /- (append)
-				result += '-';
 				i++; // Skip '#'
+				idx_t offset = 0;
+				if (i < len && ptr[i] == '-') {
+					i++; // Skip '-'
+					bool has_digits = false;
+					while (i < len && ptr[i] >= '0' && ptr[i] <= '9') {
+						offset = offset * 10 + static_cast<idx_t>(ptr[i] - '0');
+						has_digits = true;
+						i++;
+					}
+					if (!has_digits) {
+						return false;
+					}
+				}
 				if (i < len && ptr[i] == ']') {
 					i++; // Skip ']'
 				}
+				// Resolve # against the length of the array at the path so far.
+				// result still ends with '/', so the parent is everything before it.
+				auto parent = yyjson_mut_doc_ptr_getx(doc, result.c_str(), result.size() - 1, nullptr, nullptr);
+				if (!parent || !yyjson_mut_is_arr(parent)) {
+					return false;
+				}
+				auto arr_len = yyjson_mut_arr_size(parent);
+				if (offset > arr_len) {
+					return false;
+				}
+				result += to_string(arr_len - offset);
 			} else {
 				while (i < len && ptr[i] != ']') {
 					result += ptr[i];
@@ -85,7 +108,7 @@ static string ConvertToJsonPointer(const string_t &path_str) {
 			}
 		}
 	}
-	return result;
+	return true;
 }
 
 //! Set a value at a path in a JSON document (create if missing, overwrite if exists)
@@ -101,12 +124,14 @@ static void JsonSetFunction(DataChunk &args, ExpressionState &state, Vector &res
 		    auto val_doc = JSONCommon::ReadDocument(val_str, JSONCommon::READ_FLAG, alc);
 		    auto new_val = yyjson_val_mut_copy(mut_doc, val_doc->root);
 
-		    auto pointer = ConvertToJsonPointer(path_str);
-
-		    // Try set first (overwrites existing, creates missing).
-		    // Fall back to add for cases set cannot handle (e.g. appending with /-).
-		    if (!yyjson_mut_doc_ptr_setx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr)) {
-			    yyjson_mut_doc_ptr_addx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr);
+		    string pointer;
+		    if (ConvertToJsonPointer(path_str, mut_doc, pointer)) {
+			    // Try set first (overwrites existing, creates missing).
+			    // Fall back to add for cases set cannot handle (e.g. appending with /-).
+			    if (!yyjson_mut_doc_ptr_setx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr,
+			                                 nullptr)) {
+				    yyjson_mut_doc_ptr_addx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr);
+			    }
 		    }
 
 		    auto root = yyjson_mut_doc_get_root(mut_doc);
@@ -126,10 +151,10 @@ static void JsonInsertFunction(DataChunk &args, ExpressionState &state, Vector &
 		    auto doc = JSONCommon::ReadDocument(doc_str, JSONCommon::READ_FLAG, alc);
 		    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
 
-		    auto pointer = ConvertToJsonPointer(path_str);
-
-		    // Only insert if there is no value at the path yet
-		    if (!yyjson_mut_doc_ptr_getx(mut_doc, pointer.c_str(), pointer.size(), nullptr, nullptr)) {
+		    string pointer;
+		    // Only insert if the path resolves and there is no value at it yet
+		    if (ConvertToJsonPointer(path_str, mut_doc, pointer) &&
+		        !yyjson_mut_doc_ptr_getx(mut_doc, pointer.c_str(), pointer.size(), nullptr, nullptr)) {
 			    auto val_doc = JSONCommon::ReadDocument(val_str, JSONCommon::READ_FLAG, alc);
 			    auto new_val = yyjson_val_mut_copy(mut_doc, val_doc->root);
 			    yyjson_mut_doc_ptr_addx(mut_doc, pointer.c_str(), pointer.size(), new_val, true, nullptr, nullptr);
@@ -155,10 +180,11 @@ static void JsonReplaceFunction(DataChunk &args, ExpressionState &state, Vector 
 		    auto val_doc = JSONCommon::ReadDocument(val_str, JSONCommon::READ_FLAG, alc);
 		    auto new_val = yyjson_val_mut_copy(mut_doc, val_doc->root);
 
-		    auto pointer = ConvertToJsonPointer(path_str);
-
-		    // Returns the old value if the path exists, NULL otherwise (nothing is replaced)
-		    yyjson_mut_doc_ptr_replacex(mut_doc, pointer.c_str(), pointer.size(), new_val, nullptr, nullptr);
+		    string pointer;
+		    if (ConvertToJsonPointer(path_str, mut_doc, pointer)) {
+			    // Returns the old value if the path exists, NULL otherwise (nothing is replaced)
+			    yyjson_mut_doc_ptr_replacex(mut_doc, pointer.c_str(), pointer.size(), new_val, nullptr, nullptr);
+		    }
 
 		    auto root = yyjson_mut_doc_get_root(mut_doc);
 		    return JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
@@ -177,10 +203,11 @@ static void JsonRemoveFunction(DataChunk &args, ExpressionState &state, Vector &
 		    auto doc = JSONCommon::ReadDocument(doc_str, JSONCommon::READ_FLAG, alc);
 		    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
 
-		    auto pointer = ConvertToJsonPointer(path_str);
-
-		    // Returns the removed value, or NULL if the path does not exist (nothing is removed)
-		    yyjson_mut_doc_ptr_removex(mut_doc, pointer.c_str(), pointer.size(), nullptr, nullptr);
+		    string pointer;
+		    if (ConvertToJsonPointer(path_str, mut_doc, pointer)) {
+			    // Returns the removed value, or NULL if the path does not exist (nothing is removed)
+			    yyjson_mut_doc_ptr_removex(mut_doc, pointer.c_str(), pointer.size(), nullptr, nullptr);
+		    }
 
 		    // Removing the root leaves no document behind
 		    auto root = yyjson_mut_doc_get_root(mut_doc);
