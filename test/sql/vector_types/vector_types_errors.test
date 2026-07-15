@@ -1,4 +1,4 @@
-# name: test/sql/vector_types/vector_types_error.test
+# name: test/sql/vector_types/vector_types_errors.test
 # description: Test unsupported inputs for test_vector_types
 # group: [vector_types]
 
