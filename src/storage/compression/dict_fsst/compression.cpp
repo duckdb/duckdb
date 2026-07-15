@@ -462,9 +462,17 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 	return true;
 }
 
-bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_format, const string_t &str, bool is_null,
-                                                EncodedInput &encoded_input, const idx_t i, idx_t count,
-                                                bool fail_on_no_space) {
+static DictFSSTCompressResult GetCompressResult(bool success, bool new_string) {
+	if (!success) {
+		return DictFSSTCompressResult::FAILED;
+	}
+	return new_string ? DictFSSTCompressResult::NEW_STRING : DictFSSTCompressResult::REPEATED_STRING;
+}
+
+DictFSSTCompressResult DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_format,
+                                                                  const string_t &str, bool is_null,
+                                                                  EncodedInput &encoded_input, const idx_t i,
+                                                                  idx_t count, bool fail_on_no_space) {
 	auto strings = UnifiedVectorFormat::GetData<string_t>(vector_format);
 	idx_t lookup = DConstants::INVALID_INDEX;
 
@@ -487,21 +495,25 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 	case DictionaryAppendState::REGULAR: {
 		if (append_state == DictionaryAppendState::REGULAR) {
 			if (lookup != DConstants::INVALID_INDEX) {
-				return AddLookup<DictionaryAppendState::REGULAR>(*this, lookup, recalculate_indices_space,
-				                                                 fail_on_no_space);
+				return GetCompressResult(AddLookup<DictionaryAppendState::REGULAR>(
+				                             *this, lookup, recalculate_indices_space, fail_on_no_space),
+				                         false);
 			} else {
-				//! This string does not exist in the dictionary, add it
-				return AddToDictionary<DictionaryAppendState::REGULAR>(*this, str, recalculate_indices_space,
-				                                                       fail_on_no_space);
+				// This string does not exist in the dictionary, add it
+				return GetCompressResult(AddToDictionary<DictionaryAppendState::REGULAR>(
+				                             *this, str, recalculate_indices_space, fail_on_no_space),
+				                         true);
 			}
 		} else {
 			if (lookup != DConstants::INVALID_INDEX) {
-				return AddLookup<DictionaryAppendState::NOT_ENCODED>(*this, lookup, recalculate_indices_space,
-				                                                     fail_on_no_space);
+				return GetCompressResult(AddLookup<DictionaryAppendState::NOT_ENCODED>(
+				                             *this, lookup, recalculate_indices_space, fail_on_no_space),
+				                         false);
 			} else {
-				//! This string does not exist in the dictionary, add it
-				return AddToDictionary<DictionaryAppendState::NOT_ENCODED>(*this, str, recalculate_indices_space,
-				                                                           fail_on_no_space);
+				// This string does not exist in the dictionary, add it
+				return GetCompressResult(AddToDictionary<DictionaryAppendState::NOT_ENCODED>(
+				                             *this, str, recalculate_indices_space, fail_on_no_space),
+				                         true);
 			}
 		}
 	}
@@ -520,24 +532,26 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 			                                                       fail_on_no_space);
 		}
 		if (fits) {
-			return fits;
+			return GetCompressResult(true, lookup == DConstants::INVALID_INDEX);
 		}
 		if (dictionary_encoding_buffer.empty()) {
 			//! The string doesn't fit, there are no strings left in the encoding buffer that could potentially
 			//  reduce the space used enough to store this string.
-			return false;
+			return DictFSSTCompressResult::FAILED;
 		}
 
 		// We lazily encode the new entries, if we're full but have entries in the buffer
 		// we flush these and try again to see if the size went down enough
 		FlushEncodingBuffer();
 		if (lookup != DConstants::INVALID_INDEX) {
-			return AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space,
-			                                                 fail_on_no_space);
+			return GetCompressResult(
+			    AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space, fail_on_no_space),
+			    false);
 		} else {
 			//! Not in the dictionary, add it
-			return AddToDictionary<DictionaryAppendState::ENCODED>(*this, str, recalculate_indices_space,
-			                                                       fail_on_no_space);
+			return GetCompressResult(AddToDictionary<DictionaryAppendState::ENCODED>(
+			                             *this, str, recalculate_indices_space, fail_on_no_space),
+			                         true);
 		}
 	}
 	case DictionaryAppendState::ENCODED_ALL_UNIQUE: {
@@ -632,8 +646,9 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 
 #endif
 		auto &string = encoded_input.data[i - encoded_input.offset];
-		return AddToDictionary<DictionaryAppendState::ENCODED_ALL_UNIQUE>(*this, string, recalculate_indices_space,
-		                                                                  fail_on_no_space);
+		return GetCompressResult(AddToDictionary<DictionaryAppendState::ENCODED_ALL_UNIQUE>(
+		                             *this, string, recalculate_indices_space, fail_on_no_space),
+		                         true);
 	}
 	};
 	throw InternalException("Unreachable");
@@ -830,27 +845,35 @@ void DictFSSTCompressionState::Compress(const Vector &scan_vector) {
 		auto idx = vector_format.sel->get_index(i);
 		auto &str = strings[idx];
 		auto is_null = !vector_format.validity.RowIsValid(idx);
+		DictFSSTCompressResult compress_result;
 		do {
-			if (CompressInternal(vector_format, str, is_null, encoded_input, i, count, false)) {
+			compress_result = CompressInternal(vector_format, str, is_null, encoded_input, i, count, false);
+			if (compress_result != DictFSSTCompressResult::FAILED) {
 				break;
 			}
 
 			if (append_state == DictionaryAppendState::REGULAR) {
 				append_state = TryEncode();
 				D_ASSERT(append_state != DictionaryAppendState::REGULAR);
-				if (CompressInternal(vector_format, str, is_null, encoded_input, i, count, false)) {
+				compress_result = CompressInternal(vector_format, str, is_null, encoded_input, i, count, false);
+				if (compress_result != DictFSSTCompressResult::FAILED) {
 					break;
 				}
 			}
 			Flush(false);
 			encoded_input.data.clear();
 			encoded_input.offset = 0;
-			if (!CompressInternal(vector_format, str, is_null, encoded_input, i, count, true)) {
+			compress_result = CompressInternal(vector_format, str, is_null, encoded_input, i, count, true);
+			if (compress_result == DictFSSTCompressResult::FAILED) {
 				throw FatalException("Compressing directly after Flush doesn't fit - expected to throw earlier!");
 			}
 		} while (false);
 		if (!is_null) {
-			stats_writer.Update(str);
+			if (compress_result == DictFSSTCompressResult::REPEATED_STRING) {
+				stats_writer.UpdateRepeated(str);
+			} else {
+				stats_writer.Update(str);
+			}
 		} else {
 			stats_writer.SetHasNull();
 		}

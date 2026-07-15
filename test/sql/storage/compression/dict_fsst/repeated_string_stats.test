@@ -1,0 +1,50 @@
+# name: test/sql/storage/compression/dict_fsst/repeated_string_stats.test
+# description: Test string statistics for repeated values with DictFSST compression
+# group: [dict_fsst]
+
+require vector_size 2048
+
+load {TEST_DIR}/repeated_string_stats.db readwrite
+
+statement ok
+PRAGMA force_compression = 'dict_fsst'
+
+# Use enough distinct string data to exercise the encoded dictionary path.
+statement ok
+CREATE TABLE repeated AS
+SELECT repeat(lpad((i % 200)::VARCHAR, 3, '0'), 20) AS value
+FROM range(100000) t(i)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('repeated') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+DICT_FSST
+
+query III
+SELECT s.min_string_length, s.max_string_length, s.total_string_length
+FROM (SELECT stats(value) s FROM repeated LIMIT 1)
+----
+60	60	6000000
+
+# Repeated values must retain min/max, Unicode, null, and additive length statistics.
+statement ok
+CREATE TABLE repeated_unicode AS
+SELECT CASE i % 4
+	WHEN 0 THEN 'alpha'
+	WHEN 1 THEN 'βeta'
+	WHEN 2 THEN 'zebra-long'
+	ELSE NULL
+END AS value
+FROM range(10000) t(i)
+
+statement ok
+CHECKPOINT
+
+query IIIIII
+SELECT s.min_string_length, s.max_string_length, s.total_string_length, s.has_unicode, s.has_null, s.has_no_null
+FROM (SELECT stats(value) s FROM repeated_unicode LIMIT 1)
+----
+5	10	50000	true	true	true
