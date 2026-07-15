@@ -224,3 +224,9 @@ query T
 SELECT json_insert('{}', '$.a[0]', '1')
 ----
 {"a":[1]}
+
+# Creation below an appended element of an existing array
+query T
+SELECT json_insert('{"a":[0]}', '$.a[1].b', '5')
+----
+{"a":[0,{"b":5}]}

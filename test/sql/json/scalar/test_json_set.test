@@ -372,6 +372,42 @@ SELECT json_set('{"a":1}', '$.a[0]', '2')
 ----
 {"a":1}
 
+# Creation below an appended element of an existing array
+query T
+SELECT json_set('{"a":[0]}', '$.a[1].b', '5')
+----
+{"a":[0,{"b":5}]}
+
+# Creation below an append leg of an existing array
+query T
+SELECT json_set('[]', '$[#].b', '5')
+----
+[{"b":5}]
+
+# Chained numeric indexes
+query T
+SELECT json_set('{"a":[[1]]}', '$.a[0][0]', '9')
+----
+{"a":[[9]]}
+
+# Quoted key containing a dot creates containers too
+query T
+SELECT json_set('{}', '$."a.b".c', '1')
+----
+{"a.b":{"c":1}}
+
+# A huge but representable index is out of range, not an error
+query T
+SELECT json_set('[1,2]', '$[9999999999999999999]', '9')
+----
+[1,2]
+
+# Unterminated array index is not a valid path
+statement error
+SELECT json_set('[1,2]', '$[1', '9')
+----
+JSON path error
+
 # The empty path is the JSON Pointer for the whole document, like $
 query T
 SELECT json_set('{"a":1}', '', '2')

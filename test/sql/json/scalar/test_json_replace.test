@@ -61,6 +61,11 @@ SELECT json_replace('[1,2]', '/-', '3')
 ----
 [1,2]
 
+query T
+SELECT json_replace('[1,2]', '$[#]', '3')
+----
+[1,2]
+
 # Replace the root
 query T
 SELECT json_replace('{"a":1}', '$', '{"b":2}')
