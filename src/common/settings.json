@@ -1215,6 +1215,16 @@
         "custom_implementation": true
     },
     {
+        "name": "read_ahead_depth",
+        "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
+        "type": "BIGINT",
+        "default_scope": "global",
+        "default_value": "-1",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "regex_match_operator_semantics",
         "description": "Configures whether regex match operators use partial or full string matching",
         "type": "ENUM<RegexMatchOperatorSemantics>",

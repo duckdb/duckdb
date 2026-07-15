@@ -1,0 +1,22 @@
+diff --git a/src/serialize_queries_plans.cpp b/src/serialize_queries_plans.cpp
+index 4f8acd1..1735e06 100644
+--- a/src/serialize_queries_plans.cpp
++++ b/src/serialize_queries_plans.cpp
+@@ -19,7 +19,7 @@
+ #include <duckdb/parser/parser.hpp>
+ #include <duckdb/parser/parsed_data/transaction_info.hpp>
+ #include <duckdb/parser/statement/logical_plan_statement.hpp>
+-#include <duckdb/planner/operator/logical_simple.hpp>
++#include <duckdb/planner/operator/logical_transaction.hpp>
+ #include <duckdb/planner/planner.hpp>
+ 
+ namespace duckdb {
+@@ -193,7 +193,7 @@ static void SerializeQueryStatements(Connection &con, BinarySerializer &serializ
+ 
+ 			// Manually handle transaction statements
+ 			if (type == LogicalOperatorType::LOGICAL_TRANSACTION) {
+-				auto tx_type = op.Cast<LogicalSimple>().info->Cast<TransactionInfo>().type;
++				auto tx_type = op.Cast<LogicalTransaction>().info->type;
+ 				UpdateTxStateFromTxType(tx_type, test_driven_transaction_state);
+ 				slq.transaction_type = tx_type;
+ 			}

@@ -102,6 +102,18 @@ ParquetOptionsSerialization ParquetOptionsSerialization::Deserialize(Deserialize
 	return result;
 }
 
+void ParquetReaderProjectionExpression::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<ParquetReaderProjectionExpressionType>(100, "type", type);
+	serializer.WriteProperty<LogicalType>(101, "return_type", return_type);
+}
+
+ParquetReaderProjectionExpression ParquetReaderProjectionExpression::Deserialize(Deserializer &deserializer) {
+	ParquetReaderProjectionExpression result;
+	deserializer.ReadProperty<ParquetReaderProjectionExpressionType>(100, "type", result.type);
+	deserializer.ReadProperty<LogicalType>(101, "return_type", result.return_type);
+	return result;
+}
+
 void ShreddingType::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "set", set);
 	serializer.WriteProperty<LogicalType>(101, "type", type);

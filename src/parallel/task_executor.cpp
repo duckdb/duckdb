@@ -50,10 +50,9 @@ void TaskExecutor::FinishTask() {
 	token->producer_cv.notify_one();
 }
 
-void TaskExecutor::WorkOnTasks() {
-	// repeatedly execute tasks until we are finished
+void TaskExecutor::DrainTasks() {
+	// wait for all active tasks to finish, executing queued tasks on this thread where possible
 	shared_ptr<Task> task_from_producer;
-	// wait for all active tasks to finish
 	while (true) {
 		{
 			annotated_unique_lock<annotated_mutex> lk(token->producer_lock);
@@ -71,12 +70,22 @@ void TaskExecutor::WorkOnTasks() {
 		D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
 		task_from_producer.reset();
 	}
+}
 
-	// check if we ran into any errors while checkpointing
+void TaskExecutor::WorkOnTasks() {
+	DrainTasks();
+
+	// check if we ran into any errors while executing the tasks
 	if (HasError()) {
 		// throw the error
 		ThrowError();
 	}
+}
+
+void TaskExecutor::CancelAndDrain() {
+	// make tasks that have not started yet bail out instead of executing their work
+	cancelled = true;
+	DrainTasks();
 }
 
 bool TaskExecutor::GetTask(shared_ptr<Task> &task) {
@@ -87,8 +96,8 @@ BaseExecutorTask::BaseExecutorTask(TaskExecutor &executor) : executor(executor) 
 }
 
 TaskExecutionResult BaseExecutorTask::Execute(TaskExecutionMode mode) {
-	if (executor.HasError()) {
-		// another task encountered an error - bailout
+	if (executor.HasError() || executor.cancelled) {
+		// another task encountered an error or the executor was cancelled - bailout
 		executor.FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}

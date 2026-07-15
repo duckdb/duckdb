@@ -43,6 +43,8 @@ public:
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 	bool HasUnserializedChanges();
+	bool HasDeletes();
+	bool HasUncommittedChanges();
 	vector<MetaBlockPointer> GetStoragePointers();
 
 private:

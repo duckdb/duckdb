@@ -129,7 +129,7 @@ public:
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
-	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk);
+	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk, TransactionData transaction);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
 	                               ExpressionExecutor &executor);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
@@ -215,7 +215,7 @@ public:
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result,
 	                          const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});
-	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group);
+	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group, TransactionData transaction);
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;

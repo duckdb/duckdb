@@ -118,9 +118,6 @@ jobs:
         shell: bash
         run: |
           effective_git_describe="${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.git_ref }}" && -z "$effective_git_describe" ]]; then
-            effective_git_describe="v2.0.0-alpha${{ github.run_number }}"
-          fi
           echo "effective_git_describe=$effective_git_describe" >> "$GITHUB_OUTPUT"
           echo "Using effective_git_describe=$effective_git_describe"
 

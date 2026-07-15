@@ -79,6 +79,8 @@ public:
 	string OnLoadCommand();
 	string OnConnectionCommand();
 	string OnCleanupCommand();
+	string GetInitSqllogic();
+	string GetCleanupSqllogic();
 	SortStyle GetDefaultSortStyle();
 	vector<string> ExtensionToBeLoadedOnLoad();
 	vector<string> ErrorMessagesToBeSkipped();

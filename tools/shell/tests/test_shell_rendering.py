@@ -100,6 +100,18 @@ def test_mode_json_escapes(shell):
     result = test.run()
     result.check_stdout('{"name":"test","a":[4,5,6],"s":{"key":7}}')
 
+
+def test_mode_json_nested_variant(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode json")
+        .statement("SELECT [{'a': 1, 'b': [1]}::VARIANT] AS v;")
+    )
+
+    result = test.run()
+    result.check_stdout('{"v":[{"a":1,"b":[1]}]}')
+
+
 def test_mode_json_empty_result(shell):
     test = (
         ShellTest(shell)
