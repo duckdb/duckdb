@@ -35,6 +35,15 @@ enum class JoinFilterPushdownMode : uint8_t {
 
 enum class RuntimeFilterCastMode : uint8_t { DEFAULT_CAST, TRY_CAST };
 
+struct RuntimeFilterCastStep {
+	RuntimeFilterCastStep(LogicalType target_type_p, RuntimeFilterCastMode mode_p)
+	    : target_type(std::move(target_type_p)), mode(mode_p) {
+	}
+
+	LogicalType target_type;
+	RuntimeFilterCastMode mode;
+};
+
 struct JoinFilterPushdownColumn {
 	//! Index into JoinFilterPushdownInfo::join_condition for this pushed column
 	idx_t join_filter_idx = DConstants::INVALID_INDEX;
@@ -44,11 +53,8 @@ struct JoinFilterPushdownColumn {
 	LogicalType storage_type;
 	//! Whether runtime filters can reconstruct the pushed expression, or whether only storage-domain filters are safe
 	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
-	//! The original type of the pushed probe expression before rewriting to the LogicalGet storage column. Only used
-	//! when the mode allows reconstruction of the probe expression for BF/PRF runtime filters.
-	LogicalType runtime_filter_type;
-	//! The cast semantics required when reconstructing the runtime-filter input from the raw scan value.
-	RuntimeFilterCastMode cast_mode = RuntimeFilterCastMode::DEFAULT_CAST;
+	//! Casts from the raw scan value to the pushed probe expression, in evaluation order.
+	vector<RuntimeFilterCastStep> runtime_filter_casts;
 };
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };

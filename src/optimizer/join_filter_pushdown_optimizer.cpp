@@ -39,7 +39,13 @@ static bool IsJoinFilterPushdownVariantIntegralCast(const LogicalType &src, cons
 	return false;
 }
 
-static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFilterPushdownColumn &filter) {
+struct JoinFilterExpressionPath {
+	ColumnBinding binding;
+	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
+	vector<RuntimeFilterCastStep> casts;
+};
+
+static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFilterExpressionPath &path) {
 	const auto &return_type = expr.GetReturnType();
 	if (return_type.IsNested() && return_type.id() != LogicalTypeId::VARIANT) {
 		// nested columns are not supported for pushdown
@@ -49,14 +55,11 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 		// interval is not supported for pushdown
 		return false;
 	}
-	if (filter.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION && !filter.runtime_filter_type.IsValid()) {
-		filter.runtime_filter_type = return_type;
-	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		// column-ref - pass through the new column binding
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		filter.probe_column_index = colref.Binding();
+		path.binding = colref.Binding();
 		return true;
 	}
 	case ExpressionClass::BOUND_CAST: {
@@ -69,20 +72,23 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 		if (!integral_cast && !variant_integral_cast) {
 			return false;
 		}
-		if (!PushdownJoinFilterExpressionInternal(bound_cast.Child(), filter)) {
+		if (!PushdownJoinFilterExpressionInternal(bound_cast.Child(), path)) {
 			return false;
-		}
-		if (bound_cast.IsTryCast()) {
-			filter.cast_mode = RuntimeFilterCastMode::TRY_CAST;
 		}
 		if (variant_integral_cast) {
 			if (tgt.id() == LogicalTypeId::VARIANT) {
-				filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
-				filter.runtime_filter_type = LogicalType::INVALID;
+				path.mode = JoinFilterPushdownMode::STORAGE_ONLY;
+				path.casts.clear();
+			} else if (path.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION) {
+				path.casts.emplace_back(tgt, bound_cast.IsTryCast() ? RuntimeFilterCastMode::TRY_CAST
+				                                                    : RuntimeFilterCastMode::DEFAULT_CAST);
 			}
 			return true;
 		}
-		filter.runtime_filter_type = expr.GetReturnType();
+		if (path.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION) {
+			path.casts.emplace_back(tgt, bound_cast.IsTryCast() ? RuntimeFilterCastMode::TRY_CAST
+			                                                    : RuntimeFilterCastMode::DEFAULT_CAST);
+		}
 		return true;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {
@@ -90,7 +96,7 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 		if (function_expr.Function().GetName() != "variant_normalize" || function_expr.GetChildren().size() != 1) {
 			return false;
 		}
-		return PushdownJoinFilterExpressionInternal(*function_expr.GetChildren()[0], filter);
+		return PushdownJoinFilterExpressionInternal(*function_expr.GetChildren()[0], path);
 	}
 	default:
 		return false;
@@ -98,7 +104,21 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 }
 
 bool JoinFilterPushdownUtil::PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColumn &filter) {
-	return PushdownJoinFilterExpressionInternal(expr, filter);
+	JoinFilterExpressionPath path;
+	if (!PushdownJoinFilterExpressionInternal(expr, path)) {
+		return false;
+	}
+	filter.probe_column_index = path.binding;
+	if (filter.mode == JoinFilterPushdownMode::STORAGE_ONLY) {
+		return true;
+	}
+	if (path.mode == JoinFilterPushdownMode::STORAGE_ONLY) {
+		filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
+		filter.runtime_filter_casts.clear();
+		return true;
+	}
+	filter.runtime_filter_casts.insert(filter.runtime_filter_casts.begin(), path.casts.begin(), path.casts.end());
+	return true;
 }
 
 bool JoinFilterPushdownUtil::JoinTypeIsSupported(JoinType join_type) {
@@ -222,9 +242,12 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				}
 			}
 			D_ASSERT(filter.storage_type != LogicalType::INVALID);
+			const auto reconstructed_type = filter.runtime_filter_casts.empty()
+			                                    ? filter.storage_type
+			                                    : filter.runtime_filter_casts.back().target_type;
 			if (filter.storage_type.id() == LogicalTypeId::VARIANT &&
 			    filter.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
-			    filter.runtime_filter_type.id() == LogicalTypeId::VARIANT) {
+			    reconstructed_type.id() == LogicalTypeId::VARIANT) {
 				return;
 			}
 		}

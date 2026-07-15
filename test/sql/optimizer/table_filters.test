@@ -416,6 +416,28 @@ JOIN phj_build_narrow_cast b
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
+# Reconstruction retains every cast in a nested exact PRF input.
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM (
+  SELECT *
+  FROM phj_probe_narrow_cast
+  WHERE k < 1000000
+) p
+JOIN phj_build_narrow_cast b
+  ON CAST(CAST(p.k AS INTEGER) AS BIGINT) = CAST(b.k AS BIGINT)
+----
+analyzed_plan	<REGEX>:(?s).*PRF.*
+
+statement error
+SELECT count(*)
+FROM phj_probe_narrow_cast p
+JOIN phj_build_narrow_cast b
+  ON CAST(CAST(p.k AS INTEGER) AS BIGINT) = CAST(b.k AS BIGINT)
+----
+<REGEX>:Conversion Error:.*out of range.*
+
 # Explicit TRY_CAST has different semantics: failed casts become NULL and may be removed by the runtime filter.
 query I
 SELECT count(*)
@@ -452,6 +474,27 @@ SELECT count(*)
 FROM phj_probe_narrow_cast p
 JOIN bf_build_narrow_cast_errors b
   ON p.k::INTEGER = b.k
+----
+<REGEX>:Conversion Error:.*out of range.*
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM (
+  SELECT *
+  FROM phj_probe_narrow_cast
+  WHERE k < 2000000000
+) p
+JOIN bf_build_narrow_cast_errors b
+  ON CAST(CAST(p.k AS INTEGER) AS BIGINT) = CAST(b.k AS BIGINT)
+----
+analyzed_plan	<REGEX>:(?s).*BF.*
+
+statement error
+SELECT count(*)
+FROM phj_probe_narrow_cast p
+JOIN bf_build_narrow_cast_errors b
+  ON CAST(CAST(p.k AS INTEGER) AS BIGINT) = CAST(b.k AS BIGINT)
 ----
 <REGEX>:Conversion Error:.*out of range.*
 
