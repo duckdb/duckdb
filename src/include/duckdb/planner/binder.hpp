@@ -193,9 +193,10 @@ struct GlobalBinderState {
 	optional_ptr<BoundParameterMap> parameters;
 	//! Tables whose triggers have already been expanded in this query (recursion detection)
 	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
-	//! Generated base-UPDATE nodes that must also capture the pre-update (OLD) row image. Internal
+	//! Generated base-UPDATE nodes that must also capture the pre-update (OLD) row image, mapped to the reserved
+	//! column names under which the captured OLD columns are exposed (physical table order). Internal
 	//! trigger-expansion state, keyed by node identity; never set by SQL parsing and never serialized.
-	reference_set_t<QueryNode> trigger_old_capture_nodes;
+	reference_map_t<QueryNode, vector<Identifier>> trigger_old_capture_columns;
 	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
@@ -236,10 +237,6 @@ public:
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
-
-	//! Reserved internal column name for a captured OLD physical column in a trigger base UPDATE CTE. The name
-	//! is derived from the table so it cannot collide with any real column name (see the .cpp for details).
-	static string TriggerOldCaptureColumnName(const TableCatalogEntry &table, idx_t physical_index);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,

@@ -127,28 +127,6 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 	}
 }
 
-string Binder::TriggerOldCaptureColumnName(const TableCatalogEntry &table, idx_t physical_index) {
-	// Extend the reserved prefix with underscores until it is not a case-insensitive prefix of any real column
-	// name. No column name can then equal "<prefix><index>", so the OLD-capture columns exposed on the base CTE
-	// never collide with a user column (which would otherwise make the OLD alias silently read the NEW value).
-	// Derived purely from the table, so every caller in a single bind pass computes the identical name.
-	string prefix = "__duckdb_old_col_";
-	bool collides = true;
-	while (collides) {
-		collides = false;
-		for (auto &column : table.GetColumns().Logical()) {
-			auto &name = column.Name();
-			if (name.size() >= prefix.size() &&
-			    StringUtil::CIEquals(name.c_str(), prefix.size(), prefix.c_str(), prefix.size())) {
-				prefix += "_";
-				collides = true;
-				break;
-			}
-		}
-	}
-	return prefix + to_string(physical_index);
-}
-
 void Binder::BindOldRowCapture(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
                                LogicalUpdate &update) {
 	// Append a reference to each physical column's scanned pre-update value, in table order, recording the
@@ -221,7 +199,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 
 	// Trigger expansion flags its generated base UPDATE for OLD capture via scoped binder state (keyed by node
 	// identity), so the parsed AST carries no trigger-internal state.
-	bool capture_old_rows = global_binder_state->trigger_old_capture_nodes.count(node) > 0;
+	bool capture_old_rows = global_binder_state->trigger_old_capture_columns.count(node) > 0;
 
 	// set return_chunk boolean early because it needs uses update_is_del_and_insert logic
 	if (!node.returning_list.empty() || capture_old_rows) {
@@ -277,18 +255,20 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		auto returning_result = BindReturning(std::move(node.returning_list), table, node.table->alias,
 		                                      update_table_index, std::move(update_as_logicaloperator));
 		if (capture_old) {
-			// Expose the captured OLD physical columns as extra output columns of the base CTE, under reserved
-			// internal names, so the trigger's OLD transition alias can rename them. Public RETURNING (bound
-			// above) references only the NEW image, so its semantics are unchanged.
+			// Expose the captured OLD physical columns as extra output columns of the base CTE, under the reserved
+			// names computed once by trigger expansion (threaded via binder state), so the trigger's OLD transition
+			// alias can rename them. Public RETURNING (bound above) references only the NEW image, so its semantics
+			// are unchanged.
+			auto &old_capture_names = global_binder_state->trigger_old_capture_columns.at(node);
 			auto &proj = returning_result.plan->Cast<LogicalProjection>();
 			auto new_column_count = table.GetTypes().size();
 			idx_t physical_index = 0;
 			for (auto &column : table.GetColumns().Physical()) {
-				auto name = TriggerOldCaptureColumnName(table, physical_index);
+				auto &name = old_capture_names[physical_index];
 				proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-				    Identifier(name), column.Type(),
+				    name, column.Type(),
 				    ColumnBinding(update_table_index, ProjectionIndex(new_column_count + physical_index))));
-				returning_result.names.push_back(Identifier(name));
+				returning_result.names.push_back(name);
 				returning_result.types.push_back(column.Type());
 				physical_index++;
 			}
