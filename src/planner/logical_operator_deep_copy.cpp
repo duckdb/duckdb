@@ -1,6 +1,7 @@
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
@@ -214,6 +215,12 @@ void TableBindingReplacer::VisitOperator(LogicalOperator &op) {
 				col.binding.table_index = entry->second;
 			}
 		}
+		for (auto &binding : join.right_payload_binding_seeds) {
+			auto entry = table_idx_replacements.find(binding.table_index);
+			if (entry != table_idx_replacements.end()) {
+				binding.table_index = entry->second;
+			}
+		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
@@ -269,6 +276,17 @@ void TableBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) {
 			if (entry != parameter_data->end()) {
 				bound_parameter.ParameterDataMutable() = entry->second;
 			}
+		}
+	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+		auto &subquery = expr->Cast<BoundSubqueryExpression>();
+		for (auto &column : subquery.GetBinder()->correlated_columns) {
+			auto entry = table_idx_replacements.find(column.binding.table_index);
+			if (entry != table_idx_replacements.end()) {
+				column.binding.table_index = entry->second;
+			}
+		}
+		if (subquery.SubqueryMutable().plan) {
+			VisitOperator(*subquery.SubqueryMutable().plan);
 		}
 	}
 

@@ -74,8 +74,7 @@ private:
 	static void AddBindingReplacement(UnnestingState &state, ColumnBinding old_binding, ColumnBinding new_binding);
 	static void MergeBindingReplacements(UnnestingState &target, const UnnestingState &source);
 	static void RewriteOperatorBindings(LogicalOperator &op, const UnnestingState &state);
-	static UnnestingState RebaseOutputBindings(const vector<ColumnBinding> &original_bindings,
-	                                           const vector<ColumnBinding> &current_bindings, UnnestingState state);
+	static vector<ColumnBinding> GetRightPayloadBindings(LogicalDependentJoin &op);
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
 	                             bool include_names) const;
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
@@ -95,7 +94,8 @@ private:
 	UnnestingState PushDownChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                             vector<ColumnBinding> state, bool rewrite_parent = true, idx_t child_idx = 0);
 	UnnestingState FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, UnnestingState outer_state,
-	                                     const UnnestingState &right_state);
+	                                     const UnnestingState &right_state,
+	                                     vector<ColumnBinding> right_payload_bindings);
 	vector<ColumnBinding> AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left, LogicalJoin &join);
 	UnnestingState PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                             vector<ColumnBinding> state, bool correlated_left);

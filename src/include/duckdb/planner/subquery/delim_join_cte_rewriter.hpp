@@ -22,10 +22,10 @@ private:
 	explicit DelimJoinCTERewriter(Binder &binder);
 
 	void Rewrite(unique_ptr<LogicalOperator> &plan);
-	void RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
-	                             bool null_rejecting_filter_above = false, bool preserve_evidence_side = false);
-	void MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
-	                               bool null_rejecting_filter_above, bool preserve_evidence_side);
+	void RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, bool null_rejecting_filter_above = false,
+	                             bool preserve_evidence_side = false);
+	void MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, bool null_rejecting_filter_above,
+	                               bool preserve_evidence_side);
 
 private:
 	Binder &binder;

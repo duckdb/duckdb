@@ -87,11 +87,14 @@ static idx_t RewriteDelimScanReferences(unique_ptr<LogicalOperator> &op, TableIn
 	return rewritten_count;
 }
 
-static vector<ReplacementBinding> CreateBindingReplacements(const vector<ColumnBinding> &old_bindings,
-                                                            const vector<ColumnBinding> &new_bindings) {
+static vector<ReplacementBinding> CreatePositionalBindingReplacements(const vector<ColumnBinding> &old_bindings,
+                                                                      const vector<ColumnBinding> &new_bindings) {
+	if (old_bindings.size() != new_bindings.size()) {
+		throw InternalException("Delim join CTE rewrite changed child output arity from %d to %d", old_bindings.size(),
+		                        new_bindings.size());
+	}
 	vector<ReplacementBinding> result;
-	auto count = MinValue(old_bindings.size(), new_bindings.size());
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < old_bindings.size(); i++) {
 		if (old_bindings[i] != new_bindings[i] &&
 		    std::find(new_bindings.begin(), new_bindings.end(), old_bindings[i]) == new_bindings.end()) {
 			result.emplace_back(old_bindings[i], new_bindings[i]);
@@ -103,29 +106,17 @@ static vector<ReplacementBinding> CreateBindingReplacements(const vector<ColumnB
 static vector<ReplacementBinding> RewriteChangedChildBindings(LogicalOperator &op, LogicalOperator &child,
                                                               const vector<ColumnBinding> &old_child_bindings) {
 	auto new_child_bindings = child.GetColumnBindings();
-	auto replacements = CreateBindingReplacements(old_child_bindings, new_child_bindings);
+	auto replacements = CreatePositionalBindingReplacements(old_child_bindings, new_child_bindings);
 	if (replacements.empty()) {
 		return replacements;
 	}
-	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
-		auto &dependent_join = op.Cast<LogicalDependentJoin>();
-		for (auto &col : dependent_join.correlated_columns) {
-			for (const auto &replacement : replacements) {
-				if (col.binding == replacement.old_binding) {
-					col.binding = replacement.new_binding;
-					break;
-				}
-			}
-		}
-	}
-	ColumnBindingReplacer replacer;
+	CorrelatedColumnBindingReplacer replacer;
 	replacer.replacement_bindings = replacements;
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && op.children[0].get() == &child) {
 		replacer.stop_operator = child;
 		replacer.VisitOperator(op);
 	} else {
-		LogicalOperatorVisitor::EnumerateExpressions(
-		    op, [&](unique_ptr<Expression> *expr) { replacer.VisitExpression(expr); });
+		replacer.VisitOperatorBindings(op);
 	}
 	return replacements;
 }
@@ -607,7 +598,8 @@ static void ReplaceOperatorBindings(LogicalOperator &op, const vector<ColumnBind
 class GeneratedDedupRefEliminator {
 public:
 	GeneratedDedupRefEliminator(LogicalComparisonJoin &delim_join, TableIndex dedup_cte_index, idx_t dedup_ref_count,
-	                            LogicalOperator &rewrite_root, bool preserve_evidence_side);
+	                            LogicalOperator &rewrite_root, bool preserve_evidence_side,
+	                            vector<unique_ptr<Expression>> &projected_right_expressions);
 
 	idx_t Remove();
 
@@ -633,6 +625,10 @@ private:
 	bool PreserveFilterCrossProductAsSemi(unique_ptr<LogicalOperator> &filter_op);
 	bool RemoveJoin(unique_ptr<LogicalOperator> &join);
 	bool RemoveFilterCrossProduct(unique_ptr<LogicalOperator> &filter_op);
+	void ApplyBindingReplacements(ColumnBindingReplacer &replacer);
+	void ApplyExpressionReplacements(const vector<ColumnBinding> &bindings,
+	                                 const vector<unique_ptr<Expression>> &expressions,
+	                                 optional_ptr<LogicalOperator> stop_operator = nullptr);
 
 private:
 	LogicalComparisonJoin &delim_join;
@@ -640,13 +636,33 @@ private:
 	idx_t dedup_ref_count;
 	LogicalOperator &rewrite_root;
 	bool preserve_evidence_side;
+	vector<unique_ptr<Expression>> &projected_right_expressions;
 };
 
 GeneratedDedupRefEliminator::GeneratedDedupRefEliminator(LogicalComparisonJoin &delim_join, TableIndex dedup_cte_index,
                                                          idx_t dedup_ref_count, LogicalOperator &rewrite_root,
-                                                         bool preserve_evidence_side)
+                                                         bool preserve_evidence_side,
+                                                         vector<unique_ptr<Expression>> &projected_right_expressions)
     : delim_join(delim_join), dedup_cte_index(dedup_cte_index), dedup_ref_count(dedup_ref_count),
-      rewrite_root(rewrite_root), preserve_evidence_side(preserve_evidence_side) {
+      rewrite_root(rewrite_root), preserve_evidence_side(preserve_evidence_side),
+      projected_right_expressions(projected_right_expressions) {
+}
+
+void GeneratedDedupRefEliminator::ApplyBindingReplacements(ColumnBindingReplacer &replacer) {
+	replacer.VisitOperator(rewrite_root);
+	for (auto &expr : projected_right_expressions) {
+		replacer.VisitExpression(&expr);
+	}
+}
+
+void GeneratedDedupRefEliminator::ApplyExpressionReplacements(const vector<ColumnBinding> &bindings,
+                                                              const vector<unique_ptr<Expression>> &expressions,
+                                                              optional_ptr<LogicalOperator> stop_operator) {
+	ExpressionBindingReplacer replacer(bindings, expressions, stop_operator);
+	replacer.VisitOperator(rewrite_root);
+	for (auto &expr : projected_right_expressions) {
+		replacer.VisitExpression(&expr);
+	}
 }
 
 unique_ptr<GeneratedDedupRef> GeneratedDedupRefEliminator::GetGeneratedDedupRef(LogicalOperator &op,
@@ -1065,8 +1081,8 @@ bool GeneratedDedupRefEliminator::PreserveJoinAsSemi(unique_ptr<LogicalOperator>
 	comparison_join.ResolveOperatorTypes();
 
 	replacer.stop_operator = join.get();
-	replacer.VisitOperator(rewrite_root);
-	ReplaceOperatorBindings(rewrite_root, dedup_ref->output_bindings, generated_output_replacements, join.get());
+	ApplyBindingReplacements(replacer);
+	ApplyExpressionReplacements(dedup_ref->output_bindings, generated_output_replacements, join.get());
 	return true;
 }
 
@@ -1181,8 +1197,8 @@ bool GeneratedDedupRefEliminator::PreserveFilterCrossProductAsSemi(unique_ptr<Lo
 
 	filter_op = std::move(replacement_op);
 	replacer.stop_operator = filter_op.get();
-	replacer.VisitOperator(rewrite_root);
-	ReplaceOperatorBindings(rewrite_root, dedup_ref->output_bindings, generated_output_replacements, filter_op.get());
+	ApplyBindingReplacements(replacer);
+	ApplyExpressionReplacements(dedup_ref->output_bindings, generated_output_replacements, filter_op.get());
 	return true;
 }
 
@@ -1313,8 +1329,8 @@ bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join) 
 
 	join = std::move(replacement_op);
 
-	replacer.VisitOperator(rewrite_root);
-	ReplaceOperatorBindings(rewrite_root, dedup_ref->output_bindings, generated_output_replacements);
+	ApplyBindingReplacements(replacer);
+	ApplyExpressionReplacements(dedup_ref->output_bindings, generated_output_replacements);
 	return true;
 }
 
@@ -1430,7 +1446,7 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 
 	filter_op = std::move(replacement_op);
 
-	replacer.VisitOperator(rewrite_root);
+	ApplyBindingReplacements(replacer);
 	return true;
 }
 
@@ -2160,7 +2176,77 @@ DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
 	    config.options.disabled_optimizers.find(OptimizerType::DELIMINATOR) == config.options.disabled_optimizers.end();
 }
 
-void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
+static vector<unique_ptr<Expression>> GetProjectedRightExpressions(LogicalComparisonJoin &join) {
+	vector<unique_ptr<Expression>> result;
+	if (join.right_projection_map.empty()) {
+		return result;
+	}
+	join.children[1]->ResolveOperatorTypes();
+	auto right_bindings = join.children[1]->GetColumnBindings();
+	result.reserve(join.right_projection_map.size());
+	for (auto projection_index : join.right_projection_map) {
+		auto index = projection_index.GetIndex();
+		result.push_back(make_uniq<BoundColumnRefExpression>(join.children[1]->types[index], right_bindings[index]));
+	}
+	return result;
+}
+
+static void RestoreRightProjectionMap(Binder &binder, LogicalComparisonJoin &join,
+                                      vector<unique_ptr<Expression>> projected_right_expressions) {
+	if (projected_right_expressions.empty()) {
+		return;
+	}
+
+	auto right_bindings = join.children[1]->GetColumnBindings();
+	vector<optional_idx> output_indices;
+	output_indices.reserve(projected_right_expressions.size());
+	bool requires_projection = false;
+	for (auto &expr : projected_right_expressions) {
+		ColumnBinding binding;
+		if (GetBoundColumnRefBinding(*expr, binding)) {
+			auto binding_index = FindBindingIndex(right_bindings, binding);
+			if (binding_index.IsValid()) {
+				output_indices.push_back(binding_index);
+				continue;
+			}
+		}
+		output_indices.emplace_back();
+		requires_projection = true;
+	}
+
+	if (requires_projection) {
+		join.children[1]->ResolveOperatorTypes();
+		vector<unique_ptr<Expression>> expressions;
+		expressions.reserve(right_bindings.size() + projected_right_expressions.size());
+		for (idx_t i = 0; i < right_bindings.size(); i++) {
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(join.children[1]->types[i], right_bindings[i]));
+		}
+		for (idx_t i = 0; i < projected_right_expressions.size(); i++) {
+			if (output_indices[i].IsValid()) {
+				continue;
+			}
+			output_indices[i] = expressions.size();
+			expressions.push_back(std::move(projected_right_expressions[i]));
+		}
+
+		auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+		projection->children.push_back(std::move(join.children[1]));
+		auto projection_bindings = projection->GetColumnBindings();
+		ColumnBindingReplacer replacer;
+		replacer.AddReplacements(right_bindings, projection_bindings);
+		replacer.stop_operator = projection.get();
+		join.children[1] = std::move(projection);
+		replacer.VisitOperator(join);
+	}
+
+	join.right_projection_map.clear();
+	join.right_projection_map.reserve(output_indices.size());
+	for (auto output_index : output_indices) {
+		join.right_projection_map.emplace_back(output_index.GetIndex());
+	}
+}
+
+void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan,
                                                      bool null_rejecting_filter_above, bool preserve_evidence_side) {
 	auto &join = plan->Cast<LogicalComparisonJoin>();
 	if (join.delim_flipped) {
@@ -2172,11 +2258,13 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	auto dedup_cte_index = binder.GenerateTableIndex();
 	auto dedup_ref_count = RewriteDelimScanReferences(plan->children[1], dedup_cte_index);
 	if (cte_deliminator_enabled) {
+		auto projected_right_expressions = GetProjectedRightExpressions(join);
 		auto cte_deliminator_timer =
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
-		GeneratedDedupRefEliminator eliminator(join, dedup_cte_index, dedup_ref_count, rewrite_root,
-		                                       preserve_evidence_side);
+		GeneratedDedupRefEliminator eliminator(join, dedup_cte_index, dedup_ref_count, *plan, preserve_evidence_side,
+		                                       projected_right_expressions);
 		dedup_ref_count = eliminator.Remove();
+		RestoreRightProjectionMap(binder, join, std::move(projected_right_expressions));
 		if (SingleJoinRHSIsDeduplicated(join)) {
 			join.join_type = null_rejecting_filter_above ? JoinType::INNER : JoinType::LEFT;
 		}
@@ -2257,7 +2345,7 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	auto left_cte_ref = make_uniq<LogicalCTERef>(left_cte_ref_index, cte_index, left_types,
 	                                             GenerateCTEColumnNames(left_column_count, "__duckdb_delim_col_"));
 	auto new_left_bindings = left_cte_ref->GetColumnBindings();
-	auto binding_replacements = CreateBindingReplacements(cte_source_bindings, new_left_bindings);
+	auto binding_replacements = CreatePositionalBindingReplacements(cte_source_bindings, new_left_bindings);
 
 	plan->children[0] = std::move(left_cte_ref);
 	ColumnBindingReplacer replacer;
@@ -2296,8 +2384,8 @@ void DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator>
 	plan = std::move(cte);
 }
 
-void DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
-                                                   bool null_rejecting_filter_above, bool preserve_evidence_side) {
+void DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, bool null_rejecting_filter_above,
+                                                   bool preserve_evidence_side) {
 	for (auto &child : plan->children) {
 		auto old_child_bindings = child->GetColumnBindings();
 		bool child_null_rejecting_filter_above = false;
@@ -2309,11 +2397,11 @@ void DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &
 			child_null_rejecting_filter_above = FilterNullRejectsDelimJoinRHS(filter, delim_join);
 			child_preserve_evidence_side = FilterNegatesDelimJoinMarker(filter, delim_join);
 		}
-		RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above, child_preserve_evidence_side);
+		RewriteDelimJoinsToCTEs(child, child_null_rejecting_filter_above, child_preserve_evidence_side);
 		RewriteChangedChildBindings(*plan, *child, old_child_bindings);
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		MaterializeDelimJoinAsCTE(plan, rewrite_root, null_rejecting_filter_above, preserve_evidence_side);
+		MaterializeDelimJoinAsCTE(plan, null_rejecting_filter_above, preserve_evidence_side);
 	}
 }
 
@@ -2327,7 +2415,7 @@ void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
 	do {
 		filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);
 	} while (filters_pushed);
-	RewriteDelimJoinsToCTEs(plan, *plan);
+	RewriteDelimJoinsToCTEs(plan);
 	if (cte_deliminator_enabled) {
 		auto cte_deliminator_timer =
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);

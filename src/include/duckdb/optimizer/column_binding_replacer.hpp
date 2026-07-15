@@ -38,23 +38,13 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 	//! Update bindings owned by this operator without visiting its children
 	virtual void VisitOperatorBindings(LogicalOperator &op);
-	//! Visit an expression and update its column bindings
-	void VisitExpression(unique_ptr<Expression> *expression) override;
 	//! Add a binding replacement
 	void AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding);
-	//! Add a binding replacement and update the target type
-	void AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding, const LogicalType &new_type);
 	//! Add binding replacements by position
 	void AddReplacements(const vector<ColumnBinding> &old_bindings, const vector<ColumnBinding> &new_bindings);
-	//! Replace a binding using a replacement list
-	static bool ReplaceBinding(ColumnBinding &binding, const vector<ReplacementBinding> &replacement_bindings);
-	//! Replace bindings using a replacement list
-	static void ReplaceBindings(vector<ColumnBinding> &bindings,
-	                            const vector<ReplacementBinding> &replacement_bindings);
 
 protected:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 public:
 	//! Do not recurse further than this operator (optional)
@@ -67,7 +57,6 @@ public:
 //! Like ColumnBindingReplacer, but also updates correlated-column metadata and nested subquery plans.
 class CorrelatedColumnBindingReplacer : public ColumnBindingReplacer {
 public:
-	void VisitOperator(LogicalOperator &op) override;
 	void VisitOperatorBindings(LogicalOperator &op) override;
 
 protected:

@@ -26,6 +26,7 @@ class RecursiveDependentJoinPlanner : public LogicalOperatorVisitor {
 public:
 	static void Plan(Binder &binder, LogicalOperator &op);
 	static void PlanJoinConditionSubqueries(Binder &binder, unique_ptr<LogicalOperator> &op);
+	static bool CanRewritePairDependentJoinCondition(LogicalOperator &op);
 
 private:
 	explicit RecursiveDependentJoinPlanner(Binder &binder) : binder(binder) {

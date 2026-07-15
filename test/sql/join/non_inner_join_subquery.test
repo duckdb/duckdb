@@ -92,8 +92,23 @@ ORDER BY l.i, r.i NULLS LAST, r.j NULLS LAST;
 2	NULL	999
 3	NULL	999
 
-# An uncorrelated scalar subquery can be planned into either input. The join
-# predicate remains an outer join predicate.
+# Deferred join-condition subquery planning must propagate through the child
+# binders used for nested join trees.
+query IIII
+SELECT l.i, r.i, r.j, nested.i
+FROM non_inner_l l
+LEFT JOIN non_inner_r r ON EXISTS (
+	SELECT 1 FROM non_inner_s s WHERE s.i = l.i AND s.j * 10 = r.j
+)
+LEFT JOIN non_inner_s nested ON FALSE
+ORDER BY l.i, r.i NULLS LAST, r.j NULLS LAST;
+----
+1	1	100	NULL
+2	2	200	NULL
+3	NULL	NULL	NULL
+
+# An uncorrelated scalar subquery on the right-hand comparison key is planned
+# into the right input. The join predicate remains an outer join predicate.
 query III
 SELECT l.i, r.i, r.j
 FROM non_inner_l l

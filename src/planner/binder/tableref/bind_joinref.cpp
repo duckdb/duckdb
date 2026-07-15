@@ -156,6 +156,10 @@ BoundStatement Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
 	unnamed_subquery_index = parent_binder.unnamed_subquery_index;
 	auto result = Bind(ref);
 	parent_binder.unnamed_subquery_index = unnamed_subquery_index;
+	if (has_unplanned_dependent_joins) {
+		// The enclosing query block owns the final plan and must run deferred join-condition planning.
+		parent_binder.has_unplanned_dependent_joins = true;
+	}
 	return result;
 }
 

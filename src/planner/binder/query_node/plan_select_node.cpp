@@ -10,6 +10,7 @@
 #include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
@@ -237,6 +238,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		auto prune = make_uniq<LogicalProjection>(statement.prune_index, std::move(prune_expressions));
 		prune->AddChild(std::move(root));
 		root = std::move(prune);
+	}
+	if (has_unplanned_dependent_joins) {
+		RecursiveDependentJoinPlanner::Plan(*this, *root);
+		has_unplanned_dependent_joins = false;
 	}
 	return root;
 }

@@ -361,6 +361,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
+	auto has_join_condition_subquery = ref.condition && ref.condition->HasSubquery();
 	auto old_is_outside_flattened = is_outside_flattened;
 	// Plan laterals from outermost to innermost
 	if (ref.lateral) {
@@ -428,7 +429,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
 	}
-	RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(*this, result);
+	if (has_join_condition_subquery && ref.duplicate_eliminated_columns.empty() &&
+	    RecursiveDependentJoinPlanner::CanRewritePairDependentJoinCondition(*join)) {
+		// The SELECT list can bind additional columns from either join input. Delay rewriting until the query block is
+		// fully bound so pair-dependent rewrites capture the complete public output of both sides.
+		has_unplanned_dependent_joins = true;
+	} else {
+		RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(*this, result);
+	}
 	if (!ref.duplicate_eliminated_columns.empty()) {
 		if (result->type == LogicalOperatorType::LOGICAL_FILTER) {
 			join = result->children[0].get();

@@ -27,12 +27,8 @@ void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding
                                                              const ColumnBinding &target_binding) {
 	auto source_entry = correlated_aliases.find(source_binding);
 	D_ASSERT(source_entry != correlated_aliases.end());
-	auto existing = correlated_aliases.find(target_binding);
-	if (existing == correlated_aliases.end()) {
-		correlated_aliases.emplace(target_binding, source_entry->second);
-	} else {
-		D_ASSERT(existing->second == source_entry->second);
-	}
+	auto result = correlated_aliases.emplace(target_binding, source_entry->second);
+	D_ASSERT(result.second || result.first->second == source_entry->second);
 }
 
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {

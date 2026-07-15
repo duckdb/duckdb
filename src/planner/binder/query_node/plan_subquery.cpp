@@ -595,6 +595,7 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
                                                     CorrelatedColumns &correlated, JoinType join_type,
                                                     unique_ptr<Expression> condition) {
+	auto right_payload_binding_seeds = right->GetColumnBindings();
 	// scan the right operator for correlated columns
 	// correlated LATERAL JOIN
 	vector<JoinCondition> conditions;
@@ -627,6 +628,7 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	delim_join->is_lateral_join = true;
 	delim_join->arbitrary_expressions = std::move(non_comparison_conditions);
 	delim_join->conditions = std::move(comparison_conditions);
+	delim_join->right_payload_binding_seeds = std::move(right_payload_binding_seeds);
 	delim_join->AddChild(std::move(right));
 	return std::move(delim_join);
 }

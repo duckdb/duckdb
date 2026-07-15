@@ -1,5 +1,3 @@
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/constants.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -8,6 +6,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -17,7 +16,6 @@
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -44,54 +42,6 @@ static vector<Identifier> GenerateInternalColumnNames(idx_t column_count, const 
 	return result;
 }
 
-static bool IsGeneratedColumn(LogicalGet &get, idx_t column_index) {
-	auto table = get.GetTable();
-	if (!table) {
-		return false;
-	}
-	return table->GetColumn(LogicalIndex(column_index)).Generated();
-}
-
-static bool IsUserQueryableVirtualColumn(column_t column_index) {
-	return column_index != COLUMN_IDENTIFIER_EMPTY && column_index != COLUMN_IDENTIFIER_ROW_NUMBER;
-}
-
-static void AddPayloadColumn(LogicalGet &get, column_t column_index) {
-	if (!get.TryGetProjectionIndex(column_index).IsValid()) {
-		get.AddColumnId(column_index);
-	}
-}
-
-static void ExposeLogicalGetJoinSidePayload(LogicalGet &get) {
-	for (idx_t column_index = 0; column_index < get.returned_types.size(); column_index++) {
-		if (IsGeneratedColumn(get, column_index)) {
-			continue;
-		}
-		AddPayloadColumn(get, NumericCast<column_t>(column_index));
-	}
-
-	vector<column_t> virtual_column_ids;
-	virtual_column_ids.reserve(get.virtual_columns.size());
-	for (auto &entry : get.virtual_columns) {
-		if (IsUserQueryableVirtualColumn(entry.first)) {
-			virtual_column_ids.push_back(entry.first);
-		}
-	}
-	std::sort(virtual_column_ids.begin(), virtual_column_ids.end());
-	for (auto virtual_column_id : virtual_column_ids) {
-		AddPayloadColumn(get, virtual_column_id);
-	}
-}
-
-static void ExposeJoinSidePayload(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_GET) {
-		ExposeLogicalGetJoinSidePayload(op.Cast<LogicalGet>());
-	}
-	for (auto &child : op.children) {
-		ExposeJoinSidePayload(*child);
-	}
-}
-
 static void AddPairDependentFilterToLateralChild(unique_ptr<LogicalOperator> &lateral_child,
                                                  unique_ptr<Expression> condition) {
 	auto filter = make_uniq<LogicalFilter>(std::move(condition));
@@ -115,14 +65,10 @@ unique_ptr<LogicalOperator> RecursiveDependentJoinPlanner::PlanPairDependentLate
 	                                                                  correlated_columns)) {
 		throw InternalException("Pair-dependent join condition did not produce lateral correlations");
 	}
-	auto right_payload_bindings = right->GetColumnBindings();
 	AddPairDependentFilterToLateralChild(right, std::move(condition));
 	auto planned = binder.PlanLateralJoin(std::move(left), std::move(right), correlated_columns, join_type, nullptr);
 	if (!planned) {
 		throw InternalException("Failed to plan pair-dependent join condition");
-	}
-	if (join_type == JoinType::LEFT) {
-		planned->Cast<LogicalDependentJoin>().right_payload_bindings = std::move(right_payload_bindings);
 	}
 	return planned;
 }
@@ -303,10 +249,6 @@ static void AddNotDistinctConditions(vector<JoinCondition> &conditions, const Bo
 
 static bool PreparePairDependentJoinSide(Binder &binder, unique_ptr<LogicalOperator> &side, PairDependentJoinSide &info,
                                          const string &name_prefix) {
-	// The generated CTE replaces this whole join side. Expose the full public
-	// side payload before capturing the layout, otherwise the reconstructed
-	// FULL OUTER join can lose columns that were not needed by the predicate.
-	ExposeJoinSidePayload(*side);
 	side->ResolveOperatorTypes();
 
 	info.bindings = side->GetColumnBindings();
@@ -637,20 +579,32 @@ unique_ptr<LogicalOperator> PairDependentFullOuterJoinBuilder::Build() {
 	return WrapCTEs(CreateFullJoin());
 }
 
+static bool HasPairDependentSubquery(Expression &expression, const unordered_set<TableIndex> &left_bindings,
+                                     const unordered_set<TableIndex> &right_bindings) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY &&
+	    JoinSide::GetCurrentJoinSide(expression, left_bindings, right_bindings) == JoinSide::BOTH) {
+		return true;
+	}
+	bool result = false;
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
+		result = result || HasPairDependentSubquery(child, left_bindings, right_bindings);
+	});
+	return result;
+}
+
 static bool HasPairDependentSubquery(JoinCondition &condition, const unordered_set<TableIndex> &left_bindings,
                                      const unordered_set<TableIndex> &right_bindings) {
 	if (condition.IsComparison()) {
-		return JoinSide::HasPairDependentSubquery(condition.GetLHS(), left_bindings, right_bindings) ||
-		       JoinSide::HasPairDependentSubquery(condition.GetRHS(), left_bindings, right_bindings);
+		return HasPairDependentSubquery(condition.GetLHS(), left_bindings, right_bindings) ||
+		       HasPairDependentSubquery(condition.GetRHS(), left_bindings, right_bindings);
 	}
-	return JoinSide::HasPairDependentSubquery(condition.GetJoinExpression(), left_bindings, right_bindings);
+	return HasPairDependentSubquery(condition.GetJoinExpression(), left_bindings, right_bindings);
 }
 
 static bool HasPairDependentSubquery(LogicalOperator &op, const unordered_set<TableIndex> &left_bindings,
                                      const unordered_set<TableIndex> &right_bindings) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		for (auto &condition : join.conditions) {
 			if (HasPairDependentSubquery(condition, left_bindings, right_bindings)) {
@@ -660,16 +614,43 @@ static bool HasPairDependentSubquery(LogicalOperator &op, const unordered_set<Ta
 		return false;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		return JoinSide::HasPairDependentSubquery(*op.Cast<LogicalAnyJoin>().condition, left_bindings, right_bindings);
+		return HasPairDependentSubquery(*op.Cast<LogicalAnyJoin>().condition, left_bindings, right_bindings);
 	default:
 		return false;
 	}
 }
 
+static bool SupportsPairDependentRewrite(JoinType join_type) {
+	switch (join_type) {
+	case JoinType::LEFT:
+	case JoinType::RIGHT:
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+	case JoinType::OUTER:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool RecursiveDependentJoinPlanner::CanRewritePairDependentJoinCondition(LogicalOperator &op) {
+	if (op.children.size() != 2 ||
+	    (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN)) {
+		return false;
+	}
+	if (!SupportsPairDependentRewrite(op.Cast<LogicalJoin>().join_type)) {
+		return false;
+	}
+	unordered_set<TableIndex> left_bindings;
+	unordered_set<TableIndex> right_bindings;
+	LogicalJoin::GetTableReferences(*op.children[0], left_bindings);
+	LogicalJoin::GetTableReferences(*op.children[1], right_bindings);
+	return HasPairDependentSubquery(op, left_bindings, right_bindings);
+}
+
 static unique_ptr<Expression> MoveJoinCondition(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		return JoinCondition::CreateExpression(std::move(op.Cast<LogicalComparisonJoin>().conditions));
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		return std::move(op.Cast<LogicalAnyJoin>().condition);
@@ -680,10 +661,7 @@ static unique_ptr<Expression> MoveJoinCondition(LogicalOperator &op) {
 
 bool RecursiveDependentJoinPlanner::TryRewritePairDependentJoinCondition(Binder &binder,
                                                                          unique_ptr<LogicalOperator> &op) {
-	if (!op || op->children.size() != 2 || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-		return false;
-	}
-	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN && op->type != LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	if (!op || !CanRewritePairDependentJoinCondition(*op)) {
 		return false;
 	}
 
@@ -692,25 +670,12 @@ bool RecursiveDependentJoinPlanner::TryRewritePairDependentJoinCondition(Binder 
 	unordered_set<TableIndex> right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
-	if (!HasPairDependentSubquery(*op, left_bindings, right_bindings)) {
-		return false;
-	}
-
-	switch (join.join_type) {
-	case JoinType::LEFT:
-	case JoinType::RIGHT:
-	case JoinType::SEMI:
-	case JoinType::ANTI:
-		break;
-	case JoinType::OUTER:
+	if (join.join_type == JoinType::OUTER) {
 		op->children[0]->ResolveOperatorTypes();
 		op->children[1]->ResolveOperatorTypes();
 		if (op->children[0]->GetColumnBindings().empty() || op->children[1]->GetColumnBindings().empty()) {
 			return false;
 		}
-		break;
-	default:
-		return false;
 	}
 
 	auto condition = MoveJoinCondition(*op);
