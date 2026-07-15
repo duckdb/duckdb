@@ -5,6 +5,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -270,6 +271,10 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 			name += to_string(i + 1);
 		}
 		auto &input_val = input.inputs[i];
+		if (TypeVisitor::Contains(input_val.type(), LogicalTypeId::VARIANT)) {
+			throw NotImplementedException("Unimplemented type \"%s\" for test_vector_types");
+		}
+
 		names.emplace_back(name);
 		return_types.push_back(input_val.type());
 		result->types.push_back(input_val.type());
