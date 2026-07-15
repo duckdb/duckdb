@@ -267,10 +267,10 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			auto val = Load<int64_t>(stats_data);
 			switch (schema_ele.type_info) {
 			case ParquetExtraTypeInfo::UNIT_MS:
-				timestamp_value = Timestamp::FromEpochMs(val);
+				timestamp_value = ParquetTimestampMsToTimestamp(val);
 				break;
 			case ParquetExtraTypeInfo::UNIT_NS:
-				timestamp_value = Timestamp::FromEpochNanoSeconds(val);
+				timestamp_value = ParquetTimestampNsToTimestamp(val);
 				break;
 			case ParquetExtraTypeInfo::UNIT_MICROS:
 			default:
