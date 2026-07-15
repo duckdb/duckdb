@@ -1143,8 +1143,8 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 }
 
 void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state) {
-	annotated_unique_lock<annotated_mutex> lock(append_lock);
-	append_blocker_cv.wait(lock, [this]() DUCKDB_REQUIRES(append_lock) { return active_index_builds == 0; });
+	unique_lock<mutex> lock(append_lock);
+	append_blocker_cv.wait(lock, [this]() { return active_index_builds == 0; });
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to insert into table \"%s\" but it has been %s by "
 		                           "a different transaction",
@@ -1165,7 +1165,7 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 }
 
 DataTable::IndexBuildAppendGuard::IndexBuildAppendGuard(DataTable &tbl) : table(&tbl) {
-	const annotated_lock_guard<annotated_mutex> lock(tbl.append_lock);
+	const lock_guard<mutex> lock(tbl.append_lock);
 	if (!tbl.IsMainTable()) {
 		table = nullptr; // nothing to unblock in the destructor
 		throw TransactionException("Transaction conflict: attempting to add an index to table \"%s\" but it has been "
@@ -1188,7 +1188,7 @@ DataTable::IndexBuildAppendGuard::~IndexBuildAppendGuard() {
 	if (!table) {
 		return;
 	}
-	const annotated_lock_guard<annotated_mutex> lk(table->append_lock);
+	const lock_guard<mutex> lk(table->append_lock);
 	D_ASSERT(table->active_index_builds > 0);
 	if (--table->active_index_builds == 0) {
 		table->append_blocker_cv.notify_all();

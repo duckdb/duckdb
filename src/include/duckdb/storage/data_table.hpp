@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -181,10 +180,10 @@ public:
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	//! Fetches an append lock
-	void AppendLock(DuckTransaction &transaction, TableAppendState &state) DUCKDB_EXCLUDES(append_lock);
+	void AppendLock(DuckTransaction &transaction, TableAppendState &state);
 
 	//! Block appends while creating a standalone index over the table.
-	IndexBuildAppendGuard LockAppendsForCreateIndex() DUCKDB_EXCLUDES(append_lock);
+	IndexBuildAppendGuard LockAppendsForCreateIndex();
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(DuckTransaction &transaction, TableAppendState &state);
 	//! Append a chunk to the table using the AppendState obtained from InitializeAppend
@@ -346,11 +345,11 @@ private:
 	//! The set of physical columns stored by this DataTable
 	vector<ColumnDefinition> column_definitions;
 	//! Lock for appending entries to the table
-	annotated_mutex append_lock;
+	mutex append_lock;
 	//! Notifies when all index builds complete
 	std::condition_variable append_blocker_cv;
 	//! The number of active index builds on the table
-	idx_t active_index_builds DUCKDB_GUARDED_BY(append_lock) = 0;
+	idx_t active_index_builds = 0;
 	//! The row groups of the table
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The version of the data table
