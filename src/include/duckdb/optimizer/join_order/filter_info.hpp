@@ -39,6 +39,9 @@ public:
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
 	bool from_residual_predicate = false;
+	//! This filter originated above an outer join and references its nullable side.
+	//! It must remain a filter after that join instead of becoming another join condition.
+	bool must_remain_post_join = false;
 	//! Index of the equivalence group for INNER equality/IS NOT DISTINCT FROM join filters.
 	//! All filters transitively connected by equality (a=b, b=c -> a=c all share the same index).
 	//! Used by cardinality estimation to skip redundant transitive conditions.

@@ -212,6 +212,9 @@ static bool RelationSetsEqual(JoinRelationSet &left, JoinRelationSet &right) {
 void QueryGraphManager::BindFilterEndpoints() {
 	for (auto &filter_info : filters_and_bindings) {
 		auto &filter = filter_info->filter;
+		if (filter_info->must_remain_post_join) {
+			continue;
+		}
 		// now check if it can be used as a join predicate
 		if (BoundComparisonExpression::IsComparison(*filter)) {
 			auto &comparison = filter->Cast<BoundFunctionExpression>();

@@ -47,6 +47,27 @@ order by all;
 2	0	NULL	NULL
 2	1	NULL	NULL
 
+# A null-aware comparison that references both sides must also remain above the LEFT join.
+# Turning it into an additional join condition would preserve rows that should be filtered out.
+statement ok
+create table lj_indistinct_l(id integer, v integer);
+
+statement ok
+insert into lj_indistinct_l values (1, NULL), (2, 2), (3, 3);
+
+statement ok
+create table lj_indistinct_r(id integer, v integer);
+
+statement ok
+insert into lj_indistinct_r values (2, 2), (3, 99), (4, NULL);
+
+query I
+select count(*)
+from lj_indistinct_l l
+left join lj_indistinct_r r on l.id = r.id
+where l.v is not distinct from r.v;
+----
+2
 
 # filters (a ⟕ (b ⨝ c))
 query III

@@ -178,6 +178,7 @@ static void PinFilterAfterLeftJoin(FilterInfo &filter, JoinRelationSet &nullable
                                    JoinRelationSetManager &set_manager) {
 	if (RelationSetsIntersect(filter.set.get(), nullable_set)) {
 		filter.set = set_manager.Union(filter.set.get(), left_join_set);
+		filter.must_remain_post_join = true;
 	}
 	if (filter.left_set && RelationSetsIntersect(*filter.left_set, nullable_set)) {
 		filter.left_set = &set_manager.Union(*filter.left_set, left_join_set);
