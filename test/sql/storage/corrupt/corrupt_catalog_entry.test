@@ -2,6 +2,8 @@
 # description: Reject checkpoint catalog entries without create info
 # group: [corrupt]
 
+require vector_size 2048
+
 unzip data/storage/corrupt/duckdb_fuzzer_4671.db.gz {TEST_DIR}/duckdb_fuzzer_4671.db
 
 # Regression test for duckdb-fuzzer issue #4671
