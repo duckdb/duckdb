@@ -75,6 +75,9 @@ static bool ConvertToJsonPointer(const string_t &path_str, yyjson_mut_doc *doc, 
 					i++; // Skip '-'
 					bool has_digits = false;
 					while (i < len && ptr[i] >= '0' && ptr[i] <= '9') {
+						if (offset > (NumericLimits<idx_t>::Maximum() - 9) / 10) {
+							return false; // The offset would overflow, it cannot be a valid index
+						}
 						offset = offset * 10 + static_cast<idx_t>(ptr[i] - '0');
 						has_digits = true;
 						i++;
