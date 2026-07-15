@@ -4,9 +4,6 @@
 #include "duckdb/storage/compression/dict_fsst/decompression.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/table_filter_state.hpp"
 
 /*
 Data layout per segment:
@@ -179,34 +176,10 @@ void DictFSSTSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
-// DICT_FSST applies the real filter inside DictFSSTFilter so it can filter on dictionary entries and handle
-// the synthetic NULL dictionary slot. Afterwards, StandardColumnData::Filter can still pass the same filter
-// state to the validity column filter, so replace that state with a constant-true expression once the real
-// filter has been applied.
-static void ReplaceValidityFilterWithNoop(CompressedStringScanState &scan_state, TableFilterState &filter_state) {
-	if (scan_state.noop_validity_filter) {
-		return;
-	}
-	// DICT_FSST already applies the filter to both values and NULLs.
-	auto &expression_state = filter_state.Cast<ExpressionFilterState>();
-	scan_state.noop_validity_filter =
-	    make_uniq<ExpressionFilter>(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
-	auto validity_state = TableFilterState::Initialize(expression_state.GetContext(), *scan_state.noop_validity_filter);
-	auto &validity_expression_state = validity_state->Cast<ExpressionFilterState>();
-	expression_state.executor = std::move(validity_expression_state.executor);
-	expression_state.fast_executor = std::move(validity_expression_state.fast_executor);
-}
-
 static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                            SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,
                            TableFilterState &filter_state) {
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
-	if (!scan_state.dictionary_filter_state) {
-		// Keep the real filter state before replacing the original with a noop.
-		auto &expression_state = filter_state.Cast<ExpressionFilterState>();
-		scan_state.dictionary_filter_state = TableFilterState::Initialize(expression_state.GetContext(), filter);
-	}
-	auto &dictionary_filter_state = *scan_state.dictionary_filter_state;
 	auto start = state.GetPositionInSegment();
 	if (scan_state.AllowDictionaryScan(vector_count)) {
 		// only pushdown filters on dictionaries
@@ -220,7 +193,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 			Vector dict_data(scan_state.dictionary->data, /*offset=*/1, scan_state.dict_count);
 			SelectionVector dict_sel;
 			idx_t filter_count = non_null_count;
-			ColumnSegment::FilterSelection(dict_sel, dict_data, dictionary_filter_state, non_null_count, filter_count);
+			ColumnSegment::FilterSelection(dict_sel, dict_data, filter_state, non_null_count, filter_count);
 
 			// now set all matching tuples to true
 			for (idx_t i = 0; i < filter_count; i++) {
@@ -240,7 +213,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 				Vector null_data(scan_state.dictionary->data, /*offset=*/0, /*end=*/1);
 				SelectionVector null_sel;
 				idx_t null_filter_count = 1;
-				ColumnSegment::FilterSelection(null_sel, null_data, dictionary_filter_state, 1, null_filter_count);
+				ColumnSegment::FilterSelection(null_sel, null_data, filter_state, 1, null_filter_count);
 				scan_state.filter_result[0] = null_filter_count == 1;
 				scan_state.null_filter_result_initialized = true;
 			}
@@ -257,13 +230,11 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		sel_count = approved_tuple_count;
 
 		result.Dictionary(scan_state.dictionary, dict_sel, vector_count);
-		ReplaceValidityFilterWithNoop(scan_state, filter_state);
 		return;
 	}
 	// fallback: scan + filter
 	DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
-	ColumnSegment::FilterSelection(sel, result, dictionary_filter_state, vector_count, sel_count);
-	ReplaceValidityFilterWithNoop(scan_state, filter_state);
+	ColumnSegment::FilterSelection(sel, result, filter_state, vector_count, sel_count);
 }
 
 } // namespace dict_fsst

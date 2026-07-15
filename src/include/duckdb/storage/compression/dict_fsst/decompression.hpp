@@ -4,10 +4,6 @@
 
 namespace duckdb {
 
-// Forward declarations.
-struct TableFilterState;
-class TableFilter;
-
 namespace dict_fsst {
 
 //===--------------------------------------------------------------------===//
@@ -69,8 +65,6 @@ public:
 
 	unsafe_unique_array<bool> filter_result;
 	bool null_filter_result_initialized = false;
-	unique_ptr<TableFilterState> dictionary_filter_state;
-	unique_ptr<TableFilter> noop_validity_filter;
 };
 
 } // namespace dict_fsst
