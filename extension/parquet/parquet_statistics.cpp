@@ -22,6 +22,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "reader/uuid_column_reader.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "column_reader.hpp"
@@ -670,18 +671,39 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	return row_group_stats;
 }
 
+static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const Expression &expr) {
+	if (!BoundComparisonExpression::IsComparison(expr)) {
+		return nullptr;
+	}
+	auto &comp = expr.Cast<BoundFunctionExpression>();
+	if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+		return nullptr;
+	}
+	auto &left = BoundComparisonExpression::Left(comp);
+	auto &right = BoundComparisonExpression::Right(comp);
+	optional_ptr<const Expression> column;
+	optional_ptr<const BoundConstantExpression> constant;
+	if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		column = left;
+		constant = right.Cast<BoundConstantExpression>();
+	} else if (right.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	           left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		column = right;
+		constant = left.Cast<BoundConstantExpression>();
+	} else {
+		return nullptr;
+	}
+	if (column->Cast<BoundReferenceExpression>().Index() != 0 || constant->GetValue().IsNull() ||
+	    column->GetReturnType() != constant->GetValue().type()) {
+		return nullptr;
+	}
+	return constant;
+}
+
 static bool HasFilterConstants(const Expression &expr) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
-		auto &comp = expr.Cast<BoundFunctionExpression>();
-		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
-			return false;
-		}
-		auto &right = BoundComparisonExpression::Right(comp);
-		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			return false;
-		}
-		auto &constant = right.Cast<BoundConstantExpression>();
-		return !constant.GetValue().IsNull();
+		return GetBloomFilterConstant(expr) != nullptr;
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
@@ -732,8 +754,8 @@ static uint64_t ValueXXH64(const Value &constant) {
 	case PhysicalType::DOUBLE:
 		return ValueXH64FixedWidth<double>(constant);
 	case PhysicalType::VARCHAR: {
-		auto val = constant.GetValue<string>();
-		return duckdb_zstd::XXH64(val.c_str(), val.length(), 0);
+		auto &val = StringValue::Get(constant);
+		return duckdb_zstd::XXH64(val.data(), val.size(), 0);
 	}
 	default:
 		return 0;
@@ -742,17 +764,11 @@ static uint64_t ValueXXH64(const Value &constant) {
 
 static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_filter) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
-		auto &comp = expr.Cast<BoundFunctionExpression>();
-		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+		auto constant = GetBloomFilterConstant(expr);
+		if (!constant) {
 			return false;
 		}
-		auto &right = BoundComparisonExpression::Right(comp);
-		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			return false;
-		}
-		auto &constant = right.Cast<BoundConstantExpression>();
-		D_ASSERT(!constant.GetValue().IsNull());
-		auto hash = ValueXXH64(constant.GetValue());
+		auto hash = ValueXXH64(constant->GetValue());
 		return hash > 0 && !bloom_filter.FilterCheck(hash);
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
