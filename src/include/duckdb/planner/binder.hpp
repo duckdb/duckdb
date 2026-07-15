@@ -52,6 +52,7 @@ class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
 class LogicalGet;
+class LogicalUpdate;
 class LogicalVacuum;
 
 class ColumnList;
@@ -232,6 +233,10 @@ public:
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
+
+	//! Reserved internal column name for a captured OLD physical column in a trigger base UPDATE CTE. The name
+	//! is derived from the table so it cannot collide with any real column name (see the .cpp for details).
+	static string TriggerOldCaptureColumnName(const TableCatalogEntry &table, idx_t physical_index);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
@@ -451,6 +456,9 @@ private:
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
 	void BindDropTrigger(DropStatement &stmt, StatementProperties &properties);
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
+	//! Append references to the scanned pre-update (OLD) value of every physical column, in table order, to the
+	//! UPDATE child projection (before rowid). Records the input-chunk offset of the OLD block on the update.
+	void BindOldRowCapture(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update);
 	//! Build a mapping from storage column index to scan chunk index for RETURNING.
 	//! Ensures all physical columns are present in the scan.
 	//! return_columns[storage_idx] = scan_chunk_idx

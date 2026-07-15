@@ -909,6 +909,8 @@ void LogicalUpdate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(204, "columns", columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(205, "bound_defaults", bound_defaults);
 	serializer.WritePropertyWithDefault<bool>(206, "update_is_del_and_insert", update_is_del_and_insert);
+	serializer.WritePropertyWithDefault<bool>(207, "capture_old_rows", capture_old_rows, false);
+	serializer.WritePropertyWithDefault<idx_t>(208, "old_row_offset", old_row_offset, 0);
 }
 
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserializer) {
@@ -920,6 +922,8 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(204, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(205, "bound_defaults", result->bound_defaults);
 	deserializer.ReadPropertyWithDefault<bool>(206, "update_is_del_and_insert", result->update_is_del_and_insert);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "capture_old_rows", result->capture_old_rows, false);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(208, "old_row_offset", result->old_row_offset, 0);
 	return std::move(result);
 }
 

@@ -231,6 +231,12 @@
         "name": "prioritize_table_when_binding",
         "type": "bool",
         "default": "false"
+      },
+      {
+        "id": 205,
+        "name": "capture_old_rows",
+        "type": "bool",
+        "default": "false"
       }
     ]
   },

@@ -226,6 +226,7 @@ void UpdateQueryNode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "returning_list", returning_list);
 	serializer.WritePropertyWithDefault<unique_ptr<UpdateSetInfo>>(203, "set_info", set_info);
 	serializer.WritePropertyWithDefault<bool>(204, "prioritize_table_when_binding", prioritize_table_when_binding, false);
+	serializer.WritePropertyWithDefault<bool>(205, "capture_old_rows", capture_old_rows, false);
 }
 
 unique_ptr<QueryNode> UpdateQueryNode::Deserialize(Deserializer &deserializer) {
@@ -235,6 +236,7 @@ unique_ptr<QueryNode> UpdateQueryNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "returning_list", result->returning_list);
 	deserializer.ReadPropertyWithDefault<unique_ptr<UpdateSetInfo>>(203, "set_info", result->set_info);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(204, "prioritize_table_when_binding", result->prioritize_table_when_binding, false);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(205, "capture_old_rows", result->capture_old_rows, false);
 	return std::move(result);
 }
 

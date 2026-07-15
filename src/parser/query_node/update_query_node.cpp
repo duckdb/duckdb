@@ -65,6 +65,9 @@ bool UpdateQueryNode::Equals(const QueryNode *other_p) const {
 	if (prioritize_table_when_binding != other.prioritize_table_when_binding) {
 		return false;
 	}
+	if (capture_old_rows != other.capture_old_rows) {
+		return false;
+	}
 	return true;
 }
 
@@ -79,6 +82,7 @@ unique_ptr<QueryNode> UpdateQueryNode::Copy() const {
 	}
 	result->set_info = set_info->Copy();
 	result->prioritize_table_when_binding = prioritize_table_when_binding;
+	result->capture_old_rows = capture_old_rows;
 	CopyProperties(*result);
 	return std::move(result);
 }
