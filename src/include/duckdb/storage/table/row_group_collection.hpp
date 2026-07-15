@@ -44,7 +44,7 @@ class DataTable;
 class DuckTableEntry;
 class RowGroupIterationHelper;
 class TableScanState;
-class ART;
+class BoundIndex;
 
 //! How checkpoint vacuum handles table indexes when rowids may change.
 enum class VacuumIndexStrategy : uint8_t {
@@ -54,7 +54,7 @@ enum class VacuumIndexStrategy : uint8_t {
 	NO_INDEXES,
 	//! Rebuild all indexes after vacuum.
 	REBUILD,
-	//! Incrementally remap affected ART rowids.
+	//! Incrementally remap affected index rowids.
 	REMAP
 };
 
@@ -145,8 +145,9 @@ public:
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
 	//! Decides how vacuum handles this table's indexes.
-	VacuumIndexStrategy GetVacuumIndexStrategy(AttachedDatabase &attached,
-	                                           optional_ptr<vector<reference<ART>>> remap_indexes = nullptr) const;
+	VacuumIndexStrategy
+	GetVacuumIndexStrategy(AttachedDatabase &attached,
+	                       optional_ptr<vector<reference<BoundIndex>>> remap_indexes = nullptr) const;
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
 	                           optional_idx checkpoint_row_group_count);

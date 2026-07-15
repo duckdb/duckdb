@@ -45,9 +45,9 @@ static bool CanRebuildExistingIndexesAfterVacuum(DataTableInfo &info, AttachedDa
 }
 
 //! Returns true if checkpoint vacuum can incrementally remap every index: rowid gaps are persistable and
-//! every index is a bound ART without legacy-encoded geometry keys. If set, remap_indexes is filled with the ARTs.
+//! every index is a bound ART without legacy-encoded geometry keys. If set, remap_indexes is filled with the indexes.
 static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached,
-                           optional_ptr<vector<reference<ART>>> remap_indexes) {
+                           optional_ptr<vector<reference<BoundIndex>>> remap_indexes) {
 	if (remap_indexes) {
 		remap_indexes->clear();
 	}
@@ -81,7 +81,7 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 
 VacuumIndexStrategy
 RowGroupCollection::GetVacuumIndexStrategy(AttachedDatabase &attached,
-                                           optional_ptr<vector<reference<ART>>> remap_indexes) const {
+                                           optional_ptr<vector<reference<BoundIndex>>> remap_indexes) const {
 	if (CanVacuumRemap(*info, attached, remap_indexes)) {
 		return VacuumIndexStrategy::REMAP;
 	}
@@ -1342,12 +1342,12 @@ private:
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-//! Per-task remap execution: buffers the shifted rows of a vacuum merge, then applies them to each ART.
+//! Per-task remap execution: buffers the shifted rows of a vacuum merge, then applies them to each index.
 //! The buffer holds the indexed key columns in the sorted canonical order of
 //! TableIndexList::InitializeIndexChunk, followed by the old and new rowid.
 class VacuumIndexRemapper {
 public:
-	VacuumIndexRemapper(const vector<reference<ART>> &indexes, RowGroupCollection &collection)
+	VacuumIndexRemapper(const vector<reference<BoundIndex>> &indexes, RowGroupCollection &collection)
 	    : indexes(indexes), table_types(collection.GetTypes()) {
 		DataChunk index_chunk;
 		TableIndexList::InitializeIndexChunk(index_chunk, table_types, mapped_column_ids, collection.GetTableInfo());
@@ -1382,7 +1382,7 @@ public:
 		return append_chunk;
 	}
 
-	//! Apply the buffered remaps to every ART.
+	//! Apply the buffered remaps to every index.
 	void Apply() {
 		if (buffer->Count() == 0) {
 			return;
@@ -1401,17 +1401,17 @@ public:
 			}
 		};
 
-		for (auto &art_ref : indexes) {
-			auto &art = art_ref.get();
+		for (auto &index_ref : indexes) {
+			auto &index = index_ref.get();
 			IndexLock index_lock;
-			art.InitializeLock(index_lock);
+			index.InitializeLock(index_lock);
 
 			// Delete old rowids first to avoid same-key rowid collisions within the task.
 			ColumnDataScanState scan_state;
 			buffer->InitializeScan(scan_state);
 			while (buffer->Scan(scan_state, scan_chunk)) {
 				reference_table_chunk();
-				art.Delete(index_lock, table_chunk, scan_chunk.data[old_rowid_idx]);
+				index.Delete(index_lock, table_chunk, scan_chunk.data[old_rowid_idx]);
 			}
 
 			// Remapping must not re-run uniqueness checks for already-validated rows.
@@ -1419,7 +1419,7 @@ public:
 			while (buffer->Scan(scan_state, scan_chunk)) {
 				reference_table_chunk();
 				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
-				auto error = art.Append(index_lock, table_chunk, scan_chunk.data[new_rowid_idx], append_info);
+				auto error = index.Append(index_lock, table_chunk, scan_chunk.data[new_rowid_idx], append_info);
 				if (error.HasError()) {
 					error.Throw();
 				}
@@ -1432,20 +1432,14 @@ private:
 		const auto count = scan_chunk.size();
 		const auto rowid_column_index = table_types.size();
 
-		UnifiedVectorFormat old_rowid_data;
-		scan_chunk.data[rowid_column_index].ToUnifiedFormat(old_rowid_data);
-		auto old_rowids = UnifiedVectorFormat::GetData<row_t>(old_rowid_data);
-
 		SelectionVector shifted_sel(STANDARD_VECTOR_SIZE);
 		idx_t shifted_count = 0;
-		for (idx_t i = 0; i < count; i++) {
-			auto source_idx = old_rowid_data.sel->get_index(i);
-			auto old_rowid = old_rowids[source_idx];
-			auto new_rowid = UnsafeNumericCast<row_t>(new_rowid_start + i);
-			if (old_rowid == new_rowid) {
+		for (auto entry : scan_chunk.data[rowid_column_index].Values<row_t>()) {
+			auto new_rowid = UnsafeNumericCast<row_t>(new_rowid_start + entry.GetIndex());
+			if (entry.GetValue() == new_rowid) {
 				continue;
 			}
-			shifted_sel.set_index(shifted_count++, i);
+			shifted_sel.set_index(shifted_count++, entry.GetIndex());
 		}
 		if (shifted_count == 0) {
 			return;
@@ -1463,8 +1457,8 @@ private:
 	}
 
 private:
-	//! The ARTs to remap.
-	const vector<reference<ART>> &indexes;
+	//! The indexes to remap.
+	const vector<reference<BoundIndex>> &indexes;
 	const vector<LogicalType> &table_types;
 	//! Buffer slot -> table column id for the indexed key columns.
 	vector<StorageIndex> mapped_column_ids;
@@ -1486,8 +1480,8 @@ struct VacuumState {
 	bool can_change_row_ids = false;
 	//! How vacuum handles the table's indexes when it changes rowids.
 	VacuumIndexStrategy index_strategy = VacuumIndexStrategy::KEEP_ROW_IDS;
-	//! The ARTs to remap, populated only when index_strategy == REMAP.
-	vector<reference<ART>> remap_indexes;
+	//! The indexes to remap, populated only when index_strategy == REMAP.
+	vector<reference<BoundIndex>> remap_indexes;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
