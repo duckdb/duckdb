@@ -3,7 +3,7 @@
 # BENCH_NAME, PARQUET_COUNT, SETUP_SQL and RUN_QUERY via a `template` block.
 # name: ${FILE_PATH}
 # description: ${DESCRIPTION}
-# group: [feature]
+# group: [serve]
 
 include benchmark/feature/clickstream/data/clickstream_load.benchmark.in
 

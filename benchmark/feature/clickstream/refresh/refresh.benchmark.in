@@ -4,7 +4,7 @@
 # The timed statement (RUN_QUERY) is a REFRESH: a windowed group-by snapshot materialization.
 # name: ${FILE_PATH}
 # description: ${DESCRIPTION}
-# group: [feature]
+# group: [refresh]
 
 include benchmark/feature/clickstream/data/clickstream_load.benchmark.in
 

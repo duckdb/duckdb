@@ -5,7 +5,7 @@
 # SERVE) on a single line, timed as one unit.
 # name: ${FILE_PATH}
 # description: ${DESCRIPTION}
-# group: [feature]
+# group: [cases]
 
 include benchmark/feature/clickstream/data/clickstream_load.benchmark.in
 
