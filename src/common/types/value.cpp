@@ -556,16 +556,6 @@ bool Value::DoubleIsFinite(double value) {
 }
 
 template <>
-bool Value::IsNan(float input) {
-	return std::isnan(input);
-}
-
-template <>
-bool Value::IsNan(double input) {
-	return std::isnan(input);
-}
-
-template <>
 bool Value::IsFinite(float input) {
 	return Value::FloatIsFinite(input);
 }
