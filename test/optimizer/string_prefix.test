@@ -115,7 +115,7 @@ NULL	NULL
 
 # dynamic length must retain the original substring expression
 query I
-SELECT count(*) FROM (VALUES ('abcx', 3)) t(s, n) WHERE substring(s, 1, n) = 'abc';
+SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE substring(s, 1, n) = 'abc';
 ----
 1
 
@@ -171,6 +171,12 @@ SELECT (array_slice(s, NULL, 3) = 'abc'), (array_slice(s, 1, NULL) = 'abc') FROM
 ----
 NULL	NULL
 
+# dynamic length must retain the original expression
+query I
+SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE array_slice(s, 1, n) = 'abc';
+----
+1
+
 # (alias) list_slice
 
 query II
@@ -180,6 +186,12 @@ analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned
 
 query I
 SELECT count(*) FROM prefix_cases WHERE list_slice(s, 1, 5) = 'abc';
+----
+1
+
+# dynamic length must retain the original expression
+query I
+SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE list_slice(s, 1, n) = 'abc';
 ----
 1
 
@@ -218,6 +230,6 @@ xabc
 
 # dynamic end bound must retain the original slice expression
 query I
-SELECT count(*) FROM (VALUES ('abcx', 3)) t(s, n) WHERE s[1:n] = 'abc';
+SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE s[1:n] = 'abc';
 ----
 1
