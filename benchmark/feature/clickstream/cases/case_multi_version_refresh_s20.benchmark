@@ -1,0 +1,9 @@
+# name: benchmark/feature/clickstream/cases/case_multi_version_refresh_s20.benchmark
+# description: Build an 8-version refresh history in one timed unit (RETAIN 20, no eviction) (seed=42)
+# group: [feature]
+
+template benchmark/feature/clickstream/cases/cases.benchmark.in
+BENCH_NAME=Case_multi_version_refresh_s20
+PARQUET_COUNT=20
+SETUP_SQL=DROP FEATURE IF EXISTS f; DROP FEATURE IF EXISTS f2; DROP FEATURE IF EXISTS f3; CREATE FEATURE f ENTITY users TIMESTAMP EventTime WINDOW 3650 DAYS RETAIN 20 AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
+RUN_QUERY=REFRESH FEATURE f AT '2015-06-05 00:00:00'; REFRESH FEATURE f AT '2015-07-05 00:00:00'; REFRESH FEATURE f AT '2015-08-04 00:00:00'; REFRESH FEATURE f AT '2015-09-03 00:00:00'; REFRESH FEATURE f AT '2015-10-03 00:00:00'; REFRESH FEATURE f AT '2015-11-02 00:00:00'; REFRESH FEATURE f AT '2015-12-02 00:00:00'; REFRESH FEATURE f AT '2016-01-01 00:00:00';

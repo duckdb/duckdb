@@ -1,0 +1,9 @@
+# name: benchmark/feature/clickstream/cases/case_refresh_serve_interleaved_s20.benchmark
+# description: Three interleaved refresh+serve cycles (steady-state multi-version serving) (seed=42)
+# group: [feature]
+
+template benchmark/feature/clickstream/cases/cases.benchmark.in
+BENCH_NAME=Case_refresh_serve_interleaved_s20
+PARQUET_COUNT=20
+SETUP_SQL=DROP FEATURE IF EXISTS f; DROP FEATURE IF EXISTS f2; DROP FEATURE IF EXISTS f3; CREATE FEATURE f ENTITY users TIMESTAMP EventTime WINDOW 3650 DAYS RETAIN 5 AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID); CREATE OR REPLACE TABLE serve_requests AS SELECT DISTINCT UserID, TIMESTAMP '2016-01-02 00:00:00' AS EventTime FROM hits USING SAMPLE 100000 ROWS;
+RUN_QUERY=REFRESH FEATURE f AT '2016-01-01 00:00:00'; SELECT count(*) AS n FROM SERVE FEATURE f FOR serve_requests ASOF EventTime; REFRESH FEATURE f AT '2016-01-01 00:00:00'; SELECT count(*) AS n FROM SERVE FEATURE f FOR serve_requests ASOF EventTime; REFRESH FEATURE f AT '2016-01-01 00:00:00'; SELECT count(*) AS n FROM SERVE FEATURE f FOR serve_requests ASOF EventTime;
