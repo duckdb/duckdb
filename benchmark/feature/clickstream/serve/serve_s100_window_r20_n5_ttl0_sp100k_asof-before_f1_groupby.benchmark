@@ -1,0 +1,9 @@
+# name: benchmark/feature/clickstream/serve/serve_s100_window_r20_n5_ttl0_sp100k_asof-before_f1_groupby.benchmark
+# description: Generated SERVE scenario s100_window_r20_n5_ttl0_sp100k_asof-before_f1_groupby (seed=42)
+# group: [feature]
+
+template benchmark/feature/clickstream/serve/serve.benchmark.in
+BENCH_NAME=Serve_s100_window_r20_n5_ttl0_sp100k_asof-before_f1_groupby
+PARQUET_COUNT=100
+SETUP_SQL=DROP FEATURE IF EXISTS f; DROP FEATURE IF EXISTS f2; DROP FEATURE IF EXISTS f3; CREATE FEATURE f ENTITY users TIMESTAMP EventTime WINDOW 3650 DAYS RETAIN 20 AS (SELECT DISTINCT UserID, COUNT(*) OVER (PARTITION BY UserID) AS event_count, AVG(RegionID) OVER (PARTITION BY UserID) AS avg_region FROM hits); CREATE OR REPLACE TABLE serve_requests AS SELECT DISTINCT UserID, TIMESTAMP '2015-08-04 00:00:00' AS EventTime FROM hits USING SAMPLE 100000 ROWS; REFRESH FEATURE f AT '2015-09-03 00:00:00'; REFRESH FEATURE f AT '2015-10-03 00:00:00'; REFRESH FEATURE f AT '2015-11-02 00:00:00'; REFRESH FEATURE f AT '2015-12-02 00:00:00'; REFRESH FEATURE f AT '2016-01-01 00:00:00';
+RUN_QUERY=SELECT event_count IS NULL AS missing, count(*) AS n FROM SERVE FEATURE f FOR serve_requests ASOF EventTime GROUP BY event_count IS NULL;
