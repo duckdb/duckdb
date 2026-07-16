@@ -1,5 +1,8 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
-#include "duckdb/parser/statement/serve_feature_statement.hpp"
+#include "duckdb/parser/tableref/serve_feature_ref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 
@@ -181,12 +184,11 @@ static vector<FeatureServeEntityMapping> TransformServeFeatureEntityMappings(Par
 	return mappings;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
-	// ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral
-	// ServeFeatureEntity? ServeFeatureAsOf?
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto feature_items = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
+//! Shared extraction for both the standalone statement and the table-reference forms. Both grammar rules share
+//! the prefix 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity?
+//! ServeFeatureAsOf?; the ref form additionally carries a trailing TableAlias? (handled by the caller).
+static unique_ptr<ServeFeatureRef> BuildServeFeatureRef(ListParseResult &list_pr) {
+	auto feature_items = PEGTransformerFactory::ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	vector<ServeFeatureRequest> features;
 	features.reserve(feature_items.size());
 	for (auto &item : feature_items) {
@@ -201,25 +203,54 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 		features.push_back(std::move(request));
 	}
 
-	auto spine_table = ExtractFirstIdentifierName(list_pr.Child<ListParseResult>(4), "SERVE FEATURE spine table");
+	auto result = make_uniq<ServeFeatureRef>();
+	result->features = std::move(features);
+	result->spine_table = ExtractFirstIdentifierName(list_pr.Child<ListParseResult>(4), "SERVE FEATURE spine table");
 
-	string spine_entity_override;
 	auto &entity_opt = list_pr.Child<OptionalParseResult>(5);
 	if (entity_opt.HasResult()) {
-		spine_entity_override = ExtractFirstIdentifierName(entity_opt.GetResult(), "SERVE FEATURE ENTITY clause");
+		result->spine_entity_override =
+		    ExtractFirstIdentifierName(entity_opt.GetResult(), "SERVE FEATURE ENTITY clause");
 	}
 
-	string spine_asof_column;
 	auto &asof_opt = list_pr.Child<OptionalParseResult>(6);
 	if (asof_opt.HasResult()) {
-		spine_asof_column = ExtractFirstIdentifierName(asof_opt.GetResult(), "SERVE FEATURE ASOF clause");
+		result->spine_asof_column = ExtractFirstIdentifierName(asof_opt.GetResult(), "SERVE FEATURE ASOF clause");
 	}
 
-	auto result = make_uniq<ServeFeatureStatement>();
-	result->features = std::move(features);
-	result->spine_table = std::move(spine_table);
-	result->spine_entity_override = std::move(spine_entity_override);
-	result->spine_asof_column = std::move(spine_asof_column);
+	return result;
+}
+
+//! ServeFeatureRef <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral
+//! ServeFeatureEntity? ServeFeatureAsOf? TableAlias?
+unique_ptr<TableRef> PEGTransformerFactory::TransformServeFeatureRef(PEGTransformer &transformer,
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto result = BuildServeFeatureRef(list_pr);
+
+	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(7);
+	if (table_alias_opt.HasResult()) {
+		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
+		result->alias = table_alias.name;
+		result->column_name_alias = table_alias.column_name_alias;
+	}
+	return std::move(result);
+}
+
+//! ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral
+//! ServeFeatureEntity? ServeFeatureAsOf?
+//! Rewritten to: SELECT * FROM <ServeFeatureRef>
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(PEGTransformer &transformer,
+                                                                               ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto table_ref = BuildServeFeatureRef(list_pr);
+
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(table_ref);
+
+	auto result = make_uniq<SelectStatement>();
+	result->node = std::move(select_node);
 	return std::move(result);
 }
 

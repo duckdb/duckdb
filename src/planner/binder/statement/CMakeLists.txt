@@ -23,7 +23,6 @@ add_library_unity(
   bind_prepare.cpp
   bind_refresh_feature.cpp
   bind_relation.cpp
-  bind_serve_feature.cpp
   bind_select.cpp
   bind_set.cpp
   bind_simple.cpp

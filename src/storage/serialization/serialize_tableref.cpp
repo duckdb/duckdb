@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/list.hpp"
+#include "duckdb/parser/tableref/serve_feature_ref.hpp"
 #include "duckdb/parser/tableref/at_clause.hpp"
 
 namespace duckdb {
@@ -44,6 +45,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 		break;
 	case TableReferenceType::PIVOT:
 		result = PivotRef::Deserialize(deserializer);
+		break;
+	case TableReferenceType::SERVE_FEATURE:
+		result = ServeFeatureRef::Deserialize(deserializer);
 		break;
 	case TableReferenceType::SHOW_REF:
 		result = ShowRef::Deserialize(deserializer);
@@ -193,6 +197,23 @@ unique_ptr<TableRef> PivotRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<string>>(204, "groups", result->groups);
 	deserializer.ReadPropertyWithDefault<vector<string>>(205, "column_name_alias", result->column_name_alias);
 	deserializer.ReadPropertyWithDefault<bool>(206, "include_nulls", result->include_nulls);
+	return std::move(result);
+}
+
+void ServeFeatureRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<ServeFeatureRequest>>(200, "features", features);
+	serializer.WritePropertyWithDefault<string>(201, "spine_table", spine_table);
+	serializer.WritePropertyWithDefault<string>(202, "spine_entity_override", spine_entity_override);
+	serializer.WritePropertyWithDefault<string>(203, "spine_asof_column", spine_asof_column);
+}
+
+unique_ptr<TableRef> ServeFeatureRef::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ServeFeatureRef>(new ServeFeatureRef());
+	deserializer.ReadPropertyWithDefault<vector<ServeFeatureRequest>>(200, "features", result->features);
+	deserializer.ReadPropertyWithDefault<string>(201, "spine_table", result->spine_table);
+	deserializer.ReadPropertyWithDefault<string>(202, "spine_entity_override", result->spine_entity_override);
+	deserializer.ReadPropertyWithDefault<string>(203, "spine_asof_column", result->spine_asof_column);
 	return std::move(result);
 }
 

@@ -1105,6 +1105,7 @@ private:
 	static unique_ptr<TableRef> TransformBaseTableRef(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformParensTableRef(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformFeatureAtVersionRef(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformServeFeatureRef(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<AtClause> TransformAtClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<AtClause> TransformAtSpecifier(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformAtUnit(PEGTransformer &transformer, ParseResult &parse_result);

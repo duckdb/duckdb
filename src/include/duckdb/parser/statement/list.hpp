@@ -21,7 +21,6 @@
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/refresh_feature_statement.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
-#include "duckdb/parser/statement/serve_feature_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"

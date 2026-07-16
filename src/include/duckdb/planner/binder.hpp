@@ -60,8 +60,8 @@ class BoundConstraint;
 class AtClause;
 class BoundAtClause;
 class RefreshFeatureStatement;
-class ServeFeatureStatement;
 class FeatureAtVersionRef;
+class ServeFeatureRef;
 
 struct CreateInfo;
 struct CreateTriggerInfo;
@@ -425,7 +425,6 @@ private:
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
 	BoundStatement Bind(RefreshFeatureStatement &stmt);
-	BoundStatement Bind(ServeFeatureStatement &stmt);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
@@ -490,6 +489,7 @@ private:
 	BoundStatement Bind(PivotRef &expr);
 	BoundStatement Bind(ShowRef &ref);
 	BoundStatement Bind(FeatureAtVersionRef &ref);
+	BoundStatement Bind(ServeFeatureRef &ref);
 
 	unique_ptr<SelectNode> BindPivot(PivotRef &expr, vector<unique_ptr<ParsedExpression>> all_columns);
 	unique_ptr<SelectNode> BindUnpivot(Binder &child_binder, PivotRef &expr,

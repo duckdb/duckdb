@@ -145,8 +145,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<DisconnectStatement>());
 	case StatementType::REFRESH_FEATURE_STATEMENT:
 		return Bind(statement.Cast<RefreshFeatureStatement>());
-	case StatementType::SERVE_FEATURE_STATEMENT:
-		return Bind(statement.Cast<ServeFeatureStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -189,6 +187,9 @@ BoundStatement Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::FEATURE_AT_VERSION:
 		result = Bind(ref.Cast<FeatureAtVersionRef>());
+		break;
+	case TableReferenceType::SERVE_FEATURE:
+		result = Bind(ref.Cast<ServeFeatureRef>());
 		break;
 	case TableReferenceType::DELIM_GET:
 		result = Bind(ref.Cast<DelimGetRef>());

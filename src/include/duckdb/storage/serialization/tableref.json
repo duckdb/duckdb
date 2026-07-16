@@ -295,6 +295,36 @@
     ]
   },
   {
+    "class": "ServeFeatureRef",
+    "base": "TableRef",
+    "enum": "SERVE_FEATURE",
+    "includes": [
+      "duckdb/parser/tableref/serve_feature_ref.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "features",
+        "type": "vector<ServeFeatureRequest>"
+      },
+      {
+        "id": 201,
+        "name": "spine_table",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "spine_entity_override",
+        "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "spine_asof_column",
+        "type": "string"
+      }
+    ]
+  },
+  {
     "class": "AtClause",
     "includes": [
       "duckdb/parser/tableref/at_clause.hpp"

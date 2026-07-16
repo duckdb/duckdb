@@ -26,6 +26,7 @@ FeatureRefreshAtClause <- 'AT' StringLiteral
 FeatureAtVersionStatement <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral
 
 ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf?
+ServeFeatureRef <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf? TableAlias?
 
 ServeFeatureKw <- 'FEATURES' / 'FEATURE'
 ServeFeatureItem <- IdentifierOrStringLiteral ServeFeatureItemEntity?

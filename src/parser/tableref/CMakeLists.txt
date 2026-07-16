@@ -8,6 +8,7 @@ add_library_unity(
   emptytableref.cpp
   expressionlistref.cpp
   feature_at_version_ref.cpp
+  serve_feature_ref.cpp
   column_data_ref.cpp
   joinref.cpp
   pivotref.cpp

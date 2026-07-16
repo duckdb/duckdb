@@ -5,6 +5,7 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/feature_serve.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -337,6 +338,18 @@ ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<optional_idx>(101, "total_files", result.total_files);
 	deserializer.ReadProperty<optional_idx>(102, "filtered_files", result.filtered_files);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", result.sample_options);
+	return result;
+}
+
+void FeatureServeEntityMapping::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "feature_column", feature_column);
+	serializer.WritePropertyWithDefault<string>(101, "spine_column", spine_column);
+}
+
+FeatureServeEntityMapping FeatureServeEntityMapping::Deserialize(Deserializer &deserializer) {
+	FeatureServeEntityMapping result;
+	deserializer.ReadPropertyWithDefault<string>(100, "feature_column", result.feature_column);
+	deserializer.ReadPropertyWithDefault<string>(101, "spine_column", result.spine_column);
 	return result;
 }
 
@@ -689,6 +702,18 @@ SerializedReadCSVData SerializedReadCSVData::Deserialize(Deserializer &deseriali
 	deserializer.ReadProperty<SerializedCSVReaderOptions>(106, "options", result.options);
 	deserializer.ReadProperty<MultiFileReaderBindData>(107, "reader_bind", result.reader_bind);
 	deserializer.ReadPropertyWithDefault<vector<ColumnInfo>>(108, "column_info", result.column_info);
+	return result;
+}
+
+void ServeFeatureRequest::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "feature_name", feature_name);
+	serializer.WritePropertyWithDefault<vector<FeatureServeEntityMapping>>(101, "entity_mappings", entity_mappings);
+}
+
+ServeFeatureRequest ServeFeatureRequest::Deserialize(Deserializer &deserializer) {
+	ServeFeatureRequest result;
+	deserializer.ReadPropertyWithDefault<string>(100, "feature_name", result.feature_name);
+	deserializer.ReadPropertyWithDefault<vector<FeatureServeEntityMapping>>(101, "entity_mappings", result.entity_mappings);
 	return result;
 }
 
