@@ -148,6 +148,36 @@ statement error
 SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers i1 ORDER BY i;
 ----
 
+# independently decorrelated ANY below an outer correlated aggregate
+query IR
+SELECT i1.i,
+	(SELECT SUM(s1.i)
+	 FROM integers s1
+	 WHERE s1.i = i1.i
+	   AND s1.i = ANY (SELECT i2.i FROM integers i2 WHERE i2.i = s1.i))
+FROM integers i1
+ORDER BY i1.i;
+----
+NULL	NULL
+1	1.000000
+2	2.000000
+3	3.000000
+
+# independently decorrelated EXISTS below an outer correlated aggregate
+query IR
+SELECT i1.i,
+	(SELECT SUM(s1.i)
+	 FROM integers s1
+	 WHERE s1.i = i1.i
+	   AND EXISTS (SELECT 1 FROM integers i2 WHERE i2.i = s1.i))
+FROM integers i1
+ORDER BY i1.i;
+----
+NULL	NULL
+1	1.000000
+2	2.000000
+3	3.000000
+
 # union with correlated expression
 query II
 SELECT i, (SELECT i FROM integers WHERE i=i1.i UNION SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;

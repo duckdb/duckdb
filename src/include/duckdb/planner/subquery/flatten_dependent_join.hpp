@@ -46,7 +46,7 @@ private:
 
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
-	UnnestingState DecorrelateIndependentSubtree(unique_ptr<LogicalOperator> &plan);
+	UnnestingState DecorrelateIndependentSubtree(unique_ptr<LogicalOperator> &plan, bool propagate_null_values = true);
 	vector<ColumnBinding> CreateContiguousState(ColumnBinding base_binding) const;
 
 	UnnestingState DecorrelateSubtree(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,

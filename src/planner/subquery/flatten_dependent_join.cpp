@@ -258,10 +258,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 }
 
 FlattenDependentJoins::UnnestingState
-FlattenDependentJoins::DecorrelateIndependentSubtree(unique_ptr<LogicalOperator> &plan) {
+FlattenDependentJoins::DecorrelateIndependentSubtree(unique_ptr<LogicalOperator> &plan, bool propagate_null_values) {
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
-	auto result = flatten.DecorrelateSubtree(plan, true, {});
+	auto result = flatten.DecorrelateSubtree(plan, propagate_null_values, {});
 	MergeCorrelatedAliases(flatten);
 	return result;
 }
@@ -1423,12 +1423,13 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCorrelatedN
 		if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 			return PushDownCTERef(plan);
 		}
-		// Once a subtree no longer depends on the active correlation, restart decorrelation below a fresh delim source.
+		// The delim state is not part of this subtree yet. Decorrelate nested dependent joins independently,
+		// then attach it.
 		auto delim_index = binder.GenerateTableIndex();
 		auto delim_state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
 		auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-		auto result = DecorrelateSubtree(plan, propagate_null_values, std::move(delim_state));
-		result.bindings = CreateDelimCrossProduct(plan, std::move(delim_scan), std::move(result.bindings));
+		auto result = DecorrelateIndependentSubtree(plan, propagate_null_values);
+		result.bindings = CreateDelimCrossProduct(plan, std::move(delim_scan), std::move(delim_state));
 		return result;
 	}
 	switch (plan->type) {
