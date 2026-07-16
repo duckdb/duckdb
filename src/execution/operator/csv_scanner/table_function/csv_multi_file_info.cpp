@@ -5,6 +5,8 @@
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/parallel/async_result.hpp"
+#include "duckdb/parallel/callback_async_task.hpp"
 
 namespace duckdb {
 
@@ -357,10 +359,47 @@ bool CSVFileScan::TryInitializeScan(ClientContext &context, GlobalTableFunctionS
 	return gstate.Next(csv_reader_ptr, lstate);
 }
 
+// Adds a task that loads the buffer on the async pool, when the buffer is not in memory
+static void TryPushBufferLoadTask(const shared_ptr<CSVBufferManager> &manager, const idx_t buffer_idx,
+                                  vector<unique_ptr<AsyncTask>> &io_tasks) {
+	shared_ptr<CSVBufferHandle> buffer_handle;
+	if (manager->GetBufferResidency(buffer_idx, buffer_handle) == CSVBufferResidency::NEEDS_LOAD) {
+		io_tasks.push_back(make_uniq<CallbackAsyncTask>([manager, buffer_idx] { manager->GetBuffer(buffer_idx); }));
+	}
+}
+
+// I/O tasks for the buffers of the claim's decode start that are not in memory
+static vector<unique_ptr<AsyncTask>> CollectClaimIOTasks(CSVLocalState &lstate) {
+	auto &manager = lstate.file_scan->buffer_manager;
+	const idx_t start_buffer_idx = lstate.iterator.GetBufferIdx();
+	vector<unique_ptr<AsyncTask>> io_tasks;
+	TryPushBufferLoadTask(manager, start_buffer_idx, io_tasks);
+	if (lstate.iterator.IsBoundarySet() &&
+	    (!manager->HasKnownBufferRanges() ||
+	     lstate.iterator.GetEndPos() >= manager->KnownBufferSize(start_buffer_idx))) {
+		// a boundary reaching the end of its buffer also touches the next one, for straddling values
+		// and first-line detection
+		TryPushBufferLoadTask(manager, start_buffer_idx + 1, io_tasks);
+	}
+	return io_tasks;
+}
+
 AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                               LocalTableFunctionState &local_state, DataChunk &chunk) {
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	{
+		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
+		if (!tasks.empty()) {
+			return AsyncResult(std::move(tasks));
+		}
+	}
+#endif
 	auto &lstate = local_state.Cast<CSVLocalState>();
 	if (lstate.claim_state == CSVLocalState::ClaimState::PENDING) {
+		auto io_tasks = CollectClaimIOTasks(lstate);
+		if (!io_tasks.empty()) {
+			return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
+		}
 		// the claim was taken under the global lock, the scanner is constructed here on the decoding thread
 		lstate.Materialize();
 	}

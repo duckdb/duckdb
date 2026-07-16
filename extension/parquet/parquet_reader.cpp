@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/parallel/callback_async_task.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
@@ -1614,26 +1615,6 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 	}
 }
 
-// An I/O task that fetches the bytes of a ReadHead.
-class ParquetIOAsyncTask : public AsyncTask {
-public:
-	ParquetIOAsyncTask(shared_ptr<ReadHead> read_head, shared_ptr<CachingFileHandle> file_handle)
-	    : read_head(std::move(read_head)), file_handle(std::move(file_handle)) {
-	}
-
-	void Execute() override {
-		read_head->Fetch(*file_handle);
-	}
-
-	idx_t GetIOSize() const override {
-		return read_head->size;
-	}
-
-private:
-	shared_ptr<ReadHead> read_head;
-	shared_ptr<CachingFileHandle> file_handle;
-};
-
 // Async I/O tasks for the read heads in the index range [from, to), skipping any that are already fetched.
 static vector<unique_ptr<AsyncTask>>
 CollectIOTasks(ThriftFileTransport &trans, const shared_ptr<CachingFileHandle> &file_handle, idx_t from, idx_t to) {
@@ -1642,7 +1623,9 @@ CollectIOTasks(ThriftFileTransport &trans, const shared_ptr<CachingFileHandle> &
 	for (idx_t i = from; i < to; i++) {
 		auto &read_head = read_heads[i];
 		if (!read_head->data_isset) {
-			io_tasks.push_back(make_uniq<ParquetIOAsyncTask>(read_head, file_handle));
+			// fetch the read head's bytes on the async pool
+			io_tasks.push_back(make_uniq<CallbackAsyncTask>(
+			    [read_head, file_handle] { read_head->Fetch(*file_handle); }, read_head->size));
 		}
 	}
 	return io_tasks;
