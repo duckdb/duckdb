@@ -189,27 +189,42 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 			// initialize the filter result - setting everything to false
 			scan_state.filter_result = make_unsafe_uniq_array<bool>(scan_state.dict_count);
 
-			// apply the filter
-			auto &dict_data = scan_state.dictionary->data;
+			// Slot zero represents NULL and is not necessarily referenced by any row.
+			idx_t non_null_count = scan_state.dict_count - 1;
+			Vector dict_data(scan_state.dictionary->data, /*offset=*/1, scan_state.dict_count);
 			UnifiedVectorFormat vdata;
-			dict_data.ToUnifiedFormat(scan_state.dict_count, vdata);
+			dict_data.ToUnifiedFormat(non_null_count, vdata);
 			SelectionVector dict_sel;
-			idx_t filter_count = scan_state.dict_count;
-			ColumnSegment::FilterSelection(dict_sel, dict_data, vdata, filter, filter_state, scan_state.dict_count,
+			idx_t filter_count = non_null_count;
+			ColumnSegment::FilterSelection(dict_sel, dict_data, vdata, filter, filter_state, non_null_count,
 			                               filter_count);
 
 			// now set all matching tuples to true
 			for (idx_t i = 0; i < filter_count; i++) {
-				auto idx = dict_sel.get_index(i);
+				auto idx = dict_sel.get_index(i) + 1;
 				scan_state.filter_result[idx] = true;
 			}
 		}
+		// Till now, we have a filter result for all non-NULL values.
 		auto &dict_sel = scan_state.GetSelVec(start, vector_count);
 		SelectionVector new_sel(sel_count);
 		idx_t approved_tuple_count = 0;
 		for (idx_t idx = 0; idx < sel_count; idx++) {
 			auto row_idx = sel.get_index(idx);
 			auto dict_offset = dict_sel.get_index(row_idx);
+			// Evaluate NULL only when slot zero is referenced by an actual row.
+			if (dict_offset == 0 && !scan_state.null_filter_result_initialized) {
+				Vector null_data(scan_state.dictionary->data, /*offset=*/0, /*end=*/1);
+				UnifiedVectorFormat null_vdata;
+				null_data.ToUnifiedFormat(1, null_vdata);
+				SelectionVector null_sel;
+				idx_t null_filter_count = 1;
+				ColumnSegment::FilterSelection(null_sel, null_data, null_vdata, filter, filter_state, 1,
+				                               null_filter_count);
+				scan_state.filter_result[0] = null_filter_count == 1;
+				scan_state.null_filter_result_initialized = true;
+			}
+			// Check filter result for the value at the offset and assign selection vector.
 			if (!scan_state.filter_result[dict_offset]) {
 				// does not pass the filter
 				continue;
