@@ -457,7 +457,7 @@ unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_col
 unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, const LogicalType &target_type,
                                          idx_t changed_idx, ExpressionExecutor &executor,
                                          CollectionScanState &scan_state, SegmentNode<RowGroup> &node,
-                                         DataChunk &scan_chunk) {
+                                         DataChunk &scan_chunk, TransactionData transaction) {
 	Verify();
 
 	// construct a new column data for this type
@@ -474,10 +474,13 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	append_types.push_back(target_type);
 	append_chunk.Initialize(Allocator::DefaultAllocator(), append_types);
 	auto &append_vector = append_chunk.data[0];
+	ScanOptions options(transaction);
+	options.insert_type = InsertedScanType::ALL_ROWS;
+	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
-		Scan(scan_state, scan_chunk, TableScanType::TABLE_SCAN_ALL_ROWS);
+		Scan(options, scan_state, scan_chunk);
 		if (scan_chunk.size() == 0) {
 			break;
 		}

@@ -11,6 +11,10 @@
 
 namespace duckdb {
 
+Identifier PEGTransformerFactory::TransformAnalyzeKeyword(PEGTransformer &transformer) {
+	return Identifier("analyze");
+}
+
 string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
 	if (parse_result.type == ParseResultType::IDENTIFIER) {
 		return parse_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();

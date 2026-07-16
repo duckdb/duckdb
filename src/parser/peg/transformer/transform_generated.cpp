@@ -459,6 +459,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAlterDatabaseSt
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnalyzeStatementInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto analyze_keyword = transformer.Transform<Identifier>(list_pr.GetChild(0));
 	optional<bool> analyze_verbose {};
 	auto &analyze_verbose_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (analyze_verbose_opt.HasResult()) {
@@ -471,7 +472,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnalyzeStatemen
 		auto analyze_target_value = transformer.Transform<AnalyzeTarget>(analyze_target_opt.GetResult());
 		analyze_target = std::move(analyze_target_value);
 	}
-	auto result = TransformAnalyzeStatement(transformer, analyze_verbose, std::move(analyze_target));
+	auto result = TransformAnalyzeStatement(transformer, analyze_keyword, analyze_verbose, std::move(analyze_target));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
@@ -687,6 +688,12 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStringLiteralVa
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(0));
 	auto result = TransformStringLiteralValue(transformer, string_literal);
 	return make_uniq<TypedTransformResult<Value>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnalyzeKeywordInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto result = TransformAnalyzeKeyword(transformer);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
 unique_ptr<TransformResultValue>
@@ -4201,11 +4208,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExecuteStatemen
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainStatementInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	optional<bool> explain_analyze {};
-	auto &explain_analyze_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
-	if (explain_analyze_opt.HasResult()) {
-		auto explain_analyze_value = transformer.Transform<bool>(explain_analyze_opt.GetResult());
-		explain_analyze = explain_analyze_value;
+	optional<Identifier> analyze_keyword {};
+	auto &analyze_keyword_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (analyze_keyword_opt.HasResult()) {
+		auto analyze_keyword_value = transformer.Transform<Identifier>(analyze_keyword_opt.GetResult());
+		analyze_keyword = analyze_keyword_value;
 	}
 	optional<vector<GenericCopyOption>> explain_option_list {};
 	auto &explain_option_list_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
@@ -4216,14 +4223,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainStatemen
 	}
 	auto explainable_statements = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.GetChild(3));
 	auto result =
-	    TransformExplainStatement(transformer, explain_analyze, explain_option_list, std::move(explainable_statements));
+	    TransformExplainStatement(transformer, analyze_keyword, explain_option_list, std::move(explainable_statements));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainAnalyzeInternal(PEGTransformer &transformer,
-                                                                                        ParseResult &parse_result) {
-	auto result = TransformExplainAnalyze(transformer);
-	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainOptionListInternal(PEGTransformer &transformer,
@@ -4251,6 +4252,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainOptionIn
 	}
 	auto result = TransformExplainOption(transformer, explain_option_name, std::move(expression));
 	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainOptionNameInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = TransformExplainOptionName(transformer, choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
 unique_ptr<TransformResultValue>
@@ -10266,7 +10275,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformVacuumOptionInt
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformOptAnalyzeInternal(PEGTransformer &transformer,
                                                                                     ParseResult &parse_result) {
-	auto result = TransformOptAnalyze(transformer);
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto analyze_keyword = transformer.Transform<Identifier>(list_pr.GetChild(0));
+	auto result = TransformOptAnalyze(transformer, analyze_keyword);
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -10365,6 +10376,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CommentColumn", &PEGTransformerFactory::TransformCommentColumnInternal},
 	    {"CommentValue", &PEGTransformerFactory::TransformCommentValueInternal},
 	    {"StringLiteralValue", &PEGTransformerFactory::TransformStringLiteralValueInternal},
+	    {"AnalyzeKeyword", &PEGTransformerFactory::TransformAnalyzeKeywordInternal},
 	    {"ExpressionStatement", &PEGTransformerFactory::TransformExpressionStatementInternal},
 	    {"ExpressionAlias", &PEGTransformerFactory::TransformExpressionAliasInternal},
 	    {"ConstraintName", &PEGTransformerFactory::TransformConstraintNameInternal},
@@ -10704,9 +10716,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"DropSecretStorage", &PEGTransformerFactory::TransformDropSecretStorageInternal},
 	    {"ExecuteStatement", &PEGTransformerFactory::TransformExecuteStatementInternal},
 	    {"ExplainStatement", &PEGTransformerFactory::TransformExplainStatementInternal},
-	    {"ExplainAnalyze", &PEGTransformerFactory::TransformExplainAnalyzeInternal},
 	    {"ExplainOptionList", &PEGTransformerFactory::TransformExplainOptionListInternal},
 	    {"ExplainOption", &PEGTransformerFactory::TransformExplainOptionInternal},
+	    {"ExplainOptionName", &PEGTransformerFactory::TransformExplainOptionNameInternal},
 	    {"ExplainSelectStatement", &PEGTransformerFactory::TransformExplainSelectStatementInternal},
 	    {"ExplainableStatements", &PEGTransformerFactory::TransformExplainableStatementsInternal},
 	    {"ExportStatement", &PEGTransformerFactory::TransformExportStatementInternal},

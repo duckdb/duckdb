@@ -601,13 +601,13 @@ public:
 		    context, bind_data.file_options, bind_data.reader_bind, file_list, global_columns, input.column_indexes);
 
 		if (file_list.IsEmpty()) {
-			result->readers = {};
+			result->readers.clear();
 		} else if (!bind_data.union_readers.empty()) {
 			for (auto &reader : bind_data.union_readers) {
 				result->readers.push_back(make_uniq<MultiFileReaderData>(reader));
 			}
 			if (result->readers.size() != file_list.GetTotalFileCount()) {
-				result->readers = {};
+				result->readers.clear();
 			}
 		} else if (bind_data.initial_reader) {
 			// we can only use the initial reader if it was constructed from the first file

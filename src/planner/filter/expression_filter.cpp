@@ -531,6 +531,19 @@ static FilterPropagateResult CheckInOperatorStatistics(optional_ptr<ClientContex
 	return result;
 }
 
+static FilterPropagateResult CheckNotOperatorStatistics(const BoundOperatorExpression &op_expr) {
+	if (op_expr.GetChildren().size() != 1 ||
+	    op_expr.GetChildren()[0]->GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &children = op_expr.GetChildren()[0]->Cast<BoundOperatorExpression>().GetChildren();
+	if (children.size() == 2 && children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
+	    children[1]->Cast<BoundConstantExpression>().GetValue().IsNull()) {
+		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
 static FilterPropagateResult CheckOperatorStatistics(optional_ptr<ClientContext> context_p,
                                                      const BoundOperatorExpression &op_expr,
                                                      const BaseStatistics &stats) {
@@ -540,6 +553,8 @@ static FilterPropagateResult CheckOperatorStatistics(optional_ptr<ClientContext>
 		return CheckNullOperatorStatistics(context_p, op_expr, stats, op_expr.GetExpressionType());
 	case ExpressionType::COMPARE_IN:
 		return CheckInOperatorStatistics(context_p, op_expr, stats);
+	case ExpressionType::OPERATOR_NOT:
+		return CheckNotOperatorStatistics(op_expr);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -555,6 +570,9 @@ static FilterPropagateResult CheckConjunctionStatistics(optional_ptr<ClientConte
 			auto prune_result = ExpressionFilter::CheckExpressionStatistics(context_p, *child, stats);
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+			}
+			if (prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+				return FilterPropagateResult::FILTER_FALSE_OR_NULL;
 			}
 			if (prune_result != result) {
 				result = FilterPropagateResult::NO_PRUNING_POSSIBLE;

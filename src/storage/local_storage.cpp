@@ -47,14 +47,15 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
                                      const idx_t alter_column_index, const LogicalType &target_type,
-                                     const vector<StorageIndex> &bound_columns, Expression &cast_expr)
+                                     const vector<StorageIndex> &bound_columns, Expression &cast_expr,
+                                     TransactionData transaction)
     : context(context), table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)),
       deleted_rows(parent.deleted_rows), optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_data_table, parent.optimistic_writer) {
 	// Alter the column type.
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection =
-	    parent_collection.AlterType(context, alter_column_index, target_type, bound_columns, cast_expr);
+	    parent_collection.AlterType(context, alter_column_index, target_type, bound_columns, cast_expr, transaction);
 	parent_collection.CommitDropColumn(alter_column_index);
 	row_groups = std::move(parent.row_groups);
 	row_groups->collection = std::move(new_collection);
@@ -726,7 +727,7 @@ void LocalStorage::ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t change
 		return;
 	}
 	auto new_storage = make_shared_ptr<LocalTableStorage>(context, new_dt, *storage, changed_idx, target_type,
-	                                                      bound_columns, cast_expr);
+	                                                      bound_columns, cast_expr, transaction);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
