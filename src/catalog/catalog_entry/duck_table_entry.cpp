@@ -81,6 +81,10 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 	});
 }
 
+static void SetAlterDependencies(BoundCreateTableInfo &info, AlterInfo &alter_info) {
+	alter_info.new_dependencies = make_uniq<LogicalDependencyList>(info.Base().dependencies);
+}
+
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                shared_ptr<DataTable> inherited_storage)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
@@ -392,6 +396,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 	}
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	SetAlterDependencies(*bound_create_info, info);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
@@ -430,6 +435,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	vector<unique_ptr<Expression>> bound_defaults;
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
+	SetAlterDependencies(*bound_create_info, info);
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
@@ -746,7 +752,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	                              dropped_column_is_generated);
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	info.new_dependencies = make_uniq<LogicalDependencyList>(std::move(bound_create_info->dependencies));
+	SetAlterDependencies(*bound_create_info, info);
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
 		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 	}
@@ -970,7 +976,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	info.new_dependencies = make_uniq<LogicalDependencyList>(std::move(bound_create_info->dependencies));
+	SetAlterDependencies(*bound_create_info, info);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
@@ -999,6 +1005,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	SetAlterDependencies(*bound_create_info, info);
 
 	// Early return
 	if (has_not_null) {
@@ -1032,6 +1039,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	SetAlterDependencies(*bound_create_info, info);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
@@ -1123,6 +1131,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	}
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	SetAlterDependencies(*bound_create_info, info);
 
 	vector<StorageIndex> storage_oids;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
@@ -1203,6 +1212,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	SetAlterDependencies(*bound_create_info, info);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
@@ -1275,7 +1285,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
 	const auto bound_constraint = binder->BindConstraint(*info.constraint, table_info.table, table_info.columns);
-	const auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	SetAlterDependencies(*bound_create_info, info);
 
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
 	auto new_entry = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);

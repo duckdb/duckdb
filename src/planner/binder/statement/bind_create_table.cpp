@@ -588,9 +588,10 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
                                                              vector<unique_ptr<Expression>> &bound_defaults) {
-	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
-	auto &dependencies = result->dependencies;
+	auto &base = result->Base();
+	base.dependencies = LogicalDependencyList();
+	auto &dependencies = base.dependencies;
 	auto &catalog = schema.ParentCatalog();
 	optional_ptr<StorageManager> storage_manager;
 	if (catalog.IsDuckCatalog() && !catalog.InMemory()) {
@@ -687,7 +688,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
 	}
 
-	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
+	base.dependencies.VerifyDependencies(schema.catalog, base.table);
 
 #ifdef DEBUG
 	// Ensure all types are bound
