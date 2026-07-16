@@ -17,6 +17,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
@@ -549,8 +550,23 @@ static void MergeBindingReplacements(vector<ReplacementBinding> &target,
 	}
 }
 
-static void ApplyBindingReplacements(LogicalOperator &op, LogicalOperator &changed_child,
+static void RemapChangedChildProjectionMap(LogicalOperator &op, idx_t child_index,
+                                           vector<ColumnBinding> old_child_bindings,
+                                           const vector<ReplacementBinding> &replacements) {
+	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index);
+	if (!projection_map || projection_map->empty()) {
+		return;
+	}
+	for (auto &binding : old_child_bindings) {
+		binding = ResolveBindingReplacement(binding, replacements);
+	}
+	LogicalOperatorVisitor::RemapProjectionMap(*projection_map, old_child_bindings,
+	                                           op.children[child_index]->GetColumnBindings());
+}
+
+static void ApplyBindingReplacements(LogicalOperator &op, idx_t child_index, vector<ColumnBinding> old_child_bindings,
                                      const vector<ReplacementBinding> &replacements) {
+	RemapChangedChildProjectionMap(op, child_index, std::move(old_child_bindings), replacements);
 	if (replacements.empty()) {
 		return;
 	}
@@ -559,8 +575,8 @@ static void ApplyBindingReplacements(LogicalOperator &op, LogicalOperator &chang
 		replacer.AddReplacement(replacement.old_binding,
 		                        ResolveBindingReplacement(replacement.old_binding, replacements));
 	}
-	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && op.children[0].get() == &changed_child) {
-		replacer.stop_operator = changed_child;
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && child_index == 0) {
+		replacer.stop_operator = *op.children[child_index];
 		replacer.VisitOperator(op);
 	} else {
 		replacer.VisitOperatorBindings(op);
@@ -609,12 +625,13 @@ vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanOperator(unique_pt
 
 		for (idx_t i = 0; i < op.children.size(); i++) {
 			D_ASSERT(op.children[i]);
+			auto old_child_bindings = op.children[i]->GetColumnBindings();
 			vector<ReplacementBinding> child_replacements;
 			TryRewritePairDependentJoinCondition(binder, op.children[i], child_replacements);
 			PlanJoinChildFilters(*op.children[i]);
 			auto recursive_replacements = PlanOperator(op.children[i]);
 			MergeBindingReplacements(child_replacements, recursive_replacements);
-			ApplyBindingReplacements(op, *op.children[i], child_replacements);
+			ApplyBindingReplacements(op, i, std::move(old_child_bindings), child_replacements);
 			MergeBindingReplacements(operator_replacements, child_replacements);
 		}
 	}
@@ -624,7 +641,8 @@ vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanOperator(unique_pt
 void RecursiveDependentJoinPlanner::Plan(Binder &binder, unique_ptr<LogicalOperator> &op) {
 	RecursiveDependentJoinPlanner planner(binder);
 	planner.PlanJoinChildFilters(*op);
-	planner.PlanOperator(op);
+	auto replacements = planner.PlanOperator(op);
+	D_ASSERT(replacements.empty());
 }
 
 void RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(Binder &binder, unique_ptr<LogicalOperator> &op) {

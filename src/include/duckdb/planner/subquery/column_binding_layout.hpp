@@ -46,6 +46,10 @@ struct ColumnBindingLayout {
 		return result;
 	}
 
+	bool HasSameLayout(const vector<ColumnBinding> &other) const {
+		return bindings == other;
+	}
+
 	bool HasSameBindings(const vector<ColumnBinding> &other) const {
 		if (bindings.size() != other.size()) {
 			return false;

@@ -104,3 +104,119 @@ ORDER BY o.x;
 ----
 10	0
 20	1
+
+# A rewritten FULL OUTER JOIN can sit below an explicit materialization
+# boundary and another dependent join.
+query III
+WITH joined AS MATERIALIZED (
+	SELECT l.a, r.b
+	FROM (VALUES (1), (2)) l(a)
+	FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+)
+SELECT joined.a, joined.b, x.z
+FROM joined
+LEFT JOIN LATERAL (SELECT joined.a + joined.b AS z) x ON true
+ORDER BY ALL;
+----
+1	10	11
+2	NULL	NULL
+NULL	20	NULL
+
+# Two sibling binding-changing rewrites preserve both child layouts.
+query IIII
+SELECT l.a, r.b, s.c, t.d
+FROM ((VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10))
+CROSS JOIN ((VALUES (3), (4)) s(c)
+FULL OUTER JOIN (VALUES (30), (40)) t(d)
+	ON EXISTS (SELECT 1 WHERE s.c = 3 AND t.d = 30))
+ORDER BY ALL;
+----
+1	10	3	30
+1	10	4	NULL
+1	10	NULL	40
+2	NULL	3	30
+2	NULL	4	NULL
+2	NULL	NULL	40
+NULL	20	3	30
+NULL	20	4	NULL
+NULL	20	NULL	40
+
+# Nested binding-changing rewrites preserve payload order for a subsequent
+# correlated scalar subquery.
+query IIII
+SELECT l.a, r.b, s.c, (SELECT coalesce(l.a, r.b, s.c)) AS first_value
+FROM ((VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10))
+FULL OUTER JOIN (VALUES (100), (200)) s(c)
+	ON EXISTS (SELECT 1 WHERE l.a = 1 AND s.c = 100)
+ORDER BY ALL;
+----
+1	10	100	1
+2	NULL	NULL	2
+NULL	20	NULL	20
+NULL	NULL	200	200
+
+# The correlated input of the inner MARK join appears only in its predicate.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	WHERE o.x = ANY (SELECT r.b FROM (VALUES (10)) r(b))
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	1
+20	0
+
+# An aggregate above a binding-changing rewrite can feed another dependent join.
+query II
+SELECT q.cnt, x.v
+FROM (
+	SELECT count(*)::BIGINT AS cnt
+	FROM (VALUES (1), (2)) l(a)
+	FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+) q
+LEFT JOIN LATERAL (SELECT q.cnt + 1 AS v) x ON true;
+----
+3	4
+
+# A window above a binding-changing rewrite can feed another dependent join.
+query IIII
+SELECT q.a, q.b, q.rn, x.v
+FROM (
+	SELECT l.a, r.b, row_number() OVER (ORDER BY l.a NULLS LAST, r.b NULLS LAST) AS rn
+	FROM (VALUES (1), (2)) l(a)
+	FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+) q
+LEFT JOIN LATERAL (SELECT q.rn + coalesce(q.a, q.b) AS v) x ON true
+ORDER BY q.rn;
+----
+1	10	1	2
+2	NULL	2	4
+NULL	20	3	23
+
+# A set operation above a binding-changing rewrite can feed another dependent join.
+query III
+SELECT q.a, q.b, x.v
+FROM (
+	SELECT l.a, r.b
+	FROM (VALUES (1), (2)) l(a)
+	FULL OUTER JOIN (VALUES (10), (20)) r(b)
+	  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+	UNION ALL
+	SELECT 9, 90
+) q
+LEFT JOIN LATERAL (SELECT coalesce(q.a, 0) + coalesce(q.b, 0) AS v) x ON true
+ORDER BY ALL;
+----
+1	10	11
+2	NULL	2
+9	90	99
+NULL	20	20

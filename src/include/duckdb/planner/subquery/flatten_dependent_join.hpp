@@ -51,6 +51,8 @@ private:
 
 	UnnestingState DecorrelateSubtree(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                  vector<ColumnBinding> state);
+	UnnestingState DecorrelateSubtreeInternal(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                          vector<ColumnBinding> state);
 	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
 	                                      const CorrelatedColumns &correlated_columns,
 	                                      const vector<ColumnBinding> &state, bool perform_delim);
@@ -63,6 +65,9 @@ private:
 	UnnestingState PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan, bool propagate_null_values = true);
 	UnnestingState PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                      vector<ColumnBinding> state);
+	UnnestingState PushDownCorrelatedNodeInternal(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                              vector<ColumnBinding> state);
+	bool VerifyUnnestingState(LogicalOperator &plan, const UnnestingState &state) const;
 	optional_ptr<const ColumnBinding> GetCorrelatedBase(const ColumnBinding &binding) const;
 	optional_idx GetCorrelatedIndex(const ColumnBinding &binding) const;
 	void MergeCorrelatedAliases(const FlattenDependentJoins &source);

@@ -180,10 +180,10 @@ static void SetJoinProjectionMaps(LogicalOperator &join, const ColumnBindingLayo
                                   const ColumnBindingLayout &right_output,
                                   const vector<ColumnBinding> &selected_right_bindings) {
 	auto &logical_join = join.Cast<LogicalJoin>();
-	logical_join.left_projection_map = left_output.HasSameBindings(selected_left_bindings)
+	logical_join.left_projection_map = left_output.HasSameLayout(selected_left_bindings)
 	                                       ? vector<ProjectionIndex>()
 	                                       : left_output.CreateProjectionMap(selected_left_bindings);
-	logical_join.right_projection_map = right_output.HasSameBindings(selected_right_bindings)
+	logical_join.right_projection_map = right_output.HasSameLayout(selected_right_bindings)
 	                                        ? vector<ProjectionIndex>()
 	                                        : right_output.CreateProjectionMap(selected_right_bindings);
 }
