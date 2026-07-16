@@ -55,8 +55,7 @@ FilterPropagateResult SuffixFilterPrune(const FunctionStatisticsPruneInput &inpu
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	auto &suffix = StringValue::Get(suffix_value);
-	if (StringStats::HasMaxStringLength(*string_stats) &&
-	    StringStats::MaxStringLength(*string_stats) < suffix.size()) {
+	if (StringStats::HasMaxStringLength(*string_stats) && StringStats::MaxStringLength(*string_stats) < suffix.size()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 
@@ -72,7 +71,7 @@ FilterPropagateResult SuffixFilterPrune(const FunctionStatisticsPruneInput &inpu
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	return string_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
-	                                  : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	                                   : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 }
 
 } // namespace
