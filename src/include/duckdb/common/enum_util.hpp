@@ -126,8 +126,6 @@ enum class CheckpointOnDetach : uint8_t;
 
 enum class ChunkInfoType : uint8_t;
 
-enum class ClaimState : uint8_t;
-
 enum class ClientInterruptState : uint8_t;
 
 enum class ColumnDataAllocatorType : uint8_t;
@@ -323,8 +321,6 @@ enum class MergeActionType : uint8_t;
 enum class MetaPipelineType : uint8_t;
 
 enum class Monotonicity : uint8_t;
-
-enum class MoveBufferResult : uint8_t;
 
 enum class MultiFileAcquireResult : uint8_t;
 
@@ -723,9 +719,6 @@ template<>
 const char* EnumUtil::ToChars<ChunkInfoType>(ChunkInfoType value);
 
 template<>
-const char* EnumUtil::ToChars<ClaimState>(ClaimState value);
-
-template<>
 const char* EnumUtil::ToChars<ClientInterruptState>(ClientInterruptState value);
 
 template<>
@@ -1018,9 +1011,6 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
-
-template<>
-const char* EnumUtil::ToChars<MoveBufferResult>(MoveBufferResult value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileAcquireResult>(MultiFileAcquireResult value);
@@ -1546,9 +1536,6 @@ template<>
 ChunkInfoType EnumUtil::FromString<ChunkInfoType>(const char *value);
 
 template<>
-ClaimState EnumUtil::FromString<ClaimState>(const char *value);
-
-template<>
 ClientInterruptState EnumUtil::FromString<ClientInterruptState>(const char *value);
 
 template<>
@@ -1841,9 +1828,6 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
-
-template<>
-MoveBufferResult EnumUtil::FromString<MoveBufferResult>(const char *value);
 
 template<>
 MultiFileAcquireResult EnumUtil::FromString<MultiFileAcquireResult>(const char *value);
