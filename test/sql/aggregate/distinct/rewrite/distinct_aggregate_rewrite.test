@@ -97,6 +97,13 @@ FROM distinct_rewrite_order;
 ----
 4	d,c,b,a
 
+# distinct aggregate ORDER BY derived from its argument
+query T
+SELECT string_agg(DISTINCT s, ',' ORDER BY unicode(s) DESC)
+FROM distinct_rewrite_order;
+----
+d,c,b,a
+
 # grouped distinct aggregate ORDER BY
 query IT
 SELECT g, string_agg(DISTINCT s, ',' ORDER BY s DESC)
@@ -186,6 +193,33 @@ ORDER BY g;
 2	NULL
 3	NULL
 
+statement ok
+CREATE TABLE distinct_rewrite_filter_errors(g INTEGER, value VARCHAR, keep BOOLEAN);
+
+statement ok
+INSERT INTO distinct_rewrite_filter_errors VALUES (1, 'bad', false), (1, '1', true);
+
+# FILTER does not suppress evaluation errors in aggregate arguments
+statement error
+SELECT count(DISTINCT value::INTEGER) FILTER (WHERE keep)
+FROM distinct_rewrite_filter_errors;
+----
+<REGEX>:Conversion Error:.*
+
+statement error
+SELECT g, count(DISTINCT value::INTEGER) FILTER (WHERE keep)
+FROM distinct_rewrite_filter_errors
+GROUP BY g;
+----
+<REGEX>:Conversion Error:.*
+
+# FILTER also does not suppress evaluation errors in a derived aggregate order
+statement error
+SELECT string_agg(DISTINCT value, ',' ORDER BY value::INTEGER) FILTER (WHERE keep)
+FROM distinct_rewrite_filter_errors;
+----
+<REGEX>:Conversion Error:.*
+
 # GROUPING() with a regular GROUP BY is constant after rewrite
 query III
 SELECT GROUPING(g), g, count(DISTINCT x)
@@ -204,6 +238,57 @@ SELECT finalize(sum(DISTINCT x) EXPORT_STATE),
 FROM distinct_rewrite_nulls;
 ----
 9	2
+
+statement ok
+CREATE TABLE part(p_partkey BIGINT NOT NULL, p_brand VARCHAR NOT NULL, p_type VARCHAR NOT NULL,
+                  p_size INTEGER NOT NULL);
+
+statement ok
+CREATE TABLE partsupp(ps_partkey BIGINT NOT NULL, ps_suppkey BIGINT NOT NULL);
+
+statement ok
+CREATE TABLE supplier(s_suppkey BIGINT NOT NULL, s_comment VARCHAR NOT NULL);
+
+statement ok
+INSERT INTO part VALUES
+	(1, 'Brand#11', 'SMALL BRUSHED', 49),
+	(2, 'Brand#11', 'SMALL BRUSHED', 49),
+	(3, 'Brand#45', 'SMALL BRUSHED', 49),
+	(4, 'Brand#22', 'MEDIUM POLISHED STEEL', 14),
+	(5, 'Brand#22', 'LARGE BRUSHED', 3),
+	(6, 'Brand#33', 'LARGE BRUSHED', 2);
+
+statement ok
+INSERT INTO partsupp VALUES
+	(1, 10), (1, 20), (2, 10), (2, 30),
+	(3, 60), (4, 70), (5, 40), (5, 50), (6, 80);
+
+statement ok
+INSERT INTO supplier VALUES
+	(10, 'regular supplier'),
+	(20, 'Customer service Complaints pending'),
+	(30, 'regular supplier'),
+	(40, 'regular supplier'),
+	(50, 'regular supplier'),
+	(60, 'regular supplier'),
+	(70, 'regular supplier'),
+	(80, 'regular supplier');
+
+# TPC-H Q16 shape, including ORDER BY on the DISTINCT aggregate result
+query TTII
+SELECT p_brand, p_type, p_size, count(DISTINCT ps_suppkey) AS supplier_cnt
+FROM partsupp, part
+WHERE p_partkey = ps_partkey
+  AND p_brand <> 'Brand#45'
+  AND p_type NOT LIKE 'MEDIUM POLISHED%'
+  AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
+  AND ps_suppkey NOT IN (
+      SELECT s_suppkey FROM supplier WHERE s_comment LIKE '%Customer%Complaints%')
+GROUP BY p_brand, p_type, p_size
+ORDER BY supplier_cnt DESC, p_brand, p_type, p_size;
+----
+Brand#11	SMALL BRUSHED	49	2
+Brand#22	LARGE BRUSHED	3	2
 
 statement ok
 CREATE TABLE distinct_rewrite_grouping_sets(course VARCHAR, type VARCHAR, value INTEGER);
@@ -323,3 +408,22 @@ query I
 SELECT currval('distinct_rewrite_seq_grouping_sets');
 ----
 3
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# Q16 uses explicit deduplication followed by a regular count; the ORDER BY label remains SQL-level text
+query II
+EXPLAIN (FORMAT JSON)
+SELECT p_brand, p_type, p_size, count(DISTINCT ps_suppkey) AS supplier_cnt
+FROM partsupp, part
+WHERE p_partkey = ps_partkey
+  AND p_brand <> 'Brand#45'
+  AND p_type NOT LIKE 'MEDIUM POLISHED%'
+  AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
+  AND ps_suppkey NOT IN (
+      SELECT s_suppkey FROM supplier WHERE s_comment LIKE '%Customer%Complaints%')
+GROUP BY p_brand, p_type, p_size
+ORDER BY supplier_cnt DESC, p_brand, p_type, p_size;
+----
+logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"ps_suppkey"[^\]]*\].*"Expressions":\s*"count_star\(\)".*
