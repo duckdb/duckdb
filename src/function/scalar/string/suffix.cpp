@@ -2,6 +2,9 @@
 #include "duckdb/common/types/string_type.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
@@ -33,13 +36,54 @@ struct SuffixOperator {
 	}
 };
 
+FilterPropagateResult SuffixFilterPrune(const FunctionStatisticsPruneInput &input) {
+	auto &children = input.function.GetChildren();
+	if (children.size() != 2 || children[1]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	auto string_stats = input.ChildStats(0);
+	if (!string_stats || string_stats->GetStatsType() != StatisticsType::STRING_STATS) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!string_stats->CanHaveNoNull()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	auto &suffix_value = children[1]->Cast<BoundConstantExpression>().GetValue();
+	if (suffix_value.IsNull()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	auto &suffix = StringValue::Get(suffix_value);
+	if (StringStats::HasMaxStringLength(*string_stats) &&
+	    StringStats::MaxStringLength(*string_stats) < suffix.size()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
+	if (StringStats::GetMinType(*string_stats) != StringStatsType::EXACT_STATS ||
+	    StringStats::GetMaxType(*string_stats) != StringStatsType::EXACT_STATS) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto min = StringStats::Min(*string_stats);
+	if (min != StringStats::Max(*string_stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!SuffixFunction(string_t(min), string_t(suffix))) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	return string_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+	                                  : FilterPropagateResult::FILTER_ALWAYS_TRUE;
+}
+
 } // namespace
 
 ScalarFunction SuffixFun::GetFunction() {
-	return ScalarFunction("suffix",                                     // name of the function
-	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                      LogicalType::BOOLEAN,                         // return type
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, SuffixOperator>);
+	ScalarFunction function("suffix",                                     // name of the function
+	                        {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
+	                        LogicalType::BOOLEAN,                         // return type
+	                        ScalarFunction::BinaryFunction<string_t, string_t, bool, SuffixOperator>);
+	function.SetFilterPruneCallback(SuffixFilterPrune);
+	return function;
 }
 
 } // namespace duckdb
