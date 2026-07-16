@@ -320,7 +320,7 @@ public:
 	                   const shared_ptr<CSVStateMachine> &state_machine,
 	                   const shared_ptr<CSVErrorHandler> &error_handler, const shared_ptr<CSVFileScan> &csv_file_scan,
 	                   bool sniffing = false, const CSVIterator &boundary = {},
-	                   idx_t result_size = STANDARD_VECTOR_SIZE);
+	                   idx_t result_size = STANDARD_VECTOR_SIZE, bool can_suspend = false);
 
 	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
@@ -348,6 +348,15 @@ public:
 	//! Gets validation line information
 	ValidatorLine GetValidationLine();
 
+	//! Whether the scanner is suspended waiting for a buffer
+	bool IsSuspended() const {
+		return resume_phase != ResumePhase::NONE;
+	}
+	//! The buffer a suspended scanner is waiting for
+	idx_t PendingBufferIdx() const {
+		return pending_buffer_idx;
+	}
+
 	const idx_t scanner_idx;
 	//! We use the max of idx_t to signify this is a line finder scanner.
 	static constexpr idx_t LINE_FINDER_ID = NumericLimits<idx_t>::Maximum();
@@ -355,16 +364,30 @@ public:
 	//! Variable that manages buffer tracking
 	shared_ptr<CSVBufferUsage> buffer_tracker;
 
+	//! Whether this scanner is allowed to pause for I/O. sniffing/line-finding/skipping can't pause.
+	const bool can_suspend;
+
 private:
 	//! Result of trying to move to the next buffer
 	enum class MoveBufferResult : uint8_t {
-		MOVED,    //! Advanced to the next buffer, stitching any value that straddled the edge
-		NOT_MOVED //! The buffer still has bytes left, or the file has ended
+		MOVED,        //! Advanced to the next buffer, stitching any value that straddled the edge
+		NOT_MOVED,    //! The buffer still has bytes left, or the file has ended
+		NOT_IN_MEMORY //! The next buffer is not in memory, the scanner suspended on its load
+	};
+
+	//! Where a suspended scanner resumes once the pending buffer is loaded
+	enum class ResumePhase : uint8_t {
+		NONE,                    //! Not suspended, ParseChunk starts a fresh chunk
+		PENDING_BUFFER_BOUNDARY, //! Suspended finishing a boundary scan, resume retries the move
+		PENDING_BUFFER_MAIN      //! Suspended in the boundary-less scan loop, resume continues it
 	};
 
 	void Initialize() override;
 
 	void FinalizeChunkProcess() override;
+
+	//! Continues a chunk that suspended on a buffer load
+	void ResumeParse();
 
 	//! Function used to process values that go over the first buffer, extra allocation might be necessary
 	void ProcessOverBufferValue();
@@ -398,6 +421,9 @@ private:
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
 	//! Strict state machine is basically a state machine with rfc 4180 set to true, used to figure out a new line.
 	shared_ptr<CSVStateMachine> state_machine_strict;
+	//! Set when the scanner suspends on a buffer not in memory, dispatches the resume
+	ResumePhase resume_phase = ResumePhase::NONE;
+	idx_t pending_buffer_idx = 0;
 };
 
 } // namespace duckdb

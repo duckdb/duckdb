@@ -403,10 +403,19 @@ AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &
 		// the claim was taken under the global lock, the scanner is constructed here on the decoding thread
 		lstate.Materialize();
 	}
-	if (lstate.csv_reader->FinishedIterator()) {
+	auto &csv_reader = *lstate.csv_reader;
+	if (!csv_reader.IsSuspended() && csv_reader.FinishedIterator()) {
 		return AsyncResult(SourceResultType::FINISHED);
 	}
-	lstate.csv_reader->Flush(chunk);
+	csv_reader.Flush(chunk);
+	if (csv_reader.IsSuspended()) {
+		// buffer is not in memory, we need to load it to the async pool
+		auto manager = csv_reader.buffer_manager;
+		const idx_t buffer_idx = csv_reader.PendingBufferIdx();
+		vector<unique_ptr<AsyncTask>> io_tasks;
+		io_tasks.push_back(make_uniq<CallbackAsyncTask>([manager, buffer_idx] { manager->GetBuffer(buffer_idx); }));
+		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
+	}
 	return chunk.size() == 0 ? AsyncResult(SourceResultType::FINISHED)
 	                         : AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 }
