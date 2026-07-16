@@ -8,6 +8,14 @@ require parquet load_only
 
 require httpfs load_only
 
+# Shared run settings for all feature families (refresh/serve/cases include this file):
+#   - 3 hot runs
+#   - no per-run timeout: the legitimate runtime at s100 exceeds the 30s default, and the setup is
+#     never the thing under measurement, so the default timeout would spuriously kill valid runs.
+nruns 3
+
+disable_timeout
+
 # Cache the source data per scale. The cache key MUST include PARQUET_COUNT, otherwise the
 # 20-file and 100-file datasets would collide in a single db file.
 cache feature_src_${PARQUET_COUNT}.db
