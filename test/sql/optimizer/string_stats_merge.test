@@ -12,17 +12,251 @@ statement ok
 CREATE TABLE long_strings (v VARCHAR, payload INTEGER);
 
 statement ok
-INSERT INTO long_strings SELECT repeat('a', 12), 1 FROM range(2048);
+INSERT INTO long_strings SELECT repeat('b', 12), 1 FROM range(2048);
 
 statement ok
-INSERT INTO long_strings SELECT repeat('a', 13), 1 FROM range(2048);
+INSERT INTO long_strings SELECT repeat('b', 13), 1 FROM range(2048);
+
+# Compare against the exact 12-byte value.
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v > repeat('b', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v > repeat('b', 12);
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v < repeat('b', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v < repeat('b', 12);
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v >= repeat('b', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v >= repeat('b', 12);
+----
+4096
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v <= repeat('b', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v <= repeat('b', 12);
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v = repeat('b', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v = repeat('b', 12);
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v <> repeat('b', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v <> repeat('b', 12);
+----
+2048
+
+# Compare against the truncated 13-byte value.
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v > repeat('b', 13);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v > repeat('b', 13);
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v < repeat('b', 13);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v < repeat('b', 13);
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v >= repeat('b', 13);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v >= repeat('b', 13);
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v <= repeat('b', 13);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v <= repeat('b', 13);
+----
+4096
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v = repeat('b', 13);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v = repeat('b', 13);
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v <> repeat('b', 13);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v <> repeat('b', 13);
+----
+2048
+
+# Compare against a value below the minimum.
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v > repeat('a', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
 
 query I
 SELECT sum(payload) FROM long_strings WHERE v > repeat('a', 12);
 ----
-2048
+4096
+
+query II
+EXPLAIN SELECT sum(payload) FROM long_strings WHERE v < repeat('a', 12);
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v < repeat('a', 12);
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v >= repeat('a', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v >= repeat('a', 12);
+----
+4096
+
+query II
+EXPLAIN SELECT sum(payload) FROM long_strings WHERE v <= repeat('a', 12);
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v <= repeat('a', 12);
+----
+NULL
+
+query II
+EXPLAIN SELECT sum(payload) FROM long_strings WHERE v = repeat('a', 12);
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v = repeat('a', 12);
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v <> repeat('a', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
 
 query I
 SELECT sum(payload) FROM long_strings WHERE v <> repeat('a', 12);
 ----
-2048
+4096
+
+# Compare against a value above the maximum.
+query II
+EXPLAIN SELECT sum(payload) FROM long_strings WHERE v > repeat('c', 12);
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v > repeat('c', 12);
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v < repeat('c', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v < repeat('c', 12);
+----
+4096
+
+query II
+EXPLAIN SELECT sum(payload) FROM long_strings WHERE v >= repeat('c', 12);
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v >= repeat('c', 12);
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v <= repeat('c', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v <= repeat('c', 12);
+----
+4096
+
+query II
+EXPLAIN SELECT sum(payload) FROM long_strings WHERE v = repeat('c', 12);
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v = repeat('c', 12);
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT sum(payload) FROM long_strings WHERE v <> repeat('c', 12);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v <> repeat('c', 12);
+----
+4096

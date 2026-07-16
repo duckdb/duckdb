@@ -19,47 +19,97 @@ EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v > 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
+query I
+SELECT sum(payload) FROM s WHERE v > 'a';
+----
+2048
+
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v = 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM s WHERE v = 'b';
+----
+2048
 
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v IS NOT DISTINCT FROM 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
+query I
+SELECT sum(payload) FROM s WHERE v IS NOT DISTINCT FROM 'b';
+----
+2048
+
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v <> 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM s WHERE v <> 'a';
+----
+2048
 
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v IS DISTINCT FROM 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
+query I
+SELECT sum(payload) FROM s WHERE v IS DISTINCT FROM 'a';
+----
+2048
+
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v >= 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM s WHERE v >= 'b';
+----
+2048
 
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v < 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
+query I
+SELECT sum(payload) FROM s WHERE v < 'b';
+----
+2048
+
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v <= 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(payload) FROM s WHERE v <= 'a';
+----
+2048
 
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v >= 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
 
+query I
+SELECT sum(payload) FROM s WHERE v >= 'a';
+----
+4096
+
 query II
 EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v <= 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(payload) FROM s WHERE v <= 'b';
+----
+4096
