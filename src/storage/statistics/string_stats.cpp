@@ -709,7 +709,7 @@ FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, Exp
 		if (HasMinMax(stats)) {
 			// Special handle cases where constant is equal to the truncated min bound, but we're able to prune a few
 			// row groups. For example, a truncated "bbbbbbbbbbbb" with minimum length 13 has the lower bound
-			// "bbbbbbbbbbbb\0".
+			// "bbbbbbbbbbbb\0" -- the min bound is obviously larger than the constant.
 			auto min = string_data.min;
 			auto min_type = string_data.min_type;
 			string min_bound;
