@@ -1,0 +1,724 @@
+# name: test/sql/join/pair_dependent_full_outer_join_subquery_bindings.test
+# description: Test payload and state binding layouts for pair-dependent FULL OUTER joins
+# group: [join]
+
+# A FULL OUTER pair-dependent predicate should also work when one side of the
+# join exposes more than one underlying table binding.
+statement ok
+CREATE TABLE pair_multi_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_l2(c INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_r(b INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_s(a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO pair_multi_l VALUES (1), (2);
+
+statement ok
+INSERT INTO pair_multi_l2 VALUES (5);
+
+statement ok
+INSERT INTO pair_multi_r VALUES (10), (20), (30);
+
+statement ok
+INSERT INTO pair_multi_s VALUES (1, 10, 5), (2, 20, 5);
+
+query III
+SELECT l.a, l2.c, r.b
+FROM pair_multi_l l
+JOIN pair_multi_l2 l2 ON true
+FULL OUTER JOIN pair_multi_r r ON EXISTS (
+	SELECT 1
+	FROM pair_multi_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.c = l2.c
+)
+ORDER BY ALL;
+----
+1	5	10
+2	5	20
+NULL	NULL	30
+
+query III
+SELECT *
+FROM pair_multi_l l
+JOIN pair_multi_l2 l2 ON true
+FULL OUTER JOIN pair_multi_r r ON EXISTS (
+	SELECT 1
+	FROM pair_multi_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.c = l2.c
+)
+ORDER BY ALL;
+----
+1	5	10
+2	5	20
+NULL	NULL	30
+
+query III
+SELECT l.a, r.b, r2.c
+FROM pair_multi_l l
+FULL OUTER JOIN (
+	pair_multi_r r
+	JOIN pair_multi_l2 r2 ON true
+) ON EXISTS (
+	SELECT 1
+	FROM pair_multi_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.c = r2.c
+)
+ORDER BY ALL;
+----
+1	10	5
+2	20	5
+NULL	30	5
+
+query IIII
+SELECT l.a, l2.c, r.b, r2.c
+FROM pair_multi_l l
+JOIN pair_multi_l2 l2 ON true
+FULL OUTER JOIN (
+	pair_multi_r r
+	JOIN pair_multi_l2 r2 ON true
+) ON EXISTS (
+	SELECT 1
+	FROM pair_multi_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.c = l2.c
+	  AND s.c = r2.c
+)
+ORDER BY ALL;
+----
+1	5	10	5
+2	5	20	5
+NULL	NULL	30	5
+
+statement ok
+CREATE TABLE pair_multi_quant_s(a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO pair_multi_quant_s VALUES (1, 10, 5), (1, NULL, 5), (2, 20, 5);
+
+query III
+SELECT l.a, l2.c, r.b
+FROM pair_multi_l l
+JOIN pair_multi_l2 l2 ON true
+FULL OUTER JOIN pair_multi_r r ON r.b NOT IN (
+	SELECT s.b
+	FROM pair_multi_quant_s s
+	WHERE s.a = l.a
+	  AND s.c = l2.c
+)
+ORDER BY ALL;
+----
+1	5	NULL
+2	5	10
+2	5	30
+NULL	NULL	20
+
+statement ok
+CREATE TABLE pair_multi_l3(d INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_s3(a INTEGER, b INTEGER, c INTEGER, d INTEGER);
+
+statement ok
+INSERT INTO pair_multi_l3 VALUES (7);
+
+statement ok
+INSERT INTO pair_multi_s3 VALUES (1, 10, 5, 7), (2, 20, 5, 7);
+
+query IIII
+SELECT l.a, l2.c, l3.d, r.b
+FROM pair_multi_l l
+JOIN pair_multi_l2 l2 ON true
+JOIN pair_multi_l3 l3 ON true
+FULL OUTER JOIN pair_multi_r r ON EXISTS (
+	SELECT 1
+	FROM pair_multi_s3 s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.c = l2.c
+	  AND s.d = l3.d
+)
+ORDER BY ALL;
+----
+1	5	7	10
+2	5	7	20
+NULL	NULL	NULL	30
+
+query II
+SELECT l.a, r.b
+FROM (
+	SELECT a FROM pair_multi_l WHERE a = 1
+	UNION ALL
+	SELECT a FROM pair_multi_l WHERE a = 2
+) l
+FULL OUTER JOIN (
+	SELECT b FROM pair_multi_r WHERE b <= 20
+	UNION ALL
+	SELECT b FROM pair_multi_r WHERE b = 30
+) r ON EXISTS (
+	SELECT 1
+	FROM pair_multi_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+)
+ORDER BY ALL;
+----
+1	10
+2	20
+NULL	30
+
+statement ok
+CREATE TABLE pair_complex_l(a INTEGER, tags INTEGER[], st STRUCT(v INTEGER));
+
+statement ok
+CREATE TABLE pair_complex_r(b INTEGER, m MAP(INTEGER, INTEGER));
+
+statement ok
+CREATE TABLE pair_complex_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_complex_l VALUES (1, [1, 2], {'v': 10}), (2, [2, 3], {'v': 20}), (3, [3, 4], {'v': 30});
+
+statement ok
+INSERT INTO pair_complex_r VALUES (10, map([1], [10])), (20, map([2], [20])), (30, map([3], [30]));
+
+statement ok
+INSERT INTO pair_complex_s VALUES (1, 10), (2, 20);
+
+query II
+SELECT l.a, r.b
+FROM pair_complex_l l
+FULL OUTER JOIN pair_complex_r r ON EXISTS (
+	SELECT 1
+	FROM pair_complex_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+)
+ORDER BY l.a NULLS LAST, r.b NULLS LAST;
+----
+1	10
+2	20
+3	NULL
+NULL	30
+
+query ITTIT
+SELECT l.a, l.tags::VARCHAR, l.st::VARCHAR, r.b, r.m::VARCHAR
+FROM pair_complex_l l
+FULL OUTER JOIN pair_complex_r r ON EXISTS (
+	SELECT 1
+	FROM pair_complex_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+)
+ORDER BY l.a NULLS LAST, r.b NULLS LAST;
+----
+1	[1, 2]	{'v': 10}	10	{1=10}
+2	[2, 3]	{'v': 20}	20	{2=20}
+3	[3, 4]	{'v': 30}	NULL	NULL
+NULL	NULL	NULL	30	{3=30}
+
+query II
+SELECT l.a, r.b
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN range(10, 40, 10) r(b) ON EXISTS (
+	SELECT 1
+	FROM pair_multi_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+)
+ORDER BY ALL;
+----
+1	10
+2	20
+NULL	30
+
+statement ok
+CREATE TABLE pair_using_l(k INTEGER, a INTEGER);
+
+statement ok
+CREATE TABLE pair_using_l2(k INTEGER, c INTEGER);
+
+statement ok
+CREATE TABLE pair_using_s(a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO pair_using_l VALUES (1, 1), (2, 2);
+
+statement ok
+INSERT INTO pair_using_l2 VALUES (1, 5), (2, 6);
+
+statement ok
+INSERT INTO pair_using_s VALUES (1, 10, 5), (2, 20, 6);
+
+query III
+SELECT l.a, l.c, r.b
+FROM (pair_using_l JOIN pair_using_l2 USING (k)) l
+FULL OUTER JOIN pair_multi_r r ON EXISTS (
+	SELECT 1
+	FROM pair_using_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.c = l.c
+)
+ORDER BY ALL;
+----
+1	5	10
+2	6	20
+NULL	NULL	30
+
+# A single join input can also expose multiple binding groups through aggregate
+# or window outputs.
+statement ok
+CREATE TABLE pair_multi_agg_s(a INTEGER, b INTEGER, cnt BIGINT);
+
+statement ok
+INSERT INTO pair_multi_agg_s VALUES (1, 10, 1), (2, 20, 1);
+
+query III
+SELECT l.a, l.cnt, r.b
+FROM (SELECT a, count(*) AS cnt FROM pair_multi_l GROUP BY a) l
+FULL OUTER JOIN pair_multi_r r ON EXISTS (
+	SELECT 1
+	FROM pair_multi_agg_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.cnt = l.cnt
+)
+ORDER BY ALL;
+----
+1	1	10
+2	1	20
+NULL	NULL	30
+
+statement ok
+CREATE TABLE pair_multi_window_s(a INTEGER, b INTEGER, rn BIGINT);
+
+statement ok
+INSERT INTO pair_multi_window_s VALUES (1, 10, 1), (2, 20, 2);
+
+query III
+SELECT l.a, l.rn, r.b
+FROM (SELECT a, row_number() OVER (ORDER BY a) AS rn FROM pair_multi_l) l
+FULL OUTER JOIN pair_multi_r r ON EXISTS (
+	SELECT 1
+	FROM pair_multi_window_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.rn = l.rn
+)
+ORDER BY ALL;
+----
+1	1	10
+2	2	20
+NULL	NULL	30
+
+# NULL payload values should still match when the pair-dependent predicate
+# matches them with IS NOT DISTINCT FROM.
+statement ok
+CREATE TABLE pair_null_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_null_r(b INTEGER);
+
+statement ok
+CREATE TABLE pair_null_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_null_l VALUES (NULL), (1), (2);
+
+statement ok
+INSERT INTO pair_null_r VALUES (NULL), (10), (20);
+
+statement ok
+INSERT INTO pair_null_s VALUES (NULL, NULL), (1, 10);
+
+query II
+SELECT l.a, r.b
+FROM pair_null_l l
+FULL OUTER JOIN pair_null_r r ON EXISTS (
+	SELECT 1
+	FROM pair_null_s s
+	WHERE s.a IS NOT DISTINCT FROM l.a
+	  AND s.b IS NOT DISTINCT FROM r.b
+)
+ORDER BY ALL;
+----
+1	10
+2	NULL
+NULL	20
+NULL	NULL
+
+statement ok
+CREATE TABLE pair_empty_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_empty_r(b INTEGER);
+
+statement ok
+CREATE TABLE pair_empty_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_empty_l VALUES (1), (2);
+
+statement ok
+INSERT INTO pair_empty_s VALUES (1, 10);
+
+query II
+SELECT l.a, r.b
+FROM pair_empty_l l
+FULL OUTER JOIN pair_empty_r r ON EXISTS (
+	SELECT 1
+	FROM pair_empty_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+)
+ORDER BY ALL;
+----
+1	NULL
+2	NULL
+
+statement ok
+INSERT INTO pair_empty_r VALUES (10), (20);
+
+statement ok
+DELETE FROM pair_empty_l;
+
+query II
+SELECT l.a, r.b
+FROM pair_empty_l l
+FULL OUTER JOIN pair_empty_r r ON EXISTS (
+	SELECT 1
+	FROM pair_empty_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+)
+ORDER BY ALL;
+----
+NULL	10
+NULL	20
+
+statement ok
+CREATE TABLE pair_multi_dup_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_dup_l2(c INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_dup_r(b INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_dup_s(a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO pair_multi_dup_l VALUES (1), (1);
+
+statement ok
+INSERT INTO pair_multi_dup_l2 VALUES (5);
+
+statement ok
+INSERT INTO pair_multi_dup_r VALUES (10), (10), (20);
+
+statement ok
+INSERT INTO pair_multi_dup_s VALUES (1, 10, 5);
+
+query IIII
+SELECT l.a, l2.c, r.b, count(*)::INTEGER
+FROM pair_multi_dup_l l
+JOIN pair_multi_dup_l2 l2 ON true
+FULL OUTER JOIN pair_multi_dup_r r ON EXISTS (
+	SELECT 1
+	FROM pair_multi_dup_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.c = l2.c
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	5	10	4
+NULL	NULL	20	1
+
+statement ok
+CREATE TABLE pair_dup_unmatched_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_dup_unmatched_r(b INTEGER);
+
+statement ok
+CREATE TABLE pair_dup_unmatched_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_dup_unmatched_l VALUES (1), (1), (2);
+
+statement ok
+INSERT INTO pair_dup_unmatched_r VALUES (10), (20), (20);
+
+statement ok
+INSERT INTO pair_dup_unmatched_s VALUES (1, 10);
+
+query III
+SELECT l.a, r.b, count(*)::INTEGER
+FROM pair_dup_unmatched_l l
+FULL OUTER JOIN pair_dup_unmatched_r r ON EXISTS (
+	SELECT 1
+	FROM pair_dup_unmatched_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	10	2
+2	NULL	1
+NULL	20	2
+
+statement ok
+CREATE TABLE pair_null_dup_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_null_dup_r(b INTEGER);
+
+statement ok
+CREATE TABLE pair_null_dup_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_null_dup_l VALUES (NULL), (NULL), (1);
+
+statement ok
+INSERT INTO pair_null_dup_r VALUES (NULL), (10);
+
+statement ok
+INSERT INTO pair_null_dup_s VALUES (NULL, NULL);
+
+query III
+SELECT l.a, r.b, count(*)::INTEGER
+FROM pair_null_dup_l l
+FULL OUTER JOIN pair_null_dup_r r ON EXISTS (
+	SELECT 1
+	FROM pair_null_dup_s s
+	WHERE s.a IS NOT DISTINCT FROM l.a
+	  AND s.b IS NOT DISTINCT FROM r.b
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	NULL	1
+NULL	10	1
+NULL	NULL	2
+
+# Both inputs can expose multiple binding groups. Explicit output-binding
+# propagation must preserve duplicates and NULL matches for FULL, SEMI, and
+# ANTI pair-dependent rewrites.
+statement ok
+CREATE TABLE pair_multi_both_l(id INTEGER, a INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_both_l2(lid INTEGER, z INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_both_r(id INTEGER, b INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_both_r2(rid INTEGER, w INTEGER);
+
+statement ok
+CREATE TABLE pair_multi_both_s(a INTEGER, b INTEGER, z INTEGER, w INTEGER);
+
+statement ok
+INSERT INTO pair_multi_both_l VALUES (1, 1), (2, 1), (3, 2), (4, NULL);
+
+statement ok
+INSERT INTO pair_multi_both_l2 VALUES (1, 5), (2, 5), (3, 6), (4, 7);
+
+statement ok
+INSERT INTO pair_multi_both_r VALUES (10, 10), (11, 10), (12, 20), (13, NULL);
+
+statement ok
+INSERT INTO pair_multi_both_r2 VALUES (10, 50), (11, 50), (12, 60), (13, 70);
+
+statement ok
+INSERT INTO pair_multi_both_s VALUES (1, 10, 5, 50), (2, 20, 6, 60), (NULL, NULL, 7, 70), (1, 20, 5, 60);
+
+query TII
+WITH left_side AS (
+	SELECT l.id AS lid, l.a, l2.z
+	FROM pair_multi_both_l l
+	JOIN pair_multi_both_l2 l2 ON l.id = l2.lid
+), right_side AS (
+	SELECT r.id AS rid, r.b, r2.w
+	FROM pair_multi_both_r r
+	JOIN pair_multi_both_r2 r2 ON r.id = r2.rid
+), actual AS (
+	SELECT l.id AS lid, l.a, l2.z, r.id AS rid, r.b, r2.w
+	FROM pair_multi_both_l l
+	JOIN pair_multi_both_l2 l2 ON l.id = l2.lid
+	FULL OUTER JOIN (
+		pair_multi_both_r r
+		JOIN pair_multi_both_r2 r2 ON r.id = r2.rid
+	) ON EXISTS (
+		SELECT 1
+		FROM pair_multi_both_s s
+		WHERE s.a IS NOT DISTINCT FROM l.a
+		  AND s.b IS NOT DISTINCT FROM r.b
+		  AND s.z IS NOT DISTINCT FROM l2.z
+		  AND s.w IS NOT DISTINCT FROM r2.w
+	)
+), manual_matches AS (
+	SELECT l.lid, l.a, l.z, r.rid, r.b, r.w
+	FROM left_side l, right_side r
+	WHERE EXISTS (
+		SELECT 1
+		FROM pair_multi_both_s s
+		WHERE s.a IS NOT DISTINCT FROM l.a
+		  AND s.b IS NOT DISTINCT FROM r.b
+		  AND s.z IS NOT DISTINCT FROM l.z
+		  AND s.w IS NOT DISTINCT FROM r.w
+	)
+), manual AS (
+	SELECT * FROM manual_matches
+	UNION ALL
+	SELECT l.lid, l.a, l.z, NULL::INTEGER, NULL::INTEGER, NULL::INTEGER
+	FROM left_side l
+	WHERE NOT EXISTS (
+		SELECT 1
+		FROM right_side r
+		WHERE EXISTS (
+			SELECT 1
+			FROM pair_multi_both_s s
+			WHERE s.a IS NOT DISTINCT FROM l.a
+			  AND s.b IS NOT DISTINCT FROM r.b
+			  AND s.z IS NOT DISTINCT FROM l.z
+			  AND s.w IS NOT DISTINCT FROM r.w
+		)
+	)
+	UNION ALL
+	SELECT NULL::INTEGER, NULL::INTEGER, NULL::INTEGER, r.rid, r.b, r.w
+	FROM right_side r
+	WHERE NOT EXISTS (
+		SELECT 1
+		FROM left_side l
+		WHERE EXISTS (
+			SELECT 1
+			FROM pair_multi_both_s s
+			WHERE s.a IS NOT DISTINCT FROM l.a
+			  AND s.b IS NOT DISTINCT FROM r.b
+			  AND s.z IS NOT DISTINCT FROM l.z
+			  AND s.w IS NOT DISTINCT FROM r.w
+		)
+	)
+), a_minus_m AS (
+	SELECT * FROM actual EXCEPT ALL SELECT * FROM manual
+), m_minus_a AS (
+	SELECT * FROM manual EXCEPT ALL SELECT * FROM actual
+)
+SELECT 'full_multi_layout', (SELECT count(*) FROM a_minus_m), (SELECT count(*) FROM m_minus_a);
+----
+full_multi_layout	0	0
+
+query TII
+WITH left_side AS (
+	SELECT l.id AS lid, l.a, l2.z
+	FROM pair_multi_both_l l
+	JOIN pair_multi_both_l2 l2 ON l.id = l2.lid
+), right_side AS (
+	SELECT r.id AS rid, r.b, r2.w
+	FROM pair_multi_both_r r
+	JOIN pair_multi_both_r2 r2 ON r.id = r2.rid
+), actual AS (
+	SELECT l.id AS lid, l.a, l2.z
+	FROM pair_multi_both_l l
+	JOIN pair_multi_both_l2 l2 ON l.id = l2.lid
+	SEMI JOIN (
+		pair_multi_both_r r
+		JOIN pair_multi_both_r2 r2 ON r.id = r2.rid
+	) ON EXISTS (
+		SELECT 1
+		FROM pair_multi_both_s s
+		WHERE s.a IS NOT DISTINCT FROM l.a
+		  AND s.b IS NOT DISTINCT FROM r.b
+		  AND s.z IS NOT DISTINCT FROM l2.z
+		  AND s.w IS NOT DISTINCT FROM r2.w
+	)
+), manual AS (
+	SELECT l.lid, l.a, l.z
+	FROM left_side l
+	WHERE EXISTS (
+		SELECT 1
+		FROM right_side r
+		WHERE EXISTS (
+			SELECT 1
+			FROM pair_multi_both_s s
+			WHERE s.a IS NOT DISTINCT FROM l.a
+			  AND s.b IS NOT DISTINCT FROM r.b
+			  AND s.z IS NOT DISTINCT FROM l.z
+			  AND s.w IS NOT DISTINCT FROM r.w
+		)
+	)
+), a_minus_m AS (
+	SELECT * FROM actual EXCEPT ALL SELECT * FROM manual
+), m_minus_a AS (
+	SELECT * FROM manual EXCEPT ALL SELECT * FROM actual
+)
+SELECT 'semi_multi_layout', (SELECT count(*) FROM a_minus_m), (SELECT count(*) FROM m_minus_a);
+----
+semi_multi_layout	0	0
+
+query TII
+WITH left_side AS (
+	SELECT l.id AS lid, l.a, l2.z
+	FROM pair_multi_both_l l
+	JOIN pair_multi_both_l2 l2 ON l.id = l2.lid
+), right_side AS (
+	SELECT r.id AS rid, r.b, r2.w
+	FROM pair_multi_both_r r
+	JOIN pair_multi_both_r2 r2 ON r.id = r2.rid
+), actual AS (
+	SELECT l.id AS lid, l.a, l2.z
+	FROM pair_multi_both_l l
+	JOIN pair_multi_both_l2 l2 ON l.id = l2.lid
+	ANTI JOIN (
+		pair_multi_both_r r
+		JOIN pair_multi_both_r2 r2 ON r.id = r2.rid
+	) ON EXISTS (
+		SELECT 1
+		FROM pair_multi_both_s s
+		WHERE s.a IS NOT DISTINCT FROM l.a
+		  AND s.b IS NOT DISTINCT FROM r.b
+		  AND s.z IS NOT DISTINCT FROM l2.z
+		  AND s.w IS NOT DISTINCT FROM r2.w
+	)
+), manual AS (
+	SELECT l.lid, l.a, l.z
+	FROM left_side l
+	WHERE NOT EXISTS (
+		SELECT 1
+		FROM right_side r
+		WHERE EXISTS (
+			SELECT 1
+			FROM pair_multi_both_s s
+			WHERE s.a IS NOT DISTINCT FROM l.a
+			  AND s.b IS NOT DISTINCT FROM r.b
+			  AND s.z IS NOT DISTINCT FROM l.z
+			  AND s.w IS NOT DISTINCT FROM r.w
+		)
+	)
+), a_minus_m AS (
+	SELECT * FROM actual EXCEPT ALL SELECT * FROM manual
+), m_minus_a AS (
+	SELECT * FROM manual EXCEPT ALL SELECT * FROM actual
+)
+SELECT 'anti_multi_layout', (SELECT count(*) FROM a_minus_m), (SELECT count(*) FROM m_minus_a);
+----
+anti_multi_layout	0	0

@@ -764,3 +764,64 @@ ORDER BY ALL;
 
 statement ok
 PRAGMA enable_optimizer;
+# Correlation state must remain attached to both branches of set operations and
+# to the anchor and recursive term of a recursive CTE.
+statement ok
+CREATE TABLE pair_state_l(a INTEGER);
+
+statement ok
+CREATE TABLE pair_state_r(b INTEGER);
+
+statement ok
+INSERT INTO pair_state_l VALUES (1), (2), (4);
+
+statement ok
+INSERT INTO pair_state_r VALUES (2), (3);
+
+query II
+SELECT l.a, r.b
+FROM pair_state_l l
+LEFT JOIN pair_state_r r ON EXISTS (
+	WITH RECURSIVE walk(n) AS (
+		SELECT l.a
+		UNION ALL
+		SELECT n + 1 FROM walk WHERE n < r.b
+	)
+	SELECT 1 FROM walk WHERE n = r.b
+)
+ORDER BY ALL;
+----
+1	2
+1	3
+2	2
+2	3
+4	NULL
+
+query II
+SELECT l.a, r.b
+FROM pair_state_l l
+LEFT JOIN pair_state_r r ON EXISTS (
+	(SELECT 1 WHERE l.a = r.b)
+	UNION ALL
+	(SELECT 1 WHERE l.a + 1 = r.b)
+)
+ORDER BY ALL;
+----
+1	2
+2	2
+2	3
+4	NULL
+
+query II
+SELECT l.a, r.b
+FROM pair_state_l l
+LEFT JOIN pair_state_r r ON EXISTS (
+	(SELECT l.a)
+	INTERSECT
+	(SELECT r.b)
+)
+ORDER BY ALL;
+----
+1	NULL
+2	2
+4	NULL
