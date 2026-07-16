@@ -14,10 +14,9 @@
 namespace duckdb {
 class Optimizer;
 
-//! The GroupingSetsOptimizer rewrites aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into a
-//! cascade of aggregations connected through materialized CTEs. The finest grouping set is computed over the base
-//! data with the aggregate states exported, after which coarser grouping sets are computed by combining the states
-//! of a finer grouping set - instead of re-scanning and re-aggregating the base data for every grouping set.
+//! The GroupingSetsOptimizer rewrites aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into
+//! explicit aggregate branches. Compatible aggregates use a cascade that combines exported states; other aggregates
+//! use one branch per grouping set over a shared materialized input.
 class GroupingSetsOptimizer : public LogicalOperatorVisitor {
 public:
 	explicit GroupingSetsOptimizer(Optimizer &optimizer);

@@ -5,11 +5,11 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
+#include "duckdb/optimizer/aggregate_rewrite_helper.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
@@ -67,125 +67,6 @@ static bool CanRewriteAggregate(const BoundAggregateExpression &aggregate) {
 	return true;
 }
 
-static vector<Identifier> GenerateGroupingSetColumnNames(const string &prefix, idx_t column_count) {
-	vector<Identifier> result;
-	result.reserve(column_count);
-	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		result.emplace_back(StringUtil::Format("%s_%llu", prefix, col_idx));
-	}
-	return result;
-}
-
-static unique_ptr<Expression> CopyAndRebindGroupingSet(const Expression &expr,
-                                                       const column_binding_map_t<ColumnBinding> &replacement_map) {
-	auto result = expr.Copy();
-	if (replacement_map.empty()) {
-		return result;
-	}
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    result, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
-		    auto entry = replacement_map.find(colref.Binding());
-		    if (entry != replacement_map.end()) {
-			    colref.BindingMutable() = entry->second;
-		    }
-	    });
-	return result;
-}
-
-static void RebindGroupingSetExpression(unique_ptr<Expression> &expr,
-                                        const column_binding_map_t<ColumnBinding> &replacement_map) {
-	if (!expr || replacement_map.empty()) {
-		return;
-	}
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
-		    auto entry = replacement_map.find(colref.Binding());
-		    if (entry != replacement_map.end()) {
-			    colref.BindingMutable() = entry->second;
-		    }
-	    });
-}
-
-static bool StageGroupingSetExpression(unique_ptr<Expression> &expr, TableIndex projection_index,
-                                       vector<unique_ptr<Expression>> &projection_expressions, bool force = false) {
-	if (!expr || (!force && !expr->IsVolatile())) {
-		return false;
-	}
-	auto return_type = expr->GetReturnType();
-	const auto column_index = projection_expressions.size();
-	projection_expressions.push_back(std::move(expr));
-	expr = make_uniq<BoundColumnRefExpression>(return_type,
-	                                           ColumnBinding(projection_index, ProjectionIndex(column_index)));
-	return true;
-}
-
-static bool StageVolatileGroupingSetInputs(Optimizer &optimizer, LogicalAggregate &aggr,
-                                           unique_ptr<LogicalOperator> &child) {
-	child->ResolveOperatorTypes();
-	auto child_bindings = child->GetColumnBindings();
-	auto projection_index = optimizer.binder.GenerateTableIndex();
-
-	column_binding_map_t<ColumnBinding> projection_replacements;
-	vector<unique_ptr<Expression>> projection_expressions;
-	projection_expressions.reserve(child_bindings.size());
-	for (idx_t col_idx = 0; col_idx < child_bindings.size(); col_idx++) {
-		projection_replacements[child_bindings[col_idx]] = ColumnBinding(projection_index, ProjectionIndex(col_idx));
-		projection_expressions.push_back(
-		    make_uniq<BoundColumnRefExpression>(child->types[col_idx], child_bindings[col_idx]));
-	}
-
-	bool staged = false;
-	for (auto &group : aggr.groups) {
-		staged |= StageGroupingSetExpression(group, projection_index, projection_expressions);
-	}
-	for (auto &expr : aggr.expressions) {
-		auto &aggregate = expr->Cast<BoundAggregateExpression>();
-		bool has_volatile_payload = false;
-		for (auto &child_expr : aggregate.GetChildrenMutable()) {
-			has_volatile_payload |= child_expr->IsVolatile();
-			staged |= StageGroupingSetExpression(child_expr, projection_index, projection_expressions);
-		}
-		if (aggregate.GetOrderBys()) {
-			for (auto &order : aggregate.GetOrderBysMutable()->orders) {
-				has_volatile_payload |= order.expression->IsVolatile();
-				staged |= StageGroupingSetExpression(order.expression, projection_index, projection_expressions);
-			}
-		}
-		const bool stage_filter =
-		    aggregate.GetFilter() && (has_volatile_payload || aggregate.GetFilter()->IsVolatile());
-		staged |= StageGroupingSetExpression(aggregate.GetFilterMutable(), projection_index, projection_expressions,
-		                                     stage_filter);
-	}
-
-	if (!staged) {
-		return false;
-	}
-
-	for (auto &group : aggr.groups) {
-		RebindGroupingSetExpression(group, projection_replacements);
-	}
-	for (auto &expr : aggr.expressions) {
-		RebindGroupingSetExpression(expr, projection_replacements);
-	}
-
-	auto projection = make_uniq<LogicalProjection>(projection_index, std::move(projection_expressions));
-	projection->children.push_back(std::move(child));
-	child = std::move(projection);
-	return true;
-}
-
-static unique_ptr<LogicalOperator> CreateGroupingSetCTERef(Optimizer &optimizer, TableIndex cte_index,
-                                                           const vector<LogicalType> &input_types,
-                                                           const vector<Identifier> &input_names,
-                                                           const vector<ColumnBinding> &input_bindings,
-                                                           column_binding_map_t<ColumnBinding> &replacement_map) {
-	auto cte_ref_index = optimizer.binder.GenerateTableIndex();
-	for (idx_t col_idx = 0; col_idx < input_bindings.size(); col_idx++) {
-		replacement_map[input_bindings[col_idx]] = ColumnBinding(cte_ref_index, ProjectionIndex(col_idx));
-	}
-	return make_uniq<LogicalCTERef>(cte_ref_index, cte_index, input_types, input_names);
-}
-
 static int64_t GetGroupingValue(const GroupingSet &grouping_set,
                                 const unsafe_vector<ProjectionIndex> &grouping_function) {
 	int64_t grouping_value = 0;
@@ -232,11 +113,11 @@ bool GroupingSetsOptimizer::TryExpandGroupingSets(unique_ptr<LogicalOperator> &o
 	const idx_t group_count = aggr.groups.size();
 	const idx_t aggregate_count = aggr.expressions.size();
 
-	StageVolatileGroupingSetInputs(optimizer, aggr, op->children[0]);
+	AggregateRewriteHelper::StageVolatileAggregateInputs(optimizer, aggr, op->children[0]);
 
 	op->children[0]->ResolveOperatorTypes();
 	auto input_types = op->children[0]->types;
-	auto input_names = GenerateGroupingSetColumnNames("__grouping_sets_input", input_types.size());
+	auto input_names = AggregateRewriteHelper::GenerateColumnNames("__grouping_sets_input", input_types.size());
 	auto input_bindings = op->children[0]->GetColumnBindings();
 	const auto cte_index = optimizer.binder.GenerateTableIndex();
 
@@ -245,21 +126,21 @@ bool GroupingSetsOptimizer::TryExpandGroupingSets(unique_ptr<LogicalOperator> &o
 		auto &grouping_set = aggr.grouping_sets[grouping_set_idx];
 
 		column_binding_map_t<ColumnBinding> input_replacements;
-		auto branch_child =
-		    CreateGroupingSetCTERef(optimizer, cte_index, input_types, input_names, input_bindings, input_replacements);
+		auto branch_child = AggregateRewriteHelper::CreateCTERef(optimizer, cte_index, input_types, input_names,
+		                                                         input_bindings, input_replacements);
 
 		map<ProjectionIndex, idx_t> group_positions;
 		vector<unique_ptr<Expression>> branch_groups;
 		branch_groups.reserve(grouping_set.size());
 		for (auto &group_idx : grouping_set) {
 			group_positions[group_idx] = branch_groups.size();
-			branch_groups.push_back(CopyAndRebindGroupingSet(*aggr.groups[group_idx], input_replacements));
+			branch_groups.push_back(AggregateRewriteHelper::CopyAndRebind(*aggr.groups[group_idx], input_replacements));
 		}
 
 		vector<unique_ptr<Expression>> branch_aggregates;
 		branch_aggregates.reserve(aggregate_count);
 		for (auto &expr : aggr.expressions) {
-			branch_aggregates.push_back(CopyAndRebindGroupingSet(*expr, input_replacements));
+			branch_aggregates.push_back(AggregateRewriteHelper::CopyAndRebind(*expr, input_replacements));
 		}
 
 		auto branch_group_index = optimizer.binder.GenerateTableIndex();
