@@ -176,6 +176,7 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
                                                           array_ptr<const Value> values) {
 	D_ASSERT(values.size() > 0);
 	switch (values[0].type().InternalType()) {
+	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:
 	case PhysicalType::UINT32:
