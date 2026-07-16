@@ -12,8 +12,7 @@
 
 namespace duckdb {
 
-//! Buffer manager for sequential sources (pipes, compressed or non-utf-8 files): buffers form a chain, each
-//! read forward from its predecessor through the file handle's single stream position
+//! Buffer manager for sequential sources (pipes, compressed or non-utf-8 files)
 class CSVSequentialBufferManager : public CSVBufferManager {
 public:
 	CSVSequentialBufferManager(ClientContext &context, const CSVReaderOptions &options, const OpenFileInfo &file,

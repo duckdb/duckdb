@@ -372,11 +372,11 @@ private:
 	void ProcessExtraRow();
 	//! Function used to move from one buffer to the other, if necessary
 	MoveBufferResult TryMoveToNextBuffer();
-	//! Installs the next buffer and processes the value straddling the buffer edge
+	//! Move to the next buffer and processes the value straddling the buffer edge
 	void FinishMoveToNextBuffer(shared_ptr<CSVBufferHandle> next_buffer);
 	//! Tail of the boundary chunk finalization, runs after the move past the boundary end
 	void FinishBoundaryScan(bool moved);
-	//! Boundary-less scan loop: processes buffers until the chunk is full or the file ends
+	//! Processes buffers until the chunk is full or the file ends
 	void ProcessRemainingBuffers();
 
 	//! -------- Functions used to figure out where lines start ---------!//
