@@ -276,12 +276,6 @@ unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(Cli
 	return make_uniq<CSVGlobalState>(context, csv_data.options, bind_data.file_list->GetTotalFileCount(), bind_data);
 }
 
-struct CSVLocalState : public LocalTableFunctionState {
-public:
-	unique_ptr<StringValueScanner> csv_reader;
-	bool done = false;
-};
-
 unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState(ClientContext &,
                                                                            GlobalTableFunctionState &) {
 	return make_uniq<CSVLocalState>();
@@ -359,17 +353,17 @@ bool CSVFileScan::TryInitializeScan(ClientContext &context, GlobalTableFunctionS
 	auto &lstate = lstate_p.Cast<CSVLocalState>();
 	auto csv_reader_ptr = shared_ptr_cast<BaseFileReader, CSVFileScan>(shared_from_this());
 	gstate.FinishScan(std::move(lstate.csv_reader));
-	lstate.csv_reader = gstate.Next(csv_reader_ptr);
-	if (!lstate.csv_reader) {
-		// exhausted the scan
-		return false;
-	}
-	return true;
+	lstate.claim_state = CSVLocalState::ClaimState::IDLE;
+	return gstate.Next(csv_reader_ptr, lstate);
 }
 
 AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                               LocalTableFunctionState &local_state, DataChunk &chunk) {
 	auto &lstate = local_state.Cast<CSVLocalState>();
+	if (lstate.claim_state == CSVLocalState::ClaimState::PENDING) {
+		// the claim was taken under the global lock, the scanner is constructed here on the decoding thread
+		lstate.Materialize();
+	}
 	if (lstate.csv_reader->FinishedIterator()) {
 		return AsyncResult(SourceResultType::FINISHED);
 	}
