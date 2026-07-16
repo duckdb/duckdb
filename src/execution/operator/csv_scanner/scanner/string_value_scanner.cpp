@@ -1072,7 +1072,7 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 
 	state_machine->dialect_options.num_cols = options.dialect_options.num_cols;
 	state_machine->dialect_options.header = options.dialect_options.header;
-	auto buffer_manager = CSVBufferManager::Open(context, options, options.file_path, 0);
+	auto buffer_manager = CSVBufferManager::Open(context, options, options.file_path, false);
 	idx_t rows_to_skip = state_machine->options.GetSkipRows() + state_machine->options.GetHeader();
 	rows_to_skip = std::max(rows_to_skip, state_machine->dialect_options.rows_until_header +
 	                                          state_machine->dialect_options.header.GetValue());
