@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/common/projection_index.hpp"
 
@@ -29,6 +31,12 @@ public:
 
 	static void EnumerateExpressions(LogicalOperator &op,
 	                                 const std::function<void(unique_ptr<Expression> *child)> &callback);
+	//! Return the projection map owned by an operator for the given child, if any
+	static optional_ptr<vector<ProjectionIndex>> GetProjectionMap(LogicalOperator &op, idx_t child_index);
+	//! Preserve the selected binding identities after a child rewrite changes its output layout
+	static void RemapProjectionMap(vector<ProjectionIndex> &projection_map,
+	                               const vector<ColumnBinding> &child_bindings_before,
+	                               const vector<ColumnBinding> &child_bindings_after);
 
 protected:
 	//! Automatically calls the Visit method for LogicalOperator children of the current operator. Can be overloaded to

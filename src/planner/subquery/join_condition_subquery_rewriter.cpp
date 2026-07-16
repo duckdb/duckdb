@@ -12,12 +12,9 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
-#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
-#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 
@@ -47,7 +44,6 @@ struct PairDependentJoinSide {
 	vector<LogicalType> types;
 	vector<Identifier> names;
 	vector<idx_t> domain_positions;
-	bool domain_is_duplicate_free = false;
 	unique_ptr<LogicalOperator> source;
 };
 
@@ -104,117 +100,6 @@ static void CollectPairDependentBindings(Expression &expression, const unordered
 	});
 }
 
-static bool ContainsAllBindings(const column_binding_set_t &bindings, const vector<ColumnBinding> &required) {
-	for (auto &binding : required) {
-		if (!bindings.count(binding)) {
-			return false;
-		}
-	}
-	return true;
-}
-
-static bool ReturnsAtMostOneRow(LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-		return true;
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		return op.Cast<LogicalAggregate>().groups.empty() && op.Cast<LogicalAggregate>().grouping_sets.size() <= 1;
-	case LogicalOperatorType::LOGICAL_LIMIT: {
-		auto &limit = op.Cast<LogicalLimit>();
-		return limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE && limit.limit_val.GetConstantValue() <= 1;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		return op.children.size() == 1 && ReturnsAtMostOneRow(*op.children[0]);
-	default:
-		return false;
-	}
-}
-
-static bool IsDuplicateFreeOn(LogicalOperator &op, const column_binding_set_t &bindings) {
-	if (ReturnsAtMostOneRow(op)) {
-		return true;
-	}
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggregate = op.Cast<LogicalAggregate>();
-		if (!aggregate.grouping_functions.empty() || aggregate.grouping_sets.size() > 1) {
-			return false;
-		}
-		vector<ColumnBinding> group_bindings;
-		group_bindings.reserve(aggregate.groups.size());
-		for (idx_t i = 0; i < aggregate.groups.size(); i++) {
-			group_bindings.emplace_back(aggregate.group_index, ProjectionIndex(i));
-		}
-		return ContainsAllBindings(bindings, group_bindings);
-	}
-	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		auto &distinct = op.Cast<LogicalDistinct>();
-		vector<ColumnBinding> distinct_bindings;
-		if (distinct.distinct_targets.empty()) {
-			distinct_bindings = op.GetColumnBindings();
-		} else {
-			for (auto &target : distinct.distinct_targets) {
-				if (target->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-					return false;
-				}
-				distinct_bindings.push_back(target->Cast<BoundColumnRefExpression>().Binding());
-			}
-		}
-		return ContainsAllBindings(bindings, distinct_bindings);
-	}
-	case LogicalOperatorType::LOGICAL_UNION:
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT: {
-		auto &set_operation = op.Cast<LogicalSetOperation>();
-		return !set_operation.setop_all && ContainsAllBindings(bindings, op.GetColumnBindings());
-	}
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &projection = op.Cast<LogicalProjection>();
-		column_binding_set_t child_bindings;
-		for (auto &binding : bindings) {
-			if (binding.table_index != projection.table_index ||
-			    binding.column_index.GetIndex() >= projection.expressions.size()) {
-				return false;
-			}
-			auto &expression = projection.expressions[binding.column_index.GetIndex()];
-			if (expression->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				return false;
-			}
-			child_bindings.insert(expression->Cast<BoundColumnRefExpression>().Binding());
-		}
-		return IsDuplicateFreeOn(*op.children[0], child_bindings);
-	}
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_LIMIT:
-		return op.children.size() == 1 && IsDuplicateFreeOn(*op.children[0], bindings);
-	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		column_binding_set_t left_bindings;
-		column_binding_set_t right_bindings;
-		auto left_output = ColumnBindingLayout(op.children[0]->GetColumnBindings());
-		auto right_output = ColumnBindingLayout(op.children[1]->GetColumnBindings());
-		for (auto &binding : bindings) {
-			if (left_output.positions.count(binding)) {
-				left_bindings.insert(binding);
-			} else if (right_output.positions.count(binding)) {
-				right_bindings.insert(binding);
-			} else {
-				return false;
-			}
-		}
-		auto left_unique = left_bindings.empty() ? ReturnsAtMostOneRow(*op.children[0])
-		                                         : IsDuplicateFreeOn(*op.children[0], left_bindings);
-		auto right_unique = right_bindings.empty() ? ReturnsAtMostOneRow(*op.children[1])
-		                                           : IsDuplicateFreeOn(*op.children[1], right_bindings);
-		return left_unique && right_unique;
-	}
-	default:
-		return false;
-	}
-}
-
 static PairDependentJoinSide PreparePairDependentJoinSide(Binder &binder, unique_ptr<LogicalOperator> source,
                                                           const column_binding_set_t &domain_bindings,
                                                           const string &name_prefix) {
@@ -233,11 +118,6 @@ static PairDependentJoinSide PreparePairDependentJoinSide(Binder &binder, unique
 	if (result.domain_positions.empty()) {
 		throw InternalException("Pair-dependent FULL OUTER join side has no domain bindings");
 	}
-	column_binding_set_t projected_domain_bindings;
-	for (auto position : result.domain_positions) {
-		projected_domain_bindings.insert(result.bindings[position]);
-	}
-	result.domain_is_duplicate_free = IsDuplicateFreeOn(*result.source, projected_domain_bindings);
 	return result;
 }
 
@@ -252,19 +132,13 @@ static PairDependentDomain CreatePairDependentDomain(Binder &binder, const PairD
 		result.types.push_back(side.types[position]);
 		domain_expressions.push_back(make_uniq<BoundColumnRefExpression>(side.types[position], cte_bindings[position]));
 	}
-	if (side.domain_is_duplicate_free) {
-		auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(domain_expressions));
-		projection->children.push_back(std::move(cte_ref));
-		result.plan = std::move(projection);
-	} else {
-		auto group_index = binder.GenerateTableIndex();
-		auto aggregate_index = binder.GenerateTableIndex();
-		vector<unique_ptr<Expression>> aggregates;
-		auto distinct = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
-		distinct->groups = std::move(domain_expressions);
-		distinct->children.push_back(std::move(cte_ref));
-		result.plan = std::move(distinct);
-	}
+	auto group_index = binder.GenerateTableIndex();
+	auto aggregate_index = binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> aggregates;
+	auto distinct = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
+	distinct->groups = std::move(domain_expressions);
+	distinct->children.push_back(std::move(cte_ref));
+	result.plan = std::move(distinct);
 	result.bindings = result.plan->GetColumnBindings();
 	return result;
 }
@@ -306,8 +180,12 @@ static void SetJoinProjectionMaps(LogicalOperator &join, const ColumnBindingLayo
                                   const ColumnBindingLayout &right_output,
                                   const vector<ColumnBinding> &selected_right_bindings) {
 	auto &logical_join = join.Cast<LogicalJoin>();
-	logical_join.left_projection_map = left_output.CreateProjectionMap(selected_left_bindings);
-	logical_join.right_projection_map = right_output.CreateProjectionMap(selected_right_bindings);
+	logical_join.left_projection_map = left_output.HasSameBindings(selected_left_bindings)
+	                                       ? vector<ProjectionIndex>()
+	                                       : left_output.CreateProjectionMap(selected_left_bindings);
+	logical_join.right_projection_map = right_output.HasSameBindings(selected_right_bindings)
+	                                        ? vector<ProjectionIndex>()
+	                                        : right_output.CreateProjectionMap(selected_right_bindings);
 }
 
 class PairDependentFullOuterJoinBuilder {

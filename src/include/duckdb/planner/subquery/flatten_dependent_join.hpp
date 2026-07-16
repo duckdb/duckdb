@@ -39,9 +39,14 @@ private:
 		vector<ColumnBinding> bindings;
 		vector<ReplacementBinding> binding_replacements;
 	};
+	struct DependentJoinOutput {
+		vector<ColumnBinding> left_payload;
+		vector<ColumnBinding> right_payload;
+	};
 
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
+	UnnestingState DecorrelateIndependentSubtree(unique_ptr<LogicalOperator> &plan);
 	vector<ColumnBinding> CreateContiguousState(ColumnBinding base_binding) const;
 
 	UnnestingState DecorrelateSubtree(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
@@ -97,10 +102,7 @@ private:
 	UnnestingState PushDownChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                             vector<ColumnBinding> state, bool rewrite_parent = true, idx_t child_idx = 0);
 	UnnestingState FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, UnnestingState outer_state,
-	                                     const UnnestingState &right_state,
-	                                     vector<ColumnBinding> public_output_bindings);
-	UnnestingState ProjectDependentJoinOutput(unique_ptr<LogicalOperator> &plan, UnnestingState state,
-	                                          vector<ColumnBinding> public_output_bindings);
+	                                     const UnnestingState &right_state, DependentJoinOutput output);
 	UnnestingState AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left, LogicalJoin &join);
 	UnnestingState PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                             vector<ColumnBinding> state, bool correlated_left);

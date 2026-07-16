@@ -52,39 +52,54 @@ void LogicalOperatorVisitor::VisitOperatorWithProjectionMapChildren(LogicalOpera
 	}
 }
 
+optional_ptr<vector<ProjectionIndex>> LogicalOperatorVisitor::GetProjectionMap(LogicalOperator &op, idx_t child_index) {
+	if (!op.HasProjectionMap()) {
+		return nullptr;
+	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+		auto &join = op.Cast<LogicalJoin>();
+		return child_index == 0 ? optional_ptr<vector<ProjectionIndex>>(join.left_projection_map)
+		                        : optional_ptr<vector<ProjectionIndex>>(join.right_projection_map);
+	}
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		return op.Cast<LogicalOrder>().projection_map;
+	case LogicalOperatorType::LOGICAL_FILTER:
+		return op.Cast<LogicalFilter>().projection_map;
+	default:
+		throw NotImplementedException("GetProjectionMap for %s", EnumUtil::ToString(op.type));
+	}
+}
+
+void LogicalOperatorVisitor::RemapProjectionMap(vector<ProjectionIndex> &projection_map,
+                                                const vector<ColumnBinding> &child_bindings_before,
+                                                const vector<ColumnBinding> &child_bindings_after) {
+	if (projection_map.empty() || child_bindings_before == child_bindings_after) {
+		return;
+	}
+	vector<ProjectionIndex> new_projection_map;
+	new_projection_map.reserve(projection_map.size());
+	for (auto projection_index : projection_map) {
+		auto &desired_binding = child_bindings_before[projection_index.GetIndex()];
+		auto entry = std::find(child_bindings_after.begin(), child_bindings_after.end(), desired_binding);
+		if (entry == child_bindings_after.end()) {
+			projection_map.clear();
+			return;
+		}
+		new_projection_map.emplace_back(NumericCast<idx_t>(entry - child_bindings_after.begin()));
+	}
+	projection_map = std::move(new_projection_map);
+}
+
 void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(unique_ptr<LogicalOperator> &child,
                                                                    vector<ProjectionIndex> &projection_map) {
 	const auto child_bindings_before = child->GetColumnBindings();
 	VisitOperator(child);
-	if (projection_map.empty()) {
-		return; // Nothing to fix here
-	}
-	// Child binding order may have changed due to 'fun'.
 	const auto child_bindings_after = child->GetColumnBindings();
-	if (child_bindings_before == child_bindings_after) {
-		return; // Nothing changed
-	}
-	// The desired order is 'projection_map' applied to 'child_bindings_before'
-	// We create 'new_projection_map', which ensures this order even if 'child_bindings_after' is different
-	vector<ProjectionIndex> new_projection_map;
-	new_projection_map.reserve(projection_map.size());
-	for (const auto proj_idx_before : projection_map) {
-		auto &desired_binding = child_bindings_before[proj_idx_before];
-		idx_t proj_idx_after;
-		for (proj_idx_after = 0; proj_idx_after < child_bindings_after.size(); proj_idx_after++) {
-			if (child_bindings_after[proj_idx_after] == desired_binding) {
-				break;
-			}
-		}
-		if (proj_idx_after == child_bindings_after.size()) {
-			// VisitOperator has removed this binding, e.g., by replacing one binding with another
-			// Inside here we don't know how it has been replaced, and projection maps are positional: bail
-			new_projection_map.clear();
-			break;
-		}
-		new_projection_map.push_back(ProjectionIndex(proj_idx_after));
-	}
-	projection_map = std::move(new_projection_map);
+	RemapProjectionMap(projection_map, child_bindings_before, child_bindings_after);
 }
 
 void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,

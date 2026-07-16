@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
@@ -22,10 +23,12 @@ private:
 	explicit DelimJoinCTERewriter(Binder &binder);
 
 	void Rewrite(unique_ptr<LogicalOperator> &plan);
-	void RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, bool null_rejecting_filter_above = false,
-	                             bool preserve_evidence_side = false);
-	void MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, bool null_rejecting_filter_above,
-	                               bool preserve_evidence_side);
+	vector<ReplacementBinding> RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
+	                                                   bool null_rejecting_filter_above = false,
+	                                                   bool preserve_evidence_side = false);
+	vector<ReplacementBinding> MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan,
+	                                                     LogicalOperator &rewrite_root,
+	                                                     bool null_rejecting_filter_above, bool preserve_evidence_side);
 
 private:
 	Binder &binder;

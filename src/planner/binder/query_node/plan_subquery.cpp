@@ -497,15 +497,55 @@ void RecursiveDependentJoinPlanner::PlanJoinChildFilters(LogicalOperator &op) {
 		}
 		auto &filter = child->Cast<LogicalFilter>();
 		D_ASSERT(filter.children.size() == 1);
-		auto original_output =
-		    ColumnBindingLayout(filter.children[0]->GetColumnBindings()).ProjectBindings(filter.projection_map);
 		for (auto &expr : filter.expressions) {
 			binder.PlanSubqueries(expr, filter.children[0]);
 		}
-		auto current_output = filter.children[0]->GetColumnBindings();
-		if (original_output != current_output) {
-			filter.projection_map = ColumnBindingLayout(std::move(current_output)).CreateProjectionMap(original_output);
+	}
+}
+
+static ColumnBinding ResolveBindingReplacement(ColumnBinding binding, const vector<ReplacementBinding> &replacements) {
+	column_binding_set_t visited;
+	while (visited.insert(binding).second) {
+		bool replaced = false;
+		for (auto &replacement : replacements) {
+			if (replacement.old_binding != binding) {
+				continue;
+			}
+			binding = replacement.new_binding;
+			replaced = true;
+			break;
 		}
+		if (!replaced) {
+			return binding;
+		}
+	}
+	throw InternalException("Cyclic binding replacements while recursively planning dependent joins");
+}
+
+static void AddBindingReplacement(vector<ReplacementBinding> &target, const ReplacementBinding &replacement) {
+	auto new_binding = ResolveBindingReplacement(replacement.new_binding, target);
+	if (replacement.old_binding == new_binding) {
+		return;
+	}
+	for (auto &existing : target) {
+		if (existing.old_binding != replacement.old_binding) {
+			continue;
+		}
+		if (ResolveBindingReplacement(existing.new_binding, target) != new_binding) {
+			throw InternalException("Conflicting binding replacements while recursively planning dependent joins");
+		}
+		return;
+	}
+	if (ResolveBindingReplacement(new_binding, target) == replacement.old_binding) {
+		throw InternalException("Cyclic binding replacements while recursively planning dependent joins");
+	}
+	target.emplace_back(replacement.old_binding, new_binding);
+}
+
+static void MergeBindingReplacements(vector<ReplacementBinding> &target,
+                                     const vector<ReplacementBinding> &replacements) {
+	for (auto &replacement : replacements) {
+		AddBindingReplacement(target, replacement);
 	}
 }
 
@@ -514,20 +554,26 @@ static void ApplyBindingReplacements(LogicalOperator &op, const vector<Replaceme
 		return;
 	}
 	CorrelatedColumnBindingReplacer replacer;
-	replacer.replacement_bindings = replacements;
+	for (auto &replacement : replacements) {
+		replacer.AddReplacement(replacement.old_binding,
+		                        ResolveBindingReplacement(replacement.old_binding, replacements));
+	}
 	replacer.VisitOperatorBindings(op);
 }
 
-static vector<ReplacementBinding> CreateOutputBindingReplacements(const vector<ColumnBinding> &old_bindings,
-                                                                  const vector<ColumnBinding> &new_bindings) {
-	if (new_bindings.size() < old_bindings.size()) {
-		throw InternalException("Dependent-join planning reduced an operator's public output from %d to %d columns",
-		                        old_bindings.size(), new_bindings.size());
-	}
+static vector<ReplacementBinding>
+PropagateOutputBindingReplacements(const vector<ColumnBinding> &old_bindings, const vector<ColumnBinding> &new_bindings,
+                                   const vector<ReplacementBinding> &operator_replacements) {
+	ColumnBindingLayout new_output(new_bindings, "recursively planned operator output");
 	vector<ReplacementBinding> result;
-	for (idx_t i = 0; i < old_bindings.size(); i++) {
-		if (old_bindings[i] != new_bindings[i]) {
-			result.emplace_back(old_bindings[i], new_bindings[i]);
+	for (auto &old_binding : old_bindings) {
+		auto new_binding = ResolveBindingReplacement(old_binding, operator_replacements);
+		if (new_output.positions.find(new_binding) == new_output.positions.end()) {
+			throw InternalException("Dependent-join planning lost output binding %s (resolved to %s)",
+			                        old_binding.ToString(), new_binding.ToString());
+		}
+		if (old_binding != new_binding) {
+			result.emplace_back(old_binding, new_binding);
 		}
 	}
 	return result;
@@ -536,6 +582,7 @@ static vector<ReplacementBinding> CreateOutputBindingReplacements(const vector<C
 vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<LogicalOperator> &op_ptr) {
 	auto old_output = op_ptr->GetColumnBindings();
 	auto &op = *op_ptr;
+	vector<ReplacementBinding> operator_replacements;
 	if (!op.children.empty()) {
 		// Collect all recursive CTEs during recursive descend
 		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
@@ -560,12 +607,12 @@ vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanOperator(unique_pt
 			TryRewritePairDependentJoinCondition(binder, op.children[i], child_replacements);
 			PlanJoinChildFilters(*op.children[i]);
 			auto recursive_replacements = PlanOperator(op.children[i]);
-			child_replacements.insert(child_replacements.end(), recursive_replacements.begin(),
-			                          recursive_replacements.end());
+			MergeBindingReplacements(child_replacements, recursive_replacements);
 			ApplyBindingReplacements(op, child_replacements);
+			MergeBindingReplacements(operator_replacements, child_replacements);
 		}
 	}
-	return CreateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings());
+	return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 }
 
 void RecursiveDependentJoinPlanner::Plan(Binder &binder, unique_ptr<LogicalOperator> &op) {

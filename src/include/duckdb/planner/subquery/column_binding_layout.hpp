@@ -46,6 +46,19 @@ struct ColumnBindingLayout {
 		return result;
 	}
 
+	bool HasSameBindings(const vector<ColumnBinding> &other) const {
+		if (bindings.size() != other.size()) {
+			return false;
+		}
+		column_binding_set_t seen;
+		for (auto &binding : other) {
+			if (!seen.insert(binding).second || positions.find(binding) == positions.end()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	vector<ColumnBinding> ProjectBindings(const vector<ProjectionIndex> &projection_map) const {
 		if (projection_map.empty()) {
 			return bindings;

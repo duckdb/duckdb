@@ -165,7 +165,9 @@ void FlattenDependentJoins::MergeCorrelatedAliases(const FlattenDependentJoins &
 			continue;
 		}
 		auto result = correlated_aliases.emplace(entry);
-		D_ASSERT(result.second || result.first->second == entry.second);
+		if (!result.second) {
+			D_ASSERT(result.first->second == entry.second);
+		}
 	}
 }
 
@@ -255,30 +257,27 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	return plan;
 }
 
-static optional_ptr<vector<ProjectionIndex>> GetChildProjectionMap(LogicalOperator &op, idx_t child_index) {
-	if (!op.HasProjectionMap()) {
-		return nullptr;
+FlattenDependentJoins::UnnestingState
+FlattenDependentJoins::DecorrelateIndependentSubtree(unique_ptr<LogicalOperator> &plan) {
+	CorrelatedColumns correlated;
+	FlattenDependentJoins flatten(binder, correlated);
+	auto result = flatten.DecorrelateSubtree(plan, true, {});
+	MergeCorrelatedAliases(flatten);
+	return result;
+}
+
+static void RemoveDummyScanBindings(LogicalOperator &op, vector<ColumnBinding> &bindings) {
+	if (op.type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
+		auto dummy_binding = op.GetColumnBindings()[0];
+		bindings.erase(std::remove(bindings.begin(), bindings.end(), dummy_binding), bindings.end());
 	}
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-		auto &join = op.Cast<LogicalJoin>();
-		return child_index == 0 ? optional_ptr<vector<ProjectionIndex>>(join.left_projection_map)
-		                        : optional_ptr<vector<ProjectionIndex>>(join.right_projection_map);
-	}
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		return op.Cast<LogicalOrder>().projection_map;
-	case LogicalOperatorType::LOGICAL_FILTER:
-		return op.Cast<LogicalFilter>().projection_map;
-	default:
-		throw NotImplementedException("GetChildProjectionMap for %s", EnumUtil::ToString(op.type));
+	for (auto &child : op.children) {
+		RemoveDummyScanBindings(*child, bindings);
 	}
 }
 
 static vector<ColumnBinding> GetProjectedChildBindings(LogicalOperator &op, idx_t child_index) {
-	auto projection_map = GetChildProjectionMap(op, child_index);
+	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index);
 	if (!projection_map) {
 		return {};
 	}
@@ -288,15 +287,17 @@ static vector<ColumnBinding> GetProjectedChildBindings(LogicalOperator &op, idx_
 void FlattenDependentJoins::RewriteChildProjectionMap(LogicalOperator &op, idx_t child_index,
                                                       vector<ColumnBinding> projected_bindings,
                                                       const UnnestingState &state) {
-	auto projection_map = GetChildProjectionMap(op, child_index);
+	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index);
 	if (!projection_map) {
 		return;
 	}
 	for (auto &binding : projected_bindings) {
 		binding = ResolveBinding(binding, state.binding_replacements);
 	}
-	*projection_map =
-	    ColumnBindingLayout(op.children[child_index]->GetColumnBindings()).CreateProjectionMap(projected_bindings);
+	auto child_output = ColumnBindingLayout(op.children[child_index]->GetColumnBindings());
+	*projection_map = child_output.HasSameBindings(projected_bindings)
+	                      ? vector<ProjectionIndex>()
+	                      : child_output.CreateProjectionMap(projected_bindings);
 }
 
 FlattenDependentJoins::UnnestingState FlattenDependentJoins::DecorrelateSubtree(unique_ptr<LogicalOperator> &plan,
@@ -304,12 +305,41 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::DecorrelateSubtree(
                                                                                 vector<ColumnBinding> state) {
 	if (plan->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		auto &op = plan->Cast<LogicalDependentJoin>();
+		DependentJoinOutput output;
+		auto left_output = ColumnBindingLayout(op.children[0]->GetColumnBindings());
+		auto right_output = ColumnBindingLayout(op.children[1]->GetColumnBindings());
+		switch (op.join_type) {
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+		case JoinType::MARK:
+			output.left_payload = left_output.ProjectBindings(op.left_projection_map);
+			break;
+		case JoinType::RIGHT_SEMI:
+		case JoinType::RIGHT_ANTI:
+			output.right_payload = right_output.ProjectBindings(op.right_projection_map);
+			break;
+		default:
+			output.left_payload = left_output.ProjectBindings(op.left_projection_map);
+			output.right_payload = right_output.ProjectBindings(op.right_projection_map);
+			break;
+		}
+		RemoveDummyScanBindings(*op.children[0], output.left_payload);
+		RemoveDummyScanBindings(*op.children[1], output.right_payload);
+		for (auto &binding : state) {
+			auto left_entry = std::find(output.left_payload.begin(), output.left_payload.end(), binding);
+			if (left_entry != output.left_payload.end()) {
+				output.left_payload.erase(left_entry);
+			}
+			auto right_entry = std::find(output.right_payload.begin(), output.right_payload.end(), binding);
+			if (right_entry != output.right_payload.end()) {
+				output.right_payload.erase(right_entry);
+			}
+		}
 		auto left_child_has_correlation = DependsOnCorrelated(*plan->children[0]);
 		auto requires_full_rhs_decorrelation = left_child_has_correlation || op.join_type != JoinType::SINGLE;
 
 		// Phase 1: prepare the left side in the current flattener context.
 		auto outer_state = PrepareDependentJoinLeft(op, propagate_null_values, std::move(state));
-		auto public_output_bindings = plan->GetColumnBindings();
 		// Phase 2: push the active correlated state through the right subtree in a child flattener.
 		FlattenDependentJoins child_flatten(binder, op.correlated_columns, op.perform_delim, op.any_join, this);
 		child_flatten.AddReplacementAliases(outer_state.binding_replacements);
@@ -339,8 +369,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::DecorrelateSubtree(
 		}
 
 		// Phase 3: finalize the current dependent join using the state produced on the right.
-		auto result =
-		    FinalizeDependentJoin(plan, std::move(outer_state), right_state, std::move(public_output_bindings));
+		auto result = FinalizeDependentJoin(plan, std::move(outer_state), right_state, std::move(output));
 
 		if (detached_cte) {
 			detached_cte->children[1] = std::move(plan);
@@ -394,7 +423,9 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PrepareDependentJoi
 			RewriteOperatorBindings(op, result);
 		} else {
 			// There might be unrelated correlation, so we have to traverse the tree
-			op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
+			auto independent_state = DecorrelateIndependentSubtree(op.children[0]);
+			RewriteOperatorBindings(op, independent_state);
+			MergeBindingReplacements(result, independent_state);
 		}
 
 		RewriteCorrelatedBindings(op, result.bindings);
@@ -587,7 +618,7 @@ vector<ColumnBinding> FlattenDependentJoins::CreateDelimCrossProduct(unique_ptr<
 		auto bindings = cross_product->GetColumnBindings();
 		state = vector<ColumnBinding>(
 		    bindings.begin(),
-		    bindings.begin() + duckdb::NumericCast<vector<ColumnBinding>::difference_type>(correlated_columns.size()));
+		    bindings.begin() + NumericCast<vector<ColumnBinding>::difference_type>(correlated_columns.size()));
 	}
 	plan = std::move(cross_product);
 	return state;
@@ -609,50 +640,30 @@ FlattenDependentJoins::UnnestingState
 FlattenDependentJoins::AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left, LogicalJoin &join) {
 	auto original_left_output = ColumnBindingLayout(left->GetColumnBindings());
 	auto projected_left_bindings = original_left_output.ProjectBindings(join.left_projection_map);
-	left = DecorrelateIndependent(binder, std::move(left));
+	auto result = DecorrelateIndependentSubtree(left);
+	RewriteOperatorBindings(join, result);
+	for (auto &binding : projected_left_bindings) {
+		binding = ResolveBinding(binding, result.binding_replacements);
+	}
 
 	auto delim_index = binder.GenerateTableIndex();
 	auto left_state = CreateContiguousState(ColumnBinding(delim_index, ProjectionIndex(0)));
 	auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 	left_state = CreateDelimCrossProduct(left, std::move(delim_scan), std::move(left_state));
 
-	left->ResolveOperatorTypes();
-	auto attached_bindings = left->GetColumnBindings();
-	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(attached_bindings.size());
-	for (idx_t i = 0; i < attached_bindings.size(); i++) {
-		expressions.push_back(make_uniq<BoundColumnRefExpression>(left->types[i], attached_bindings[i]));
-	}
-	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-	projection->children.push_back(std::move(left));
-	auto projected_bindings = projection->GetColumnBindings();
-	left = std::move(projection);
-
-	UnnestingState result;
-	CorrelatedColumnBindingReplacer replacer;
-	for (idx_t i = 0; i < attached_bindings.size(); i++) {
-		replacer.AddReplacement(attached_bindings[i], projected_bindings[i]);
-		AddBindingReplacement(result, attached_bindings[i], projected_bindings[i]);
-	}
-	replacer.VisitOperatorBindings(join);
-	for (auto &binding : projected_left_bindings) {
-		binding = ResolveBinding(binding, result.binding_replacements);
-	}
-	for (auto &binding : left_state) {
-		binding = ResolveBinding(binding, result.binding_replacements);
-	}
-
-	auto attached_output = ColumnBindingLayout(projected_bindings);
+	auto attached_output = ColumnBindingLayout(left->GetColumnBindings());
 	projected_left_bindings.insert(projected_left_bindings.end(), left_state.begin(), left_state.end());
-	join.left_projection_map = attached_output.CreateProjectionMap(projected_left_bindings);
+	join.left_projection_map = attached_output.HasSameBindings(projected_left_bindings)
+	                               ? vector<ProjectionIndex>()
+	                               : attached_output.CreateProjectionMap(projected_left_bindings);
 	result.bindings = std::move(left_state);
 	return result;
 }
 
-FlattenDependentJoins::UnnestingState
-FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, UnnestingState outer_state,
-                                             const UnnestingState &right_state,
-                                             vector<ColumnBinding> public_output_bindings) {
+FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan,
+                                                                                   UnnestingState outer_state,
+                                                                                   const UnnestingState &right_state,
+                                                                                   DependentJoinOutput output) {
 	auto &op = plan->Cast<LogicalDependentJoin>();
 	RewriteCorrelatedBindings(op, outer_state.bindings);
 
@@ -671,6 +682,53 @@ FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, 
 	auto plan_columns = plan->children[1]->GetColumnBindings();
 	CreateDelimJoinConditions(op, op.correlated_columns, right_state.bindings, op.perform_delim);
 	MergeBindingReplacements(outer_state, right_state);
+	for (auto &binding : output.left_payload) {
+		binding = ResolveBinding(binding, outer_state.binding_replacements);
+	}
+	for (auto &binding : output.right_payload) {
+		binding = ResolveBinding(binding, outer_state.binding_replacements);
+	}
+	for (auto &binding : outer_state.bindings) {
+		binding = ResolveBinding(binding, outer_state.binding_replacements);
+	}
+
+	auto left_output = ColumnBindingLayout(op.children[0]->GetColumnBindings(), "decorrelated dependent join left");
+	auto right_output = ColumnBindingLayout(op.children[1]->GetColumnBindings(), "decorrelated dependent join right");
+	auto left_selected = std::move(output.left_payload);
+	auto right_selected = std::move(output.right_payload);
+	for (auto &binding : outer_state.bindings) {
+		auto in_left = left_output.positions.count(binding) > 0;
+		auto in_right = right_output.positions.count(binding) > 0;
+		if (in_left == in_right) {
+			throw InternalException("Dependent-join state binding %s must be owned by exactly one input",
+			                        binding.ToString());
+		}
+		if (in_left) {
+			if (op.join_type == JoinType::RIGHT_SEMI || op.join_type == JoinType::RIGHT_ANTI) {
+				throw InternalException("Dependent-join state is not emitted by the right-only join output");
+			}
+			if (std::find(left_selected.begin(), left_selected.end(), binding) == left_selected.end()) {
+				left_selected.push_back(binding);
+			}
+		} else {
+			if (op.join_type == JoinType::SEMI || op.join_type == JoinType::ANTI || op.join_type == JoinType::MARK) {
+				throw InternalException("Dependent-join state is not emitted by the left-only join output");
+			}
+			if (std::find(right_selected.begin(), right_selected.end(), binding) == right_selected.end()) {
+				right_selected.push_back(binding);
+			}
+		}
+	}
+	if (!left_selected.empty()) {
+		op.left_projection_map = left_output.HasSameBindings(left_selected)
+		                             ? vector<ProjectionIndex>()
+		                             : left_output.CreateProjectionMap(left_selected);
+	}
+	if (!right_selected.empty()) {
+		op.right_projection_map = right_output.HasSameBindings(right_selected)
+		                              ? vector<ProjectionIndex>()
+		                              : right_output.CreateProjectionMap(right_selected);
+	}
 
 	if (op.is_lateral_join && op.subquery_type == SubqueryType::INVALID) {
 		// check if there are any arbitrary expressions left
@@ -688,52 +746,7 @@ FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, 
 	} else if (op.subquery_type == SubqueryType::ANY) {
 		AddAnyJoinConditions(op, plan_columns);
 	}
-	return ProjectDependentJoinOutput(plan, std::move(outer_state), std::move(public_output_bindings));
-}
-
-FlattenDependentJoins::UnnestingState
-FlattenDependentJoins::ProjectDependentJoinOutput(unique_ptr<LogicalOperator> &plan, UnnestingState state,
-                                                  vector<ColumnBinding> public_output_bindings) {
-	for (auto &binding : public_output_bindings) {
-		binding = ResolveBinding(binding, state.binding_replacements);
-	}
-	vector<idx_t> state_positions;
-	state_positions.reserve(state.bindings.size());
-	for (auto &binding : state.bindings) {
-		binding = ResolveBinding(binding, state.binding_replacements);
-		auto entry = std::find(public_output_bindings.begin(), public_output_bindings.end(), binding);
-		if (entry == public_output_bindings.end()) {
-			state_positions.push_back(public_output_bindings.size());
-			public_output_bindings.push_back(binding);
-		} else {
-			state_positions.push_back(NumericCast<idx_t>(entry - public_output_bindings.begin()));
-		}
-	}
-
-	auto current_output = plan->GetColumnBindings();
-	if (current_output == public_output_bindings) {
-		return state;
-	}
-	plan->ResolveOperatorTypes();
-	auto output_layout = ColumnBindingLayout(current_output, "decorrelated dependent join output");
-	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(public_output_bindings.size());
-	for (auto &binding : public_output_bindings) {
-		auto position = output_layout.GetPosition(binding);
-		expressions.push_back(make_uniq<BoundColumnRefExpression>(plan->types[position], binding));
-	}
-
-	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-	projection->children.push_back(std::move(plan));
-	auto projected_bindings = projection->GetColumnBindings();
-	for (idx_t i = 0; i < public_output_bindings.size(); i++) {
-		AddBindingReplacement(state, public_output_bindings[i], projected_bindings[i]);
-	}
-	for (idx_t i = 0; i < state.bindings.size(); i++) {
-		state.bindings[i] = projected_bindings[state_positions[i]];
-	}
-	plan = std::move(projection);
-	return state;
+	return outer_state;
 }
 
 FlattenDependentJoins::UnnestingState
@@ -753,7 +766,11 @@ FlattenDependentJoins::PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator>
 			                           ColumnBindingLayout(plan->children[1]->GetColumnBindings()), result.bindings);
 		}
 	}
-	plan->children[independent_idx] = DecorrelateIndependent(binder, std::move(plan->children[independent_idx]));
+	auto projected_bindings = GetProjectedChildBindings(*plan, independent_idx);
+	auto independent_state = DecorrelateIndependentSubtree(plan->children[independent_idx]);
+	RewriteOperatorBindings(*plan, independent_state);
+	RewriteChildProjectionMap(*plan, independent_idx, std::move(projected_bindings), independent_state);
+	MergeBindingReplacements(result, independent_state);
 	return result;
 }
 
@@ -1059,7 +1076,11 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 		}
 
 		auto left_state = PushDownChild(plan, propagate_null_values, state, false);
-		plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
+		auto projected_bindings = GetProjectedChildBindings(*plan, 1);
+		auto independent_state = DecorrelateIndependentSubtree(plan->children[1]);
+		RewriteOperatorBindings(*plan, independent_state);
+		RewriteChildProjectionMap(*plan, 1, std::move(projected_bindings), independent_state);
+		MergeBindingReplacements(left_state, independent_state);
 		RewriteCorrelatedBindings(*plan, left_state.bindings);
 		return left_state;
 	}
@@ -1329,7 +1350,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCTE(unique_
 		if (DependsOnCorrelated(*plan->children[1])) {
 			result = PushDownCorrelatedNode(plan->children[1], propagate_null_values, std::move(result.bindings));
 			RewriteOperatorBindings(*plan, result);
-			plan->children[0] = DecorrelateIndependent(binder, std::move(plan->children[0]));
+			DecorrelateIndependentSubtree(plan->children[0]);
 		}
 		return result;
 	}

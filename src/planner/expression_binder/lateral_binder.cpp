@@ -61,7 +61,7 @@ static void ReduceColumnRefDepth(BoundColumnRefExpression &expr, const Correlate
 	}
 	for (auto &correlated : correlated_columns) {
 		if (correlated.binding == expr.Binding()) {
-			D_ASSERT(expr.Depth() > 0);
+			D_ASSERT(expr.Depth() > 1);
 			expr.DepthMutable()--;
 			break;
 		}
