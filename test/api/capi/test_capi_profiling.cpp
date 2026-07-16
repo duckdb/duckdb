@@ -437,7 +437,7 @@ TEST_CASE("Test profiling with the non-query appender", "[capi]") {
 	auto query_name_c_str = duckdb_get_varchar(query_name);
 	auto query_name_str = duckdb::string(query_name_c_str);
 
-	auto query = "INSERT INTO main.test FROM __duckdb_internal_appended_data";
+	auto query = "INSERT INTO memory.main.test FROM __duckdb_internal_appended_data";
 	REQUIRE(query_name_str == query);
 
 	duckdb_destroy_value(&query_name);
