@@ -18,17 +18,17 @@ SELECT 1 <> 1, 1 != 1, 1 <> 0, 1 != 0, 1 <> NULL
 statement error
 SELECT 1 = 1 = 1;
 ----
-Parser Error: Chained comparisons are not supported - use AND to combine comparisons
+Parser Error: Chained comparisons are not supported, use AND to combine comparisons
 
 statement error
 SELECT 1 < 2 < 3;
 ----
-Parser Error: Chained comparisons are not supported - use AND to combine comparisons
+Parser Error: Chained comparisons are not supported, use AND to combine comparisons
 
 statement error
 SELECT 1 IS DISTINCT FROM 2 IS DISTINCT FROM 3;
 ----
-Parser Error: Chained comparisons are not supported - use AND to combine comparisons
+Parser Error: Chained comparisons are not supported, use AND to combine comparisons
 
 query I
 SELECT 1 < 2 AND 2 < 3
