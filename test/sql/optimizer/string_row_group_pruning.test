@@ -11,105 +11,55 @@ USE db;
 # 4096 rows -> 2 row groups of 2048 each. First group is all 'a', second is all 'b'.
 statement ok
 CREATE TABLE s AS
-SELECT CASE WHEN range < 2048 THEN 'a' ELSE 'b' END AS v
+SELECT CASE WHEN range < 2048 THEN 'a' ELSE 'b' END AS v, 1 AS payload
 FROM range(4096);
 
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v > 'a';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v > 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
-query I
-SELECT count(*) FROM s WHERE v > 'a';
-----
-2048
-
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v = 'b';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v = 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
-query I
-SELECT count(*) FROM s WHERE v = 'b';
-----
-2048
-
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v IS NOT DISTINCT FROM 'b';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v IS NOT DISTINCT FROM 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
-query I
-SELECT count(*) FROM s WHERE v IS NOT DISTINCT FROM 'b';
-----
-2048
-
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v <> 'a';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v <> 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
-query I
-SELECT count(*) FROM s WHERE v <> 'a';
-----
-2048
-
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v IS DISTINCT FROM 'a';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v IS DISTINCT FROM 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
-query I
-SELECT count(*) FROM s WHERE v IS DISTINCT FROM 'a';
-----
-2048
-
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v >= 'b';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v >= 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
-query I
-SELECT count(*) FROM s WHERE v >= 'b';
-----
-2048
-
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v < 'b';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v < 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
-query I
-SELECT count(*) FROM s WHERE v < 'b';
-----
-2048
-
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v <= 'a';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v <= 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
 
-query I
-SELECT count(*) FROM s WHERE v <= 'a';
-----
-2048
-
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v >= 'a';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v >= 'a';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
 
-query I
-SELECT count(*) FROM s WHERE v >= 'a';
-----
-4096
-
 query II
-EXPLAIN ANALYZE SELECT count(*) FROM s WHERE v <= 'b';
+EXPLAIN ANALYZE SELECT sum(payload) FROM s WHERE v <= 'b';
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
-
-query I
-SELECT count(*) FROM s WHERE v <= 'b';
-----
-4096

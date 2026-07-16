@@ -1,0 +1,28 @@
+# name: test/sql/optimizer/string_stats_merge.test
+# description: Merging exact and truncated string statistics preserves correct bounds
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/string_stats_merge.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE long_strings (v VARCHAR, payload INTEGER);
+
+statement ok
+INSERT INTO long_strings SELECT repeat('a', 12), 1 FROM range(2048);
+
+statement ok
+INSERT INTO long_strings SELECT repeat('a', 13), 1 FROM range(2048);
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v > repeat('a', 12);
+----
+2048
+
+query I
+SELECT sum(payload) FROM long_strings WHERE v <> repeat('a', 12);
+----
+2048
