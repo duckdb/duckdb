@@ -10,6 +10,7 @@ add_subdirectory(capi)
 
 set(TEST_API_OBJECTS
     test_api.cpp
+    test_bind_statement.cpp
     test_config.cpp
     test_custom_allocator.cpp
     test_extension_setting_autoload.cpp
@@ -28,8 +29,10 @@ set(TEST_API_OBJECTS
     test_relation_api.cpp
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
+    test_read_ahead_abandon.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
+    test_parse_statement_iterator.cpp
     test_progress_bar.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
@@ -52,6 +55,11 @@ if(DUCKDB_EXTENSION_TPCH_SHOULD_LINK)
       ${TEST_API_OBJECTS} test_tpch_with_relations.cpp
       test_tpch_with_streaming.cpp
       serialized_plans/test_plan_serialization_bwc.cpp)
+endif()
+
+if(DUCKDB_EXTENSION_TPCDS_SHOULD_LINK)
+  include_directories(../../extension/tpcds/include)
+  set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_tpcds_with_streaming.cpp)
 endif()
 
 add_library(test_api OBJECT ${TEST_API_OBJECTS})

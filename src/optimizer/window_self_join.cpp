@@ -8,11 +8,41 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
 
 namespace duckdb {
 
-static unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_expr) {
+static bool IsOrderableDistinctAggregate(const BoundWindowExpression &w_expr) {
+	//	If the aggregate is order-sensitive and distinct,
+	//	then the ORDER BYs need to be functional dependencies of the arguments.
+	auto agg_func = *w_expr.AggregateFunction();
+	if (agg_func.GetOrderDependent() != AggregateOrderDependent::ORDER_DEPENDENT || !w_expr.Distinct()) {
+		return true;
+	}
+
+	const auto &arguments = w_expr.GetChildren();
+	vector<reference<Expression>> arg_refs;
+	arg_refs.reserve(arguments.size());
+	for (auto &arg : arguments) {
+		arg_refs.emplace_back(*arg);
+	}
+	bool in_args = true;
+
+	if (!w_expr.ArgOrders().empty()) {
+		for (auto &order : w_expr.ArgOrders()) {
+			in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
+		}
+	} else if (!w_expr.OrderBy().empty()) {
+		for (auto &order : w_expr.OrderBy()) {
+			in_args &= BaseSelectBinder::IsFunctionallyDependent(order.expression, arg_refs);
+		}
+	}
+
+	return in_args;
+}
+
+static unique_ptr<Expression> TranslateAggregate(ClientContext &client, const BoundWindowExpression &w_expr) {
 	auto agg_func = *w_expr.AggregateFunction();
 	unique_ptr<FunctionData> bind_info;
 	if (w_expr.BindInfo()) {
@@ -32,10 +62,15 @@ static unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_
 		filter = w_expr.Filter()->Copy();
 	}
 
-	auto aggr_type = w_expr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
-
+	const auto aggr_type = w_expr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
+	const auto aggr_ordered = (agg_func.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT);
 	auto result = make_uniq<BoundAggregateExpression>(std::move(agg_func), std::move(children), std::move(filter),
 	                                                  std::move(bind_info), aggr_type);
+
+	if (!aggr_ordered) {
+		//	ORDER BY is a NOP, so drop it.
+		return std::move(result);
+	}
 
 	if (!w_expr.ArgOrders().empty()) {
 		result->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
@@ -109,6 +144,10 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 		return false;
 	}
 	if (!w_expr.PartitionsAreEquivalent(w_expr0)) {
+		return false;
+	}
+
+	if (!IsOrderableDistinctAggregate(w_expr)) {
 		return false;
 	}
 
@@ -195,7 +234,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 
 		for (auto &expr : window.expressions) {
 			auto &w_expr = expr->Cast<BoundWindowExpression>();
-			aggregates.emplace_back(TranslateAggregate(w_expr));
+			aggregates.emplace_back(TranslateAggregate(optimizer.GetContext(), w_expr));
 		}
 
 		// args: group_index, aggregate_index, ...

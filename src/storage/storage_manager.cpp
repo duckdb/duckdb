@@ -154,7 +154,8 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 }
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, AttachOptions &options)
-    : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY), wal_size(0) {
+    : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY), wal_size(0),
+      prefetched_file(std::move(options.prefetched)) {
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
 		return;
@@ -523,6 +524,9 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			options.block_header_size = config.options.default_block_header_size;
 		}
 
+		// Carry the prefetched header into the block manager options so the initial header reads hit memory.
+		options.prefetched = std::move(prefetched_file);
+
 		// Initialize the block manager while loading the database file.
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
@@ -768,7 +772,15 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
-			throw FatalException("Failed to create checkpoint because of error: %s", error.Message());
+			if (db.IsInitialDatabase()) {
+				ValidChecker::Invalidate(db.GetDatabase(), error.RawMessage());
+				throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
+			}
+			// A non-initial database can be detached and reattached, so scope invalidation to this db.
+			db.Invalidate(error.RawMessage());
+			throw IOException("Checkpoint failed for database \"%s\". The database has been invalidated. Original "
+			                  "error: %s",
+			                  db.GetName().GetIdentifierName(), error.RawMessage());
 		}
 	}
 

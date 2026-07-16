@@ -12,15 +12,24 @@ namespace duckdb {
 
 void CatalogEntryInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CatalogType>(100, "type", type);
-	serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
+	}
 	serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<vector<Identifier>>(103, "schema_path", schema_path, vector<Identifier>());
+	}
 }
 
 CatalogEntryInfo CatalogEntryInfo::Deserialize(Deserializer &deserializer) {
 	CatalogEntryInfo result;
 	deserializer.ReadProperty<CatalogType>(100, "type", result.type);
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
 	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	deserializer.ReadPropertyWithExplicitDefault<vector<Identifier>>(103, "schema_path", result.schema_path, vector<Identifier>());
+	if (result.schema_path.empty() && result.type != CatalogType::SCHEMA_ENTRY && !schema.empty()) {
+		result.schema_path.push_back(std::move(schema));
+	}
 	return result;
 }
 

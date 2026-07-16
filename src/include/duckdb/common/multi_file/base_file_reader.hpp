@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
@@ -21,6 +22,8 @@ namespace duckdb {
 
 class BaseStatistics;
 class BaseUnionData;
+class AsyncResult;
+class DataChunk;
 struct GlobalTableFunctionState;
 struct LocalTableFunctionState;
 
@@ -89,19 +92,26 @@ public:
 	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name);
 	//! Prepare reader for scanning
 	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
+	//! Called after opening when the scan is driven by read-ahead, lets the reader pre-open scan resources
+	DUCKDB_API virtual void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &);
 
 	//! Try to initialize a scan over the reader - this is done while the global lock is held
 	virtual bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                               LocalTableFunctionState &lstate) = 0;
 	//! Prepare a scan - called after TryInitializeScan succeeds - this is done without any lock held
 	virtual void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
-	//! Scan a chunk from the read state
+	//! Function to schedule IO tasks, if Reader supports that
+	DUCKDB_API virtual AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                          LocalTableFunctionState &lstate);
+	//! Scan a chunk
 	virtual AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                         LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
 	//! Finish scanning a given file
 	DUCKDB_API virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate);
 	//! Get progress within a given file
 	DUCKDB_API virtual double GetProgressInFile(ClientContext &context);
+	//! Get reader metadata, if available
+	DUCKDB_API virtual InsertionOrderPreservingMap<Value> GetMetadata() const;
 
 	virtual string GetReaderType() const = 0;
 

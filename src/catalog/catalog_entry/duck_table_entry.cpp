@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -28,6 +29,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -35,7 +37,7 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
                               const idx_t id) {
 	auto &table_info = info->Cast<CreateTableInfo>();
 	auto constraint_name = EnumUtil::ToString(type) + "_";
-	auto name = constraint_name + table_info.table + "_" + to_string(id);
+	auto name = constraint_name + table_info.GetTableName() + "_" + to_string(id);
 	IndexStorageInfo index_info {Identifier(name)};
 	if (!v1_0_0_storage) {
 		index_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
@@ -70,6 +72,28 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				auto current = GetStorageVersionName(storage_version, false);
 
 				throw InvalidInputException("Empty STRUCT columns are not supported in storage versions prior to %s "
+				                            "(database \"%s\" is using storage version %s)",
+				                            required, db.GetName(), current);
+			}
+			// an unnamed STRUCT is serialized identically to a TUPLE, so it must pass the same gate
+			if (storage_version < StorageVersion::V2_0_0 && StructType::IsUnnamed(type)) {
+				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("TUPLE columns are not supported in storage versions prior to %s "
+				                            "(database \"%s\" is using storage version %s)",
+				                            required, db.GetName(), current);
+			}
+		} break;
+		case LogicalTypeId::TUPLE: {
+			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate them to v2.0.0+
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (storage_version < StorageVersion::V2_0_0) {
+				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("TUPLE columns are not supported in storage versions prior to %s "
 				                            "(database \"%s\" is using storage version %s)",
 				                            required, db.GetName(), current);
 			}
@@ -543,10 +567,10 @@ Value ConstructMapping(const Identifier &name, const LogicalType &type) {
 	for (auto &entry : child_types) {
 		auto mapping_value = ConstructMapping(entry.first, entry.second);
 		if (entry.second.IsNested()) {
-			child_list_t<Value> child_values;
-			child_values.emplace_back(string(), Value(entry.first));
-			child_values.emplace_back(string(), std::move(mapping_value));
-			mapping_value = Value::STRUCT(std::move(child_values));
+			vector<Value> child_values;
+			child_values.push_back(Value(entry.first));
+			child_values.push_back(std::move(mapping_value));
+			mapping_value = Value::TUPLE(std::move(child_values));
 		}
 		child_mapping.emplace_back(entry.first, std::move(mapping_value));
 	}
@@ -855,10 +879,10 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 		}
 
 		if (entry.second.IsNested()) {
-			child_list_t<Value> child_values;
-			child_values.emplace_back(string(), Value(entry.first));
-			child_values.emplace_back(string(), std::move(mapping_value));
-			mapping_value = Value::STRUCT(std::move(child_values));
+			vector<Value> child_values;
+			child_values.push_back(Value(entry.first));
+			child_values.push_back(std::move(mapping_value));
+			mapping_value = Value::TUPLE(std::move(child_values));
 		}
 		child_mapping.emplace_back(entry.first, std::move(mapping_value));
 		new_type_children.emplace_back(entry.first, type_value);
@@ -956,10 +980,10 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 			type_value = entry.second;
 		}
 		if (entry.second.IsNested()) {
-			child_list_t<Value> child_values;
-			child_values.emplace_back(string(), Value(entry.first));
-			child_values.emplace_back(string(), std::move(mapping_value));
-			mapping_value = Value::STRUCT(std::move(child_values));
+			vector<Value> child_values;
+			child_values.push_back(Value(entry.first));
+			child_values.push_back(std::move(mapping_value));
+			mapping_value = Value::TUPLE(std::move(child_values));
 		}
 		child_mapping.emplace_back(field_name, std::move(mapping_value));
 		new_type_children.emplace_back(field_name, type_value);
@@ -1216,7 +1240,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKey
 	}
 	ForeignKeyInfo fk_info;
 	fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
-	fk_info.schema = info.schema;
+	fk_info.schema = info.GetQualifiedName().Schema();
 	fk_info.table = info.fk_table;
 	fk_info.pk_keys = info.pk_keys;
 	fk_info.fk_keys = info.fk_keys;
@@ -1320,7 +1344,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 
 	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
-	const auto bound_constraint = binder->BindConstraint(*info.constraint, table_info.table, table_info.columns);
+	const auto bound_constraint =
+	    binder->BindConstraint(*info.constraint, table_info.GetTableName(), table_info.columns);
 	const auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);

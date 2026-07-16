@@ -1,4 +1,5 @@
 #include "duckdb/main/settings.hpp"
+#include "duckdb/function/partition_stats.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"

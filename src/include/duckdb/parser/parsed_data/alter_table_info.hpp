@@ -92,7 +92,7 @@ enum class AlterTableType : uint8_t {
 };
 
 struct AlterTableInfo : public AlterInfo {
-	AlterTableInfo(AlterTableType type, AlterEntryData data);
+	AlterTableInfo(AlterTableType type, const AlterEntryData &data);
 	~AlterTableInfo() override;
 
 	AlterTableType alter_table_type;
@@ -111,7 +111,7 @@ protected:
 // RenameColumnInfo
 //===--------------------------------------------------------------------===//
 struct RenameColumnInfo : public AlterTableInfo {
-	RenameColumnInfo(AlterEntryData data, Identifier old_name_p, Identifier new_name_p);
+	RenameColumnInfo(const AlterEntryData &data, Identifier old_name_p, Identifier new_name_p);
 	~RenameColumnInfo() override;
 
 	//! Column old name
@@ -134,7 +134,7 @@ private:
 // RenameFieldInfo
 //===--------------------------------------------------------------------===//
 struct RenameFieldInfo : public AlterTableInfo {
-	RenameFieldInfo(AlterEntryData data, vector<Identifier> column_path, Identifier new_name_p);
+	RenameFieldInfo(const AlterEntryData &data, vector<Identifier> column_path, Identifier new_name_p);
 	~RenameFieldInfo() override;
 
 	//! Path to source field.
@@ -160,7 +160,7 @@ private:
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
 struct RenameTableInfo : public AlterTableInfo {
-	RenameTableInfo(AlterEntryData data, Identifier new_name);
+	RenameTableInfo(const AlterEntryData &data, Identifier new_name);
 	~RenameTableInfo() override;
 
 	//! Relation new name
@@ -181,7 +181,7 @@ private:
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
 struct AddColumnInfo : public AlterTableInfo {
-	AddColumnInfo(AlterEntryData data, ColumnDefinition new_column, bool if_column_not_exists);
+	AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column, bool if_column_not_exists);
 	~AddColumnInfo() override;
 
 	//! New column
@@ -204,7 +204,7 @@ private:
 // AddFieldInfo
 //===--------------------------------------------------------------------===//
 struct AddFieldInfo : public AlterTableInfo {
-	AddFieldInfo(AlterEntryData data, vector<Identifier> column_path, ColumnDefinition new_field,
+	AddFieldInfo(const AlterEntryData &data, vector<Identifier> column_path, ColumnDefinition new_field,
 	             bool if_field_not_exists);
 	~AddFieldInfo() override;
 
@@ -233,7 +233,7 @@ private:
 // RemoveColumnInfo
 //===--------------------------------------------------------------------===//
 struct RemoveColumnInfo : public AlterTableInfo {
-	RemoveColumnInfo(AlterEntryData data, string removed_column, bool if_column_exists, bool cascade);
+	RemoveColumnInfo(const AlterEntryData &data, string removed_column, bool if_column_exists, bool cascade);
 	~RemoveColumnInfo() override;
 
 	//! The column to remove
@@ -260,7 +260,7 @@ private:
 // RemoveFieldInfo
 //===--------------------------------------------------------------------===//
 struct RemoveFieldInfo : public AlterTableInfo {
-	RemoveFieldInfo(AlterEntryData data, vector<Identifier> column_path, bool if_column_exists, bool cascade);
+	RemoveFieldInfo(const AlterEntryData &data, vector<Identifier> column_path, bool if_column_exists, bool cascade);
 	~RemoveFieldInfo() override;
 
 	//! Path to source field.
@@ -287,7 +287,7 @@ private:
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
 struct ChangeColumnTypeInfo : public AlterTableInfo {
-	ChangeColumnTypeInfo(AlterEntryData data, Identifier column_name, LogicalType target_type,
+	ChangeColumnTypeInfo(const AlterEntryData &data, Identifier column_name, LogicalType target_type,
 	                     unique_ptr<ParsedExpression> expression);
 	~ChangeColumnTypeInfo() override;
 
@@ -315,7 +315,7 @@ private:
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
 struct SetDefaultInfo : public AlterTableInfo {
-	SetDefaultInfo(AlterEntryData data, Identifier column_name, unique_ptr<ParsedExpression> new_default);
+	SetDefaultInfo(const AlterEntryData &data, Identifier column_name, unique_ptr<ParsedExpression> new_default);
 	~SetDefaultInfo() override;
 
 	//! The column name to alter
@@ -337,7 +337,7 @@ private:
 // AlterForeignKeyInfo
 //===--------------------------------------------------------------------===//
 struct AlterForeignKeyInfo : public AlterTableInfo {
-	AlterForeignKeyInfo(AlterEntryData data, Identifier fk_table, vector<Identifier> pk_columns,
+	AlterForeignKeyInfo(const AlterEntryData &data, Identifier fk_table, vector<Identifier> pk_columns,
 	                    vector<Identifier> fk_columns, vector<PhysicalIndex> pk_keys, vector<PhysicalIndex> fk_keys,
 	                    AlterForeignKeyType type);
 	~AlterForeignKeyInfo() override;
@@ -363,7 +363,7 @@ private:
 // SetNotNullInfo
 //===--------------------------------------------------------------------===//
 struct SetNotNullInfo : public AlterTableInfo {
-	SetNotNullInfo(AlterEntryData data, Identifier column_name);
+	SetNotNullInfo(const AlterEntryData &data, Identifier column_name);
 	~SetNotNullInfo() override;
 
 	//! The column name to alter
@@ -383,7 +383,7 @@ private:
 // DropNotNullInfo
 //===--------------------------------------------------------------------===//
 struct DropNotNullInfo : public AlterTableInfo {
-	DropNotNullInfo(AlterEntryData data, Identifier column_name);
+	DropNotNullInfo(const AlterEntryData &data, Identifier column_name);
 	~DropNotNullInfo() override;
 
 	//! The column name to alter
@@ -405,7 +405,7 @@ private:
 enum class AlterViewType : uint8_t { INVALID = 0, RENAME_VIEW = 1 };
 
 struct AlterViewInfo : public AlterInfo {
-	AlterViewInfo(AlterViewType type, AlterEntryData data);
+	AlterViewInfo(AlterViewType type, const AlterEntryData &data);
 	~AlterViewInfo() override;
 
 	AlterViewType alter_view_type;
@@ -423,7 +423,7 @@ protected:
 // RenameViewInfo
 //===--------------------------------------------------------------------===//
 struct RenameViewInfo : public AlterViewInfo {
-	RenameViewInfo(AlterEntryData data, Identifier new_name);
+	RenameViewInfo(const AlterEntryData &data, Identifier new_name);
 	~RenameViewInfo() override;
 
 	//! Relation new name
@@ -443,7 +443,7 @@ private:
 // AddConstraintInfo
 //===--------------------------------------------------------------------===//
 struct AddConstraintInfo : public AlterTableInfo {
-	AddConstraintInfo(AlterEntryData data, unique_ptr<Constraint> constraint);
+	AddConstraintInfo(const AlterEntryData &data, unique_ptr<Constraint> constraint);
 	~AddConstraintInfo() override;
 
 	//! The constraint to add.
@@ -463,7 +463,7 @@ private:
 // SetPartitionedByInfo
 //===--------------------------------------------------------------------===//
 struct SetPartitionedByInfo : public AlterTableInfo {
-	SetPartitionedByInfo(AlterEntryData data, vector<unique_ptr<ParsedExpression>> partition_keys);
+	SetPartitionedByInfo(const AlterEntryData &data, vector<unique_ptr<ParsedExpression>> partition_keys);
 	~SetPartitionedByInfo() override;
 
 	//! The partition keys
@@ -483,7 +483,7 @@ private:
 // SetSortedByInfo
 //===--------------------------------------------------------------------===//
 struct SetSortedByInfo : public AlterTableInfo {
-	SetSortedByInfo(AlterEntryData data, vector<OrderByNode> orders);
+	SetSortedByInfo(const AlterEntryData &data, vector<OrderByNode> orders);
 	~SetSortedByInfo() override;
 
 	//! The sort keys
@@ -503,7 +503,7 @@ private:
 // SetOptionsInfo
 //===--------------------------------------------------------------------===//
 struct SetTableOptionsInfo : public AlterTableInfo {
-	SetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options);
+	SetTableOptionsInfo(const AlterEntryData &data, case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options);
 	~SetTableOptionsInfo() override;
 
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options;
@@ -523,7 +523,7 @@ private:
 // ResetOptionsInfo
 //===--------------------------------------------------------------------===//
 struct ResetTableOptionsInfo : public AlterTableInfo {
-	ResetTableOptionsInfo(AlterEntryData data, identifier_set_t table_options);
+	ResetTableOptionsInfo(const AlterEntryData &data, identifier_set_t table_options);
 	~ResetTableOptionsInfo() override;
 
 	identifier_set_t table_options;

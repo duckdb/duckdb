@@ -113,7 +113,7 @@ def load_grammar_types(types_file):
 
     # Category entries: CategoryName -> {type: "...", by_value: bool, default_initializer: "...", rules: [...]}
     for key, value in data.items():
-        if key in ("overrides", "excluded_rules", "matcher_rule_overrides"):
+        if key in ("overrides", "excluded_rules", "matcher_rule_overrides", "packrat_memoized_rules"):
             continue
         if not isinstance(value, dict):
             continue
@@ -147,3 +147,25 @@ def load_matcher_rule_overrides(types_file):
         print(f"Error: matcher_rule_overrides in {types_file} must be a mapping.", file=sys.stderr)
         sys.exit(1)
     return overrides
+
+
+def load_packrat_memoized_rules(types_file, known_rules=None):
+    """Load packrat_memoized_rules from grammar_types.yml."""
+    data = load_grammar_types_yaml(types_file)
+
+    rules = data.get("packrat_memoized_rules", [])
+    if not isinstance(rules, list):
+        print(f"Error: packrat_memoized_rules in {types_file} must be a list.", file=sys.stderr)
+        sys.exit(1)
+    rules = [str(rule) for rule in rules]
+
+    if known_rules is not None:
+        known_rules = set(known_rules)
+        missing_rules = sorted(rule for rule in rules if rule not in known_rules)
+        if missing_rules:
+            print(f"Error: packrat_memoized_rules in {types_file} contains unknown grammar rules:", file=sys.stderr)
+            for rule in missing_rules:
+                print(f"  - {rule}", file=sys.stderr)
+            sys.exit(1)
+
+    return rules

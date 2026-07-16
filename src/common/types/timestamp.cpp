@@ -85,7 +85,7 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	//	We parsed an interval, so make sure it is in range.
-	if (time.micros > Interval::MICROS_PER_DAY) {
+	if (time.value > Interval::MICROS_PER_DAY) {
 		return TimestampCastResult::ERROR_RANGE;
 	}
 	pos += time_pos;
@@ -392,7 +392,7 @@ bool Timestamp::TryFromDatetime(date_t date, dtime_t time, timestamp_t &result) 
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::MICROS_PER_DAY, result.value)) {
 		return false;
 	}
-	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time.micros, result.value)) {
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time.value, result.value)) {
 		return false;
 	}
 	return result.IsFinite();
@@ -561,7 +561,7 @@ int64_t Timestamp::GetEpochRounded(timestamp_t input, int64_t power_of_ten) {
 }
 
 double Timestamp::GetJulianDay(timestamp_t timestamp) {
-	double result = double(Timestamp::GetTime(timestamp).micros);
+	double result = double(Timestamp::GetTime(timestamp).value);
 	result /= Interval::MICROS_PER_DAY;
 	result += double(Date::ExtractJulianDay(Timestamp::GetDate(timestamp)));
 	return result;

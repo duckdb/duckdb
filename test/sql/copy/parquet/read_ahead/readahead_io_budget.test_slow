@@ -1,0 +1,56 @@
+# name: test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow
+# description: In automatic mode the scheduled-ahead I/O is byte-budgeted, bounded by the memory limit and not by the job depth
+# group: [read_ahead]
+
+require parquet
+
+statement ok
+SET threads=1
+
+statement ok
+SET memory_limit='10MB'
+
+loop i 0 8
+
+statement ok
+COPY (SELECT range AS i, md5(range::VARCHAR) AS s FROM range(50000)) TO '{TEST_DIR}/budget_gate_{i}.parquet' (FORMAT parquet, ROW_GROUP_SIZE 100000)
+
+endloop
+
+statement ok
+CALL enable_logging('ParquetPrefetch')
+
+query I
+SELECT sum(i) FROM '{TEST_DIR}/budget_gate_*.parquet' WHERE s = '88888888888888888888888888888888'
+----
+NULL
+
+query T
+SELECT strategy FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%budget_gate_%'
+ORDER BY file_path
+LIMIT 3
+----
+whole_group
+prefetch_filters
+prefetch_filters
+
+statement ok
+CALL truncate_duckdb_logs()
+
+loop i 0 8
+
+statement ok
+COPY (SELECT range AS i, md5(range::VARCHAR) AS s FROM range(50000)) TO '{TEST_DIR}/budget_scan_{i}.parquet' (FORMAT parquet, ROW_GROUP_SIZE 100000)
+
+endloop
+
+# scanning all ~14 MB of files with a large look-ahead must stay within the memory limit
+loop x 0 5
+
+query I
+SELECT sum(length(s)) FROM '{TEST_DIR}/budget_scan_*.parquet'
+----
+12800000
+
+endloop

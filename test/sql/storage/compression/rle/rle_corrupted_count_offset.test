@@ -1,0 +1,16 @@
+# name: test/sql/storage/compression/rle/rle_corrupted_count_offset.test
+# group: [rle]
+
+require vector_size 2048
+
+load data/storage/rle_corrupt_count_offset.db readonly
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE compression='RLE';
+----
+RLE
+
+statement error
+SELECT * FROM t LIMIT 1;
+----
+IO Error: Corrupted RLE segment: rle_count_offset is corrupted

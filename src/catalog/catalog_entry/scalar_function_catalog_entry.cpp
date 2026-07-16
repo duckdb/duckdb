@@ -4,6 +4,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
@@ -13,8 +14,8 @@ ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog &catalog, SchemaC
                                                        CreateScalarFunctionInfo &info)
     : FunctionEntry(CatalogType::SCALAR_FUNCTION_ENTRY, catalog, schema, info), functions(info.functions) {
 	for (auto &function : functions.functions) {
-		function.catalog_name = catalog.GetAttached().GetName();
-		function.schema_name = schema.name;
+		function.SetCatalogName(catalog.GetAttached().GetName());
+		function.SetSchemaName(schema.name);
 	}
 }
 

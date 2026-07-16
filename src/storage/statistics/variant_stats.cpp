@@ -786,6 +786,7 @@ unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &s
 		if (!index_iter.get().HasChildren()) {
 			break;
 		}
+		index_iter = index_iter.get().GetChildIndex(0);
 	}
 	auto &shredded_child_stats = *res;
 

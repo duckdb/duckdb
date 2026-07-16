@@ -14,7 +14,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/main/query_context.hpp"
+#include "duckdb/common/query_context.hpp"
 
 namespace duckdb {
 

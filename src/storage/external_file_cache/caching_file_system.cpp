@@ -3,11 +3,13 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_util.hpp"
@@ -16,6 +18,16 @@ namespace duckdb {
 
 // Forward declaration.
 class DatabaseInstance;
+
+namespace {
+
+// Allocate an uncached read buffer to make sure it's de-allocated immediately, and its metadata is not stored in the
+// eviction queue.
+BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t size) {
+	auto buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, size);
+	buffer.GetBlockHandle()->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+	return buffer;
+}
 
 //===----------------------------------------------------------------------===//
 // FetchBlockTask
@@ -109,6 +121,8 @@ private:
 	idx_t block_size;
 	BufferHandle &result_pin;
 };
+
+} // namespace
 
 //===----------------------------------------------------------------------===//
 // CachingFileSystem
@@ -257,9 +271,12 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		return FileBufferHandleGroup();
 	}
 
-	// Uncached files are read directly into one contiguous buffer, skipping the per block syscalls and copies
-	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path)) {
-		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+	// Only cache when file metadata is available.
+	const bool no_validation_metadata =
+	    Validate() && version_tag.empty() && (!last_modified.IsFinite() || last_modified == timestamp_t(0));
+
+	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || no_validation_metadata) {
+		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
@@ -324,7 +341,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 	if (!external_file_cache.IsEnabled() || !CanSeek()) {
-		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buf.GetDataMutable(), nr_bytes));
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});

@@ -36,6 +36,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -264,9 +265,10 @@ idx_t DataTable::GetRowGroupSize() const {
 }
 
 vector<PartitionStatistics> DataTable::GetPartitionStats(ClientContext &context) {
-	auto result = row_groups->GetPartitionStats();
+	auto &transaction = DuckTransaction::Get(context, db);
+	auto result = row_groups->GetPartitionStats(transaction);
 	auto &local_storage = LocalStorage::Get(context, db);
-	auto local_partitions = local_storage.GetPartitionStats(*this);
+	auto local_partitions = local_storage.GetPartitionStats(*this, transaction);
 	result.insert(result.end(), local_partitions.begin(), local_partitions.end());
 	return result;
 }
@@ -680,8 +682,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	}
 
 	// Get the column types in their physical order.
-	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, db.GetName(), bound_foreign_key.info.schema,
-	                                                         bound_foreign_key.info.table);
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
+	    context, QualifiedName(db.GetName(), bound_foreign_key.info.schema, bound_foreign_key.info.table));
 	vector<LogicalType> types;
 	for (auto &col : table_entry.GetColumns().Physical()) {
 		types.emplace_back(col.Type());

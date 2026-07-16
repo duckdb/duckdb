@@ -8,7 +8,12 @@ from typing import List
 
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar, PEGTokenType
-from grammar_types import load_grammar_types, load_grammar_types_yaml, load_matcher_rule_overrides
+from grammar_types import (
+    load_grammar_types,
+    load_grammar_types_yaml,
+    load_matcher_rule_overrides,
+    load_packrat_memoized_rules,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +225,7 @@ def to_snake_case(name):
 
 
 def manual_body_exists(gram_stem, rule_name):
-    pattern = re.compile(rf'\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\(')
+    pattern = re.compile(rf'\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\([^;]*\)\s*\{{', re.S)
     preferred_path = transformer_dir / f"transform_{gram_stem}.cpp"
     paths = [preferred_path] if preferred_path.exists() else []
     paths.extend(path for path in transformer_dir.glob("transform_*.cpp") if path != preferred_path)
@@ -305,6 +310,12 @@ def _emit_string_result_extraction(var_name, source_expr, result_type="string"):
     identifier_value = f"{source_expr}.Cast<IdentifierParseResult>().identifier"
     if result_type != "Identifier":
         identifier_value = f"{identifier_value}.GetIdentifierName()"
+    operator_extraction = (
+        f"\t}} else if ({source_expr}.type == ParseResultType::OPERATOR) {{\n"
+        f"\t\t{var_name} = {source_expr}.Cast<OperatorParseResult>().operator_token;\n"
+        if result_type == "string"
+        else ""
+    )
     return (
         f"\t{result_type} {var_name};\n"
         f"\tif ({source_expr}.type == ParseResultType::IDENTIFIER) {{\n"
@@ -313,7 +324,8 @@ def _emit_string_result_extraction(var_name, source_expr, result_type="string"):
         f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<KeywordParseResult>().keyword')};\n"
         f"\t}} else if ({source_expr}.type == ParseResultType::STRING) {{\n"
         f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<StringLiteralParseResult>().result')};\n"
-        f"\t}} else {{\n"
+        + operator_extraction
+        + f"\t}} else {{\n"
         f"\t\t{var_name} = transformer.Transform<{result_type}>({source_expr});\n"
         f"\t}}\n"
     )
@@ -329,7 +341,11 @@ def generate_choice_internal_full(rule_name, return_type, return_by_value):
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
-        f"\tauto result = transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
+        + (
+            _emit_string_result_extraction("result", "choice_pr.GetResult()", return_type)
+            if return_type == "string"
+            else f"\tauto result = transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
+        )
         + _box_result(return_type, return_by_value)
         + f"}}\n"
     )
@@ -1178,6 +1194,8 @@ _START_BLOCK = _SEPARATOR + "\t// START GENERATED RULES\n" + _SEPARATOR
 _END_BLOCK = _SEPARATOR + "\t// END GENERATED RULES\n" + _SEPARATOR
 _MATCHER_START_BLOCK = _SEPARATOR + "\t// START GENERATED RULE OVERRIDES\n" + _SEPARATOR
 _MATCHER_END_BLOCK = _SEPARATOR + "\t// END GENERATED RULE OVERRIDES\n" + _SEPARATOR
+_PACKRAT_START_BLOCK = _SEPARATOR + "\t// START GENERATED PACKRAT MEMOIZED RULES\n" + _SEPARATOR
+_PACKRAT_END_BLOCK = _SEPARATOR + "\t// END GENERATED PACKRAT MEMOIZED RULES\n" + _SEPARATOR
 
 
 def _matcher_override_expr(rule_name, override):
@@ -1189,6 +1207,8 @@ def _matcher_override_expr(rule_name, override):
     if matcher == "reserved_identifier":
         if suggestion:
             return f"allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::{suggestion}))"
+    if matcher == "identifier_string":
+        return "allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE))"
     if matcher == "number_literal":
         return "allocator.Allocate(make_uniq<NumberLiteralMatcher>())"
     if matcher == "string_literal":
@@ -1226,6 +1246,26 @@ def write_matcher_rule_overrides(matcher_overrides):
     print(f"Updated {matcher_cpp_path}")
 
 
+def write_packrat_memoized_rules(packrat_memoized_rules):
+    content = matcher_cpp_path.read_text()
+    start_idx = content.find(_PACKRAT_START_BLOCK)
+    if start_idx == -1:
+        raise RuntimeError(f"Could not find START GENERATED PACKRAT MEMOIZED RULES marker in {matcher_cpp_path}")
+    end_idx = content.find(_PACKRAT_END_BLOCK, start_idx + len(_PACKRAT_START_BLOCK))
+    if end_idx == -1:
+        raise RuntimeError(f"Could not find END GENERATED PACKRAT MEMOIZED RULES marker in {matcher_cpp_path}")
+
+    lines = []
+    for rule_name in packrat_memoized_rules:
+        lines.append(f'\tAddPackratMemoizedRule("{rule_name}");\n')
+
+    block_end = end_idx + len(_PACKRAT_END_BLOCK)
+    generated_block = _PACKRAT_START_BLOCK + "".join(lines) + _PACKRAT_END_BLOCK
+    new_content = content[:start_idx] + generated_block + content[block_end:]
+    matcher_cpp_path.write_text(new_content)
+    print(f"Updated {matcher_cpp_path}")
+
+
 def write_hpp(all_declarations):
     hpp_path = include_peg_dir / "peg_transformer.hpp"
     content = hpp_path.read_text()
@@ -1244,22 +1284,23 @@ def write_hpp(all_declarations):
     print(f"Updated {hpp_path}")
 
 
-def _extract_func_signature(text, func_name):
-    """Extract 'ReturnType PEGTransformerFactory::func_name(params)' from C++ source text."""
-    m = re.search(rf'\bPEGTransformerFactory::{re.escape(func_name)}\s*\(', text)
-    if not m:
-        return None
-    line_start = text.rfind('\n', 0, m.start()) + 1
-    paren_start = text.index('(', m.start())
-    depth = 0
-    for i, char in enumerate(text[paren_start:]):
-        if char == '(':
-            depth += 1
-        elif char == ')':
-            depth -= 1
-            if depth == 0:
-                return text[line_start : paren_start + i + 1]
-    return None
+def _extract_func_signatures(text, func_name):
+    """Extract all 'ReturnType PEGTransformerFactory::func_name(params)' overload signatures from C++ source text."""
+    signatures = []
+    matches = re.finditer(rf'\bPEGTransformerFactory::{re.escape(func_name)}\s*\(', text)
+    for m in matches:
+        line_start = text.rfind('\n', 0, m.start()) + 1
+        paren_start = text.index('(', m.start())
+        depth = 0
+        for i, char in enumerate(text[paren_start:]):
+            if char == '(':
+                depth += 1
+            elif char == ')':
+                depth -= 1
+                if depth == 0:
+                    signatures.append(text[line_start : paren_start + i + 1])
+                    break
+    return signatures
 
 
 def _norm_ws(s):
@@ -1291,12 +1332,14 @@ def _check_implementations(gram_stem, body_stubs):
         expected_norm = expected[expected.find(prefix) :] if prefix in expected else expected
         found_mismatch = False
         for path in paths:
-            actual = _extract_func_signature(path.read_text(), f'Transform{rule_name}')
-            if actual is None:
+            actual_signatures = _extract_func_signatures(path.read_text(), f'Transform{rule_name}')
+            if not actual_signatures:
                 continue
-            actual = _norm_ws(actual)
-            actual_norm = actual[actual.find(prefix) :] if prefix in actual else actual
-            if expected_norm == actual_norm:
+            actual_norms = []
+            for actual in actual_signatures:
+                actual = _norm_ws(actual)
+                actual_norms.append(actual[actual.find(prefix) :] if prefix in actual else actual)
+            if expected_norm in actual_norms:
                 implemented.add(rule_name)
                 found_mismatch = False
                 break
@@ -1397,6 +1440,27 @@ def print_manual_steps(all_results):
             step += 1
 
 
+def validate_no_missing_grammar_types(all_results):
+    missing = [
+        (r.gram_stem, rule_name)
+        for r in all_results
+        for rule_name, reason in r.skipped
+        if reason == "no return type in grammar_types.yml"
+    ]
+    if not missing:
+        return
+
+    print("Error: missing transformer metadata in grammar_types.yml:", file=sys.stderr)
+    current_stem = None
+    for gram_stem, rule_name in missing:
+        if gram_stem != current_stem:
+            print(f"  {gram_stem}.gram:", file=sys.stderr)
+            current_stem = gram_stem
+        print(f"    {rule_name}", file=sys.stderr)
+    print("Add type metadata for these rules or explicitly list syntax-only rules in excluded_rules.", file=sys.stderr)
+    sys.exit(1)
+
+
 def process_gram_file(gram_filename, rule_types, excluded_rules, provided_rule_names, identifier_override_rules):
     """Parse a .gram file and classify all its rules into a GramFileResult."""
     gram_stem = gram_filename.removesuffix('.gram')
@@ -1421,6 +1485,18 @@ def process_gram_file(gram_filename, rule_types, excluded_rules, provided_rule_n
     )
 
 
+def load_grammar_rule_names(gram_files):
+    rule_names = set()
+    for gram_filename in gram_files:
+        gram_path = statements_dir / gram_filename
+        try:
+            rules = parse_peg_grammar(gram_path.read_text())
+        except Exception as e:
+            raise Exception(f"{gram_filename}: {e}") from None
+        rule_names.update(rules.keys())
+    return rule_names
+
+
 def main():
     arg_parser = argparse.ArgumentParser(description="Generate Internal transformer wrappers from grammar rules.")
     arg_parser.add_argument("--write", action="store_true", help="Write generated files to disk.")
@@ -1428,7 +1504,9 @@ def main():
 
     gram_files_to_gen = sorted(path.name for path in statements_dir.glob('*.gram'))
     grammar_types_file = type_dir / 'grammar_types.yml'
+    grammar_rule_names = load_grammar_rule_names(gram_files_to_gen)
     matcher_overrides = load_matcher_rule_overrides(grammar_types_file)
+    packrat_memoized_rules = load_packrat_memoized_rules(grammar_types_file, grammar_rule_names)
     matcher_rule_names = set(matcher_overrides.keys())
     identifier_override_rules = load_identifier_override_rules(grammar_types_file)
     rule_types, excluded_rules = load_grammar_types(grammar_types_file)
@@ -1436,6 +1514,7 @@ def main():
         process_gram_file(f, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules)
         for f in gram_files_to_gen
     ]
+    validate_no_missing_grammar_types(results)
 
     if args.write:
         all_declarations = [d for r in results for d in r.declarations]
@@ -1444,6 +1523,7 @@ def main():
         all_registrations = [reg for r in results for reg in r.registrations]
         write_cpp(all_implementations, all_registrations)
         write_matcher_rule_overrides(matcher_overrides)
+        write_packrat_memoized_rules(packrat_memoized_rules)
         print_manual_steps(results)
     else:
         for r in results:

@@ -112,15 +112,17 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 				continue;
 			}
 
-			// CSE Elimination: Search for a previous match
+			// CSE Elimination: Search for a previous match (volatile expressions must not be deduplicated)
 			bool cse = false;
-			for (idx_t i = 0; i < matching.size(); ++i) {
-				const auto match_idx = matching[i];
-				auto &match_expr = op.expressions[match_idx]->Cast<BoundWindowExpression>();
-				if (wexpr.Equals(match_expr)) {
-					projection_map[input_width + expr_idx] = output_pos + i;
-					cse = true;
-					break;
+			if (!wexpr.IsVolatile()) {
+				for (idx_t i = 0; i < matching.size(); ++i) {
+					const auto match_idx = matching[i];
+					auto &match_expr = op.expressions[match_idx]->Cast<BoundWindowExpression>();
+					if (wexpr.Equals(match_expr)) {
+						projection_map[input_width + expr_idx] = output_pos + i;
+						cse = true;
+						break;
+					}
 				}
 			}
 			if (cse) {

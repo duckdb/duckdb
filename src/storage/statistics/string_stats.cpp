@@ -719,7 +719,7 @@ FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, Exp
 	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
-int8_t CompareStringStats(string_t input, string_t stats, StringStatsType type) {
+int8_t StringStats::CompareStringStats(string_t input, string_t stats, StringStatsType type) {
 	if (type == StringStatsType::TRUNCATED_STATS && input.GetSize() > stats.GetSize()) {
 		// if the stats are truncated we can only compare at most the bytes as are present in the stats
 		return Comparator::Operation(string_t(input.GetData(), static_cast<uint32_t>(stats.GetSize())), stats);

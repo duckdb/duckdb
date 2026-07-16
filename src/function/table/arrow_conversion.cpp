@@ -11,8 +11,6 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/table/arrow.hpp"
 
 #include "duckdb/common/bswap.hpp"
@@ -430,7 +428,7 @@ static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			// dtime_ns_t.micros actually holds nanos (!)
-			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].value)) {
 				throw ConversionException("Could not convert TimeNS to Nanoseconds");
 			}
 		}
@@ -440,7 +438,7 @@ static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 				continue;
 			}
 			// dtime_ns_t.micros actually holds nanos (!)
-			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].value)) {
 				throw ConversionException("Could not convert TimeNS to Nanoseconds");
 			}
 		}
@@ -992,7 +990,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			auto src_ptr = ArrowBufferData<int64_t>(array, 1) +
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
 			for (idx_t row = 0; row < size; row++) {
-				tgt_ptr[row].micros = src_ptr[row] / 1000;
+				tgt_ptr[row].value = src_ptr[row] / 1000;
 			}
 			break;
 		}
@@ -1182,7 +1180,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		ArrowToDuckDBMapVerify(vector, size);
 		break;
 	}
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		//! Fill the children
 		auto &struct_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
 		auto &child_entries = StructVector::GetEntries(vector);

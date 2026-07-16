@@ -109,7 +109,7 @@ public:
 	DUCKDB_API virtual idx_t GetProgress();
 	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
 
-	DUCKDB_API bool CanSeek();
+	DUCKDB_API virtual bool CanSeek();
 	DUCKDB_API bool SupportsPositionalWrites();
 	DUCKDB_API bool IsPipe();
 	DUCKDB_API bool OnDiskFile();
@@ -149,6 +149,10 @@ public:
 	FileOpenFlags flags;
 
 	shared_ptr<Logger> logger;
+	//! Whether reads/writes through this handle are counted in the query's I/O metrics. Set to false for
+	//! wrapper handles (e.g. compressed files) that delegate the real on-disk I/O to a child handle, so that
+	//! the bytes are attributed to the child handle (the actual disk I/O) and not double-counted.
+	bool track_io = true;
 };
 
 class FileSystem {

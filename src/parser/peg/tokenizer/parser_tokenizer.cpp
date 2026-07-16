@@ -3,7 +3,18 @@
 
 namespace duckdb {
 
+static bool IsEmptyQuotedIdentifier(const string &sql, idx_t start, idx_t end, TokenType type) {
+	return type == TokenType::IDENTIFIER && end == start + 2 && sql.substr(start, 2) == "\"\"";
+}
+
 ParserTokenizer::ParserTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {
+}
+
+void ParserTokenizer::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
+	if (IsEmptyQuotedIdentifier(sql, start, end, type)) {
+		throw ParserException::SyntaxError(sql, "zero-length delimited identifier", optional_idx(start));
+	}
+	BaseTokenizer::PushToken(start, end, type, unterminated);
 }
 
 void ParserTokenizer::OnStatementEnd(idx_t pos) {

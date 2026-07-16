@@ -13,6 +13,8 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 
@@ -83,18 +85,29 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	// at least one equality is necessary
 	D_ASSERT(!equality_types.empty());
 
-	// Types for the layout
-	auto layout = make_shared_ptr<TupleDataLayout>();
-	vector<LogicalType> layout_types(condition_types);
-	layout_types.insert(layout_types.end(), build_types.begin(), build_types.end());
-	if (PropagatesBuildSide(join_type)) {
-		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
-		// we place the bool before the NEXT pointer
-		layout_types.emplace_back(LogicalType::BOOLEAN);
+	if (join_type == JoinType::SINGLE) {
+		single_join_error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(context);
 	}
-	layout_types.emplace_back(LogicalType::HASH);
-	layout->Initialize(layout_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-	layout_ptr = std::move(layout);
+
+	if (non_equality_predicates.empty() && !residual_predicate &&
+	    (join_type == JoinType::SEMI || join_type == JoinType::ANTI || join_type == JoinType::MARK)) {
+		insert_duplicate_keys = false;
+	}
+
+	InitializePartitionMasks();
+	// Layout-dependent state is published lazily on the first Sink chunk (see FinishInitWithLayout).
+}
+
+void JoinHashTable::FinishInitWithLayout(shared_ptr<TupleDataLayout> published_layout,
+                                         vector<uint8_t> dict_index_width_p) {
+	D_ASSERT(!layout_ptr);
+	layout_ptr = std::move(published_layout);
+	if (dict_index_width_p.empty()) {
+		dict_index_width.assign(build_types.size(), 0);
+	} else {
+		D_ASSERT(dict_index_width_p.size() == build_types.size());
+		dict_index_width = std::move(dict_index_width_p);
+	}
 
 	// Initialize the row matcher that are used for filtering during the probing only if there are non-equality preds
 	if (!non_equality_predicates.empty()) {
@@ -110,7 +123,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 		needs_chain_matcher = false;
 	}
 
-	chains_longer_than_one = false;
+	chains_longer_than_one.store(false, std::memory_order_relaxed);
 	row_matcher_build.Initialize(true, *layout_ptr, equality_predicates);
 
 	const auto &offsets = layout_ptr->GetOffsets();
@@ -118,23 +131,16 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	pointer_offset = offsets.back();
 	entry_size = layout_ptr->GetRowWidth();
 
-	data_collection = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE);
+	data_collection =
+	    make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE, nullptr, context);
 	sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-	                                                       radix_bits, layout_ptr->ColumnCount() - 1);
+	                                                       radix_bits, layout_ptr->ColumnCount() - 1, context);
 
 	dead_end = make_unsafe_uniq_array_uninitialized<data_t>(layout_ptr->GetRowWidth());
 	memset(dead_end.get(), 0, layout_ptr->GetRowWidth());
 
-	if (join_type == JoinType::SINGLE) {
-		single_join_error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(context);
-	}
-
-	if (non_equality_predicates.empty() && !residual_predicate &&
-	    (join_type == JoinType::SEMI || join_type == JoinType::ANTI || join_type == JoinType::MARK)) {
-		insert_duplicate_keys = false;
-	}
-
-	InitializePartitionMasks();
+	// indexed parallel to build_types / payload columns (not to output_columns)
+	dict_registry.assign(build_types.size(), nullptr);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -161,6 +167,23 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	}
 
 	sink_collection->Combine(*other.sink_collection);
+
+	// Reconcile per-column pinned dictionary entries. For global dictionary producers every thread pins the
+	// same buffer_ptr, so this is normally a no-op or a "take theirs" adoption.
+	if (dict_registry.size() < other.dict_registry.size()) {
+		dict_registry.resize(other.dict_registry.size(), nullptr);
+	}
+	for (idx_t col = 0; col < other.dict_registry.size(); col++) {
+		if (!other.dict_registry[col]) {
+			continue;
+		}
+		if (!dict_registry[col]) {
+			dict_registry[col] = std::move(other.dict_registry[col]);
+		} else {
+			// Both threads pinned the same upstream entry, so ids match by construction; a mismatch is a producer bug.
+			D_ASSERT(dict_registry[col]->id == other.dict_registry[col]->id);
+		}
+	}
 }
 
 static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const idx_t &bitmask) {
@@ -391,6 +414,153 @@ static idx_t FilterNullValues(UnifiedVectorFormat &vdata, const SelectionVector 
 	return result_count;
 }
 
+// A dictionary of D slots uses indices 0..D-1, so D slots fit a W-byte index iff D <= 2^(8*W).
+static constexpr idx_t DICT_INDEX_UINT8_CAPACITY = 256;
+static constexpr idx_t DICT_INDEX_UINT16_CAPACITY = 65536;
+
+//! Narrowest unsigned-integer byte width that can hold any index into a dictionary of dict_size slots
+static uint8_t DictIndexWidth(idx_t dict_size) {
+	if (dict_size <= DICT_INDEX_UINT8_CAPACITY) {
+		return sizeof(uint8_t);
+	}
+	if (dict_size <= DICT_INDEX_UINT16_CAPACITY) {
+		return sizeof(uint16_t);
+	}
+	return sizeof(uint32_t);
+}
+
+//! Materialise a flat width-INDEX_T index vector (allocation owned by `buffers`, view in `vectors`) from the
+//! dict sel. UnsafeNumericCast is safe: the publisher sized the width to the dictionary, so every index fits.
+template <class INDEX_T>
+static void ScatterDictIndices(const SelectionVector &dict_sel, idx_t count, const LogicalType &index_type,
+                               Allocator &allocator, vector<AllocatedData> &buffers, vector<Vector> &vectors) {
+	buffers.emplace_back(allocator.Allocate(count * sizeof(INDEX_T)));
+	vectors.emplace_back(index_type, buffers.back().get(), count);
+	auto idx_data = FlatVector::GetDataMutable<INDEX_T>(vectors.back());
+	for (idx_t r = 0; r < count; r++) {
+		idx_data[r] = UnsafeNumericCast<INDEX_T>(dict_sel.get_index(r));
+	}
+}
+
+//! Dispatch on the chosen index width (1/2/4 B) to the matching templated ScatterDictIndices
+static void ScatterDictIndices(uint8_t index_width, const SelectionVector &dict_sel, idx_t count, Allocator &allocator,
+                               vector<AllocatedData> &buffers, vector<Vector> &vectors) {
+	switch (index_width) {
+	case sizeof(uint8_t):
+		ScatterDictIndices<uint8_t>(dict_sel, count, LogicalType::UTINYINT, allocator, buffers, vectors);
+		break;
+	case sizeof(uint16_t):
+		ScatterDictIndices<uint16_t>(dict_sel, count, LogicalType::USMALLINT, allocator, buffers, vectors);
+		break;
+	default:
+		ScatterDictIndices<uint32_t>(dict_sel, count, LogicalType::UINTEGER, allocator, buffers, vectors);
+		break;
+	}
+}
+
+//! Load the per-match dict index (width INDEX_T) from each matched row's slot at col_offset into build_sel_vec
+template <class INDEX_T>
+static void LoadDictIndices(const data_ptr_t *ptrs, const SelectionVector &ptr_sel, idx_t count, idx_t col_offset,
+                            SelectionVector &build_sel_vec) {
+	for (idx_t i = 0; i < count; i++) {
+		build_sel_vec.set_index(i, Load<INDEX_T>(ptrs[ptr_sel.get_index(i)] + col_offset));
+	}
+}
+
+//! Dispatch on the chosen index width (1/2/4 B) to the matching templated LoadDictIndices
+static void LoadDictIndices(uint8_t index_width, const data_ptr_t *ptrs, const SelectionVector &ptr_sel, idx_t count,
+                            idx_t col_offset, SelectionVector &build_sel_vec) {
+	switch (index_width) {
+	case sizeof(uint8_t):
+		LoadDictIndices<uint8_t>(ptrs, ptr_sel, count, col_offset, build_sel_vec);
+		break;
+	case sizeof(uint16_t):
+		LoadDictIndices<uint16_t>(ptrs, ptr_sel, count, col_offset, build_sel_vec);
+		break;
+	default:
+		LoadDictIndices<uint32_t>(ptrs, ptr_sel, count, col_offset, build_sel_vec);
+		break;
+	}
+}
+
+bool JoinHashTable::ColumnReferencedByResidual(idx_t build_col_idx) const {
+	if (!residual_info) {
+		return false;
+	}
+	const auto layout_col = condition_types.size() + build_col_idx;
+	for (const auto &kv : residual_info->build_input_to_layout_map) {
+		if (kv.second == layout_col) {
+			return true;
+		}
+	}
+	return false;
+}
+
+uint8_t JoinHashTable::GetDictSurvivingIndexWidth(idx_t build_col_idx, const Vector &incoming) const {
+	const auto &type = build_types[build_col_idx];
+	// Vector::Dictionary rejects nested types
+	switch (type.InternalType()) {
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
+		return 0;
+	default:
+		break;
+	}
+	// residual predicates read from the row slot directly; a narrowed slot would corrupt them
+	if (ColumnReferencedByResidual(build_col_idx)) {
+		return 0;
+	}
+	if (incoming.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return 0;
+	}
+	if (!DictionaryVector::IsGlobalDictionary(incoming)) {
+		return 0;
+	}
+	// an empty/invalid dictionary keeps native width
+	const auto dict_size = DictionaryVector::DictionarySize(incoming);
+	if (!dict_size.IsValid()) {
+		return 0;
+	}
+	// only narrow when strictly smaller than the native slot (never regress; e.g. INTEGER over a D<=256 dict)
+	const uint8_t index_width = DictIndexWidth(dict_size.GetIndex());
+	const auto native_bytes = GetTypeIdSize(type.InternalType());
+	if (index_width >= native_bytes) {
+		return 0;
+	}
+	return index_width;
+}
+
+void JoinHashTable::PinDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, uint8_t index_width) {
+	// Slot was narrowed on the first chunk; there is no fallback for a non-dict later chunk. Throw, not D_ASSERT:
+	// the Cast<DictionaryBuffer> below is UB in release on a non-dict vector, scattering foreign bytes as indices.
+	if (incoming.GetVectorType() != VectorType::DICTIONARY_VECTOR || DictionaryVector::DictionaryId(incoming).empty() ||
+	    !DictionaryVector::IsGlobalDictionary(incoming)) {
+		throw InternalException("dict-surviving join: narrowed column %llu received a "
+		                        "non-global-dictionary chunk; build pipeline is not single-source",
+		                        static_cast<uint64_t>(build_col_idx));
+	}
+	const auto &entry = incoming.Buffer().Cast<DictionaryBuffer>().GetEntry();
+	if (dict_registry[build_col_idx]) {
+		// Subsequent chunks wrap the same entry, so ids match by construction; a mismatch is a producer bug.
+		D_ASSERT(dict_registry[build_col_idx]->id == entry.id);
+		return;
+	}
+	// The upstream child is a zero-copy gather: its long strings point into the producer's row-store heap, recycled
+	// before we gather on probe. Deep-copy into a self-owned entry so it outlives them.
+	const auto &upstream_child = entry.data;
+	const auto child_count = upstream_child.size();
+	// child_count fits index_width by construction (publisher sized the width to this dict). Assert so a producer
+	// that grows the child past it fails loudly instead of truncating in the UnsafeNumericCast.
+	D_ASSERT(child_count <= (idx_t(1) << (8 * index_width)));
+	auto owned_entry = DictionaryVector::CreateReusableGlobalDictionary(upstream_child.GetType(), child_count);
+	if (child_count > 0) {
+		VectorOperations::Copy(upstream_child, owned_entry->data, child_count, 0, 0);
+	}
+	owned_entry->id = entry.id;
+	dict_registry[build_col_idx] = std::move(owned_entry);
+}
+
 void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &payload) {
 	D_ASSERT(!finalized);
 	D_ASSERT(keys.size() == payload.size());
@@ -427,8 +597,22 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	}
 	idx_t col_offset = keys.ColumnCount();
 	D_ASSERT(build_types.size() == payload.ColumnCount());
+	// Scratch index vectors for narrowed columns, allocated via the buffer manager so the bytes are accounted.
+	// buffers own the bytes, vectors are flat views; both must outlive the ToUnifiedFormat / AppendUnified below.
+	vector<AllocatedData> dict_idx_buffers;
+	vector<Vector> dict_idx_vectors;
 	for (idx_t i = 0; i < payload.ColumnCount(); i++) {
-		source_chunk.data[col_offset + i].Reference(payload.data[i]);
+		auto &incoming = payload.data[i];
+		const uint8_t index_width = i < dict_index_width.size() ? dict_index_width[i] : 0;
+		if (index_width == 0) {
+			source_chunk.data[col_offset + i].Reference(incoming);
+			continue;
+		}
+		// Narrowed column: pin the dictionary, then scatter its sel indices at the chosen width in place of the value.
+		PinDictSurvivingColumn(i, incoming, index_width);
+		ScatterDictIndices(index_width, DictionaryVector::SelVector(incoming), payload.size(),
+		                   buffer_manager.GetBufferAllocator(), dict_idx_buffers, dict_idx_vectors);
+		source_chunk.data[col_offset + i].Reference(dict_idx_vectors.back());
 	}
 	col_offset += payload.ColumnCount();
 	if (PropagatesBuildSide(join_type)) {
@@ -580,13 +764,13 @@ static inline void InsertMatchesAndIncrementMisses(unsafe_optional_ptr<atomic<ht
                                                    const hash_t hash_salts[], const idx_t capacity_mask,
                                                    const idx_t key_match_count, const idx_t key_no_match_count) {
 	if (key_match_count != 0) {
-		ht.chains_longer_than_one = true;
+		ht.chains_longer_than_one.store(true, std::memory_order_relaxed);
 	}
 
 	// Insert the rows that match
 	if (ht.insert_duplicate_keys) {
 		if (key_match_count != 0) {
-			ht.chains_longer_than_one = true;
+			ht.chains_longer_than_one.store(true, std::memory_order_relaxed);
 		}
 		for (idx_t i = 0; i < key_match_count; i++) {
 			const auto need_compare_idx = state.key_match_sel.get_index(i);
@@ -831,29 +1015,21 @@ void JoinHashTable::AllocatePointerTable() {
 	            {"size", to_string(data_collection->SizeInBytes() + hash_map.GetSize())}});
 }
 
-void JoinHashTable::PrepareBuildBloomFilter(idx_t estimated_row_count) {
-	should_build_bloom_filter = true;
-	if (!bloom_filter.IsInitialized()) {
-		bloom_filter_init_count = MaxValue<idx_t>(estimated_row_count, idx_t(1));
-		bloom_filter.Initialize(context, bloom_filter_init_count);
-	}
-}
-
 void JoinHashTable::PrepareBloomFilterForFinalize() {
 	if (!should_build_bloom_filter) {
 		return;
 	}
 
 	// Finalize scans every build tuple and inserts its hash into the bloom filter.
-	// Resize here if the planner estimate was too low, then let finalize populate it.
+	// Make sure any existing filter has enough sectors for the actual build count.
 	const auto build_count = Count();
 	const auto actual_init_count = MaxValue<idx_t>(build_count, 1);
-	static constexpr double REBUILD_UNDERESTIMATE_THRESHOLD = 2.0;
-	const auto estimated_too_low = bloom_filter_init_count == 0 ||
-	                               static_cast<double>(build_count) >
-	                                   static_cast<double>(bloom_filter_init_count) * REBUILD_UNDERESTIMATE_THRESHOLD;
-	if (bloom_filter.IsInitialized() && !estimated_too_low) {
-		return;
+	if (bloom_filter.IsInitialized()) {
+		const auto current_sectors = BloomFilter::GetNumberOfSectors(bloom_filter_init_count);
+		const auto required_sectors = BloomFilter::GetNumberOfSectors(actual_init_count);
+		if (current_sectors >= required_sectors) {
+			return;
+		}
 	}
 
 	bloom_filter.Reset();
@@ -1131,8 +1307,9 @@ bool JoinHashTable::TryProbeConstant(ScanStructure &scan_structure, DataChunk &k
 		unique_values.InitializeEmpty(vector<LogicalType> {equality_types[0]});
 		TupleDataCollection::InitializeChunkState(dict_state.unique_key_state, {equality_types[0]});
 	}
-	unique_values.data[0].Reference(constant_col);
-	unique_values.SetChildCardinality(1);
+	SelectionVector sel(1);
+	sel.set_index(0, 0);
+	unique_values.data[0].Slice(constant_col, sel, 1);
 	unique_values.Flatten();
 
 	TupleDataCollection::ToUnifiedFormat(dict_state.unique_key_state, unique_values);
@@ -1257,7 +1434,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &probe_data, DataChunk &resu
 		NextLeftJoin(keys, probe_data, result);
 		break;
 	case JoinType::LEFT:
-		if (!ht.chains_longer_than_one) {
+		if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 			NextUniqueLeftJoin(keys, probe_data, result);
 		} else {
 			NextLeftJoin(keys, probe_data, result);
@@ -1400,7 +1577,7 @@ static void AdvancePointersLoop(JoinHashTable &ht, Vector &pointers, SelectionVe
 }
 
 void ScanStructure::AdvancePointers(const SelectionVector &sel, const idx_t sel_count) {
-	if (!ht.chains_longer_than_one) {
+	if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 		this->count = 0;
 		return;
 	}
@@ -1438,13 +1615,50 @@ void JoinHashTable::GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, 
 		return;
 	}
 	const auto &result_sel = *FlatVector::IncrementalSelectionVector();
+	const auto ptrs = FlatVector::GetData<data_ptr_t>(row_ptrs);
+	const auto &offsets = layout_ptr->GetOffsets();
+	const auto cond_count = condition_types.size();
+
 	for (idx_t col_idx = 0; col_idx < output_columns.size(); col_idx++) {
 		auto &vector = result.data[rhs_col_offset + col_idx];
 		const auto output_col_idx = output_columns[col_idx];
+
+		// Pinned column: re-emit the upstream dictionary. Layout is [conditions, build, (found), hash], so payload
+		// columns sit at layout index >= cond_count; guard the subtraction so it cannot underflow into a spurious idx.
+		if (output_col_idx >= cond_count) {
+			const idx_t payload_idx = output_col_idx - cond_count;
+			if (payload_idx < dict_registry.size() && dict_registry[payload_idx]) {
+				SelectionVector build_sel_vec(count);
+				const auto col_offset = offsets[output_col_idx];
+				// Read the dict index at the width chosen at layout-publication time
+				const uint8_t index_width = payload_idx < dict_index_width.size() ? dict_index_width[payload_idx] : 0;
+				LoadDictIndices(index_width, ptrs, ptr_sel, count, col_offset, build_sel_vec);
+				vector.Dictionary(dict_registry[payload_idx], build_sel_vec, count);
+				continue;
+			}
+		}
+
 		D_ASSERT(vector.GetType() == layout_ptr->GetTypes()[output_col_idx]);
+		// The native gather writes straight into a flat buffer. A reused output chunk (e.g. across recursive-CTE
+		// iterations) may still hold a DICTIONARY_VECTOR left by a prior dict-emitting iteration; reset it to flat.
+		if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+			vector.Initialize();
+		}
 		data_collection->Gather(row_ptrs, ptr_sel, count, output_col_idx, vector, result_sel, nullptr);
 		FlatVector::SetSize(vector, count_t(count));
 	}
+}
+
+static bool SelectionIsFullIdentity(const SelectionVector &sel, idx_t count, idx_t source_count) {
+	if (count != source_count) {
+		return false;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		if (sel.get_index_unsafe(i) != i) {
+			return false;
+		}
+	}
+	return true;
 }
 
 void ScanStructure::UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count) {
@@ -1498,11 +1712,17 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 
 			if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 				// fast path: no chains longer than one
-				if (!ht.chains_longer_than_one) {
+				if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 					// extract only OUTPUT columns from probe_data
+					const auto full_identity =
+					    SelectionIsFullIdentity(chain_match_sel_vector, result_count, probe_data.size());
 					for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 						idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-						result.data[i].Slice(probe_data.data[probe_col_idx], chain_match_sel_vector, result_count);
+						if (full_identity) {
+							result.data[i].Reference(probe_data.data[probe_col_idx]);
+						} else {
+							result.data[i].Slice(probe_data.data[probe_col_idx], chain_match_sel_vector, result_count);
+						}
 					}
 					// on the RHS, we need to fetch the data from the hash table
 					ht.GatherRHS(pointers, chain_match_sel_vector, result_count, result, ht.lhs_output_in_probe.size());
@@ -1521,9 +1741,14 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 
 	if (base_count > 0) {
 		// extract only OUTPUT columns from probe_data using compaction buffer
+		const auto full_identity = SelectionIsFullIdentity(lhs_sel_vector, base_count, probe_data.size());
 		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-			result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
+			if (full_identity) {
+				result.data[i].Reference(probe_data.data[probe_col_idx]);
+			} else {
+				result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
+			}
 		}
 		// 2) gather RHS vectors
 		ht.GatherRHS(rhs_pointers, *FlatVector::IncrementalSelectionVector(), base_count, result,
@@ -1887,7 +2112,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
 	// Unique left join: RHS has unique keys, so at most one match per LHS row.
 	// Single pass - no state machine needed.
-	D_ASSERT(!ht.chains_longer_than_one);
+	D_ASSERT(!ht.chains_longer_than_one.load(std::memory_order_relaxed));
 
 	// First scan for key matches
 	ScanKeyMatches(keys, probe_data);
@@ -2107,7 +2332,7 @@ void JoinHashTable::SetRepartitionRadixBits(const idx_t max_ht_size, const idx_t
 	}
 	radix_bits += added_bits;
 	sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-	                                                       radix_bits, layout_ptr->ColumnCount() - 1);
+	                                                       radix_bits, layout_ptr->ColumnCount() - 1, context);
 
 	// Need to initialize again after changing the number of bits
 	InitializePartitionMasks();
@@ -2141,8 +2366,9 @@ idx_t JoinHashTable::FinishedPartitionCount() const {
 }
 
 void JoinHashTable::Repartition(JoinHashTable &global_ht) {
-	auto new_sink_collection = make_uniq<RadixPartitionedTupleData>(
-	    buffer_manager, layout_ptr, MemoryTag::HASH_TABLE, global_ht.radix_bits, layout_ptr->ColumnCount() - 1);
+	auto new_sink_collection =
+	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE, global_ht.radix_bits,
+	                                         layout_ptr->ColumnCount() - 1, context);
 	sink_collection->Repartition(context, *new_sink_collection);
 	sink_collection = std::move(new_sink_collection);
 	global_ht.Merge(*this);
@@ -2178,13 +2404,17 @@ static void ResetCorrelatedMarkJoinInfo(JoinHashTable &ht) {
 }
 
 void JoinHashTable::ResetForNewIterationSinglePartition() {
+	if (!layout_ptr) {
+		// layout was never published (no Sink chunk last iteration); the next first chunk will publish
+		return;
+	}
 	data_collection->Reset();
 	// Always use a single partition (radix_bits=0) to avoid per-iteration overhead of resetting
 	// and re-creating many radix partitions when only one thread builds the hash table.
 	if (radix_bits != 0) {
 		radix_bits = 0;
 		sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-		                                                       idx_t(0), layout_ptr->ColumnCount() - 1);
+		                                                       idx_t(0), layout_ptr->ColumnCount() - 1, context);
 	} else {
 		sink_collection->Reset();
 	}
@@ -2193,7 +2423,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	bitmask = DConstants::INVALID_INDEX;
 	finalized = false;
 	has_null = false;
-	chains_longer_than_one = false;
+	chains_longer_than_one.store(false, std::memory_order_relaxed);
 	total_probe_matches = 0;
 	load_factor = DEFAULT_LOAD_FACTOR;
 	should_build_bloom_filter = false;
@@ -2208,6 +2438,10 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	aux_next_ptrs.Reset();
 	aux_next_ptrs_data = nullptr;
 	use_dict_emission = false;
+	// Drop pinned upstream dictionary entries; the next iteration's first chunk re-pins
+	for (auto &entry : dict_registry) {
+		entry.reset();
+	}
 }
 
 bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
@@ -2401,6 +2635,13 @@ bool JoinHashTable::CanUseDictionaryEmission(const PhysicalHashJoin &op, bool ex
 	if (external) {
 		return false;
 	}
+	// mutually exclusive with the dict-surviving path: that path narrows the payload slot to a 1/2/4-byte
+	// index, while NEXT_PTR embedding here overwrites a different field and assumes payload bytes are intact.
+	for (const auto &entry : dict_registry) {
+		if (entry) {
+			return false;
+		}
+	}
 	// SINGLE joins need FlatVector::SetNull for unmatched rows; dictionary vectors cannot supply it
 	if (join_type == JoinType::SINGLE) {
 		return false;
@@ -2468,18 +2709,24 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 	(void)collected;
 	const auto row_ptrs = FlatVector::GetData<data_ptr_t>(row_pointer_vector);
 
+	// LEFT / OUTER joins fill unmatched probe rows with a constant-NULL vector (NextLeftJoin), so they do not
+	// wrap this entry on every chunk; it is only a global dictionary when every chunk goes through EmitDictVectors.
+	const bool dict_on_every_chunk = join_type != JoinType::LEFT && join_type != JoinType::OUTER;
+
 	// gather RHS output columns into columnar dictionary arrays
 	const auto &sel = *FlatVector::IncrementalSelectionVector();
 	for (idx_t col_idx = 0; col_idx < op.rhs_output_columns.col_types.size(); col_idx++) {
 		const auto &type = op.rhs_output_columns.col_types[col_idx];
-		auto dict_entry = DictionaryVector::CreateReusableDictionary(type, build_count);
+		auto dict_entry = dict_on_every_chunk ? DictionaryVector::CreateReusableGlobalDictionary(type, build_count)
+		                                      : DictionaryVector::CreateReusableDictionary(type, build_count);
 		const auto output_col_idx = output_columns[col_idx];
 		collection.Gather(row_pointer_vector, sel, build_count, output_col_idx, dict_entry->data, sel, nullptr);
 		dict_arrays.emplace_back(std::move(dict_entry));
 	}
 
 	// save chain pointers before overwriting NEXT_PTR; GetNextPointer reads them back
-	if (chains_longer_than_one) {
+	const auto has_chains = chains_longer_than_one.load(std::memory_order_relaxed);
+	if (has_chains) {
 		aux_next_ptrs = buffer_manager.GetBufferAllocator().Allocate(build_count * sizeof(data_ptr_t));
 		aux_next_ptrs_data = reinterpret_cast<data_ptr_t *>(aux_next_ptrs.get());
 	}
@@ -2487,7 +2734,7 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 	// save the original NEXT_PTR into aux_next_ptrs (if chains exist) and embed the dict index
 	for (idx_t i = 0; i < build_count; i++) {
 		const auto next_ptr_location = row_ptrs[i] + pointer_offset;
-		if (chains_longer_than_one) {
+		if (has_chains) {
 			aux_next_ptrs_data[i] = LoadPointer(next_ptr_location);
 		}
 		Store<uint32_t>(static_cast<uint32_t>(i), next_ptr_location);

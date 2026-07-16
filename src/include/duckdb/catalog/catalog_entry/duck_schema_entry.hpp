@@ -16,9 +16,13 @@ namespace duckdb {
 //! A schema in the catalog
 class DuckSchemaEntry : public SchemaCatalogEntry {
 public:
-	DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info);
+	DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info, optional_ptr<SchemaCatalogEntry> parent_schema = nullptr);
 
 private:
+	//! The parent schema (for a nested schema), or nullptr for a top-level schema
+	optional_ptr<SchemaCatalogEntry> parent_schema;
+	//! The catalog set holding the nested schemas
+	CatalogSet schemas;
 	//! The catalog set holding the tables
 	CatalogSet tables;
 	//! The catalog set holding the indexes
@@ -62,6 +66,8 @@ public:
 	optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
 	                                                  CreateCoordinateSystemInfo &info) override;
 	optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info) override;
+	//! Create a nested schema inside this schema
+	optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info);
 	void Alter(CatalogTransaction transaction, AlterInfo &info) override;
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
@@ -74,6 +80,12 @@ public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	void Verify(Catalog &catalog) override;
+
+	unique_ptr<CreateInfo> GetInfo() const override;
+
+	optional_ptr<SchemaCatalogEntry> GetParentSchema() const override {
+		return parent_schema;
+	}
 
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);

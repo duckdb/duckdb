@@ -1,0 +1,3189 @@
+brand_id|brand|t_hour|t_minute|ext_price
+1002001|"importoamalg #1"|18|44|NULL
+1004002|"edu packamalg #2"|19|30|NULL
+2001001|"amalgimporto #1"|18|41|NULL
+2003002|"exportiimporto #2"|9|27|NULL
+3002001|"importoexporti #1"|19|37|NULL
+3004002|"edu packexporti #2"|19|24|NULL
+5004001|"edu packscholar #1"|8|40|NULL
+6001001|"amalgcorp #1"|8|24|NULL
+6012005|"importobrand #5"|8|29|NULL
+6012005|"importobrand #5"|9|44|NULL
+6016003|"corpbrand #3"|8|9|NULL
+7001009|"amalgbrand #9"|18|42|NULL
+7007010|"brandbrand #10"|19|12|NULL
+7009005|"maxibrand #5"|18|40|NULL
+7010003|"univnameless #3"|8|26|NULL
+7010008|"univnameless #8"|17|22|NULL
+7012003|"importonameless #3"|9|34|NULL
+7012003|"importonameless #3"|19|55|NULL
+7015002|"scholarnameless #2"|8|33|NULL
+8003003|"exportinameless #3"|18|22|NULL
+10004004|"edu packunivamalg #4"|17|42|NULL
+7004006|"edu packbrand #6"|9|7|21073.34
+10003016|"exportiunivamalg #16"|19|18|19710.65
+8013009|"exportimaxi #9"|18|56|19619.01
+2002001|"importoimporto #1"|19|31|19219.16
+4001002|"amalgedu pack #2"|18|27|18895.68
+6016003|"corpbrand #3"|8|11|18519.60
+7013007|"exportinameless #7"|18|48|17664.46
+2003002|"exportiimporto #2"|18|43|17427.34
+5001002|"amalgscholar #2"|6|2|17065.00
+3003001|"exportiexporti #1"|19|37|16531.50
+10013013|"exportiamalgamalg #13"|18|30|16441.92
+7016007|"corpnameless #7"|9|38|16235.38
+10016003|"corpamalgamalg #3"|17|16|16082.22
+1004002|"edu packamalg #2"|17|49|15812.55
+7010008|"univnameless #8"|17|15|15475.50
+4003001|"exportiedu pack #1"|6|57|15428.30
+6005007|"scholarcorp #7"|19|15|15406.38
+6005001|"scholarcorp #1"|18|43|15042.95
+3003001|"exportiexporti #1"|19|46|14697.90
+9009009|"maximaxi #9"|18|5|14515.01
+6002005|"importocorp #5"|9|57|14418.25
+9008005|"namelessmaxi #5"|18|11|14287.06
+5003001|"exportischolar #1"|19|47|13843.02
+9008005|"namelessmaxi #5"|17|53|13704.60
+8014005|"edu packmaxi #5"|18|28|13500.30
+3002002|"importoexporti #2"|17|6|13383.00
+6008007|"namelesscorp #7"|18|33|13284.00
+5003001|"exportischolar #1"|17|5|13176.83
+6011003|"amalgbrand #3"|17|28|13021.89
+5004002|"edu packscholar #2"|7|43|13003.65
+8016006|"corpmaxi #6"|8|1|12937.96
+10003016|"exportiunivamalg #16"|17|24|12768.80
+8003003|"exportinameless #3"|8|49|12695.30
+1002002|"importoamalg #2"|7|14|12602.16
+8012005|"importomaxi #5"|19|30|12601.71
+1003001|"exportiamalg #1"|17|59|12582.96
+10016001|"corpamalgamalg #1"|19|21|12494.48
+1002001|"importoamalg #1"|19|31|12297.28
+6008005|"namelesscorp #5"|17|47|12252.44
+6003003|"exporticorp #3"|19|25|11925.90
+9010009|"univunivamalg #9"|18|36|11925.87
+2001002|"amalgimporto #2"|19|56|11895.74
+7015007|"scholarnameless #7"|17|11|11864.94
+7010008|"univnameless #8"|17|34|11682.40
+4003001|"exportiedu pack #1"|17|15|11653.62
+6002001|"importocorp #1"|17|1|11649.21
+6008003|"namelesscorp #3"|9|55|11607.75
+2002001|"importoimporto #1"|19|40|11545.95
+9010009|"univunivamalg #9"|8|23|11503.55
+7007004|"brandbrand #4"|18|54|11421.33
+4004001|"edu packedu pack #1"|17|42|11156.94
+10006002|"corpunivamalg #2"|19|26|11109.12
+1002001|"importoamalg #1"|17|19|11099.90
+10006002|"corpunivamalg #2"|18|55|11043.75
+6005001|"scholarcorp #1"|17|13|10941.60
+7004006|"edu packbrand #6"|9|30|10895.30
+5001001|"amalgscholar #1"|18|14|10860.94
+7012010|"importonameless #10"|8|24|10860.21
+9011009|"amalgunivamalg #9"|17|36|10846.08
+6011001|"amalgbrand #1"|17|21|10809.92
+9006008|"corpmaxi #8"|6|57|10752.84
+1001002|"amalgamalg #2"|7|13|10728.20
+4004002|"edu packedu pack #2"|19|26|10700.80
+6003003|"exporticorp #3"|7|39|10683.27
+10005013|"scholarunivamalg #13"|18|49|10670.05
+2001002|"amalgimporto #2"|6|49|10640.80
+9003003|"exportimaxi #3"|18|2|10616.00
+3003001|"exportiexporti #1"|9|40|10580.32
+7001009|"amalgbrand #9"|18|19|10569.30
+3003001|"exportiexporti #1"|6|23|10485.15
+7009010|"maxibrand #10"|19|51|10484.99
+1003002|"exportiamalg #2"|19|25|10412.35
+4002001|"importoedu pack #1"|18|59|10391.43
+1004002|"edu packamalg #2"|19|49|10379.30
+2002001|"importoimporto #1"|9|32|10360.35
+3004001|"edu packexporti #1"|17|12|10284.80
+7001004|"amalgbrand #4"|8|58|10253.04
+9007011|"brandmaxi #11"|7|51|10247.31
+10013015|"exportiamalgamalg #15"|9|41|10180.56
+10005013|"scholarunivamalg #13"|18|7|10140.03
+7009005|"maxibrand #5"|6|50|10115.25
+10003007|"exportiunivamalg #7"|18|37|10076.08
+6012008|"importobrand #8"|9|42|10042.41
+2003001|"exportiimporto #1"|9|50|10033.77
+3003002|"exportiexporti #2"|19|14|10032.24
+9013002|"exportiunivamalg #2"|7|47|10032.00
+4004001|"edu packedu pack #1"|17|21|9997.32
+6008005|"namelesscorp #5"|17|59|9995.02
+3002002|"importoexporti #2"|19|14|9990.20
+10015004|"scholaramalgamalg #4"|18|15|9978.80
+9011009|"amalgunivamalg #9"|18|35|9907.58
+8009005|"maxinameless #5"|18|50|9901.07
+1001002|"amalgamalg #2"|9|50|9832.96
+8009005|"maxinameless #5"|18|31|9772.84
+9009002|"maximaxi #2"|19|31|9694.72
+7001005|"amalgbrand #5"|17|16|9659.76
+2004002|"edu packimporto #2"|19|18|9602.76
+3002001|"importoexporti #1"|17|52|9575.36
+2001001|"amalgimporto #1"|8|54|9553.44
+9014002|"edu packunivamalg #2"|8|31|9460.80
+9002011|"importomaxi #11"|7|53|9450.93
+10012005|"importoamalgamalg #5"|18|39|9440.20
+4004002|"edu packedu pack #2"|9|58|9411.84
+5001002|"amalgscholar #2"|9|10|9352.20
+10002011|"importounivamalg #11"|9|48|9259.25
+6001001|"amalgcorp #1"|8|10|9228.31
+3003001|"exportiexporti #1"|19|11|9164.22
+5003001|"exportischolar #1"|17|6|9151.74
+6006007|"corpcorp #7"|18|52|9115.60
+2004001|"edu packimporto #1"|17|33|8984.40
+2002001|"importoimporto #1"|17|14|8956.53
+7015002|"scholarnameless #2"|6|18|8945.04
+1004002|"edu packamalg #2"|6|51|8918.00
+6014002|"edu packbrand #2"|17|33|8871.00
+2003002|"exportiimporto #2"|18|24|8854.84
+8012005|"importomaxi #5"|18|4|8842.68
+4002002|"importoedu pack #2"|19|14|8774.37
+7003002|"exportibrand #2"|8|14|8758.75
+1004002|"edu packamalg #2"|17|20|8728.86
+2004002|"edu packimporto #2"|19|15|8719.80
+8014005|"edu packmaxi #5"|9|53|8696.88
+9013002|"exportiunivamalg #2"|19|56|8673.00
+7003002|"exportibrand #2"|9|16|8671.23
+4002001|"importoedu pack #1"|18|50|8665.02
+3002001|"importoexporti #1"|19|4|8664.04
+7012010|"importonameless #10"|8|21|8630.05
+6008005|"namelesscorp #5"|17|31|8617.48
+10007012|"brandunivamalg #12"|8|39|8556.60
+2003002|"exportiimporto #2"|9|31|8513.40
+6015006|"scholarbrand #6"|19|4|8511.84
+1004001|"edu packamalg #1"|18|17|8486.52
+2003001|"exportiimporto #1"|7|54|8411.63
+10016016|"corpamalgamalg #16"|6|16|8336.00
+10004001|"edu packunivamalg #1"|17|23|8265.92
+9012003|"importounivamalg #3"|9|46|8240.80
+2003001|"exportiimporto #1"|19|42|8238.23
+1004002|"edu packamalg #2"|6|12|8226.24
+1003001|"exportiamalg #1"|8|54|8225.49
+5001001|"amalgscholar #1"|8|44|8223.60
+6001001|"amalgcorp #1"|8|22|8218.89
+4003001|"exportiedu pack #1"|19|38|8213.38
+2003002|"exportiimporto #2"|17|20|8210.40
+7010003|"univnameless #3"|19|9|8147.52
+10003007|"exportiunivamalg #7"|6|15|8146.60
+9015011|"scholarunivamalg #11"|9|44|8143.20
+10012011|"importoamalgamalg #11"|17|31|8139.09
+9011008|"amalgunivamalg #8"|8|24|8090.28
+10007012|"brandunivamalg #12"|17|45|8081.60
+4001001|"amalgedu pack #1"|17|44|8058.05
+3002002|"importoexporti #2"|18|25|8051.94
+9007009|"brandmaxi #9"|19|58|8046.72
+10016008|"corpamalgamalg #8"|8|46|8037.93
+10015013|"scholaramalgamalg #13"|18|29|8035.28
+6002003|"importocorp #3"|19|44|8028.36
+9012003|"importounivamalg #3"|8|27|7970.27
+2003001|"exportiimporto #1"|19|52|7962.30
+4001001|"amalgedu pack #1"|6|25|7933.54
+2001002|"amalgimporto #2"|6|36|7902.18
+8002009|"importonameless #9"|18|28|7891.65
+5004001|"edu packscholar #1"|18|9|7871.16
+5003001|"exportischolar #1"|18|32|7868.93
+3003001|"exportiexporti #1"|8|25|7817.40
+5001001|"amalgscholar #1"|7|32|7805.60
+4004002|"edu packedu pack #2"|19|54|7782.05
+9014008|"edu packunivamalg #8"|18|40|7747.36
+6012007|"importobrand #7"|17|25|7729.82
+4003001|"exportiedu pack #1"|17|11|7726.88
+7007010|"brandbrand #10"|19|37|7714.20
+5003002|"exportischolar #2"|17|38|7700.48
+6012002|"importobrand #2"|17|51|7698.40
+10016008|"corpamalgamalg #8"|18|48|7685.04
+5003001|"exportischolar #1"|17|11|7678.05
+1003001|"exportiamalg #1"|17|48|7664.76
+1002001|"importoamalg #1"|18|11|7662.45
+3003001|"exportiexporti #1"|19|36|7661.50
+2003002|"exportiimporto #2"|17|24|7644.00
+7002003|"importobrand #3"|9|46|7603.33
+4004001|"edu packedu pack #1"|19|16|7570.56
+10004004|"edu packunivamalg #4"|18|34|7564.24
+10008015|"namelessunivamalg #15"|19|38|7547.68
+1003001|"exportiamalg #1"|9|44|7534.89
+1004002|"edu packamalg #2"|19|52|7503.62
+9011009|"amalgunivamalg #9"|7|42|7479.22
+3002001|"importoexporti #1"|17|31|7469.43
+4004002|"edu packedu pack #2"|7|14|7449.57
+6015006|"scholarbrand #6"|7|22|7433.91
+1004002|"edu packamalg #2"|6|24|7391.60
+1002001|"importoamalg #1"|18|3|7361.29
+3002002|"importoexporti #2"|9|25|7327.20
+10012004|"importoamalgamalg #4"|17|38|7325.60
+7009003|"maxibrand #3"|17|22|7316.10
+1001001|"amalgamalg #1"|7|10|7306.20
+7012003|"importonameless #3"|19|49|7294.29
+7010009|"univnameless #9"|9|5|7265.60
+9009002|"maximaxi #2"|7|16|7264.95
+7012003|"importonameless #3"|7|31|7247.70
+10012001|"importoamalgamalg #1"|7|43|7235.04
+10006002|"corpunivamalg #2"|18|18|7219.92
+7011001|"amalgnameless #1"|9|15|7203.70
+8007010|"brandnameless #10"|18|42|7192.20
+5003001|"exportischolar #1"|9|48|7164.51
+2002001|"importoimporto #1"|17|48|7164.00
+1001001|"amalgamalg #1"|9|59|7163.25
+2004002|"edu packimporto #2"|18|36|7136.01
+1004002|"edu packamalg #2"|19|15|7110.21
+10003004|"exportiunivamalg #4"|18|45|7099.92
+6007003|"brandcorp #3"|9|45|7097.16
+2004002|"edu packimporto #2"|17|51|7096.36
+10016001|"corpamalgamalg #1"|19|53|7095.33
+7009005|"maxibrand #5"|17|41|7062.15
+4003001|"exportiedu pack #1"|17|9|7044.54
+1001002|"amalgamalg #2"|17|26|7042.98
+2001002|"amalgimporto #2"|8|57|7042.89
+2002001|"importoimporto #1"|18|1|7021.08
+7007004|"brandbrand #4"|17|30|6981.36
+9007011|"brandmaxi #11"|9|59|6980.82
+4004001|"edu packedu pack #1"|8|45|6935.19
+1004001|"edu packamalg #1"|9|57|6905.28
+6016003|"corpbrand #3"|9|56|6874.92
+3002002|"importoexporti #2"|9|34|6864.92
+7001005|"amalgbrand #5"|17|31|6852.11
+3003001|"exportiexporti #1"|19|1|6827.52
+1001001|"amalgamalg #1"|7|40|6825.39
+10002011|"importounivamalg #11"|19|38|6815.34
+9010009|"univunivamalg #9"|6|16|6812.47
+6011001|"amalgbrand #1"|17|42|6778.44
+9015009|"scholarunivamalg #9"|6|41|6774.00
+5002002|"importoscholar #2"|17|1|6765.75
+7002003|"importobrand #3"|6|41|6758.29
+6015006|"scholarbrand #6"|18|23|6755.76
+10002012|"importounivamalg #12"|18|29|6749.73
+6011005|"amalgbrand #5"|18|26|6735.36
+4001001|"amalgedu pack #1"|9|48|6726.75
+5002002|"importoscholar #2"|6|5|6723.45
+7007004|"brandbrand #4"|17|11|6722.10
+5002001|"importoscholar #1"|9|23|6721.99
+1001001|"amalgamalg #1"|6|10|6710.40
+2004002|"edu packimporto #2"|17|6|6700.76
+5003001|"exportischolar #1"|19|16|6680.39
+2002001|"importoimporto #1"|6|26|6669.10
+10006002|"corpunivamalg #2"|18|11|6622.86
+8008005|"namelessnameless #5"|17|34|6607.29
+6012008|"importobrand #8"|17|56|6599.88
+5003002|"exportischolar #2"|17|41|6536.00
+9011009|"amalgunivamalg #9"|19|16|6535.62
+5004001|"edu packscholar #1"|17|50|6532.32
+8016006|"corpmaxi #6"|9|42|6522.39
+7016001|"corpnameless #1"|6|5|6516.00
+10004001|"edu packunivamalg #1"|18|57|6512.78
+6008002|"namelesscorp #2"|19|56|6512.38
+8004009|"edu packnameless #9"|8|43|6508.47
+3002002|"importoexporti #2"|19|13|6487.20
+7015007|"scholarnameless #7"|6|53|6487.02
+10015017|"scholaramalgamalg #17"|9|2|6484.80
+6003007|"exporticorp #7"|8|14|6474.66
+7014001|"edu packnameless #1"|19|39|6469.82
+2004002|"edu packimporto #2"|17|42|6457.60
+3003001|"exportiexporti #1"|17|9|6450.60
+8007005|"brandnameless #5"|17|47|6414.24
+7001009|"amalgbrand #9"|9|17|6400.32
+6008003|"namelesscorp #3"|8|58|6367.36
+7001004|"amalgbrand #4"|9|42|6360.18
+6012005|"importobrand #5"|18|39|6357.05
+1002002|"importoamalg #2"|17|47|6356.57
+4002001|"importoedu pack #1"|8|59|6294.34
+4003001|"exportiedu pack #1"|18|16|6294.18
+6008002|"namelesscorp #2"|9|10|6293.82
+3003001|"exportiexporti #1"|19|38|6285.96
+7009010|"maxibrand #10"|17|50|6237.66
+9012008|"importounivamalg #8"|17|48|6228.20
+1002001|"importoamalg #1"|18|21|6218.52
+4003001|"exportiedu pack #1"|18|8|6206.82
+5003001|"exportischolar #1"|8|0|6188.40
+9007011|"brandmaxi #11"|19|14|6183.38
+7008009|"namelessbrand #9"|9|29|6179.36
+7004007|"edu packbrand #7"|9|23|6173.10
+5001001|"amalgscholar #1"|19|6|6171.84
+10016017|"corpamalgamalg #17"|9|44|6164.34
+9014008|"edu packunivamalg #8"|19|2|6162.72
+6011003|"amalgbrand #3"|8|6|6145.72
+4002002|"importoedu pack #2"|17|10|6141.26
+1001001|"amalgamalg #1"|17|10|6141.07
+4001002|"amalgedu pack #2"|17|5|6120.18
+10010013|"univamalgamalg #13"|17|45|6120.18
+4002002|"importoedu pack #2"|8|6|6098.05
+4003001|"exportiedu pack #1"|9|3|6078.60
+4001001|"amalgedu pack #1"|9|34|6073.92
+4001002|"amalgedu pack #2"|6|3|6073.25
+4003001|"exportiedu pack #1"|17|1|6056.48
+10012001|"importoamalgamalg #1"|17|28|6031.44
+2003001|"exportiimporto #1"|19|11|6019.01
+6008005|"namelesscorp #5"|19|17|6001.00
+10010013|"univamalgamalg #13"|19|38|5984.40
+8012010|"importomaxi #10"|9|50|5975.50
+5003001|"exportischolar #1"|19|40|5965.30
+1004001|"edu packamalg #1"|17|5|5957.58
+1004002|"edu packamalg #2"|9|10|5934.86
+3004002|"edu packexporti #2"|19|52|5933.44
+1003001|"exportiamalg #1"|19|52|5920.25
+9013002|"exportiunivamalg #2"|18|26|5888.92
+9009002|"maximaxi #2"|9|6|5868.72
+7007010|"brandbrand #10"|17|8|5860.32
+2003001|"exportiimporto #1"|6|53|5850.44
+9012008|"importounivamalg #8"|6|9|5837.00
+9014005|"edu packunivamalg #5"|9|47|5826.80
+6008005|"namelesscorp #5"|19|39|5824.13
+3002001|"importoexporti #1"|9|4|5813.30
+8013009|"exportimaxi #9"|9|53|5808.00
+10015004|"scholaramalgamalg #4"|9|42|5804.58
+10004001|"edu packunivamalg #1"|6|56|5799.64
+9008005|"namelessmaxi #5"|19|9|5798.52
+4001001|"amalgedu pack #1"|6|51|5782.64
+7014001|"edu packnameless #1"|19|22|5769.28
+7013009|"exportinameless #9"|9|23|5764.50
+5001001|"amalgscholar #1"|18|2|5751.20
+10010001|"univamalgamalg #1"|7|3|5712.98
+9010009|"univunivamalg #9"|19|42|5712.80
+6008005|"namelesscorp #5"|8|35|5702.40
+7015002|"scholarnameless #2"|18|27|5700.15
+7001005|"amalgbrand #5"|17|32|5693.88
+4001002|"amalgedu pack #2"|9|6|5685.60
+4002002|"importoedu pack #2"|19|0|5684.58
+5002001|"importoscholar #1"|19|28|5659.46
+7012003|"importonameless #3"|18|20|5657.04
+1004001|"edu packamalg #1"|9|2|5650.29
+3003001|"exportiexporti #1"|6|5|5647.32
+6008005|"namelesscorp #5"|9|39|5644.53
+7012010|"importonameless #10"|19|53|5635.04
+8002009|"importonameless #9"|19|33|5633.00
+1003002|"exportiamalg #2"|6|13|5631.12
+1001002|"amalgamalg #2"|17|38|5607.40
+8016006|"corpmaxi #6"|17|21|5607.00
+5003001|"exportischolar #1"|18|20|5591.60
+6005007|"scholarcorp #7"|7|35|5590.91
+6011005|"amalgbrand #5"|17|53|5583.17
+5004001|"edu packscholar #1"|17|45|5581.60
+10013015|"exportiamalgamalg #15"|19|25|5579.31
+9014011|"edu packunivamalg #11"|19|57|5565.00
+5004002|"edu packscholar #2"|9|51|5544.00
+6011008|"amalgbrand #8"|19|11|5541.86
+10012011|"importoamalgamalg #11"|17|40|5538.00
+7010003|"univnameless #3"|19|38|5529.92
+7009005|"maxibrand #5"|9|20|5525.52
+10015013|"scholaramalgamalg #13"|18|3|5514.06
+1001002|"amalgamalg #2"|18|57|5486.13
+3001001|"amalgexporti #1"|17|12|5475.35
+1002001|"importoamalg #1"|9|53|5470.74
+1001001|"amalgamalg #1"|7|29|5467.35
+1003001|"exportiamalg #1"|18|44|5452.48
+5001001|"amalgscholar #1"|17|42|5442.55
+4003001|"exportiedu pack #1"|17|6|5437.80
+10006002|"corpunivamalg #2"|18|44|5436.48
+7001009|"amalgbrand #9"|17|19|5434.52
+9007011|"brandmaxi #11"|18|39|5421.15
+2004002|"edu packimporto #2"|19|24|5405.85
+5003001|"exportischolar #1"|19|52|5405.40
+2002001|"importoimporto #1"|8|35|5402.10
+7015002|"scholarnameless #2"|9|42|5398.86
+9011009|"amalgunivamalg #9"|19|5|5393.50
+9011008|"amalgunivamalg #8"|8|35|5389.02
+6014007|"edu packbrand #7"|17|0|5388.06
+4002001|"importoedu pack #1"|19|4|5370.00
+9003003|"exportimaxi #3"|8|53|5323.12
+8003010|"exportinameless #10"|17|26|5320.00
+6011001|"amalgbrand #1"|17|55|5318.78
+3002001|"importoexporti #1"|18|10|5291.46
+5003001|"exportischolar #1"|9|18|5288.15
+6016003|"corpbrand #3"|18|18|5278.52
+10012001|"importoamalgamalg #1"|9|13|5278.32
+5002001|"importoscholar #1"|19|4|5255.54
+7016007|"corpnameless #7"|17|31|5251.95
+1002002|"importoamalg #2"|9|18|5251.32
+4002001|"importoedu pack #1"|19|9|5238.87
+5003002|"exportischolar #2"|19|38|5236.00
+6008005|"namelesscorp #5"|9|8|5233.69
+3004001|"edu packexporti #1"|9|36|5218.56
+9011009|"amalgunivamalg #9"|17|21|5213.50
+10016001|"corpamalgamalg #1"|19|38|5206.50
+9007003|"brandmaxi #3"|19|21|5206.00
+6005001|"scholarcorp #1"|9|48|5170.92
+8009005|"maxinameless #5"|19|49|5152.68
+3004002|"edu packexporti #2"|18|27|5151.54
+10012001|"importoamalgamalg #1"|9|2|5148.00
+9009009|"maximaxi #9"|19|24|5139.92
+5004001|"edu packscholar #1"|9|53|5129.90
+7002003|"importobrand #3"|17|27|5127.75
+9007003|"brandmaxi #3"|18|45|5123.36
+6003008|"exporticorp #8"|19|51|5118.75
+1002002|"importoamalg #2"|18|35|5097.51
+9011009|"amalgunivamalg #9"|18|25|5096.38
+1004002|"edu packamalg #2"|8|58|5087.15
+5001001|"amalgscholar #1"|17|43|5080.72
+6015006|"scholarbrand #6"|19|58|5080.60
+10016001|"corpamalgamalg #1"|19|37|5080.50
+7001009|"amalgbrand #9"|9|10|5080.43
+8003010|"exportinameless #10"|8|11|5062.52
+1003001|"exportiamalg #1"|19|22|5059.45
+5004001|"edu packscholar #1"|19|39|5059.25
+4004001|"edu packedu pack #1"|6|58|5059.08
+10016001|"corpamalgamalg #1"|9|21|5057.00
+5004001|"edu packscholar #1"|17|17|5043.03
+10012004|"importoamalgamalg #4"|17|24|5042.10
+7004009|"edu packbrand #9"|17|7|5036.76
+6006003|"corpcorp #3"|8|24|5036.72
+7010009|"univnameless #9"|18|45|5036.57
+9010009|"univunivamalg #9"|7|11|5034.26
+1002002|"importoamalg #2"|9|46|5031.84
+5001001|"amalgscholar #1"|9|11|5019.08
+6001002|"amalgcorp #2"|19|42|5018.88
+8013009|"exportimaxi #9"|18|15|5011.61
+1003001|"exportiamalg #1"|17|26|5006.88
+10016003|"corpamalgamalg #3"|18|31|5005.26
+7010004|"univnameless #4"|18|57|4997.89
+7004007|"edu packbrand #7"|8|51|4984.00
+7001005|"amalgbrand #5"|8|4|4977.60
+10012005|"importoamalgamalg #5"|18|59|4961.81
+7015009|"scholarnameless #9"|9|38|4957.80
+9007009|"brandmaxi #9"|17|14|4947.94
+10002012|"importounivamalg #12"|19|1|4947.69
+6012007|"importobrand #7"|17|45|4938.84
+2003001|"exportiimporto #1"|17|55|4930.39
+3002001|"importoexporti #1"|18|50|4930.20
+6007003|"brandcorp #3"|17|6|4928.11
+3001002|"amalgexporti #2"|8|47|4915.82
+9008002|"namelessmaxi #2"|18|51|4908.33
+7010008|"univnameless #8"|18|9|4904.20
+4002001|"importoedu pack #1"|18|20|4896.00
+9010009|"univunivamalg #9"|7|48|4891.60
+7013009|"exportinameless #9"|18|35|4884.24
+6006007|"corpcorp #7"|8|6|4881.28
+9015011|"scholarunivamalg #11"|19|16|4876.80
+2002001|"importoimporto #1"|19|58|4871.44
+4002001|"importoedu pack #1"|8|20|4865.40
+6008003|"namelesscorp #3"|19|53|4864.86
+6001001|"amalgcorp #1"|18|21|4862.00
+6011005|"amalgbrand #5"|9|25|4856.40
+7012003|"importonameless #3"|19|7|4855.20
+2004002|"edu packimporto #2"|18|21|4854.93
+2004001|"edu packimporto #1"|18|1|4839.20
+2003001|"exportiimporto #1"|19|21|4826.88
+10014016|"edu packamalgamalg #16"|18|0|4814.64
+6005001|"scholarcorp #1"|18|32|4810.60
+2001002|"amalgimporto #2"|6|20|4805.24
+7002003|"importobrand #3"|19|46|4796.00
+8003003|"exportinameless #3"|17|38|4775.65
+9015009|"scholarunivamalg #9"|8|52|4774.34
+1003001|"exportiamalg #1"|9|8|4772.95
+3004002|"edu packexporti #2"|19|55|4757.76
+6008007|"namelesscorp #7"|19|29|4756.73
+5003001|"exportischolar #1"|8|26|4734.96
+5001001|"amalgscholar #1"|19|37|4733.04
+10016001|"corpamalgamalg #1"|18|34|4730.19
+10008015|"namelessunivamalg #15"|17|39|4723.60
+2004002|"edu packimporto #2"|19|21|4721.98
+4002001|"importoedu pack #1"|8|27|4721.76
+9008002|"namelessmaxi #2"|17|37|4721.12
+7011001|"amalgnameless #1"|18|58|4719.78
+10016017|"corpamalgamalg #17"|8|11|4714.92
+6014004|"edu packbrand #4"|17|52|4714.40
+9002011|"importomaxi #11"|17|13|4713.08
+2003001|"exportiimporto #1"|19|49|4706.26
+9003003|"exportimaxi #3"|19|25|4704.66
+10007012|"brandunivamalg #12"|19|24|4701.00
+6016003|"corpbrand #3"|17|26|4688.60
+9010009|"univunivamalg #9"|9|4|4658.85
+6010004|"univbrand #4"|8|50|4656.08
+4002002|"importoedu pack #2"|17|58|4647.18
+10011009|"amalgamalgamalg #9"|18|39|4643.00
+6016003|"corpbrand #3"|18|58|4608.81
+6002001|"importocorp #1"|9|42|4607.68
+1001002|"amalgamalg #2"|19|47|4606.20
+6014004|"edu packbrand #4"|19|54|4601.00
+9014008|"edu packunivamalg #8"|19|25|4594.76
+6008003|"namelesscorp #3"|17|1|4580.16
+2004002|"edu packimporto #2"|19|17|4576.74
+9007011|"brandmaxi #11"|18|2|4560.76
+8005008|"scholarnameless #8"|9|38|4544.04
+6010005|"univbrand #5"|8|42|4528.00
+9010009|"univunivamalg #9"|9|14|4527.70
+2002001|"importoimporto #1"|17|1|4509.46
+2001001|"amalgimporto #1"|9|34|4503.87
+5001001|"amalgscholar #1"|18|32|4502.68
+5001001|"amalgscholar #1"|17|49|4501.79
+4001001|"amalgedu pack #1"|8|37|4498.20
+3002002|"importoexporti #2"|8|0|4497.93
+1002002|"importoamalg #2"|19|54|4491.96
+7010008|"univnameless #8"|8|47|4491.36
+9007009|"brandmaxi #9"|17|18|4484.33
+3004001|"edu packexporti #1"|19|26|4483.16
+9011009|"amalgunivamalg #9"|18|1|4482.45
+6012005|"importobrand #5"|19|54|4474.87
+6005001|"scholarcorp #1"|8|4|4459.52
+2001001|"amalgimporto #1"|8|16|4437.50
+6016003|"corpbrand #3"|19|11|4435.85
+9006008|"corpmaxi #8"|19|0|4435.56
+10001017|"amalgunivamalg #17"|8|30|4433.76
+2004001|"edu packimporto #1"|19|44|4420.58
+5004001|"edu packscholar #1"|18|54|4413.73
+6014002|"edu packbrand #2"|9|20|4399.20
+4004002|"edu packedu pack #2"|8|1|4395.99
+8014005|"edu packmaxi #5"|8|20|4386.72
+6012002|"importobrand #2"|9|17|4382.00
+1001001|"amalgamalg #1"|18|35|4381.44
+9007011|"brandmaxi #11"|8|20|4381.32
+1002001|"importoamalg #1"|7|41|4368.54
+5003001|"exportischolar #1"|9|6|4368.33
+3004002|"edu packexporti #2"|19|47|4361.53
+6011008|"amalgbrand #8"|17|44|4358.64
+5002001|"importoscholar #1"|17|30|4357.64
+7012003|"importonameless #3"|18|53|4353.87
+8002009|"importonameless #9"|8|44|4338.45
+5001001|"amalgscholar #1"|19|31|4334.26
+9012003|"importounivamalg #3"|8|32|4333.07
+5003002|"exportischolar #2"|17|10|4328.14
+2001001|"amalgimporto #1"|19|32|4326.21
+5002001|"importoscholar #1"|18|32|4324.52
+10016006|"corpamalgamalg #6"|19|55|4320.00
+4004002|"edu packedu pack #2"|8|15|4318.00
+3001002|"amalgexporti #2"|9|14|4313.40
+5001002|"amalgscholar #2"|9|27|4309.90
+4002001|"importoedu pack #1"|6|4|4308.77
+4002002|"importoedu pack #2"|8|25|4300.94
+1003001|"exportiamalg #1"|17|49|4298.06
+10011014|"amalgamalgamalg #14"|19|45|4292.68
+4002001|"importoedu pack #1"|17|56|4287.92
+7013001|"exportinameless #1"|8|1|4281.66
+10008002|"namelessunivamalg #2"|7|42|4281.00
+9001005|"amalgmaxi #5"|19|9|4275.00
+6006004|"corpcorp #4"|18|57|4269.96
+2004002|"edu packimporto #2"|7|56|4267.90
+1004002|"edu packamalg #2"|17|19|4263.91
+10004004|"edu packunivamalg #4"|19|27|4263.84
+3003001|"exportiexporti #1"|9|53|4250.68
+6002003|"importocorp #3"|19|42|4248.27
+10005013|"scholarunivamalg #13"|7|35|4246.56
+6012008|"importobrand #8"|19|23|4240.43
+1001002|"amalgamalg #2"|17|51|4238.93
+1004002|"edu packamalg #2"|8|24|4230.35
+9013009|"exportiunivamalg #9"|17|52|4224.48
+10016001|"corpamalgamalg #1"|18|9|4223.82
+10003004|"exportiunivamalg #4"|18|6|4219.50
+6001002|"amalgcorp #2"|17|44|4213.16
+9016003|"corpunivamalg #3"|9|57|4213.16
+5004001|"edu packscholar #1"|6|41|4188.56
+9011008|"amalgunivamalg #8"|9|6|4186.80
+10016016|"corpamalgamalg #16"|9|34|4180.00
+5004001|"edu packscholar #1"|18|45|4167.08
+4004001|"edu packedu pack #1"|9|6|4154.52
+10001017|"amalgunivamalg #17"|17|26|4150.30
+6005001|"scholarcorp #1"|19|55|4137.88
+6014007|"edu packbrand #7"|9|3|4134.44
+6012007|"importobrand #7"|9|1|4131.40
+9011008|"amalgunivamalg #8"|9|23|4125.00
+8008005|"namelessnameless #5"|17|42|4122.64
+8008005|"namelessnameless #5"|19|6|4100.75
+1004002|"edu packamalg #2"|19|53|4099.44
+9014011|"edu packunivamalg #11"|17|57|4091.46
+6012007|"importobrand #7"|9|8|4088.28
+10015013|"scholaramalgamalg #13"|18|26|4085.90
+9013009|"exportiunivamalg #9"|17|2|4078.46
+1004002|"edu packamalg #2"|6|27|4076.80
+9010009|"univunivamalg #9"|18|32|4076.40
+8012005|"importomaxi #5"|19|27|4075.92
+8009005|"maxinameless #5"|17|58|4075.20
+2002001|"importoimporto #1"|19|3|4066.38
+8004003|"edu packnameless #3"|6|36|4062.85
+5002001|"importoscholar #1"|19|22|4056.06
+6006004|"corpcorp #4"|18|53|4049.55
+2004002|"edu packimporto #2"|9|42|4046.74
+7013009|"exportinameless #9"|18|31|4042.11
+6001001|"amalgcorp #1"|9|26|4041.36
+6011008|"amalgbrand #8"|19|38|4030.84
+10012017|"importoamalgamalg #17"|18|16|4027.31
+2004002|"edu packimporto #2"|9|48|4026.45
+8005005|"scholarnameless #5"|9|11|4024.96
+6002005|"importocorp #5"|19|28|4024.41
+6002001|"importocorp #1"|17|56|4010.70
+1003001|"exportiamalg #1"|19|21|4006.93
+7013009|"exportinameless #9"|19|27|4004.28
+10008002|"namelessunivamalg #2"|18|50|4004.06
+7011001|"amalgnameless #1"|18|19|4001.25
+3001002|"amalgexporti #2"|19|51|3999.31
+6001002|"amalgcorp #2"|18|23|3991.26
+10011014|"amalgamalgamalg #14"|18|50|3991.08
+8004003|"edu packnameless #3"|17|23|3987.20
+1003001|"exportiamalg #1"|8|9|3986.28
+10013013|"exportiamalgamalg #13"|19|5|3984.80
+6006004|"corpcorp #4"|19|42|3977.41
+3003001|"exportiexporti #1"|8|40|3973.08
+4002001|"importoedu pack #1"|17|39|3967.00
+3002001|"importoexporti #1"|18|38|3963.56
+5001001|"amalgscholar #1"|19|17|3960.24
+2002001|"importoimporto #1"|18|37|3958.18
+7007010|"brandbrand #10"|19|57|3956.85
+8016004|"corpmaxi #4"|9|23|3943.96
+7001005|"amalgbrand #5"|6|2|3937.92
+7008007|"namelessbrand #7"|18|27|3936.60
+2004001|"edu packimporto #1"|17|43|3933.90
+1004002|"edu packamalg #2"|19|21|3913.16
+9008005|"namelessmaxi #5"|8|58|3911.46
+3002002|"importoexporti #2"|6|2|3906.00
+10016008|"corpamalgamalg #8"|8|27|3904.76
+5004001|"edu packscholar #1"|8|36|3900.00
+7007010|"brandbrand #10"|9|30|3896.76
+6007003|"brandcorp #3"|18|36|3883.71
+4001002|"amalgedu pack #2"|18|40|3883.14
+3003002|"exportiexporti #2"|18|15|3882.84
+2003001|"exportiimporto #1"|8|8|3882.46
+8008005|"namelessnameless #5"|17|44|3873.66
+9002011|"importomaxi #11"|8|13|3864.10
+7001005|"amalgbrand #5"|9|5|3862.11
+3004002|"edu packexporti #2"|18|45|3854.20
+2001002|"amalgimporto #2"|18|45|3848.20
+6008002|"namelesscorp #2"|18|38|3841.04
+2004002|"edu packimporto #2"|19|36|3837.24
+7008009|"namelessbrand #9"|9|40|3813.00
+4001001|"amalgedu pack #1"|18|48|3802.12
+3001001|"amalgexporti #1"|19|42|3796.32
+6016003|"corpbrand #3"|17|9|3790.80
+9013009|"exportiunivamalg #9"|19|25|3789.60
+2001002|"amalgimporto #2"|18|54|3780.72
+5003001|"exportischolar #1"|9|17|3780.21
+4002001|"importoedu pack #1"|18|4|3779.82
+2001001|"amalgimporto #1"|18|11|3776.00
+5003001|"exportischolar #1"|17|51|3774.60
+5001002|"amalgscholar #2"|19|21|3770.65
+4004001|"edu packedu pack #1"|18|38|3769.22
+7010008|"univnameless #8"|18|33|3765.36
+8014005|"edu packmaxi #5"|19|57|3757.74
+6011001|"amalgbrand #1"|9|18|3757.20
+2004001|"edu packimporto #1"|6|15|3754.36
+6006003|"corpcorp #3"|18|52|3748.08
+9010009|"univunivamalg #9"|18|55|3744.30
+4002001|"importoedu pack #1"|18|23|3736.50
+5003001|"exportischolar #1"|18|58|3733.50
+7013009|"exportinameless #9"|19|20|3725.98
+7007004|"brandbrand #4"|18|1|3723.10
+2001001|"amalgimporto #1"|18|2|3720.00
+4004001|"edu packedu pack #1"|19|26|3718.44
+7008009|"namelessbrand #9"|17|44|3708.04
+2004002|"edu packimporto #2"|9|30|3697.72
+6001001|"amalgcorp #1"|18|50|3693.71
+10013013|"exportiamalgamalg #13"|19|3|3692.70
+1004001|"edu packamalg #1"|9|54|3692.00
+6002005|"importocorp #5"|9|0|3688.20
+1002001|"importoamalg #1"|18|31|3683.55
+9013009|"exportiunivamalg #9"|19|13|3678.22
+8003010|"exportinameless #10"|19|22|3672.80
+8012005|"importomaxi #5"|17|32|3661.90
+4002001|"importoedu pack #1"|18|56|3659.16
+2004002|"edu packimporto #2"|18|6|3659.07
+10016016|"corpamalgamalg #16"|18|47|3649.71
+9013009|"exportiunivamalg #9"|9|43|3624.70
+3003002|"exportiexporti #2"|18|16|3621.66
+4004001|"edu packedu pack #1"|19|25|3605.91
+7013007|"exportinameless #7"|19|0|3604.72
+6014007|"edu packbrand #7"|9|27|3601.92
+10016001|"corpamalgamalg #1"|8|17|3601.58
+5001001|"amalgscholar #1"|18|5|3594.06
+9014008|"edu packunivamalg #8"|8|24|3582.45
+2004002|"edu packimporto #2"|19|32|3576.90
+3004001|"edu packexporti #1"|9|26|3565.10
+6009003|"maxicorp #3"|18|41|3561.60
+2003001|"exportiimporto #1"|7|41|3560.20
+9001005|"amalgmaxi #5"|17|8|3557.25
+3001002|"amalgexporti #2"|18|9|3555.30
+9010009|"univunivamalg #9"|6|24|3554.96
+9014002|"edu packunivamalg #2"|17|52|3553.11
+6016003|"corpbrand #3"|9|4|3551.84
+6008005|"namelesscorp #5"|9|2|3549.15
+10001017|"amalgunivamalg #17"|8|55|3525.30
+5003001|"exportischolar #1"|18|18|3522.63
+5004002|"edu packscholar #2"|18|48|3517.71
+4002002|"importoedu pack #2"|17|40|3517.00
+4002001|"importoedu pack #1"|17|44|3516.54
+4004002|"edu packedu pack #2"|8|51|3514.40
+4004001|"edu packedu pack #1"|18|5|3511.20
+4004002|"edu packedu pack #2"|19|44|3507.84
+4003001|"exportiedu pack #1"|8|38|3501.12
+10003007|"exportiunivamalg #7"|19|57|3499.68
+8011009|"amalgmaxi #9"|9|41|3498.39
+10011014|"amalgamalgamalg #14"|19|10|3494.34
+4004002|"edu packedu pack #2"|6|5|3489.30
+6009004|"maxicorp #4"|7|0|3484.06
+6008005|"namelesscorp #5"|18|47|3473.43
+6008005|"namelesscorp #5"|17|48|3466.64
+4003001|"exportiedu pack #1"|8|48|3455.48
+2002001|"importoimporto #1"|17|54|3455.10
+1001001|"amalgamalg #1"|19|49|3454.10
+7016007|"corpnameless #7"|7|29|3452.90
+5003001|"exportischolar #1"|17|30|3450.60
+2002001|"importoimporto #1"|17|56|3442.32
+10014016|"edu packamalgamalg #16"|9|31|3439.45
+9010009|"univunivamalg #9"|18|45|3431.74
+2001002|"amalgimporto #2"|18|30|3431.22
+6011005|"amalgbrand #5"|18|43|3426.80
+9016003|"corpunivamalg #3"|17|43|3426.78
+4004001|"edu packedu pack #1"|18|8|3419.52
+1001002|"amalgamalg #2"|18|25|3408.48
+4002002|"importoedu pack #2"|18|21|3405.60
+10003016|"exportiunivamalg #16"|17|11|3404.11
+9007009|"brandmaxi #9"|8|32|3402.90
+5003001|"exportischolar #1"|9|35|3401.01
+6003007|"exporticorp #7"|17|42|3400.80
+7010003|"univnameless #3"|17|14|3400.70
+5003001|"exportischolar #1"|8|19|3387.44
+3001002|"amalgexporti #2"|18|23|3385.04
+9012005|"importounivamalg #5"|7|42|3384.28
+9012003|"importounivamalg #3"|18|26|3377.25
+6005001|"scholarcorp #1"|17|39|3371.22
+4003001|"exportiedu pack #1"|7|3|3370.24
+3002001|"importoexporti #1"|8|37|3367.49
+1004001|"edu packamalg #1"|18|27|3361.79
+9015009|"scholarunivamalg #9"|19|41|3358.62
+9007009|"brandmaxi #9"|18|29|3357.35
+10016008|"corpamalgamalg #8"|7|55|3357.30
+7010003|"univnameless #3"|18|14|3346.14
+6006003|"corpcorp #3"|18|55|3345.21
+9011009|"amalgunivamalg #9"|18|58|3334.80
+1004002|"edu packamalg #2"|19|0|3330.60
+7013007|"exportinameless #7"|19|50|3330.60
+5001001|"amalgscholar #1"|7|1|3324.86
+4004001|"edu packedu pack #1"|8|12|3324.32
+9007009|"brandmaxi #9"|6|58|3323.76
+1002002|"importoamalg #2"|8|14|3306.94
+1002002|"importoamalg #2"|18|40|3301.20
+5004001|"edu packscholar #1"|8|15|3297.80
+2002001|"importoimporto #1"|18|28|3291.84
+9012003|"importounivamalg #3"|17|5|3285.12
+5004001|"edu packscholar #1"|17|21|3280.49
+2003001|"exportiimporto #1"|17|49|3277.12
+2002001|"importoimporto #1"|9|45|3262.97
+1002001|"importoamalg #1"|19|9|3253.80
+7003005|"exportibrand #5"|7|46|3242.66
+5003001|"exportischolar #1"|6|47|3231.06
+1002001|"importoamalg #1"|17|52|3230.76
+10002012|"importounivamalg #12"|17|30|3228.66
+9010009|"univunivamalg #9"|9|26|3225.04
+9002011|"importomaxi #11"|18|44|3220.20
+1003001|"exportiamalg #1"|7|39|3215.68
+1001002|"amalgamalg #2"|19|41|3214.40
+10005013|"scholarunivamalg #13"|9|46|3214.40
+10015017|"scholaramalgamalg #17"|19|20|3212.66
+7011001|"amalgnameless #1"|19|10|3207.06
+9012003|"importounivamalg #3"|19|41|3206.40
+7001005|"amalgbrand #5"|18|38|3205.55
+2004001|"edu packimporto #1"|18|32|3200.68
+1004001|"edu packamalg #1"|17|3|3195.99
+4001002|"amalgedu pack #2"|8|30|3195.66
+9010009|"univunivamalg #9"|17|56|3191.40
+7007004|"brandbrand #4"|17|44|3189.90
+10004004|"edu packunivamalg #4"|17|24|3189.12
+7008007|"namelessbrand #7"|18|21|3188.86
+8003010|"exportinameless #10"|18|11|3185.52
+5004002|"edu packscholar #2"|18|54|3184.26
+7013009|"exportinameless #9"|18|44|3178.14
+9014002|"edu packunivamalg #2"|7|45|3177.36
+4002002|"importoedu pack #2"|17|49|3166.35
+6010004|"univbrand #4"|19|11|3160.42
+1004002|"edu packamalg #2"|19|6|3159.76
+1004001|"edu packamalg #1"|17|0|3158.88
+2002001|"importoimporto #1"|17|25|3157.23
+1004001|"edu packamalg #1"|18|50|3156.75
+8002009|"importonameless #9"|18|18|3152.90
+9011008|"amalgunivamalg #8"|19|9|3147.84
+10015017|"scholaramalgamalg #17"|19|23|3147.66
+7010003|"univnameless #3"|18|58|3140.80
+7002003|"importobrand #3"|19|54|3139.92
+6008003|"namelesscorp #3"|19|26|3136.68
+7003002|"exportibrand #2"|7|31|3135.57
+7002003|"importobrand #3"|9|3|3131.96
+9007003|"brandmaxi #3"|7|53|3127.85
+8004003|"edu packnameless #3"|8|38|3125.32
+2004001|"edu packimporto #1"|19|37|3122.80
+9013002|"exportiunivamalg #2"|17|17|3120.92
+9008005|"namelessmaxi #5"|19|53|3119.48
+7016001|"corpnameless #1"|8|2|3110.88
+5001002|"amalgscholar #2"|19|57|3108.78
+7010003|"univnameless #3"|19|54|3102.40
+7001005|"amalgbrand #5"|9|50|3099.60
+2002001|"importoimporto #1"|17|24|3096.00
+8010009|"univmaxi #9"|9|3|3090.00
+9003003|"exportimaxi #3"|9|26|3087.34
+1003001|"exportiamalg #1"|17|43|3086.16
+9001005|"amalgmaxi #5"|17|32|3086.00
+5003002|"exportischolar #2"|17|4|3084.35
+5003002|"exportischolar #2"|17|29|3077.28
+3004001|"edu packexporti #1"|17|20|3076.62
+9015009|"scholarunivamalg #9"|19|35|3075.56
+5001001|"amalgscholar #1"|9|17|3069.36
+7001005|"amalgbrand #5"|17|17|3065.04
+9013009|"exportiunivamalg #9"|6|32|3060.10
+1003002|"exportiamalg #2"|19|53|3059.22
+2004002|"edu packimporto #2"|18|52|3059.20
+4004001|"edu packedu pack #1"|19|39|3052.20
+2004001|"edu packimporto #1"|19|4|3051.40
+9011008|"amalgunivamalg #8"|9|2|3048.19
+10004004|"edu packunivamalg #4"|18|55|3041.41
+1003001|"exportiamalg #1"|19|12|3039.64
+4003001|"exportiedu pack #1"|9|53|3039.05
+9015011|"scholarunivamalg #11"|18|37|3028.41
+6001002|"amalgcorp #2"|18|10|3026.80
+7004007|"edu packbrand #7"|9|48|3022.76
+4002002|"importoedu pack #2"|8|47|3019.52
+7010009|"univnameless #9"|9|55|3019.20
+5002002|"importoscholar #2"|7|51|3018.88
+2001002|"amalgimporto #2"|8|41|3014.58
+9015009|"scholarunivamalg #9"|8|27|3008.70
+1001001|"amalgamalg #1"|19|53|2997.52
+5002002|"importoscholar #2"|8|42|2989.36
+7003005|"exportibrand #5"|9|30|2988.70
+5001001|"amalgscholar #1"|18|40|2973.44
+6009004|"maxicorp #4"|18|21|2973.12
+9008005|"namelessmaxi #5"|18|52|2970.30
+7009005|"maxibrand #5"|17|49|2961.28
+6015004|"scholarbrand #4"|19|25|2957.79
+1004002|"edu packamalg #2"|17|29|2955.54
+7009005|"maxibrand #5"|17|29|2944.92
+5001001|"amalgscholar #1"|8|12|2942.94
+7009003|"maxibrand #3"|8|50|2929.64
+6008003|"namelesscorp #3"|18|35|2927.65
+8012010|"importomaxi #10"|9|24|2925.87
+9015011|"scholarunivamalg #11"|18|15|2910.97
+6005001|"scholarcorp #1"|17|3|2901.56
+1001002|"amalgamalg #2"|19|52|2896.74
+6010004|"univbrand #4"|19|41|2894.40
+8004003|"edu packnameless #3"|9|26|2892.80
+2004002|"edu packimporto #2"|18|59|2885.19
+10012004|"importoamalgamalg #4"|17|49|2883.30
+6008002|"namelesscorp #2"|9|0|2879.20
+8013007|"exportimaxi #7"|19|25|2874.00
+3002002|"importoexporti #2"|17|7|2865.49
+2001001|"amalgimporto #1"|18|3|2861.60
+9013009|"exportiunivamalg #9"|19|59|2859.01
+8012010|"importomaxi #10"|19|42|2858.40
+3004001|"edu packexporti #1"|17|14|2857.68
+10016001|"corpamalgamalg #1"|18|42|2853.60
+1002002|"importoamalg #2"|18|20|2851.38
+4002001|"importoedu pack #1"|18|13|2846.48
+2004001|"edu packimporto #1"|7|30|2830.41
+8007010|"brandnameless #10"|19|42|2830.41
+10013013|"exportiamalgamalg #13"|8|0|2829.79
+2003001|"exportiimporto #1"|7|27|2829.48
+2002001|"importoimporto #1"|19|12|2828.16
+9014008|"edu packunivamalg #8"|18|31|2827.55
+6010004|"univbrand #4"|17|42|2827.50
+9011008|"amalgunivamalg #8"|17|10|2823.00
+4004002|"edu packedu pack #2"|18|21|2822.67
+10009015|"maxiunivamalg #15"|8|1|2817.88
+6002001|"importocorp #1"|18|22|2814.35
+8003010|"exportinameless #10"|17|46|2814.21
+1003001|"exportiamalg #1"|17|54|2806.32
+5003001|"exportischolar #1"|17|15|2803.14
+2004002|"edu packimporto #2"|9|17|2796.00
+1001001|"amalgamalg #1"|9|18|2793.44
+8009009|"maxinameless #9"|17|16|2792.62
+4002001|"importoedu pack #1"|9|59|2782.55
+4002001|"importoedu pack #1"|17|16|2781.75
+4002002|"importoedu pack #2"|19|40|2772.25
+3002002|"importoexporti #2"|17|45|2770.68
+7004009|"edu packbrand #9"|18|41|2764.88
+1002002|"importoamalg #2"|8|47|2761.38
+7010004|"univnameless #4"|8|32|2760.26
+6014007|"edu packbrand #7"|17|33|2752.86
+9007009|"brandmaxi #9"|19|14|2750.93
+1003001|"exportiamalg #1"|8|21|2746.80
+2002001|"importoimporto #1"|18|4|2746.51
+9013002|"exportiunivamalg #2"|18|56|2744.54
+2004001|"edu packimporto #1"|18|48|2742.78
+10010013|"univamalgamalg #13"|19|33|2737.80
+10016001|"corpamalgamalg #1"|18|8|2734.20
+1004001|"edu packamalg #1"|8|23|2731.32
+6011001|"amalgbrand #1"|18|52|2729.64
+6005007|"scholarcorp #7"|9|9|2726.75
+9016003|"corpunivamalg #3"|17|50|2725.20
+2001002|"amalgimporto #2"|9|35|2724.84
+9013009|"exportiunivamalg #9"|19|31|2709.85
+5004002|"edu packscholar #2"|9|19|2708.64
+3001001|"amalgexporti #1"|19|24|2702.25
+6002005|"importocorp #5"|18|9|2701.50
+7010008|"univnameless #8"|6|7|2696.60
+3002001|"importoexporti #1"|18|20|2694.50
+2001002|"amalgimporto #2"|17|22|2691.36
+10012017|"importoamalgamalg #17"|19|34|2690.52
+6014007|"edu packbrand #7"|19|41|2688.63
+6005001|"scholarcorp #1"|17|40|2688.21
+4003001|"exportiedu pack #1"|7|38|2687.87
+1002001|"importoamalg #1"|19|21|2685.97
+4002001|"importoedu pack #1"|8|29|2683.56
+2003002|"exportiimporto #2"|19|22|2680.52
+7001005|"amalgbrand #5"|19|5|2670.85
+7014001|"edu packnameless #1"|17|31|2669.04
+6005001|"scholarcorp #1"|19|3|2657.20
+1002002|"importoamalg #2"|9|37|2655.46
+1003002|"exportiamalg #2"|9|54|2653.50
+3003001|"exportiexporti #1"|9|30|2651.06
+10002012|"importounivamalg #12"|18|43|2649.36
+2004001|"edu packimporto #1"|7|3|2643.20
+10016016|"corpamalgamalg #16"|8|34|2642.70
+10012005|"importoamalgamalg #5"|9|40|2642.64
+10014016|"edu packamalgamalg #16"|9|21|2640.27
+4004002|"edu packedu pack #2"|9|0|2639.79
+9013002|"exportiunivamalg #2"|9|1|2634.82
+4003001|"exportiedu pack #1"|17|7|2633.48
+9015009|"scholarunivamalg #9"|17|3|2631.60
+1004002|"edu packamalg #2"|18|19|2630.92
+7008009|"namelessbrand #9"|19|4|2624.49
+9003003|"exportimaxi #3"|9|38|2622.48
+4003001|"exportiedu pack #1"|9|46|2621.05
+8007010|"brandnameless #10"|17|0|2616.30
+7010004|"univnameless #4"|19|58|2614.40
+10012005|"importoamalgamalg #5"|9|12|2614.08
+7007004|"brandbrand #4"|17|24|2612.61
+2004001|"edu packimporto #1"|19|56|2611.38
+8005005|"scholarnameless #5"|19|55|2606.45
+8009009|"maxinameless #9"|19|5|2601.00
+10016008|"corpamalgamalg #8"|19|16|2599.56
+3002001|"importoexporti #1"|18|6|2596.44
+1001001|"amalgamalg #1"|19|57|2596.24
+6008005|"namelesscorp #5"|9|33|2594.35
+7016001|"corpnameless #1"|9|30|2590.28
+3001001|"amalgexporti #1"|17|44|2582.18
+7004006|"edu packbrand #6"|9|39|2582.16
+10016017|"corpamalgamalg #17"|17|22|2579.48
+10016001|"corpamalgamalg #1"|18|59|2568.27
+1001002|"amalgamalg #2"|9|57|2565.53
+1002001|"importoamalg #1"|7|10|2564.66
+10014016|"edu packamalgamalg #16"|17|44|2564.10
+2002001|"importoimporto #1"|17|16|2564.00
+3002002|"importoexporti #2"|9|20|2563.92
+4003001|"exportiedu pack #1"|8|32|2562.55
+9007009|"brandmaxi #9"|7|37|2561.56
+5004001|"edu packscholar #1"|17|7|2560.80
+4001001|"amalgedu pack #1"|17|21|2560.53
+3004002|"edu packexporti #2"|9|31|2559.92
+4002001|"importoedu pack #1"|19|37|2559.15
+4003001|"exportiedu pack #1"|17|27|2552.55
+7013001|"exportinameless #1"|17|5|2552.32
+6007007|"brandcorp #7"|9|5|2551.02
+6009004|"maxicorp #4"|9|41|2549.32
+2002001|"importoimporto #1"|8|31|2548.56
+6014002|"edu packbrand #2"|17|26|2528.76
+8011009|"amalgmaxi #9"|18|26|2527.14
+4002001|"importoedu pack #1"|19|24|2516.80
+1001001|"amalgamalg #1"|17|28|2515.50
+6002001|"importocorp #1"|9|32|2512.80
+5001001|"amalgscholar #1"|19|39|2512.00
+7001005|"amalgbrand #5"|17|43|2510.74
+8003010|"exportinameless #10"|18|27|2507.44
+10016001|"corpamalgamalg #1"|19|9|2507.10
+6016003|"corpbrand #3"|17|24|2506.30
+10007012|"brandunivamalg #12"|19|54|2499.18
+8004003|"edu packnameless #3"|18|52|2495.22
+1001002|"amalgamalg #2"|18|11|2491.16
+2002001|"importoimporto #1"|8|54|2483.25
+5001001|"amalgscholar #1"|19|45|2480.72
+4004002|"edu packedu pack #2"|18|31|2477.60
+9007009|"brandmaxi #9"|9|23|2477.44
+1002002|"importoamalg #2"|17|24|2476.89
+10004001|"edu packunivamalg #1"|8|39|2472.93
+10010001|"univamalgamalg #1"|19|40|2465.84
+5001001|"amalgscholar #1"|18|25|2451.87
+7014001|"edu packnameless #1"|17|56|2450.25
+1004001|"edu packamalg #1"|18|59|2445.18
+7009010|"maxibrand #10"|19|54|2443.65
+3004001|"edu packexporti #1"|9|9|2435.16
+2001001|"amalgimporto #1"|9|24|2433.90
+8012010|"importomaxi #10"|18|45|2432.95
+5001001|"amalgscholar #1"|9|45|2431.22
+7004009|"edu packbrand #9"|17|0|2430.48
+1001001|"amalgamalg #1"|17|18|2428.86
+7009005|"maxibrand #5"|17|25|2424.88
+4001001|"amalgedu pack #1"|18|58|2419.82
+10011014|"amalgamalgamalg #14"|7|49|2414.54
+5004002|"edu packscholar #2"|19|38|2412.81
+7015007|"scholarnameless #7"|18|7|2409.63
+5004001|"edu packscholar #1"|18|35|2406.00
+4003001|"exportiedu pack #1"|17|28|2405.78
+5003001|"exportischolar #1"|18|29|2400.05
+1003002|"exportiamalg #2"|19|14|2398.95
+9014011|"edu packunivamalg #11"|18|15|2398.88
+5001001|"amalgscholar #1"|8|48|2390.80
+1001001|"amalgamalg #1"|17|53|2389.02
+6012002|"importobrand #2"|18|5|2388.30
+5003002|"exportischolar #2"|17|37|2388.24
+4003001|"exportiedu pack #1"|8|55|2380.48
+5001002|"amalgscholar #2"|9|42|2376.87
+7003005|"exportibrand #5"|18|23|2376.72
+5003001|"exportischolar #1"|8|33|2376.00
+6009004|"maxicorp #4"|9|14|2365.55
+6008002|"namelesscorp #2"|9|53|2364.06
+5002001|"importoscholar #1"|17|59|2361.55
+2001002|"amalgimporto #2"|8|16|2349.40
+9014002|"edu packunivamalg #2"|19|4|2342.32
+2003001|"exportiimporto #1"|18|20|2335.23
+1003002|"exportiamalg #2"|17|59|2332.35
+2001001|"amalgimporto #1"|17|29|2328.72
+3003001|"exportiexporti #1"|17|16|2326.50
+6003003|"exporticorp #3"|18|35|2321.00
+10016017|"corpamalgamalg #17"|9|20|2320.80
+4002002|"importoedu pack #2"|19|8|2320.00
+2002001|"importoimporto #1"|19|59|2318.76
+8004003|"edu packnameless #3"|9|44|2314.40
+7010009|"univnameless #9"|6|54|2312.64
+3002002|"importoexporti #2"|18|57|2311.54
+2001002|"amalgimporto #2"|9|3|2307.14
+9009009|"maximaxi #9"|18|20|2301.74
+10012005|"importoamalgamalg #5"|19|50|2300.98
+10016017|"corpamalgamalg #17"|18|30|2300.10
+10016003|"corpamalgamalg #3"|8|7|2299.00
+2004001|"edu packimporto #1"|17|44|2295.00
+2004001|"edu packimporto #1"|18|33|2282.85
+6001002|"amalgcorp #2"|8|44|2274.60
+10001017|"amalgunivamalg #17"|19|4|2271.50
+2004001|"edu packimporto #1"|18|21|2270.70
+7007004|"brandbrand #4"|9|57|2269.84
+2004002|"edu packimporto #2"|8|4|2267.84
+9013009|"exportiunivamalg #9"|9|42|2265.90
+7015007|"scholarnameless #7"|8|25|2265.76
+10004004|"edu packunivamalg #4"|8|33|2264.64
+4004002|"edu packedu pack #2"|18|36|2261.60
+4001001|"amalgedu pack #1"|19|18|2258.90
+3004002|"edu packexporti #2"|17|19|2256.00
+4003001|"exportiedu pack #1"|17|8|2253.35
+1003002|"exportiamalg #2"|9|36|2252.50
+8008005|"namelessnameless #5"|9|0|2248.86
+6012007|"importobrand #7"|17|13|2243.16
+9010009|"univunivamalg #9"|18|4|2236.48
+7001009|"amalgbrand #9"|19|52|2236.36
+1004002|"edu packamalg #2"|18|16|2236.35
+6003007|"exporticorp #7"|9|51|2235.12
+4001002|"amalgedu pack #2"|8|28|2226.40
+6014002|"edu packbrand #2"|18|49|2219.58
+7004006|"edu packbrand #6"|19|0|2216.46
+6007003|"brandcorp #3"|17|34|2215.29
+2004001|"edu packimporto #1"|19|7|2213.86
+8016006|"corpmaxi #6"|18|45|2212.70
+6016003|"corpbrand #3"|19|45|2210.88
+6011005|"amalgbrand #5"|17|18|2206.68
+3003001|"exportiexporti #1"|8|9|2206.47
+7014001|"edu packnameless #1"|17|19|2205.36
+6006007|"corpcorp #7"|19|56|2204.90
+3001002|"amalgexporti #2"|19|2|2204.00
+3001002|"amalgexporti #2"|9|57|2200.70
+1001002|"amalgamalg #2"|9|16|2198.02
+2002001|"importoimporto #1"|18|32|2194.19
+8003003|"exportinameless #3"|18|56|2180.88
+1002001|"importoamalg #1"|8|8|2179.80
+7008009|"namelessbrand #9"|18|26|2176.02
+1002001|"importoamalg #1"|18|45|2160.19
+3004001|"edu packexporti #1"|18|9|2159.19
+3002001|"importoexporti #1"|18|32|2157.75
+9015011|"scholarunivamalg #11"|19|32|2155.86
+1004002|"edu packamalg #2"|19|34|2155.41
+6006003|"corpcorp #3"|8|58|2155.26
+8007005|"brandnameless #5"|17|26|2149.00
+1003001|"exportiamalg #1"|9|27|2148.30
+9013009|"exportiunivamalg #9"|7|59|2146.80
+5003002|"exportischolar #2"|9|47|2134.44
+8012010|"importomaxi #10"|19|10|2133.04
+6005001|"scholarcorp #1"|8|5|2132.73
+9013009|"exportiunivamalg #9"|17|32|2128.58
+5004002|"edu packscholar #2"|17|27|2128.40
+8002009|"importonameless #9"|9|5|2123.14
+7007010|"brandbrand #10"|19|6|2117.36
+6002001|"importocorp #1"|8|0|2117.00
+7004006|"edu packbrand #6"|17|9|2108.16
+10011009|"amalgamalgamalg #9"|8|8|2107.32
+4004001|"edu packedu pack #1"|17|2|2103.90
+10016008|"corpamalgamalg #8"|17|11|2102.18
+7013007|"exportinameless #7"|17|39|2100.76
+7002003|"importobrand #3"|17|17|2097.55
+10016001|"corpamalgamalg #1"|17|24|2095.73
+4004002|"edu packedu pack #2"|17|11|2092.30
+8008005|"namelessnameless #5"|7|24|2088.66
+3001001|"amalgexporti #1"|19|34|2082.75
+6008005|"namelesscorp #5"|18|55|2081.70
+7013007|"exportinameless #7"|18|37|2076.48
+1001001|"amalgamalg #1"|19|29|2072.70
+9016003|"corpunivamalg #3"|17|36|2068.47
+5001002|"amalgscholar #2"|19|47|2066.10
+4001001|"amalgedu pack #1"|17|13|2062.72
+7004009|"edu packbrand #9"|17|1|2058.00
+9014011|"edu packunivamalg #11"|17|22|2052.00
+7013009|"exportinameless #9"|18|9|2050.05
+7010004|"univnameless #4"|19|50|2049.18
+5001001|"amalgscholar #1"|19|5|2048.48
+6002003|"importocorp #3"|17|23|2045.55
+9007003|"brandmaxi #3"|17|18|2044.68
+7010004|"univnameless #4"|18|39|2039.49
+7015009|"scholarnameless #9"|8|13|2035.28
+6014004|"edu packbrand #4"|9|32|2032.55
+10008015|"namelessunivamalg #15"|18|21|2032.01
+2004001|"edu packimporto #1"|8|43|2029.17
+7010003|"univnameless #3"|9|37|2027.22
+1002001|"importoamalg #1"|6|48|2027.13
+4004002|"edu packedu pack #2"|17|59|2025.37
+5003001|"exportischolar #1"|6|13|2025.17
+3003001|"exportiexporti #1"|9|0|2024.10
+6012007|"importobrand #7"|9|44|2021.70
+7013001|"exportinameless #1"|9|14|2021.58
+6007003|"brandcorp #3"|8|13|2018.00
+8012005|"importomaxi #5"|17|43|2016.75
+6015006|"scholarbrand #6"|17|30|2014.12
+3004002|"edu packexporti #2"|17|11|2012.56
+5003001|"exportischolar #1"|17|7|2011.24
+4004001|"edu packedu pack #1"|18|4|2010.81
+5002002|"importoscholar #2"|17|16|2009.70
+8005005|"scholarnameless #5"|17|48|2006.40
+7009005|"maxibrand #5"|17|5|2003.07
+5003001|"exportischolar #1"|8|10|2002.80
+9014008|"edu packunivamalg #8"|9|51|2001.60
+9008002|"namelessmaxi #2"|17|24|2001.16
+10012004|"importoamalgamalg #4"|8|11|1999.65
+6016003|"corpbrand #3"|17|40|1999.44
+9007003|"brandmaxi #3"|8|21|1999.20
+7015002|"scholarnameless #2"|18|9|1996.20
+4002002|"importoedu pack #2"|17|51|1996.00
+7013009|"exportinameless #9"|18|14|1995.28
+9006008|"corpmaxi #8"|19|47|1993.42
+7001005|"amalgbrand #5"|18|1|1988.56
+7004007|"edu packbrand #7"|8|3|1988.43
+8012010|"importomaxi #10"|19|23|1986.64
+7002003|"importobrand #3"|19|52|1983.41
+9002011|"importomaxi #11"|9|13|1981.35
+5002002|"importoscholar #2"|17|49|1980.88
+2001001|"amalgimporto #1"|9|31|1977.58
+9007009|"brandmaxi #9"|8|1|1974.00
+2001001|"amalgimporto #1"|19|40|1973.16
+5003002|"exportischolar #2"|17|33|1965.60
+4002002|"importoedu pack #2"|18|23|1962.65
+9014011|"edu packunivamalg #11"|18|1|1962.26
+6016003|"corpbrand #3"|17|3|1959.00
+2001002|"amalgimporto #2"|19|32|1958.10
+6007003|"brandcorp #3"|17|12|1957.02
+9006008|"corpmaxi #8"|9|53|1955.82
+3003002|"exportiexporti #2"|9|32|1954.11
+5001002|"amalgscholar #2"|17|57|1953.20
+4003001|"exportiedu pack #1"|18|56|1952.32
+6003007|"exporticorp #7"|18|15|1950.54
+10003004|"exportiunivamalg #4"|7|57|1950.08
+4004001|"edu packedu pack #1"|17|4|1949.14
+10007012|"brandunivamalg #12"|6|22|1947.99
+5001001|"amalgscholar #1"|8|36|1947.33
+8013007|"exportimaxi #7"|18|55|1943.61
+8002009|"importonameless #9"|7|36|1943.04
+5004002|"edu packscholar #2"|9|48|1941.76
+10008015|"namelessunivamalg #15"|7|35|1939.84
+4004001|"edu packedu pack #1"|9|43|1938.42
+9014002|"edu packunivamalg #2"|17|54|1938.34
+10008002|"namelessunivamalg #2"|9|3|1935.46
+10016008|"corpamalgamalg #8"|18|8|1928.70
+9011009|"amalgunivamalg #9"|9|33|1928.64
+6002001|"importocorp #1"|17|32|1924.12
+4002001|"importoedu pack #1"|19|12|1921.54
+6009003|"maxicorp #3"|18|37|1912.24
+9006008|"corpmaxi #8"|19|21|1911.80
+2002001|"importoimporto #1"|17|4|1910.08
+10011014|"amalgamalgamalg #14"|8|5|1908.08
+8004003|"edu packnameless #3"|19|58|1905.78
+5004001|"edu packscholar #1"|18|47|1905.28
+3004001|"edu packexporti #1"|18|4|1900.50
+7016007|"corpnameless #7"|9|10|1895.73
+10008002|"namelessunivamalg #2"|19|29|1894.58
+7004006|"edu packbrand #6"|7|54|1893.73
+1003002|"exportiamalg #2"|7|23|1887.75
+7013009|"exportinameless #9"|17|39|1887.34
+4001002|"amalgedu pack #2"|17|55|1880.97
+4003001|"exportiedu pack #1"|6|52|1880.06
+8011009|"amalgmaxi #9"|18|22|1878.49
+6009004|"maxicorp #4"|19|36|1875.30
+2003002|"exportiimporto #2"|18|9|1874.40
+4003001|"exportiedu pack #1"|19|46|1874.07
+6016003|"corpbrand #3"|19|49|1869.84
+4001001|"amalgedu pack #1"|7|38|1867.21
+1003001|"exportiamalg #1"|17|32|1866.28
+9011008|"amalgunivamalg #8"|9|18|1862.56
+2002001|"importoimporto #1"|17|45|1861.62
+10005013|"scholarunivamalg #13"|18|50|1858.50
+2003001|"exportiimporto #1"|9|0|1856.96
+8013007|"exportimaxi #7"|9|34|1853.28
+7007010|"brandbrand #10"|19|58|1853.10
+9008005|"namelessmaxi #5"|8|24|1852.00
+2004002|"edu packimporto #2"|17|2|1845.85
+4004002|"edu packedu pack #2"|17|3|1845.12
+1002001|"importoamalg #1"|17|2|1844.28
+1001001|"amalgamalg #1"|17|39|1844.18
+5004001|"edu packscholar #1"|9|20|1842.33
+2004001|"edu packimporto #1"|19|6|1841.86
+7009005|"maxibrand #5"|18|19|1840.68
+10016016|"corpamalgamalg #16"|17|55|1840.32
+2001002|"amalgimporto #2"|17|11|1822.40
+8007010|"brandnameless #10"|8|55|1820.44
+5002002|"importoscholar #2"|18|14|1817.00
+2004002|"edu packimporto #2"|19|9|1816.49
+7004007|"edu packbrand #7"|18|22|1816.40
+9001005|"amalgmaxi #5"|17|37|1813.17
+6011001|"amalgbrand #1"|17|14|1813.05
+8009005|"maxinameless #5"|9|19|1812.88
+4001001|"amalgedu pack #1"|19|17|1809.31
+5003002|"exportischolar #2"|17|43|1801.58
+1003002|"exportiamalg #2"|17|24|1801.45
+8007005|"brandnameless #5"|8|14|1799.16
+7014001|"edu packnameless #1"|17|32|1797.12
+9013009|"exportiunivamalg #9"|17|19|1796.25
+4003001|"exportiedu pack #1"|9|13|1795.24
+9002011|"importomaxi #11"|18|50|1795.23
+7014001|"edu packnameless #1"|19|5|1792.50
+7001005|"amalgbrand #5"|17|10|1790.88
+5003001|"exportischolar #1"|17|13|1789.42
+5002001|"importoscholar #1"|6|7|1789.20
+8009005|"maxinameless #5"|7|43|1785.33
+2004001|"edu packimporto #1"|18|19|1785.00
+8007005|"brandnameless #5"|19|30|1784.51
+2001001|"amalgimporto #1"|17|45|1780.24
+7010003|"univnameless #3"|9|14|1779.84
+1003001|"exportiamalg #1"|18|9|1779.74
+6003008|"exporticorp #8"|9|30|1775.75
+4001001|"amalgedu pack #1"|17|48|1774.66
+7013007|"exportinameless #7"|18|50|1773.20
+1001001|"amalgamalg #1"|17|30|1768.50
+3002001|"importoexporti #1"|19|52|1764.00
+8016004|"corpmaxi #4"|9|5|1756.12
+9009002|"maximaxi #2"|17|35|1755.60
+1002001|"importoamalg #1"|17|3|1754.20
+1003001|"exportiamalg #1"|9|16|1753.70
+1003001|"exportiamalg #1"|17|38|1753.50
+7016001|"corpnameless #1"|17|5|1750.70
+5004002|"edu packscholar #2"|9|57|1749.36
+1002001|"importoamalg #1"|18|43|1749.35
+3003001|"exportiexporti #1"|19|6|1747.62
+8003010|"exportinameless #10"|7|35|1744.00
+10015003|"scholaramalgamalg #3"|18|13|1741.56
+7010009|"univnameless #9"|18|14|1740.60
+6001001|"amalgcorp #1"|9|34|1740.52
+4002001|"importoedu pack #1"|8|5|1738.88
+3004002|"edu packexporti #2"|9|52|1736.46
+8011009|"amalgmaxi #9"|19|27|1736.38
+3001001|"amalgexporti #1"|19|9|1735.21
+6006003|"corpcorp #3"|18|7|1732.90
+1001001|"amalgamalg #1"|19|20|1729.18
+5001002|"amalgscholar #2"|7|9|1728.09
+9007003|"brandmaxi #3"|17|20|1727.37
+3004001|"edu packexporti #1"|19|27|1727.32
+10009015|"maxiunivamalg #15"|17|45|1727.00
+7009010|"maxibrand #10"|17|12|1726.21
+9008005|"namelessmaxi #5"|18|34|1725.78
+4004002|"edu packedu pack #2"|7|27|1724.63
+7013001|"exportinameless #1"|17|0|1724.52
+1003002|"exportiamalg #2"|18|39|1723.98
+3001001|"amalgexporti #1"|17|6|1719.72
+9016003|"corpunivamalg #3"|17|12|1717.71
+10006002|"corpunivamalg #2"|7|13|1716.65
+5001001|"amalgscholar #1"|9|34|1713.04
+2004001|"edu packimporto #1"|8|57|1709.84
+4004001|"edu packedu pack #1"|9|58|1706.04
+10003004|"exportiunivamalg #4"|19|51|1705.70
+6007007|"brandcorp #7"|8|53|1705.44
+1003002|"exportiamalg #2"|18|37|1702.40
+5003001|"exportischolar #1"|8|58|1701.87
+10016016|"corpamalgamalg #16"|17|39|1700.31
+1003001|"exportiamalg #1"|18|17|1699.98
+3001002|"amalgexporti #2"|18|13|1695.72
+8005005|"scholarnameless #5"|18|52|1694.52
+9013009|"exportiunivamalg #9"|17|14|1692.54
+4002002|"importoedu pack #2"|19|56|1689.58
+6002005|"importocorp #5"|17|18|1689.54
+3002001|"importoexporti #1"|17|29|1688.27
+7001004|"amalgbrand #4"|18|38|1685.34
+9006008|"corpmaxi #8"|19|52|1684.80
+4002002|"importoedu pack #2"|8|59|1684.48
+7009005|"maxibrand #5"|9|16|1683.60
+4004002|"edu packedu pack #2"|9|35|1683.00
+5004001|"edu packscholar #1"|17|53|1680.36
+2003001|"exportiimporto #1"|19|53|1678.38
+9008002|"namelessmaxi #2"|18|56|1678.11
+9001005|"amalgmaxi #5"|9|53|1675.01
+9010009|"univunivamalg #9"|7|2|1674.90
+6008005|"namelesscorp #5"|18|35|1669.20
+7002003|"importobrand #3"|9|15|1667.36
+10002012|"importounivamalg #12"|9|43|1665.18
+7007010|"brandbrand #10"|19|14|1661.40
+4004002|"edu packedu pack #2"|6|44|1655.28
+10003004|"exportiunivamalg #4"|19|32|1652.73
+4003001|"exportiedu pack #1"|9|49|1649.83
+9001005|"amalgmaxi #5"|17|14|1649.23
+1001002|"amalgamalg #2"|19|54|1647.78
+4001001|"amalgedu pack #1"|17|31|1647.24
+10015017|"scholaramalgamalg #17"|18|5|1646.50
+10010013|"univamalgamalg #13"|8|13|1644.20
+9007003|"brandmaxi #3"|18|5|1643.89
+3001001|"amalgexporti #1"|8|32|1641.00
+9007009|"brandmaxi #9"|9|58|1639.68
+1004002|"edu packamalg #2"|17|39|1632.14
+7010004|"univnameless #4"|6|6|1630.53
+1003001|"exportiamalg #1"|6|10|1630.20
+4004002|"edu packedu pack #2"|17|58|1629.00
+7013009|"exportinameless #9"|19|50|1626.05
+7009003|"maxibrand #3"|17|42|1625.03
+6007003|"brandcorp #3"|8|50|1623.78
+2004002|"edu packimporto #2"|17|46|1620.51
+3003002|"exportiexporti #2"|17|22|1620.06
+4004002|"edu packedu pack #2"|17|29|1618.80
+10011009|"amalgamalgamalg #9"|19|22|1618.56
+6005001|"scholarcorp #1"|18|36|1617.00
+6012002|"importobrand #2"|19|43|1616.40
+5003001|"exportischolar #1"|9|11|1613.76
+1003001|"exportiamalg #1"|9|46|1609.34
+6009003|"maxicorp #3"|6|5|1608.60
+9010009|"univunivamalg #9"|17|44|1607.80
+7008007|"namelessbrand #7"|8|25|1605.60
+10011009|"amalgamalgamalg #9"|9|36|1602.75
+7008009|"namelessbrand #9"|8|8|1600.80
+8005005|"scholarnameless #5"|17|47|1595.93
+1003001|"exportiamalg #1"|19|39|1592.80
+6006007|"corpcorp #7"|19|14|1590.54
+4001002|"amalgedu pack #2"|17|54|1590.00
+6007003|"brandcorp #3"|9|9|1589.28
+10016003|"corpamalgamalg #3"|17|51|1584.72
+8012010|"importomaxi #10"|9|42|1582.56
+3002002|"importoexporti #2"|19|56|1580.53
+9008005|"namelessmaxi #5"|18|45|1580.25
+1002001|"importoamalg #1"|6|24|1576.92
+5002001|"importoscholar #1"|8|56|1572.65
+5001001|"amalgscholar #1"|9|42|1571.48
+1001001|"amalgamalg #1"|17|29|1570.54
+1003002|"exportiamalg #2"|17|5|1570.50
+4002001|"importoedu pack #1"|17|28|1568.16
+8003003|"exportinameless #3"|7|6|1568.16
+5003001|"exportischolar #1"|17|41|1567.44
+2003001|"exportiimporto #1"|17|39|1566.40
+6008002|"namelesscorp #2"|17|54|1563.48
+2002001|"importoimporto #1"|17|29|1559.08
+3002001|"importoexporti #1"|17|6|1555.89
+2001001|"amalgimporto #1"|18|26|1555.44
+10015013|"scholaramalgamalg #13"|19|51|1553.20
+7016001|"corpnameless #1"|19|30|1551.44
+4004001|"edu packedu pack #1"|9|15|1550.43
+10015003|"scholaramalgamalg #3"|9|37|1550.34
+6002003|"importocorp #3"|17|14|1548.02
+6014002|"edu packbrand #2"|18|17|1545.42
+5001002|"amalgscholar #2"|19|36|1544.54
+4002001|"importoedu pack #1"|6|47|1543.36
+5003001|"exportischolar #1"|17|28|1543.36
+8008005|"namelessnameless #5"|19|44|1540.80
+10012001|"importoamalgamalg #1"|6|16|1540.78
+9012008|"importounivamalg #8"|9|12|1540.33
+7011001|"amalgnameless #1"|6|44|1538.90
+1003002|"exportiamalg #2"|9|14|1535.49
+10012001|"importoamalgamalg #1"|6|47|1531.04
+3003001|"exportiexporti #1"|18|1|1530.90
+7001004|"amalgbrand #4"|6|59|1527.12
+6012008|"importobrand #8"|19|29|1524.00
+10012011|"importoamalgamalg #11"|17|48|1523.96
+4002001|"importoedu pack #1"|6|59|1521.51
+2002001|"importoimporto #1"|18|42|1521.17
+7013009|"exportinameless #9"|8|27|1521.08
+5001001|"amalgscholar #1"|19|52|1518.75
+1002001|"importoamalg #1"|17|45|1516.48
+5004002|"edu packscholar #2"|19|24|1514.74
+3003002|"exportiexporti #2"|19|43|1513.22
+4004001|"edu packedu pack #1"|9|9|1512.48
+10010013|"univamalgamalg #13"|19|39|1512.00
+1001001|"amalgamalg #1"|9|17|1510.60
+6006007|"corpcorp #7"|9|35|1510.45
+4003001|"exportiedu pack #1"|9|19|1509.39
+6012007|"importobrand #7"|18|47|1504.80
+1003002|"exportiamalg #2"|8|11|1499.62
+4003001|"exportiedu pack #1"|9|58|1496.48
+3003002|"exportiexporti #2"|18|2|1496.44
+4002001|"importoedu pack #1"|19|57|1496.04
+7013009|"exportinameless #9"|17|9|1495.44
+10010001|"univamalgamalg #1"|18|37|1493.43
+3004001|"edu packexporti #1"|17|39|1491.93
+6010004|"univbrand #4"|9|48|1490.40
+8014005|"edu packmaxi #5"|19|18|1490.00
+8003003|"exportinameless #3"|17|20|1489.48
+6005001|"scholarcorp #1"|17|14|1488.52
+10005013|"scholarunivamalg #13"|17|6|1487.72
+4004001|"edu packedu pack #1"|7|29|1487.64
+4004002|"edu packedu pack #2"|19|23|1487.48
+2002001|"importoimporto #1"|9|24|1486.80
+10016003|"corpamalgamalg #3"|17|20|1486.35
+1002002|"importoamalg #2"|19|22|1482.95
+1003002|"exportiamalg #2"|6|27|1481.76
+3002001|"importoexporti #1"|8|50|1481.48
+9010009|"univunivamalg #9"|18|37|1479.00
+1002001|"importoamalg #1"|18|15|1477.30
+6002005|"importocorp #5"|18|38|1476.10
+8007010|"brandnameless #10"|17|28|1474.86
+6002003|"importocorp #3"|18|35|1472.42
+9014008|"edu packunivamalg #8"|18|7|1469.65
+1003001|"exportiamalg #1"|19|18|1467.75
+10010001|"univamalgamalg #1"|18|53|1466.25
+7013001|"exportinameless #1"|18|51|1465.38
+6006007|"corpcorp #7"|9|17|1465.31
+6011005|"amalgbrand #5"|7|2|1465.10
+1004002|"edu packamalg #2"|19|48|1464.96
+2004002|"edu packimporto #2"|9|53|1462.42
+6003003|"exporticorp #3"|18|57|1461.78
+8012005|"importomaxi #5"|17|24|1459.92
+9014011|"edu packunivamalg #11"|18|7|1457.40
+6006007|"corpcorp #7"|18|47|1457.25
+1003001|"exportiamalg #1"|18|55|1456.98
+1001001|"amalgamalg #1"|17|52|1454.24
+5002002|"importoscholar #2"|18|3|1453.50
+4004002|"edu packedu pack #2"|17|35|1450.46
+7016007|"corpnameless #7"|17|44|1449.90
+4004002|"edu packedu pack #2"|18|20|1449.10
+9013002|"exportiunivamalg #2"|18|18|1448.28
+2001001|"amalgimporto #1"|18|14|1445.72
+6008003|"namelesscorp #3"|18|54|1444.84
+1003001|"exportiamalg #1"|9|33|1444.56
+5003001|"exportischolar #1"|19|8|1443.84
+10016016|"corpamalgamalg #16"|17|12|1443.84
+3003001|"exportiexporti #1"|18|54|1443.75
+4002002|"importoedu pack #2"|17|0|1443.64
+9015009|"scholarunivamalg #9"|8|43|1441.96
+9012005|"importounivamalg #5"|7|50|1441.88
+4001002|"amalgedu pack #2"|17|51|1440.36
+7016001|"corpnameless #1"|8|44|1440.00
+6008005|"namelesscorp #5"|17|43|1438.03
+2001002|"amalgimporto #2"|19|7|1437.09
+3003001|"exportiexporti #1"|18|36|1436.76
+2001002|"amalgimporto #2"|17|31|1436.66
+6005007|"scholarcorp #7"|9|7|1436.00
+6003003|"exporticorp #3"|9|8|1431.52
+1004002|"edu packamalg #2"|8|42|1429.48
+9011008|"amalgunivamalg #8"|19|31|1429.20
+9007009|"brandmaxi #9"|17|38|1422.63
+9009002|"maximaxi #2"|19|1|1420.50
+5001001|"amalgscholar #1"|19|35|1415.88
+2003001|"exportiimporto #1"|18|54|1414.00
+3004001|"edu packexporti #1"|19|35|1413.16
+10010013|"univamalgamalg #13"|9|38|1413.12
+1004002|"edu packamalg #2"|9|20|1411.83
+3004001|"edu packexporti #1"|8|46|1406.70
+1002001|"importoamalg #1"|17|48|1406.50
+7015002|"scholarnameless #2"|17|11|1404.48
+5002002|"importoscholar #2"|17|30|1404.00
+5004002|"edu packscholar #2"|9|43|1401.20
+3003001|"exportiexporti #1"|8|48|1398.06
+8016006|"corpmaxi #6"|19|34|1394.12
+7003005|"exportibrand #5"|18|6|1393.65
+9012008|"importounivamalg #8"|17|31|1393.56
+1001001|"amalgamalg #1"|8|22|1389.57
+2004001|"edu packimporto #1"|19|18|1389.24
+10008002|"namelessunivamalg #2"|18|49|1388.80
+8012010|"importomaxi #10"|9|15|1384.68
+7013009|"exportinameless #9"|9|9|1383.80
+9014008|"edu packunivamalg #8"|18|12|1383.68
+10013013|"exportiamalgamalg #13"|17|57|1383.36
+1002001|"importoamalg #1"|18|47|1383.12
+6008003|"namelesscorp #3"|6|41|1382.92
+2001001|"amalgimporto #1"|17|10|1377.40
+3003001|"exportiexporti #1"|19|8|1377.00
+10016001|"corpamalgamalg #1"|17|22|1374.84
+10015013|"scholaramalgamalg #13"|9|34|1373.40
+3002001|"importoexporti #1"|17|24|1372.50
+3004001|"edu packexporti #1"|19|21|1372.00
+4004002|"edu packedu pack #2"|18|37|1370.85
+3004001|"edu packexporti #1"|8|9|1370.16
+8004003|"edu packnameless #3"|17|15|1370.08
+3004002|"edu packexporti #2"|19|50|1368.90
+10004004|"edu packunivamalg #4"|8|6|1366.20
+2001001|"amalgimporto #1"|9|12|1366.08
+1002002|"importoamalg #2"|9|38|1365.50
+9015009|"scholarunivamalg #9"|17|51|1362.50
+8011009|"amalgmaxi #9"|6|37|1359.15
+4003001|"exportiedu pack #1"|9|41|1356.00
+7009003|"maxibrand #3"|18|31|1355.21
+5003001|"exportischolar #1"|17|18|1355.18
+9012003|"importounivamalg #3"|18|1|1354.08
+1001002|"amalgamalg #2"|8|33|1350.90
+3004001|"edu packexporti #1"|17|1|1350.80
+1003001|"exportiamalg #1"|18|15|1349.13
+2004002|"edu packimporto #2"|19|11|1345.60
+6014007|"edu packbrand #7"|8|55|1344.78
+1001002|"amalgamalg #2"|19|55|1344.20
+6010005|"univbrand #5"|19|30|1343.37
+1004002|"edu packamalg #2"|19|9|1341.54
+10012017|"importoamalgamalg #17"|18|59|1341.06
+8007005|"brandnameless #5"|19|37|1340.28
+1001001|"amalgamalg #1"|8|53|1338.58
+4002001|"importoedu pack #1"|18|41|1338.54
+1003001|"exportiamalg #1"|17|22|1338.00
+10007012|"brandunivamalg #12"|9|29|1337.73
+1003001|"exportiamalg #1"|9|14|1337.70
+10012005|"importoamalgamalg #5"|8|7|1337.05
+4004002|"edu packedu pack #2"|9|37|1336.83
+9008005|"namelessmaxi #5"|6|0|1330.80
+4004001|"edu packedu pack #1"|17|31|1326.32
+7004007|"edu packbrand #7"|17|36|1322.72
+9007011|"brandmaxi #11"|17|5|1317.50
+1004002|"edu packamalg #2"|17|50|1317.12
+7015002|"scholarnameless #2"|9|6|1315.80
+10008015|"namelessunivamalg #15"|18|11|1314.92
+6006007|"corpcorp #7"|18|1|1314.84
+6009003|"maxicorp #3"|17|57|1310.40
+9013009|"exportiunivamalg #9"|6|49|1308.00
+10012005|"importoamalgamalg #5"|17|10|1305.72
+6011005|"amalgbrand #5"|9|11|1302.90
+6008007|"namelesscorp #7"|8|26|1301.90
+7001005|"amalgbrand #5"|8|24|1301.52
+4001001|"amalgedu pack #1"|18|59|1300.80
+4003001|"exportiedu pack #1"|19|59|1293.14
+9014011|"edu packunivamalg #11"|19|58|1292.16
+5001002|"amalgscholar #2"|18|26|1290.96
+8007005|"brandnameless #5"|19|50|1289.82
+9007003|"brandmaxi #3"|17|47|1289.75
+4003001|"exportiedu pack #1"|19|51|1288.98
+6008002|"namelesscorp #2"|8|38|1283.26
+7001005|"amalgbrand #5"|9|33|1281.76
+6008007|"namelesscorp #7"|19|46|1279.71
+2002001|"importoimporto #1"|8|41|1278.18
+7014001|"edu packnameless #1"|9|29|1274.94
+1003002|"exportiamalg #2"|17|48|1274.45
+5001002|"amalgscholar #2"|8|2|1274.10
+9014011|"edu packunivamalg #11"|19|44|1273.80
+7004007|"edu packbrand #7"|6|57|1273.70
+7010008|"univnameless #8"|17|31|1273.50
+7001009|"amalgbrand #9"|19|43|1271.16
+9011008|"amalgunivamalg #8"|19|5|1269.96
+6008002|"namelesscorp #2"|18|58|1269.06
+4003001|"exportiedu pack #1"|17|51|1269.05
+4001001|"amalgedu pack #1"|17|37|1265.78
+7015002|"scholarnameless #2"|19|2|1261.92
+5003002|"exportischolar #2"|19|23|1261.44
+8004009|"edu packnameless #9"|17|21|1259.64
+5001002|"amalgscholar #2"|9|47|1258.91
+10001017|"amalgunivamalg #17"|8|46|1257.12
+6005001|"scholarcorp #1"|18|38|1256.60
+3003002|"exportiexporti #2"|18|23|1256.31
+1004002|"edu packamalg #2"|18|30|1252.93
+10003004|"exportiunivamalg #4"|9|48|1250.67
+1004001|"edu packamalg #1"|19|3|1246.40
+3003001|"exportiexporti #1"|6|51|1246.35
+10015017|"scholaramalgamalg #17"|18|2|1245.62
+9014005|"edu packunivamalg #5"|17|48|1243.23
+5001002|"amalgscholar #2"|17|9|1241.76
+4002001|"importoedu pack #1"|19|45|1240.98
+9015011|"scholarunivamalg #11"|19|49|1236.48
+4001001|"amalgedu pack #1"|9|37|1235.87
+6006007|"corpcorp #7"|8|24|1235.52
+2001002|"amalgimporto #2"|17|20|1235.16
+6008003|"namelesscorp #3"|8|32|1234.75
+2004002|"edu packimporto #2"|18|29|1231.12
+7009005|"maxibrand #5"|6|56|1227.20
+10012005|"importoamalgamalg #5"|18|22|1226.61
+4002001|"importoedu pack #1"|18|11|1225.73
+7012010|"importonameless #10"|17|18|1224.51
+1002002|"importoamalg #2"|19|41|1222.32
+1001001|"amalgamalg #1"|19|3|1217.16
+5001001|"amalgscholar #1"|8|40|1215.76
+3002001|"importoexporti #1"|18|54|1214.00
+4002001|"importoedu pack #1"|18|17|1213.60
+5003001|"exportischolar #1"|6|6|1213.46
+4002001|"importoedu pack #1"|17|32|1210.88
+8010009|"univmaxi #9"|17|21|1210.80
+6006007|"corpcorp #7"|18|59|1210.32
+5003001|"exportischolar #1"|18|14|1210.20
+7001004|"amalgbrand #4"|9|38|1204.91
+7011001|"amalgnameless #1"|17|28|1204.79
+1003001|"exportiamalg #1"|19|17|1204.17
+2001001|"amalgimporto #1"|17|3|1203.84
+6010004|"univbrand #4"|19|22|1203.30
+3001002|"amalgexporti #2"|18|3|1203.00
+1002002|"importoamalg #2"|18|39|1199.45
+7015002|"scholarnameless #2"|9|31|1199.34
+6002003|"importocorp #3"|19|16|1198.54
+9014011|"edu packunivamalg #11"|19|12|1198.40
+10013015|"exportiamalgamalg #15"|17|14|1192.50
+1001002|"amalgamalg #2"|9|25|1191.88
+4002001|"importoedu pack #1"|17|19|1191.78
+10005013|"scholarunivamalg #13"|18|57|1190.85
+6008003|"namelesscorp #3"|19|51|1190.48
+10007012|"brandunivamalg #12"|19|25|1187.34
+8010009|"univmaxi #9"|19|36|1186.60
+9012005|"importounivamalg #5"|8|36|1186.36
+7013001|"exportinameless #1"|19|6|1184.80
+10015013|"scholaramalgamalg #13"|19|58|1183.84
+2004002|"edu packimporto #2"|17|50|1182.33
+10003016|"exportiunivamalg #16"|18|53|1182.22
+2003002|"exportiimporto #2"|18|52|1181.44
+3003001|"exportiexporti #1"|19|12|1181.00
+2002001|"importoimporto #1"|18|9|1180.96
+8016006|"corpmaxi #6"|17|30|1180.28
+5004001|"edu packscholar #1"|17|55|1179.84
+2002001|"importoimporto #1"|18|47|1177.74
+4001001|"amalgedu pack #1"|8|33|1175.53
+7008009|"namelessbrand #9"|8|53|1171.42
+3004002|"edu packexporti #2"|18|38|1171.10
+2003001|"exportiimporto #1"|17|59|1167.30
+1004002|"edu packamalg #2"|19|54|1166.60
+10002011|"importounivamalg #11"|19|19|1164.54
+4003001|"exportiedu pack #1"|19|36|1163.80
+1001001|"amalgamalg #1"|18|47|1162.72
+7015007|"scholarnameless #7"|8|14|1161.30
+8003003|"exportinameless #3"|9|32|1158.55
+5004002|"edu packscholar #2"|17|10|1157.50
+4004002|"edu packedu pack #2"|17|4|1156.68
+9014011|"edu packunivamalg #11"|7|28|1154.88
+7010009|"univnameless #9"|6|47|1149.72
+8009009|"maxinameless #9"|8|27|1148.50
+10015003|"scholaramalgamalg #3"|9|5|1146.37
+4004001|"edu packedu pack #1"|18|9|1143.25
+9011009|"amalgunivamalg #9"|8|13|1142.25
+7010009|"univnameless #9"|9|7|1140.36
+1002001|"importoamalg #1"|9|8|1139.75
+2002001|"importoimporto #1"|8|45|1136.40
+1001002|"amalgamalg #2"|8|31|1135.08
+7001005|"amalgbrand #5"|18|22|1133.86
+6011005|"amalgbrand #5"|18|59|1133.36
+9015011|"scholarunivamalg #11"|18|28|1132.20
+3001001|"amalgexporti #1"|18|57|1129.84
+4001002|"amalgedu pack #2"|19|27|1128.87
+9003003|"exportimaxi #3"|9|51|1128.00
+8005008|"scholarnameless #8"|19|23|1127.04
+3002001|"importoexporti #1"|7|58|1126.60
+5003002|"exportischolar #2"|18|32|1126.29
+10003007|"exportiunivamalg #7"|17|29|1126.20
+6005007|"scholarcorp #7"|8|14|1124.86
+9015009|"scholarunivamalg #9"|18|18|1124.16
+4001002|"amalgedu pack #2"|9|33|1122.55
+3003001|"exportiexporti #1"|17|51|1121.40
+3003002|"exportiexporti #2"|9|4|1117.80
+9014008|"edu packunivamalg #8"|17|2|1115.80
+9013009|"exportiunivamalg #9"|9|0|1115.55
+8004009|"edu packnameless #9"|7|1|1114.80
+6008005|"namelesscorp #5"|17|10|1114.10
+2002001|"importoimporto #1"|17|53|1113.84
+1003002|"exportiamalg #2"|19|26|1113.60
+6014002|"edu packbrand #2"|9|5|1113.00
+3003001|"exportiexporti #1"|18|5|1112.40
+6005001|"scholarcorp #1"|9|21|1110.70
+1002001|"importoamalg #1"|18|37|1110.60
+3001002|"amalgexporti #2"|18|15|1108.65
+6015006|"scholarbrand #6"|9|29|1107.26
+9002011|"importomaxi #11"|18|21|1106.00
+3001002|"amalgexporti #2"|17|44|1105.83
+4001002|"amalgedu pack #2"|8|58|1098.22
+7011001|"amalgnameless #1"|18|42|1097.58
+3003001|"exportiexporti #1"|9|7|1096.87
+6014004|"edu packbrand #4"|17|30|1096.76
+7012010|"importonameless #10"|17|8|1096.50
+10015017|"scholaramalgamalg #17"|8|42|1095.33
+5001001|"amalgscholar #1"|17|15|1092.60
+3003002|"exportiexporti #2"|9|13|1092.40
+8004003|"edu packnameless #3"|8|9|1092.00
+5004001|"edu packscholar #1"|9|12|1089.90
+4001001|"amalgedu pack #1"|9|24|1089.60
+1003001|"exportiamalg #1"|17|39|1087.20
+7012003|"importonameless #3"|19|27|1085.92
+1003001|"exportiamalg #1"|18|7|1084.72
+8004003|"edu packnameless #3"|19|57|1083.88
+5002001|"importoscholar #1"|18|24|1080.43
+3003001|"exportiexporti #1"|18|42|1078.93
+2004002|"edu packimporto #2"|18|23|1078.50
+9012003|"importounivamalg #3"|17|23|1077.60
+10016003|"corpamalgamalg #3"|19|24|1076.88
+10003004|"exportiunivamalg #4"|9|35|1074.40
+6005001|"scholarcorp #1"|9|40|1070.68
+8012010|"importomaxi #10"|19|16|1068.48
+6006004|"corpcorp #4"|8|1|1068.08
+7007005|"brandbrand #5"|18|27|1065.90
+3003002|"exportiexporti #2"|8|46|1065.60
+2003001|"exportiimporto #1"|6|5|1065.06
+2001002|"amalgimporto #2"|19|50|1063.79
+9002011|"importomaxi #11"|19|8|1063.78
+4002001|"importoedu pack #1"|7|50|1062.50
+5002001|"importoscholar #1"|17|50|1062.20
+4004002|"edu packedu pack #2"|6|31|1061.82
+3004002|"edu packexporti #2"|19|7|1061.28
+10012001|"importoamalgamalg #1"|19|6|1061.20
+1004001|"edu packamalg #1"|17|45|1060.74
+9008002|"namelessmaxi #2"|17|54|1058.40
+6005001|"scholarcorp #1"|19|13|1056.16
+4003001|"exportiedu pack #1"|17|26|1055.70
+6001002|"amalgcorp #2"|17|28|1053.78
+3001001|"amalgexporti #1"|8|29|1053.69
+5004002|"edu packscholar #2"|17|8|1052.70
+1002002|"importoamalg #2"|9|41|1049.49
+9015009|"scholarunivamalg #9"|7|29|1047.41
+10008015|"namelessunivamalg #15"|19|26|1046.72
+5002001|"importoscholar #1"|19|27|1046.49
+3002002|"importoexporti #2"|19|57|1045.87
+6003008|"exporticorp #8"|8|14|1045.50
+7009003|"maxibrand #3"|18|47|1044.47
+8005005|"scholarnameless #5"|18|34|1044.42
+3004002|"edu packexporti #2"|6|45|1041.40
+10012004|"importoamalgamalg #4"|19|38|1041.10
+4003001|"exportiedu pack #1"|19|54|1040.75
+7013007|"exportinameless #7"|9|40|1040.40
+10011014|"amalgamalgamalg #14"|18|30|1039.52
+10012001|"importoamalgamalg #1"|18|22|1039.50
+9007003|"brandmaxi #3"|8|59|1036.45
+8016006|"corpmaxi #6"|18|35|1035.88
+10011009|"amalgamalgamalg #9"|17|44|1035.72
+10004004|"edu packunivamalg #4"|18|52|1031.00
+2001002|"amalgimporto #2"|19|33|1027.82
+5004001|"edu packscholar #1"|9|40|1026.00
+4004001|"edu packedu pack #1"|9|46|1025.44
+10003007|"exportiunivamalg #7"|18|57|1024.88
+9015011|"scholarunivamalg #11"|17|55|1024.76
+4004002|"edu packedu pack #2"|9|49|1023.88
+1004001|"edu packamalg #1"|17|8|1021.02
+1003001|"exportiamalg #1"|9|9|1018.85
+2002001|"importoimporto #1"|19|15|1017.61
+9013009|"exportiunivamalg #9"|19|53|1017.45
+5002002|"importoscholar #2"|17|54|1014.80
+4002001|"importoedu pack #1"|9|33|1014.48
+8013009|"exportimaxi #9"|18|24|1013.76
+3003001|"exportiexporti #1"|18|16|1013.58
+1001001|"amalgamalg #1"|18|15|1013.17
+9015009|"scholarunivamalg #9"|8|57|1012.83
+1001002|"amalgamalg #2"|7|48|1012.70
+6011008|"amalgbrand #8"|17|39|1011.33
+10008002|"namelessunivamalg #2"|17|52|1009.80
+6015006|"scholarbrand #6"|17|1|1009.44
+10015017|"scholaramalgamalg #17"|7|36|1009.02
+6005001|"scholarcorp #1"|9|54|1007.48
+6005001|"scholarcorp #1"|19|8|1007.25
+10012004|"importoamalgamalg #4"|19|5|1005.06
+4001001|"amalgedu pack #1"|8|52|1004.90
+5001001|"amalgscholar #1"|9|50|1003.60
+2004002|"edu packimporto #2"|17|24|1000.16
+7004007|"edu packbrand #7"|18|52|999.75
+3001001|"amalgexporti #1"|17|39|998.56
+1004001|"edu packamalg #1"|19|49|998.43
+7007005|"brandbrand #5"|17|16|997.28
+7015007|"scholarnameless #7"|17|13|995.67
+8002009|"importonameless #9"|8|11|994.91
+7016007|"corpnameless #7"|18|45|992.74
+6005001|"scholarcorp #1"|19|16|991.98
+4002001|"importoedu pack #1"|18|58|991.20
+9007011|"brandmaxi #11"|19|41|990.15
+3004001|"edu packexporti #1"|18|30|989.82
+2003001|"exportiimporto #1"|17|44|989.12
+3002002|"importoexporti #2"|18|35|989.00
+4002002|"importoedu pack #2"|18|49|987.52
+2004001|"edu packimporto #1"|9|38|987.28
+10016016|"corpamalgamalg #16"|17|57|987.19
+3004001|"edu packexporti #1"|19|1|987.00
+3004002|"edu packexporti #2"|8|12|986.25
+7015007|"scholarnameless #7"|9|23|983.40
+4001001|"amalgedu pack #1"|17|17|982.80
+2003001|"exportiimporto #1"|19|24|982.60
+10003007|"exportiunivamalg #7"|8|9|979.60
+6005001|"scholarcorp #1"|18|45|979.54
+8004003|"edu packnameless #3"|8|33|978.60
+7001009|"amalgbrand #9"|8|45|977.40
+4002002|"importoedu pack #2"|9|33|975.36
+5004001|"edu packscholar #1"|8|8|973.35
+1002001|"importoamalg #1"|8|56|972.27
+5001002|"amalgscholar #2"|9|22|971.84
+9012008|"importounivamalg #8"|17|38|969.00
+4004002|"edu packedu pack #2"|19|16|968.88
+4002001|"importoedu pack #1"|18|35|968.31
+4004001|"edu packedu pack #1"|9|44|967.05
+7004009|"edu packbrand #9"|8|57|965.16
+1003001|"exportiamalg #1"|18|57|962.72
+1001001|"amalgamalg #1"|17|15|962.10
+5004002|"edu packscholar #2"|17|46|961.00
+3004001|"edu packexporti #1"|18|2|960.48
+3003001|"exportiexporti #1"|18|27|960.12
+8004003|"edu packnameless #3"|17|42|960.00
+1004002|"edu packamalg #2"|17|53|956.84
+4004001|"edu packedu pack #1"|19|48|954.46
+4003001|"exportiedu pack #1"|17|56|953.87
+1004001|"edu packamalg #1"|7|31|952.80
+1002002|"importoamalg #2"|19|9|952.56
+10006002|"corpunivamalg #2"|19|47|952.38
+10015004|"scholaramalgamalg #4"|8|38|950.94
+10012017|"importoamalgamalg #17"|17|5|950.84
+10011009|"amalgamalgamalg #9"|17|23|949.55
+7007010|"brandbrand #10"|17|56|947.72
+6001002|"amalgcorp #2"|19|6|947.20
+7007004|"brandbrand #4"|18|3|946.00
+4004002|"edu packedu pack #2"|19|22|945.76
+1001001|"amalgamalg #1"|9|52|944.16
+4004001|"edu packedu pack #1"|8|42|943.80
+5003001|"exportischolar #1"|9|12|943.20
+10014016|"edu packamalgamalg #16"|17|59|942.66
+9014008|"edu packunivamalg #8"|7|59|942.06
+7004007|"edu packbrand #7"|17|31|939.40
+3002001|"importoexporti #1"|9|50|935.40
+5001001|"amalgscholar #1"|17|52|933.94
+3004001|"edu packexporti #1"|17|8|933.30
+8003010|"exportinameless #10"|7|24|931.32
+3001001|"amalgexporti #1"|6|14|930.16
+2003001|"exportiimporto #1"|19|15|930.15
+4001001|"amalgedu pack #1"|19|47|929.66
+9008005|"namelessmaxi #5"|17|25|928.20
+6015004|"scholarbrand #4"|17|5|926.10
+5001001|"amalgscholar #1"|18|19|925.12
+1004001|"edu packamalg #1"|19|37|924.96
+5001002|"amalgscholar #2"|7|6|924.42
+5003001|"exportischolar #1"|9|20|922.68
+8004003|"edu packnameless #3"|9|46|919.38
+3001001|"amalgexporti #1"|6|36|917.40
+9013009|"exportiunivamalg #9"|8|36|915.81
+6001001|"amalgcorp #1"|9|36|912.45
+7012010|"importonameless #10"|17|37|910.80
+5001001|"amalgscholar #1"|18|23|909.48
+1002001|"importoamalg #1"|17|26|909.34
+2003001|"exportiimporto #1"|19|41|908.04
+3003001|"exportiexporti #1"|9|19|906.00
+2003001|"exportiimporto #1"|18|38|903.84
+6008005|"namelesscorp #5"|18|51|903.21
+4004002|"edu packedu pack #2"|17|31|903.00
+5001002|"amalgscholar #2"|19|11|902.66
+3003001|"exportiexporti #1"|17|20|902.22
+6005001|"scholarcorp #1"|7|45|902.10
+1001002|"amalgamalg #2"|17|27|899.40
+1001001|"amalgamalg #1"|17|14|899.10
+10013015|"exportiamalgamalg #15"|6|30|889.11
+3003001|"exportiexporti #1"|17|3|888.00
+1002001|"importoamalg #1"|8|24|887.10
+1001002|"amalgamalg #2"|8|11|885.72
+9012005|"importounivamalg #5"|9|57|884.30
+1002001|"importoamalg #1"|17|6|883.83
+6002003|"importocorp #3"|19|46|883.25
+4001001|"amalgedu pack #1"|18|29|882.00
+2001002|"amalgimporto #2"|17|49|880.64
+10015017|"scholaramalgamalg #17"|7|32|878.22
+6016003|"corpbrand #3"|18|42|877.58
+8012005|"importomaxi #5"|17|20|877.28
+9007011|"brandmaxi #11"|19|58|877.14
+1002001|"importoamalg #1"|7|5|876.12
+3002001|"importoexporti #1"|18|39|873.60
+6015006|"scholarbrand #6"|8|17|873.01
+10016017|"corpamalgamalg #17"|19|5|871.06
+7001009|"amalgbrand #9"|18|44|870.24
+8004009|"edu packnameless #9"|17|18|870.09
+10013015|"exportiamalgamalg #15"|18|33|869.00
+10001017|"amalgunivamalg #17"|9|2|868.68
+1004002|"edu packamalg #2"|18|31|867.84
+1003002|"exportiamalg #2"|9|25|864.45
+7011001|"amalgnameless #1"|17|50|864.15
+3001001|"amalgexporti #1"|7|50|863.36
+4004002|"edu packedu pack #2"|19|46|858.48
+2001001|"amalgimporto #1"|17|53|858.00
+5003001|"exportischolar #1"|18|10|856.12
+3003001|"exportiexporti #1"|18|50|852.55
+5002001|"importoscholar #1"|8|35|851.73
+1002002|"importoamalg #2"|18|18|850.95
+7003002|"exportibrand #2"|17|14|850.05
+7009005|"maxibrand #5"|17|23|849.90
+1004001|"edu packamalg #1"|7|45|849.39
+10011014|"amalgamalgamalg #14"|19|13|848.30
+6011001|"amalgbrand #1"|8|22|847.11
+7007004|"brandbrand #4"|18|59|840.96
+4002001|"importoedu pack #1"|9|36|838.42
+2001002|"amalgimporto #2"|6|23|838.28
+6015004|"scholarbrand #4"|9|3|836.38
+2004001|"edu packimporto #1"|18|20|835.20
+9014008|"edu packunivamalg #8"|17|10|834.48
+5002002|"importoscholar #2"|18|2|832.65
+10015004|"scholaramalgamalg #4"|17|18|832.63
+9014011|"edu packunivamalg #11"|19|22|832.44
+6002005|"importocorp #5"|8|33|831.60
+4001002|"amalgedu pack #2"|17|12|830.25
+1002001|"importoamalg #1"|9|24|828.99
+8010009|"univmaxi #9"|18|38|828.75
+5003002|"exportischolar #2"|19|48|828.55
+8016006|"corpmaxi #6"|18|15|828.38
+1001002|"amalgamalg #2"|9|32|828.18
+3004002|"edu packexporti #2"|17|59|824.00
+6008003|"namelesscorp #3"|17|32|822.51
+6003007|"exporticorp #7"|19|15|822.22
+1004001|"edu packamalg #1"|9|41|821.92
+10015004|"scholaramalgamalg #4"|18|58|821.56
+6012005|"importobrand #5"|9|2|820.40
+4002002|"importoedu pack #2"|18|0|819.66
+7002003|"importobrand #3"|19|36|816.42
+4004001|"edu packedu pack #1"|17|35|816.06
+2004002|"edu packimporto #2"|17|47|814.72
+7009005|"maxibrand #5"|17|44|813.06
+4003001|"exportiedu pack #1"|17|38|811.68
+7016007|"corpnameless #7"|9|54|810.24
+1002001|"importoamalg #1"|18|34|809.85
+7009003|"maxibrand #3"|6|25|808.50
+10016017|"corpamalgamalg #17"|17|15|806.96
+7010003|"univnameless #3"|7|27|804.84
+1002002|"importoamalg #2"|19|34|803.66
+2001001|"amalgimporto #1"|8|34|803.40
+7013009|"exportinameless #9"|19|32|803.16
+10015013|"scholaramalgamalg #13"|19|11|802.56
+3003001|"exportiexporti #1"|17|19|801.27
+8004003|"edu packnameless #3"|18|54|800.80
+10015017|"scholaramalgamalg #17"|18|37|800.40
+3002001|"importoexporti #1"|19|15|798.08
+3002001|"importoexporti #1"|17|13|797.64
+6012008|"importobrand #8"|8|4|795.15
+9015009|"scholarunivamalg #9"|9|6|793.44
+10016017|"corpamalgamalg #17"|19|0|793.35
+1002001|"importoamalg #1"|9|39|791.84
+1001002|"amalgamalg #2"|8|57|790.80
+6008005|"namelesscorp #5"|17|34|790.32
+10010001|"univamalgamalg #1"|18|49|789.12
+10013013|"exportiamalgamalg #13"|17|35|787.44
+9015009|"scholarunivamalg #9"|8|28|786.56
+9011008|"amalgunivamalg #8"|19|26|785.70
+7003005|"exportibrand #5"|19|14|785.18
+9013009|"exportiunivamalg #9"|9|29|783.68
+6009004|"maxicorp #4"|8|22|782.04
+3001001|"amalgexporti #1"|9|14|782.00
+1003001|"exportiamalg #1"|8|14|781.20
+5003002|"exportischolar #2"|6|49|779.22
+9014011|"edu packunivamalg #11"|19|26|777.60
+10016001|"corpamalgamalg #1"|8|54|777.38
+1004002|"edu packamalg #2"|17|43|776.37
+2004001|"edu packimporto #1"|19|51|773.00
+9011008|"amalgunivamalg #8"|19|47|772.56
+5003002|"exportischolar #2"|17|31|772.53
+1002001|"importoamalg #1"|7|18|772.20
+3001002|"amalgexporti #2"|19|7|769.50
+3003001|"exportiexporti #1"|18|30|769.26
+1003001|"exportiamalg #1"|9|48|768.24
+5003001|"exportischolar #1"|17|2|767.96
+9011008|"amalgunivamalg #8"|6|47|767.52
+4004001|"edu packedu pack #1"|18|36|767.25
+3001002|"amalgexporti #2"|17|43|766.65
+10016001|"corpamalgamalg #1"|17|54|764.64
+8011009|"amalgmaxi #9"|18|6|763.14
+5001002|"amalgscholar #2"|19|24|762.96
+9006008|"corpmaxi #8"|8|38|762.60
+1004001|"edu packamalg #1"|17|40|758.01
+9003003|"exportimaxi #3"|18|11|757.86
+6008005|"namelesscorp #5"|17|21|757.77
+4002001|"importoedu pack #1"|9|11|757.08
+7015009|"scholarnameless #9"|7|55|757.01
+7016001|"corpnameless #1"|18|33|756.58
+8004009|"edu packnameless #9"|17|50|756.15
+5004002|"edu packscholar #2"|9|18|755.70
+5002002|"importoscholar #2"|18|26|755.09
+8005008|"scholarnameless #8"|7|7|754.22
+3004001|"edu packexporti #1"|8|18|752.84
+9013009|"exportiunivamalg #9"|17|31|752.64
+3004001|"edu packexporti #1"|6|30|752.40
+4004001|"edu packedu pack #1"|9|47|749.28
+5003001|"exportischolar #1"|9|58|745.20
+6008005|"namelesscorp #5"|18|40|742.90
+3003002|"exportiexporti #2"|7|54|742.72
+2001001|"amalgimporto #1"|17|32|741.06
+9012003|"importounivamalg #3"|8|3|739.10
+4003001|"exportiedu pack #1"|19|25|738.64
+1003001|"exportiamalg #1"|18|11|738.30
+6006004|"corpcorp #4"|8|40|731.68
+2004002|"edu packimporto #2"|8|24|731.20
+9009002|"maximaxi #2"|6|54|730.73
+10011009|"amalgamalgamalg #9"|18|26|729.54
+6014004|"edu packbrand #4"|9|6|729.27
+9006008|"corpmaxi #8"|17|15|728.84
+10015003|"scholaramalgamalg #3"|9|40|727.89
+7007004|"brandbrand #4"|19|9|726.48
+3002002|"importoexporti #2"|9|52|725.76
+4004001|"edu packedu pack #1"|17|39|725.76
+6015006|"scholarbrand #6"|8|59|723.84
+9013002|"exportiunivamalg #2"|9|44|720.27
+4003001|"exportiedu pack #1"|19|39|720.01
+1001002|"amalgamalg #2"|6|5|718.04
+10012004|"importoamalgamalg #4"|18|33|717.21
+2002001|"importoimporto #1"|17|13|716.39
+4004001|"edu packedu pack #1"|9|38|714.96
+1003002|"exportiamalg #2"|19|24|712.84
+9013009|"exportiunivamalg #9"|17|58|712.50
+3004001|"edu packexporti #1"|9|20|711.36
+4004001|"edu packedu pack #1"|18|21|710.40
+4002002|"importoedu pack #2"|19|58|710.16
+7003002|"exportibrand #2"|19|16|709.94
+5001002|"amalgscholar #2"|7|38|709.92
+7013009|"exportinameless #9"|6|3|707.16
+1004001|"edu packamalg #1"|18|0|706.86
+3004002|"edu packexporti #2"|9|50|706.61
+4004001|"edu packedu pack #1"|8|49|706.42
+2002001|"importoimporto #1"|18|10|704.70
+2002001|"importoimporto #1"|18|59|703.54
+1003001|"exportiamalg #1"|8|24|702.18
+5003001|"exportischolar #1"|9|30|701.33
+4003001|"exportiedu pack #1"|17|17|699.16
+6009003|"maxicorp #3"|18|33|697.20
+4002002|"importoedu pack #2"|9|4|696.26
+8016004|"corpmaxi #4"|17|35|696.08
+10015017|"scholaramalgamalg #17"|18|44|692.44
+3004002|"edu packexporti #2"|18|6|691.25
+9001005|"amalgmaxi #5"|6|41|690.76
+10005013|"scholarunivamalg #13"|18|37|689.04
+9014011|"edu packunivamalg #11"|17|17|686.55
+4004002|"edu packedu pack #2"|18|25|682.38
+6005007|"scholarcorp #7"|18|8|680.68
+10012017|"importoamalgamalg #17"|7|42|679.97
+10015003|"scholaramalgamalg #3"|17|3|679.20
+2001001|"amalgimporto #1"|18|15|678.96
+7001009|"amalgbrand #9"|9|30|678.58
+1001002|"amalgamalg #2"|17|58|678.37
+6008005|"namelesscorp #5"|9|52|676.76
+1003001|"exportiamalg #1"|17|55|676.44
+3003002|"exportiexporti #2"|19|19|675.62
+3003001|"exportiexporti #1"|9|11|673.00
+3004002|"edu packexporti #2"|7|9|672.75
+10007012|"brandunivamalg #12"|9|4|671.76
+7009005|"maxibrand #5"|17|6|670.80
+1001001|"amalgamalg #1"|6|22|670.00
+3003002|"exportiexporti #2"|8|12|669.33
+7004009|"edu packbrand #9"|8|11|669.03
+1004002|"edu packamalg #2"|19|32|668.00
+8003003|"exportinameless #3"|8|45|667.87
+6012008|"importobrand #8"|18|36|667.45
+10012005|"importoamalgamalg #5"|17|4|665.28
+9003003|"exportimaxi #3"|17|56|663.06
+6011008|"amalgbrand #8"|9|45|662.25
+9013009|"exportiunivamalg #9"|18|11|662.13
+9014005|"edu packunivamalg #5"|17|24|662.04
+1004001|"edu packamalg #1"|18|23|661.92
+9009002|"maximaxi #2"|17|25|661.54
+10010013|"univamalgamalg #13"|19|51|661.44
+5002001|"importoscholar #1"|8|30|661.05
+2001001|"amalgimporto #1"|18|33|660.42
+1002002|"importoamalg #2"|18|29|659.60
+3002001|"importoexporti #1"|17|48|659.10
+7008007|"namelessbrand #7"|18|56|656.64
+9014005|"edu packunivamalg #5"|19|8|655.90
+7012010|"importonameless #10"|6|45|654.59
+5001002|"amalgscholar #2"|17|26|653.95
+10009015|"maxiunivamalg #15"|18|16|653.28
+10016001|"corpamalgamalg #1"|8|30|652.60
+4004001|"edu packedu pack #1"|19|22|651.84
+9012005|"importounivamalg #5"|9|17|650.72
+6005007|"scholarcorp #7"|19|36|650.52
+4001002|"amalgedu pack #2"|18|58|650.40
+2003002|"exportiimporto #2"|8|25|650.25
+2001001|"amalgimporto #1"|9|2|649.60
+1003001|"exportiamalg #1"|8|50|645.78
+9009002|"maximaxi #2"|9|43|644.49
+2002001|"importoimporto #1"|7|58|643.69
+8004003|"edu packnameless #3"|9|7|642.72
+6011001|"amalgbrand #1"|18|1|641.50
+4002002|"importoedu pack #2"|7|54|640.08
+8003010|"exportinameless #10"|17|53|638.10
+5003002|"exportischolar #2"|8|4|637.69
+4004002|"edu packedu pack #2"|6|1|635.62
+7004009|"edu packbrand #9"|6|49|633.50
+8012005|"importomaxi #5"|9|34|631.80
+1001001|"amalgamalg #1"|19|59|630.00
+5003001|"exportischolar #1"|18|19|628.86
+7012003|"importonameless #3"|17|14|628.86
+10015017|"scholaramalgamalg #17"|9|23|627.00
+2002001|"importoimporto #1"|19|20|626.50
+3004001|"edu packexporti #1"|18|50|625.86
+4001002|"amalgedu pack #2"|17|38|625.60
+7015002|"scholarnameless #2"|19|0|624.96
+4001001|"amalgedu pack #1"|9|33|624.69
+1002002|"importoamalg #2"|17|40|621.86
+3001001|"amalgexporti #1"|19|48|621.18
+9008002|"namelessmaxi #2"|18|23|620.36
+7010004|"univnameless #4"|9|59|620.16
+4001001|"amalgedu pack #1"|9|4|619.68
+9014011|"edu packunivamalg #11"|19|8|619.16
+1001001|"amalgamalg #1"|17|8|619.08
+10003016|"exportiunivamalg #16"|17|2|619.08
+8013007|"exportimaxi #7"|9|28|618.93
+4001002|"amalgedu pack #2"|18|59|618.75
+8013009|"exportimaxi #9"|19|20|618.41
+10012005|"importoamalgamalg #5"|17|51|618.24
+8004003|"edu packnameless #3"|17|46|617.40
+8007005|"brandnameless #5"|18|0|616.40
+10012017|"importoamalgamalg #17"|17|17|616.00
+7003005|"exportibrand #5"|17|55|613.44
+6005001|"scholarcorp #1"|17|31|613.17
+2003001|"exportiimporto #1"|9|47|612.32
+6006004|"corpcorp #4"|18|2|612.32
+4004002|"edu packedu pack #2"|19|37|611.80
+10002012|"importounivamalg #12"|8|30|611.55
+7013001|"exportinameless #1"|9|28|611.52
+8013007|"exportimaxi #7"|7|11|610.90
+6006004|"corpcorp #4"|8|13|610.74
+10010001|"univamalgamalg #1"|17|43|610.56
+6008007|"namelesscorp #7"|19|10|609.30
+7016001|"corpnameless #1"|18|4|609.20
+1001001|"amalgamalg #1"|17|17|609.12
+6016003|"corpbrand #3"|8|25|609.00
+7016001|"corpnameless #1"|17|36|609.00
+7008007|"namelessbrand #7"|19|3|608.79
+5001002|"amalgscholar #2"|8|22|608.60
+10016008|"corpamalgamalg #8"|6|10|608.38
+3003002|"exportiexporti #2"|19|52|608.19
+2001001|"amalgimporto #1"|9|22|607.91
+3003001|"exportiexporti #1"|9|59|607.87
+7001009|"amalgbrand #9"|8|6|605.82
+7009010|"maxibrand #10"|18|20|604.32
+7013001|"exportinameless #1"|17|55|603.96
+7010008|"univnameless #8"|8|42|602.62
+9010009|"univunivamalg #9"|18|56|601.92
+7001004|"amalgbrand #4"|7|0|601.02
+2003001|"exportiimporto #1"|17|42|599.86
+1002001|"importoamalg #1"|17|56|597.85
+1004001|"edu packamalg #1"|18|29|596.45
+10011014|"amalgamalgamalg #14"|9|56|592.28
+6001002|"amalgcorp #2"|17|5|590.52
+7001004|"amalgbrand #4"|17|14|589.36
+6014007|"edu packbrand #7"|18|57|586.41
+1001001|"amalgamalg #1"|6|2|585.65
+7002003|"importobrand #3"|17|9|585.20
+10016001|"corpamalgamalg #1"|19|27|583.68
+9008002|"namelessmaxi #2"|6|50|583.19
+3004002|"edu packexporti #2"|9|59|583.00
+5004001|"edu packscholar #1"|18|20|582.78
+5004001|"edu packscholar #1"|19|9|580.58
+8012005|"importomaxi #5"|6|55|580.19
+4001001|"amalgedu pack #1"|18|9|579.70
+1003001|"exportiamalg #1"|8|38|578.76
+8003003|"exportinameless #3"|19|28|578.68
+7009005|"maxibrand #5"|19|50|578.46
+5001002|"amalgscholar #2"|17|4|578.36
+3003002|"exportiexporti #2"|17|17|578.20
+7007010|"brandbrand #10"|17|49|577.92
+6006003|"corpcorp #3"|18|6|574.48
+7011001|"amalgnameless #1"|8|2|573.50
+6005001|"scholarcorp #1"|17|21|573.30
+10016006|"corpamalgamalg #6"|19|25|572.50
+10012001|"importoamalgamalg #1"|9|41|572.25
+2004001|"edu packimporto #1"|8|42|569.48
+1001001|"amalgamalg #1"|18|44|569.14
+10005013|"scholarunivamalg #13"|9|0|568.69
+7013009|"exportinameless #9"|18|8|568.60
+2004002|"edu packimporto #2"|17|18|568.03
+10004004|"edu packunivamalg #4"|9|22|567.64
+1003001|"exportiamalg #1"|19|59|566.58
+10010001|"univamalgamalg #1"|9|47|566.54
+9007009|"brandmaxi #9"|18|52|566.28
+10012001|"importoamalgamalg #1"|17|39|566.08
+8005005|"scholarnameless #5"|17|17|563.72
+7015009|"scholarnameless #9"|17|20|563.40
+2001001|"amalgimporto #1"|9|19|563.04
+5002001|"importoscholar #1"|9|7|562.96
+1001001|"amalgamalg #1"|9|39|558.24
+2002001|"importoimporto #1"|9|27|558.24
+10005013|"scholarunivamalg #13"|9|16|557.37
+1002001|"importoamalg #1"|18|6|555.22
+3001002|"amalgexporti #2"|9|54|554.88
+1002001|"importoamalg #1"|18|41|554.40
+4001002|"amalgedu pack #2"|18|9|554.09
+9011008|"amalgunivamalg #8"|18|9|554.00
+6016003|"corpbrand #3"|18|17|553.09
+9014011|"edu packunivamalg #11"|18|0|552.72
+3002002|"importoexporti #2"|19|35|552.66
+9011008|"amalgunivamalg #8"|18|5|551.59
+4004002|"edu packedu pack #2"|19|6|551.43
+9016003|"corpunivamalg #3"|17|34|550.68
+1002002|"importoamalg #2"|8|27|549.88
+10016008|"corpamalgamalg #8"|7|8|549.12
+3003001|"exportiexporti #1"|9|8|547.40
+8003003|"exportinameless #3"|18|49|547.20
+6006007|"corpcorp #7"|17|58|546.72
+6003007|"exporticorp #7"|17|57|544.17
+1001001|"amalgamalg #1"|7|11|542.82
+6014004|"edu packbrand #4"|9|41|542.75
+8004003|"edu packnameless #3"|19|47|539.52
+5001001|"amalgscholar #1"|19|15|538.78
+7010008|"univnameless #8"|9|54|536.50
+8013007|"exportimaxi #7"|9|43|536.49
+1004002|"edu packamalg #2"|8|45|536.25
+4003001|"exportiedu pack #1"|18|44|536.13
+7010009|"univnameless #9"|19|13|536.05
+2004002|"edu packimporto #2"|18|49|535.50
+4002001|"importoedu pack #1"|18|48|535.04
+5001002|"amalgscholar #2"|17|27|535.02
+9010009|"univunivamalg #9"|17|8|534.82
+7012010|"importonameless #10"|18|54|533.61
+7015007|"scholarnameless #7"|19|56|532.91
+7013007|"exportinameless #7"|19|52|532.10
+4003001|"exportiedu pack #1"|9|22|532.08
+1004002|"edu packamalg #2"|8|6|531.20
+3004001|"edu packexporti #1"|8|30|530.88
+10012005|"importoamalgamalg #5"|17|3|530.84
+9006008|"corpmaxi #8"|19|43|529.56
+2003001|"exportiimporto #1"|6|13|528.19
+1003001|"exportiamalg #1"|6|57|526.32
+3001001|"amalgexporti #1"|19|10|525.60
+5004001|"edu packscholar #1"|9|50|524.80
+6015006|"scholarbrand #6"|9|10|523.95
+3003002|"exportiexporti #2"|17|47|522.90
+6001001|"amalgcorp #1"|18|22|521.70
+7008009|"namelessbrand #9"|18|39|519.82
+5003002|"exportischolar #2"|18|18|518.70
+4002001|"importoedu pack #1"|17|7|516.20
+6007007|"brandcorp #7"|9|4|515.58
+5001001|"amalgscholar #1"|17|27|515.46
+9009009|"maximaxi #9"|17|57|514.52
+5003001|"exportischolar #1"|19|31|514.08
+7010003|"univnameless #3"|17|8|513.60
+2004002|"edu packimporto #2"|9|14|513.36
+6012007|"importobrand #7"|19|12|510.49
+10011009|"amalgamalgamalg #9"|17|9|509.24
+4001001|"amalgedu pack #1"|19|11|508.90
+3002001|"importoexporti #1"|9|1|508.48
+6002001|"importocorp #1"|17|10|507.60
+4002001|"importoedu pack #1"|17|46|506.94
+8004003|"edu packnameless #3"|7|24|506.61
+10002012|"importounivamalg #12"|8|41|506.25
+3003002|"exportiexporti #2"|18|38|504.90
+1004002|"edu packamalg #2"|9|12|504.37
+5003001|"exportischolar #1"|8|24|504.10
+7015002|"scholarnameless #2"|9|55|504.09
+10012004|"importoamalgamalg #4"|8|8|503.10
+4004001|"edu packedu pack #1"|19|8|501.43
+6011005|"amalgbrand #5"|19|49|499.38
+8004003|"edu packnameless #3"|9|30|498.64
+7013001|"exportinameless #1"|9|5|497.61
+7016001|"corpnameless #1"|17|34|495.90
+5003001|"exportischolar #1"|18|31|494.56
+8011009|"amalgmaxi #9"|17|33|494.13
+1002001|"importoamalg #1"|19|59|493.35
+9010009|"univunivamalg #9"|19|26|492.56
+1001002|"amalgamalg #2"|7|17|492.14
+2004002|"edu packimporto #2"|8|11|488.60
+9012003|"importounivamalg #3"|9|41|488.00
+7015009|"scholarnameless #9"|17|52|487.16
+10012011|"importoamalgamalg #11"|19|45|486.60
+2001002|"amalgimporto #2"|17|1|485.56
+7007005|"brandbrand #5"|18|39|482.94
+1004002|"edu packamalg #2"|18|6|482.25
+6011001|"amalgbrand #1"|17|27|482.08
+4002001|"importoedu pack #1"|19|26|481.80
+6005001|"scholarcorp #1"|18|9|481.10
+3004002|"edu packexporti #2"|8|20|477.36
+1002001|"importoamalg #1"|9|27|476.19
+5003002|"exportischolar #2"|19|14|475.50
+4002001|"importoedu pack #1"|7|1|474.40
+7009005|"maxibrand #5"|9|34|473.76
+9007003|"brandmaxi #3"|9|35|473.68
+5002002|"importoscholar #2"|17|0|472.78
+9013009|"exportiunivamalg #9"|18|23|472.43
+6011001|"amalgbrand #1"|8|48|472.23
+7009003|"maxibrand #3"|8|38|471.58
+7004009|"edu packbrand #9"|18|2|470.00
+5003002|"exportischolar #2"|19|33|468.60
+3002002|"importoexporti #2"|8|39|468.54
+7016007|"corpnameless #7"|19|35|468.20
+10015017|"scholaramalgamalg #17"|19|46|466.20
+5001001|"amalgscholar #1"|6|27|465.60
+7008007|"namelessbrand #7"|8|33|465.00
+2004002|"edu packimporto #2"|8|34|464.60
+1002001|"importoamalg #1"|18|59|464.52
+1004001|"edu packamalg #1"|19|41|464.09
+5002002|"importoscholar #2"|17|21|463.87
+2003001|"exportiimporto #1"|8|5|462.92
+5003002|"exportischolar #2"|7|36|462.56
+7013009|"exportinameless #9"|19|38|462.31
+7001005|"amalgbrand #5"|18|49|461.80
+7004006|"edu packbrand #6"|8|38|461.70
+3004001|"edu packexporti #1"|17|34|461.51
+7010009|"univnameless #9"|19|42|460.98
+9008005|"namelessmaxi #5"|17|27|460.32
+1002001|"importoamalg #1"|19|1|459.76
+1003001|"exportiamalg #1"|9|18|459.00
+1002002|"importoamalg #2"|18|58|456.30
+1003002|"exportiamalg #2"|19|6|456.24
+1002001|"importoamalg #1"|6|40|455.43
+5002002|"importoscholar #2"|17|51|454.40
+8008005|"namelessnameless #5"|9|21|454.40
+5004001|"edu packscholar #1"|18|57|453.27
+2001001|"amalgimporto #1"|18|44|452.36
+9011009|"amalgunivamalg #9"|18|54|452.34
+10003007|"exportiunivamalg #7"|7|24|451.78
+9013009|"exportiunivamalg #9"|9|4|450.00
+2003001|"exportiimporto #1"|19|5|447.81
+9011009|"amalgunivamalg #9"|19|35|444.80
+3001002|"amalgexporti #2"|8|38|442.89
+3001001|"amalgexporti #1"|8|58|442.86
+7012010|"importonameless #10"|9|41|441.32
+7004006|"edu packbrand #6"|8|20|441.22
+8003003|"exportinameless #3"|18|47|440.45
+1004002|"edu packamalg #2"|17|16|437.76
+8016006|"corpmaxi #6"|18|26|437.58
+7009005|"maxibrand #5"|18|25|437.31
+4002001|"importoedu pack #1"|6|1|436.02
+7010009|"univnameless #9"|19|55|435.12
+2004002|"edu packimporto #2"|6|2|432.75
+10016017|"corpamalgamalg #17"|19|21|431.97
+4001001|"amalgedu pack #1"|19|26|429.48
+6001001|"amalgcorp #1"|17|17|426.30
+5001002|"amalgscholar #2"|18|3|425.25
+5001001|"amalgscholar #1"|19|29|423.93
+2004001|"edu packimporto #1"|9|59|422.64
+7016001|"corpnameless #1"|8|53|421.74
+7004007|"edu packbrand #7"|19|28|421.60
+6002005|"importocorp #5"|7|19|421.29
+9009009|"maximaxi #9"|18|48|420.72
+4004002|"edu packedu pack #2"|17|47|420.35
+7010004|"univnameless #4"|17|36|420.16
+5004001|"edu packscholar #1"|19|15|417.45
+1002002|"importoamalg #2"|9|33|416.66
+1004002|"edu packamalg #2"|7|2|416.33
+2001001|"amalgimporto #1"|18|43|415.80
+3003001|"exportiexporti #1"|19|14|414.96
+4004001|"edu packedu pack #1"|8|47|414.88
+1001002|"amalgamalg #2"|7|9|414.05
+1004002|"edu packamalg #2"|17|57|414.00
+1001002|"amalgamalg #2"|18|2|412.74
+7001004|"amalgbrand #4"|9|58|412.51
+1003002|"exportiamalg #2"|17|21|411.75
+8014005|"edu packmaxi #5"|19|0|411.47
+10016001|"corpamalgamalg #1"|18|16|411.32
+5003002|"exportischolar #2"|18|26|411.00
+7009005|"maxibrand #5"|18|34|409.50
+3003001|"exportiexporti #1"|17|7|409.08
+7010009|"univnameless #9"|18|35|409.02
+3003002|"exportiexporti #2"|17|6|408.36
+1003002|"exportiamalg #2"|18|0|408.24
+6010004|"univbrand #4"|9|58|408.20
+9009009|"maximaxi #9"|17|49|406.80
+2004001|"edu packimporto #1"|9|16|403.68
+3002002|"importoexporti #2"|17|9|399.51
+6006007|"corpcorp #7"|19|11|398.40
+10016016|"corpamalgamalg #16"|19|56|397.30
+9009002|"maximaxi #2"|17|37|395.64
+3004002|"edu packexporti #2"|19|39|394.42
+7010003|"univnameless #3"|18|0|393.48
+2003001|"exportiimporto #1"|17|52|392.96
+3001001|"amalgexporti #1"|8|18|392.15
+4001002|"amalgedu pack #2"|18|38|392.00
+1001002|"amalgamalg #2"|9|29|391.60
+8009009|"maxinameless #9"|18|46|391.23
+6009004|"maxicorp #4"|9|46|391.20
+6012007|"importobrand #7"|19|7|390.72
+5003002|"exportischolar #2"|17|16|390.39
+8003010|"exportinameless #10"|19|26|387.92
+6003008|"exporticorp #8"|17|9|387.86
+10012004|"importoamalgamalg #4"|8|37|387.81
+7003005|"exportibrand #5"|17|11|387.20
+5003001|"exportischolar #1"|17|12|386.63
+9014011|"edu packunivamalg #11"|18|59|385.60
+1001002|"amalgamalg #2"|17|1|385.31
+1004001|"edu packamalg #1"|17|44|383.67
+10015013|"scholaramalgamalg #13"|9|29|382.08
+6012005|"importobrand #5"|9|10|381.00
+6008005|"namelesscorp #5"|17|17|380.70
+7009010|"maxibrand #10"|9|42|380.64
+9008002|"namelessmaxi #2"|17|6|380.55
+2004002|"edu packimporto #2"|17|55|380.42
+5003001|"exportischolar #1"|18|23|379.95
+10015004|"scholaramalgamalg #4"|18|23|379.68
+7004007|"edu packbrand #7"|18|33|379.61
+5002001|"importoscholar #1"|8|1|377.57
+6005001|"scholarcorp #1"|19|58|376.20
+9009002|"maximaxi #2"|17|34|376.20
+4004001|"edu packedu pack #1"|17|57|375.39
+2004001|"edu packimporto #1"|7|22|373.73
+6016003|"corpbrand #3"|17|29|372.78
+7013009|"exportinameless #9"|17|24|372.30
+8002009|"importonameless #9"|8|46|371.42
+1001001|"amalgamalg #1"|17|11|371.25
+2001001|"amalgimporto #1"|18|32|371.25
+5003001|"exportischolar #1"|19|42|370.35
+3003001|"exportiexporti #1"|18|41|370.24
+6012007|"importobrand #7"|9|53|369.96
+6008003|"namelesscorp #3"|6|45|368.16
+10015003|"scholaramalgamalg #3"|9|13|367.20
+1004001|"edu packamalg #1"|8|16|365.67
+10016017|"corpamalgamalg #17"|18|4|365.30
+5002001|"importoscholar #1"|18|53|365.10
+6009004|"maxicorp #4"|9|17|364.80
+9011009|"amalgunivamalg #9"|9|26|363.32
+9012003|"importounivamalg #3"|17|19|361.80
+7001005|"amalgbrand #5"|19|8|359.94
+6014002|"edu packbrand #2"|7|53|359.87
+10016006|"corpamalgamalg #6"|18|38|357.96
+9015009|"scholarunivamalg #9"|9|22|357.20
+1001002|"amalgamalg #2"|17|31|356.50
+2004002|"edu packimporto #2"|19|4|356.29
+7002003|"importobrand #3"|8|55|355.54
+4001001|"amalgedu pack #1"|9|11|354.20
+7013009|"exportinameless #9"|19|30|353.09
+3004002|"edu packexporti #2"|9|18|351.78
+5002002|"importoscholar #2"|19|14|351.12
+5001001|"amalgscholar #1"|7|12|350.07
+9014005|"edu packunivamalg #5"|19|9|349.86
+3003001|"exportiexporti #1"|18|35|349.68
+8004003|"edu packnameless #3"|19|8|349.44
+5004002|"edu packscholar #2"|18|17|348.90
+2001001|"amalgimporto #1"|19|47|348.30
+1004002|"edu packamalg #2"|17|18|348.08
+1003002|"exportiamalg #2"|9|34|346.50
+9009009|"maximaxi #9"|17|51|346.32
+1001001|"amalgamalg #1"|8|57|346.14
+8003010|"exportinameless #10"|19|39|345.59
+6003008|"exporticorp #8"|9|24|343.97
+6005001|"scholarcorp #1"|17|52|343.14
+3003002|"exportiexporti #2"|18|27|342.50
+10015003|"scholaramalgamalg #3"|19|12|340.80
+6005007|"scholarcorp #7"|8|5|340.47
+7009003|"maxibrand #3"|8|12|340.00
+3001002|"amalgexporti #2"|18|25|339.84
+5003001|"exportischolar #1"|18|2|339.69
+2001002|"amalgimporto #2"|19|44|339.50
+9014011|"edu packunivamalg #11"|8|58|339.36
+4004002|"edu packedu pack #2"|17|23|338.40
+6010005|"univbrand #5"|7|6|338.20
+1003002|"exportiamalg #2"|18|58|338.18
+5003001|"exportischolar #1"|18|41|338.12
+3003001|"exportiexporti #1"|18|28|337.28
+1004001|"edu packamalg #1"|9|35|336.49
+10016016|"corpamalgamalg #16"|9|44|336.40
+8010009|"univmaxi #9"|17|33|335.40
+4004001|"edu packedu pack #1"|19|29|331.65
+2003001|"exportiimporto #1"|17|21|331.04
+8007005|"brandnameless #5"|9|48|330.79
+10012011|"importoamalgamalg #11"|18|8|329.23
+4004002|"edu packedu pack #2"|8|58|329.04
+5004001|"edu packscholar #1"|19|38|328.32
+5002002|"importoscholar #2"|9|7|328.26
+9016003|"corpunivamalg #3"|9|45|328.24
+6003007|"exporticorp #7"|9|34|327.96
+1002001|"importoamalg #1"|19|35|327.70
+10011014|"amalgamalgamalg #14"|18|22|327.02
+6008005|"namelesscorp #5"|17|50|326.90
+5004001|"edu packscholar #1"|17|39|326.83
+4004001|"edu packedu pack #1"|9|34|325.74
+10014016|"edu packamalgamalg #16"|17|27|325.06
+6003007|"exporticorp #7"|19|34|324.75
+10015004|"scholaramalgamalg #4"|17|42|324.72
+6008002|"namelesscorp #2"|17|8|324.47
+10013015|"exportiamalgamalg #15"|17|28|324.33
+9008002|"namelessmaxi #2"|8|38|324.28
+9009002|"maximaxi #2"|17|30|324.26
+10006002|"corpunivamalg #2"|19|10|323.68
+1004002|"edu packamalg #2"|18|44|323.51
+1004002|"edu packamalg #2"|19|51|321.90
+7013009|"exportinameless #9"|8|1|320.49
+3004002|"edu packexporti #2"|19|41|319.00
+1004001|"edu packamalg #1"|7|3|318.64
+7014001|"edu packnameless #1"|18|28|318.50
+4002001|"importoedu pack #1"|6|24|317.94
+7008007|"namelessbrand #7"|19|30|317.19
+4001001|"amalgedu pack #1"|8|0|316.91
+5003002|"exportischolar #2"|17|18|316.48
+8005008|"scholarnameless #8"|17|34|316.32
+10003007|"exportiunivamalg #7"|19|4|316.20
+6002005|"importocorp #5"|6|9|315.92
+6010005|"univbrand #5"|19|16|315.00
+8002009|"importonameless #9"|18|17|314.28
+3003002|"exportiexporti #2"|7|37|313.24
+10001017|"amalgunivamalg #17"|19|16|313.16
+3002001|"importoexporti #1"|19|20|312.80
+10005013|"scholarunivamalg #13"|19|0|312.60
+6010005|"univbrand #5"|18|13|312.20
+1004001|"edu packamalg #1"|9|34|311.00
+5002002|"importoscholar #2"|17|27|310.55
+4002001|"importoedu pack #1"|8|28|309.66
+9008002|"namelessmaxi #2"|17|51|309.32
+10016017|"corpamalgamalg #17"|8|4|308.55
+6008003|"namelesscorp #3"|18|57|308.46
+2001002|"amalgimporto #2"|17|45|308.44
+8005008|"scholarnameless #8"|17|26|307.19
+4003001|"exportiedu pack #1"|19|15|305.76
+6005007|"scholarcorp #7"|9|26|305.64
+6012007|"importobrand #7"|19|5|305.40
+6007003|"brandcorp #3"|19|58|305.20
+10010013|"univamalgamalg #13"|19|34|305.10
+5003002|"exportischolar #2"|17|27|304.00
+8003003|"exportinameless #3"|18|57|303.93
+4004002|"edu packedu pack #2"|19|27|303.40
+1004001|"edu packamalg #1"|18|11|303.21
+6003003|"exporticorp #3"|17|54|302.68
+5004001|"edu packscholar #1"|8|12|302.40
+5001001|"amalgscholar #1"|6|5|300.48
+7009010|"maxibrand #10"|17|6|299.97
+6006003|"corpcorp #3"|19|9|299.88
+1002002|"importoamalg #2"|7|29|298.90
+9013009|"exportiunivamalg #9"|17|6|297.91
+5002002|"importoscholar #2"|8|45|296.02
+7001005|"amalgbrand #5"|19|47|296.00
+6007007|"brandcorp #7"|17|12|295.80
+9014008|"edu packunivamalg #8"|17|37|294.98
+8010009|"univmaxi #9"|8|48|294.70
+4003001|"exportiedu pack #1"|9|45|293.16
+9007011|"brandmaxi #11"|17|21|293.08
+6005007|"scholarcorp #7"|6|2|291.60
+7007005|"brandbrand #5"|17|48|291.20
+7013009|"exportinameless #9"|19|53|288.60
+10016003|"corpamalgamalg #3"|18|28|288.11
+10014016|"edu packamalgamalg #16"|8|9|287.75
+2002001|"importoimporto #1"|18|57|285.51
+10016016|"corpamalgamalg #16"|9|2|285.36
+9007003|"brandmaxi #3"|9|51|285.09
+2001001|"amalgimporto #1"|17|25|284.43
+1001001|"amalgamalg #1"|19|32|283.80
+4001001|"amalgedu pack #1"|7|42|282.92
+9009009|"maximaxi #9"|18|7|281.98
+10010013|"univamalgamalg #13"|17|16|281.82
+3004001|"edu packexporti #1"|17|25|281.76
+1003001|"exportiamalg #1"|8|15|280.88
+9013009|"exportiunivamalg #9"|18|7|279.84
+6006007|"corpcorp #7"|18|21|279.60
+1003001|"exportiamalg #1"|18|58|277.32
+10003004|"exportiunivamalg #4"|8|25|277.24
+7001005|"amalgbrand #5"|19|14|276.22
+8003010|"exportinameless #10"|18|38|275.24
+2001002|"amalgimporto #2"|18|7|274.80
+3003001|"exportiexporti #1"|9|41|274.80
+5001002|"amalgscholar #2"|17|29|274.68
+8005008|"scholarnameless #8"|17|19|274.16
+9002011|"importomaxi #11"|17|23|273.26
+8016006|"corpmaxi #6"|19|23|272.85
+4001001|"amalgedu pack #1"|19|23|272.68
+1002001|"importoamalg #1"|9|9|271.50
+1001002|"amalgamalg #2"|17|30|270.00
+1004002|"edu packamalg #2"|17|1|267.60
+10003007|"exportiunivamalg #7"|17|53|267.26
+9014002|"edu packunivamalg #2"|9|0|265.20
+5003001|"exportischolar #1"|17|27|265.05
+2001002|"amalgimporto #2"|9|23|264.54
+10010013|"univamalgamalg #13"|19|45|263.67
+9011009|"amalgunivamalg #9"|18|29|263.50
+2001001|"amalgimporto #1"|17|46|260.70
+9009009|"maximaxi #9"|8|16|260.32
+7003005|"exportibrand #5"|19|24|259.52
+4003001|"exportiedu pack #1"|18|42|259.12
+9013009|"exportiunivamalg #9"|18|25|259.12
+3002001|"importoexporti #1"|18|25|258.96
+8005008|"scholarnameless #8"|8|51|258.56
+3003001|"exportiexporti #1"|9|48|258.39
+2004002|"edu packimporto #2"|9|50|256.08
+1003001|"exportiamalg #1"|17|17|255.06
+7015009|"scholarnameless #9"|19|23|255.00
+7014001|"edu packnameless #1"|8|42|254.64
+2004002|"edu packimporto #2"|17|11|252.86
+1002002|"importoamalg #2"|19|57|252.45
+10003007|"exportiunivamalg #7"|17|32|251.94
+1002002|"importoamalg #2"|18|4|251.55
+9014002|"edu packunivamalg #2"|19|42|251.43
+2001002|"amalgimporto #2"|17|41|250.74
+7013007|"exportinameless #7"|9|53|250.70
+4004002|"edu packedu pack #2"|17|1|248.40
+8005005|"scholarnameless #5"|9|4|248.10
+9016003|"corpunivamalg #3"|8|49|247.26
+8012005|"importomaxi #5"|9|50|246.96
+8004003|"edu packnameless #3"|9|27|246.16
+6008007|"namelesscorp #7"|9|30|245.79
+1003001|"exportiamalg #1"|17|51|245.22
+8009009|"maxinameless #9"|19|2|244.12
+5003001|"exportischolar #1"|19|11|243.60
+4004002|"edu packedu pack #2"|7|13|243.53
+9003003|"exportimaxi #3"|6|21|243.39
+7016007|"corpnameless #7"|18|17|243.12
+10012011|"importoamalgamalg #11"|19|12|241.80
+6001001|"amalgcorp #1"|19|6|240.72
+2001002|"amalgimporto #2"|17|13|240.00
+3002001|"importoexporti #1"|17|32|240.00
+10010001|"univamalgamalg #1"|9|6|238.38
+4003001|"exportiedu pack #1"|19|22|238.26
+5002001|"importoscholar #1"|17|38|238.08
+6011005|"amalgbrand #5"|17|55|237.72
+9016003|"corpunivamalg #3"|17|11|237.12
+7009005|"maxibrand #5"|17|13|236.40
+7015009|"scholarnameless #9"|17|5|236.18
+1003001|"exportiamalg #1"|18|13|234.32
+9015011|"scholarunivamalg #11"|6|57|233.84
+7013001|"exportinameless #1"|18|36|233.16
+9015009|"scholarunivamalg #9"|6|26|232.47
+10006002|"corpunivamalg #2"|8|47|231.84
+8005008|"scholarnameless #8"|6|33|230.66
+6008005|"namelesscorp #5"|17|11|228.48
+2003001|"exportiimporto #1"|18|30|227.55
+7016001|"corpnameless #1"|18|28|227.47
+2001002|"amalgimporto #2"|17|9|227.07
+3004002|"edu packexporti #2"|17|47|226.73
+9014002|"edu packunivamalg #2"|9|16|226.73
+5001001|"amalgscholar #1"|19|28|226.54
+8008005|"namelessnameless #5"|17|27|226.48
+2003002|"exportiimporto #2"|19|40|225.72
+9011009|"amalgunivamalg #9"|8|10|225.72
+4004002|"edu packedu pack #2"|7|12|224.94
+2002001|"importoimporto #1"|19|37|224.91
+1002001|"importoamalg #1"|9|43|223.60
+2002001|"importoimporto #1"|17|51|222.80
+7012010|"importonameless #10"|18|44|222.72
+5004001|"edu packscholar #1"|17|19|222.40
+8012005|"importomaxi #5"|17|31|221.85
+6008003|"namelesscorp #3"|9|46|221.76
+5002002|"importoscholar #2"|19|56|221.52
+10011014|"amalgamalgamalg #14"|17|32|220.99
+9012003|"importounivamalg #3"|9|57|220.92
+2001001|"amalgimporto #1"|19|16|219.87
+5004001|"edu packscholar #1"|8|57|219.23
+2003001|"exportiimporto #1"|18|55|218.46
+8016004|"corpmaxi #4"|17|37|218.25
+3004002|"edu packexporti #2"|19|25|216.90
+10003007|"exportiunivamalg #7"|19|45|216.06
+5001002|"amalgscholar #2"|19|12|215.27
+2004002|"edu packimporto #2"|9|28|214.56
+5002001|"importoscholar #1"|19|34|213.56
+3003002|"exportiexporti #2"|17|15|212.52
+7012010|"importonameless #10"|17|50|212.52
+7009010|"maxibrand #10"|18|23|211.48
+8004003|"edu packnameless #3"|19|27|210.92
+4004001|"edu packedu pack #1"|18|23|210.48
+9011008|"amalgunivamalg #8"|19|43|209.40
+7012010|"importonameless #10"|8|37|209.28
+5003001|"exportischolar #1"|17|25|209.20
+7012003|"importonameless #3"|19|44|208.32
+4002001|"importoedu pack #1"|7|10|208.26
+10013015|"exportiamalgamalg #15"|7|47|207.90
+4004002|"edu packedu pack #2"|19|21|207.48
+2001002|"amalgimporto #2"|8|15|207.08
+3001001|"amalgexporti #1"|18|3|205.66
+6008005|"namelesscorp #5"|19|49|204.75
+5004001|"edu packscholar #1"|18|7|203.00
+7007004|"brandbrand #4"|19|4|202.50
+1001001|"amalgamalg #1"|18|40|201.78
+10004004|"edu packunivamalg #4"|19|3|201.48
+2004002|"edu packimporto #2"|18|38|201.15
+1003001|"exportiamalg #1"|9|53|200.88
+7009005|"maxibrand #5"|19|28|200.88
+1002001|"importoamalg #1"|19|18|200.60
+10016006|"corpamalgamalg #6"|19|7|200.40
+8013007|"exportimaxi #7"|19|19|199.71
+7009005|"maxibrand #5"|17|40|199.56
+5003002|"exportischolar #2"|9|31|199.50
+8016006|"corpmaxi #6"|17|27|199.43
+9012003|"importounivamalg #3"|17|30|199.08
+1004002|"edu packamalg #2"|9|4|198.72
+4003001|"exportiedu pack #1"|9|17|198.72
+4002001|"importoedu pack #1"|17|53|198.33
+2001002|"amalgimporto #2"|17|55|197.40
+5001001|"amalgscholar #1"|19|25|196.84
+2004002|"edu packimporto #2"|9|12|195.44
+5001001|"amalgscholar #1"|9|29|193.76
+10010001|"univamalgamalg #1"|19|35|193.68
+6006003|"corpcorp #3"|19|7|191.40
+10004001|"edu packunivamalg #1"|19|50|190.62
+5002002|"importoscholar #2"|17|41|190.53
+3003001|"exportiexporti #1"|7|30|189.56
+8010009|"univmaxi #9"|19|2|187.32
+10015017|"scholaramalgamalg #17"|19|58|186.73
+6005001|"scholarcorp #1"|8|49|186.62
+2004001|"edu packimporto #1"|9|40|186.30
+1001001|"amalgamalg #1"|18|53|185.85
+1003002|"exportiamalg #2"|17|18|184.45
+5004001|"edu packscholar #1"|17|0|184.11
+7009005|"maxibrand #5"|9|36|183.33
+4004002|"edu packedu pack #2"|17|54|183.00
+1001002|"amalgamalg #2"|9|27|182.41
+4002002|"importoedu pack #2"|17|25|181.97
+6014004|"edu packbrand #4"|18|16|180.88
+9014002|"edu packunivamalg #2"|17|35|178.50
+7012010|"importonameless #10"|8|0|177.81
+6009003|"maxicorp #3"|9|28|177.64
+7001009|"amalgbrand #9"|17|53|177.60
+10016016|"corpamalgamalg #16"|9|21|177.60
+1001002|"amalgamalg #2"|18|7|177.48
+7001005|"amalgbrand #5"|7|32|177.45
+8003003|"exportinameless #3"|17|59|176.28
+10016003|"corpamalgamalg #3"|17|0|176.28
+4004001|"edu packedu pack #1"|18|55|175.80
+7002003|"importobrand #3"|18|53|174.70
+4001002|"amalgedu pack #2"|9|21|174.40
+10016006|"corpamalgamalg #6"|19|44|173.74
+1004002|"edu packamalg #2"|18|41|173.44
+1003001|"exportiamalg #1"|18|49|173.43
+1001001|"amalgamalg #1"|18|17|173.30
+1004001|"edu packamalg #1"|17|49|172.80
+8004009|"edu packnameless #9"|17|58|172.32
+6014004|"edu packbrand #4"|17|31|172.20
+1001001|"amalgamalg #1"|19|50|172.12
+10007012|"brandunivamalg #12"|8|54|171.92
+7004007|"edu packbrand #7"|9|32|171.08
+10012004|"importoamalgamalg #4"|6|17|170.94
+1002001|"importoamalg #1"|19|14|170.43
+4001002|"amalgedu pack #2"|18|42|170.25
+4002001|"importoedu pack #1"|18|46|169.28
+3004002|"edu packexporti #2"|9|14|168.96
+8013009|"exportimaxi #9"|19|31|168.82
+9011009|"amalgunivamalg #9"|6|49|168.75
+1001001|"amalgamalg #1"|17|20|168.60
+2003001|"exportiimporto #1"|17|40|168.33
+1001002|"amalgamalg #2"|8|21|168.21
+8012005|"importomaxi #5"|6|18|167.58
+3002002|"importoexporti #2"|8|42|167.52
+2001002|"amalgimporto #2"|18|29|167.50
+2004002|"edu packimporto #2"|17|52|167.40
+5003002|"exportischolar #2"|19|39|167.40
+6005001|"scholarcorp #1"|18|49|167.31
+10016001|"corpamalgamalg #1"|8|57|167.28
+5001001|"amalgscholar #1"|6|4|166.27
+4004002|"edu packedu pack #2"|9|17|166.20
+10008002|"namelessunivamalg #2"|18|42|165.41
+10016006|"corpamalgamalg #6"|9|41|164.50
+1003001|"exportiamalg #1"|19|15|163.88
+5004002|"edu packscholar #2"|8|47|163.80
+6015004|"scholarbrand #4"|17|41|163.00
+8012010|"importomaxi #10"|9|43|162.75
+7013001|"exportinameless #1"|17|33|162.40
+9011009|"amalgunivamalg #9"|17|43|162.36
+5003002|"exportischolar #2"|17|47|160.68
+8008005|"namelessnameless #5"|19|29|160.40
+3004002|"edu packexporti #2"|17|14|160.20
+4004001|"edu packedu pack #1"|19|40|159.63
+9013009|"exportiunivamalg #9"|9|7|159.39
+4004001|"edu packedu pack #1"|9|21|158.40
+6012005|"importobrand #5"|19|41|157.92
+3002001|"importoexporti #1"|17|20|157.85
+7011001|"amalgnameless #1"|9|50|157.85
+5001002|"amalgscholar #2"|9|37|157.08
+3003001|"exportiexporti #1"|9|1|156.98
+6008005|"namelesscorp #5"|19|59|156.95
+2001002|"amalgimporto #2"|18|0|156.40
+9014011|"edu packunivamalg #11"|19|6|155.21
+9015009|"scholarunivamalg #9"|9|19|154.79
+3003001|"exportiexporti #1"|17|35|154.24
+2001001|"amalgimporto #1"|8|39|154.08
+9008002|"namelessmaxi #2"|9|54|153.60
+7009003|"maxibrand #3"|9|53|152.70
+4004002|"edu packedu pack #2"|19|13|152.49
+7002003|"importobrand #3"|18|16|152.44
+5001002|"amalgscholar #2"|17|49|152.32
+8004009|"edu packnameless #9"|17|11|151.25
+6012007|"importobrand #7"|19|38|151.20
+8003010|"exportinameless #10"|17|49|151.20
+10001017|"amalgunivamalg #17"|17|44|150.92
+2003001|"exportiimporto #1"|19|34|150.90
+7016001|"corpnameless #1"|8|19|150.75
+3002001|"importoexporti #1"|9|42|150.12
+1002001|"importoamalg #1"|6|10|149.19
+9012003|"importounivamalg #3"|19|9|148.75
+9015009|"scholarunivamalg #9"|8|38|147.92
+1002001|"importoamalg #1"|17|34|147.30
+4002002|"importoedu pack #2"|9|56|146.90
+6011005|"amalgbrand #5"|18|20|146.85
+7008007|"namelessbrand #7"|7|33|146.71
+3004001|"edu packexporti #1"|6|4|146.58
+6008007|"namelesscorp #7"|18|55|146.10
+7012010|"importonameless #10"|17|48|145.60
+7010004|"univnameless #4"|18|7|145.25
+1004001|"edu packamalg #1"|17|56|144.42
+9011008|"amalgunivamalg #8"|19|46|144.32
+8013007|"exportimaxi #7"|9|56|144.13
+8002009|"importonameless #9"|17|43|143.92
+5004001|"edu packscholar #1"|18|43|143.36
+4003001|"exportiedu pack #1"|18|54|143.01
+3004002|"edu packexporti #2"|8|26|142.50
+9016003|"corpunivamalg #3"|9|18|141.96
+5002001|"importoscholar #1"|8|52|141.15
+6015006|"scholarbrand #6"|9|27|141.12
+3002001|"importoexporti #1"|18|29|141.04
+3003002|"exportiexporti #2"|17|0|139.30
+6008002|"namelesscorp #2"|17|47|138.85
+5003002|"exportischolar #2"|18|25|138.15
+5004001|"edu packscholar #1"|19|36|137.76
+8008005|"namelessnameless #5"|9|14|137.70
+1004001|"edu packamalg #1"|19|8|137.34
+5002001|"importoscholar #1"|9|59|137.24
+10016001|"corpamalgamalg #1"|18|22|137.16
+1002002|"importoamalg #2"|17|35|136.81
+10012004|"importoamalgamalg #4"|17|33|136.80
+6009003|"maxicorp #3"|9|52|135.76
+7008009|"namelessbrand #9"|17|9|135.33
+9015009|"scholarunivamalg #9"|18|57|135.30
+3002001|"importoexporti #1"|17|8|134.88
+7013007|"exportinameless #7"|19|15|134.72
+10016008|"corpamalgamalg #8"|18|10|134.46
+2001001|"amalgimporto #1"|17|2|134.30
+2003002|"exportiimporto #2"|18|27|134.10
+5001002|"amalgscholar #2"|18|11|133.84
+6005001|"scholarcorp #1"|17|59|133.70
+10004001|"edu packunivamalg #1"|17|42|133.65
+7016001|"corpnameless #1"|17|57|132.48
+10007012|"brandunivamalg #12"|8|52|131.95
+6014007|"edu packbrand #7"|9|54|131.82
+9015009|"scholarunivamalg #9"|19|22|131.40
+6015004|"scholarbrand #4"|17|6|130.56
+8012010|"importomaxi #10"|17|11|130.32
+6002003|"importocorp #3"|18|53|130.24
+6011001|"amalgbrand #1"|17|37|130.23
+7008009|"namelessbrand #9"|17|23|129.50
+7011001|"amalgnameless #1"|18|41|129.36
+7015002|"scholarnameless #2"|18|4|128.74
+5003001|"exportischolar #1"|6|30|128.16
+3004002|"edu packexporti #2"|18|16|128.10
+6009004|"maxicorp #4"|19|39|127.95
+1004002|"edu packamalg #2"|19|20|126.83
+10011009|"amalgamalgamalg #9"|19|36|126.48
+3004001|"edu packexporti #1"|18|34|126.42
+8008005|"namelessnameless #5"|8|51|126.15
+2003002|"exportiimporto #2"|18|5|125.46
+8012005|"importomaxi #5"|18|54|125.45
+10004001|"edu packunivamalg #1"|19|28|125.12
+10012017|"importoamalgamalg #17"|9|19|124.00
+5001001|"amalgscholar #1"|9|58|123.31
+9007009|"brandmaxi #9"|19|38|123.20
+6014002|"edu packbrand #2"|9|18|121.92
+7008007|"namelessbrand #7"|19|2|121.52
+9007003|"brandmaxi #3"|18|8|121.41
+7015009|"scholarnameless #9"|8|15|120.78
+6005007|"scholarcorp #7"|19|21|120.40
+6015004|"scholarbrand #4"|8|27|120.12
+10014016|"edu packamalgamalg #16"|9|47|120.12
+10003007|"exportiunivamalg #7"|18|40|119.92
+7011001|"amalgnameless #1"|17|42|118.44
+2001002|"amalgimporto #2"|19|38|118.41
+3003001|"exportiexporti #1"|17|12|117.00
+9002011|"importomaxi #11"|19|9|116.96
+1004001|"edu packamalg #1"|9|33|116.40
+6016003|"corpbrand #3"|8|14|114.64
+7008007|"namelessbrand #7"|19|10|114.48
+1003001|"exportiamalg #1"|17|33|114.08
+3001001|"amalgexporti #1"|17|18|113.40
+7008007|"namelessbrand #7"|9|6|113.03
+6009003|"maxicorp #3"|17|39|112.00
+2003001|"exportiimporto #1"|17|26|111.65
+10010001|"univamalgamalg #1"|9|43|110.16
+1001002|"amalgamalg #2"|19|6|109.50
+10012017|"importoamalgamalg #17"|9|7|108.90
+9013002|"exportiunivamalg #2"|18|10|107.92
+1001002|"amalgamalg #2"|18|8|107.30
+4001001|"amalgedu pack #1"|17|25|107.25
+4002002|"importoedu pack #2"|9|50|105.82
+7012003|"importonameless #3"|9|46|105.65
+5002001|"importoscholar #1"|17|54|105.60
+8013009|"exportimaxi #9"|7|33|105.08
+4003001|"exportiedu pack #1"|19|52|105.03
+9010009|"univunivamalg #9"|7|29|104.10
+6014002|"edu packbrand #2"|17|25|103.68
+9009009|"maximaxi #9"|6|49|103.20
+1001001|"amalgamalg #1"|8|49|102.06
+2004001|"edu packimporto #1"|19|45|101.01
+8003003|"exportinameless #3"|19|24|100.65
+4004002|"edu packedu pack #2"|18|24|99.52
+8012005|"importomaxi #5"|17|29|98.82
+10002011|"importounivamalg #11"|17|36|98.64
+1002002|"importoamalg #2"|17|16|97.92
+10012011|"importoamalgamalg #11"|17|3|97.20
+5001001|"amalgscholar #1"|9|57|97.15
+9007009|"brandmaxi #9"|17|15|97.00
+2004001|"edu packimporto #1"|18|54|96.99
+10004001|"edu packunivamalg #1"|19|0|96.00
+8004003|"edu packnameless #3"|19|59|95.76
+9014011|"edu packunivamalg #11"|18|47|95.34
+10005013|"scholarunivamalg #13"|9|3|95.12
+10016016|"corpamalgamalg #16"|17|50|95.09
+10008015|"namelessunivamalg #15"|9|14|94.94
+3003001|"exportiexporti #1"|19|51|94.80
+10003007|"exportiunivamalg #7"|18|48|93.54
+9014005|"edu packunivamalg #5"|17|10|93.06
+10010001|"univamalgamalg #1"|8|4|92.97
+4003001|"exportiedu pack #1"|19|28|92.88
+10003004|"exportiunivamalg #4"|9|28|92.80
+7013007|"exportinameless #7"|19|21|92.52
+10016017|"corpamalgamalg #17"|19|41|92.34
+6005001|"scholarcorp #1"|19|28|92.28
+1003001|"exportiamalg #1"|19|20|91.77
+5003002|"exportischolar #2"|17|30|91.45
+6007007|"brandcorp #7"|19|31|91.38
+4004001|"edu packedu pack #1"|19|59|90.26
+9011009|"amalgunivamalg #9"|19|21|90.25
+6012008|"importobrand #8"|7|38|89.96
+10015003|"scholaramalgamalg #3"|17|37|89.76
+6009004|"maxicorp #4"|17|35|89.28
+9001005|"amalgmaxi #5"|8|10|89.18
+2001002|"amalgimporto #2"|18|51|88.35
+3004002|"edu packexporti #2"|17|33|88.20
+6010004|"univbrand #4"|17|12|87.92
+2004002|"edu packimporto #2"|17|23|87.84
+9007009|"brandmaxi #9"|18|37|87.84
+6014002|"edu packbrand #2"|18|27|86.66
+7015007|"scholarnameless #7"|19|19|86.52
+9014002|"edu packunivamalg #2"|19|2|86.48
+9014011|"edu packunivamalg #11"|9|30|85.82
+1004001|"edu packamalg #1"|18|37|85.39
+3004001|"edu packexporti #1"|19|32|85.36
+4001001|"amalgedu pack #1"|19|13|84.48
+10004004|"edu packunivamalg #4"|17|22|84.10
+8008005|"namelessnameless #5"|8|46|83.72
+3003002|"exportiexporti #2"|9|8|83.64
+3002002|"importoexporti #2"|17|10|83.52
+1004002|"edu packamalg #2"|17|12|83.42
+1004001|"edu packamalg #1"|7|36|83.12
+3003001|"exportiexporti #1"|19|31|82.24
+3003002|"exportiexporti #2"|19|59|82.08
+10016017|"corpamalgamalg #17"|8|18|82.00
+6011001|"amalgbrand #1"|6|10|81.83
+2004002|"edu packimporto #2"|8|1|81.41
+5004001|"edu packscholar #1"|19|2|81.12
+2003001|"exportiimporto #1"|7|38|81.06
+4002001|"importoedu pack #1"|17|57|80.75
+2002001|"importoimporto #1"|7|32|80.08
+1004001|"edu packamalg #1"|19|59|79.92
+2002001|"importoimporto #1"|9|41|79.75
+10016008|"corpamalgamalg #8"|19|22|79.06
+6008005|"namelesscorp #5"|18|30|79.05
+9014005|"edu packunivamalg #5"|9|23|79.02
+3002002|"importoexporti #2"|6|48|78.89
+6014002|"edu packbrand #2"|6|40|78.54
+9014011|"edu packunivamalg #11"|19|1|78.54
+6001001|"amalgcorp #1"|17|47|78.52
+5001002|"amalgscholar #2"|8|34|78.39
+10016003|"corpamalgamalg #3"|19|43|77.85
+5003001|"exportischolar #1"|18|45|77.08
+7012003|"importonameless #3"|19|42|76.98
+3001001|"amalgexporti #1"|17|23|76.85
+5004001|"edu packscholar #1"|9|6|76.34
+4003001|"exportiedu pack #1"|9|38|76.05
+5001001|"amalgscholar #1"|19|34|75.90
+7009005|"maxibrand #5"|19|37|75.64
+7001005|"amalgbrand #5"|19|50|75.20
+7015007|"scholarnameless #7"|8|44|73.89
+9009009|"maximaxi #9"|8|3|73.00
+9014002|"edu packunivamalg #2"|17|51|72.80
+5001001|"amalgscholar #1"|18|38|72.16
+1002001|"importoamalg #1"|9|47|71.74
+10001017|"amalgunivamalg #17"|19|15|71.28
+10004001|"edu packunivamalg #1"|19|12|70.47
+3004001|"edu packexporti #1"|19|38|70.30
+6008002|"namelesscorp #2"|18|21|69.93
+5004001|"edu packscholar #1"|19|35|69.16
+4002001|"importoedu pack #1"|17|9|68.90
+4003001|"exportiedu pack #1"|9|4|67.85
+7004007|"edu packbrand #7"|9|2|67.76
+2002001|"importoimporto #1"|19|35|67.42
+5003002|"exportischolar #2"|19|20|67.20
+4003001|"exportiedu pack #1"|18|58|67.06
+5001002|"amalgscholar #2"|8|8|66.96
+6010005|"univbrand #5"|9|43|66.87
+7013001|"exportinameless #1"|9|49|66.00
+2001002|"amalgimporto #2"|9|52|65.68
+10011009|"amalgamalgamalg #9"|9|40|65.22
+4003001|"exportiedu pack #1"|18|27|64.80
+1002001|"importoamalg #1"|8|1|64.48
+10008002|"namelessunivamalg #2"|9|46|64.17
+7001005|"amalgbrand #5"|17|26|63.92
+9013002|"exportiunivamalg #2"|19|50|63.90
+8005005|"scholarnameless #5"|17|19|63.70
+7004007|"edu packbrand #7"|9|14|63.60
+9011009|"amalgunivamalg #9"|8|32|63.51
+9007011|"brandmaxi #11"|19|26|63.13
+6005001|"scholarcorp #1"|17|30|63.12
+1004002|"edu packamalg #2"|6|39|63.08
+3002002|"importoexporti #2"|17|27|62.50
+6007003|"brandcorp #3"|19|46|61.20
+9015009|"scholarunivamalg #9"|18|40|59.93
+10012005|"importoamalgamalg #5"|17|29|58.77
+2001002|"amalgimporto #2"|17|47|58.31
+10012001|"importoamalgamalg #1"|18|27|58.15
+10016016|"corpamalgamalg #16"|18|15|57.72
+6008005|"namelesscorp #5"|18|46|57.38
+2001002|"amalgimporto #2"|6|5|57.29
+10011014|"amalgamalgamalg #14"|18|43|56.42
+1003002|"exportiamalg #2"|17|56|56.25
+4002002|"importoedu pack #2"|18|18|56.25
+4004002|"edu packedu pack #2"|8|8|55.86
+4003001|"exportiedu pack #1"|7|6|55.44
+9013009|"exportiunivamalg #9"|18|20|54.92
+4004002|"edu packedu pack #2"|17|6|54.60
+2001001|"amalgimporto #1"|19|26|54.45
+9015009|"scholarunivamalg #9"|8|47|54.20
+10015004|"scholaramalgamalg #4"|18|21|53.98
+4003001|"exportiedu pack #1"|8|12|53.85
+7004007|"edu packbrand #7"|17|8|53.20
+4002002|"importoedu pack #2"|19|28|53.13
+7008009|"namelessbrand #9"|19|1|53.13
+4004002|"edu packedu pack #2"|9|46|52.56
+10006002|"corpunivamalg #2"|9|18|52.50
+9016003|"corpunivamalg #3"|17|13|52.36
+1003002|"exportiamalg #2"|9|5|50.76
+3004002|"edu packexporti #2"|19|44|50.44
+8011009|"amalgmaxi #9"|19|23|50.16
+10012001|"importoamalgamalg #1"|9|48|50.14
+8007010|"brandnameless #10"|18|6|49.92
+2004002|"edu packimporto #2"|9|26|49.38
+6009003|"maxicorp #3"|7|5|48.89
+1002002|"importoamalg #2"|7|50|48.23
+10002011|"importounivamalg #11"|19|11|47.72
+9010009|"univunivamalg #9"|9|13|47.70
+9003003|"exportimaxi #3"|19|16|47.60
+3001002|"amalgexporti #2"|19|20|47.59
+1004001|"edu packamalg #1"|19|17|47.32
+8013007|"exportimaxi #7"|9|22|47.28
+3004001|"edu packexporti #1"|7|3|47.19
+4001002|"amalgedu pack #2"|9|43|47.16
+2002001|"importoimporto #1"|19|26|45.70
+9016003|"corpunivamalg #3"|9|22|45.20
+4001001|"amalgedu pack #1"|17|12|44.72
+6001002|"amalgcorp #2"|17|25|44.70
+5003002|"exportischolar #2"|8|21|43.89
+7010009|"univnameless #9"|8|13|43.86
+9011009|"amalgunivamalg #9"|8|4|43.30
+9013009|"exportiunivamalg #9"|8|43|43.20
+5003001|"exportischolar #1"|18|34|42.56
+8003003|"exportinameless #3"|18|16|42.30
+10011014|"amalgamalgamalg #14"|9|20|42.30
+5003001|"exportischolar #1"|19|5|41.73
+8004003|"edu packnameless #3"|7|51|41.31
+2004002|"edu packimporto #2"|18|44|40.98
+7009005|"maxibrand #5"|19|6|40.86
+10001017|"amalgunivamalg #17"|18|46|40.80
+5004001|"edu packscholar #1"|19|6|40.56
+7013007|"exportinameless #7"|9|51|40.05
+3004001|"edu packexporti #1"|18|8|39.78
+2001002|"amalgimporto #2"|9|2|39.45
+5001002|"amalgscholar #2"|18|21|39.15
+7013009|"exportinameless #9"|9|47|38.11
+4004001|"edu packedu pack #1"|18|24|37.80
+9015009|"scholarunivamalg #9"|9|8|37.55
+7016007|"corpnameless #7"|9|52|36.96
+7007004|"brandbrand #4"|18|23|36.38
+10016017|"corpamalgamalg #17"|19|33|36.10
+4002002|"importoedu pack #2"|17|54|35.70
+1002001|"importoamalg #1"|17|15|35.64
+3001001|"amalgexporti #1"|19|23|34.97
+3003001|"exportiexporti #1"|19|45|34.86
+2001002|"amalgimporto #2"|8|22|34.65
+1001002|"amalgamalg #2"|9|10|34.32
+5002001|"importoscholar #1"|17|4|34.30
+3001001|"amalgexporti #1"|19|27|33.99
+3003002|"exportiexporti #2"|6|54|32.90
+10009015|"maxiunivamalg #15"|9|14|32.64
+10016016|"corpamalgamalg #16"|17|30|32.32
+1003001|"exportiamalg #1"|18|6|32.18
+9009009|"maximaxi #9"|18|55|30.39
+8002009|"importonameless #9"|19|8|29.84
+6005001|"scholarcorp #1"|19|24|29.75
+3004001|"edu packexporti #1"|19|34|29.40
+8005005|"scholarnameless #5"|9|15|29.20
+9011009|"amalgunivamalg #9"|6|48|28.86
+10016006|"corpamalgamalg #6"|17|24|27.82
+5004001|"edu packscholar #1"|17|28|27.72
+10004004|"edu packunivamalg #4"|19|30|27.67
+1002002|"importoamalg #2"|7|47|27.56
+1001002|"amalgamalg #2"|9|33|26.88
+10013015|"exportiamalgamalg #15"|18|18|26.72
+8012010|"importomaxi #10"|6|42|26.67
+3003001|"exportiexporti #1"|18|29|26.66
+10006002|"corpunivamalg #2"|6|31|26.40
+7013009|"exportinameless #9"|19|47|26.28
+9009002|"maximaxi #2"|19|46|26.14
+9015009|"scholarunivamalg #9"|18|26|25.96
+3004002|"edu packexporti #2"|18|53|25.50
+3002001|"importoexporti #1"|19|34|25.16
+10004004|"edu packunivamalg #4"|7|25|25.12
+5004002|"edu packscholar #2"|6|4|25.08
+1002001|"importoamalg #1"|19|10|25.01
+9012003|"importounivamalg #3"|18|52|24.84
+6003008|"exporticorp #8"|9|45|24.64
+9001005|"amalgmaxi #5"|18|57|24.56
+6003007|"exporticorp #7"|17|55|24.44
+9015009|"scholarunivamalg #9"|17|28|24.36
+10012017|"importoamalgamalg #17"|9|11|24.36
+2004002|"edu packimporto #2"|19|1|24.00
+2001002|"amalgimporto #2"|17|33|23.92
+5004002|"edu packscholar #2"|18|46|23.68
+10012011|"importoamalgamalg #11"|8|22|23.04
+5003002|"exportischolar #2"|18|35|22.82
+6005001|"scholarcorp #1"|19|26|22.49
+10002011|"importounivamalg #11"|9|11|22.44
+9007003|"brandmaxi #3"|19|11|22.32
+7002003|"importobrand #3"|19|0|22.24
+3004002|"edu packexporti #2"|19|22|22.08
+6005001|"scholarcorp #1"|17|33|21.92
+10014016|"edu packamalgamalg #16"|17|23|21.72
+3003001|"exportiexporti #1"|6|58|21.70
+5001001|"amalgscholar #1"|17|17|21.48
+1004002|"edu packamalg #2"|9|17|21.44
+5004002|"edu packscholar #2"|17|30|21.28
+4003001|"exportiedu pack #1"|9|56|21.12
+9006008|"corpmaxi #8"|17|44|20.61
+6006004|"corpcorp #4"|8|9|20.46
+9014002|"edu packunivamalg #2"|8|26|20.16
+9015011|"scholarunivamalg #11"|17|22|19.44
+1001002|"amalgamalg #2"|19|30|19.41
+4003001|"exportiedu pack #1"|18|49|19.20
+2003001|"exportiimporto #1"|19|33|18.45
+9013002|"exportiunivamalg #2"|19|57|18.25
+10011009|"amalgamalgamalg #9"|17|3|18.24
+6015004|"scholarbrand #4"|9|44|18.00
+1001002|"amalgamalg #2"|17|13|17.84
+8016004|"corpmaxi #4"|19|58|17.77
+8008005|"namelessnameless #5"|17|47|17.45
+5003001|"exportischolar #1"|8|32|17.40
+6012002|"importobrand #2"|18|59|17.32
+4001001|"amalgedu pack #1"|18|45|17.31
+10003004|"exportiunivamalg #4"|18|11|17.19
+10013015|"exportiamalgamalg #15"|17|59|16.83
+4004001|"edu packedu pack #1"|19|58|16.15
+5001001|"amalgscholar #1"|8|50|15.84
+1001002|"amalgamalg #2"|17|47|14.56
+1002001|"importoamalg #1"|17|36|13.78
+10009015|"maxiunivamalg #15"|9|4|13.60
+9014011|"edu packunivamalg #11"|17|56|13.50
+9011009|"amalgunivamalg #9"|9|36|13.32
+6005001|"scholarcorp #1"|19|40|13.25
+6008002|"namelesscorp #2"|18|8|13.05
+7004006|"edu packbrand #6"|18|53|13.00
+3001002|"amalgexporti #2"|17|38|12.18
+6005007|"scholarcorp #7"|19|45|12.15
+5003001|"exportischolar #1"|17|1|11.88
+9007003|"brandmaxi #3"|19|52|11.71
+3002001|"importoexporti #1"|7|3|11.56
+10016008|"corpamalgamalg #8"|19|38|10.88
+3001002|"amalgexporti #2"|18|54|10.80
+6011008|"amalgbrand #8"|19|44|10.72
+1004002|"edu packamalg #2"|9|40|10.53
+6008002|"namelesscorp #2"|18|47|10.08
+9013009|"exportiunivamalg #9"|8|10|9.80
+3002002|"importoexporti #2"|19|24|9.46
+7015002|"scholarnameless #2"|8|25|8.91
+6003008|"exporticorp #8"|7|36|8.84
+4001002|"amalgedu pack #2"|19|38|8.72
+5002001|"importoscholar #1"|9|21|8.42
+10016008|"corpamalgamalg #8"|18|12|8.05
+4004002|"edu packedu pack #2"|9|15|8.00
+5003001|"exportischolar #1"|19|12|7.79
+5001002|"amalgscholar #2"|8|59|7.64
+9012008|"importounivamalg #8"|19|56|7.36
+10013015|"exportiamalgamalg #15"|19|26|7.35
+8008005|"namelessnameless #5"|6|43|6.73
+4002001|"importoedu pack #1"|18|5|6.69
+1003001|"exportiamalg #1"|9|3|6.68
+6001001|"amalgcorp #1"|18|10|6.12
+7016001|"corpnameless #1"|19|28|6.10
+10013013|"exportiamalgamalg #13"|19|26|5.55
+4002002|"importoedu pack #2"|17|21|4.17
+2003001|"exportiimporto #1"|9|42|3.76
+6014002|"edu packbrand #2"|9|11|3.60
+5001001|"amalgscholar #1"|9|27|3.12
+6016003|"corpbrand #3"|18|26|2.88
+5004001|"edu packscholar #1"|7|7|2.48
+9003003|"exportimaxi #3"|18|55|1.71
+1002002|"importoamalg #2"|19|53|1.51
+6012002|"importobrand #2"|8|43|0.81
+1002002|"importoamalg #2"|19|18|0.54
+6006003|"corpcorp #3"|18|45|0.37
+1002001|"importoamalg #1"|18|53|0.00
+1002001|"importoamalg #1"|19|24|0.00
+1004001|"edu packamalg #1"|17|23|0.00
+2001002|"amalgimporto #2"|18|12|0.00
+2003001|"exportiimporto #1"|9|49|0.00
+3001001|"amalgexporti #1"|17|5|0.00
+3002001|"importoexporti #1"|19|0|0.00
+3003001|"exportiexporti #1"|19|33|0.00
+4002001|"importoedu pack #1"|18|10|0.00
+4002001|"importoedu pack #1"|19|35|0.00
+4002001|"importoedu pack #1"|19|49|0.00
+4004002|"edu packedu pack #2"|7|47|0.00
+5003001|"exportischolar #1"|17|36|0.00
+5004002|"edu packscholar #2"|8|7|0.00
+6010004|"univbrand #4"|18|1|0.00
+6010004|"univbrand #4"|19|35|0.00
+6011005|"amalgbrand #5"|19|31|0.00
+7007004|"brandbrand #4"|18|52|0.00
+7009005|"maxibrand #5"|19|46|0.00
+7010003|"univnameless #3"|18|56|0.00
+7010003|"univnameless #3"|19|59|0.00
+7011001|"amalgnameless #1"|6|53|0.00
+7011001|"amalgnameless #1"|9|18|0.00
+7014001|"edu packnameless #1"|9|53|0.00
+7016001|"corpnameless #1"|17|12|0.00
+8003003|"exportinameless #3"|19|37|0.00
+8005005|"scholarnameless #5"|18|18|0.00
+8005008|"scholarnameless #8"|19|24|0.00
+8010009|"univmaxi #9"|6|43|0.00
+9003003|"exportimaxi #3"|19|28|0.00
+9009009|"maximaxi #9"|18|31|0.00
+9015009|"scholarunivamalg #9"|19|9|0.00
+10001017|"amalgunivamalg #17"|18|51|0.00
+10010001|"univamalgamalg #1"|18|42|0.00

@@ -421,10 +421,16 @@ clean:
 
 EXTENSION_REPOSITORY_PATH ?= build/release/repository
 EXTENSION_BUCKET ?= duckdb-core-extensions
+SIGNED_EXTENSIONS_DIR ?= $(EXTENSION_REPOSITORY_PATH)
+EXTENSION_SIGNING_PUBLIC_KEY_FILE ?=
 
 .PHONY: upload-extensions
 upload-extensions:
 	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/extension-upload-repository.sh "$(EXTENSION_REPOSITORY_PATH)" "$(EXTENSION_BUCKET)"
+
+.PHONY: verify-extension-signing
+verify-extension-signing:
+	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/verify-extension-signing.sh "$(SIGNED_EXTENSIONS_DIR)" "$(EXTENSION_SIGNING_PUBLIC_KEY_FILE)"
 
 define cmake_build
 	mkdir -p ./$(1) && \
@@ -471,6 +477,9 @@ wasm_threads: ${EXTENSION_CONFIG_STEP}
 
 cldebug: ${EXTENSION_CONFIG_STEP}
 	$(call cmake_build,build/cldebug,Debug,-DENABLE_SANITIZER=0 -DENABLE_UBSAN=0)
+
+codecov: ${EXTENSION_CONFIG_STEP}
+	$(call cmake_build,build/codecov,Release,-DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCOVERAGE=1)
 
 clreldebug:
 	mkdir -p ./build/clreldebug && \
@@ -541,7 +550,8 @@ TEST_CONFIGS := \
 	test/configs/force_storage_mmap.json \
 	test/configs/verify_aggregate_state_export.json \
 	test/configs/verify_functions.json \
-	test/configs/shredded_vector.json
+	test/configs/shredded_vector.json \
+	test/configs/transformer_trampoline_style.json
 
 test_configs:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))
@@ -701,6 +711,10 @@ spell_tools:
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
 
+.PHONY: extension-patch-check
+extension-patch-check:
+	cmake -DCONFIG_DIR=.github/config -DPATCH_DIR=.github/patches/extensions -P scripts/check_extension_patches.cmake
+
 .PHONY: format_venv
 format_venv:
 	@if [ ! -x "$(FORMAT_PYTHON)" ]; then \
@@ -745,7 +759,7 @@ tidy-check-diff:
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
 	cd ../../ && \
-	git diff origin/${GIT_BASE_BRANCH} . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | $(PYTHON) scripts/clang-tidy-diff.py -path build/tidy -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
+	git diff origin/${GIT_BASE_BRANCH} . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' ':(exclude)examples/embedded-c' | $(PYTHON) scripts/clang-tidy-diff.py -path build/tidy -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
 
 tidy-fix:
 	mkdir -p ./build/tidy && \
@@ -768,7 +782,15 @@ format-fix: $(FORMAT_SETUP_DEPS)
 format-parser-grammar: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/parser/peg/transformer/peg_transformer.hpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated_trampoline.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
+
+.PHONY: parser-grammar-tools parser-grammar
+parser-grammar-tools: $(FORMAT_SETUP_DEPS)
+	@$(FORMAT_PYTHON) -m pip show pyyaml >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install PyYAML
+
+parser-grammar: parser-grammar-tools
+	PYTHON="$(FORMAT_PYTHON)" ./scripts/parser/build_grammar.sh
 
 .PHONY: check-extension-entries
 check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
@@ -842,6 +864,8 @@ generate-files:
 	$(PYTHON) scripts/generate_util.py
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_enum_util.py
+	$(PYTHON) scripts/generate_html_template.py
+	$(MAKE) parser-grammar
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 

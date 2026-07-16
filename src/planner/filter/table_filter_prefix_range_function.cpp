@@ -134,6 +134,32 @@ public:
 		return found_count;
 	}
 
+	template <typename T, typename CONVERTER>
+	idx_t LookupKeys(Vector &keys, const SelectionVector &sel, SelectionVector &result_sel, idx_t count) const {
+		UnifiedVectorFormat key_data;
+		keys.ToUnifiedFormat(key_data);
+
+		const auto keys_data = UnifiedVectorFormat::GetData<T>(key_data);
+		idx_t found_count = 0;
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = sel.get_index_unsafe(i);
+			const auto key_idx = key_data.sel->get_index(idx);
+			if (!key_data.validity.RowIsValid(key_idx)) {
+				continue;
+			}
+			const U comparable = CONVERTER::Convert(keys_data[key_idx]);
+			const U y = comparable - min;
+			const U bit_idx = y >> shift;
+			const uint8_t in_range = y <= span;
+			const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
+			const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
+
+			result_sel.set_index(found_count, i);
+			found_count += bit & in_range;
+		}
+		return found_count;
+	}
+
 	FilterPropagateResult LookupRange(U lower_bound, U upper_bound) const {
 		const U lb_y = lower_bound - min;
 		const U lb_bit_idx = lb_y >> shift;
@@ -270,6 +296,14 @@ public:
 		return bitmap.template LookupKeys<T, NumericConverter<T>>(keys, result_sel, count);
 	}
 
+	idx_t LookupKeys(Vector &keys, const SelectionVector &sel, SelectionVector &result_sel,
+	                 idx_t count) const override {
+		if (keys.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			return bitmap.template LookupOne<T, NumericConverter<T>>(keys.GetValue(0)) ? count : 0;
+		}
+		return bitmap.template LookupKeys<T, NumericConverter<T>>(keys, sel, result_sel, count);
+	}
+
 	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
 		const auto lb = lower_bound.GetValueUnsafe<T>();
 		const auto ub = upper_bound.GetValueUnsafe<T>();
@@ -323,6 +357,14 @@ public:
 			return bitmap.template LookupOne<string_t, StringPrefixConverter>(keys.GetValue(0)) ? count : 0;
 		}
 		return bitmap.template LookupKeys<string_t, StringPrefixConverter>(keys, result_sel, count);
+	}
+
+	idx_t LookupKeys(Vector &keys, const SelectionVector &sel, SelectionVector &result_sel,
+	                 idx_t count) const override {
+		if (keys.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			return bitmap.template LookupOne<string_t, StringPrefixConverter>(keys.GetValue(0)) ? count : 0;
+		}
+		return bitmap.template LookupKeys<string_t, StringPrefixConverter>(keys, sel, result_sel, count);
 	}
 
 	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
@@ -547,26 +589,31 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 	if (!data.filter || !data.filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	switch (input.stats.GetStatsType()) {
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &stats = *column_stats;
+	switch (stats.GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS: {
-		if (!NumericStats::HasMinMax(input.stats)) {
+		if (!NumericStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		const auto min = NumericStats::Min(input.stats);
-		const auto max = NumericStats::Max(input.stats);
+		const auto min = NumericStats::Min(stats);
+		const auto max = NumericStats::Max(stats);
 		if (min > max) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		return data.filter->LookupRange(min, max);
 	}
 	case StatisticsType::STRING_STATS: {
-		if (!StringStats::HasMinMax(input.stats)) {
+		if (!StringStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		// String stats may contain raw parquet bytes that are not valid UTF-8. Reconstruct them as BLOBs so the
 		// prefix-range comparable logic can inspect the raw bytes without value-construction validation.
-		return data.filter->LookupRange(Value::BLOB_RAW(StringStats::Min(input.stats)),
-		                                Value::BLOB_RAW(StringStats::Max(input.stats)));
+		return data.filter->LookupRange(Value::BLOB_RAW(StringStats::Min(stats)),
+		                                Value::BLOB_RAW(StringStats::Max(stats)));
 	}
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;

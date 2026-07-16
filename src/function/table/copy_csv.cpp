@@ -22,6 +22,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 
 namespace duckdb {
 
@@ -274,8 +275,8 @@ public:
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(CSVReaderOptions &options, FileSystem &fs, const string &file_path,
-	                   FileCompressionType compression)
-	    : writer(options, fs, file_path, compression) {
+	                   FileCompressionType compression, QueryContext context)
+	    : writer(options, fs, file_path, compression, context) {
 	}
 
 	idx_t FileSize() {
@@ -325,8 +326,8 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
                                                                const string &file_path) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
-	auto global_data =
-	    make_uniq<GlobalWriteCSVData>(options, FileSystem::GetFileSystem(context), file_path, options.compression);
+	auto global_data = make_uniq<GlobalWriteCSVData>(options, FileSystem::GetFileSystem(context), file_path,
+	                                                 options.compression, context);
 
 	global_data->writer.Initialize();
 

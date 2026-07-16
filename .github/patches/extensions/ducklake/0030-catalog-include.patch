@@ -1,0 +1,204 @@
+--- a/src/functions/base_metadata_function.cpp
++++ b/src/functions/base_metadata_function.cpp
+@@ -1,4 +1,5 @@
+ #include "functions/ducklake_table_functions.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/main/attached_database.hpp"
+ #include "duckdb/main/database_manager.hpp"
+ 
+--- a/src/functions/ducklake_add_data_files.cpp
++++ b/src/functions/ducklake_add_data_files.cpp
+@@ -1,4 +1,5 @@
+ #include "functions/ducklake_table_functions.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "storage/ducklake_transaction.hpp"
+ #include "common/ducklake_util.hpp"
+--- a/src/functions/ducklake_cleanup_files.cpp
++++ b/src/functions/ducklake_cleanup_files.cpp
+@@ -1,4 +1,5 @@
+ #include "functions/ducklake_table_functions.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/common/file_system.hpp"
+ 
+ #include "duckdb/common/operator/subtract.hpp"
+--- a/src/functions/ducklake_expire_snapshots.cpp
++++ b/src/functions/ducklake_expire_snapshots.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/common/operator/subtract.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "functions/ducklake_table_functions.hpp"
+ #include "duckdb/main/attached_database.hpp"
+ #include "duckdb/main/database_manager.hpp"
+--- a/src/functions/ducklake_flush_inlined_data.cpp
++++ b/src/functions/ducklake_flush_inlined_data.cpp
+@@ -1,4 +1,5 @@
+ #include "functions/ducklake_table_functions.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "duckdb/execution/physical_plan_generator.hpp"
+--- a/src/functions/ducklake_options.cpp
++++ b/src/functions/ducklake_options.cpp
+@@ -1,4 +1,5 @@
+ #include "functions/ducklake_table_functions.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "storage/ducklake_transaction.hpp"
+ #include "storage/ducklake_catalog.hpp"
+ #include "storage/ducklake_metadata_manager.hpp"
+--- a/src/functions/ducklake_set_commit_message.cpp
++++ b/src/functions/ducklake_set_commit_message.cpp
+@@ -1,4 +1,5 @@
+ #include "functions/ducklake_table_functions.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "storage/ducklake_transaction.hpp"
+ #include "storage/ducklake_catalog.hpp"
+ #include "storage/ducklake_table_entry.hpp"
+--- a/src/functions/ducklake_set_option.cpp
++++ b/src/functions/ducklake_set_option.cpp
+@@ -1,4 +1,5 @@
+ #include "functions/ducklake_table_functions.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/main/config.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "storage/ducklake_transaction.hpp"
+--- a/src/functions/ducklake_table_insertions.cpp
++++ b/src/functions/ducklake_table_insertions.cpp
+@@ -1,4 +1,5 @@
+ #include "functions/ducklake_table_functions.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "storage/ducklake_transaction.hpp"
+ #include "common/ducklake_util.hpp"
+ #include "storage/ducklake_transaction_changes.hpp"
+--- a/src/include/functions/ducklake_table_functions.hpp
++++ b/src/include/functions/ducklake_table_functions.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/function/table_function.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+ #include "duckdb/function/function_set.hpp"
+ 
+--- a/src/include/storage/ducklake_macro_entry.hpp
++++ b/src/include/storage/ducklake_macro_entry.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+ #include "duckdb/common/mutex.hpp"
+ #include "common/index.hpp"
+--- a/src/include/storage/ducklake_schema_entry.hpp
++++ b/src/include/storage/ducklake_schema_entry.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+ #include "storage/ducklake_catalog_set.hpp"
+--- a/src/include/storage/ducklake_table_entry.hpp
++++ b/src/include/storage/ducklake_table_entry.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+ #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+ #include "storage/ducklake_stats.hpp"
+--- a/src/include/storage/ducklake_transaction.hpp
++++ b/src/include/storage/ducklake_transaction.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "ducklake_macro_entry.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "common/ducklake_data_file.hpp"
+ #include "common/ducklake_snapshot.hpp"
+--- a/src/include/storage/ducklake_view_entry.hpp
++++ b/src/include/storage/ducklake_view_entry.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+ #include "duckdb/common/mutex.hpp"
+ #include "common/index.hpp"
+--- a/src/storage/ducklake_catalog.cpp
++++ b/src/storage/ducklake_catalog.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/ducklake_catalog.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/planner/logical_operator.hpp"
+ #include "duckdb/main/database_manager.hpp"
+ 
+--- a/src/storage/ducklake_initializer.cpp
++++ b/src/storage/ducklake_initializer.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/main/attached_database.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/transaction/meta_transaction.hpp"
+ #include "duckdb/storage/data_table.hpp"
+--- a/src/storage/ducklake_insert.cpp
++++ b/src/storage/ducklake_insert.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/ducklake_catalog.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/main/config.hpp"
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+ #include "duckdb/execution/physical_plan_generator.hpp"
+--- a/src/storage/ducklake_scan.cpp
++++ b/src/storage/ducklake_scan.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/ducklake_scan.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "storage/ducklake_catalog.hpp"
+--- a/src/storage/ducklake_schema_entry.cpp
++++ b/src/storage/ducklake_schema_entry.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/ducklake_schema_entry.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "duckdb/catalog/similar_catalog_entry.hpp"
+--- a/src/storage/ducklake_storage.cpp
++++ b/src/storage/ducklake_storage.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/main/attached_database.hpp"
+ #include "duckdb/parser/parsed_data/attach_info.hpp"
+ 
+--- a/src/storage/ducklake_table_entry.cpp
++++ b/src/storage/ducklake_table_entry.cpp
+@@ -1,4 +1,5 @@
+ #include "common/ducklake_types.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "common/ducklake_util.hpp"
+--- a/src/storage/ducklake_transaction.cpp
++++ b/src/storage/ducklake_transaction.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/ducklake_transaction.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/common/file_system.hpp"
+ 
+--- a/src/storage/ducklake_view_entry.cpp
++++ b/src/storage/ducklake_view_entry.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/ducklake_view_entry.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+ #include "duckdb/parser/parsed_data/create_view_info.hpp"
+ #include "duckdb/parser/parser.hpp"

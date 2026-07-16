@@ -421,7 +421,8 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (func.Function().GetName() != "prefix") {
+	auto &function_name = func.Function().GetName();
+	if (function_name != "prefix" && function_name != "starts_with" && function_name != "^@") {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (func.GetChildren()[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
@@ -501,15 +502,16 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 
-	//! We have a prefix - we can push down the prefix using a bound (x >= PREFIX AND x <= prefix + 1)
+	//! We have a prefix - we can push down the prefix using a bound (x >= PREFIX AND x < next_prefix)
 	// Note that we still need to execute the LIKE filter
 	auto lower_bound =
 	    CreateComparisonExpression(*func.GetChildren()[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix));
-	prefix[prefix.size() - 1]++;
-	auto upper_bound =
-	    CreateComparisonExpression(*func.GetChildren()[0], ExpressionType::COMPARE_LESSTHAN, Value(prefix));
 	table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(lower_bound)));
-	table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
+	if (Utf8Proc::FindNextLegalUTF8(prefix)) {
+		auto upper_bound =
+		    CreateComparisonExpression(*func.GetChildren()[0], ExpressionType::COMPARE_LESSTHAN, Value(prefix));
+		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
+	}
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
@@ -1106,10 +1108,10 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 				result = AddConstantComparison(info_list, info);
 			} else {
 				D_ASSERT(upper_is_scalar);
-				const auto type =
-				    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
-				auto left = upper_bound.Copy();
-				auto right = input.Copy();
+				const auto type = lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+				                                  : ExpressionType::COMPARE_GREATERTHAN;
+				auto left = input.Copy();
+				auto right = lower_bound.Copy();
 				auto lower_comp = BoundComparisonExpression::Create(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(*lower_comp);
 			}

@@ -1,6 +1,5 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
-#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 
@@ -17,7 +16,7 @@ void VariantUtils::UnshredVariantData(Vector &input, Vector &output, idx_t count
 	//! Traverse the (shredded) variant directly through the iterator and encode it into the canonical
 	//! unshredded layout - no intermediate vector<VariantValue> materialization is required.
 	VariantIterator state(unshredded, shredded);
-	VariantValue::ToVARIANT(state, count, output);
+	ToVariant(state, count, output);
 }
 
 } // namespace duckdb

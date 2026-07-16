@@ -55,7 +55,47 @@ inline void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 		}
 		auto &state = *states[i].GetValue();
 		aggr_input_data.allocator.AlignNext();
-		functions.AppendRow(aggr_input_data.allocator, state.linked_list, input_data, i);
+		functions.AppendRows(aggr_input_data.allocator, state.linked_list, input_data, i, 1);
+	}
+}
+
+//! Clustered variant of ListUpdateFunction - appends the rows of each run to that run's state.
+//! Contiguous runs are appended in a single batch; scattered runs are appended row by row.
+template <bool IGNORE_NULLS = false>
+inline void ListClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
+                              const ClusteredAggr &clustered, idx_t count) {
+	D_ASSERT(input_count == 1);
+	auto &input = inputs[0];
+	RecursiveUnifiedVectorFormat input_data;
+	Vector::RecursiveToUnifiedFormat(input, input_data);
+
+	ListSegmentFunctions functions;
+	GetSegmentDataFunctions(functions, input.GetType());
+
+	for (idx_t run_idx = 0; run_idx < clustered.n_group_runs; run_idx++) {
+		auto &run = clustered.group_runs[run_idx];
+		auto &state = *reinterpret_cast<ListAggState *>(run.state);
+		auto run_sel = run.sel;
+
+		if (!IGNORE_NULLS && !run_sel) {
+			// contiguous run covering [0, run.count) without NULL filtering - append in a single batch
+			aggr_input_data.allocator.AlignNext();
+			functions.AppendRows(aggr_input_data.allocator, state.linked_list, input_data, 0, run.count);
+			continue;
+		}
+
+		// scattered run and/or NULL filtering - append the rows one by one
+		for (idx_t k = 0; k < run.count; k++) {
+			idx_t entry_idx = run_sel ? run_sel[k] : k;
+			if (IGNORE_NULLS) {
+				const auto idx = input_data.unified.sel->get_index(entry_idx);
+				if (!input_data.unified.validity.RowIsValid(idx)) {
+					continue;
+				}
+			}
+			aggr_input_data.allocator.AlignNext();
+			functions.AppendRows(aggr_input_data.allocator, state.linked_list, input_data, entry_idx, 1);
+		}
 	}
 }
 

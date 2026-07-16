@@ -17,9 +17,11 @@ ByName <- 'BY' 'NAME'
 
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
 ResultModifiers <- OrderByClause? LimitOffset?
-LimitOffset <- LimitOffsetClause / OffsetLimitClause
+LimitOffset <- LimitOffsetClause / OffsetFetchClause / OffsetLimitClause / FetchOnlyClause
 LimitOffsetClause <- LimitClause OffsetClause?
 OffsetLimitClause <- OffsetClause LimitClause?
+OffsetFetchClause <- OffsetClause FetchClause
+FetchOnlyClause <- FetchClause
 TableStatement <- 'TABLE' BaseTableName
 OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
 SimpleSelectParens <- Parens(SimpleSelect)
@@ -64,7 +66,9 @@ TableUnpivotClauseBody <- UnpivotHeader 'FOR' UnpivotValueList+
 
 PivotHeader <- BaseExpression
 PivotValueList <- PivotHeader 'IN' PivotValueTarget
-PivotValueTarget <- Identifier / PivotTargetList
+PivotValueTarget <- PivotEnumTarget / PivotListTarget
+PivotEnumTarget <- Identifier
+PivotListTarget <- PivotTargetList
 UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
 PivotTargetList <- Parens(TargetList)
 UnpivotTargetList <- Parens(TargetList)
@@ -98,8 +102,9 @@ AtUnit <- VersionAtUnit / TimestampAtUnit
 VersionAtUnit <- 'VERSION'
 TimestampAtUnit <- 'TIMESTAMP'
 
-JoinClause <- RegularJoinClause / JoinWithoutOnClause
+JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause
 RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
+JoinByClause <- 'JOIN' 'BY' Parens('TYPE' ColLabel) TableRef JoinQualifier
 Asof <- 'ASOF'
 JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
 JoinQualifier <- OnClause / UsingClause
@@ -178,6 +183,9 @@ LimitValue <- LimitAll / LimitLiteralPercent / LimitExpression
 LimitAll <- 'ALL'
 LimitLiteralPercent <- NumberLiteral 'PERCENT'
 LimitExpression <- Expression '%'?
+FetchClause <- 'FETCH' FirstOrNext FetchValue RowOrRows 'ONLY'
+FirstOrNext <- 'FIRST' / 'NEXT'
+FetchValue <- Expression
 
 AliasedExpression <- ColIdExpression / ExpressionAsCollabel / ExpressionOptIdentifier
 ColIdExpression <- ColId ':' Expression

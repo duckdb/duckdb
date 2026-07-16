@@ -35,6 +35,8 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  parse_iterator.cpp
+  statement_iterator.cpp
   database_file_path_manager.cpp
   database_path_and_type.cpp
   database_manager.cpp

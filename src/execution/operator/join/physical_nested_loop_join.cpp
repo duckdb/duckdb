@@ -4,6 +4,7 @@
 #include "duckdb/execution/nested_loop_join.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 

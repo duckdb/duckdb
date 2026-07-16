@@ -219,9 +219,8 @@ using APPROX_QUANTILE_EXPORT_TYPE =
 
 void ApproxQuantileExportState(Vector &state_vector, AggregateFinalizeInputData &aggr_input_data, Vector &result,
                                idx_t count, idx_t offset) {
-	D_ASSERT(offset == 0);
 	auto states = state_vector.Values<ApproxQuantileState *>();
-	auto writer = FlatVector::Writer<APPROX_QUANTILE_EXPORT_TYPE>(result, count);
+	auto writer = FlatVector::Writer<APPROX_QUANTILE_EXPORT_TYPE>(result, count, offset);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
 		if (!state.h || state.pos == 0) {

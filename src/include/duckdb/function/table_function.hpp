@@ -13,19 +13,18 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
-#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/column_index.hpp"
-#include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
-#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
+enum class TablePartitionInfo : uint8_t;
+struct PartitionStatistics;
 
 //! Controls how a table function manages parallelism.
 enum class TableFunctionParallelism : uint8_t {
@@ -49,6 +48,9 @@ struct OperatorMetrics;
 enum class OrderByColumnType : uint8_t;
 enum class OrderType : uint8_t;
 enum class OrderByStatistics : uint8_t;
+struct RowGroupOrderOptions;
+class LogicalOperator;
+class Binder;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -185,6 +187,8 @@ public:
 	optional_ptr<GlobalTableFunctionState> global_state;
 	AsyncResult async_result {};
 	AsyncResultsExecutionMode results_execution_mode {AsyncResultsExecutionMode::SYNCHRONOUS};
+	//! Interrupt state of the calling task, so the function might park and wake-up by returning a taskless Blocked res
+	optional_ptr<const InterruptState> interrupt_state;
 };
 
 struct TableFunctionPartitionInput {
@@ -194,6 +198,13 @@ struct TableFunctionPartitionInput {
 
 	optional_ptr<const FunctionData> bind_data;
 	const vector<column_t> &partition_ids;
+};
+
+struct TableFunctionProjectionExpressionInput {
+	const LogicalGet &get;
+	const Expression &expr;
+	//! Position of pushed down column within get, usage: get.GetColumnIds()[column_index]
+	ProjectionIndex column_index;
 };
 
 struct TableFunctionToStringInput {
@@ -348,8 +359,8 @@ typedef void (*table_function_serialize_t)(Serializer &serializer, const optiona
                                            const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
-typedef void (*table_function_type_pushdown_t)(ClientContext &context, optional_ptr<FunctionData> bind_data,
-                                               const unordered_map<idx_t, LogicalType> &new_column_types);
+typedef bool (*table_function_projection_expression_pushdown_t)(ClientContext &context,
+                                                                const TableFunctionProjectionExpressionInput &input);
 typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext &context,
                                                                   TableFunctionPartitionInput &input);
 
@@ -470,8 +481,10 @@ public:
 	table_function_get_partition_data_t get_partition_data;
 	//! (Optional) returns extra bind info
 	table_function_get_bind_info_t get_bind_info;
-	//! (Optional) pushes down type information to scanner, returns true if pushdown was successful
-	table_function_type_pushdown_t type_pushdown;
+	//! (Optional) pushes down projection expressions like len() in "SELECT len(str)" or
+	//! casts like "col as UINTEGER" in "SELECT col::UINTEGER" to scanner.
+	//! Returns true if pushdown was successful
+	table_function_projection_expression_pushdown_t projection_expression_pushdown;
 	//! (Optional) allows injecting a custom MultiFileReader implementation
 	table_function_get_multi_file_reader_t get_multi_file_reader;
 	//! (Optional) If this scanner supports filter pushdown, but not to all data types

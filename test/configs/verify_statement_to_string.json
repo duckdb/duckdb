@@ -4,6 +4,12 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
+      "reason": "The trampoline transformer skeleton only supports a small use.gram slice; reparsing stringified statements requires SetStatement support",
+      "paths": [
+        "test/sql/peg_parser/transformer/use_statement_trampoline.test"
+      ]
+    },
+    {
       "reason": "Different error message",
       "paths": [
         "test/sql/error/lineitem_errors.test",

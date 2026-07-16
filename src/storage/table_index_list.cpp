@@ -12,6 +12,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -159,7 +160,8 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 	auto &catalog = table_info.GetDB().GetCatalog();
 	auto schema = table_info.GetSchemaName();
 	auto table_name = table_info.GetTableName();
-	auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
+	auto &table_entry =
+	    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), schema, table_name));
 	auto &table = table_entry.Cast<DuckTableEntry>();
 
 	vector<LogicalType> column_types;

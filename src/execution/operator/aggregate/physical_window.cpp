@@ -8,6 +8,8 @@
 #include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -595,7 +597,7 @@ void WindowGlobalSourceState::CreateTaskList() {
 
 	//	Schedule the largest group on as many threads as possible
 	auto &ts = TaskScheduler::GetScheduler(client);
-	const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
+	const auto threads = ts.NumberOfThreads();
 
 	const auto &max_block = partition_blocks.front();
 

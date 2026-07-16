@@ -10,6 +10,7 @@
 
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
