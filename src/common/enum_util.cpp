@@ -124,6 +124,8 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -1179,6 +1181,25 @@ const char* EnumUtil::ToChars<ChunkInfoType>(ChunkInfoType value) {
 template<>
 ChunkInfoType EnumUtil::FromString<ChunkInfoType>(const char *value) {
 	return static_cast<ChunkInfoType>(StringUtil::StringToEnum(GetChunkInfoTypeValues(), 3, "ChunkInfoType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetClaimStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ClaimState::IDLE), "IDLE" },
+		{ static_cast<uint32_t>(ClaimState::PENDING), "PENDING" },
+		{ static_cast<uint32_t>(ClaimState::MATERIALIZED), "MATERIALIZED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ClaimState>(ClaimState value) {
+	return StringUtil::EnumToString(GetClaimStateValues(), 3, "ClaimState", static_cast<uint32_t>(value));
+}
+
+template<>
+ClaimState EnumUtil::FromString<ClaimState>(const char *value) {
+	return static_cast<ClaimState>(StringUtil::StringToEnum(GetClaimStateValues(), 3, "ClaimState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetClientInterruptStateValues() {
@@ -3501,6 +3522,24 @@ const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value) {
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value) {
 	return static_cast<Monotonicity>(StringUtil::StringToEnum(GetMonotonicityValues(), 6, "Monotonicity", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMoveBufferResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MoveBufferResult::MOVED), "MOVED" },
+		{ static_cast<uint32_t>(MoveBufferResult::NOT_MOVED), "NOT_MOVED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MoveBufferResult>(MoveBufferResult value) {
+	return StringUtil::EnumToString(GetMoveBufferResultValues(), 2, "MoveBufferResult", static_cast<uint32_t>(value));
+}
+
+template<>
+MoveBufferResult EnumUtil::FromString<MoveBufferResult>(const char *value) {
+	return static_cast<MoveBufferResult>(StringUtil::StringToEnum(GetMoveBufferResultValues(), 2, "MoveBufferResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileAcquireResultValues() {

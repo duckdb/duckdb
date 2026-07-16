@@ -23,8 +23,8 @@ shared_ptr<CSVBufferHandle> CSVRandomBufferManager::GetBuffer(const idx_t pos) {
 		return nullptr;
 	}
 	if (!cached_buffers[pos]) {
-		cached_buffers[pos] = make_shared_ptr<CSVBuffer>(context, buffer_size, KnownBufferSize(pos),
-		                                                 pos * buffer_size, pos, pos + 1 == cached_buffers.size());
+		cached_buffers[pos] = make_shared_ptr<CSVBuffer>(context, buffer_size, KnownBufferSize(pos), pos * buffer_size,
+		                                                 pos, pos + 1 == cached_buffers.size());
 		cached_buffers[pos]->LoadRandomAccess(*file_handle);
 	}
 	// an evicted buffer reloads inside Pin through the same positional read
