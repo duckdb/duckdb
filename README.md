@@ -165,11 +165,26 @@ build/reldebug/test/unittest "*"
 
 ### Benchmarks
 
-Run the feature store benchmarks (requires ClickBench data, downloaded automatically on first run):
+The feature store benchmarks live under `benchmark/feature/clickstream/` in three families —
+`serve/` (point-in-time SERVE), `refresh/` (windowed REFRESH snapshots) and `cases/` (multi-step
+workflows). They require ClickBench data, downloaded automatically on first run and cached per scale.
 
 ```bash
+# run everything under the feature group
 build/reldebug/benchmark/benchmark_runner "benchmark/feature/.*"
+
+# or a single family
+build/reldebug/benchmark/benchmark_runner "benchmark/feature/clickstream/serve/serve_.*"
+build/reldebug/benchmark/benchmark_runner "benchmark/feature/clickstream/refresh/refresh_.*"
+build/reldebug/benchmark/benchmark_runner "benchmark/feature/clickstream/cases/case_.*"
+
+# list without running
+build/reldebug/benchmark/benchmark_runner --list | grep clickstream/
 ```
+
+The scenarios are generated (not hand-written) by a seeded pairwise generator; see
+[benchmark/feature/clickstream/README.md](benchmark/feature/clickstream/README.md) for the methodology
+and how to regenerate them.
 
 Run standard DuckDB benchmarks:
 

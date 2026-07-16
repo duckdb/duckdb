@@ -93,7 +93,11 @@ downloaded a scale, the others reuse it.
   first run per scale builds source + features in `load` (and caches the source); subsequent runs
   rebuild only the scenario's features via `reload` (which runs when the cache already exists). Both
   start with `DROP FEATURE IF EXISTS ...` so re-runs and scenario switches on a shared cache are clean.
-- **`SERVE` is the only timed statement** (`run`); it is read-only, so repeated hot iterations do not
-  accumulate versions. Feature creation/refresh happen once, before timing.
-- A lightweight `assert` (store materialized, spine non-empty) guards against degenerate empty-state
-  timings; exact result values are not checked because they vary per scenario.
+- **Only the `run` block is timed.** For `serve/` the timed statement is read-only, so hot iterations
+  don't accumulate versions and setup happens once. For `refresh/`/`cases/` the timed statement
+  mutates (REFRESH appends versions); `cases/` sets `require_reinit` so each hot run rebuilds a clean
+  feature store from the cached source, and `refresh/` measures the steady-state refresh (bounded by
+  `RETAIN`).
+- A lightweight `assert` (source populated; for `serve/`, store materialized and spine non-empty)
+  guards against degenerate empty-state timings; exact result values are not checked because they
+  vary per scenario.

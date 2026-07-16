@@ -6,24 +6,7 @@
 # description: ${DESCRIPTION}
 # group: [feature]
 
-require parquet load_only
-
-require httpfs load_only
-
-# Source data cached per scale (see serve.benchmark.in for the caching / init-vs-load rationale).
-cache feature_src_${PARQUET_COUNT}.db
-
-load
-CREATE TABLE hits_raw AS SELECT CAST(UserID AS BIGINT) AS UserID, epoch_ms(EventTime * 1000) AS EventTime, CAST(RegionID AS INTEGER) AS RegionID, CAST(CounterID AS INTEGER) AS CounterID FROM read_parquet([format('https://datasets.clickhouse.com/hits_compatible/athena_partitioned/hits_{}.parquet', x) for x in range(0, ${PARQUET_COUNT})], binary_as_string = True);
-CREATE TABLE users (UserID BIGINT PRIMARY KEY);
-INSERT INTO users SELECT DISTINCT UserID FROM hits_raw;
-CREATE TABLE hits (UserID BIGINT, EventTime TIMESTAMP, RegionID INTEGER, CounterID INTEGER, FOREIGN KEY (UserID) REFERENCES users(UserID));
-INSERT INTO hits SELECT UserID, EventTime, RegionID, CounterID FROM hits_raw;
-DROP TABLE hits_raw;
-${SETUP_SQL}
-
-reload
-${SETUP_SQL}
+include benchmark/feature/clickstream/data/clickstream_load.benchmark.in
 
 name ${BENCH_NAME}
 group feature
