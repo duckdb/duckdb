@@ -1,6 +1,6 @@
 # name: benchmark/feature/clickstream/refresh/refresh_s20_simple_w1d_r5_prior5.benchmark
 # description: Generated REFRESH scenario s20_simple_w1d_r5_prior5 (seed=42)
-# group: [feature]
+# group: [refresh]
 
 template benchmark/feature/clickstream/refresh/refresh.benchmark.in
 BENCH_NAME=Refresh_s20_simple_w1d_r5_prior5

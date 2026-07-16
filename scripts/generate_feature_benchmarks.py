@@ -206,24 +206,18 @@ def join_sql(stmts):
 
 def refresh_timestamps(n):
     """n ascending monthly snapshot timestamps ending at the anchor date."""
-    return [
-        _ts(_ANCHOR - datetime.timedelta(days=_STEP_DAYS * (n - 1 - i)))
-        for i in range(n)
-    ]
+    return [_ts(_ANCHOR - datetime.timedelta(days=_STEP_DAYS * (n - 1 - i))) for i in range(n)]
 
 
 def prior_timestamps(p):
     """p ascending monthly timestamps strictly before the anchor."""
-    return [
-        _ts(_ANCHOR - datetime.timedelta(days=_STEP_DAYS * (p - i))) for i in range(p)
-    ]
+    return [_ts(_ANCHOR - datetime.timedelta(days=_STEP_DAYS * (p - i))) for i in range(p)]
 
 
 def create_feature(name, agg, window, retain, ttl="0"):
     ttl_clause = "" if ttl == "0" else " TTL {}".format(ttl)
     return (
-        "CREATE FEATURE {name} ENTITY users TIMESTAMP EventTime WINDOW {window}{ttl} "
-        "RETAIN {retain} AS ({agg})"
+        "CREATE FEATURE {name} ENTITY users TIMESTAMP EventTime WINDOW {window}{ttl} " "RETAIN {retain} AS ({agg})"
     ).format(name=name, window=window, ttl=ttl_clause, retain=retain, agg=agg)
 
 
@@ -259,16 +253,10 @@ def serve_timestamp(vec):
 
 def build_serve_setup(vec):
     stmts = list(DROPS)
-    stmts.append(
-        create_feature("f", AGG_QUERIES[vec["AGG"]], WINDOW, vec["RETAIN"], vec["TTL"])
-    )
+    stmts.append(create_feature("f", AGG_QUERIES[vec["AGG"]], WINDOW, vec["RETAIN"], vec["TTL"]))
     if vec["N_FEATURES"] == 3:
-        stmts.append(
-            create_feature("f2", FEATURE2_AGG, WINDOW, vec["RETAIN"], vec["TTL"])
-        )
-        stmts.append(
-            create_feature("f3", FEATURE3_AGG, WINDOW, vec["RETAIN"], vec["TTL"])
-        )
+        stmts.append(create_feature("f2", FEATURE2_AGG, WINDOW, vec["RETAIN"], vec["TTL"]))
+        stmts.append(create_feature("f3", FEATURE3_AGG, WINDOW, vec["RETAIN"], vec["TTL"]))
     stmts.append(
         "CREATE OR REPLACE TABLE serve_requests AS SELECT DISTINCT UserID, "
         "TIMESTAMP '{ts}' AS EventTime FROM hits USING SAMPLE {n} ROWS".format(
@@ -296,13 +284,10 @@ def build_serve_run(vec):
     if wrap == "where":
         return "SELECT * FROM {} WHERE event_count IS NOT NULL;".format(core)
     if wrap == "groupby":
-        return (
-            "SELECT event_count IS NULL AS missing, count(*) AS n FROM {} "
-            "GROUP BY event_count IS NULL;"
-        ).format(core)
-    return "WITH s AS (SELECT * FROM {}) SELECT count(*) AS n FROM s WHERE event_count IS NOT NULL;".format(
-        core
-    )
+        return ("SELECT event_count IS NULL AS missing, count(*) AS n FROM {} " "GROUP BY event_count IS NULL;").format(
+            core
+        )
+    return "WITH s AS (SELECT * FROM {}) SELECT count(*) AS n FROM s WHERE event_count IS NOT NULL;".format(core)
 
 
 def serve_slug(vec):
@@ -329,9 +314,7 @@ _WIN_SLUG = {"1 DAY": "1d", "30 DAYS": "30d", "3650 DAYS": "3650d"}
 
 def build_refresh_setup(vec):
     stmts = list(DROPS)
-    stmts.append(
-        create_feature("f", AGG_QUERIES[vec["AGG"]], vec["WINDOW"], vec["RETAIN"])
-    )
+    stmts.append(create_feature("f", AGG_QUERIES[vec["AGG"]], vec["WINDOW"], vec["RETAIN"]))
     for ts in prior_timestamps(vec["PRIOR_VERSIONS"]):
         stmts.append("REFRESH FEATURE f AT '{}'".format(ts))
     return join_sql(stmts)
@@ -367,34 +350,20 @@ def _serve_step():
 
 def case_multi_version_refresh(pc):
     setup = join_sql(DROPS + [create_feature("f", SIMPLE_AGG, "3650 DAYS", 20)])
-    run = join_sql(
-        [
-            "REFRESH FEATURE f AT '{}'".format(ts)
-            for ts in refresh_timestamps(_CASE_REFRESH_COUNT)
-        ]
-    )
-    desc = (
-        "Build an 8-version refresh history in one timed unit (RETAIN 20, no eviction)"
-    )
+    run = join_sql(["REFRESH FEATURE f AT '{}'".format(ts) for ts in refresh_timestamps(_CASE_REFRESH_COUNT)])
+    desc = "Build an 8-version refresh history in one timed unit (RETAIN 20, no eviction)"
     return "multi_version_refresh_s{}".format(pc), setup, run, desc
 
 
 def case_gc_pressure_refresh(pc):
     setup = join_sql(DROPS + [create_feature("f", SIMPLE_AGG, "3650 DAYS", 2)])
-    run = join_sql(
-        [
-            "REFRESH FEATURE f AT '{}'".format(ts)
-            for ts in refresh_timestamps(_CASE_REFRESH_COUNT)
-        ]
-    )
+    run = join_sql(["REFRESH FEATURE f AT '{}'".format(ts) for ts in refresh_timestamps(_CASE_REFRESH_COUNT)])
     desc = "8 refreshes with RETAIN 2 -- every refresh past v2 triggers in-place eviction (GC pressure)"
     return "gc_pressure_refresh_s{}".format(pc), setup, run, desc
 
 
 def case_refresh_then_serve(pc):
-    setup = join_sql(
-        DROPS + [create_feature("f", SIMPLE_AGG, "3650 DAYS", 5), spine_stmt()]
-    )
+    setup = join_sql(DROPS + [create_feature("f", SIMPLE_AGG, "3650 DAYS", 5), spine_stmt()])
     run = join_sql(["REFRESH FEATURE f AT '{}'".format(_ts(_ANCHOR)), _serve_step()])
     desc = "Refresh then immediately serve the fresh snapshot (point-in-time ASOF retrieval)"
     return "refresh_then_serve_s{}".format(pc), setup, run, desc
@@ -422,9 +391,7 @@ def case_concurrent_feature_refresh(pc):
 
 
 def case_refresh_serve_interleaved(pc):
-    setup = join_sql(
-        DROPS + [create_feature("f", SIMPLE_AGG, "3650 DAYS", 5), spine_stmt()]
-    )
+    setup = join_sql(DROPS + [create_feature("f", SIMPLE_AGG, "3650 DAYS", 5), spine_stmt()])
     anchor = _ts(_ANCHOR)
     steps = []
     for _ in range(3):
@@ -449,9 +416,7 @@ def build_cases():
     for pc in CASE_SCALES:
         for builder in CASE_BUILDERS:
             name, setup, run, desc = builder(pc)
-            out.append(
-                {"name": name, "pc": pc, "setup": setup, "run": run, "desc": desc}
-            )
+            out.append({"name": name, "pc": pc, "setup": setup, "run": run, "desc": desc})
     return out
 
 
@@ -498,9 +463,7 @@ def repo_root():
 
 
 def stub_text(subdir, prefix, tmpl_rel, bench_name, name, pc, setup, run, seed, desc):
-    header_path = "benchmark/feature/clickstream/{}/{}{}.benchmark".format(
-        subdir, prefix, name
-    )
+    header_path = "benchmark/feature/clickstream/{}/{}{}.benchmark".format(subdir, prefix, name)
     return (
         "# name: {path}\n"
         "# description: {desc} (seed={seed})\n"
@@ -566,9 +529,7 @@ def emit_pairwise_family(root, fam, cfg, seed, strategy, count):
             seed,
             cfg["desc"].format(name=name),
         )
-        with open(
-            os.path.join(out_dir, "{}{}.benchmark".format(cfg["prefix"], name)), "w"
-        ) as f:
+        with open(os.path.join(out_dir, "{}{}.benchmark".format(cfg["prefix"], name)), "w") as f:
             f.write(text)
     return {
         "family": fam,
@@ -598,9 +559,7 @@ def emit_cases_family(root, seed):
             seed,
             c["desc"],
         )
-        with open(
-            os.path.join(out_dir, "case_{}.benchmark".format(c["name"])), "w"
-        ) as f:
+        with open(os.path.join(out_dir, "case_{}.benchmark".format(c["name"])), "w") as f:
             f.write(text)
     return {"family": "cases", "strategy": "curated", "cases": cases}
 
@@ -620,11 +579,7 @@ def manifest_text(results, seed):
         lines.append("#")
         if res["strategy"] == "curated":
             cases = res["cases"]
-            lines.append(
-                "# ===== family: {} (curated, {} scenarios) =====".format(
-                    fam, len(cases)
-                )
-            )
+            lines.append("# ===== family: {} (curated, {} scenarios) =====".format(fam, len(cases)))
             for c in cases:
                 lines.append("#   {:<32} {}".format(c["name"], c["desc"]))
             continue
@@ -633,11 +588,7 @@ def manifest_text(results, seed):
         cov = ""
         if res["strategy"] == "pairwise":
             cov = ", {}/{} pairs".format(len(res["covered"]), len(res["target"]))
-        lines.append(
-            "# ===== family: {} ({}, {} scenarios{}) =====".format(
-                fam, res["strategy"], len(vectors), cov
-            )
-        )
+        lines.append("# ===== family: {} ({}, {} scenarios{}) =====".format(fam, res["strategy"], len(vectors), cov))
         lines.append("# Dimensions:")
         for k, vals in cfg["dims"].items():
             lines.append("#   {:<14} {}".format(k, vals))
@@ -681,24 +632,16 @@ def run_verify(seed):
 
 
 def main():
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    ap.add_argument(
-        "--seed", type=int, default=42, help="RNG seed (reproducible list). Default 42."
-    )
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--seed", type=int, default=42, help="RNG seed (reproducible list). Default 42.")
     ap.add_argument(
         "--family",
         choices=["all", "serve", "refresh", "cases"],
         default="all",
         help="Which family to (re)generate. A single family leaves the shared manifest untouched.",
     )
-    ap.add_argument(
-        "--strategy", choices=["pairwise", "random", "grid"], default="pairwise"
-    )
-    ap.add_argument(
-        "--count", type=int, default=16, help="Scenario count for --strategy random."
-    )
+    ap.add_argument("--strategy", choices=["pairwise", "random", "grid"], default="pairwise")
+    ap.add_argument("--count", type=int, default=16, help="Scenario count for --strategy random.")
     ap.add_argument(
         "--verify",
         action="store_true",
@@ -736,9 +679,7 @@ def main():
         print("{:<8} {} scenarios{}".format(res["family"] + ":", n, extra))
 
     if args.family == "all":
-        manifest_path = os.path.join(
-            root, "benchmark/feature/clickstream/scenarios.manifest"
-        )
+        manifest_path = os.path.join(root, "benchmark/feature/clickstream/scenarios.manifest")
         with open(manifest_path, "w") as f:
             f.write(manifest_text(results, args.seed))
         print("Manifest: {}".format(os.path.relpath(manifest_path, root)))

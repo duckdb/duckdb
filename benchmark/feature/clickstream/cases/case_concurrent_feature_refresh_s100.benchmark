@@ -1,6 +1,6 @@
 # name: benchmark/feature/clickstream/cases/case_concurrent_feature_refresh_s100.benchmark
 # description: Refresh three features sharing the same entity key in one timed unit (seed=42)
-# group: [feature]
+# group: [cases]
 
 template benchmark/feature/clickstream/cases/cases.benchmark.in
 BENCH_NAME=Case_concurrent_feature_refresh_s100

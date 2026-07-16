@@ -1,6 +1,6 @@
 # name: benchmark/feature/clickstream/cases/case_refresh_serve_interleaved_s20.benchmark
 # description: Three interleaved refresh+serve cycles (steady-state multi-version serving) (seed=42)
-# group: [feature]
+# group: [cases]
 
 template benchmark/feature/clickstream/cases/cases.benchmark.in
 BENCH_NAME=Case_refresh_serve_interleaved_s20

@@ -1,6 +1,6 @@
 # name: benchmark/feature/clickstream/serve/serve_s20_window_r5_n20_ttl0_sp10k_latest-na_f3_cte.benchmark
 # description: Generated SERVE scenario s20_window_r5_n20_ttl0_sp10k_latest-na_f3_cte (seed=42)
-# group: [feature]
+# group: [serve]
 
 template benchmark/feature/clickstream/serve/serve.benchmark.in
 BENCH_NAME=Serve_s20_window_r5_n20_ttl0_sp10k_latest-na_f3_cte

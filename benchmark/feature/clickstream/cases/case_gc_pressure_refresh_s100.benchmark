@@ -1,6 +1,6 @@
 # name: benchmark/feature/clickstream/cases/case_gc_pressure_refresh_s100.benchmark
 # description: 8 refreshes with RETAIN 2 -- every refresh past v2 triggers in-place eviction (GC pressure) (seed=42)
-# group: [feature]
+# group: [cases]
 
 template benchmark/feature/clickstream/cases/cases.benchmark.in
 BENCH_NAME=Case_gc_pressure_refresh_s100

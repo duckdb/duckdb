@@ -1,6 +1,6 @@
 # name: benchmark/feature/clickstream/serve/serve_s100_simple_r1_n20_ttl0_sp100k_asof-before_f3_bare.benchmark
 # description: Generated SERVE scenario s100_simple_r1_n20_ttl0_sp100k_asof-before_f3_bare (seed=42)
-# group: [feature]
+# group: [serve]
 
 template benchmark/feature/clickstream/serve/serve.benchmark.in
 BENCH_NAME=Serve_s100_simple_r1_n20_ttl0_sp100k_asof-before_f3_bare

@@ -1,6 +1,6 @@
 # name: benchmark/feature/clickstream/cases/case_multi_version_refresh_s100.benchmark
 # description: Build an 8-version refresh history in one timed unit (RETAIN 20, no eviction) (seed=42)
-# group: [feature]
+# group: [cases]
 
 template benchmark/feature/clickstream/cases/cases.benchmark.in
 BENCH_NAME=Case_multi_version_refresh_s100

@@ -1,6 +1,6 @@
 # name: benchmark/feature/clickstream/serve/serve_s100_window_r20_n5_ttl0_sp100k_asof-before_f1_groupby.benchmark
 # description: Generated SERVE scenario s100_window_r20_n5_ttl0_sp100k_asof-before_f1_groupby (seed=42)
-# group: [feature]
+# group: [serve]
 
 template benchmark/feature/clickstream/serve/serve.benchmark.in
 BENCH_NAME=Serve_s100_window_r20_n5_ttl0_sp100k_asof-before_f1_groupby
