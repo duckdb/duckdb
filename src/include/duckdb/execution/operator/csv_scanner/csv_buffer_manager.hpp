@@ -34,7 +34,6 @@ public:
 	//! Initializes the buffer manager, during it's construction/reset
 	void Initialize();
 
-	void UnpinBuffer(const idx_t cache_idx);
 	//! Returns the buffer size set for this CSV buffer manager
 	idx_t GetBufferSize() const;
 	//! Returns the number of buffers in the cached_buffers cache
@@ -48,10 +47,7 @@ public:
 
 	bool IsBlockUnloaded(idx_t block_idx);
 
-	idx_t GetBytesRead() const;
-
 	ClientContext &context;
-	idx_t skip_rows = 0;
 	bool sniffing = false;
 	const bool per_file_single_threaded;
 
@@ -69,7 +65,6 @@ private:
 	idx_t buffer_size;
 	//! If this buffer manager is done (i.e., no more buffers to read beyond the ones that were cached
 	bool done = false;
-	idx_t bytes_read = 0;
 	//! Because the buffer manager can be accessed in Parallel we need a mutex.
 	mutex main_mutex;
 	//! If the file_handle used seek

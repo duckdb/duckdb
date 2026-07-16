@@ -15,14 +15,7 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
 		file_handle = ReadCSV::OpenCSV(file, options, context);
 	}
 	is_pipe = file_handle->IsPipe();
-	skip_rows = options.dialect_options.skip_rows.GetValue();
 	Initialize();
-}
-
-void CSVBufferManager::UnpinBuffer(const idx_t cache_idx) {
-	if (cache_idx < cached_buffers.size()) {
-		cached_buffers[cache_idx]->Unpin();
-	}
 }
 
 void CSVBufferManager::Initialize() {
@@ -42,7 +35,6 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 				return false;
 			}
 			last_buffer = std::move(maybe_last_buffer);
-			bytes_read += last_buffer->GetBufferSize();
 			cached_buffers.emplace_back(last_buffer);
 			return true;
 		}
@@ -150,10 +142,6 @@ bool CSVBufferManager::IsBlockUnloaded(idx_t block_idx) {
 		return cached_buffers[block_idx]->IsUnloaded();
 	}
 	return false;
-}
-
-idx_t CSVBufferManager::GetBytesRead() const {
-	return bytes_read;
 }
 
 } // namespace duckdb
