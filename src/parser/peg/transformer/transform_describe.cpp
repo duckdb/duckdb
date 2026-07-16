@@ -10,16 +10,40 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformDescribeStatement(PE
 	return select_statement;
 }
 
-unique_ptr<QueryNode>
-PEGTransformerFactory::TransformShowSelect(PEGTransformer &transformer, const ShowType &show_or_describe_or_summarize,
-                                           unique_ptr<SelectStatement> select_statement_internal) {
-	auto result = make_uniq<ShowRef>();
-	result->show_type = show_or_describe_or_summarize;
-	result->query = std::move(select_statement_internal->node);
+// Wrap a ShowRef as the query "SELECT * FROM <showref>".
+static unique_ptr<QueryNode> WrapShowRef(unique_ptr<ShowRef> showref) {
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(result);
+	select_node->from_table = std::move(showref);
 	return std::move(select_node);
+}
+
+// Configure `showref` as the "list all tables" form (bare SHOW/DESCRIBE and SHOW ALL TABLES). The
+// __show_tables_expanded name is recognized by the binder (see bind_showref.cpp).
+static void SetShowAllTables(ShowRef &showref) {
+	showref.SetTableName("__show_tables_expanded");
+	showref.show_type = ShowType::SHOW_SPECIAL;
+}
+
+//! Build the "describe the columns of this query" QueryNode. Shared by "DESCRIBE/SUMMARIZE (query)" and the
+//! deprecated "SHOW (query)".
+static unique_ptr<QueryNode> BuildDescribeSelect(ShowType show_type, unique_ptr<SelectStatement> select_statement) {
+	auto showref = make_uniq<ShowRef>();
+	showref->show_type = show_type;
+	showref->query = std::move(select_statement->node);
+	return WrapShowRef(std::move(showref));
+}
+
+unique_ptr<QueryNode>
+PEGTransformerFactory::TransformDescribeSelect(PEGTransformer &transformer, const ShowType &describe_or_summarize,
+                                               unique_ptr<SelectStatement> select_statement_internal) {
+	return BuildDescribeSelect(describe_or_summarize, std::move(select_statement_internal));
+}
+
+unique_ptr<QueryNode>
+PEGTransformerFactory::TransformShowDeprecatedSelect(PEGTransformer &transformer, const ShowType &show_rule,
+                                                     unique_ptr<SelectStatement> select_statement_internal) {
+	return BuildDescribeSelect(show_rule, std::move(select_statement_internal));
 }
 
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer &transformer,
@@ -37,88 +61,144 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
 		showref->SetCatalogName(qualified_name.Schema());
 		showref->SetSchemaName(qualified_name.Name());
 	}
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(showref);
-	return std::move(select_node);
+	return WrapShowRef(std::move(showref));
 }
 
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransformer &transformer,
                                                                     const ShowType &show_or_describe) {
-	auto result = make_uniq<ShowRef>();
-	// Legacy reasons, see bind_showref.cpp
-	result->SetTableName("__show_tables_expanded");
-	result->show_type = ShowType::SHOW_UNQUALIFIED;
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(result);
-	return std::move(select_node);
+	auto showref = make_uniq<ShowRef>();
+	SetShowAllTables(*showref);
+	return WrapShowRef(std::move(showref));
 }
 
-unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTransformer &transformer,
-                                                                        const ShowType &show_or_describe_or_summarize,
-                                                                        optional<DescribeTarget> describe_target) {
-	auto showref = make_uniq<ShowRef>();
-	showref->show_type = show_or_describe_or_summarize;
-	DescribeTarget target;
-	if (describe_target) {
-		target = std::move(*describe_target);
+// The special MySQL-inherited forms - "[SHOW|DESCRIBE] DATABASES|SCHEMAS|TABLES|VARIABLES" - which the binder
+// dispatches to a dedicated pragma. Returns true (and configures `showref`) if `relation` is one of them.
+static bool TrySetSpecialShowForm(ShowRef &showref, const BaseTableRef &relation) {
+	if (!IsInvalidSchema(relation.GetQualifiedName().Schema())) {
+		// A qualified name is never a special form.
+		return false;
 	}
 
-	if (target.is_table_name || target.table_ref) {
-		if (target.is_table_name) {
-			// Case: SHOW 'something' or DESCRIBE 'something'
-			showref->SetTableName(target.table_name);
-		} else {
-			// Case: A relation/table reference
-			auto &base_table = *target.table_ref;
+	auto name = StringUtil::Lower(relation.Table().GetIdentifierName());
+	if (name != "databases" && name != "tables" && name != "schemas" && name != "variables") {
+		return false;
+	}
 
-			if (showref->show_type == ShowType::SHOW_FROM) {
-				// Logic for SHOW TABLES FROM [database].[schema]
-				if (IsInvalidSchema(base_table.GetQualifiedName().Schema())) {
-					showref->SetSchemaName(base_table.Table());
-				} else {
-					showref->SetCatalogName(base_table.GetQualifiedName().Schema());
-					showref->SetSchemaName(base_table.Table());
-				}
-			} else if (IsInvalidSchema(base_table.GetQualifiedName().Schema())) {
-				// Logic for unqualified relations (databases, tables, variables)
-				auto table_name = StringUtil::Lower(base_table.Table().GetIdentifierName());
-				if (table_name == "databases" || table_name == "tables" || table_name == "schemas" ||
-				    table_name == "variables") {
-					showref->SetTableName(Identifier("\"" + table_name + "\""));
-					showref->show_type = ShowType::SHOW_UNQUALIFIED;
-				}
-			}
-		}
-		if (showref->GetTableName().empty() && showref->show_type != ShowType::SHOW_FROM) {
-			auto show_select_node = make_uniq<SelectNode>();
-			show_select_node->select_list.push_back(make_uniq<StarExpression>());
-			if (target.is_table_name) {
-				// Case: SHOW 'something' or DESCRIBE 'something'
-				auto table_ref = make_uniq<BaseTableRef>();
-				table_ref->SetTable(target.table_name);
-				show_select_node->from_table = std::move(table_ref);
-			} else {
-				// Case: A relation/table reference
-				show_select_node->from_table = std::move(target.table_ref);
-			}
-			showref->query = std::move(show_select_node);
-		}
-	} else {
-		// Case: No relation specified (e.g., just "SHOW TABLES")
-		if (showref->show_type == ShowType::SUMMARY) {
+	showref.SetTableName(Identifier("\"" + name + "\""));
+	showref.show_type = ShowType::SHOW_SPECIAL;
+	return true;
+}
+
+// Describe the columns of `relation` by binding it as "SELECT * FROM <relation>".
+static void SetDescribeQuery(ShowRef &showref, unique_ptr<BaseTableRef> relation) {
+	auto query = make_uniq<SelectNode>();
+	query->select_list.push_back(make_uniq<StarExpression>());
+	query->from_table = std::move(relation);
+	showref.query = std::move(query);
+}
+
+// True when nothing follows the keyword (bare "SHOW" / "DESCRIBE" / "SUMMARIZE").
+static bool HasNoTarget(const DescribeTarget &target) {
+	return !target.is_table_name && !target.table_ref;
+}
+
+//! Build the ShowRef for "SHOW <target>". SHOW is settings-first: a bare name is offered to the binder as a setting
+//! (falling back to describing a table); a qualified name or the special forms describe/list directly.
+static unique_ptr<ShowRef> BuildShowByName(ShowType show_type, optional<DescribeTarget> show_target) {
+	auto showref = make_uniq<ShowRef>();
+	showref->show_type = show_type;
+
+	if (!show_target || HasNoTarget(*show_target)) {
+		// Bare "SHOW" lists all tables.
+		SetShowAllTables(*showref);
+		return showref;
+	}
+
+	auto target = std::move(*show_target);
+	if (target.is_table_name) {
+		// "SHOW 'literal'": the string names the table directly.
+		showref->SetTableName(target.table_name);
+		return showref;
+	}
+
+	if (TrySetSpecialShowForm(*showref, *target.table_ref)) {
+		// "SHOW DATABASES" and friends.
+		return showref;
+	}
+
+	if (!IsInvalidSchema(target.table_ref->GetQualifiedName().Schema())) {
+		// "SHOW cat.tbl" (deprecated): a qualified name can't be a setting, so record it and describe the table via a
+		// query. The recorded name lets the binder report a table (not a setting) error if it does not exist.
+		showref->qualified_name = target.table_ref->GetQualifiedName();
+		SetDescribeQuery(*showref, std::move(target.table_ref));
+		return showref;
+	}
+
+	// Bareword "SHOW name" is settings-first: name the table so the binder tries a setting, then (deprecated) falls
+	// back to describing a table with this name.
+	showref->SetTableName(target.table_ref->Table());
+	return showref;
+}
+
+//! Build the ShowRef for "DESCRIBE <target>" / "SUMMARIZE <target>", which always describe a relation or query.
+static unique_ptr<ShowRef> BuildDescribeByName(ShowType show_type, optional<DescribeTarget> describe_target) {
+	auto showref = make_uniq<ShowRef>();
+	showref->show_type = show_type;
+
+	if (!describe_target || HasNoTarget(*describe_target)) {
+		// Bare "DESCRIBE" lists all tables; "SUMMARIZE" requires a target.
+		if (show_type == ShowType::SUMMARY) {
 			throw ParserException("Expected table name with SUMMARIZE");
 		}
-		showref->SetTableName("__show_tables_expanded");
-		showref->show_type = ShowType::SHOW_UNQUALIFIED;
+		SetShowAllTables(*showref);
+		return showref;
 	}
 
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(showref);
+	auto target = std::move(*describe_target);
+	if (target.is_table_name) {
+		// "DESCRIBE 'literal'": the string names the table directly.
+		showref->SetTableName(target.table_name);
+		return showref;
+	}
 
-	return std::move(select_node);
+	if (TrySetSpecialShowForm(*showref, *target.table_ref)) {
+		// "DESCRIBE DATABASES" and friends.
+		return showref;
+	}
+
+	// Describe the (possibly qualified) relation's columns via a query.
+	SetDescribeQuery(*showref, std::move(target.table_ref));
+	return showref;
+}
+
+unique_ptr<QueryNode> PEGTransformerFactory::TransformShowByName(PEGTransformer &transformer, const ShowType &show_rule,
+                                                                 optional<DescribeTarget> show_target) {
+	return WrapShowRef(BuildShowByName(show_rule, std::move(show_target)));
+}
+
+unique_ptr<QueryNode> PEGTransformerFactory::TransformDescribeByName(PEGTransformer &transformer,
+                                                                     const ShowType &describe_or_summarize,
+                                                                     optional<DescribeTarget> describe_target) {
+	return WrapShowRef(BuildDescribeByName(describe_or_summarize, std::move(describe_target)));
+}
+
+DescribeTarget PEGTransformerFactory::TransformShowSettingName(PEGTransformer &transformer,
+                                                               const Identifier &setting_name) {
+	// A bare "SHOW name" - the name is an unqualified relation/setting; BuildShowRef tries it as a setting first.
+	DescribeTarget result;
+	auto table_ref = make_uniq<BaseTableRef>();
+	table_ref->SetTable(setting_name);
+	result.table_ref = std::move(table_ref);
+	return result;
+}
+
+DescribeTarget
+PEGTransformerFactory::TransformShowDeprecatedQualifiedTableName(PEGTransformer &transformer,
+                                                                 unique_ptr<BaseTableRef> qualified_table_name) {
+	// A qualified "SHOW cat.tbl" always describes a table.
+	DescribeTarget result;
+	result.table_ref = std::move(qualified_table_name);
+	return result;
 }
 
 DescribeTarget PEGTransformerFactory::TransformDescribeBaseTableName(PEGTransformer &transformer,
@@ -145,7 +225,7 @@ ShowType PEGTransformerFactory::TransformSummarize(PEGTransformer &transformer, 
 }
 
 ShowType PEGTransformerFactory::TransformShowRule(PEGTransformer &transformer) {
-	return ShowType::DESCRIBE;
+	return ShowType::SHOW;
 }
 
 ShowType PEGTransformerFactory::TransformDescribeLongRule(PEGTransformer &transformer) {

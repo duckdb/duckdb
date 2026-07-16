@@ -1501,6 +1501,11 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 
 	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
 	SuppressSuggestions("ExpressionStatement");
+	// Using SHOW to describe a table/query is deprecated - parse these forms but do not autocomplete them after SHOW
+	// (only setting names and the special SHOW forms are offered). DESCRIBE/SUMMARIZE still complete tables and
+	// queries.
+	SuppressSuggestions("ShowDeprecatedQualifiedTableName");
+	SuppressSuggestions("ShowDeprecatedSelect");
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);

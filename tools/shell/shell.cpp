@@ -941,6 +941,13 @@ ShellState &ShellState::Get() {
 	return *GetReference();
 }
 
+static bool ResultIsDescribeShaped(const duckdb::QueryResult &result) {
+	// The describe renderer reads the fixed column layout produced by DESCRIBE / a table describe (column_name,
+	// column_type, null, key, default, extra). Anything else - e.g. a setting value from a bareword "SHOW name" - is a
+	// regular result that must not be rendered in describe mode.
+	return result.names.size() == 6 && result.names[0] == "column_name" && result.names[1] == "column_type";
+}
+
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
 	if (statement->has_anonymous_parameters) {
 		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
@@ -983,6 +990,13 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
+	}
+	// A bareword "SHOW name" is optimistically routed to the describe renderer, but it may have resolved to a setting
+	// value rather than a table describe. Only a describe-shaped result can be rendered in describe mode - fall back to
+	// the default rendering otherwise.
+	if (cMode == RenderMode::DESCRIBE && !ResultIsDescribeShaped(res)) {
+		cMode = mode;
+		renderer = GetRenderer();
 	}
 	// analyze the query result so we know how long/wide the result will be
 	auto render_state = RenderQueryResult(*renderer, res);

@@ -1270,6 +1270,13 @@
         "custom_implementation": true
     },
     {
+        "name": "show_behavior",
+        "description": "How SHOW resolves a bare identifier: 'auto' (describe a table if one exists, else a setting; deprecated), 'table' (always a table), or 'setting' (always a setting)",
+        "type": "ENUM<ShowBehaviorType>",
+        "default_scope": "global",
+        "default_value": "AUTO"
+    },
+    {
         "name": "standard_vector_size",
         "description": "The compiled-in STANDARD_VECTOR_SIZE (read-only)",
         "type": "UBIGINT",

@@ -609,8 +609,14 @@ private:
 	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const Identifier &target_database_name);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const Identifier &target_database_name);
 
-	BoundStatement BindShowQuery(ShowRef &ref);
-	BoundStatement BindShowTable(ShowRef &ref);
+	BoundStatement BindDescribeQuery(ShowRef &ref);
+	BoundStatement BindDescribeTable(ShowRef &ref);
+	//! Describes a ShowRef target: its query if it has one, otherwise the named table
+	BoundStatement BindDescribe(ShowRef &ref);
+	//! Binds the Postgres-style "SHOW name" (settings-first, with a deprecated table/query describe fallback)
+	BoundStatement BindShow(ShowRef &ref);
+	//! Binds "SHOW name" to the value of the setting "name", returns false if no such setting exists
+	bool TryBindShowSetting(ShowRef &ref, BoundStatement &result);
 	BoundStatement BindSummarize(ShowRef &ref);
 
 	void BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &columns, bool default_values,
