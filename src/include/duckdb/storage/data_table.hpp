@@ -176,15 +176,13 @@ public:
 	//! Finalize an append
 	void FinalizeAppend(DuckTransaction &transaction, TableAppendState &state);
 	//! Commit the append
-	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count,
-	                  optional_ptr<TableAppendState> append_state = nullptr);
+	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	//! Write a segment of the table to the WAL
 	void WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
 	                optional_ptr<StorageCommitState> commit_state);
 	//! Revert a set of appends made by the given AppendState, used to revert appends in the event of an error during
 	//! commit (e.g. because of an I/O exception)
-	void RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count,
-	                  optional_ptr<TableAppendState> append_state = nullptr);
+	void RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
 
 	void ScanTableSegment(DuckTransaction &transaction, idx_t start_row, idx_t count,

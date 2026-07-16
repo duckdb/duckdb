@@ -361,18 +361,10 @@ LocalStorage::LocalStorage(ClientContext &context, DuckTransaction &transaction)
     : context(context), transaction(transaction) {
 }
 
-LocalStorageCommitState::LocalStorageCommitState() {
+LocalStorage::CommitState::CommitState() {
 }
 
-LocalStorageCommitState::~LocalStorageCommitState() {
-}
-
-optional_ptr<TableAppendState> LocalStorageCommitState::GetAppendState(DataTable &table) {
-	auto entry = append_states.find(table);
-	if (entry == append_states.end()) {
-		return nullptr;
-	}
-	return entry->second.get();
+LocalStorage::CommitState::~CommitState() {
 }
 
 LocalStorage &LocalStorage::Get(DuckTransaction &transaction) {
@@ -592,8 +584,7 @@ void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<Physic
 	storage->GetCollection().Update(TransactionData(0, 0), table, ids, column_ids, updates);
 }
 
-void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<TableAppendState> append_state,
-                         optional_ptr<StorageCommitState> commit_state) {
+void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {
 	if (storage.is_dropped) {
 		return;
 	}
@@ -607,14 +598,15 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 	auto append_count = storage.GetCollection().GetTotalRows() - storage.deleted_rows;
 	const auto row_group_size = storage.GetCollection().GetRowGroupSize();
 
-	D_ASSERT(append_state);
-	if ((append_state->row_start == 0 || storage.GetCollection().GetTotalRows() >= row_group_size) &&
+	TableAppendState append_state;
+	table.AppendLock(transaction, append_state);
+	if ((append_state.row_start == 0 || storage.GetCollection().GetTotalRows() >= row_group_size) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
 		// first flush any outstanding blocks
 		storage.FlushBlocks();
 		// Append to the indexes.
-		storage.AppendToIndexes(transaction, *append_state);
+		storage.AppendToIndexes(transaction, append_state);
 		// finally move over the row groups
 		table.MergeStorage(storage.GetCollection(), commit_state);
 	} else {
@@ -623,11 +615,11 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// so we need to revert the data we have already written
 		storage.Rollback();
 		// append to the indexes
-		storage.AppendToIndexes(transaction, *append_state);
+		storage.AppendToIndexes(transaction, append_state);
 		// after that is successful - append to the table
-		storage.AppendToTable(transaction, *append_state);
+		storage.AppendToTable(transaction, append_state);
 	}
-	transaction.PushAppend(table, NumericCast<idx_t>(append_state->row_start), append_count);
+	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
 
 #ifdef DEBUG
 	// Verify that our index memory is stable.
@@ -635,36 +627,15 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 #endif
 }
 
-void LocalStorage::Commit(LocalStorageCommitState &local_commit_state,
-                          optional_ptr<StorageCommitState> storage_commit_state) {
+void LocalStorage::Commit(optional_ptr<StorageCommitState> commit_state) {
 	// commit local storage
 	// iterate over all entries in the table storage map and commit them
 	// after this, the local storage is no longer required and can be cleared
 	auto table_storage = table_manager.MoveEntries();
-
-	// We retain append locks until the undo buffer has committed. Acquire all locks in a stable order to avoid
-	// deadlocks when concurrent transactions append to the same set of tables in a different insertion order.
-	vector<reference<DataTable>> append_tables;
-	for (auto &entry : table_storage) {
-		auto &storage = *entry.second;
-		if (!storage.is_dropped && storage.GetCollection().GetTotalRows() > storage.deleted_rows) {
-			append_tables.emplace_back(entry.first);
-		}
-	}
-	std::sort(append_tables.begin(), append_tables.end(),
-	          [](const reference<DataTable> &left, const reference<DataTable> &right) {
-		          return std::less<const DataTable *>()(&left.get(), &right.get());
-	          });
-	for (auto &table : append_tables) {
-		auto append_state = make_uniq<TableAppendState>();
-		table.get().AppendLock(transaction, *append_state);
-		local_commit_state.append_states.emplace(table, std::move(append_state));
-	}
-
 	for (auto &entry : table_storage) {
 		auto table = entry.first;
 		auto storage = entry.second.get();
-		Flush(table, *storage, local_commit_state.GetAppendState(table), storage_commit_state);
+		Flush(table, *storage, commit_state);
 		entry.second.reset();
 	}
 }

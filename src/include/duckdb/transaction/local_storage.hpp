@@ -25,15 +25,6 @@ class WriteAheadLog;
 struct LocalAppendState;
 struct TableAppendState;
 
-struct LocalStorageCommitState {
-	LocalStorageCommitState();
-	~LocalStorageCommitState();
-
-	optional_ptr<TableAppendState> GetAppendState(DataTable &table);
-
-	reference_map_t<DataTable, unique_ptr<TableAppendState>> append_states;
-};
-
 class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
@@ -122,7 +113,12 @@ private:
 //! The LocalStorage class holds appends that have not been committed yet
 class LocalStorage {
 public:
-	using CommitState = LocalStorageCommitState;
+	struct CommitState {
+		CommitState();
+		~CommitState();
+
+		reference_map_t<DataTable, unique_ptr<TableAppendState>> append_states;
+	};
 
 public:
 	explicit LocalStorage(ClientContext &context, DuckTransaction &transaction);
@@ -166,7 +162,7 @@ public:
 	void Update(DataTable &table, Vector &row_ids, const vector<PhysicalIndex> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit(LocalStorageCommitState &local_commit_state, optional_ptr<StorageCommitState> storage_commit_state);
+	void Commit(optional_ptr<StorageCommitState> commit_state);
 	//! Rollback the local storage
 	void Rollback();
 
@@ -205,8 +201,7 @@ private:
 	LocalTableManager table_manager;
 
 private:
-	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<TableAppendState> append_state,
-	           optional_ptr<StorageCommitState> commit_state);
+	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state);
 };
 
 } // namespace duckdb

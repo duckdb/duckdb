@@ -24,7 +24,6 @@ class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
 class StorageCommitState;
-struct LocalStorageCommitState;
 struct DataTableInfo;
 struct UndoBufferProperties;
 
@@ -107,8 +106,6 @@ private:
 	UndoBuffer undo_buffer;
 	//! The set of uncommitted appends for the transaction
 	unique_ptr<LocalStorage> storage;
-	//! Locks held while transaction-local appends are flushed and committed
-	unique_ptr<LocalStorageCommitState> local_storage_commit_state;
 	//! Lock that prevents checkpoints from starting
 	unique_ptr<StorageLockKey> checkpoint_lock;
 	//! Lock that prevents vacuums from starting

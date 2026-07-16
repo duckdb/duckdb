@@ -220,13 +220,10 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		auto &storage_manager = db.GetStorageManager();
 		auto wal = storage_manager.GetWAL();
 		commit_state = storage_manager.GenStorageCommitState(*wal);
-		if (!local_storage_commit_state) {
-			local_storage_commit_state = make_uniq<LocalStorageCommitState>();
-		}
 
 		auto &profiler = *context.client_data->profiler;
 		auto commit_timer = profiler.StartTimer(MetricType::COMMIT_LOCAL_STORAGE_LATENCY);
-		storage->Commit(*local_storage_commit_state, commit_state.get());
+		storage->Commit(commit_state.get());
 		commit_timer.EndTimer();
 
 		auto wal_timer = profiler.StartTimer(MetricType::WRITE_TO_WAL_LATENCY);
@@ -273,11 +270,8 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	CommitDropState drop_state(block_manager);
 	commit_info.drop_state = &drop_state;
 	try {
-		if (!local_storage_commit_state) {
-			local_storage_commit_state = make_uniq<LocalStorageCommitState>();
-		}
-		storage->Commit(*local_storage_commit_state, commit_state.get());
-		undo_buffer.Commit(iterator_state, commit_info, local_storage_commit_state.get());
+		storage->Commit(commit_state.get());
+		undo_buffer.Commit(iterator_state, commit_info);
 		// if (DebugForceAbortCommit()) {
 		// 	throw InvalidInputException("Force revert");
 		// }
@@ -286,23 +280,19 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			commit_state->FlushCommit();
 		}
 		drop_state.FinalizeCommit();
-		local_storage_commit_state.reset();
 		return ErrorData();
 	} catch (std::exception &ex) {
-		undo_buffer.RevertCommit(iterator_state, this->transaction_id, local_storage_commit_state.get());
+		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
 		if (commit_state) {
 			// if we have written to the WAL - truncate the WAL on failure
 			commit_state->RevertCommit();
 		}
-		local_storage_commit_state.reset();
 		return ErrorData(ex);
 	}
 }
 
 ErrorData DuckTransaction::Rollback() {
 	try {
-		// Release append locks retained during a failed commit before reverting the physical appends.
-		local_storage_commit_state.reset();
 		storage->Rollback();
 		undo_buffer.Rollback();
 		return ErrorData();

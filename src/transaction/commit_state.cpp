@@ -131,9 +131,8 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 // CommitState
 //===--------------------------------------------------------------------===//
 CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
-                         ActiveTransactionState transaction_state, CommitMode commit_mode,
-                         optional_ptr<LocalStorageCommitState> local_commit_state_p)
-    : transaction(transaction_p), commit_id(commit_id), local_commit_state(local_commit_state_p),
+                         ActiveTransactionState transaction_state, CommitMode commit_mode)
+    : transaction(transaction_p), commit_id(commit_id),
       index_data_remover(transaction, *transaction.context.lock(),
                          GetIndexRemovalType(transaction_state, commit_mode)) {
 }
@@ -302,9 +301,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 			                           table_name, table_modification);
 		}
 		// mark the tuples as committed
-		auto append_state =
-		    local_commit_state ? local_commit_state->GetAppendState(*info->table) : optional_ptr<TableAppendState>();
-		info->table->CommitAppend(commit_id, info->start_row, info->count, append_state);
+		info->table->CommitAppend(commit_id, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
@@ -363,9 +360,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert this append
-		auto append_state =
-		    local_commit_state ? local_commit_state->GetAppendState(*info->table) : optional_ptr<TableAppendState>();
-		info->table->RevertAppend(transaction, info->start_row, info->count, append_state);
+		info->table->RevertAppend(transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
