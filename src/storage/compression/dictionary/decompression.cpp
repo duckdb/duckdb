@@ -68,7 +68,23 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
 	index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
 	auto stored_width = Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width));
-	current_width = (bitpacking_width_t)stored_width;
+	if (index_buffer_count == 0) {
+		throw IOException(
+		    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
+	}
+	auto expected_width = BitpackingPrimitives::MinimumBitWidth(index_buffer_count - 1);
+	if (stored_width != expected_width) {
+		throw IOException(
+		    "Failed to scan dictionary string - bitpacking width was invalid. Database file appears to be "
+		    "corrupted.");
+	}
+	current_width = expected_width;
+	auto selection_buffer_size = BitpackingPrimitives::GetRequiredSize(segment.count.load(), current_width);
+	auto expected_index_buffer_offset = DictionaryCompression::DICTIONARY_HEADER_SIZE + selection_buffer_size;
+	if (index_buffer_offset != expected_index_buffer_offset) {
+		throw IOException("Failed to scan dictionary string - selection buffer was out of range. Database file appears "
+		                  "to be corrupted.");
+	}
 	if (segment.GetBlockOffset() + index_buffer_offset + sizeof(uint32_t) * index_buffer_count >
 	    segment.GetBlockSize()) {
 		throw IOException(
@@ -81,16 +97,10 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 
 	dict = DictionaryCompression::GetDictionary(segment, *handle);
 	auto index_buffer_end = index_buffer_offset + sizeof(uint32_t) * index_buffer_count;
-	if (dict.size > block_size || dict.end > block_size || dict.size > dict.end || index_buffer_count == 0 ||
+	if (dict.size > block_size || dict.end > block_size || dict.size > dict.end ||
 	    dict.end - dict.size < index_buffer_end) {
 		throw IOException(
 		    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
-	}
-	auto expected_width = BitpackingPrimitives::MinimumBitWidth(index_buffer_count - 1);
-	if (stored_width != expected_width) {
-		throw IOException(
-		    "Failed to scan dictionary string - bitpacking width was invalid. Database file appears to be "
-		    "corrupted.");
 	}
 	if (!initialize_dictionary) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
