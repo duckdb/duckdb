@@ -13,6 +13,8 @@ unzip data/storage/dictionary_invalid_bitpacking_width.db.gz {TEST_DIR}/dictiona
 
 unzip data/storage/dictionary_invalid_selection_buffer.db.gz {TEST_DIR}/dictionary_invalid_selection_buffer.db
 
+unzip data/storage/dictionary_invalid_segment_end.db.gz {TEST_DIR}/dictionary_invalid_segment_end.db
+
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_offset.db' AS offset_db
 
@@ -92,3 +94,19 @@ statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
 IO Error: Failed to scan dictionary string - selection buffer was out of range. Database file appears to be corrupted.
+
+statement ok
+ATTACH '{TEST_DIR}/dictionary_invalid_segment_end.db' AS segment_end_db
+
+statement ok
+USE segment_end_db
+
+query I
+SELECT block_offset FROM pragma_storage_info('tbl') WHERE compression='Dictionary' AND column_name='street'
+----
+992
+
+statement error
+SELECT sum(length(STREET)) FROM tbl
+----
+IO Error: Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.
