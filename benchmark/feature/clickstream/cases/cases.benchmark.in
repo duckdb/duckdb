@@ -12,9 +12,17 @@ include benchmark/feature/clickstream/data/clickstream_load.benchmark.in
 name ${BENCH_NAME}
 group feature
 
-# The timed run mutates state (REFRESH appends versions), so re-initialise before every hot run:
-# reload rebuilds a clean feature setup from the cached source, keeping timings independent.
-require_reinit
+# The timed run mutates state (REFRESH appends versions), so rebuild a clean feature store after
+# every run. SETUP_SQL is idempotent (DROP FEATURE IF EXISTS first), so re-running it restores the
+# pre-run state, keeping timings independent. This runs after the profiler stops, so it is untimed.
+# The trailing CHECKPOINT reclaims the blocks freed by DROP FEATURE: without it the cache file grows
+# by ~1GB per run and later runs drift slower as they wade through the garbage.
+# NOTE: do NOT use require_reinit here. It also yields a clean store (closing the db checkpoints it),
+# but it reopens the whole multi-GB cached database before every hot run -- ~14s of untimed work per
+# run at s20 and minutes at s100, versus ~1s of actual measurement. Worse, the runner prints the run
+# number *before* re-initialising, so the wait looks like a hang on the next run.
+cleanup
+${SETUP_SQL} CHECKPOINT;
 
 # Features are created (version 0) in SETUP_SQL; the timed run performs the refreshes, so the
 # assert only checks that the source is populated.

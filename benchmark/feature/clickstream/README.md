@@ -95,9 +95,16 @@ downloaded a scale, the others reuse it.
   start with `DROP FEATURE IF EXISTS ...` so re-runs and scenario switches on a shared cache are clean.
 - **Only the `run` block is timed.** For `serve/` the timed statement is read-only, so hot iterations
   don't accumulate versions and setup happens once. For `refresh/`/`cases/` the timed statement
-  mutates (REFRESH appends versions); `cases/` sets `require_reinit` so each hot run rebuilds a clean
-  feature store from the cached source, and `refresh/` measures the steady-state refresh (bounded by
-  `RETAIN`).
+  mutates (REFRESH appends versions); `cases/` re-runs `SETUP_SQL` in an (untimed) `cleanup` block so
+  each hot run starts from a clean feature store, and `refresh/` measures the steady-state refresh
+  (bounded by `RETAIN`).
+- **`cases/` uses `cleanup`, not `require_reinit`.** Both give a clean store per run, but
+  `require_reinit` reopens the whole cached database before every hot run — a full close + checkpoint
+  + reopen of a multi-GB file. That is ~14s of untimed work per run at s20 (and minutes at s100)
+  against ~1s of measurement, and because the runner prints the run number *before* re-initialising,
+  the wait looks like the next run hanging. Re-running the idempotent `SETUP_SQL` in `cleanup`
+  reaches the same state ~6x faster. The trailing `CHECKPOINT` matters: it reclaims the blocks freed
+  by `DROP FEATURE`, without which the cache grows ~1GB per run and timings drift slower.
 - A lightweight `assert` (source populated; for `serve/`, store materialized and spine non-empty)
   guards against degenerate empty-state timings; exact result values are not checked because they
   vary per scenario.
