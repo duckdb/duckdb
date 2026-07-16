@@ -1035,6 +1035,19 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 		return PushDownSingleCorrelatedChild(plan, propagate_null_values, std::move(state), false);
 	}
 	if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+		if (!left_has_correlation && !right_has_correlation) {
+			// The correlation exists only in the predicate. Attach the active delim
+			// state to the output side and decorrelate the other side independently.
+			auto projected_bindings = GetProjectedChildBindings(*plan, 1);
+			auto right_state = DecorrelateIndependentSubtree(plan->children[1]);
+			RewriteOperatorBindings(*plan, right_state);
+			RewriteChildProjectionMap(*plan, 1, std::move(projected_bindings), right_state);
+
+			auto left_state = AttachDelimToIndependentJoinLeft(plan->children[0], join);
+			RewriteCorrelatedBindings(*plan, left_state.bindings);
+			MergeBindingReplacements(left_state, right_state);
+			return left_state;
+		}
 		if (left_has_correlation && !right_has_correlation) {
 			return PushDownSingleCorrelatedChild(plan, propagate_null_values, std::move(state), true);
 		}

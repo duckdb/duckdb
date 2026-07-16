@@ -389,21 +389,22 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	if (ref.condition_lateral) {
 		PushFilterToChild(right, ref.condition);
 		if (ref.correlated_columns.empty()) {
-			RecursiveDependentJoinPlanner::Plan(*this, right);
+			if (!has_unplanned_dependent_joins) {
+				RecursiveDependentJoinPlanner::Plan(*this, right);
+			}
 			vector<JoinCondition> conditions;
 			return LogicalComparisonJoin::CreateJoin(ref.type, JoinRefType::REGULAR, std::move(left), std::move(right),
 			                                         std::move(conditions));
 		}
 		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type, nullptr);
-		RecursiveDependentJoinPlanner::Plan(*this, new_plan);
+		if (!has_unplanned_dependent_joins) {
+			RecursiveDependentJoinPlanner::Plan(*this, new_plan);
+		}
 		return new_plan;
 	}
 	if (ref.lateral) {
 		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                                std::move(ref.condition));
-		if (has_unplanned_dependent_joins) {
-			RecursiveDependentJoinPlanner::Plan(*this, new_plan);
-		}
 		return new_plan;
 	}
 	switch (ref.ref_type) {

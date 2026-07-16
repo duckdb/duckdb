@@ -478,7 +478,7 @@ public:
 		join_keys.Initialize(allocator, op.condition_types);
 
 		if (!op.payload_columns.col_types.empty()) {
-			payload_chunk.Initialize(allocator, op.payload_columns.col_types);
+			payload_chunk.InitializeEmpty(op.payload_columns.col_types);
 		}
 
 		hash_table = op.InitializeHashTable(context, gstate.hash_table->GetRadixBits());
@@ -702,7 +702,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(
 			    context, allocator, delim_types, delim_payload_types, std::move(correlated_aggregates));
 			info.correlated_types = delim_types;
-			info.group_chunk.Initialize(allocator, delim_types);
+			info.group_chunk.InitializeEmpty(delim_types);
 			info.result_chunk.Initialize(allocator, delim_payload_types);
 		}
 	}
@@ -1898,7 +1898,6 @@ public:
 	}
 
 	void Reset() override {
-		auto &sink = op.sink_state->Cast<HashJoinGlobalSinkState>();
 		ResetCachingState();
 		lhs_join_keys.Reset();
 		lhs_probe_data.Reset();
@@ -1907,9 +1906,7 @@ public:
 		perfect_hash_join_state.reset();
 		spill_state = JoinHashTable::ProbeSpillLocalAppendState();
 		TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
-		if (spill_chunk.ColumnCount() == 0) {
-			spill_chunk.Initialize(BufferAllocator::Get(sink.context), sink.probe_types);
-		} else {
+		if (spill_chunk.ColumnCount() != 0) {
 			spill_chunk.Reset();
 		}
 		// discard cached build-side pointers; the HT may have been reset between iterations (e.g. recursive CTE)
@@ -1928,10 +1925,10 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 
 	// initialize probe data with ALL probe columns (output + predicate)
 	if (!lhs_probe_columns.col_types.empty()) {
-		state->lhs_probe_data.Initialize(allocator, lhs_probe_columns.col_types);
+		state->lhs_probe_data.InitializeEmpty(lhs_probe_columns.col_types);
 	}
 	if (!lhs_output_columns.col_types.empty()) {
-		state->lhs_output_data.Initialize(allocator, lhs_output_columns.col_types);
+		state->lhs_output_data.InitializeEmpty(lhs_output_columns.col_types);
 	}
 
 	for (auto &cond : conditions) {
@@ -1944,7 +1941,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	}
 
 	if (sink.external) {
-		state->spill_chunk.Initialize(allocator, sink.probe_types);
+		state->spill_chunk.InitializeEmpty(sink.probe_types);
 		sink.InitializeProbeSpill();
 	}
 
@@ -2373,8 +2370,8 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(ExecutionContext &context, Gl
 	lhs_join_keys.Initialize(allocator, op.condition_types);
 
 	// initialize with PROBE columns (not just output)
-	lhs_probe_data.Initialize(allocator, op.lhs_probe_columns.col_types);
-	lhs_output_data.Initialize(allocator, op.lhs_output_columns.col_types);
+	lhs_probe_data.InitializeEmpty(op.lhs_probe_columns.col_types);
+	lhs_output_data.InitializeEmpty(op.lhs_output_columns.col_types);
 
 	TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
 

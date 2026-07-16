@@ -1,0 +1,106 @@
+# name: test/sql/join/non_inner_decorrelation_regressions.test
+# description: Regression tests for non-inner join decorrelation
+# group: [join]
+
+# Pair-dependent FULL OUTER JOIN followed by a correlated scalar subquery.
+query III
+SELECT l.a, r.b, (SELECT l.a + r.b) AS z
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+ORDER BY ALL;
+----
+1	10	11
+2	NULL	NULL
+NULL	20	NULL
+
+# Pair-dependent FULL OUTER JOIN followed by a correlated EXISTS filter.
+query II
+SELECT l.a, r.b
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+WHERE EXISTS (SELECT 1 WHERE l.a + r.b = 11)
+ORDER BY ALL;
+----
+1	10
+
+# Pair-dependent FULL OUTER JOIN followed by a lateral subquery.
+query III
+SELECT l.a, r.b, x.z
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+LEFT JOIN LATERAL (SELECT l.a + r.b AS z) x ON true
+ORDER BY ALL;
+----
+1	10	11
+2	NULL	NULL
+NULL	20	NULL
+
+# Pair-dependent FULL OUTER JOIN followed by another dependent LEFT JOIN.
+query III
+SELECT l.a, r.b, s.c
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+LEFT JOIN (VALUES (100), (200)) s(c)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND s.c = 100)
+ORDER BY ALL;
+----
+1	10	100
+2	NULL	NULL
+NULL	20	NULL
+
+# Pair-dependent FULL OUTER JOIN followed by a dependent SEMI JOIN.
+query II
+SELECT l.a, r.b
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+SEMI JOIN (VALUES (100), (200)) s(c)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND s.c = 100)
+ORDER BY ALL;
+----
+1	10
+
+# Pair-dependent FULL OUTER JOIN followed by a dependent ANTI JOIN.
+query II
+SELECT l.a, r.b
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+ANTI JOIN (VALUES (100), (200)) s(c)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND s.c = 100)
+ORDER BY ALL;
+----
+2	NULL
+NULL	20
+
+# SEMI JOIN whose correlation exists only in the join condition.
+query IT
+SELECT o.x, EXISTS (
+  SELECT *
+  FROM (VALUES (1)) l(a)
+  SEMI JOIN (VALUES (2)) r(b)
+    ON l.a = 1 AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	1
+20	0
+
+# ANTI JOIN whose correlation exists only in the join condition.
+query IT
+SELECT o.x, EXISTS (
+  SELECT *
+  FROM (VALUES (1)) l(a)
+  ANTI JOIN (VALUES (2)) r(b)
+    ON l.a = 1 AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1

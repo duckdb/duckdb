@@ -549,7 +549,8 @@ static void MergeBindingReplacements(vector<ReplacementBinding> &target,
 	}
 }
 
-static void ApplyBindingReplacements(LogicalOperator &op, const vector<ReplacementBinding> &replacements) {
+static void ApplyBindingReplacements(LogicalOperator &op, LogicalOperator &changed_child,
+                                     const vector<ReplacementBinding> &replacements) {
 	if (replacements.empty()) {
 		return;
 	}
@@ -558,7 +559,12 @@ static void ApplyBindingReplacements(LogicalOperator &op, const vector<Replaceme
 		replacer.AddReplacement(replacement.old_binding,
 		                        ResolveBindingReplacement(replacement.old_binding, replacements));
 	}
-	replacer.VisitOperatorBindings(op);
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && op.children[0].get() == &changed_child) {
+		replacer.stop_operator = changed_child;
+		replacer.VisitOperator(op);
+	} else {
+		replacer.VisitOperatorBindings(op);
+	}
 }
 
 static vector<ReplacementBinding>
@@ -608,7 +614,7 @@ vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanOperator(unique_pt
 			PlanJoinChildFilters(*op.children[i]);
 			auto recursive_replacements = PlanOperator(op.children[i]);
 			MergeBindingReplacements(child_replacements, recursive_replacements);
-			ApplyBindingReplacements(op, child_replacements);
+			ApplyBindingReplacements(op, *op.children[i], child_replacements);
 			MergeBindingReplacements(operator_replacements, child_replacements);
 		}
 	}
