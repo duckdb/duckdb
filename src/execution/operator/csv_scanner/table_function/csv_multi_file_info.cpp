@@ -75,7 +75,7 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	idx_t current_file = 0;
 	options.file_path = file_paths[current_file].path;
 
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, false);
+	buffer_manager = CSVBufferManager::Open(context, options, options.file_path, false);
 	idx_t only_header_or_empty_files = 0;
 
 	{
@@ -101,8 +101,7 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	while (total_number_of_rows < required_number_of_lines && current_file < files_to_sniff) {
 		auto option_copy = option_og;
 		option_copy.file_path = file_paths[current_file].path;
-		auto file_buffer_manager =
-		    make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, false);
+		auto file_buffer_manager = CSVBufferManager::Open(context, option_copy, option_copy.file_path, false);
 		// TODO: We could cache the sniffer to be reused during scanning. Currently that's an exercise left to the
 		// reader
 		CSVSniffer sniffer(option_copy, file_options, file_buffer_manager, CSVStateMachineCache::Get(context));

@@ -106,6 +106,12 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	return UnsafeNumericCast<idx_t>(bytes_read);
 }
 
+void CSVFileHandle::ReadAt(void *buffer, idx_t nr_bytes, idx_t position) {
+	D_ASSERT(HasKnownBufferRanges());
+	D_ASSERT(position + nr_bytes <= file_size);
+	file_handle->Read(context, buffer, nr_bytes, position);
+}
+
 string CSVFileHandle::ReadLine() {
 	bool carriage_return = false;
 	string result;

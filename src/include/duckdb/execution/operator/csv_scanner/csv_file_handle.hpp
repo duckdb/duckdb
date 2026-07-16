@@ -44,6 +44,9 @@ public:
 
 	idx_t Read(void *buffer, idx_t nr_bytes);
 
+	//! Random-access read that bypasses the handle's seek state, only valid for files with known buffer ranges
+	void ReadAt(void *buffer, idx_t nr_bytes, idx_t position);
+
 	string ReadLine();
 
 	string GetFilePath();
