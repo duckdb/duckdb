@@ -73,6 +73,11 @@ idx_t CSVFileHandle::FileSize() const {
 	return file_size;
 }
 
+bool CSVFileHandle::HasKnownBufferRanges() const {
+	return compression_type == FileCompressionType::UNCOMPRESSED && can_seek && !is_pipe &&
+	       encoder.encoding_name == "utf-8";
+}
+
 bool CSVFileHandle::FinishedReading() const {
 	return finished;
 }

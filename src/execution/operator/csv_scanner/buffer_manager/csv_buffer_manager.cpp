@@ -108,6 +108,27 @@ void CSVBufferManager::ResetBuffer(const idx_t buffer_idx) {
 	}
 }
 
+bool CSVBufferManager::HasKnownBufferRanges() const {
+	return file_handle->HasKnownBufferRanges();
+}
+
+idx_t CSVBufferManager::KnownBufferCount() const {
+	D_ASSERT(HasKnownBufferRanges());
+	const idx_t file_size = file_handle->FileSize();
+	if (file_size == 0) {
+		// an empty file still materializes a single empty buffer
+		return 1;
+	}
+	return (file_size + buffer_size - 1) / buffer_size;
+}
+
+idx_t CSVBufferManager::KnownBufferSize(const idx_t buffer_idx) const {
+	D_ASSERT(HasKnownBufferRanges() && buffer_idx < KnownBufferCount());
+	const idx_t file_size = file_handle->FileSize();
+	const idx_t buffer_start = buffer_idx * buffer_size;
+	return MinValue<idx_t>(buffer_size, file_size - buffer_start);
+}
+
 idx_t CSVBufferManager::GetBufferSize() const {
 	return buffer_size;
 }

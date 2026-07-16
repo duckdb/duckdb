@@ -34,6 +34,13 @@ public:
 	//! Initializes the buffer manager, during it's construction/reset
 	void Initialize();
 
+	//! Whether buffer byte ranges follow deterministically from the file size
+	bool HasKnownBufferRanges() const;
+	//! For files with known buffer ranges, the number of buffers in the file
+	idx_t KnownBufferCount() const;
+	//! For files with known buffer range, the actual size of a given buffer
+	idx_t KnownBufferSize(const idx_t buffer_idx) const;
+
 	//! Returns the buffer size set for this CSV buffer manager
 	idx_t GetBufferSize() const;
 	//! Returns the number of buffers in the cached_buffers cache
