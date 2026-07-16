@@ -64,6 +64,7 @@ public:
 	bool all_values_inlined = false;
 
 	unsafe_unique_array<bool> filter_result;
+	bool null_filter_result_initialized = false;
 };
 
 } // namespace dict_fsst

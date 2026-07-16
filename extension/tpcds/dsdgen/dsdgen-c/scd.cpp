@@ -50,7 +50,7 @@
 #include "permute.h"
 
 /* an array of the most recent business key for each table */
-char arBKeys[MAX_TABLE][17];
+thread_local char arBKeys[MAX_TABLE][17];
 
 /*
  * Routine: setSCDKey

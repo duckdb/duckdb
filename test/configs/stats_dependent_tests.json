@@ -46,6 +46,8 @@
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
         "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
         "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
+        "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
+        "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",
         "test/sql/types/geo/geometry_vertex_extract.test"
       ]
     }

@@ -1,0 +1,13 @@
+# name: test/sql/vector_types/vector_types_errors.test
+# description: Test unsupported inputs for test_vector_types
+# group: [vector_types]
+
+statement error
+FROM test_vector_types(NULL::VARIANT);
+----
+Unimplemented type for test_vector_types
+
+statement error
+FROM test_vector_types({a: 1, b: 2}::VARIANT);
+----
+Unimplemented type for test_vector_types

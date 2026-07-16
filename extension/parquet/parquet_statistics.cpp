@@ -22,6 +22,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "reader/uuid_column_reader.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "column_reader.hpp"
@@ -299,10 +300,10 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			auto val = Load<int64_t>(stats_data);
 			switch (schema_ele.type_info) {
 			case ParquetExtraTypeInfo::UNIT_MS:
-				timestamp_value = Timestamp::FromEpochMs(val);
+				timestamp_value = ParquetTimestampMsToTimestamp(val);
 				break;
 			case ParquetExtraTypeInfo::UNIT_NS:
-				timestamp_value = Timestamp::FromEpochNanoSeconds(val);
+				timestamp_value = ParquetTimestampNsToTimestamp(val);
 				break;
 			case ParquetExtraTypeInfo::UNIT_MICROS:
 			default:
@@ -670,18 +671,39 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	return row_group_stats;
 }
 
+static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const Expression &expr) {
+	if (!BoundComparisonExpression::IsComparison(expr)) {
+		return nullptr;
+	}
+	auto &comp = expr.Cast<BoundFunctionExpression>();
+	if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+		return nullptr;
+	}
+	auto &left = BoundComparisonExpression::Left(comp);
+	auto &right = BoundComparisonExpression::Right(comp);
+	optional_ptr<const Expression> column;
+	optional_ptr<const BoundConstantExpression> constant;
+	if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		column = left;
+		constant = right.Cast<BoundConstantExpression>();
+	} else if (right.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	           left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		column = right;
+		constant = left.Cast<BoundConstantExpression>();
+	} else {
+		return nullptr;
+	}
+	if (column->Cast<BoundReferenceExpression>().Index() != 0 || constant->GetValue().IsNull() ||
+	    column->GetReturnType() != constant->GetValue().type()) {
+		return nullptr;
+	}
+	return constant;
+}
+
 static bool HasFilterConstants(const Expression &expr) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
-		auto &comp = expr.Cast<BoundFunctionExpression>();
-		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
-			return false;
-		}
-		auto &right = BoundComparisonExpression::Right(comp);
-		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			return false;
-		}
-		auto &constant = right.Cast<BoundConstantExpression>();
-		return !constant.GetValue().IsNull();
+		return GetBloomFilterConstant(expr) != nullptr;
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
@@ -732,8 +754,8 @@ static uint64_t ValueXXH64(const Value &constant) {
 	case PhysicalType::DOUBLE:
 		return ValueXH64FixedWidth<double>(constant);
 	case PhysicalType::VARCHAR: {
-		auto val = constant.GetValue<string>();
-		return duckdb_zstd::XXH64(val.c_str(), val.length(), 0);
+		auto &val = StringValue::Get(constant);
+		return duckdb_zstd::XXH64(val.data(), val.size(), 0);
 	}
 	default:
 		return 0;
@@ -742,17 +764,11 @@ static uint64_t ValueXXH64(const Value &constant) {
 
 static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_filter) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
-		auto &comp = expr.Cast<BoundFunctionExpression>();
-		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+		auto constant = GetBloomFilterConstant(expr);
+		if (!constant) {
 			return false;
 		}
-		auto &right = BoundComparisonExpression::Right(comp);
-		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			return false;
-		}
-		auto &constant = right.Cast<BoundConstantExpression>();
-		D_ASSERT(!constant.GetValue().IsNull());
-		auto hash = ValueXXH64(constant.GetValue());
+		auto hash = ValueXXH64(constant->GetValue());
 		return hash > 0 && !bloom_filter.FilterCheck(hash);
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
@@ -808,12 +824,27 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	    column_meta_data.bloom_filter_offset <= 0) {
 		return false;
 	}
-	// TODO check length against file length!
 
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto.getTransport());
-	transport.SetLocation(column_meta_data.bloom_filter_offset);
-	if (column_meta_data.__isset.bloom_filter_length && column_meta_data.bloom_filter_length > 0) {
-		transport.Prefetch(column_meta_data.bloom_filter_offset, column_meta_data.bloom_filter_length);
+	auto bloom_filter_start = UnsafeNumericCast<idx_t>(column_meta_data.bloom_filter_offset);
+	if (bloom_filter_start >= transport.GetSize()) {
+		return false;
+	}
+	idx_t bloom_filter_length = 0;
+	if (column_meta_data.__isset.bloom_filter_length) {
+		if (column_meta_data.bloom_filter_length <= 0) {
+			return false;
+		}
+		bloom_filter_length = UnsafeNumericCast<idx_t>(column_meta_data.bloom_filter_length);
+		if (bloom_filter_length > transport.GetSize() ||
+		    bloom_filter_start > transport.GetSize() - bloom_filter_length) {
+			return false;
+		}
+	}
+
+	transport.SetLocation(bloom_filter_start);
+	if (bloom_filter_length > 0) {
+		transport.Prefetch(bloom_filter_start, bloom_filter_length);
 	}
 
 	duckdb_parquet::BloomFilterHeader filter_header;
@@ -823,9 +854,28 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	    !filter_header.hash.__isset.XXHASH) {
 		return false;
 	}
+	if (filter_header.numBytes <= 0) {
+		return false;
+	}
+	auto bloom_filter_data_start = transport.GetLocation();
+	auto bloom_filter_data_size = UnsafeNumericCast<idx_t>(filter_header.numBytes);
+	if (bloom_filter_data_size % sizeof(ParquetBloomBlock) != 0) {
+		return false;
+	}
+	if (bloom_filter_data_start < bloom_filter_start || bloom_filter_data_size > transport.GetSize() ||
+	    bloom_filter_data_start > transport.GetSize() - bloom_filter_data_size) {
+		return false;
+	}
+	if (bloom_filter_length > 0) {
+		auto bloom_filter_header_size = bloom_filter_data_start - bloom_filter_start;
+		if (bloom_filter_header_size > bloom_filter_length ||
+		    bloom_filter_data_size != bloom_filter_length - bloom_filter_header_size) {
+			return false;
+		}
+	}
 
-	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, filter_header.numBytes);
-	transport.read(new_buffer->ptr, filter_header.numBytes);
+	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, bloom_filter_data_size);
+	transport.read(new_buffer->ptr, UnsafeNumericCast<uint32_t>(bloom_filter_data_size));
 	ParquetBloomFilter bloom_filter(std::move(new_buffer));
 	return ApplyBloomFilter(duckdb_filter, bloom_filter);
 }

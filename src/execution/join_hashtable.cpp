@@ -1446,6 +1446,10 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &probe_data, DataChunk &resu
 	default:
 		throw InternalException("Unhandled join type in JoinHashTable");
 	}
+
+	if (PointersExhausted()) {
+		FlushProbeMatches();
+	}
 }
 
 bool ScanStructure::PointersExhausted() const {
@@ -1484,10 +1488,18 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel, no_match_count);
 	}
 
-	// Update total probe match count
-	ht.total_probe_matches.fetch_add(result_count, std::memory_order_relaxed);
-
+	// accumulate matches locally, will be flushed globally if PointersExhausted is true and we
+	// finished walking the chains
+	local_probe_matches += result_count;
 	return result_count;
+}
+
+void ScanStructure::FlushProbeMatches() {
+	if (local_probe_matches == 0) {
+		return;
+	}
+	ht.total_probe_matches.fetch_add(local_probe_matches, std::memory_order_relaxed);
+	local_probe_matches = 0;
 }
 
 idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,

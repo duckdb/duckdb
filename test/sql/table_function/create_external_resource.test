@@ -1,0 +1,339 @@
+# name: test/sql/table_function/create_external_resource.test
+# description: create_external_resource — blocking create + status poll, baseline enforcement, deleter binding
+# group: [table_function]
+
+# Mock recipe callbacks (non-TEMP macros, visible instance-wide to the internal connection).
+statement ok
+CREATE MACRO mock_create(p) AS TABLE SELECT MAP {'id': 'r1'} AS handle;
+
+statement ok
+CREATE MACRO mock_status(h) AS TABLE
+  SELECT 'ready' AS state, MAP {'uri': 'quack:localhost:9494', 'attached_db_type': 'quack', 'token': 't1'} AS result;
+
+statement ok
+CREATE MACRO mock_destroy(h) AS TABLE SELECT 'ok' AS status;
+
+statement ok
+CALL register_external_resource_type('mock@local', kind := 'catalog', create_function := 'mock_create',
+    status_function := 'mock_status', destroy_function := 'mock_destroy');
+
+# Blocking create: invokes create, polls status to 'ready', extracts uri/attached_db_type, binds deleter.
+# (deleter_function is suffix-matched: it comes back fully qualified when the type is registered in a
+# non-default search path, e.g. under configs that force a USE.)
+query TTTT
+SELECT uri, attached_db_type, deleter_function LIKE '%mock_destroy', handle
+FROM create_external_resource('mock@local', params := MAP {'region': 'x'});
+----
+quack:localhost:9494	quack	true	{id=r1}
+
+# The connect options ride in `result` (e.g. token flows through generically).
+query T
+SELECT result FROM create_external_resource('mock@local');
+----
+{uri='quack:localhost:9494', attached_db_type=quack, token=t1}
+
+# End-to-end: capture the deleter binding and invoke it.
+statement ok
+SET VARIABLE dfn = (SELECT deleter_function FROM create_external_resource('mock@local'));
+
+statement ok
+SET VARIABLE dpl = (SELECT deleter_payload FROM create_external_resource('mock@local'));
+
+statement ok
+CALL destroy_external_resource(getvariable('dfn'), getvariable('dpl'));
+
+# Baseline enforcement: an catalog resource whose status omits 'uri' errors.
+statement ok
+CREATE MACRO bad_status(h) AS TABLE SELECT 'ready' AS state, MAP {'foo': 'bar'} AS result;
+
+statement ok
+CALL register_external_resource_type('badattach@local', kind := 'catalog', create_function := 'mock_create', status_function := 'bad_status');
+
+statement error
+SELECT * FROM create_external_resource('badattach@local');
+----
+<REGEX>:.*missing 'uri'.*
+
+# A 'failed' status is surfaced as an error.
+statement ok
+CREATE MACRO fail_status(h) AS TABLE SELECT 'failed' AS state, MAP {'x': 'y'} AS result;
+
+statement ok
+CALL register_external_resource_type('failing@local', kind := 'catalog', create_function := 'mock_create', status_function := 'fail_status');
+
+statement error
+SELECT * FROM create_external_resource('failing@local');
+----
+<REGEX>:.*state 'failed'.*
+
+# A type with no status function can't await readiness => error.
+statement ok
+CALL register_external_resource_type('nostatus@local', kind := 'catalog', create_function := 'mock_create');
+
+statement error
+SELECT * FROM create_external_resource('nostatus@local');
+----
+<REGEX>:.*no status function.*
+
+# Unknown resource type errors.
+statement error
+SELECT * FROM create_external_resource('does_not_exist@local');
+----
+<REGEX>:.*unknown resource type.*
+
+# Callback names that are keywords (or otherwise need quoting) are quoted when the callback SQL is built.
+statement ok
+CREATE MACRO "select"(p) AS TABLE SELECT MAP {'id':'r'} AS handle;
+
+statement ok
+CREATE MACRO plain_status(h) AS TABLE SELECT 'ready' AS state, MAP {'uri':'kw', 'attached_db_type':'quack'} AS result;
+
+statement ok
+CALL register_external_resource_type('kw@local', kind := 'catalog', create_function := 'select', status_function := 'plain_status');
+
+query T
+SELECT uri FROM create_external_resource('kw@local');
+----
+kw
+
+# A status function whose 'result' column is not a MAP is rejected with a clear error (not an internal crash).
+statement ok
+CREATE MACRO nonmap_result_status(h) AS TABLE SELECT 'ready' AS state, 42 AS result;
+
+statement ok
+CALL register_external_resource_type('nonmap_result@local', kind := 'compute', create_function := 'mock_create', status_function := 'nonmap_result_status');
+
+statement error
+SELECT * FROM create_external_resource('nonmap_result@local');
+----
+<REGEX>:.*must return a MAP in its 'result' column.*
+
+# A create function whose 'handle' column is not a MAP is likewise rejected (not an internal crash).
+statement ok
+CREATE MACRO nonmap_handle_create(p) AS TABLE SELECT 99 AS handle;
+
+statement ok
+CALL register_external_resource_type('nonmap_handle@local', kind := 'compute', create_function := 'nonmap_handle_create', status_function := 'mock_status');
+
+statement error
+SELECT * FROM create_external_resource('nonmap_handle@local');
+----
+<REGEX>:.*must return a MAP in its 'handle' column.*
+
+# The blocking poll loop stays interruptible: a never-ready resource must surface max_execution_time
+# (and, interactively, Ctrl-C) rather than hang until the internal readiness timeout.
+statement ok
+CREATE MACRO stuck_status(h) AS TABLE SELECT 'pending' AS state, MAP {'uri':'u','attached_db_type':'quack'} AS result;
+
+statement ok
+CALL register_external_resource_type('stuck@local', kind := 'catalog', create_function := 'mock_create', status_function := 'stuck_status');
+
+statement ok
+SET max_execution_time = 500;
+
+statement error
+SELECT * FROM create_external_resource('stuck@local');
+----
+<REGEX>:.*maximum execution time.*
+
+statement ok
+SET max_execution_time = 0;
+
+# The readiness timeout is configurable via timeout_seconds; a never-ready resource errors after it elapses.
+statement error
+SELECT * FROM create_external_resource('stuck@local', timeout_seconds := 1, poll_interval_seconds := 1);
+----
+<REGEX>:.*timed out awaiting readiness.*
+
+# Both are range-checked at bind time. A negative timeout would silently mean 'wait forever' and a huge one
+# would overflow the poll loop's deadline arithmetic; a poll interval below 1s would busy-spin on status.
+statement error
+SELECT * FROM create_external_resource('stuck@local', timeout_seconds := -1);
+----
+<REGEX>:.*'timeout_seconds' must be between 0 and 2592000.*
+
+statement error
+SELECT * FROM create_external_resource('stuck@local', timeout_seconds := 9223372036854775807);
+----
+<REGEX>:.*'timeout_seconds' must be between 0 and 2592000.*
+
+statement error
+SELECT * FROM create_external_resource('stuck@local', poll_interval_seconds := 0);
+----
+<REGEX>:.*'poll_interval_seconds' must be between 1 and 2592000.*
+
+statement error
+SELECT * FROM create_external_resource('stuck@local', poll_interval_seconds := 9223372036854775807);
+----
+<REGEX>:.*'poll_interval_seconds' must be between 1 and 2592000.*
+
+# A non-catalog (compute) resource is not subject to the uri baseline; a well-formed map result is fine.
+statement ok
+CREATE MACRO compute_status(h) AS TABLE SELECT 'ready' AS state, MAP {'ip': '10.0.0.1'} AS result;
+
+statement ok
+CALL register_external_resource_type('compute@local', kind := 'compute', create_function := 'mock_create', status_function := 'compute_status');
+
+query T
+SELECT result FROM create_external_resource('compute@local');
+----
+{ip=10.0.0.1}
+
+# Callbacks resolve in the search path captured at registration (like views/macros), so unqualified names in
+# a non-default schema keep resolving from create_external_resource's internal connection — even after the
+# caller's search path changes.
+statement ok
+CREATE SCHEMA app;
+
+statement ok
+CREATE MACRO app.sp_create(p) AS TABLE SELECT MAP {'id':'r'} AS handle;
+
+statement ok
+CREATE MACRO app.sp_status(h) AS TABLE SELECT 'ready' AS state, MAP {'uri':'quack:sp', 'attached_db_type':'quack'} AS result;
+
+statement ok
+SET search_path = 'app';
+
+statement ok
+CALL register_external_resource_type('sp@local', kind := 'catalog', create_function := 'sp_create', status_function := 'sp_status');
+
+# Change the search path after registration: resolution still uses the captured (registration-time) path.
+statement ok
+RESET search_path;
+
+query T
+SELECT uri FROM create_external_resource('sp@local');
+----
+quack:sp
+
+# When callbacks live in a non-default schema, the returned deleter_function is fully qualified, so it stays
+# resolvable after the search path changes (as when DETACH fires the deleter from another connection).
+statement ok
+CREATE SCHEMA q;
+
+statement ok
+CREATE SEQUENCE q.qd_calls;
+
+statement ok
+CREATE MACRO q.qd_create(p) AS TABLE SELECT MAP {'id':'r'} AS handle;
+
+statement ok
+CREATE MACRO q.qd_status(h) AS TABLE SELECT 'ready' AS state, MAP {'uri':'qq','attached_db_type':'quack'} AS result;
+
+statement ok
+CREATE MACRO q.qd_destroy(h) AS TABLE SELECT nextval('q.qd_calls') AS n;
+
+statement ok
+SET search_path = 'q';
+
+statement ok
+CALL register_external_resource_type('qd@local', kind := 'catalog', create_function := 'qd_create', status_function := 'qd_status', destroy_function := 'qd_destroy');
+
+# The returned deleter function is fully qualified (catalog.schema.name), not the bare registered name.
+query T
+SELECT deleter_function LIKE '%.q.qd_destroy' FROM create_external_resource('qd@local');
+----
+true
+
+statement ok
+SET VARIABLE dfn = (SELECT deleter_function FROM create_external_resource('qd@local'));
+
+statement ok
+SET VARIABLE dpl = (SELECT deleter_payload FROM create_external_resource('qd@local'));
+
+# Change the search path, then invoke the deleter from the default path: the qualified name still resolves.
+statement ok
+RESET search_path;
+
+statement ok
+CALL destroy_external_resource(getvariable('dfn'), getvariable('dpl'));
+
+# On a post-create failure the provisioned resource must be torn down (no leak): destroy_function is
+# invoked. destroy advances a sequence, which lets us observe the call across the internal connection.
+statement ok
+CREATE SEQUENCE teardown_calls;
+
+statement ok
+CREATE MACRO ok_handle(p) AS TABLE SELECT MAP {'id':'z'} AS handle;
+
+statement ok
+CREATE MACRO fails(h) AS TABLE SELECT 'failed' AS state, MAP {'x':'y'} AS result;
+
+statement ok
+CREATE MACRO record_teardown(h) AS TABLE SELECT nextval('teardown_calls') AS n;
+
+statement ok
+CALL register_external_resource_type('leaky@local', kind := 'compute', create_function := 'ok_handle', status_function := 'fails', destroy_function := 'record_teardown');
+
+statement error
+SELECT * FROM create_external_resource('leaky@local');
+----
+<REGEX>:.*state 'failed'.*
+
+# destroy ran once (consumed value 1), so the next value here is 2.
+query I
+SELECT nextval('teardown_calls');
+----
+2
+
+# teardown_on_failure := false leaves the resource for inspection: destroy is NOT invoked.
+statement ok
+CREATE SEQUENCE teardown_calls_kept;
+
+statement ok
+CREATE MACRO record_teardown_kept(h) AS TABLE SELECT nextval('teardown_calls_kept') AS n;
+
+statement ok
+CALL register_external_resource_type('kept@local', kind := 'compute', create_function := 'ok_handle', status_function := 'fails', destroy_function := 'record_teardown_kept');
+
+statement error
+SELECT * FROM create_external_resource('kept@local', teardown_on_failure := false);
+----
+<REGEX>:.*state 'failed'.*
+
+# destroy never ran, so the first value here is 1.
+query I
+SELECT nextval('teardown_calls_kept');
+----
+1
+
+# Provisioning is a side effect of materializing a row: each create_external_resource invocation provisions
+# exactly once, independent of the outer query. A sequence bumped by the create callback counts provisions.
+statement ok
+RESET search_path;
+
+statement ok
+CREATE SEQUENCE prov_count;
+
+statement ok
+CREATE MACRO pc_create(p) AS TABLE SELECT MAP {'id': 'r' || nextval('prov_count')} AS handle;
+
+statement ok
+CREATE MACRO pc_status(h) AS TABLE SELECT 'ready' AS state, MAP {'uri':'u','attached_db_type':'quack'} AS result;
+
+statement ok
+CALL register_external_resource_type('pc@local', kind := 'catalog', create_function := 'pc_create', status_function := 'pc_status');
+
+# Single invocation -> exactly one provision (so the next value is 2).
+statement ok
+SELECT * FROM create_external_resource('pc@local');
+
+query I
+SELECT nextval('prov_count');
+----
+2
+
+# Each invocation provisions independently: a self-join provisions twice (so the next value advances to 5).
+statement ok
+SELECT a.uri, b.uri FROM create_external_resource('pc@local') a, create_external_resource('pc@local') b;
+
+query I
+SELECT nextval('prov_count');
+----
+5
+
+# LIMIT 0 runs cleanly; its provisioning is optimizer-dependent (pruned to an empty result with the optimizer,
+# runs once without it), so the count is intentionally not asserted -- use WITH EXTERNAL RESOURCE ... ATTACH
+# when provisioning must be guaranteed.
+statement ok
+SELECT * FROM create_external_resource('pc@local') LIMIT 0;

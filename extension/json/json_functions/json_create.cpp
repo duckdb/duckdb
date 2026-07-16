@@ -933,6 +933,12 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		CreateRawValues(doc, vals, string_vector, count);
 		break;
 	}
+	case LogicalTypeId::VARIANT: {
+		Vector json_vector(LogicalType::JSON(), count);
+		VectorOperations::DefaultCast(value_v, json_vector, count);
+		TemplatedCreateValues<string_t, string_t>(doc, vals, json_vector, count);
+		break;
+	}
 	case LogicalTypeId::DECIMAL: {
 		if (DecimalType::GetWidth(type) > 15) {
 			Vector string_vector(LogicalTypeId::VARCHAR, count);
@@ -951,7 +957,6 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::TEMPLATE:
 	case LogicalTypeId::UNBOUND:
 	case LogicalTypeId::TYPE:
-	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:

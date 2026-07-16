@@ -1108,10 +1108,10 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 				result = AddConstantComparison(info_list, info);
 			} else {
 				D_ASSERT(upper_is_scalar);
-				const auto type =
-				    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
-				auto left = upper_bound.Copy();
-				auto right = input.Copy();
+				const auto type = lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+				                                  : ExpressionType::COMPARE_GREATERTHAN;
+				auto left = input.Copy();
+				auto right = lower_bound.Copy();
 				auto lower_comp = BoundComparisonExpression::Create(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(*lower_comp);
 			}

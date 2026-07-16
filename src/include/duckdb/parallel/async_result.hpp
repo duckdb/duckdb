@@ -29,6 +29,10 @@ class AsyncTask {
 public:
 	virtual ~AsyncTask() {};
 	virtual void Execute() = 0;
+	//! The number of bytes this task reads, when known (used to budget I/O scheduled ahead by the read-ahead)
+	virtual idx_t GetIOSize() const {
+		return 0;
+	}
 };
 
 class AsyncResult {
