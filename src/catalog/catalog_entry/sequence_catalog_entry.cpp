@@ -7,6 +7,8 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include <cstdio>
+#include <iostream>
 
 #include <algorithm>
 #include <sstream>
@@ -53,7 +55,9 @@ int64_t SequenceCatalogEntry::CurrentValue() {
 }
 
 int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
+	std::cerr << "NextValue locking" << std::endl;
 	lock_guard<mutex> seqlock(lock);
+	std::cerr << "NextValue locked" << std::endl;
 	int64_t result;
 	result = data.counter;
 	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, data.counter);

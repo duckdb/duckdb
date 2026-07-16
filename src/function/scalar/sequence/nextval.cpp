@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/planner/binder.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -70,6 +71,7 @@ unique_ptr<FunctionLocalState> NextValLocalFunction(ExpressionState &state, cons
 
 template <class OP>
 void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	std::cerr << "NextValFunction" << std::endl;
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (!func_expr.BindInfo()) {
 		// no bind info - return null
