@@ -1,4 +1,4 @@
-# name: test/optimizer/left_to_prefix.test
+# name: test/optimizer/string_prefix.test
 # description: Test rewriting string prefix extractions into prefix comparisons
 # group: [optimizer]
 
