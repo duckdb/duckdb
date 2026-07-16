@@ -63,6 +63,11 @@ struct GetNumericValueUnion {
 };
 
 template <>
+bool GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.boolean;
+}
+
+template <>
 int8_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
 	return v.value_.tinyint;
 }
@@ -239,6 +244,8 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 	}
 	D_ASSERT(stats.CanHaveNoNull());
 	switch (stats.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		return CheckZonemapTemplated<bool>(stats, comparison_type, constants);
 	case PhysicalType::INT8:
 		return CheckZonemapTemplated<int8_t>(stats, comparison_type, constants);
 	case PhysicalType::INT16:
