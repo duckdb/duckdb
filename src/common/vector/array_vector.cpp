@@ -211,11 +211,30 @@ void VectorArrayBuffer::CopyInternal(const Vector &source, const SelectionVector
 		copy_valid_slice(0, copy_count);
 		return;
 	}
+	// NULL rows whose source slots are all NULL are handled by validity propagation in the wholesale copy
+	const auto child_vector_type = source_child.GetVectorType();
+	const bool child_checkable =
+	    child_vector_type == VectorType::FLAT_VECTOR || child_vector_type == VectorType::CONSTANT_VECTOR;
+	auto source_child_validity = source_child.Validity();
 	idx_t start_idx = 0;
 	for (idx_t i = 0; i < copy_count; i++) {
 		if (validity.RowIsValidUnsafe(target_offset + i)) {
 			continue;
 		}
+		if (child_checkable) {
+			auto source_idx = source_sel.get_index(source_offset + i);
+			bool all_null = true;
+			for (idx_t j = 0; j < array_size; j++) {
+				if (source_child_validity.IsValid(source_idx * array_size + j)) {
+					all_null = false;
+					break;
+				}
+			}
+			if (all_null) {
+				continue;
+			}
+		}
+		// only rows violating the child-NULL invariant need isolation from the copied runs
 		copy_valid_slice(start_idx, i);
 		start_idx = i + 1;
 		for (idx_t j = 0; j < array_size; j++) {

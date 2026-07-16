@@ -886,14 +886,16 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 	// copy the NULL values for the main struct vector
 	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
-	// check if the copied range contains any NULL rows
+	// check if the copied range contains any NULL rows, children must not claim valid entries under them
+	auto &parent_validity = source_data.validity;
+	const bool parent_flat = !source_data.sel->IsSet();
 	bool parent_has_nulls = false;
-	if (source_data.validity.IsMaskSet()) {
-		for (idx_t i = 0; i < copy_count; i++) {
-			auto source_idx = source_data.sel->get_index(offset + i);
-			if (!source_data.validity.RowIsValidUnsafe(source_idx)) {
-				parent_has_nulls = true;
-				break;
+	if (parent_validity.IsMaskSet()) {
+		if (parent_flat) {
+			parent_has_nulls = !parent_validity.CheckAllValid(offset + copy_count, offset);
+		} else {
+			for (idx_t i = 0; i < copy_count && !parent_has_nulls; i++) {
+				parent_has_nulls = !parent_validity.RowIsValidUnsafe(source_data.sel->get_index(offset + i));
 			}
 		}
 	}
@@ -912,14 +914,28 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 
 		if (parent_has_nulls) {
 			D_ASSERT(!child_data.sel->IsSet());
-			// Broadcast and sync the validity of the struct vector to the child vector
-			// This requires creating a copy of the validity mask: we cannot modify the input validity
-			child_data.validity = ValidityMask(child_data.validity, child_data.validity.Capacity());
-			child_data.validity.EnsureWritable();
-			for (idx_t i = 0; i < copy_count; i++) {
-				auto source_idx = source_data.sel->get_index(offset + i);
-				if (!source_data.validity.RowIsValidUnsafe(source_idx)) {
-					child_data.validity.SetInvalidUnsafe(offset + i);
+			// only rows violating the child-NULL invariant need a patched validity mask
+			bool children_correctly_masked = true;
+			if (parent_flat) {
+				// parent and child validity are at identical positions
+				children_correctly_masked =
+				    !AnyChildValidUnderNullParent(parent_validity, child_data.validity, offset, copy_count);
+			} else {
+				for (idx_t i = 0; i < copy_count && children_correctly_masked; i++) {
+					auto source_idx = source_data.sel->get_index(offset + i);
+					children_correctly_masked =
+					    parent_validity.RowIsValidUnsafe(source_idx) && child_data.validity.RowIsValid(offset + i);
+				}
+			}
+			if (!children_correctly_masked) {
+				// requires a copy of the validity mask: we cannot modify the input validity
+				child_data.validity = ValidityMask(child_data.validity, child_data.validity.Capacity());
+				child_data.validity.EnsureWritable();
+				for (idx_t i = 0; i < copy_count; i++) {
+					auto source_idx = source_data.sel->get_index(offset + i);
+					if (!parent_validity.RowIsValidUnsafe(source_idx)) {
+						child_data.validity.SetInvalidUnsafe(offset + i);
+					}
 				}
 			}
 		}

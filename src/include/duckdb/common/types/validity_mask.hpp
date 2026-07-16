@@ -96,16 +96,43 @@ public:
 		return CountValid(count) == 0;
 	}
 
+	//! Validity bits of the slice [row, row+count) that lies within one entry, low-aligned and zero-padded above.
+	//! Precondition: mask allocated, count in [1, BITS_PER_VALUE], (row % BITS_PER_VALUE) + count <= BITS_PER_VALUE.
+	inline V GetSliceWithinEntry(idx_t row, idx_t count) const {
+		const V entry = GetValidityEntryUnsafe(row / BITS_PER_VALUE) >> (row % BITS_PER_VALUE);
+		return count == BITS_PER_VALUE ? entry : (entry & EntryWithValidBits(count));
+	}
+
 	inline bool CheckAllValid(idx_t to, idx_t from) const {
 		if (CannotHaveNull()) {
 			return true;
 		}
-		for (idx_t i = from; i < to; i++) {
-			if (!RowIsValid(i)) {
+		// check validity in blocks of BITS_PER_VALUE at a time rather than row by row
+		for (idx_t i = from; i < to;) {
+			const idx_t bits = MinValue<idx_t>(BITS_PER_VALUE - i % BITS_PER_VALUE, to - i);
+			if (GetSliceWithinEntry(i, bits) != EntryWithValidBits(bits)) {
 				return false;
 			}
+			i += bits;
 		}
 		return true;
+	}
+
+	//! Returns `count` (1 to BITS_PER_VALUE) validity bits starting at `offset`, in the low bits, zero-padded above
+	inline V GetSliceEntry(idx_t offset, idx_t count) const {
+		D_ASSERT(count > 0 && count <= BITS_PER_VALUE);
+		if (CannotHaveNull()) {
+			return EntryWithValidBits(count);
+		}
+		const idx_t idx_in_entry = offset % BITS_PER_VALUE;
+		if (idx_in_entry + count <= BITS_PER_VALUE) {
+			return GetSliceWithinEntry(offset, count);
+		}
+		// slice includes a word boundary: stitch the high bits of this entry with the low bits of the next
+		const idx_t entry_idx = offset / BITS_PER_VALUE;
+		V result = GetValidityEntryUnsafe(entry_idx) >> idx_in_entry;
+		result |= GetValidityEntryUnsafe(entry_idx + 1) << (BITS_PER_VALUE - idx_in_entry);
+		return result & EntryWithValidBits(count);
 	}
 
 	idx_t CountValid(const idx_t count) const {
@@ -394,6 +421,24 @@ public:
 	void Write(WriteStream &writer, idx_t count);
 	void Read(ReadStream &reader, idx_t count);
 };
+
+//! Enforces the nested-NULL invariant: a child of a NULL parent must itself be NULL. Returns true iff
+//! some row in [offset, offset+count) is NULL in `parent` but valid in `child`. `parent` and `child`
+//! must be positionally aligned, as they are for a struct's children.
+inline bool AnyChildValidUnderNullParent(const ValidityMask &parent, const ValidityMask &child, idx_t offset,
+                                         idx_t count) {
+	for (idx_t done = 0; done < count; done += ValidityMask::BITS_PER_VALUE) {
+		auto bits = MinValue<idx_t>(ValidityMask::BITS_PER_VALUE, count - done);
+		auto parent_null = ~parent.GetSliceEntry(offset + done, bits) & ValidityMask::EntryWithValidBits(bits);
+		if (!parent_null) {
+			continue;
+		}
+		if (parent_null & child.GetSliceEntry(offset + done, bits)) {
+			return true;
+		}
+	}
+	return false;
+}
 
 //===--------------------------------------------------------------------===//
 // ValidityArray
