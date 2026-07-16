@@ -618,12 +618,14 @@ void StringStats::MergeStats(BaseStatistics &stats, string_t &target, StringStat
 		return;
 	}
 	// both min/max stats are there - compare
-	bool new_is_more_extreme;
-	if (is_min) {
-		new_is_more_extreme = LessThan::Operation(source, target);
-	} else {
-		new_is_more_extreme = GreaterThan::Operation(source, target);
+	auto comparison = Comparator::Operation(source, target);
+	if (comparison == 0) {
+		if (target_type == StringStatsType::TRUNCATED_STATS || source_type == StringStatsType::TRUNCATED_STATS) {
+			target_type = StringStatsType::TRUNCATED_STATS;
+		}
+		return;
 	}
+	bool new_is_more_extreme = is_min ? comparison < 0 : comparison > 0;
 	if (!new_is_more_extreme) {
 		// old value is more extreme - bail
 		return;
