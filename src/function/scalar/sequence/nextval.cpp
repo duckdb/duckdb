@@ -163,4 +163,16 @@ ScalarFunction CurrvalFun::GetFunction() {
 	return curr_val;
 }
 
+ScalarFunction SetvalFun::GetFunction() {
+	ScalarFunction curr_val("setval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
+	curr_val.SetBindCallback(NextValBind);
+	curr_val.SetSerializeCallback(Serialize);
+	curr_val.SetDeserializeCallback(Deserialize);
+	curr_val.SetInitStateCallback(NextValLocalFunction);
+	curr_val.SetVolatile();
+	curr_val.SetFallible();
+	return curr_val;
+}
+
 } // namespace duckdb
