@@ -1638,55 +1638,54 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 	previous_buffer_handle.reset();
 	const idx_t next_buffer_idx = iterator.pos.buffer_idx + 1;
 	auto next_buffer = buffer_manager->GetBuffer(next_buffer_idx);
-	if (!next_buffer) {
-		previous_buffer_handle = std::move(cur_buffer_handle);
-		cur_buffer_handle.reset();
-		buffer_handle_ptr = nullptr;
-		// We do not care if it's a quoted new line on the last row of our file.
-		result.quoted_new_line = false;
-		// This means we reached the end of the file, we must add a last line if there is any to be added
-		if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
-		    states.IsNotSet()) {
-			if (result.cur_col_id == result.number_of_columns && !result.IsStateCurrent(CSVState::INVALID)) {
-				result.number_of_rows++;
-			}
-			result.cur_col_id = 0;
-			result.chunk_col_id = 0;
-			return MoveBufferResult::NOT_MOVED;
-		} else if (states.NewValue()) {
-			// we add the value
-			result.AddValue(result, previous_buffer_handle->actual_size);
-			// And an extra empty value to represent what comes after the delimiter
-			if (result.IsCommentSet(result)) {
-				result.UnsetComment(result, iterator.pos.buffer_pos);
-			} else {
-				result.AddRow(result, previous_buffer_handle->actual_size);
-			}
-			lines_read++;
-		} else if (states.IsQuotedCurrent() &&
-		           state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
-			// Unterminated quote
-			LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
-			result.current_line_position.begin = result.current_line_position.end;
-			result.current_line_position.end = current_line_start;
-			result.InvalidState(result);
-		} else {
-			if (result.IsCommentSet(result)) {
-				result.UnsetComment(result, iterator.pos.buffer_pos);
-			} else {
-				if (result.quoted && states.IsDelimiterBytes() &&
-				    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
-					result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
-					                             result.last_position);
-				}
-				result.AddRow(result, previous_buffer_handle->actual_size);
-			}
-			lines_read++;
-		}
-		return MoveBufferResult::NOT_MOVED;
+	if (next_buffer) {
+		FinishMoveToNextBuffer(std::move(next_buffer));
+		return MoveBufferResult::MOVED;
 	}
-	FinishMoveToNextBuffer(std::move(next_buffer));
-	return MoveBufferResult::MOVED;
+	previous_buffer_handle = std::move(cur_buffer_handle);
+	cur_buffer_handle.reset();
+	buffer_handle_ptr = nullptr;
+	// We do not care if it's a quoted new line on the last row of our file.
+	result.quoted_new_line = false;
+	// This means we reached the end of the file, we must add a last line if there is any to be added
+	if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
+	    states.IsNotSet()) {
+		if (result.cur_col_id == result.number_of_columns && !result.IsStateCurrent(CSVState::INVALID)) {
+			result.number_of_rows++;
+		}
+		result.cur_col_id = 0;
+		result.chunk_col_id = 0;
+	} else if (states.NewValue()) {
+		// we add the value
+		result.AddValue(result, previous_buffer_handle->actual_size);
+		// And an extra empty value to represent what comes after the delimiter
+		if (result.IsCommentSet(result)) {
+			result.UnsetComment(result, iterator.pos.buffer_pos);
+		} else {
+			result.AddRow(result, previous_buffer_handle->actual_size);
+		}
+		lines_read++;
+	} else if (states.IsQuotedCurrent() &&
+	           state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+		// Unterminated quote
+		LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+		result.current_line_position.begin = result.current_line_position.end;
+		result.current_line_position.end = current_line_start;
+		result.InvalidState(result);
+	} else {
+		if (result.IsCommentSet(result)) {
+			result.UnsetComment(result, iterator.pos.buffer_pos);
+		} else {
+			if (result.quoted && states.IsDelimiterBytes() &&
+			    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+				result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
+				                             result.last_position);
+			}
+			result.AddRow(result, previous_buffer_handle->actual_size);
+		}
+		lines_read++;
+	}
+	return MoveBufferResult::NOT_MOVED;
 }
 
 void StringValueScanner::FinishMoveToNextBuffer(shared_ptr<CSVBufferHandle> next_buffer) {

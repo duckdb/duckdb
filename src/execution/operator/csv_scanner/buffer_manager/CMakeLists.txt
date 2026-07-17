@@ -4,7 +4,7 @@ add_library_unity(
   csv_buffer.cpp
   csv_buffer_manager.cpp
   csv_sequential_buffer_manager.cpp
-  csv_random_buffer_manager.cpp
+  csv_random_access_buffer_manager.cpp
   csv_file_handle.cpp)
 
 set(ALL_OBJECT_FILES

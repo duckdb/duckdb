@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_sequential_buffer_manager.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_random_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_random_access_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 namespace duckdb {
@@ -21,8 +21,8 @@ shared_ptr<CSVBufferManager> CSVBufferManager::Open(ClientContext &context, cons
 		file_handle = ReadCSV::OpenCSV(file, options, context);
 	}
 	if (file_handle->HasKnownBufferRanges()) {
-		return make_shared_ptr<CSVRandomBufferManager>(context, options, file, per_file_single_threaded,
-		                                               std::move(file_handle));
+		return make_shared_ptr<CSVRandomAccessBufferManager>(context, options, file, per_file_single_threaded,
+		                                                     std::move(file_handle));
 	}
 	return make_shared_ptr<CSVSequentialBufferManager>(context, options, file, per_file_single_threaded,
 	                                                   std::move(file_handle));
