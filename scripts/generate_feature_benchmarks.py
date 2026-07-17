@@ -467,7 +467,7 @@ def stub_text(subdir, prefix, tmpl_rel, bench_name, name, pc, setup, run, seed, 
     return (
         "# name: {path}\n"
         "# description: {desc} (seed={seed})\n"
-        "# group: [feature]\n"
+        "# group: [{group}]\n"
         "\n"
         "template {tmpl}\n"
         "BENCH_NAME={bench}\n"
@@ -478,6 +478,7 @@ def stub_text(subdir, prefix, tmpl_rel, bench_name, name, pc, setup, run, seed, 
         path=header_path,
         desc=desc,
         seed=seed,
+        group=subdir,
         tmpl=tmpl_rel,
         bench=bench_name,
         pc=pc,
