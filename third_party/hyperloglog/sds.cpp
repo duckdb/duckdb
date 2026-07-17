@@ -1042,11 +1042,11 @@ sds *sdssplitargs(const char *line, int *argc) {
                 if (*p) p++;
             }
             /* add the token to the vector */
-            char **new_vector =(char **)realloc(vector, ((*argc) + 1) * sizeof(char *));
-            if (new_vector == NULL) {
+            char **tmp = (char **)realloc(vector, ((*argc) + 1) * sizeof(char *));
+            if (tmp == NULL) {
                 goto err;
             }
-            vector = new_vector;
+            vector = tmp;
             vector[*argc] = current;
             (*argc)++;
             current = NULL;
