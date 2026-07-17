@@ -58,8 +58,8 @@ public:
 	DUCKDB_API ~CachingFileHandle();
 
 public:
-	//! Get the underlying FileHandle
-	DUCKDB_API FileHandle &GetFileHandle();
+	//! Get shared ownership of the underlying FileHandle
+	DUCKDB_API shared_ptr<FileHandle> GetFileHandle();
 	//! Get the buffer-manager-backed Allocator.
 	DUCKDB_API Allocator &GetBufferAllocator() const;
 	//! Read [nr_bytes] bytes at the requested [location].
@@ -111,7 +111,7 @@ private:
 	//! Used to ensure file handle and cached file metadata is only initialized once.
 	annotated_mutex file_handle_mutex;
 	//! File handle for the internal filesystem.
-	unique_ptr<FileHandle> file_handle;
+	shared_ptr<FileHandle> file_handle;
 	//! Last modified time and version tag (if FileHandle is opened)
 	timestamp_t last_modified;
 	string version_tag;
