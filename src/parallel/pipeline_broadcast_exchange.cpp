@@ -234,6 +234,131 @@ struct PipelineBroadcastExchange::SpoolReadReservation {
 	}
 };
 
+struct PipelineBroadcastExchange::BufferedChunk {
+	shared_ptr<DataChunk> chunk;
+};
+
+struct PipelineBroadcastExchange::BufferState {
+	BufferState(ClientContext &context_p, const vector<LogicalType> &types_p, idx_t max_threads)
+	    : context(context_p), types(types_p),
+	      chunk_pool(make_shared_ptr<ChunkPool>(BufferAllocator::Get(context), types, max_threads)) {
+	}
+
+	void BeginExecution() {
+		chunk_pool->BeginExecution();
+	}
+
+	void EndExecution() {
+		chunk_pool->EndExecution();
+	}
+
+	void Reset() {
+		chunks.clear();
+		shared_spool.reset();
+		base_position = 0;
+		next_position = 0;
+		buffered_chunks = 0;
+	}
+
+	shared_ptr<DataChunk> Copy(DataChunk &chunk) {
+		return chunk_pool->Acquire(chunk);
+	}
+
+	idx_t BasePosition() const {
+		return base_position;
+	}
+
+	idx_t NextPosition() const {
+		return next_position;
+	}
+
+	idx_t BufferedCount() const {
+		return buffered_chunks;
+	}
+
+	bool HasSharedSpool() const {
+		return shared_spool != nullptr;
+	}
+
+	bool Empty() const {
+		return chunks.empty() && !shared_spool;
+	}
+
+	void ReserveAppend(AppendReservation &reservation) const {
+		reservation.shared_spool = shared_spool;
+		reservation.position = next_position;
+	}
+
+	void CompleteAppend(const AppendReservation &reservation, shared_ptr<DataChunk> copy) {
+		if (!reservation.shared_spool) {
+			chunks.push_back({std::move(copy)});
+		}
+		buffered_chunks++;
+		D_ASSERT(next_position == reservation.position);
+		next_position++;
+	}
+
+	void ReserveRead(idx_t position, shared_ptr<BroadcastSpoolReader> &reader, shared_ptr<DataChunk> &next_chunk,
+	                 SpoolReadReservation &spool_read) const {
+		D_ASSERT(position < next_position);
+		if (shared_spool) {
+			if (!shared_spool->HasPosition(position)) {
+				throw InternalException("Pipeline broadcast shared spool chunk was retired before it was read");
+			}
+			if (!reader) {
+				reader = make_shared_ptr<BroadcastSpoolReader>(*shared_spool);
+			}
+			spool_read.spool = shared_spool;
+			spool_read.reader = reader;
+			spool_read.position = position;
+			return;
+		}
+		D_ASSERT(position >= base_position);
+		auto chunk_idx = position - base_position;
+		D_ASSERT(chunk_idx < chunks.size());
+		next_chunk = chunks[chunk_idx].chunk;
+	}
+
+	void CreateSharedSpool() {
+		D_ASSERT(!shared_spool);
+		shared_spool = make_shared_ptr<BroadcastSpool>(context, types, base_position);
+		for (auto &chunk : chunks) {
+			shared_spool->Append(*chunk.chunk);
+		}
+		chunks.clear();
+	}
+
+	void RetireBefore(idx_t position) {
+		if (shared_spool) {
+			auto retired_chunks = shared_spool->RetireBefore(position);
+			buffered_chunks -= MinValue(buffered_chunks, retired_chunks);
+			base_position = MaxValue(base_position, position);
+			return;
+		}
+		while (!chunks.empty() && base_position < position) {
+			buffered_chunks -= MinValue<idx_t>(buffered_chunks, 1);
+			chunks.pop_front();
+			base_position++;
+		}
+	}
+
+	void Release() {
+		chunks.clear();
+		shared_spool.reset();
+		buffered_chunks = 0;
+		base_position = next_position;
+	}
+
+	ClientContext &context;
+	const vector<LogicalType> &types;
+	shared_ptr<ChunkPool> chunk_pool;
+	deque<BufferedChunk> chunks;
+	shared_ptr<BroadcastSpool> shared_spool;
+	idx_t base_position = 0;
+	idx_t next_position = 0;
+	idx_t buffered_chunks = 0;
+};
+
 PipelineBroadcastExchange::ConsumerState::ConsumerState() = default;
 PipelineBroadcastExchange::ConsumerState::~ConsumerState() = default;
 PipelineBroadcastExchange::ConsumerState::ConsumerState(ConsumerState &&other) noexcept = default;
@@ -247,14 +372,10 @@ PipelineBroadcastExchangeLocalState::PipelineBroadcastExchangeLocalState(ClientC
 	vector<reference<Pipeline>> direct_pipeline_refs;
 	{
 		annotated_lock_guard<annotated_mutex> guard(exchange.lock);
-		idx_t exchange_consumers = 0;
-		for (auto &consumer : exchange.consumers) {
-			if (consumer.mode != PipelineBroadcastExchange::ConsumerMode::MATERIALIZED) {
-				exchange_consumers++;
-			}
-		}
-		mode = exchange_consumers > 0 && exchange.active_consumers == 0 &&
-		               exchange.direct_pipelines.size() == exchange_consumers
+		auto summary = exchange.GetConsumerSummaryLocked();
+		D_ASSERT(summary.unresolved == 0);
+		mode = summary.ExchangeConsumerCount() > 0 && summary.buffered == 0 &&
+		               exchange.direct_pipelines.size() == summary.direct
 		           ? PipelineBroadcastExchangeLocalMode::DIRECT_ONLY
 		           : PipelineBroadcastExchangeLocalMode::BUFFERED;
 		direct_pipeline_refs = exchange.direct_pipelines;
@@ -278,7 +399,7 @@ PipelineBroadcastExchange::PipelineBroadcastExchange(ClientContext &context, vec
                                                      PipelineBroadcastExchangeCompletionMode completion_mode_p)
     : context(context), types(std::move(types_p)), completion_mode(completion_mode_p),
       max_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())) {
-	chunk_pool = make_shared_ptr<ChunkPool>(BufferAllocator::Get(context), types, max_threads);
+	buffer = make_uniq<BufferState>(context, types, max_threads);
 }
 
 unique_ptr<PipelineBroadcastExchangeLocalState> PipelineBroadcastExchange::GetLocalState(ClientContext &context) const {
@@ -288,24 +409,20 @@ unique_ptr<PipelineBroadcastExchangeLocalState> PipelineBroadcastExchange::GetLo
 idx_t PipelineBroadcastExchange::RegisterConsumer() {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	ConsumerState state;
-	state.position = base_position;
+	state.position = buffer->BasePosition();
 	consumers.push_back(std::move(state));
 	active_consumers++;
 	return consumers.size() - 1;
 }
 
-bool PipelineBroadcastExchange::DisableConsumer(idx_t consumer_idx) {
-	// Disabled consumers are served from materialized CTE storage instead of this exchange.
+void PipelineBroadcastExchange::SelectMaterializedConsumer(idx_t consumer_idx) {
+	// Materialized consumers are served from CTE storage instead of this exchange.
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	D_ASSERT(consumer_idx < consumers.size());
 	auto &consumer = consumers[consumer_idx];
-	if (consumer.mode == ConsumerMode::MATERIALIZED) {
-		return false;
-	}
-	D_ASSERT(consumer.mode == ConsumerMode::BUFFERED);
-	consumer.mode = ConsumerMode::MATERIALIZED;
-	DeactivateConsumerLocked(consumer, next_position);
-	return true;
+	D_ASSERT(consumer.mode == PipelineBroadcastExchangeConsumerMode::UNRESOLVED);
+	consumer.mode = PipelineBroadcastExchangeConsumerMode::MATERIALIZED;
+	DeactivateConsumerLocked(consumer, buffer->NextPosition());
 }
 
 bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
@@ -315,19 +432,27 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	D_ASSERT(consumer_idx < consumers.size());
 	auto &consumer = consumers[consumer_idx];
-	D_ASSERT(consumer.mode != ConsumerMode::MATERIALIZED);
-	if (consumer.mode == ConsumerMode::DIRECT) {
+	if (consumer.mode == PipelineBroadcastExchangeConsumerMode::DIRECT) {
 		return true;
 	}
-	consumer.mode = ConsumerMode::DIRECT;
-	DeactivateConsumerLocked(consumer, base_position);
+	D_ASSERT(consumer.mode == PipelineBroadcastExchangeConsumerMode::UNRESOLVED);
+	consumer.mode = PipelineBroadcastExchangeConsumerMode::DIRECT;
+	DeactivateConsumerLocked(consumer, buffer->BasePosition());
 	direct_pipelines.push_back(pipeline);
 	return true;
 }
 
+void PipelineBroadcastExchange::SelectBufferedConsumer(idx_t consumer_idx) {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	D_ASSERT(consumer_idx < consumers.size());
+	auto &consumer = consumers[consumer_idx];
+	D_ASSERT(consumer.mode == PipelineBroadcastExchangeConsumerMode::UNRESOLVED);
+	consumer.mode = PipelineBroadcastExchangeConsumerMode::BUFFERED;
+}
+
 void PipelineBroadcastExchange::ResetConsumerRegistrations() {
 	annotated_lock_guard<annotated_mutex> guard(lock);
-	chunk_pool->EndExecution();
+	buffer->EndExecution();
 	ResetExchangeStateLocked();
 	direct_pipelines.clear();
 	blocked_readers.clear();
@@ -345,7 +470,7 @@ void PipelineBroadcastExchange::Reset() {
 	vector<ExchangeLogEntry> log_entries;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		chunk_pool->BeginExecution();
+		buffer->BeginExecution();
 		ResetExchangeStateLocked();
 		for (auto &consumer : consumers) {
 			ResetConsumerExecutionLocked(consumer);
@@ -361,11 +486,7 @@ void PipelineBroadcastExchange::Reset() {
 }
 
 void PipelineBroadcastExchange::ResetExchangeStateLocked() {
-	chunks.clear();
-	shared_spool.reset();
-	base_position = 0;
-	next_position = 0;
-	shared_buffered_chunks = 0;
+	buffer->Reset();
 	produced_rows.store(0, std::memory_order_relaxed);
 	producer_state = ProducerState::ACTIVE;
 	watermark_state = WatermarkState::BELOW_HIGH_WATERMARK;
@@ -383,16 +504,17 @@ void PipelineBroadcastExchange::ResetConsumerReadStateLocked(ConsumerState &cons
 void PipelineBroadcastExchange::ResetConsumerRegistrationLocked(ConsumerState &consumer) {
 	consumer.rows_read = 0;
 	consumer.lifecycle = ConsumerLifecycle::ACTIVE;
-	consumer.mode = ConsumerMode::BUFFERED;
-	ResetConsumerReadStateLocked(consumer, base_position);
+	consumer.mode = PipelineBroadcastExchangeConsumerMode::UNRESOLVED;
+	ResetConsumerReadStateLocked(consumer, buffer->BasePosition());
 	active_consumers++;
 }
 
 void PipelineBroadcastExchange::ResetConsumerExecutionLocked(ConsumerState &consumer) {
 	consumer.rows_read = 0;
-	consumer.lifecycle =
-	    consumer.mode == ConsumerMode::BUFFERED ? ConsumerLifecycle::ACTIVE : ConsumerLifecycle::INACTIVE;
-	ResetConsumerReadStateLocked(consumer, base_position);
+	D_ASSERT(consumer.mode != PipelineBroadcastExchangeConsumerMode::UNRESOLVED);
+	consumer.lifecycle = consumer.mode == PipelineBroadcastExchangeConsumerMode::BUFFERED ? ConsumerLifecycle::ACTIVE
+	                                                                                      : ConsumerLifecycle::INACTIVE;
+	ResetConsumerReadStateLocked(consumer, buffer->BasePosition());
 	if (consumer.lifecycle == ConsumerLifecycle::ACTIVE) {
 		active_consumers++;
 	}
@@ -409,10 +531,10 @@ void PipelineBroadcastExchange::DeactivateConsumerLocked(ConsumerState &consumer
 
 SinkResultType PipelineBroadcastExchange::Push(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,
                                                const InterruptState &interrupt_state) {
-	if (!lstate.direct_executors.empty() &&
+	if (lstate.HasDirectConsumers() &&
 	    (lstate.direct_push_state == PipelineBroadcastExchangeDirectPushState::NOT_STARTED ||
 	     lstate.direct_push_state == PipelineBroadcastExchangeDirectPushState::RESUMING)) {
-		auto direct_result = PushDirectConsumers(chunk, lstate, interrupt_state);
+		auto direct_result = lstate.Push(chunk, interrupt_state);
 		if (direct_result == SinkResultType::BLOCKED) {
 			return SinkResultType::BLOCKED;
 		}
@@ -433,10 +555,8 @@ SinkResultType PipelineBroadcastExchange::CompletePush(DataChunk &chunk, Pipelin
 	if (buffered_state != BufferedPushState::APPENDED && buffered_state != BufferedPushState::CANCELLED) {
 		RecordProducedRows(chunk.size());
 	}
-	const auto direct_consumers_finished =
-	    lstate.direct_executors.empty() ||
-	    lstate.direct_push_state == PipelineBroadcastExchangeDirectPushState::FINISHED;
-	ResetPushChunk(lstate);
+	const auto direct_consumers_finished = lstate.DirectConsumersFinished();
+	lstate.ResetPush();
 	if (buffered_state == BufferedPushState::CANCELLED ||
 	    (!RunToCompletion() && direct_consumers_finished &&
 	     (buffered_state == BufferedPushState::UNCONSUMED || buffered_state == BufferedPushState::NOT_REQUIRED))) {
@@ -447,42 +567,39 @@ SinkResultType PipelineBroadcastExchange::CompletePush(DataChunk &chunk, Pipelin
 
 SinkCombineResultType PipelineBroadcastExchange::FinishLocal(PipelineBroadcastExchangeLocalState &lstate,
                                                              const InterruptState &interrupt_state) {
-	return FinishDirectConsumers(lstate, interrupt_state);
+	return lstate.Finish(interrupt_state);
 }
 
-SinkResultType PipelineBroadcastExchange::PushDirectConsumers(DataChunk &chunk,
-                                                              PipelineBroadcastExchangeLocalState &lstate,
-                                                              const InterruptState &interrupt_state) {
-	if (lstate.direct_push_state != PipelineBroadcastExchangeDirectPushState::RESUMING) {
-		lstate.direct_idx = 0;
+SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const InterruptState &interrupt_state) {
+	if (direct_push_state != PipelineBroadcastExchangeDirectPushState::RESUMING) {
+		direct_idx = 0;
 	}
-	for (; lstate.direct_idx < lstate.direct_executors.size(); lstate.direct_idx++) {
-		auto &executor = *lstate.direct_executors[lstate.direct_idx];
+	for (; direct_idx < direct_executors.size(); direct_idx++) {
+		auto &executor = *direct_executors[direct_idx];
 		executor.SetInterruptState(interrupt_state);
 		if (executor.IsFinishedProcessing()) {
 			continue;
 		}
 		auto result = executor.PushExternal(chunk);
 		if (result == PipelineExecuteResult::INTERRUPTED) {
-			lstate.direct_push_state = PipelineBroadcastExchangeDirectPushState::RESUMING;
+			direct_push_state = PipelineBroadcastExchangeDirectPushState::RESUMING;
 			return SinkResultType::BLOCKED;
 		}
 	}
 
-	lstate.direct_push_state = PipelineBroadcastExchangeDirectPushState::FINISHED;
-	for (auto &executor : lstate.direct_executors) {
+	direct_push_state = PipelineBroadcastExchangeDirectPushState::FINISHED;
+	for (auto &executor : direct_executors) {
 		if (!executor->IsFinishedProcessing()) {
-			lstate.direct_push_state = PipelineBroadcastExchangeDirectPushState::ACTIVE;
+			direct_push_state = PipelineBroadcastExchangeDirectPushState::ACTIVE;
 			break;
 		}
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkCombineResultType PipelineBroadcastExchange::FinishDirectConsumers(PipelineBroadcastExchangeLocalState &lstate,
-                                                                       const InterruptState &interrupt_state) {
-	for (; lstate.direct_finalize_idx < lstate.direct_executors.size(); lstate.direct_finalize_idx++) {
-		auto &executor = *lstate.direct_executors[lstate.direct_finalize_idx];
+SinkCombineResultType PipelineBroadcastExchangeLocalState::Finish(const InterruptState &interrupt_state) {
+	for (; direct_finalize_idx < direct_executors.size(); direct_finalize_idx++) {
+		auto &executor = *direct_executors[direct_finalize_idx];
 		executor.SetInterruptState(interrupt_state);
 		auto result = PipelineExecuteResult::NOT_FINISHED;
 		while (result == PipelineExecuteResult::NOT_FINISHED) {
@@ -495,8 +612,16 @@ SinkCombineResultType PipelineBroadcastExchange::FinishDirectConsumers(PipelineB
 	return SinkCombineResultType::FINISHED;
 }
 
-void PipelineBroadcastExchange::ResetPushChunk(PipelineBroadcastExchangeLocalState &lstate) {
-	lstate.direct_push_state = PipelineBroadcastExchangeDirectPushState::NOT_STARTED;
+bool PipelineBroadcastExchangeLocalState::HasDirectConsumers() const {
+	return !direct_executors.empty();
+}
+
+bool PipelineBroadcastExchangeLocalState::DirectConsumersFinished() const {
+	return direct_executors.empty() || direct_push_state == PipelineBroadcastExchangeDirectPushState::FINISHED;
+}
+
+void PipelineBroadcastExchangeLocalState::ResetPush() {
+	direct_push_state = PipelineBroadcastExchangeDirectPushState::NOT_STARTED;
 }
 
 PipelineBroadcastExchange::AppendAdmission
@@ -518,7 +643,8 @@ PipelineBroadcastExchange::PrepareAppendLocked(const InterruptState &interrupt_s
 	if (ShouldThrottleProducerLocked()) {
 		if (watermark_state == WatermarkState::BELOW_HIGH_WATERMARK) {
 			watermark_state = WatermarkState::ABOVE_HIGH_WATERMARK;
-			log_entries.push_back({ExchangeLogEvent::HIGH_WATERMARK_BLOCKED, active_consumers, shared_buffered_chunks});
+			log_entries.push_back(
+			    {ExchangeLogEvent::HIGH_WATERMARK_BLOCKED, active_consumers, buffer->BufferedCount()});
 		}
 		blocked_writers.push_back(interrupt_state);
 		return AppendAdmission::BLOCKED;
@@ -534,8 +660,7 @@ PipelineBroadcastExchange::ReserveAppendLocked(const InterruptState &interrupt_s
 		return admission;
 	}
 	append_reservation_state = AppendReservationState::RESERVED;
-	reservation.shared_spool = shared_spool;
-	reservation.position = next_position;
+	buffer->ReserveAppend(reservation);
 	return AppendAdmission::READY;
 }
 
@@ -556,14 +681,7 @@ PipelineBroadcastExchange::BufferedPushState PipelineBroadcastExchange::Complete
 		WakeAppendersLocked(appenders);
 		return BufferedPushState::UNCONSUMED;
 	}
-	if (reservation.shared_spool) {
-		shared_buffered_chunks++;
-	} else {
-		chunks.push_back({std::move(copy)});
-		shared_buffered_chunks++;
-	}
-	D_ASSERT(next_position == reservation.position);
-	next_position++;
+	buffer->CompleteAppend(reservation, std::move(copy));
 	WakeReadersLocked(readers);
 	RecordProducedRows(row_count);
 	WakeAppendersLocked(appenders);
@@ -607,7 +725,7 @@ PipelineBroadcastExchange::BufferedPushState PipelineBroadcastExchange::Append(D
 
 	shared_ptr<DataChunk> copy;
 	try {
-		copy = CopyChunk(chunk);
+		copy = buffer->Copy(chunk);
 	} catch (...) {
 		Cancel();
 		throw;
@@ -647,7 +765,7 @@ PipelineBroadcastExchange::BufferedPushState PipelineBroadcastExchange::Append(D
 		CallbackAll(readers);
 		CallbackAll(writers);
 		CallbackAll(appenders);
-		chunk_pool->EndExecution();
+		buffer->EndExecution();
 		throw;
 	}
 
@@ -682,7 +800,7 @@ void PipelineBroadcastExchange::Finish() {
 		WakeReadersLocked(readers);
 		WakeWritersLocked(writers, log_entries, WriterWakeMode::FORCE);
 	}
-	chunk_pool->EndExecution();
+	buffer->EndExecution();
 	CallbackAll(readers);
 	CallbackAll(writers);
 	LogTransitions(log_entries);
@@ -710,7 +828,7 @@ void PipelineBroadcastExchange::Cancel() {
 		WakeWritersLocked(writers, log_entries, WriterWakeMode::FORCE);
 		WakeAppendersLocked(appenders);
 	}
-	chunk_pool->EndExecution();
+	buffer->EndExecution();
 	CallbackAll(readers);
 	CallbackAll(writers);
 	CallbackAll(appenders);
@@ -753,7 +871,7 @@ SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &
 			CallbackAll(failed_readers);
 			CallbackAll(failed_writers);
 			CallbackAll(appenders);
-			chunk_pool->EndExecution();
+			buffer->EndExecution();
 			throw;
 		}
 		{
@@ -786,29 +904,17 @@ SourceResultType PipelineBroadcastExchange::ReserveScanLocked(idx_t consumer_idx
 		blocked_readers.push_back(interrupt_state);
 		return SourceResultType::BLOCKED;
 	}
-	if (consumer.position < next_position) {
-		if (shared_spool) {
-			if (!shared_spool->HasPosition(consumer.position)) {
-				throw InternalException("Pipeline broadcast shared spool chunk was retired before it was read");
-			}
-			if (!consumer.shared_reader) {
-				consumer.shared_reader = make_shared_ptr<BroadcastSpoolReader>(*shared_spool);
-			}
+	if (consumer.position < buffer->NextPosition()) {
+		buffer->ReserveRead(consumer.position, consumer.shared_reader, next_chunk, spool_read);
+		if (spool_read.IsSet()) {
 			consumer.read_state = ConsumerReadState::READING;
 			consumer.read_position = consumer.position;
-			spool_read.spool = shared_spool;
-			spool_read.reader = consumer.shared_reader;
-			spool_read.position = consumer.position;
-			return SourceResultType::HAVE_MORE_OUTPUT;
+		} else {
+			consumer.position++;
+			consumer.rows_read += next_chunk->size();
+			RetireChunksLocked();
+			WakeWritersLocked(writers, log_entries);
 		}
-		D_ASSERT(consumer.position >= base_position);
-		auto chunk_idx = consumer.position - base_position;
-		D_ASSERT(chunk_idx < chunks.size());
-		next_chunk = chunks[chunk_idx].chunk;
-		consumer.position++;
-		consumer.rows_read += next_chunk->size();
-		RetireChunksLocked();
-		WakeWritersLocked(writers, log_entries);
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 	if (producer_state == ProducerState::FINISHED) {
@@ -863,7 +969,7 @@ void PipelineBroadcastExchange::UnregisterConsumer(idx_t consumer_idx) {
 			return;
 		}
 		consumer.lifecycle = ConsumerLifecycle::INACTIVE;
-		consumer.position = next_position;
+		consumer.position = buffer->NextPosition();
 		if (consumer.read_state != ConsumerReadState::READING) {
 			consumer.shared_reader.reset();
 		}
@@ -872,7 +978,7 @@ void PipelineBroadcastExchange::UnregisterConsumer(idx_t consumer_idx) {
 		RetireChunksLocked();
 		WakeReadersLocked(readers);
 		WakeWritersLocked(writers, log_entries, WriterWakeMode::FORCE);
-		log_entries.push_back({ExchangeLogEvent::CONSUMER_UNREGISTERED, active_consumers, shared_buffered_chunks});
+		log_entries.push_back({ExchangeLogEvent::CONSUMER_UNREGISTERED, active_consumers, buffer->BufferedCount()});
 	}
 	CallbackAll(readers);
 	CallbackAll(writers);
@@ -939,24 +1045,38 @@ idx_t PipelineBroadcastExchange::RegisteredConsumerCount() const {
 	return consumers.size();
 }
 
-idx_t PipelineBroadcastExchange::ConsumerCount() const {
+PipelineBroadcastExchangeConsumerMode PipelineBroadcastExchange::GetConsumerMode(idx_t consumer_idx) const {
 	annotated_lock_guard<annotated_mutex> guard(lock);
-	idx_t count = 0;
+	D_ASSERT(consumer_idx < consumers.size());
+	return consumers[consumer_idx].mode;
+}
+
+PipelineBroadcastExchangeConsumerSummary PipelineBroadcastExchange::GetConsumerSummaryLocked() const {
+	PipelineBroadcastExchangeConsumerSummary result;
 	for (auto &consumer : consumers) {
-		if (consumer.mode != ConsumerMode::MATERIALIZED) {
-			count++;
+		switch (consumer.mode) {
+		case PipelineBroadcastExchangeConsumerMode::UNRESOLVED:
+			result.unresolved++;
+			break;
+		case PipelineBroadcastExchangeConsumerMode::BUFFERED:
+			result.buffered++;
+			break;
+		case PipelineBroadcastExchangeConsumerMode::DIRECT:
+			result.direct++;
+			break;
+		case PipelineBroadcastExchangeConsumerMode::MATERIALIZED:
+			result.materialized++;
+			break;
+		default:
+			throw InternalException("Unknown pipeline broadcast exchange consumer mode");
 		}
 	}
-	return count;
+	return result;
 }
 
-idx_t PipelineBroadcastExchange::DirectConsumerCount() const {
+PipelineBroadcastExchangeConsumerSummary PipelineBroadcastExchange::GetConsumerSummary() const {
 	annotated_lock_guard<annotated_mutex> guard(lock);
-	return direct_pipelines.size();
-}
-
-shared_ptr<DataChunk> PipelineBroadcastExchange::CopyChunk(DataChunk &chunk) {
-	return chunk_pool->Acquire(chunk);
+	return GetConsumerSummaryLocked();
 }
 
 bool PipelineBroadcastExchange::ShouldStopProducerLocked() const {
@@ -964,30 +1084,25 @@ bool PipelineBroadcastExchange::ShouldStopProducerLocked() const {
 }
 
 bool PipelineBroadcastExchange::ShouldThrottleProducerLocked() const {
-	if (shared_spool) {
+	if (buffer->HasSharedSpool()) {
 		return false;
 	}
-	return active_consumers > 0 && shared_buffered_chunks >= PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS;
+	return active_consumers > 0 && buffer->BufferedCount() >= PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS;
 }
 
 bool PipelineBroadcastExchange::ShouldCreateSharedSpoolLocked() const {
-	return !shared_spool && (!direct_pipelines.empty() || active_consumers > 1) &&
-	       shared_buffered_chunks >= PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS;
+	return !buffer->HasSharedSpool() && (!direct_pipelines.empty() || active_consumers > 1) &&
+	       buffer->BufferedCount() >= PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS;
 }
 
 void PipelineBroadcastExchange::CreateSharedSpoolLocked(vector<ExchangeLogEntry> &log_entries) {
-	D_ASSERT(!shared_spool);
-	shared_spool = make_shared_ptr<BroadcastSpool>(context, types, base_position);
-	for (auto &chunk : chunks) {
-		shared_spool->Append(*chunk.chunk);
-	}
-	chunks.clear();
-	log_entries.push_back({ExchangeLogEvent::SPOOL_CREATED, active_consumers, shared_buffered_chunks});
+	buffer->CreateSharedSpool();
+	log_entries.push_back({ExchangeLogEvent::SPOOL_CREATED, active_consumers, buffer->BufferedCount()});
 }
 
 void PipelineBroadcastExchange::RetireChunksLocked() {
-	if (shared_spool) {
-		idx_t min_position = next_position;
+	if (buffer->HasSharedSpool()) {
+		idx_t min_position = buffer->NextPosition();
 		bool found_reader = false;
 		for (auto &consumer : consumers) {
 			if (consumer.read_state == ConsumerReadState::READING) {
@@ -1000,18 +1115,16 @@ void PipelineBroadcastExchange::RetireChunksLocked() {
 			}
 		}
 		if (!found_reader) {
-			min_position = next_position;
+			min_position = buffer->NextPosition();
 		}
-		auto retired_chunks = shared_spool->RetireBefore(min_position);
-		shared_buffered_chunks -= MinValue(shared_buffered_chunks, retired_chunks);
-		base_position = MaxValue(base_position, min_position);
+		buffer->RetireBefore(min_position);
 		TryReleaseBufferedStorageLocked();
 		return;
 	}
-	if (chunks.empty()) {
+	if (buffer->Empty()) {
 		return;
 	}
-	idx_t min_position = next_position;
+	idx_t min_position = buffer->NextPosition();
 	bool found_active = false;
 	for (auto &consumer : consumers) {
 		if (consumer.lifecycle != ConsumerLifecycle::ACTIVE) {
@@ -1021,13 +1134,9 @@ void PipelineBroadcastExchange::RetireChunksLocked() {
 		min_position = MinValue(min_position, consumer.position);
 	}
 	if (!found_active) {
-		min_position = next_position;
+		min_position = buffer->NextPosition();
 	}
-	while (!chunks.empty() && base_position < min_position) {
-		shared_buffered_chunks -= MinValue<idx_t>(shared_buffered_chunks, 1);
-		chunks.pop_front();
-		base_position++;
-	}
+	buffer->RetireBefore(min_position);
 	TryReleaseBufferedStorageLocked();
 }
 
@@ -1041,10 +1150,7 @@ void PipelineBroadcastExchange::TryReleaseBufferedStorageLocked() {
 		}
 		consumer.shared_reader.reset();
 	}
-	chunks.clear();
-	shared_spool.reset();
-	shared_buffered_chunks = 0;
-	base_position = next_position;
+	buffer->Release();
 }
 
 void PipelineBroadcastExchange::DeactivateAllConsumersLocked() {
@@ -1053,7 +1159,7 @@ void PipelineBroadcastExchange::DeactivateAllConsumersLocked() {
 			continue;
 		}
 		consumer.lifecycle = ConsumerLifecycle::INACTIVE;
-		consumer.position = next_position;
+		consumer.position = buffer->NextPosition();
 		if (consumer.read_state != ConsumerReadState::READING) {
 			consumer.shared_reader.reset();
 		}
@@ -1068,13 +1174,13 @@ void PipelineBroadcastExchange::WakeReadersLocked(vector<InterruptState> &reader
 
 void PipelineBroadcastExchange::WakeWritersLocked(vector<InterruptState> &writers,
                                                   vector<ExchangeLogEntry> &log_entries, WriterWakeMode mode) {
-	if (mode == WriterWakeMode::LOW_WATERMARK && shared_buffered_chunks > PIPELINE_BROADCAST_LOW_WATERMARK_CHUNKS &&
+	if (mode == WriterWakeMode::LOW_WATERMARK && buffer->BufferedCount() > PIPELINE_BROADCAST_LOW_WATERMARK_CHUNKS &&
 	    producer_state == ProducerState::ACTIVE && !ShouldStopProducerLocked()) {
 		return;
 	}
 	if (mode == WriterWakeMode::LOW_WATERMARK && watermark_state == WatermarkState::ABOVE_HIGH_WATERMARK) {
 		watermark_state = WatermarkState::BELOW_HIGH_WATERMARK;
-		log_entries.push_back({ExchangeLogEvent::LOW_WATERMARK_WAKE, active_consumers, shared_buffered_chunks});
+		log_entries.push_back({ExchangeLogEvent::LOW_WATERMARK_WAKE, active_consumers, buffer->BufferedCount()});
 	}
 	writers.insert(writers.end(), blocked_writers.begin(), blocked_writers.end());
 	blocked_writers.clear();

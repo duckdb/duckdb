@@ -108,6 +108,8 @@ enum class CAPIResultSetType : uint8_t;
 
 enum class CSVState : uint8_t;
 
+enum class CTEExecutionMode : uint8_t;
+
 enum class CTEMaterialize : uint8_t;
 
 enum class CacheBlockState : uint8_t;
@@ -385,6 +387,8 @@ enum class PhysicalOperatorType : uint8_t;
 enum class PhysicalTableScanExecutionStrategy : uint8_t;
 
 enum class PhysicalType : uint8_t;
+
+enum class PipelineBroadcastExchangeConsumerMode : uint8_t;
 
 enum class PipelineInputMode : uint8_t;
 
@@ -692,6 +696,9 @@ const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
 
 template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value);
+
+template<>
+const char* EnumUtil::ToChars<CTEExecutionMode>(CTEExecutionMode value);
 
 template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
@@ -1111,6 +1118,9 @@ template<>
 const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value);
 
 template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeConsumerMode>(PipelineBroadcastExchangeConsumerMode value);
+
+template<>
 const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value);
 
 template<>
@@ -1512,6 +1522,9 @@ CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
 
 template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value);
+
+template<>
+CTEExecutionMode EnumUtil::FromString<CTEExecutionMode>(const char *value);
 
 template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
@@ -1929,6 +1942,9 @@ PhysicalTableScanExecutionStrategy EnumUtil::FromString<PhysicalTableScanExecuti
 
 template<>
 PhysicalType EnumUtil::FromString<PhysicalType>(const char *value);
+
+template<>
+PipelineBroadcastExchangeConsumerMode EnumUtil::FromString<PipelineBroadcastExchangeConsumerMode>(const char *value);
 
 template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value);

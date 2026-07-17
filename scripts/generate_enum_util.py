@@ -31,8 +31,6 @@ blacklist = [
     "AppendAdmission",
     "AppendReservationState",
     "BufferedPushState",
-    "CTEConsumerMode",
-    "CTEExecutionMode",
     "CTEPipelineSelectionState",
     "ConsumerLifecycle",
     "ConsumerMode",

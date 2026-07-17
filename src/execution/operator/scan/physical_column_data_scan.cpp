@@ -122,14 +122,13 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 				current.SetExternalInput();
 				current.AddExternalFinishDependency(cte_dependency);
 				cte_dependency->AddDataflowDependency(current_pipeline);
-				source.consumer_mode = CTEConsumerMode::DIRECT;
 				DUCKDB_LOG(current.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",
 				           {{"consumer", to_string(source.consumer_idx)}, {"mode", "DIRECT"}});
 				state.SetPipelineSource(current, *cte_source);
 				return;
 			}
 			if (cte.ShouldUseBufferedConsumer(current)) {
-				source.consumer_mode = CTEConsumerMode::BUFFERED;
+				cte.RegisterBufferedConsumer(source.consumer_idx);
 				current.AddDataflowDependency(cte_dependency);
 				DUCKDB_LOG(current.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",
 				           {{"consumer", to_string(source.consumer_idx)}, {"mode", "BUFFERED"}});
@@ -138,7 +137,6 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 			}
 			D_ASSERT(collection);
 			cte.RegisterMaterializedConsumer(source.consumer_idx);
-			source.consumer_mode = CTEConsumerMode::MATERIALIZED;
 			current.AddDependency(cte_dependency);
 			DUCKDB_LOG(current.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",
 			           {{"consumer", to_string(source.consumer_idx)}, {"mode", "MATERIALIZED"}});

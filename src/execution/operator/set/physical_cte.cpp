@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -9,34 +10,6 @@
 #include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 
 namespace duckdb {
-
-static const char *GetCTEConsumerModeName(CTEConsumerMode mode) {
-	switch (mode) {
-	case CTEConsumerMode::UNRESOLVED:
-		return "UNRESOLVED";
-	case CTEConsumerMode::DIRECT:
-		return "DIRECT";
-	case CTEConsumerMode::BUFFERED:
-		return "BUFFERED";
-	case CTEConsumerMode::MATERIALIZED:
-		return "MATERIALIZED";
-	default:
-		throw InternalException("Unknown CTE consumer mode");
-	}
-}
-
-static const char *GetCTEExecutionModeName(CTEExecutionMode mode) {
-	switch (mode) {
-	case CTEExecutionMode::MATERIALIZED:
-		return "MATERIALIZED";
-	case CTEExecutionMode::STREAMING_FANOUT:
-		return "STREAMING_FANOUT";
-	case CTEExecutionMode::HYBRID_FANOUT:
-		return "HYBRID_FANOUT";
-	default:
-		throw InternalException("Unknown CTE execution mode");
-	}
-}
 
 enum class CTESinkExecutionState : uint8_t { ACTIVE, BLOCKED, STOPPED };
 enum class CTECombineState : uint8_t { PENDING, COMBINED };
@@ -107,7 +80,7 @@ void PhysicalCTEConsumerSource::SourceFinished(ClientContext &context, GlobalSou
 InsertionOrderPreservingMap<string> PhysicalCTEConsumerSource::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Index"] = StringUtil::Format("%llu", cte_index.index);
-	result["CTE Mode"] = GetCTEConsumerModeName(consumer_mode);
+	result["CTE Mode"] = EnumUtil::ToString(exchange->GetConsumerMode(consumer_idx));
 	result["Consumer"] = StringUtil::Format("%llu", consumer_idx);
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
@@ -228,14 +201,14 @@ SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, Op
 		if (result == SinkResultType::BLOCKED) {
 			if (lstate.sink_execution_state != CTESinkExecutionState::BLOCKED) {
 				DUCKDB_LOG(context.client, PhysicalOperatorLogType, *this, "PhysicalCTE", "ExchangeBlocked",
-				           {{"mode", GetCTEExecutionModeName(lstate.execution_mode)}});
+				           {{"mode", EnumUtil::ToString(lstate.execution_mode)}});
 				lstate.sink_execution_state = CTESinkExecutionState::BLOCKED;
 			}
 			return result;
 		}
 		if (result == SinkResultType::FINISHED && lstate.sink_execution_state != CTESinkExecutionState::STOPPED) {
 			DUCKDB_LOG(context.client, PhysicalOperatorLogType, *this, "PhysicalCTE", "ProducerStoppedEarly",
-			           {{"mode", GetCTEExecutionModeName(lstate.execution_mode)}});
+			           {{"mode", EnumUtil::ToString(lstate.execution_mode)}});
 			lstate.sink_execution_state = CTESinkExecutionState::STOPPED;
 		} else if (result != SinkResultType::FINISHED) {
 			lstate.sink_execution_state = CTESinkExecutionState::ACTIVE;
@@ -277,7 +250,7 @@ SinkFinalizeType PhysicalCTE::Finalize(Pipeline &pipeline, Event &event, ClientC
 		gstate.exchange->Finish();
 		gstate.exchange->FinishDirectConsumers();
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalCTE", "ProducerFinished",
-		           {{"mode", GetCTEExecutionModeName(gstate.execution_mode)}});
+		           {{"mode", EnumUtil::ToString(gstate.execution_mode)}});
 	}
 	return SinkFinalizeType::READY;
 }
@@ -290,7 +263,6 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	pipeline_selection_state = CTEPipelineSelectionState::UNRESOLVED;
 	op_state.reset();
 	sink_state.reset();
-	materialized_consumer_count = 0;
 	if (exchange) {
 		exchange->SetLogOperator(*this);
 		// Prepared plans rebuild pipelines while keeping the physical CTE and consumer indexes.
@@ -360,19 +332,26 @@ bool PhysicalCTE::ShouldUseBufferedConsumer(Pipeline &pipeline) const {
 	return pipeline.CanStopSourceEarly();
 }
 
+void PhysicalCTE::RegisterBufferedConsumer(idx_t consumer_idx) {
+	D_ASSERT(exchange);
+	exchange->SelectBufferedConsumer(consumer_idx);
+}
+
 void PhysicalCTE::RegisterMaterializedConsumer(idx_t consumer_idx) {
 	D_ASSERT(exchange);
 	// Materialized consumers must not keep the exchange producer active or force exchange buffering.
-	if (exchange->DisableConsumer(consumer_idx)) {
-		materialized_consumer_count++;
-	}
+	exchange->SelectMaterializedConsumer(consumer_idx);
 }
 
 CTEExecutionMode PhysicalCTE::GetExecutionMode() const {
-	if (!exchange || exchange->ConsumerCount() == 0) {
+	if (!exchange) {
 		return CTEExecutionMode::MATERIALIZED;
 	}
-	if (materialized_consumer_count > 0) {
+	auto summary = exchange->GetConsumerSummary();
+	if (summary.ExchangeConsumerCount() == 0) {
+		return CTEExecutionMode::MATERIALIZED;
+	}
+	if (summary.materialized > 0) {
 		return CTEExecutionMode::HYBRID_FANOUT;
 	}
 	return CTEExecutionMode::STREAMING_FANOUT;
@@ -399,15 +378,16 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 		return result;
 	}
 	auto execution_mode = GetExecutionMode();
-	result["Execution Mode"] = GetCTEExecutionModeName(execution_mode);
+	result["Execution Mode"] = EnumUtil::ToString(execution_mode);
 	if (UseStreamingExchange() && exchange->RunToCompletion()) {
 		result["Run To Completion"] = "true";
 	}
 	if (UseStreamingExchange()) {
-		auto direct_count = exchange->DirectConsumerCount();
-		auto consumer_count = exchange->ConsumerCount();
+		auto summary = exchange->GetConsumerSummary();
+		auto direct_count = summary.direct;
+		auto consumer_count = summary.ExchangeConsumerCount();
 		D_ASSERT(direct_count <= consumer_count);
-		auto buffered_count = consumer_count - direct_count;
+		auto buffered_count = summary.buffered;
 		if (direct_count == 0) {
 			result["Fanout Mode"] = "BUFFERED";
 		} else if (direct_count == consumer_count) {
@@ -420,8 +400,11 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 		result["Buffered Consumers"] = StringUtil::Format("%llu", buffered_count);
 		result["Chunk Storage"] = buffered_count == 0 ? "NONE" : "POOLED/COLUMN_DATA";
 	}
-	if (materialized_consumer_count > 0) {
-		result["Materialized Consumers"] = StringUtil::Format("%llu", materialized_consumer_count);
+	if (exchange) {
+		auto summary = exchange->GetConsumerSummary();
+		if (summary.materialized > 0) {
+			result["Materialized Consumers"] = StringUtil::Format("%llu", summary.materialized);
+		}
 	}
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
