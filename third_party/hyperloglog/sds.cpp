@@ -1042,13 +1042,23 @@ sds *sdssplitargs(const char *line, int *argc) {
                 if (*p) p++;
             }
             /* add the token to the vector */
-            vector = (char**) realloc(vector,((*argc)+1)*sizeof(char*));
+            char **new_vector =(char **)realloc(vector, ((*argc) + 1) * sizeof(char *));
+            if (new_vector == NULL) {
+                goto err;
+            }
+            vector = new_vector;
             vector[*argc] = current;
             (*argc)++;
             current = NULL;
         } else {
             /* Even on empty input string return something not NULL. */
-            if (vector == NULL) vector = (char**) malloc(sizeof(void*));
+            if (vector == NULL) {
+                vector = (char**) malloc(sizeof(void*));
+                if (vector == NULL) {
+                    *argc = 0;
+                    return NULL;
+                }
+            }
             return vector;
         }
     }
@@ -1057,7 +1067,7 @@ err:
     while((*argc)--)
         sdsfree(vector[*argc]);
     free(vector);
-    if (current) sdsfree(current);
+    sdsfree(current);
     *argc = 0;
     return NULL;
 }
