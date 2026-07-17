@@ -29,7 +29,7 @@ struct HTTPParams {
 	}
 	virtual ~HTTPParams();
 
-	static constexpr uint64_t DEFAULT_TIMEOUT_SECONDS = 30; // 30 sec
+	static constexpr uint64_t DEFAULT_TIMEOUT_SECONDS = 300; // 5 minutes
 	static constexpr uint64_t DEFAULT_RETRIES = 3;
 	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 100;
 	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
