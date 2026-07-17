@@ -206,8 +206,8 @@ FileType CachingFileSystemWrapper::GetFileType(FileHandle &handle) {
 		return underlying_file_system.GetFileType(handle);
 	}
 
-	auto &file_handle = caching_handle->GetFileHandle();
-	return underlying_file_system.GetFileType(file_handle);
+	auto file_handle = caching_handle->GetFileHandle();
+	return underlying_file_system.GetFileType(*file_handle);
 }
 
 FileMetadata CachingFileSystemWrapper::Stats(FileHandle &handle) {
@@ -216,8 +216,8 @@ FileMetadata CachingFileSystemWrapper::Stats(FileHandle &handle) {
 		return underlying_file_system.Stats(handle);
 	}
 
-	auto &file_handle = caching_handle->GetFileHandle();
-	return underlying_file_system.Stats(file_handle);
+	auto file_handle = caching_handle->GetFileHandle();
+	return underlying_file_system.Stats(*file_handle);
 }
 
 //===----------------------------------------------------------------------===//

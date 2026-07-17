@@ -15,7 +15,7 @@ add_library_unity(
   equal_or_null_simplification.cpp
   in_clause_simplification_rule.cpp
   join_dependent_filter.cpp
-  left_to_prefix.cpp
+  string_prefix.cpp
   like_optimizations.cpp
   list_comprehension_rewrite.cpp
   monotone_preimage.cpp
