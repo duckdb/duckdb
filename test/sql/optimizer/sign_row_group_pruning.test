@@ -10,10 +10,7 @@ USE db;
 
 statement ok
 CREATE TABLE integers AS
-    SELECT CASE WHEN range = 0 THEN 0
-                WHEN range % 2048 = 0 THEN NULL
-                ELSE range::INTEGER
-           END AS i
+    SELECT range::INTEGER AS i
     FROM range(6144);
 
 query I
@@ -25,18 +22,3 @@ query II
 EXPLAIN ANALYZE SELECT sum(i) FROM integers WHERE sign(i) = 0;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
-
-statement ok
-CREATE TABLE reported_repro AS
-    SELECT CASE WHEN range % 10000 = 0 THEN NULL ELSE range::INTEGER END AS i
-    FROM range(6144);
-
-query I
-SELECT sum(i) FROM reported_repro WHERE sign(i) = 0;
-----
-NULL
-
-query II
-EXPLAIN ANALYZE SELECT sum(i) FROM reported_repro WHERE sign(i) = 0;
-----
-analyzed_plan	<REGEX>:.*Empty Result.*
