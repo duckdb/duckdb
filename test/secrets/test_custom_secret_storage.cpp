@@ -7,6 +7,7 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 using namespace duckdb;
 
@@ -417,6 +418,8 @@ TEST_CASE("Transaction secret validation and conflicts", "[secret]") {
 
 	con.BeginTransaction();
 	auto input = TransactionSecretInput("conflicting_secret", "s3://original");
+	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*con.context);
+	REQUIRE_THROWS(secret_manager.BindCreateSecret(transaction, input));
 	REQUIRE(secret_manager.CreateSecret(*con.context, input));
 	REQUIRE_THROWS(secret_manager.CreateSecret(*con.context, input));
 
@@ -426,7 +429,6 @@ TEST_CASE("Transaction secret validation and conflicts", "[secret]") {
 	input.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 	input.scope = {"s3://replacement"};
 	REQUIRE(secret_manager.CreateSecret(*con.context, input));
-	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*con.context);
 	auto stored_secret = secret_manager.GetSecretByName(transaction, "conflicting_secret");
 	REQUIRE(stored_secret);
 	REQUIRE(stored_secret->secret->GetScope()[0] == "s3://replacement");

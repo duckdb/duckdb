@@ -278,6 +278,9 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 }
 
 BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, CreateSecretInput &info) {
+	if (info.persist_type == SecretPersistType::TRANSACTION || info.storage_type == TRANSACTION_STORAGE_NAME) {
+		throw BinderException("Transaction-scoped secrets cannot be created through SQL");
+	}
 	InitializeSecrets(transaction);
 
 	auto type = info.type;
