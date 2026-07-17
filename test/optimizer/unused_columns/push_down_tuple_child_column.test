@@ -1,0 +1,17 @@
+# name: test/optimizer/unused_columns/push_down_tuple_child_column.test
+# description: test tuple type column could remove unused tuple child columns
+# group: [unused_columns]
+
+statement ok
+CREATE TABLE ts AS SELECT (i, i)::TUPLE(INTEGER, INTEGER) AS c FROM range(100) t(i);
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;;
+
+query II
+EXPLAIN SELECT sum(struct_extract_at(c, 1)) FROM ts;
+----
+physical_plan	<!REGEX>:.*struct_extract_at.*
+
+statement ok
+SELECT struct_extract_at(sub.c, 2) FROM (SELECT c FROM ts) sub;
