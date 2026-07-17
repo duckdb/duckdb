@@ -912,8 +912,10 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 		UnifiedVectorFormat child_data;
 		child_vectors[child_idx].ToUnifiedFormat(child_data);
 
-		// child_source will be handed to the copier.
+		// child_source is handed to the copier and replaced by a patched copy on the violation path.
+		// note: patched_child must outlive the child_function call below, hence the outer scope.
 		reference<Vector> child_source = child_vectors[child_idx];
+		unique_ptr<Vector> patched_child;
 
 		if (parent_has_nulls) {
 			D_ASSERT(!child_data.sel->IsSet());
@@ -940,10 +942,15 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 						child_data.validity.SetInvalidUnsafe(offset + i);
 					}
 				}
-				// Replace child_source with a child that is patched with the new validity mask
-				auto patched_child = make_uniq<Vector>(Vector::Ref(child_vectors[child_idx]));
-				FlatVector::SetValidity(*patched_child, child_data.validity);
-				child_source = *patched_child;
+				// Only a LIST child's element copy reads validity from the Vector (via
+				// GetConsecutiveChildListInfo), so it must carry the patched mask too; other child types read
+				// only source_data. SetValidity needs a flat buffer, so constant/dict children are left as-is.
+				if (child_vectors[child_idx].GetType().InternalType() == PhysicalType::LIST &&
+				    child_vectors[child_idx].GetVectorType() == VectorType::FLAT_VECTOR) {
+					patched_child = make_uniq<Vector>(Vector::Ref(child_vectors[child_idx]));
+					FlatVector::SetValidity(*patched_child, child_data.validity);
+					child_source = *patched_child;
+				}
 			}
 		}
 
@@ -980,8 +987,10 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 	child_vector.ToUnifiedFormat(child_vector_data);
 
-	// child_source will be handed to the copier.
+	// child_source is handed to the copier and replaced by a patched copy on the violation path.
+	// note: patched_child must outlive the child_function call below, hence the outer scope.
 	reference<Vector> array_child_source = child_vector;
+	unique_ptr<Vector> patched_child;
 
 	// Broadcast and sync the validity of the array vector to the child vector
 	// This requires creating a copy of the validity mask: we cannot modify the input validity
@@ -997,10 +1006,15 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 				}
 			}
 		}
-		// Replace child_source with a child that is patched with the new validity mask
-		auto patched_child = make_uniq<Vector>(Vector::Ref(child_vector));
-		FlatVector::SetValidity(*patched_child, child_vector_data.validity);
-		array_child_source = *patched_child;
+		// Only a LIST child's element copy reads validity from the Vector (via
+		// GetConsecutiveChildListInfo), so it must carry the patched mask too; other child types read
+		// only source_data. SetValidity needs a flat buffer, so constant/dict children are left as-is.
+		if (child_vector.GetType().InternalType() == PhysicalType::LIST &&
+		    child_vector.GetVectorType() == VectorType::FLAT_VECTOR) {
+			patched_child = make_uniq<Vector>(Vector::Ref(child_vector));
+			FlatVector::SetValidity(*patched_child, child_vector_data.validity);
+			array_child_source = *patched_child;
+		}
 	}
 
 	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;

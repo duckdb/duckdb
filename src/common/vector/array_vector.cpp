@@ -232,7 +232,8 @@ void VectorArrayBuffer::CopyInternal(const Vector &source, const SelectionVector
 			auto source_idx = source_sel.get_index(source_offset + i);
 			bool all_null = true;
 			for (idx_t j = 0; j < array_size; j++) {
-				if (source_child_format.sel->get_index(source_idx * array_size + j)) {
+				auto child_idx = source_child_format.sel->get_index(source_idx * array_size + j);
+				if (source_child_format.validity.RowIsValid(child_idx)) {
 					all_null = false;
 					break;
 				}
