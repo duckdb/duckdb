@@ -1,0 +1,60 @@
+# name: test/sql/storage/alter/alter_based_on_unfinished_insert_fails.test
+# group: [alter]
+
+load __TEST_DIR__/concurrent_rename_and_insert.db readwrite v1.5.4
+
+foreach mode with_wal without_wal
+
+onlyif mode=without_wal
+statement ok
+set wal_autocheckpoint = '10gb';
+
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT
+	range::INTEGER AS int_col,
+	md5(range::VARCHAR)::VARCHAR AS varchar_col
+FROM range(200)
+
+concurrentforeach task rename insert
+
+loop run 0 200
+
+onlyif task=rename
+statement maybe
+ALTER TABLE t ADD COLUMN IF NOT EXISTS int_col__tmp INTEGER;
+----
+
+onlyif task=rename
+statement maybe
+UPDATE t SET int_col__tmp = int_col;
+----
+
+onlyif task=rename
+statement maybe
+ALTER TABLE t DROP COLUMN int_col__tmp;
+----
+
+onlyif task=insert
+statement maybe
+INSERT INTO t BY NAME SELECT
+	1::INTEGER AS int_col,
+	'x' AS varchar_col
+FROM range(10);
+----
+
+# run
+endloop
+
+# task
+endloop
+
+statement ok
+checkpoint;
+
+restart
+
+statement ok
+SELECT count(*) FROM t
+
+# mode
+endloop

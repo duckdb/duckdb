@@ -1354,6 +1354,11 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 	}
 #endif
 
+	if (!IsMainTable()) {
+		//! The table was altered by another transaction since we staged our commit, revert it
+		//! Causing the commit of the other transaction to fail
+		version = DataTableVersion::MAIN_TABLE;
+	}
 	// revert the data table append
 	RevertAppendInternal(start_row);
 }
