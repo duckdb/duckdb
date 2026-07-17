@@ -39,6 +39,10 @@ public:
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
 	bool from_residual_predicate = false;
+	//! Whether this predicate originated from a LogicalFilter rather than a join condition.
+	bool from_logical_filter = false;
+	//! Logical filters above a LEFT join can depend on NULL-extended rows and must remain filters.
+	bool must_remain_filter = false;
 	//! Index of the equivalence group for INNER equality/IS NOT DISTINCT FROM join filters.
 	//! All filters transitively connected by equality (a=b, b=c -> a=c all share the same index).
 	//! Used by cardinality estimation to skip redundant transitive conditions.
