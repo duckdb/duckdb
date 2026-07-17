@@ -18,6 +18,7 @@
 #include <map>
 
 namespace duckdb {
+class LogicalGet;
 class Optimizer;
 
 enum class ValueComparisonResult { PRUNE_LEFT, PRUNE_RIGHT, UNSATISFIABLE_CONDITION, PRUNE_NOTHING };
