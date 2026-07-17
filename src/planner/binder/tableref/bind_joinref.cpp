@@ -240,9 +240,18 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	result->delim_flipped = ref.delim_flipped;
 
 	{
-		LateralBinder lateral_binder(left_binder, context);
-
-		right_binder.BeginSubqueryBind(left_binder, lateral_binder);
+		shared_ptr<Binder> visibility_binder;
+		unique_ptr<LateralBinder> lateral_binder;
+		if (result->inputs_flipped) {
+			// The normalized left input is syntactically to the right and must not be visible while binding
+			// the syntactic left input. It is exposed separately when the join condition is bound below.
+			visibility_binder = Binder::CreateBinder(context);
+			lateral_binder = make_uniq<LateralBinder>(*visibility_binder, context);
+			right_binder.BeginSubqueryBind(*visibility_binder, *lateral_binder);
+		} else {
+			lateral_binder = make_uniq<LateralBinder>(left_binder, context);
+			right_binder.BeginSubqueryBind(left_binder, *lateral_binder);
+		}
 		result->right = right_binder.BindJoin(*this, right_ref);
 		if (!ref.duplicate_eliminated_columns.empty()) {
 			if (ref.delim_flipped) {

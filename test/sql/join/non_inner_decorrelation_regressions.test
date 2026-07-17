@@ -308,6 +308,34 @@ ORDER BY o.x;
 0	1
 1	0
 
+# RIGHT JOIN normalization must preserve syntactic input visibility while
+# binding a lateral reference from the syntactic left input.
+query III
+SELECT o.b, q.a, q.b
+FROM (VALUES (1), (2)) o(b)
+LEFT JOIN LATERAL (
+	SELECT l.a, r.b
+	FROM LATERAL (SELECT b) l(a)
+	RIGHT JOIN (VALUES (1)) r(b) ON EXISTS (
+		SELECT 1 WHERE l.a = r.b
+	)
+) q ON true
+ORDER BY o.b;
+----
+1	1	1
+2	NULL	1
+
+# The syntactic right input is not visible from the syntactic left input,
+# even when RIGHT JOIN normalization swaps their planning roles.
+statement error
+SELECT *
+FROM LATERAL (SELECT r.b) l(a)
+RIGHT JOIN (VALUES (1)) r(b) ON EXISTS (
+	SELECT 1 WHERE l.a = r.b
+);
+----
+<REGEX>:.*Referenced table "r" not found.*
+
 query IT
 SELECT o.x, EXISTS (
 	SELECT *
