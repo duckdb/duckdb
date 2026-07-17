@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -369,17 +370,98 @@ int8_t SignOperator::Operation(double input) {
 	}
 }
 
+// Returns whether we could safely produce output bounds.
+template <class T>
+bool SignStatsBounds(const BaseStatistics &input_stats, int8_t &min_sign, int8_t &max_sign) {
+	auto min = NumericStats::GetMin<T>(input_stats);
+	auto max = NumericStats::GetMax<T>(input_stats);
+	if constexpr (std::is_floating_point<T>::value) {
+		if (Value::IsNan(min) || Value::IsNan(max)) {
+			return false;
+		}
+	}
+	min_sign = SignOperator::Operation<T, int8_t>(min);
+	max_sign = SignOperator::Operation<T, int8_t>(max);
+	return true;
+}
+
+unique_ptr<BaseStatistics> PropagateSignStats(ClientContext &context, FunctionStatisticsInput &input) {
+	(void)context;
+	auto &child_stats = input.child_stats;
+	D_ASSERT(child_stats.size() == 1);
+	auto &input_stats = child_stats[0];
+	auto result = NumericStats::CreateEmpty(LogicalType::TINYINT);
+	result.CopyValidity(input_stats);
+	if (!input_stats.CanHaveNoNull()) {
+		return result.ToUnique();
+	}
+	if (!NumericStats::HasMinMax(input_stats)) {
+		return nullptr;
+	}
+
+	int8_t min_sign = 0;
+	int8_t max_sign = 0;
+	bool success = false;
+	switch (input.expr.GetChildren()[0]->GetReturnType().InternalType()) {
+	case PhysicalType::INT8:
+		success = SignStatsBounds<int8_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::INT16:
+		success = SignStatsBounds<int16_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::INT32:
+		success = SignStatsBounds<int32_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::INT64:
+		success = SignStatsBounds<int64_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::INT128:
+		success = SignStatsBounds<hugeint_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT8:
+		success = SignStatsBounds<uint8_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT16:
+		success = SignStatsBounds<uint16_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT32:
+		success = SignStatsBounds<uint32_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT64:
+		success = SignStatsBounds<uint64_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT128:
+		success = SignStatsBounds<uhugeint_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::FLOAT:
+		success = SignStatsBounds<float>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::DOUBLE:
+		success = SignStatsBounds<double>(input_stats, min_sign, max_sign);
+		break;
+	default:
+		return nullptr;
+	}
+	if (!success) {
+		return nullptr;
+	}
+
+	NumericStats::SetMin(result, min_sign);
+	NumericStats::SetMax(result, max_sign);
+	return result.ToUnique();
+}
+
 } // namespace
 ScalarFunctionSet SignFun::GetFunctions() {
 	ScalarFunctionSet sign;
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
-		} else {
-			sign.AddFunction(
-			    ScalarFunction({type}, LogicalType::TINYINT,
-			                   ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
 		}
+		ScalarFunction function({type}, LogicalType::TINYINT,
+		                        ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type));
+		function.SetStatisticsCallback(PropagateSignStats);
+		sign.AddFunction(function);
 	}
 	return sign;
 }
