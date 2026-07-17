@@ -68,7 +68,8 @@ idx_t VectorArrayBuffer::GetAllocationSize() const {
 void VectorArrayBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
 	// a child slot under a NULL array row must be NULL as well, we check before reading any child payload
-	if (child->GetVectorType() == VectorType::FLAT_VECTOR || child->GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (child->GetVectorType() == VectorType::FLAT_VECTOR || child->GetVectorType() == VectorType::CONSTANT_VECTOR ||
+	    child->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto child_validity = child->Validity();
 		for (idx_t i = 0; i < count; i++) {
 			auto item_idx = sel.get_index(i);
@@ -213,9 +214,15 @@ void VectorArrayBuffer::CopyInternal(const Vector &source, const SelectionVector
 	}
 	// NULL rows whose source slots are all NULL are handled by validity propagation in the wholesale copy
 	const auto child_vector_type = source_child.GetVectorType();
-	const bool child_checkable =
-	    child_vector_type == VectorType::FLAT_VECTOR || child_vector_type == VectorType::CONSTANT_VECTOR;
-	auto source_child_validity = source_child.Validity();
+
+	const bool child_checkable = child_vector_type == VectorType::FLAT_VECTOR ||
+	                             child_vector_type == VectorType::CONSTANT_VECTOR ||
+	                             child_vector_type == VectorType::DICTIONARY_VECTOR;
+	// ToUnifiedFormat is side-effect-free for these three types, so only if child_checkable we grab the sel vector
+	UnifiedVectorFormat source_child_format;
+	if (child_checkable) {
+		source_child.ToUnifiedFormat(source_child_format);
+	}
 	idx_t start_idx = 0;
 	for (idx_t i = 0; i < copy_count; i++) {
 		if (validity.RowIsValidUnsafe(target_offset + i)) {
@@ -225,7 +232,7 @@ void VectorArrayBuffer::CopyInternal(const Vector &source, const SelectionVector
 			auto source_idx = source_sel.get_index(source_offset + i);
 			bool all_null = true;
 			for (idx_t j = 0; j < array_size; j++) {
-				if (source_child_validity.IsValid(source_idx * array_size + j)) {
+				if (source_child_format.sel->get_index(source_idx * array_size + j)) {
 					all_null = false;
 					break;
 				}

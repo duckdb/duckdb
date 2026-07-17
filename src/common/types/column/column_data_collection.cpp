@@ -912,6 +912,9 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 		UnifiedVectorFormat child_data;
 		child_vectors[child_idx].ToUnifiedFormat(child_data);
 
+		// child_source will be handed to the copier.
+		reference<Vector> child_source = child_vectors[child_idx];
+
 		if (parent_has_nulls) {
 			D_ASSERT(!child_data.sel->IsSet());
 			// only rows violating the child-NULL invariant need a patched validity mask
@@ -937,10 +940,14 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 						child_data.validity.SetInvalidUnsafe(offset + i);
 					}
 				}
+				// Replace child_source with a child that is patched with the new validity mask
+				auto patched_child = make_uniq<Vector>(Vector::Ref(child_vectors[child_idx]));
+				FlatVector::SetValidity(*patched_child, child_data.validity);
+				child_source = *patched_child;
 			}
 		}
 
-		child_function.function(child_meta_data, child_data, child_vectors[child_idx], offset, copy_count);
+		child_function.function(child_meta_data, child_data, child_source.get(), offset, copy_count);
 	}
 }
 
@@ -973,6 +980,9 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 	child_vector.ToUnifiedFormat(child_vector_data);
 
+	// child_source will be handed to the copier.
+	reference<Vector> array_child_source = child_vector;
+
 	// Broadcast and sync the validity of the array vector to the child vector
 	// This requires creating a copy of the validity mask: we cannot modify the input validity
 	child_vector_data.validity = ValidityMask(child_vector_data.validity, child_vector_data.validity.Capacity());
@@ -987,16 +997,20 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 				}
 			}
 		}
+		// Replace child_source with a child that is patched with the new validity mask
+		auto patched_child = make_uniq<Vector>(Vector::Ref(child_vector));
+		FlatVector::SetValidity(*patched_child, child_vector_data.validity);
+		array_child_source = *patched_child;
 	}
 
 	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// If the array is constant, we need to copy the child vector n times
 	if (is_constant) {
 		for (idx_t i = 0; i < copy_count; i++) {
-			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
+			child_function.function(child_meta_data, child_vector_data, array_child_source.get(), 0, array_size);
 		}
 	} else {
-		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+		child_function.function(child_meta_data, child_vector_data, array_child_source.get(), offset * array_size,
 		                        copy_count * array_size);
 	}
 }

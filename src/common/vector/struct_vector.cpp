@@ -126,7 +126,8 @@ void VectorStructBuffer::VerifyInternal(const LogicalType &type, const Selection
 			}
 		} else {
 			if (child.GetVectorType() == VectorType::FLAT_VECTOR ||
-			    child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			    child.GetVectorType() == VectorType::CONSTANT_VECTOR ||
+			    child.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 				auto child_validity = child.Validity();
 				for (idx_t r = 0; r < Size(); r++) {
 					if (!validity.RowIsValid(r)) {

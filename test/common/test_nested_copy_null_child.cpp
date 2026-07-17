@@ -385,6 +385,19 @@ TEST_CASE("Verify rejects non-NULL children under a NULL ARRAY row", "[copy]") {
 		REQUIRE_THROWS(v.Verify(sel, row_count));
 	}
 
+	SECTION("dictionary child") {
+		auto v = make_array(LogicalType::VARCHAR);
+		auto &child = ArrayVector::GetChildMutable(v);
+		SelectionVector dict_sel(child.size());
+		for (idx_t i = 0; i < child.size(); i++) {
+			dict_sel.set_index(i, 0);
+		}
+		child.Slice(dict_sel, child.size());
+		FlatVector::ValidityMutable(v).SetInvalid(null_row);
+		VerifyVectorsGuard guard;
+		REQUIRE_THROWS(v.Verify());
+	}
+
 	SECTION("grandchild under a correctly-NULL struct is caught by recursion (full path)") {
 		auto v = make_array(StructOfVarchar());
 		auto &struct_child = ArrayVector::GetChildMutable(v);
@@ -516,6 +529,56 @@ TEST_CASE("ColumnDataCollection append must not read child payloads under NULL r
 				REQUIRE(result.data[0].GetValue(r) == expected[r]);
 			}
 		}
+	}
+
+	SECTION("STRUCT(LIST(VARCHAR)): a child under a NULL parent does not shift later lists") {
+		auto type = MakeType(Shape::STRUCT_LIST_VARCHAR);
+		const idx_t row_count = 3;
+		const idx_t null_row = 1;
+		DataChunk chunk;
+		chunk.Initialize(allocator, {type});
+		chunk.SetChildCardinality(row_count);
+		duckdb::vector<Value> expected(row_count);
+		for (idx_t r = 0; r < row_count; r++) {
+			expected[r] = ValidValue(Shape::STRUCT_LIST_VARCHAR, r);
+			chunk.data[0].SetValue(r, expected[r]);
+		}
+		// Leave the LIST child valid while marking only its STRUCT parent NULL.
+		FlatVector::ValidityMutable(chunk.data[0]).SetInvalid(null_row);
+
+		ColumnDataCollection collection(allocator, {type});
+		collection.Append(chunk);
+
+		DataChunk result;
+		ScanSingleChunk(collection, result);
+		REQUIRE(result.data[0].GetValue(0) == expected[0]);
+		REQUIRE(result.data[0].GetValue(null_row).IsNull());
+		REQUIRE(result.data[0].GetValue(2) == expected[2]);
+	}
+
+	SECTION("ARRAY(LIST(VARCHAR)): a child under a NULL parent does not shift later lists") {
+		auto type = MakeType(Shape::ARRAY_LIST_VARCHAR);
+		const idx_t row_count = 3;
+		const idx_t null_row = 1;
+		DataChunk chunk;
+		chunk.Initialize(allocator, {type});
+		chunk.SetChildCardinality(row_count);
+		duckdb::vector<Value> expected(row_count);
+		for (idx_t r = 0; r < row_count; r++) {
+			expected[r] = ValidValue(Shape::ARRAY_LIST_VARCHAR, r);
+			chunk.data[0].SetValue(r, expected[r]);
+		}
+		// Leave the LIST grandchildren valid while marking only the ARRAY parent row NULL.
+		FlatVector::ValidityMutable(chunk.data[0]).SetInvalid(null_row);
+
+		ColumnDataCollection collection(allocator, {type});
+		collection.Append(chunk);
+
+		DataChunk result;
+		ScanSingleChunk(collection, result);
+		REQUIRE(result.data[0].GetValue(0) == expected[0]);
+		REQUIRE(result.data[0].GetValue(null_row).IsNull());
+		REQUIRE(result.data[0].GetValue(2) == expected[2]);
 	}
 
 	SECTION("dictionary child sharing a slot with a NULL row is not corrupted") {
