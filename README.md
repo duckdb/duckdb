@@ -165,26 +165,28 @@ build/reldebug/test/unittest "*"
 
 ### Benchmarks
 
-The feature store benchmarks live under `benchmark/feature/clickstream/` in three families —
-`serve/` (point-in-time SERVE), `refresh/` (windowed REFRESH snapshots) and `cases/` (multi-step
-workflows). They require ClickBench data, downloaded automatically on first run and cached per scale.
+Feature store benchmarks live under `benchmark/feature/clickstream/`, in three families: `serve/`
+(point-in-time SERVE), `refresh/` (windowed REFRESH snapshots), `cases/` (multi-step workflows).
+ClickBench data downloads automatically on first run and is cached per scale.
 
 ```bash
-# run everything under the feature group
-build/reldebug/benchmark/benchmark_runner "benchmark/feature/.*"
-
-# or a single family
-build/reldebug/benchmark/benchmark_runner "benchmark/feature/clickstream/serve/serve_.*"
-build/reldebug/benchmark/benchmark_runner "benchmark/feature/clickstream/refresh/refresh_.*"
-build/reldebug/benchmark/benchmark_runner "benchmark/feature/clickstream/cases/case_.*"
-
-# list without running
-build/reldebug/benchmark/benchmark_runner --list | grep clickstream/
+build/reldebug/benchmark/benchmark_runner "benchmark/feature/.*"                        # everything
+build/reldebug/benchmark/benchmark_runner "benchmark/feature/clickstream/serve/serve_.*" # one family
+build/reldebug/benchmark/benchmark_runner --list | grep clickstream/                     # list only
 ```
 
-The scenarios are generated (not hand-written) by a seeded pairwise generator; see
-[benchmark/feature/clickstream/README.md](benchmark/feature/clickstream/README.md) for the methodology
-and how to regenerate them.
+Scenarios are generated, not hand-written, by a seeded pairwise generator
+(`scripts/generate_feature_benchmarks.py`):
+
+```bash
+python3 scripts/generate_feature_benchmarks.py                 # regenerate the checked-in set (seed 42)
+python3 scripts/generate_feature_benchmarks.py --family refresh # regenerate one family
+python3 scripts/generate_feature_benchmarks.py --seed 7         # a different reproducible list
+python3 scripts/generate_feature_benchmarks.py --verify         # assert full pairwise coverage
+```
+
+See [benchmark/feature/clickstream/README.md](benchmark/feature/clickstream/README.md) for the
+sampling methodology.
 
 Run standard DuckDB benchmarks:
 
