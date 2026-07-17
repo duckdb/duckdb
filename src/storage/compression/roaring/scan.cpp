@@ -192,28 +192,30 @@ void BitsetContainerScanState::Verify() const {
 RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	handle = buffer_manager.Pin(segment.GetBlockHandle());
-	auto segment_size = segment.SegmentSize();
+	auto block_size = segment.GetBlockSize();
 	auto segment_block_offset = segment.GetBlockOffset();
-	if (segment_block_offset >= segment_size) {
-		throw InternalException("invalid segment_block_offset in RoaringScanState constructor");
+	if (segment_block_offset >= block_size || block_size - segment_block_offset < sizeof(idx_t)) {
+		throw IOException("Corrupted Roaring segment: invalid block offset");
 	}
+	auto available_segment_space = block_size - segment_block_offset;
 
 	auto base_ptr = handle.GetDataMutable() + segment_block_offset;
 	data_ptr = base_ptr + sizeof(idx_t);
 
 	// Deserialize the container metadata for this segment
 	auto metadata_offset = Load<idx_t>(base_ptr);
-	if (metadata_offset >= segment_size) {
-		throw InternalException("invalid metadata offset in RoaringScanState constructor");
+	if (metadata_offset >= available_segment_space - sizeof(idx_t)) {
+		throw IOException("Corrupted Roaring segment: metadata offset exceeds segment bounds");
 	}
 	auto metadata_ptr = data_ptr + metadata_offset;
+	auto available_metadata_space = available_segment_space - sizeof(idx_t) - metadata_offset;
 
 	auto segment_count = segment.count.load();
 	auto container_count = segment_count / ROARING_CONTAINER_SIZE;
 	if (segment_count % ROARING_CONTAINER_SIZE != 0) {
 		container_count++;
 	}
-	metadata_collection.Deserialize(metadata_ptr, container_count);
+	metadata_collection.Deserialize(metadata_ptr, container_count, available_metadata_space);
 	ContainerMetadataCollectionScanner scanner(metadata_collection);
 	data_start_position.reserve(container_count);
 	idx_t position = 0;
@@ -227,14 +229,20 @@ RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
 		} else if (metadata.IsRun() && metadata.NumberOfRuns() < COMPRESSED_RUN_THRESHOLD) {
 			position = AlignValue<idx_t, sizeof(RunContainerRLEPair)>(position);
 		}
+		auto start_of_container = i * ROARING_CONTAINER_SIZE;
+		auto container_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(
+		    MinValue<idx_t>(segment_count - start_of_container, ROARING_CONTAINER_SIZE));
+		auto data_size = SkipVector(metadata, container_size);
+		if (position > metadata_offset || data_size > metadata_offset - position) {
+			throw IOException("Corrupted Roaring segment: container data exceeds metadata offset");
+		}
 		data_start_position.push_back(position);
-		position += SkipVector(metadata);
+		position += data_size;
 	}
 }
 
-idx_t RoaringScanState::SkipVector(const ContainerMetadata &metadata) {
-	// NOTE: this doesn't care about smaller containers, since only the last container can be smaller
-	return metadata.GetDataSizeInBytes(ROARING_CONTAINER_SIZE);
+idx_t RoaringScanState::SkipVector(const ContainerMetadata &metadata, idx_t container_size) {
+	return metadata.GetDataSizeInBytes(container_size);
 }
 
 bool RoaringScanState::UseContainerStateCache(idx_t container_index, idx_t internal_offset) {

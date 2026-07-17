@@ -4,6 +4,7 @@ add_library_unity(
   OBJECT
   test_buffer_manager.cpp
   test_checksum.cpp
+  test_roaring_corruption.cpp
   test_storage.cpp
   test_database_size.cpp
   wal_torn_write.cpp)

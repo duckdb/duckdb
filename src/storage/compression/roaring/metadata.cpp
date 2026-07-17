@@ -1,5 +1,6 @@
 #include "duckdb/storage/compression/roaring/roaring.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/bitpacking.hpp"
 
@@ -153,14 +154,22 @@ idx_t ContainerMetadataCollection::Serialize(data_ptr_t dest) const {
 	return types_size + runs_size + arrays_size;
 }
 
-void ContainerMetadataCollection::Deserialize(data_ptr_t src, idx_t container_count) {
+static void VerifyMetadataRead(idx_t read_offset, idx_t read_size, idx_t available_size, const char *metadata_name) {
+	if (read_size > available_size || read_offset > available_size - read_size) {
+		throw IOException("Corrupted Roaring segment: %s metadata exceeds segment bounds", metadata_name);
+	}
+}
+
+void ContainerMetadataCollection::Deserialize(data_ptr_t src, idx_t container_count, idx_t available_size) {
 	container_type.resize(AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(container_count));
 	count_in_segment = container_count;
 
 	// Load the types of the containers
 	idx_t types_size = BitpackingPrimitives::GetRequiredSize(container_type.size(), 2);
+	idx_t read_offset = 0;
+	VerifyMetadataRead(read_offset, types_size, available_size, "container type");
 	BitpackingPrimitives::UnPackBuffer<uint8_t>(container_type.data(), src, container_count, 2, true);
-	src += types_size;
+	read_offset += types_size;
 
 	// Figure out how many are run containers
 	idx_t runs_count = 0;
@@ -175,16 +184,18 @@ void ContainerMetadataCollection::Deserialize(data_ptr_t src, idx_t container_co
 	// Load the run containers
 	if (runs_count) {
 		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_count, RUN_CONTAINER_SIZE_BITWIDTH);
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(number_of_runs.data(), src, runs_count, RUN_CONTAINER_SIZE_BITWIDTH,
-		                                            true);
-		src += runs_size;
+		VerifyMetadataRead(read_offset, runs_size, available_size, "run container");
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(number_of_runs.data(), src + read_offset, runs_count,
+		                                            RUN_CONTAINER_SIZE_BITWIDTH, true);
+		read_offset += runs_size;
 	}
 
 	// Load the array/bitset containers
 	if (!cardinality.empty()) {
 		idx_t arrays_size = sizeof(uint8_t) * cardinality.size();
+		VerifyMetadataRead(read_offset, arrays_size, available_size, "array container");
 		arrays_in_segment = arrays_size;
-		memcpy(cardinality.data(), src, arrays_size);
+		memcpy(cardinality.data(), src + read_offset, arrays_size);
 	}
 }
 

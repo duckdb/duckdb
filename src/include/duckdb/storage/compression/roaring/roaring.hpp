@@ -160,7 +160,7 @@ public:
 	void Reset();
 	// Write the metadata for the current segment
 	idx_t Serialize(data_ptr_t dest) const;
-	void Deserialize(data_ptr_t src, idx_t container_count);
+	void Deserialize(data_ptr_t src, idx_t container_count, idx_t available_size);
 
 private:
 	void AddBitsetContainer();
@@ -610,7 +610,7 @@ public:
 	explicit RoaringScanState(ColumnSegment &segment);
 
 public:
-	idx_t SkipVector(const ContainerMetadata &metadata);
+	idx_t SkipVector(const ContainerMetadata &metadata, idx_t container_size);
 	bool UseContainerStateCache(idx_t container_index, idx_t internal_offset);
 	ContainerMetadata GetContainerMetadata(idx_t container_index);
 	data_ptr_t GetStartOfContainerData(idx_t container_index);
