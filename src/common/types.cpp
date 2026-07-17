@@ -30,6 +30,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 
 #include <cmath>
+#include "duckdb/common/types/geometry.hpp"
 
 namespace duckdb {
 
@@ -718,9 +719,13 @@ bool LogicalType::IsComplete() const {
 				return false;
 			}
 			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty();
-		case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
-			return DecimalType::GetWidth(type) >= 1 && DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
-			       DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
+		case ExtraTypeInfoType::DECIMAL_TYPE_INFO: {
+			// A well-formed decimal is not incomplete
+			auto is_well_formed = DecimalType::GetWidth(type) >= 1 &&
+			                      DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
+			                      DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
+			return !is_well_formed;
+		}
 		default:
 			return false; // Nested types are checked by TypeVisitor recursion
 		}

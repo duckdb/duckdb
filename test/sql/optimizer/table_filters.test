@@ -380,3 +380,17 @@ JOIN bf_build_cast_down b
  AND p.g >= b.g
 ----
 600000
+
+# Chained comparison filters must evaluate later filters at the selected row
+# indices from earlier filters, not at dense positions in the vector.
+statement ok
+CREATE TABLE chained_comparison_filters AS
+SELECT i::INTEGER AS a, i::INTEGER AS b
+FROM range(0, 4096) t(i)
+
+query I
+SELECT count(*)
+FROM chained_comparison_filters
+WHERE a >= 1000 AND b < 10
+----
+0

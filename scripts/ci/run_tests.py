@@ -1365,6 +1365,7 @@ def generate_coverage_report(source_root: Path, unittest_bin: str, profile_dir: 
             os.fspath(coverage_css_file),
             "--quiet",
             "--hierarchical",
+            "--no-function-coverage",
             "--filter",
             "region",
             "--ignore-errors",
@@ -1411,14 +1412,23 @@ def run_batch(config: TestRunnerConfig, batch):
         batch_file_path = Path(batch_file.name)
 
     command = build_test_command(config, shlex.quote(str(batch_file_path)))
+    # Capture the child's stdout/stderr to temp files rather than pipes, avoid deadlock
+    # between a process.wait() and a full unread pipe.
+    stdout_capture = tempfile.NamedTemporaryFile(mode="w+b", delete=False)
+    stderr_capture = tempfile.NamedTemporaryFile(mode="w+b", delete=False)
+
+    def read_captures():
+        stdout_capture.seek(0)
+        stderr_capture.seek(0)
+        out = normalize_output(stdout_capture.read().decode("utf8", "backslashreplace"))
+        err = normalize_output(stderr_capture.read().decode("utf8", "backslashreplace"))
+        return out, err
+
     try:
         proc = subprocess.Popen(
             shlex.split(command),
-            text=True,
-            encoding="utf8",
-            errors="backslashreplace",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=stdout_capture,
+            stderr=stderr_capture,
             env=child_env,
         )
         deadline = time.monotonic() + config.batch_timeout_seconds
@@ -1429,9 +1439,8 @@ def run_batch(config: TestRunnerConfig, batch):
                 peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
             if time.monotonic() >= deadline:
                 proc.kill()
-                stdout, stderr = proc.communicate()
-                stdout = normalize_output(stdout)
-                stderr = normalize_output(stderr)
+                proc.wait()
+                stdout, stderr = read_captures()
                 failed = True
                 message = f"batch timed out after {config.batch_timeout_seconds} seconds"
                 break
@@ -1439,9 +1448,8 @@ def run_batch(config: TestRunnerConfig, batch):
                 time.sleep(DEFAULT_RSS_POLL_INTERVAL_SECONDS)
 
         if message is None:
-            stdout, stderr = proc.communicate()
-            stdout = normalize_output(stdout)
-            stderr = normalize_output(stderr)
+            proc.wait()
+            stdout, stderr = read_captures()
             rss_bytes = get_process_rss_bytes(proc.pid)
             if rss_bytes is not None:
                 peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
@@ -1458,6 +1466,10 @@ def run_batch(config: TestRunnerConfig, batch):
         message = "failed to launch batch command"
     finally:
         batch_file_path.unlink(missing_ok=True)
+        stdout_capture.close()
+        stderr_capture.close()
+        Path(stdout_capture.name).unlink(missing_ok=True)
+        Path(stderr_capture.name).unlink(missing_ok=True)
 
     return {
         "failed": failed,

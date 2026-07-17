@@ -8,6 +8,7 @@ add_library_unity(
   keyword_helper.cpp
   keyword_map.cpp
   matcher.cpp
+  parser_packrat.cpp
   peg_parser.cpp
   sql_formatter.cpp)
 set(ALL_OBJECT_FILES

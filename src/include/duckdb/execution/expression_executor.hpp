@@ -12,11 +12,11 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 
 namespace duckdb {
 class Allocator;
+class ClientContext;
 class ExecutionContext;
 
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk

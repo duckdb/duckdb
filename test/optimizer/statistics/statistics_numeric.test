@@ -179,3 +179,70 @@ query II
 SELECT s.min, s.max FROM (SELECT STATS(exp(x)) s FROM mixed LIMIT 1)
 ----
 1.0	2.718281828459045
+
+# sqrt is strictly increasing: perfect squares round exactly, so bounds are exact
+statement ok
+CREATE TABLE squares(x DOUBLE);
+
+statement ok
+INSERT INTO squares VALUES (4.0), (16.0);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(sqrt(x)) s FROM squares LIMIT 1)
+----
+2.0	4.0
+
+# sqrt of a negative corner throws/NaN: propagator bails, no derived bounds
+statement ok
+CREATE TABLE maybe_negative(x DOUBLE);
+
+statement ok
+INSERT INTO maybe_negative VALUES (-5.0), (10.0);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(sqrt(x)) s FROM maybe_negative LIMIT 1)
+----
+NULL	NULL
+
+# ln of a negative corner throws/NaN: propagator bails
+query II
+SELECT s.min, s.max FROM (SELECT STATS(ln(x)) s FROM maybe_negative LIMIT 1)
+----
+NULL	NULL
+
+# monotone logs: derived output range prunes impossible filters
+statement ok
+CREATE TABLE positives(x DOUBLE);
+
+statement ok
+INSERT INTO positives VALUES (1.0), (100.0);
+
+# ln(x) for x in [1, 100] is in [0, ln(100)]: ln(x) < -1 is impossible
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE ln(x) < -1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# log10(x) for x in [1, 100] is in [0, 2]: log10(x) > 3 is impossible
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE log10(x) > 3;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# log2(x) for x in [1, 100] is in [0, log2(100)]: log2(x) > 7 is impossible
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE log2(x) > 7;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# degrees is strictly increasing: degrees(x) for x in [1, 100] < 50 is impossible (degrees(1) ~= 57.3)
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE degrees(x) < 50;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# radians is strictly increasing: radians(x) for x in [1, 100] > 2 is impossible (radians(100) ~= 1.75)
+query II
+EXPLAIN SELECT count(*) FROM positives WHERE radians(x) > 2;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*

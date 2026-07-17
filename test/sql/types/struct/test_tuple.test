@@ -154,7 +154,7 @@ SELECT struct_extract(c, 1), struct_extract(c, 2) FROM t WHERE c IS NOT NULL ORD
 
 # storage: a recent (v2.0.0+) database stores the TUPLE id directly - empty and non-empty round-trip as TUPLE
 statement ok
-ATTACH '__TEST_DIR__/tuple_v2.db' AS v2 (STORAGE_VERSION 'v2.0.0');
+ATTACH '{TEST_DIR}/tuple_v2.db' AS v2 (STORAGE_VERSION 'v2.0.0');
 
 statement ok
 CREATE TABLE v2.tup AS SELECT row() AS e, row(1) AS one, row(2, 'b') AS two;
@@ -163,7 +163,7 @@ statement ok
 DETACH v2;
 
 statement ok
-ATTACH '__TEST_DIR__/tuple_v2.db' AS v2 (READ_ONLY);
+ATTACH '{TEST_DIR}/tuple_v2.db' AS v2 (READ_ONLY);
 
 query TTTTTT
 SELECT e, typeof(e), one, typeof(one), two, typeof(two) FROM v2.tup;
@@ -175,7 +175,7 @@ DETACH v2;
 
 # storage: TUPLE columns are not storable in older formats (older engines reject the unnamed STRUCT on disk)
 statement ok
-ATTACH '__TEST_DIR__/tuple_v15.db' AS v15 (STORAGE_VERSION 'v1.5.0');
+ATTACH '{TEST_DIR}/tuple_v15.db' AS v15 (STORAGE_VERSION 'v1.5.0');
 
 statement error
 CREATE TABLE v15.tup AS SELECT row(2, 'b') AS two;

@@ -531,8 +531,11 @@ void PlanEnumerator::InitLeafPlans() {
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 void PlanEnumerator::SolveJoinOrder() {
 	bool force_no_cross_product = Settings::Get<DebugForceNoCrossProductSetting>(query_graph_manager.context);
+	auto swap_to_approximate_threshold =
+	    Settings::Get<ApproximateJoinOrderThresholdSetting>(query_graph_manager.context);
+
 	// first try to solve the join order exactly
-	if (query_graph_manager.relation_manager.NumRelations() >= THRESHOLD_TO_SWAP_TO_APPROXIMATE) {
+	if (query_graph_manager.relation_manager.NumRelations() >= swap_to_approximate_threshold) {
 		SolveJoinOrderApproximately();
 	} else if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm

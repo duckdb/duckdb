@@ -1,4 +1,5 @@
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
@@ -19,6 +20,7 @@
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/external_resource_type_registry.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/error_manager.hpp"
@@ -123,6 +125,13 @@ DatabaseManager &DatabaseInstance::GetDatabaseManager() {
 		throw InternalException("Missing DB manager");
 	}
 	return *db_manager;
+}
+
+ExternalResourceTypeRegistry &DatabaseInstance::GetExternalResourceTypeRegistry() {
+	if (!external_resource_type_registry) {
+		throw InternalException("Missing external resource type registry");
+	}
+	return *external_resource_type_registry;
 }
 
 Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
@@ -293,6 +302,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
+	external_resource_type_registry = make_uniq<ExternalResourceTypeRegistry>();
 	if (config.buffer_manager) {
 		buffer_manager = config.buffer_manager;
 	} else {
@@ -419,8 +429,7 @@ LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
 }
 
 FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
-	if (vfs.SubSystemIsDisabled(local_fs.GetName())) {
+	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
 	return local_fs;

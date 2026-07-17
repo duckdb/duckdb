@@ -97,6 +97,20 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_
 	return found_count;
 }
 
+idx_t BloomFilter::LookupHashes(const Vector &hashes_v, const SelectionVector &sel, SelectionVector &result_sel,
+                                const idx_t count) const {
+	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
+
+	const auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
+	idx_t found_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		result_sel.set_index(found_count, i);
+		found_count += LookupOne(hashes[sel.get_index_unsafe(i)]);
+	}
+	return found_count;
+}
+
 inline void BloomFilter::InsertOne(const hash_t hash) const {
 	D_ASSERT(initialized);
 	const uint64_t bf_offset = hash & bitmask;
@@ -106,7 +120,7 @@ inline void BloomFilter::InsertOne(const hash_t hash) const {
 	slot.fetch_or(mask, std::memory_order_relaxed);
 }
 
-inline bool BloomFilter::LookupOne(const uint64_t hash) const {
+bool BloomFilter::LookupOne(const uint64_t hash) const {
 	D_ASSERT(initialized);
 	const uint64_t bf_offset = hash & bitmask;
 	const uint64_t mask = GetMask(hash);
@@ -260,28 +274,33 @@ FilterPropagateResult BloomFilterScalarFun::FilterPrune(const FunctionStatistics
 	if (!data.filter || !data.filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &stats = *column_stats;
 
 	switch (data.key_type.InternalType()) {
 	case PhysicalType::UINT8:
-		return TemplatedBloomFilterPrune<uint8_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint8_t>(*data.filter, stats);
 	case PhysicalType::UINT16:
-		return TemplatedBloomFilterPrune<uint16_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint16_t>(*data.filter, stats);
 	case PhysicalType::UINT32:
-		return TemplatedBloomFilterPrune<uint32_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint32_t>(*data.filter, stats);
 	case PhysicalType::UINT64:
-		return TemplatedBloomFilterPrune<uint64_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint64_t>(*data.filter, stats);
 	case PhysicalType::UINT128:
-		return TemplatedBloomFilterPrune<uhugeint_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uhugeint_t>(*data.filter, stats);
 	case PhysicalType::INT8:
-		return TemplatedBloomFilterPrune<int8_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int8_t>(*data.filter, stats);
 	case PhysicalType::INT16:
-		return TemplatedBloomFilterPrune<int16_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int16_t>(*data.filter, stats);
 	case PhysicalType::INT32:
-		return TemplatedBloomFilterPrune<int32_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int32_t>(*data.filter, stats);
 	case PhysicalType::INT64:
-		return TemplatedBloomFilterPrune<int64_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int64_t>(*data.filter, stats);
 	case PhysicalType::INT128:
-		return TemplatedBloomFilterPrune<hugeint_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<hugeint_t>(*data.filter, stats);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

@@ -618,12 +618,14 @@ void StringStats::MergeStats(BaseStatistics &stats, string_t &target, StringStat
 		return;
 	}
 	// both min/max stats are there - compare
-	bool new_is_more_extreme;
-	if (is_min) {
-		new_is_more_extreme = LessThan::Operation(source, target);
-	} else {
-		new_is_more_extreme = GreaterThan::Operation(source, target);
+	auto comparison = Comparator::Operation(source, target);
+	if (comparison == 0) {
+		if (target_type == StringStatsType::TRUNCATED_STATS || source_type == StringStatsType::TRUNCATED_STATS) {
+			target_type = StringStatsType::TRUNCATED_STATS;
+		}
+		return;
 	}
+	bool new_is_more_extreme = is_min ? comparison < 0 : comparison > 0;
 	if (!new_is_more_extreme) {
 		// old value is more extreme - bail
 		return;
@@ -719,7 +721,7 @@ FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, Exp
 	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
-int8_t CompareStringStats(string_t input, string_t stats, StringStatsType type) {
+int8_t StringStats::CompareStringStats(string_t input, string_t stats, StringStatsType type) {
 	if (type == StringStatsType::TRUNCATED_STATS && input.GetSize() > stats.GetSize()) {
 		// if the stats are truncated we can only compare at most the bytes as are present in the stats
 		return Comparator::Operation(string_t(input.GetData(), static_cast<uint32_t>(stats.GetSize())), stats);
@@ -745,21 +747,31 @@ FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType mi
 		if (min_comp < 0 || max_comp > 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN:
-		if (max_comp <= 0) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
+		if (min_comp == 0 && max_comp == 0 && min_type == StringStatsType::EXACT_STATS &&
+		    max_type == StringStatsType::EXACT_STATS) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_GREATERTHAN:
+		if (max_comp < 0 || (max_comp == 0 && max_type != StringStatsType::EXACT_STATS)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		if (max_comp <= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_LESSTHAN:
+		if (min_comp > 0 || (min_comp == 0 && min_type != StringStatsType::EXACT_STATS)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		if (min_comp >= 0) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	default:
 		throw InternalException("Expression type not implemented for string statistics zone map");
 	}

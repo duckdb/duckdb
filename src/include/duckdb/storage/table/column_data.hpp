@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/column_segment_tree.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/scan_vector_type.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/atomic_ptr.hpp"
 
@@ -23,6 +24,11 @@ namespace duckdb {
 class ColumnData;
 class ColumnSegment;
 class DatabaseInstance;
+class PartialBlockManager;
+class DuckTableEntry;
+struct ColumnCheckpointState;
+struct ColumnSegmentInfo;
+struct ColumnSegmentInfoScanOptions;
 class RowGroup;
 class RowGroupWriter;
 class StorageManager;

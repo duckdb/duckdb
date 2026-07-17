@@ -26,6 +26,9 @@ create table build as select range id from range(8)
 statement ok
 set memory_limit='300mb'
 
+statement ok
+set read_ahead_depth=0
+
 # runs out of memory when caching operators are enabled because strings are accumulated
 statement error
 copy (

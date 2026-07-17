@@ -147,6 +147,7 @@
         "test/sql/storage/types/variant/variant_stats_merging.test_slow",
         "test/parquet/variant/variant_legacy_encoding.test",
         "test/sql/types/variant/tpch_test.test",
+        "test/sql/storage/compression/default_storage_dict_fsst.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test",
         "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",

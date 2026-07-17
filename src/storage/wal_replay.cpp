@@ -36,6 +36,8 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/main/profiler/metrics.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 enum class WALReplayState { MAIN_WAL, CHECKPOINT_WAL };

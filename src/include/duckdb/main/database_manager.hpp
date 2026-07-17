@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/common/checked_integer.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 class AttachedDatabase;

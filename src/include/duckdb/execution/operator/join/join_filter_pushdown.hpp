@@ -21,6 +21,7 @@ class DataChunk;
 class DynamicTableFilterSet;
 class LogicalGet;
 class JoinHashTable;
+class PhysicalOperator;
 class PhysicalComparisonJoin;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
@@ -46,11 +47,22 @@ struct JoinFilterPushdownColumn {
 	LogicalType runtime_filter_type;
 };
 
+enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };
+
+struct DeferredRuntimeFilterPushdown {
+	DeferredRuntimeFilterType type = DeferredRuntimeFilterType::BLOOM_FILTER;
+	const PhysicalOperator *op = nullptr;
+	shared_ptr<DynamicTableFilterSet> dynamic_filters;
+	JoinFilterPushdownColumn column;
+	ProjectionIndex filter_col_idx;
+};
+
 struct JoinFilterGlobalState {
 	~JoinFilterGlobalState();
 
 	//! Global Min/Max aggregates for filter pushdown
 	unique_ptr<GlobalUngroupedAggregateState> global_aggregate_state;
+	vector<DeferredRuntimeFilterPushdown> deferred_runtime_filters;
 };
 
 struct JoinFilterLocalState {
@@ -103,20 +115,20 @@ public:
 	unique_ptr<DataChunk> FinalizeMinMax(JoinFilterGlobalState &gstate) const;
 	unique_ptr<DataChunk> FinalizeFilters(ClientContext &context, const PhysicalComparisonJoin &op,
 	                                      unique_ptr<DataChunk> final_min_max, optional_ptr<JoinHashTable> ht = nullptr,
-	                                      bool allow_bloom_filters = true,
-	                                      bool allow_prefix_range_filters = true) const;
+	                                      bool allow_bloom_filters = true, bool allow_prefix_range_filters = true,
+	                                      optional_ptr<JoinFilterGlobalState> gstate = nullptr) const;
 
 private:
 	bool PushInFilter(const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column, JoinHashTable &ht,
 	                  const PhysicalOperator &op, idx_t filter_idx, ProjectionIndex filter_col_idx) const;
 
-	void PushBloomFilter(ClientContext &context, const PhysicalOperator &op, JoinHashTable &ht,
-	                     const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,
-	                     ProjectionIndex filter_col_idx) const;
+	void DeferRuntimeFilter(DeferredRuntimeFilterType type, const PhysicalOperator &op,
+	                        const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,
+	                        ProjectionIndex filter_col_idx, JoinFilterGlobalState &gstate) const;
 	bool TryRegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context, JoinHashTable &ht,
 	                                  const PhysicalOperator &op, const JoinFilterPushdownColumn &column,
 	                                  ProjectionIndex filter_col_idx, const Value &min_val, const Value &max_val,
-	                                  idx_t max_bits) const;
+	                                  idx_t max_bits, JoinFilterGlobalState &gstate) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op, const ExpressionType &cmp,

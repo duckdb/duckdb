@@ -102,7 +102,8 @@ bool RLEAnalyze(AnalyzeState &state, const Vector &input) {
 	input.ToUnifiedFormat(vdata);
 
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
-	for (idx_t i = 0; i < input.size(); i++) {
+	const auto count = input.size();
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		rle_state.state.Update(data, vdata.validity, idx);
 	}

@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
+#include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,8 @@ public:
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 	bool HasUnserializedChanges();
+	bool HasDeletes();
+	bool HasUncommittedChanges();
 	vector<MetaBlockPointer> GetStoragePointers();
 
 private:

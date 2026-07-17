@@ -35,6 +35,25 @@
     "pointer_type": "none"
   },
   {
+    "class": "ParquetReaderProjectionExpression",
+    "includes": [
+      "parquet_reader.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "ParquetReaderProjectionExpressionType"
+      },
+      {
+        "id": 101,
+        "name": "return_type",
+        "type": "LogicalType"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "ParquetEncryptionConfig",
     "includes": [
       "parquet_crypto.hpp"

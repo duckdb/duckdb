@@ -49,6 +49,7 @@ add_library_unity(
   row_number_rewriter.cpp
   sampling_pushdown.cpp
   type_pushdown.cpp
+  scalar_fn_pushdown.cpp
   projection_pullup.cpp
   remote_pushdown_optimizer.cpp)
 set(ALL_OBJECT_FILES

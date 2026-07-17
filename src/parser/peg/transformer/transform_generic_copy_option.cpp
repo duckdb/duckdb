@@ -134,4 +134,26 @@ vector<OrderByNode> PEGTransformerFactory::TransformGenericCopyOptionParenthesiz
 	return order_by_expression_list;
 }
 
+void PEGTransformerFactory::SplitGenericOptions(const vector<GenericCopyOption> &options_in,
+                                                case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_options,
+                                                unordered_map<string, Value> &options, const char *statement_name) {
+	for (const auto &option : options_in) {
+		if (option.expression) {
+			parsed_options[option.name.GetIdentifierName()] = option.expression->Copy();
+			continue;
+		}
+		if (option.children.empty()) {
+			options[option.name.GetIdentifierName()] = Value(true);
+		} else if (option.children.size() == 1) {
+			if (option.children[0].IsNull()) {
+				throw BinderException("NULL is not supported as a valid option for %s option \"%s\"", statement_name,
+				                      option.name);
+			}
+			options[option.name.GetIdentifierName()] = option.children[0];
+		} else {
+			throw ParserException("Option %s can only have one argument", option.name);
+		}
+	}
+}
+
 } // namespace duckdb

@@ -35,11 +35,14 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  parse_iterator.cpp
+  statement_iterator.cpp
   database_file_path_manager.cpp
   database_path_and_type.cpp
   database_manager.cpp
   db_instance_cache.cpp
   error_manager.cpp
+  external_resource_type_registry.cpp
   extension.cpp
   extension_callback_manager.cpp
   extension_install_info.cpp
