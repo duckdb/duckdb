@@ -57,7 +57,8 @@ private:
 	                                      const CorrelatedColumns &correlated_columns,
 	                                      const vector<ColumnBinding> &state, bool perform_delim);
 	column_binding_map_t<ColumnBinding> GetCurrentBindings(const vector<ColumnBinding> &state) const;
-	void RewriteCorrelatedBindings(LogicalOperator &op, const vector<ColumnBinding> &state);
+	void RewriteCorrelatedBindings(unique_ptr<LogicalOperator> &op, const vector<ColumnBinding> &state);
+	void RewriteCorrelatedBindings(LogicalDependentJoin &op, const vector<ColumnBinding> &state);
 	//! Checks whether a subtree contains any correlated expressions that reference this flattener's correlated columns.
 	bool DependsOnCorrelated(LogicalOperator &op) const;
 	idx_t GetDelimKeyIndex(idx_t index) const;

@@ -130,7 +130,12 @@ FlattenDependentJoins::GetCurrentBindings(const vector<ColumnBinding> &state) co
 	return current_binding_map;
 }
 
-void FlattenDependentJoins::RewriteCorrelatedBindings(LogicalOperator &op, const vector<ColumnBinding> &state) {
+void FlattenDependentJoins::RewriteCorrelatedBindings(LogicalDependentJoin &op, const vector<ColumnBinding> &state) {
+	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
+}
+
+void FlattenDependentJoins::RewriteCorrelatedBindings(unique_ptr<LogicalOperator> &op,
+                                                      const vector<ColumnBinding> &state) {
 	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
 }
 
@@ -395,7 +400,7 @@ FlattenDependentJoins::DecorrelateSubtreeInternal(unique_ptr<LogicalOperator> &p
 		RewriteChildProjectionMap(*plan, child_index, std::move(projected_bindings), child_state);
 		result.bindings = child_state.bindings;
 		MergeBindingReplacements(result, child_state);
-		RewriteCorrelatedBindings(*plan, result.bindings);
+		RewriteCorrelatedBindings(plan, result.bindings);
 	}
 	return result;
 }
@@ -486,7 +491,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownChild(uniqu
 	}
 	RewriteOperatorBindings(*plan, result);
 	if (rewrite_parent) {
-		RewriteCorrelatedBindings(*plan, result.bindings);
+		RewriteCorrelatedBindings(plan, result.bindings);
 	}
 	return result;
 }
@@ -766,6 +771,7 @@ FlattenDependentJoins::PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator>
 	idx_t independent_idx = correlated_left ? 1 : 0;
 	auto result = PushDownCorrelatedNode(plan->children[correlated_idx], propagate_null_values, std::move(state));
 	RewriteOperatorBindings(*plan, result);
+	RewriteCorrelatedBindings(plan, result.bindings);
 	if (IsJoinWithProjectionMap(plan->type)) {
 		auto &join = plan->Cast<LogicalJoin>();
 		if (correlated_left) {
@@ -972,7 +978,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownFullOuterJo
 	auto right_state = PushDownChild(plan, propagate_null_values, left_state.bindings, false, 1);
 
 	AddCorrelatedJoinConditions(join, left_state.bindings, right_state.bindings);
-	RewriteCorrelatedBindings(*plan, right_state.bindings);
+	RewriteCorrelatedBindings(plan, right_state.bindings);
 
 	for (auto &binding : left_payload) {
 		binding = ResolveBinding(binding, left_state.binding_replacements);
@@ -982,11 +988,11 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownFullOuterJo
 	}
 	auto left_output = ColumnBindingLayout(plan->children[0]->GetColumnBindings());
 	auto right_output = ColumnBindingLayout(plan->children[1]->GetColumnBindings());
-	join.left_projection_map = left_output.CreateProjectionMap(left_payload);
-	join.right_projection_map = right_output.CreateProjectionMap(right_payload);
-	AppendStateToProjectionMap(join.left_projection_map, left_output, left_state.bindings);
-	AppendStateToProjectionMap(join.right_projection_map, right_output, right_state.bindings);
-
+	auto &rewritten_join = plan->Cast<LogicalJoin>();
+	rewritten_join.left_projection_map = left_output.CreateProjectionMap(left_payload);
+	rewritten_join.right_projection_map = right_output.CreateProjectionMap(right_payload);
+	AppendStateToProjectionMap(rewritten_join.left_projection_map, left_output, left_state.bindings);
+	AppendStateToProjectionMap(rewritten_join.right_projection_map, right_output, right_state.bindings);
 	plan->ResolveOperatorTypes();
 	auto join_bindings = plan->GetColumnBindings();
 	auto join_types = plan->types;
@@ -1054,7 +1060,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 			RewriteChildProjectionMap(*plan, 1, std::move(projected_bindings), right_state);
 
 			auto left_state = AttachDelimToIndependentJoinLeft(plan->children[0], join);
-			RewriteCorrelatedBindings(*plan, left_state.bindings);
+			RewriteCorrelatedBindings(plan, left_state.bindings);
 			MergeBindingReplacements(left_state, right_state);
 			return left_state;
 		}
@@ -1067,7 +1073,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 			auto right_state = PushDownChild(plan, propagate_null_values, state, false, 1);
 			auto left_state = AttachDelimToIndependentJoinLeft(plan->children[0], join);
 			AddCorrelatedJoinConditions(join, left_state.bindings, right_state.bindings);
-			RewriteCorrelatedBindings(*plan, left_state.bindings);
+			RewriteCorrelatedBindings(plan, left_state.bindings);
 			MergeBindingReplacements(right_state, left_state);
 			right_state.bindings = std::move(left_state.bindings);
 			return right_state;
@@ -1081,7 +1087,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 			                           ColumnBindingLayout(plan->children[0]->GetColumnBindings()),
 			                           left_state.bindings);
 			AddCorrelatedJoinConditions(join, left_state.bindings, right_state.bindings);
-			RewriteCorrelatedBindings(*plan, left_state.bindings);
+			RewriteCorrelatedBindings(plan, left_state.bindings);
 			MergeBindingReplacements(left_state, right_state);
 			return left_state;
 		}
@@ -1104,7 +1110,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 		RewriteOperatorBindings(*plan, independent_state);
 		RewriteChildProjectionMap(*plan, 1, std::move(projected_bindings), independent_state);
 		MergeBindingReplacements(left_state, independent_state);
-		RewriteCorrelatedBindings(*plan, left_state.bindings);
+		RewriteCorrelatedBindings(plan, left_state.bindings);
 		return left_state;
 	}
 
@@ -1121,16 +1127,17 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 	auto right_state = PushDownChild(plan, propagate_null_values, left_state.bindings, false, 1);
 
 	AddCorrelatedJoinConditions(join, left_state.bindings, right_state.bindings);
-	RewriteCorrelatedBindings(*plan, right_state.bindings);
+	RewriteCorrelatedBindings(plan, right_state.bindings);
 	MergeBindingReplacements(left_state, right_state);
 
-	if (join.join_type == JoinType::LEFT) {
-		AppendStateToProjectionMap(join.left_projection_map,
+	auto &rewritten_join = plan->Cast<LogicalJoin>();
+	if (rewritten_join.join_type == JoinType::LEFT) {
+		AppendStateToProjectionMap(rewritten_join.left_projection_map,
 		                           ColumnBindingLayout(plan->children[0]->GetColumnBindings()), left_state.bindings);
 		return left_state;
 	}
-	AppendStateToProjectionMap(join.right_projection_map, ColumnBindingLayout(plan->children[1]->GetColumnBindings()),
-	                           right_state.bindings);
+	AppendStateToProjectionMap(rewritten_join.right_projection_map,
+	                           ColumnBindingLayout(plan->children[1]->GetColumnBindings()), right_state.bindings);
 	left_state.bindings = right_state.bindings;
 	return left_state;
 }
@@ -1299,7 +1306,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownExpressionG
 
 	// Rewrite any depth>0 correlated refs already in the expression lists (VALUES (NEW.col))
 	// before appending the delim-get bindings for the join condition.
-	RewriteCorrelatedBindings(*plan, result.bindings);
+	RewriteCorrelatedBindings(plan, result.bindings);
 
 	auto &expr_get = plan->Cast<LogicalExpressionGet>();
 	for (auto &expr_list : expr_get.expressions) {
@@ -1356,7 +1363,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownGet(unique_
 		get.projected_input.push_back(NumericCast<idx_t>(it - child_bindings.begin()));
 	}
 
-	RewriteCorrelatedBindings(*plan, result.bindings);
+	RewriteCorrelatedBindings(plan, result.bindings);
 	// state bindings pass through LogicalGet's projected_input, no update needed
 	return result;
 }
@@ -1404,7 +1411,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCTE(unique_
 
 	auto right_state = PushDownCorrelatedNode(plan->children[1], false, cte_state);
 	RewriteOperatorBindings(*plan, right_state);
-	RewriteCorrelatedBindings(*plan, right_state.bindings);
+	RewriteCorrelatedBindings(plan, right_state.bindings);
 	MergeBindingReplacements(result, right_state);
 
 #ifdef DEBUG

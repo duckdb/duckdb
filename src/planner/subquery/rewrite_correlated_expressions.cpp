@@ -7,20 +7,92 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 
 namespace duckdb {
+
+static bool ReclassifyJoinConditions(LogicalOperator &op) {
+	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	auto &join = op.Cast<LogicalComparisonJoin>();
+	bool reclassified = false;
+	unordered_set<TableIndex> left_bindings;
+	unordered_set<TableIndex> right_bindings;
+	LogicalJoin::GetTableReferences(*op.children[0], left_bindings);
+	LogicalJoin::GetTableReferences(*op.children[1], right_bindings);
+	for (auto &condition : join.conditions) {
+		if (!condition.IsComparison()) {
+			continue;
+		}
+		auto left_side = JoinSide::GetCurrentJoinSide(condition.GetLHS(), left_bindings, right_bindings);
+		auto right_side = JoinSide::GetCurrentJoinSide(condition.GetRHS(), left_bindings, right_bindings);
+		if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
+			continue;
+		}
+		auto expression = JoinCondition::CreateExpression(std::move(condition));
+		condition = JoinCondition(std::move(expression));
+		reclassified = true;
+	}
+	return reclassified;
+}
+
+static void NormalizeComparisonJoin(unique_ptr<LogicalOperator> &op) {
+	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return;
+	}
+	auto &join = op->Cast<LogicalComparisonJoin>();
+	for (auto &condition : join.conditions) {
+		if (condition.IsComparison()) {
+			return;
+		}
+	}
+
+	D_ASSERT(join.mark_types.empty());
+	D_ASSERT(join.duplicate_eliminated_columns.empty());
+	D_ASSERT(!join.filter_pushdown);
+	auto any_join = make_uniq<LogicalAnyJoin>(join.join_type);
+	any_join->condition = JoinCondition::CreateExpression(std::move(join.conditions));
+	if (!any_join->condition) {
+		any_join->condition = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+	}
+	any_join->mark_index = join.mark_index;
+	any_join->left_projection_map = std::move(join.left_projection_map);
+	any_join->right_projection_map = std::move(join.right_projection_map);
+	any_join->children = std::move(join.children);
+	if (op->has_estimated_cardinality) {
+		any_join->SetEstimatedCardinality(op->estimated_cardinality);
+	}
+	op = std::move(any_join);
+}
 
 RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(column_binding_map_t<ColumnBinding> current_binding_map,
                                                            column_binding_map_t<ColumnBinding> &correlated_aliases)
     : current_binding_map(std::move(current_binding_map)), correlated_aliases(correlated_aliases) {
 }
 
-void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, column_binding_map_t<ColumnBinding> current_binding_map,
+void RewriteCorrelatedExpressions::Rewrite(unique_ptr<LogicalOperator> &op,
+                                           column_binding_map_t<ColumnBinding> current_binding_map,
                                            column_binding_map_t<ColumnBinding> &correlated_aliases) {
 	RewriteCorrelatedExpressions rewriter(std::move(current_binding_map), correlated_aliases);
 	rewriter.VisitOperator(op);
+}
+
+void RewriteCorrelatedExpressions::Rewrite(LogicalDependentJoin &op,
+                                           column_binding_map_t<ColumnBinding> current_binding_map,
+                                           column_binding_map_t<ColumnBinding> &correlated_aliases) {
+	RewriteCorrelatedExpressions rewriter(std::move(current_binding_map), correlated_aliases);
+	rewriter.RewriteOperator(op);
+}
+
+void RewriteCorrelatedExpressions::VisitOperator(unique_ptr<LogicalOperator> &op) {
+	if (RewriteOperator(*op)) {
+		NormalizeComparisonJoin(op);
+	}
 }
 
 void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding &source_binding,
@@ -33,7 +105,7 @@ void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding
 	}
 }
 
-void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
+bool RewriteCorrelatedExpressions::RewriteOperator(LogicalOperator &op) {
 	if (op.type != LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		VisitOperatorChildren(op);
 	}
@@ -52,6 +124,7 @@ void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 		}
 	}
 	VisitOperatorExpressions(op);
+	return ReclassifyJoinConditions(op);
 }
 
 unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr,

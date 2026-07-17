@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
@@ -194,6 +195,25 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.join_type == JoinType::ANTI) {
+			// A preserved-side condition belongs to ANTI match evaluation. Extracting it as a
+			// separate filter would discard rows for which the complete match condition is false.
+			unordered_set<TableIndex> left_bindings;
+			unordered_set<TableIndex> right_bindings;
+			LogicalJoin::GetTableReferences(*op.children[0], left_bindings);
+			LogicalJoin::GetTableReferences(*op.children[1], right_bindings);
+			for (auto &condition : join.conditions) {
+				auto side =
+				    condition.IsComparison()
+				        ? JoinSide::CombineJoinSide(
+				              JoinSide::GetCurrentJoinSide(condition.GetLHS(), left_bindings, right_bindings),
+				              JoinSide::GetCurrentJoinSide(condition.GetRHS(), left_bindings, right_bindings))
+				        : JoinSide::GetCurrentJoinSide(condition.GetJoinExpression(), left_bindings, right_bindings);
+				if (side == JoinSide::LEFT || side == JoinSide::NONE) {
+					return false;
+				}
+			}
+		}
 
 		switch (join.join_type) {
 		case JoinType::INNER:

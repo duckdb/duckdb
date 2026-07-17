@@ -220,3 +220,158 @@ ORDER BY ALL;
 2	NULL	2
 9	90	99
 NULL	20	20
+
+# A preserved-side predicate is part of ANTI match evaluation, not a filter
+# above the ANTI join.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1
+
+# Join ordering must preserve the same ANTI match dependency when the
+# preserved-side value is already local.
+query I
+SELECT o.x
+FROM (VALUES (10), (20)) o(x)
+CROSS JOIN (VALUES (1)) l(a)
+ANTI JOIN (VALUES (1)) r(b)
+	ON l.a = r.b AND o.x = 10
+ORDER BY o.x;
+----
+20
+
+# A non-matching RHS never eliminates the preserved row.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (2)) r(b)
+		ON l.a = r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	1
+20	1
+
+# Duplicate matching rows do not change ANTI match semantics.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (1), (1)) r(b)
+		ON l.a = r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1
+
+# NULL-safe comparisons retain the same predicate-only ANTI semantics.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (NULL::INTEGER)) l(a)
+	ANTI JOIN (VALUES (NULL::INTEGER)) r(b)
+		ON l.a IS NOT DISTINCT FROM r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1
+
+# Correlation rewriting can turn one side of a comparison into a both-child
+# expression. It must then be represented as an arbitrary join predicate.
+statement ok
+SET debug_verify_column_bindings=true;
+
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	SEMI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b + o.x
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	1
+1	0
+
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b + o.x
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	0
+1	1
+
+# The same reclassification is required for other non-inner join types.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	LEFT JOIN (VALUES (1)) r(b)
+		ON l.a = r.b + o.x
+	WHERE r.b IS NOT NULL
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	1
+1	0
+
+statement ok
+SET debug_verify_column_bindings=false;
+
+# The CTE-delim path reaches the same ANTI planning and join-ordering path.
+statement ok
+SET delim_join_as_cte=true;
+
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	ANTI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;
+----
+10	0
+20	1
+
+statement ok
+SET delim_join_as_cte=false;
+
+# Reclassified predicates remain valid without optimizer plan repair.
+statement ok
+PRAGMA disable_optimizer;
+
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1)) l(a)
+	SEMI JOIN (VALUES (1)) r(b)
+		ON l.a = r.b + o.x
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	1
+1	0
