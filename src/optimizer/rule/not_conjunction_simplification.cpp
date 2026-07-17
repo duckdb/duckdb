@@ -26,6 +26,9 @@ unique_ptr<Expression> NotConjunctionSimplificationRule::Apply(LogicalOperator &
 	auto &conjunction = child->Cast<BoundConjunctionExpression>();
 	D_ASSERT(conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND ||
 	         conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_OR);
+	if (conjunction.IsVolatile() || conjunction.CanThrow()) {
+		return nullptr;
+	}
 	auto negated_type = conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND
 	                        ? ExpressionType::CONJUNCTION_OR
 	                        : ExpressionType::CONJUNCTION_AND;

@@ -75,3 +75,35 @@ false	false
 NULL	NULL
 false	false
 NULL	NULL
+
+# Do not change the number of volatile function evaluations
+statement ok
+CREATE SEQUENCE s;
+
+statement ok
+CREATE TABLE volatile_t(a BOOLEAN);
+
+statement ok
+INSERT INTO volatile_t VALUES (false), (true);
+
+query I
+SELECT count(*) FROM volatile_t WHERE NOT (a AND nextval('s') > 0);
+----
+1
+
+query I
+SELECT currval('s');
+----
+2
+
+# Do not suppress errors by changing short-circuit behavior
+statement ok
+CREATE TABLE throwing_t(a BOOLEAN);
+
+statement ok
+INSERT INTO throwing_t VALUES (false);
+
+statement error
+SELECT count(*) FROM throwing_t WHERE NOT (a AND error('expected'));
+----
+expected
