@@ -1,4 +1,5 @@
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
