@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/table/read_duckdb.hpp"
 
 #include "duckdb/common/enum_util.hpp"
