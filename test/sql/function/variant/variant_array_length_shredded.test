@@ -38,7 +38,6 @@ SELECT DISTINCT vector_type(v) FROM variants;
 ----
 SHREDDED_VECTOR
 
-# A present non-array, including VARIANT_NULL, returns zero. A missing path returns NULL.
 query I
 SELECT variant_array_length(v, 'arr') FROM variants ORDER BY id;
 ----

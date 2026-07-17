@@ -7,7 +7,6 @@ load {TEST_DIR}/variant_keys_shredded.db readwrite v1.5.0
 statement ok
 SET variant_minimum_shredding_size = 0;
 
-# Use non-lexicographic field order to ensure physical shredding order does not affect the result.
 statement ok
 SET force_variant_shredding = 'STRUCT(b INTEGER, a INTEGER, obj STRUCT(y INTEGER, x INTEGER))';
 
@@ -37,7 +36,6 @@ SELECT DISTINCT vector_type(v) FROM variants;
 ----
 SHREDDED_VECTOR
 
-# Keys are returned in logical order and missing typed fields are omitted.
 query I
 SELECT variant_keys(v) FROM variants ORDER BY id;
 ----
@@ -47,7 +45,6 @@ SELECT variant_keys(v) FROM variants ORDER BY id;
 []
 NULL
 
-# A present non-object returns an empty list, while a missing path returns NULL.
 query I
 SELECT variant_keys(v, 'obj') FROM variants ORDER BY id;
 ----

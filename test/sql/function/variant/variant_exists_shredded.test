@@ -21,6 +21,7 @@ INSERT INTO variants VALUES
 	(2, {'a': 10, 'b': NULL}::VARIANT),
 	-- missing value in shredded schema
 	(3, {'a': 20}::VARIANT),
+	(4, {'z': 40}::VARIANT),
 	-- root with different type than shredded schema
 	(5, 42::VARIANT),
 	-- SQL-NULL
