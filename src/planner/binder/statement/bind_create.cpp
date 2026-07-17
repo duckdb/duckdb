@@ -178,7 +178,7 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 	}
 	view_binder->can_contain_nulls = true;
 
-	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name);
+	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name, true);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
 	auto copy = stmt.Copy();

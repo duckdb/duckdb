@@ -100,7 +100,8 @@ unique_ptr<BoundAtClause> Binder::BindAtClause(optional_ptr<AtClause> at_clause)
 	return make_uniq<BoundAtClause>(at_clause->Unit(), std::move(val));
 }
 
-vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string &schema_name) {
+vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string &schema_name,
+                                                 bool default_schema_precedence) {
 	vector<CatalogSearchEntry> view_search_path;
 	auto &catalog_name = catalog.GetName();
 	if (!schema_name.empty()) {
@@ -111,7 +112,7 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 		view_search_path.emplace_back(catalog_name, default_schema);
 	}
 	//! Signal that this catalog should be checked, regardless of the schema in the reference
-	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA);
+	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA, default_schema_precedence);
 	return view_search_path;
 }
 
@@ -306,7 +307,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		// when binding a view, we always look into the catalog/schema where the view is stored first
 		auto view_search_path =
-		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name);
+		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name, true);
 		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 		// propagate the AT clause through the view
 		view_binder->entry_retriever.SetAtClause(entry_at_clause);

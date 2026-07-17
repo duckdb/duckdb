@@ -19,10 +19,14 @@ namespace duckdb {
 class ClientContext;
 
 struct CatalogSearchEntry {
-	CatalogSearchEntry(string catalog, string schema);
+	CatalogSearchEntry(string catalog, string schema, bool default_schema_precedence = false);
 
 	string catalog;
 	string schema;
+
+	// For unqualified non-table lookups, search this implicit catalog's default schema at its position in the search
+	// path rather than as a fallback.
+	bool default_schema_precedence;
 
 public:
 	string ToString() const;
@@ -60,6 +64,10 @@ public:
 
 	DUCKDB_API vector<string> GetSchemasForCatalog(const string &catalog) const;
 	DUCKDB_API vector<string> GetCatalogsForSchema(const string &schema) const;
+
+	DUCKDB_API vector<CatalogSearchEntry> GetImplicitSearchCatalogs() const;
+
+	DUCKDB_API vector<CatalogSearchEntry> GetWithPrecedenceSchemas(ClientContext &context) const;
 
 	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const string &catalog_name,
 	                                   const string &schema_name) const;

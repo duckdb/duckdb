@@ -462,13 +462,19 @@ vector<SimilarCatalogEntry> Catalog::SimilarEntriesInSchemas(ClientContext &cont
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog,
-                                             const string &schema) {
+                                             const string &schema, CatalogType lookup_type = CatalogType::INVALID) {
 	auto &context = retriever.GetContext();
 	vector<CatalogSearchEntry> entries;
 	auto &search_path = retriever.GetSearchPath();
 	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
-		// no catalog or schema provided - scan the entire search path
-		entries = search_path.Get();
+		// no catalog or schema provided - scan the entire search path.
+		if (lookup_type == CatalogType::INVALID || lookup_type == CatalogType::TABLE_ENTRY) {
+			entries = search_path.Get();
+		} else {
+			// for non-table lookups, resolve implicit catalogs that requested precedence to their default schema in
+			// place
+			entries = search_path.GetWithPrecedenceSchemas(context);
+		}
 	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
@@ -878,7 +884,7 @@ static void ThrowDefaultTableAmbiguityException(CatalogEntryLookup &base_lookup,
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
                                            const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-                                           bool allow_default_table_lookup) {
+                                           bool allow_default_lookup) {
 	auto &context = retriever.GetContext();
 	reference_set_t<SchemaCatalogEntry> schemas;
 	bool all_errors = true;
@@ -902,7 +908,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 
 	// Special case for tables: we do a second lookup searching for catalogs with default tables that also match this
 	// lookup
-	if (lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY && allow_default_table_lookup) {
+	if (lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY && allow_default_lookup) {
 		if (!result.Found()) {
 			result = TryLookupDefaultTable(retriever, lookup_info, false);
 			if (result.error.HasError()) {
@@ -915,6 +921,15 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 			if (ambiguity_lookup.Found()) {
 				ThrowDefaultTableAmbiguityException(result, ambiguity_lookup, lookup_info.GetEntryName());
 			}
+		}
+	}
+
+	// Special case for non-table entries (functions, macros, types): Fall back to the default schema of any
+	// catalog flagged as an implicit search catalog. Ignored if the schema already had precedence.
+	if (lookup_info.GetCatalogType() != CatalogType::TABLE_ENTRY && allow_default_lookup && !result.Found()) {
+		result = TryLookupDefaultSchema(retriever, lookup_info);
+		if (result.error.HasError()) {
+			error_data = std::move(result.error);
 		}
 	}
 
@@ -982,10 +997,31 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 	return {nullptr, nullptr, ErrorData()};
 }
 
+CatalogEntryLookup Catalog::TryLookupDefaultSchema(CatalogEntryRetriever &retriever,
+                                                   const EntryLookupInfo &lookup_info) {
+	// look for the entry in the default schema of every catalog that was flagged as an implicit search catalog
+	auto &search_path = retriever.GetSearchPath();
+	for (auto &implicit_catalog : search_path.GetImplicitSearchCatalogs()) {
+		auto catalog_entry = GetCatalogEntry(retriever, implicit_catalog.catalog);
+		if (!catalog_entry) {
+			continue;
+		}
+		auto transaction = catalog_entry->GetCatalogTransaction(retriever.GetContext());
+		auto result =
+		    catalog_entry->TryLookupEntryInternal(transaction, catalog_entry->GetDefaultSchema(), lookup_info);
+		if (result.Found() || result.error.HasError()) {
+			return result;
+		}
+	}
+
+	return {nullptr, nullptr, ErrorData()};
+}
+
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                            const string &schema, const EntryLookupInfo &lookup_info,
                                            OnEntryNotFound if_not_found) {
-	auto entries = GetCatalogEntries(retriever, catalog, schema);
+	auto entries = GetCatalogEntries(retriever, catalog, schema, lookup_info.GetCatalogType());
+
 	vector<CatalogLookup> lookups;
 	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());
@@ -1012,9 +1048,9 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		lookups.emplace_back(std::move(lookup));
 	}
 
-	bool allow_default_table_lookup = catalog.empty() && schema.empty();
+	bool allow_default_lookup = catalog.empty() && schema.empty();
 
-	return TryLookupEntry(retriever, lookups, lookup_info, if_not_found, allow_default_table_lookup);
+	return TryLookupEntry(retriever, lookups, lookup_info, if_not_found, allow_default_lookup);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
