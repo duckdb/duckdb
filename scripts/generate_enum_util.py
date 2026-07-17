@@ -14,6 +14,7 @@ blacklist = [
     "Type",
     "DictionaryAppendState",
     "DictFSSTMode",
+    "DictFSSTCompressResult",
     "ComplexJSONType",
     "UnavailableReason",
     "VirtualColumnBindingType",
