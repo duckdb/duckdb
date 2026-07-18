@@ -1417,9 +1417,10 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 			}
 			// check the bloom filter if present
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
-			    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
+			    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Schema()) &&
 			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[schema_column_index].meta_data,
-			                                                *state.thrift_file_proto, allocator)) {
+			                                                *state.thrift_file_proto, allocator,
+			                                                column_reader.Schema())) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			}
 

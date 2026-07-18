@@ -142,6 +142,99 @@ FROM parquet_bloom_probe('{TEST_DIR}/bloom_blob.parquet', 'b', from_hex('FE')::B
 ----
 true
 
+# Temporal bloom filters use the encoded Parquet value, including the timestamp unit
+statement ok
+COPY (
+    SELECT
+        (DATE '2000-01-01' + (2 * (i % 2048))::INTEGER)::DATE AS dt,
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP AS ts,
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP_MS AS ts_ms,
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP_NS AS ts_ns,
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMPTZ AS ts_tz
+    FROM range(8192) t(i)
+) TO '{TEST_DIR}/bloom_temporal.parquet' (
+    FORMAT PARQUET,
+    ROW_GROUP_SIZE 2048,
+    DICTIONARY_SIZE_LIMIT 4096,
+    BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.0001
+);
+
+query III
+SELECT column_id, bool_and(bloom_filter_offset IS NOT NULL), bool_and(bloom_filter_length IS NOT NULL)
+FROM parquet_metadata('{TEST_DIR}/bloom_temporal.parquet')
+GROUP BY column_id
+ORDER BY column_id;
+----
+0	true	true
+1	true	true
+2	true	true
+3	true	true
+4	true	true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'dt', DATE '2000-01-01' + 1001);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts',
+                         TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts_ms',
+                         TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts_ns',
+                         TIMESTAMP_NS '2000-01-01' + INTERVAL 1001 SECOND);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts_tz',
+                         (TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND)::TIMESTAMPTZ);
+----
+true
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE dt = DATE '2000-01-01' + 1001;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts = TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts_ms = TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts_ns = TIMESTAMP_NS '2000-01-01' + INTERVAL 1001 SECOND;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts_tz = (TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND)::TIMESTAMPTZ;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
 # Computed expressions do not operate in the raw column's bloom filter domain
 query I
 SELECT count(*) FROM '{TEST_DIR}/bloom_blob.parquet' WHERE to_hex(b) = 'FF';
