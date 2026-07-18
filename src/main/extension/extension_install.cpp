@@ -37,6 +37,12 @@ static void LogInstall(DatabaseInstance &db, const string &extension, optional_p
 	           EnumUtil::ToString(info->mode), source, reason);
 }
 
+//! Emit a structured log event for a failed install
+static void LogInstallFailure(DatabaseInstance &db, const string &extension, const string &reason,
+                              const string &error) {
+	DUCKDB_LOG(db, ExtensionLoadInstallLogType, "install", extension, "", "", "", reason, error);
+}
+
 const string ExtensionHelper::NormalizeVersionTag(const string &version_tag) {
 	if (!version_tag.empty() && version_tag[0] != 'v') {
 		return "v" + version_tag;
@@ -212,9 +218,15 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DatabaseInsta
 	return nullptr;
 #endif
 	string local_path = ExtensionDirectory(db, fs);
-	auto info = InstallExtensionInternal(db, fs, local_path, extension, options);
-	LogInstall(db, ExtensionHelper::GetExtensionName(extension), info, options.reason);
-	return info;
+	auto extension_name = ExtensionHelper::GetExtensionName(extension);
+	try {
+		auto info = InstallExtensionInternal(db, fs, local_path, extension, options);
+		LogInstall(db, extension_name, info, options.reason);
+		return info;
+	} catch (std::exception &ex) {
+		LogInstallFailure(db, extension_name, options.reason, ErrorData(ex).RawMessage());
+		throw;
+	}
 }
 
 unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext &context, const string &extension,
@@ -226,9 +238,15 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
-	auto info = InstallExtensionInternal(db, fs, local_path, extension, options, context);
-	LogInstall(db, ExtensionHelper::GetExtensionName(extension), info, options.reason);
-	return info;
+	auto extension_name = ExtensionHelper::GetExtensionName(extension);
+	try {
+		auto info = InstallExtensionInternal(db, fs, local_path, extension, options, context);
+		LogInstall(db, extension_name, info, options.reason);
+		return info;
+	} catch (std::exception &ex) {
+		LogInstallFailure(db, extension_name, options.reason, ErrorData(ex).RawMessage());
+		throw;
+	}
 }
 
 static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {

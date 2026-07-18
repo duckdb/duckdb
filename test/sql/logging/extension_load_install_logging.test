@@ -49,3 +49,31 @@ query I
 SELECT count(*) FROM duckdb_logs_parsed('ExtensionLoadInstall')
 ----
 1
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# A failed LOAD is surfaced with the reason and the error populated
+statement error
+LOAD '{TEST_DIR}/does_not_exist.duckdb_extension';
+----
+not found
+
+query IIII
+SELECT event, extension, reason, error IS NOT NULL FROM duckdb_logs_parsed('ExtensionLoadInstall') ORDER BY timestamp
+----
+load	does_not_exist	explicit SQL LOAD statement	true
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# A failed INSTALL is surfaced with the reason and the error populated
+statement error
+INSTALL '{TEST_DIR}/does_not_exist.duckdb_extension';
+----
+Failed to install
+
+query IIII
+SELECT event, extension, reason, error IS NOT NULL FROM duckdb_logs_parsed('ExtensionLoadInstall') ORDER BY timestamp
+----
+install	does_not_exist	explicit SQL INSTALL statement	true

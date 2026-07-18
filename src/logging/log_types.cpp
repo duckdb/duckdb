@@ -390,6 +390,7 @@ LogicalType ExtensionLoadInstallLogType::GetLogType() {
 	    {"event", LogicalType::VARCHAR},        {"extension", LogicalType::VARCHAR},
 	    {"version", LogicalType::VARCHAR},      {"install_mode", LogicalType::VARCHAR},
 	    {"source", LogicalType::VARCHAR},       {"reason", LogicalType::VARCHAR},
+	    {"error", LogicalType::VARCHAR},
 	};
 	return LogicalType::STRUCT(child_list);
 }
@@ -413,7 +414,8 @@ string ExternalResourceLogType::ConstructLogMessage(const string &resource_type,
 
 string ExtensionLoadInstallLogType::ConstructLogMessage(const char *event, const string &extension_name,
                                                         const string &version, const string &install_mode,
-                                                        const string &source, const string &reason) {
+                                                        const string &source, const string &reason,
+                                                        const string &error) {
 	auto or_null = [](const string &value) { return value.empty() ? Value() : Value(value); };
 	child_list_t<Value> child_list = {
 	    {"event", Value(event)},
@@ -422,6 +424,7 @@ string ExtensionLoadInstallLogType::ConstructLogMessage(const char *event, const
 	    {"install_mode", or_null(install_mode)},
 	    {"source", or_null(source)},
 	    {"reason", or_null(reason)},
+	    {"error", or_null(error)},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

@@ -43,6 +43,9 @@ void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
 		ExtensionManager::Get(db).RemoveExtensionInfo(alias.GetIdentifierName());
 	}
 	DUCKDB_LOG_INFO(db, "Failed to load extension '%s': %s", extension_name.GetIdentifierName(), error.Message());
+
+	DUCKDB_LOG(db, ExtensionLoadInstallLogType, "load", extension_name.GetIdentifierName(), "", "", "", reason,
+	           error.Message());
 }
 
 ExtensionManager::ExtensionManager(DatabaseInstance &db) : db(db) {
