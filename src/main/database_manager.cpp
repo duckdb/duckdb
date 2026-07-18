@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/database.hpp"
@@ -249,9 +250,15 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 		if (detached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 			--remote_catalog_count;
 		}
+		auto deleter = detached_db->ExtractDeleter();
 		meta_transaction.DetachDatabase(*detached_db);
 		detached_db->OnDetach(context);
 		detached_db.reset();
+		// Best-effort teardown: the replacement is already in effect, so a deleter failure must not
+		// abort the statement mid-swap; TryDelete logs it as a warning instead.
+		if (deleter) {
+			deleter->TryDelete();
+		}
 	}
 	if (attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		++remote_catalog_count;
@@ -279,10 +286,35 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &n
 		return;
 	}
 
+	auto deleter = attached_db->ExtractDeleter();
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
 	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);
+
+	// Tear down the owned external resource last (runs SQL): the detach itself is complete either way,
+	// and a teardown failure surfaces with instructions to retry it manually.
+	if (deleter) {
+		deleter->Delete();
+	}
+}
+
+void DatabaseManager::AddPendingTeardown(unique_ptr<ResourceDeleter> deleter) {
+	lock_guard<mutex> guard(pending_teardowns_lock);
+	pending_teardowns.push_back(std::move(deleter));
+}
+
+void DatabaseManager::DrainPendingTeardowns() {
+	vector<unique_ptr<ResourceDeleter>> to_run;
+	{
+		lock_guard<mutex> guard(pending_teardowns_lock);
+		to_run = std::move(pending_teardowns);
+		pending_teardowns.clear();
+	}
+	// Best-effort: the statement that owned these resources is gone, so a failure can only be logged.
+	for (auto &deleter : to_run) {
+		deleter->TryDelete();
+	}
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {

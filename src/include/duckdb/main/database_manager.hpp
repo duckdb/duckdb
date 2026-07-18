@@ -24,6 +24,7 @@ class CatalogEntryRetriever;
 class CatalogSet;
 class ClientContext;
 class DatabaseInstance;
+class ResourceDeleter;
 class TaskScheduler;
 struct AttachOptions;
 struct AlterInfo;
@@ -56,6 +57,11 @@ public:
 
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found);
+	//! Queue the teardown of an external resource from a context that cannot run SQL (e.g. transaction
+	//! rollback, under the transaction lock).
+	void AddPendingTeardown(unique_ptr<ResourceDeleter> deleter);
+	//! Run queued teardowns, best-effort. Called once no transaction locks are held.
+	void DrainPendingTeardowns();
 	//! Alter operation dispatcher
 	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database
@@ -132,6 +138,11 @@ private:
 	atomic<transaction_t> current_transaction_id;
 	//! Count of remote catalogs currently attached; used to skip the remote pushdown optimizer when zero
 	atomic<CheckedInteger<idx_t, InternalException>> remote_catalog_count;
+	//! Lock for pending_teardowns
+	mutex pending_teardowns_lock;
+	//! External-resource teardowns queued from contexts that cannot run SQL (see AddPendingTeardown);
+	//! drained best-effort once no transaction locks are held.
+	vector<unique_ptr<ResourceDeleter>> pending_teardowns;
 	//! The current default database
 	Identifier default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program

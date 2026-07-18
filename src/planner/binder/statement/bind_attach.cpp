@@ -1,11 +1,30 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/attach_statement.hpp"
+#include "duckdb/parser/parsed_data/external_resource_options.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_attach.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
+
+void Binder::BindExternalResource(ExternalResourceOptions &external_resource) {
+	// Reference form (`EXTERNAL RESOURCE <name>`): the resource already exists — the physical operator
+	// looks it up in the manager at execution. Nothing to resolve here.
+	if (!external_resource.reference_name.empty()) {
+		return;
+	}
+
+	// Create form (`NEW TEMPORARY EXTERNAL RESOURCE '<type>' (opts)`): the type is a string literal set by the
+	// parser, so only the create params need resolving.
+	TableFunctionBinder binder(*this, context, "External resource", "External resource parameter");
+	for (auto &entry : external_resource.parsed_params) {
+		auto bound = binder.Bind(entry.second);
+		auto val = ExpressionExecutor::EvaluateScalar(context, *bound);
+		external_resource.params[entry.first] = std::move(val);
+	}
+	external_resource.parsed_params.clear();
+}
 
 BoundStatement Binder::Bind(AttachStatement &stmt) {
 	BoundStatement result;
@@ -36,6 +55,11 @@ BoundStatement Binder::Bind(AttachStatement &stmt) {
 		stmt.info->options[entry.first] = std::move(val);
 	}
 	stmt.info->parsed_options.clear();
+
+	// Bind the external resource clause (ATTACH/CONNECT TO EXTERNAL RESOURCE ...): resolve the type + create params.
+	if (stmt.info->external_resource) {
+		BindExternalResource(*stmt.info->external_resource);
+	}
 
 	result.plan = make_uniq<LogicalAttach>(std::move(stmt.info));
 
