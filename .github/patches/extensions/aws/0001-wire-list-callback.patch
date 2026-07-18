@@ -1,0 +1,23 @@
+diff --git a/src/quack_on_ec2_resource.cpp b/src/quack_on_ec2_resource.cpp
+index 9572d0a..78078da 100644
+--- a/src/quack_on_ec2_resource.cpp
++++ b/src/quack_on_ec2_resource.cpp
+@@ -271,8 +271,8 @@ void QuackOnEc2Resource::Register(ExtensionLoader &loader) {
+ 	TableFunction destroy_fn("__aws__cloudformation__quack_on_ec2__destroy", {map_vv}, QuackDestroyFun,
+ 	                         QuackDestroyBind, QuackAdapterInit);
+ 	loader.RegisterFunction(destroy_fn);
+-	// Registered as a plain callable function only. Wiring it into the resource-type registry (a `list_function`
+-	// slot) is a separate duckdb-side change, done elsewhere.
++	// Also wired into the resource-type registry below (as this type's `list_function`), so
++	// `SHOW ALL EXTERNAL RESOURCES` can discover existing stacks that are not locally managed.
+ 	TableFunction list_fn("__aws__cloudformation__quack_on_ec2__list", {map_vv}, QuackListFun, QuackListBind,
+ 	                      QuackListInit);
+ 	loader.RegisterFunction(list_fn);
+@@ -284,6 +284,7 @@ void QuackOnEc2Resource::Register(ExtensionLoader &loader) {
+ 	type.create_function = "__aws__cloudformation__quack_on_ec2__create";
+ 	type.status_function = "__aws__cloudformation__quack_on_ec2__status";
+ 	type.destroy_function = "__aws__cloudformation__quack_on_ec2__destroy";
++	type.list_function = "__aws__cloudformation__quack_on_ec2__list";
+ 	type.origin = "extension";
+ 	ExternalResourceTypeRegistry::Get(loader.GetDatabaseInstance()).Add(std::move(type));
+ }
