@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
@@ -143,7 +144,7 @@ bool BaseStatistics::IsConstant() const {
 	}
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
-		return NumericStats::IsConstant(*this);
+		return ConstantFun::TypeIsSupported(type.InternalType()) && NumericStats::IsConstant(*this);
 	default:
 		break;
 	}
