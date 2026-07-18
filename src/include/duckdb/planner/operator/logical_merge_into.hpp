@@ -32,6 +32,8 @@ public:
 	physical_index_vector_t<idx_t> column_index_map;
 	//! Whether or not an UPDATE is a DELETE + INSERT
 	bool update_is_del_and_insert = false;
+	//! See TableDeleteState::skip_unchanged_fk_delete_check.
+	bool skip_unchanged_fk_delete_check = false;
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BoundMergeIntoAction> Deserialize(Deserializer &deserializer);

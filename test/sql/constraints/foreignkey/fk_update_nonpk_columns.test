@@ -1,0 +1,107 @@
+# name: test/sql/constraints/foreignkey/fk_update_nonpk_columns.test
+# description: Test that updating non-PK columns of an FK-referenced table does not raise a spurious FK violation (issue #16409)
+# group: [foreignkey]
+
+# NOTE for the implementing agent:
+# Before the fix, every "statement ok" UPDATE / INSERT-OR-REPLACE / ON CONFLICT block
+# below FAILS with: "Violates foreign key constraint because key ... is still referenced".
+# After the fix they must all pass. The "statement error" blocks at the end must STILL error.
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (id INTEGER PRIMARY KEY, arr VARCHAR[]);
+
+statement ok
+INSERT INTO test VALUES (1, ['asdf', '2e3f']);
+
+statement ok
+CREATE TABLE test_fk (test_id INTEGER REFERENCES test (id), val VARCHAR);
+
+statement ok
+INSERT INTO test_fk VALUES (1, 'blkaj');
+
+# --- Variant 1: plain UPDATE of a LIST column, PK unchanged ---
+statement ok
+UPDATE test SET arr = [] WHERE id = 1;
+
+query II
+SELECT id, arr FROM test;
+----
+1	[]
+
+# --- Variant 2: UPDATE to a non-empty list, PK unchanged ---
+statement ok
+UPDATE test SET arr = ['x'] WHERE id = 1;
+
+query II
+SELECT id, arr FROM test;
+----
+1	[x]
+
+# --- Variant 3: INSERT OR REPLACE (same PK) ---
+statement ok
+INSERT OR REPLACE INTO test VALUES (1, ['replaced']);
+
+query II
+SELECT id, arr FROM test;
+----
+1	[replaced]
+
+# --- Variant 4: INSERT ... ON CONFLICT DO UPDATE (same PK) ---
+statement ok
+INSERT INTO test VALUES (1, ['conflict']) ON CONFLICT (id) DO UPDATE SET arr = EXCLUDED.arr;
+
+query II
+SELECT id, arr FROM test;
+----
+1	[conflict]
+
+# child reference must still be intact after all those updates
+query IT
+SELECT test_id, val FROM test_fk;
+----
+1	blkaj
+
+# --- Regression: a genuine FK violation must STILL be rejected ---
+
+# deleting the referenced parent row must fail
+statement error
+DELETE FROM test WHERE id = 1;
+----
+<REGEX>:.*Constraint Error.*foreign key.*
+
+# updating the PK column to a value the child does not reference must fail
+statement error
+UPDATE test SET id = 99 WHERE id = 1;
+----
+<REGEX>:.*Constraint Error.*foreign key.*
+
+# inserting a child row referencing a non-existent parent must fail
+statement error
+INSERT INTO test_fk VALUES (12345, 'orphan');
+----
+<REGEX>:.*Constraint Error.*foreign key.*
+
+# --- Related types: STRUCT and MAP columns (issues #16354, #11288, #11915, #15830) ---
+
+statement ok
+CREATE TABLE p2 (id INTEGER PRIMARY KEY, s STRUCT(a INTEGER, b VARCHAR));
+
+statement ok
+INSERT INTO p2 VALUES (1, {'a': 1, 'b': 'x'});
+
+statement ok
+CREATE TABLE c2 (pid INTEGER REFERENCES p2 (id));
+
+statement ok
+INSERT INTO c2 VALUES (1);
+
+statement ok
+UPDATE p2 SET s = {'a': 2, 'b': 'y'} WHERE id = 1;
+
+query I
+SELECT pid FROM c2;
+----
+1
