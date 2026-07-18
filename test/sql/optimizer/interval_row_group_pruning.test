@@ -14,9 +14,6 @@ CREATE TABLE intervals AS
     FROM range(6144);
 
 statement ok
-FORCE CHECKPOINT;
-
-statement ok
 USE memory;
 
 statement ok
@@ -46,9 +43,6 @@ statement ok
 CREATE TABLE compat.intervals AS
     SELECT range * INTERVAL '1 day' AS iv, range::BIGINT AS i
     FROM range(6144);
-
-statement ok
-FORCE CHECKPOINT;
 
 statement ok
 DETACH compat;
