@@ -165,11 +165,28 @@ build/reldebug/test/unittest "*"
 
 ### Benchmarks
 
-Run the feature store benchmarks (requires ClickBench data, downloaded automatically on first run):
+Feature store benchmarks live under `benchmark/feature/clickstream/`, in three families: `serve/`
+(point-in-time SERVE), `refresh/` (windowed REFRESH snapshots), `cases/` (multi-step workflows).
+ClickBench data downloads automatically on first run and is cached per scale.
 
 ```bash
-build/reldebug/benchmark/benchmark_runner "benchmark/feature/.*"
+build/reldebug/benchmark/benchmark_runner "benchmark/feature/.*"                        # everything
+build/reldebug/benchmark/benchmark_runner "benchmark/feature/clickstream/serve/serve_.*" # one family
+build/reldebug/benchmark/benchmark_runner --list | grep clickstream/                     # list only
 ```
+
+Scenarios are generated, not hand-written, by a seeded pairwise generator
+(`scripts/generate_feature_benchmarks.py`):
+
+```bash
+python3 scripts/generate_feature_benchmarks.py                 # regenerate the checked-in set (seed 42)
+python3 scripts/generate_feature_benchmarks.py --family refresh # regenerate one family
+python3 scripts/generate_feature_benchmarks.py --seed 7         # a different reproducible list
+python3 scripts/generate_feature_benchmarks.py --verify         # assert full pairwise coverage
+```
+
+See [benchmark/feature/clickstream/README.md](benchmark/feature/clickstream/README.md) for the
+sampling methodology.
 
 Run standard DuckDB benchmarks:
 

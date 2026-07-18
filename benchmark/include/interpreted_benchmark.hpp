@@ -69,6 +69,18 @@ public:
 	bool RequireReinit() override {
 		return require_reinit;
 	}
+	//! How many hot runs to execute (overridable per-file via the `nruns` directive).
+	size_t NRuns() override {
+		return n_runs;
+	}
+	//! Per-run timeout. The `disable_timeout` directive removes it for a single benchmark (e.g. large
+	//! scales whose legitimate runtime exceeds the default), without needing the global CLI flag.
+	optional_idx Timeout(const BenchmarkConfiguration &config) override {
+		if (disable_timeout) {
+			return optional_idx();
+		}
+		return config.timeout_duration;
+	}
 	QueryResultType ResultMode() const {
 		return result_type;
 	}
@@ -120,6 +132,8 @@ private:
 	QueryResultType result_type = QueryResultType::MATERIALIZED_RESULT;
 	idx_t arrow_batch_size = STANDARD_VECTOR_SIZE;
 	bool require_reinit = false;
+	size_t n_runs = DEFAULT_NRUNS;
+	bool disable_timeout = false;
 };
 
 } // namespace duckdb

@@ -300,6 +300,16 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 				throw std::runtime_error(reader.FormatException("require_reinit does not take any parameters"));
 			}
 			require_reinit = true;
+		} else if (splits[0] == "nruns") {
+			if (splits.size() != 2) {
+				throw std::runtime_error(reader.FormatException("nruns requires a single parameter (the run count)"));
+			}
+			n_runs = std::stoull(splits[1]);
+		} else if (splits[0] == "disable_timeout") {
+			if (splits.size() != 1) {
+				throw std::runtime_error(reader.FormatException("disable_timeout does not take any parameters"));
+			}
+			disable_timeout = true;
 		} else if (splits[0] == "name" || splits[0] == "group" || splits[0] == "subgroup") {
 			if (splits.size() == 1) {
 				throw std::runtime_error(reader.FormatException(splits[0] + " requires a parameter"));
