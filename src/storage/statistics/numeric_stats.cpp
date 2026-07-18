@@ -553,6 +553,7 @@ static void DeserializeNumericStatsValue(const LogicalType &type, NumericValueUn
 
 void NumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
+	// INTERVAL stats are only serialized in V2.0.0 and later.
 	if (stats.GetType().id() == LogicalTypeId::INTERVAL && !serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		return;
 	}
