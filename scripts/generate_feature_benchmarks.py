@@ -336,9 +336,9 @@ def refresh_slug(vec):
 
 # =============================================================================================
 # CASES family: curated multi-step scenarios. RUN_QUERY is a multi-statement sequence on one line,
-# timed as a unit. Emitted at each source scale. The cases template sets `require_reinit`, so a
-# fresh setup is rebuilt (from the cached source) before every hot run -- keeping the mutating
-# refresh timings independent across iterations.
+# timed as a unit. Emitted at each source scale. The cases template re-runs SETUP_SQL in an
+# (untimed) `cleanup` block after every hot run, so a fresh setup is rebuilt before the next
+# iteration -- keeping the mutating refresh timings independent across iterations.
 # =============================================================================================
 CASE_SCALES = [20, 100]
 _CASE_REFRESH_COUNT = 8
@@ -402,9 +402,31 @@ def case_refresh_serve_interleaved(pc):
     return "refresh_serve_interleaved_s{}".format(pc), setup, run, desc
 
 
+_HIGH_RETAIN = 10
+
+
+def case_high_retain_gc_pressure(pc):
+    # Pre-build the store to exactly RETAIN versions in (untimed) setup, so every timed refresh
+    # below evicts from an already-large, steady-state-sized store -- unlike gc_pressure_refresh
+    # (RETAIN 2, store never grows large) or multi_version_refresh (RETAIN 20, eviction never
+    # fires within 8 calls). This is the regime the eviction-scan row-group filter targets: each
+    # timed call scans only the ~1 version being evicted instead of all ~RETAIN live versions.
+    setup = join_sql(
+        DROPS
+        + [create_feature("f", SIMPLE_AGG, "3650 DAYS", _HIGH_RETAIN)]
+        + ["REFRESH FEATURE f AT '{}'".format(ts) for ts in prior_timestamps(_HIGH_RETAIN)]
+    )
+    run = join_sql(["REFRESH FEATURE f AT '{}'".format(ts) for ts in refresh_timestamps(_CASE_REFRESH_COUNT)])
+    desc = "8 refreshes against a pre-built {}-version store (RETAIN {}) -- every timed refresh evicts from an already-large store".format(
+        _HIGH_RETAIN, _HIGH_RETAIN
+    )
+    return "high_retain_gc_pressure_s{}".format(pc), setup, run, desc
+
+
 CASE_BUILDERS = [
     case_multi_version_refresh,
     case_gc_pressure_refresh,
+    case_high_retain_gc_pressure,
     case_refresh_then_serve,
     case_concurrent_feature_refresh,
     case_refresh_serve_interleaved,

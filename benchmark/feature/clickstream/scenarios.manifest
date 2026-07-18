@@ -66,14 +66,16 @@
 12	20	window	3650 DAYS	20	5
 13	20	multi	3650 DAYS	5	0
 #
-# ===== family: cases (curated, 10 scenarios) =====
+# ===== family: cases (curated, 12 scenarios) =====
 #   multi_version_refresh_s20        Build an 8-version refresh history in one timed unit (RETAIN 20, no eviction)
 #   gc_pressure_refresh_s20          8 refreshes with RETAIN 2 -- every refresh past v2 triggers in-place eviction (GC pressure)
+#   high_retain_gc_pressure_s20      8 refreshes against a pre-built 10-version store (RETAIN 10) -- every timed refresh evicts from an already-large store
 #   refresh_then_serve_s20           Refresh then immediately serve the fresh snapshot (point-in-time ASOF retrieval)
 #   concurrent_feature_refresh_s20   Refresh three features sharing the same entity key in one timed unit
 #   refresh_serve_interleaved_s20    Three interleaved refresh+serve cycles (steady-state multi-version serving)
 #   multi_version_refresh_s100       Build an 8-version refresh history in one timed unit (RETAIN 20, no eviction)
 #   gc_pressure_refresh_s100         8 refreshes with RETAIN 2 -- every refresh past v2 triggers in-place eviction (GC pressure)
+#   high_retain_gc_pressure_s100     8 refreshes against a pre-built 10-version store (RETAIN 10) -- every timed refresh evicts from an already-large store
 #   refresh_then_serve_s100          Refresh then immediately serve the fresh snapshot (point-in-time ASOF retrieval)
 #   concurrent_feature_refresh_s100  Refresh three features sharing the same entity key in one timed unit
 #   refresh_serve_interleaved_s100   Three interleaved refresh+serve cycles (steady-state multi-version serving)
