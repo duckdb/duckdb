@@ -92,6 +92,7 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
 		return StatisticsType::NUMERIC_STATS;
 	case PhysicalType::VARCHAR:
 		return StatisticsType::STRING_STATS;
@@ -102,7 +103,6 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	case PhysicalType::ARRAY:
 		return StatisticsType::ARRAY_STATS;
 	case PhysicalType::BIT:
-	case PhysicalType::INTERVAL:
 	default:
 		return StatisticsType::BASE_STATS;
 	}
