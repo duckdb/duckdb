@@ -100,7 +100,19 @@ struct DestroyExternalResourceFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct RegisterExternalResourceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DeregisterExternalResourceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBExternalResourceTypesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBExternalResourcesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

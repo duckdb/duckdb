@@ -10,12 +10,32 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/external_resource_type_registry.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 
 #include <chrono>
 #include <thread>
 
 namespace duckdb {
+
+//! Empty `extra_info` map for an ExternalResource log entry.
+static Value NoExtraInfo() {
+	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, vector<Value>(), vector<Value>());
+}
+
+//! Single-entry `extra_info` map for an ExternalResource log entry.
+static Value ExtraInfo(const string &key, const string &value) {
+	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, {Value(key)}, {Value(value)});
+}
+
+//! Log one recipe callback invocation (on response). `resource_type` may be empty (rendered NULL) when
+//! the callsite does not know it; `error` is empty on success.
+static void LogExternalResourceOperation(ClientContext &context, const string &resource_type,
+                                         const string &resource_name, const char *operation, const string &error,
+                                         const Value &extra_info) {
+	DUCKDB_LOG(context, ExternalResourceLogType, resource_type, resource_name, string(operation), error, extra_info);
+}
 
 //! Defaults for the readiness poll loop, both overridable per call via named parameters. A timeout of 0
 //! means wait indefinitely (rely on a terminal status or query cancellation).
@@ -94,7 +114,10 @@ static int64_t ReadSecondsParameter(const string &key, const Value &value, int64
 
 struct CreateExternalResourceBindData : public TableFunctionData {
 	string type_name;
+	string resource_name;
 	Value params;
+	//! When set (non-NULL), adopt this existing handle instead of calling `create` to provision a new one.
+	Value adopt_handle;
 	bool teardown_on_failure = true;
 	int64_t timeout_seconds = DEFAULT_READINESS_TIMEOUT_SECONDS;
 	int64_t poll_interval_seconds = DEFAULT_POLL_INTERVAL_SECONDS;
@@ -116,6 +139,10 @@ static unique_ptr<FunctionData> CreateExternalResourceBind(ClientContext &contex
 		auto key = StringUtil::Lower(np.first.GetIdentifierName());
 		if (key == "params" && !np.second.IsNull()) {
 			result->params = np.second;
+		} else if (key == "resource_name" && !np.second.IsNull()) {
+			result->resource_name = StringValue::Get(np.second);
+		} else if (key == "handle" && !np.second.IsNull()) {
+			result->adopt_handle = np.second;
 		} else if (key == "teardown_on_failure" && !np.second.IsNull()) {
 			result->teardown_on_failure = BooleanValue::Get(np.second);
 		} else if (key == "timeout_seconds" && !np.second.IsNull()) {
@@ -160,11 +187,6 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	if (!type) {
 		throw InvalidInputException("create_external_resource: unknown resource type \"%s\"", bind_data.type_name);
 	}
-	if (type->create_function.empty()) {
-		throw InvalidInputException("create_external_resource: resource type \"%s\" has no create function",
-		                            bind_data.type_name);
-	}
-
 	// Separate internal connection: the current connection's context lock is held here.
 	Connection con(DatabaseInstance::GetDatabase(context));
 	// Resolve the callbacks in the search path captured at registration, so unqualified names in a non-default
@@ -177,26 +199,45 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 			    bind_data.type_name, type->search_path, set_res->GetError());
 		}
 	}
-	auto sql = "SELECT * FROM " + QualifiedName::Parse(type->create_function).ToString() + "(" +
-	           bind_data.params.ToSQLString() + ")";
-	auto result = con.Query(sql);
-	if (result->HasError()) {
-		throw IOException("create_external_resource: create function \"%s\" failed: %s", type->create_function,
-		                  result->GetError());
-	}
-	if (result->RowCount() == 0) {
-		throw InvalidInputException("create_external_resource: create function \"%s\" returned no rows",
-		                            type->create_function);
-	}
-	// Contract: `create` returns a single 'handle' column (a MAP; opaque to us, passed back to status/destroy).
-	auto handle = RequireResourceMap(result->GetValue(0, 0), type->create_function, "handle");
 
-	// Ownership: the resource now exists. We own its teardown until we successfully hand back the deleter
-	// binding below; on any failure in between (status 'failed', timeout, cancellation, malformed result,
-	// baseline violation) tear it down best-effort — unless teardown_on_failure is disabled, e.g. to inspect
-	// a rolled-back resource. This guard runs the destroy on every exit path, including exception unwinding.
+	// Provision (call `create`) or adopt (use the caller-supplied handle). A `create` returns a single
+	// 'handle' column (a MAP; opaque to us, passed back to status/destroy).
+	const bool adopting = !bind_data.adopt_handle.IsNull();
+	Value handle;
+	if (adopting) {
+		handle = RequireResourceMap(bind_data.adopt_handle, bind_data.type_name, "handle");
+	} else {
+		if (type->create_function.empty()) {
+			throw InvalidInputException("create_external_resource: resource type \"%s\" has no create function",
+			                            bind_data.type_name);
+		}
+		auto sql = "SELECT * FROM " + QualifiedName::Parse(type->create_function).ToString() + "(" +
+		           bind_data.params.ToSQLString() + ")";
+		auto result = con.Query(sql);
+		LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "create",
+		                             result->HasError() ? result->GetError() : string(), NoExtraInfo());
+		if (result->HasError()) {
+			throw IOException("create_external_resource: create function \"%s\" failed: %s", type->create_function,
+			                  result->GetError());
+		}
+		if (result->RowCount() == 0) {
+			throw InvalidInputException("create_external_resource: create function \"%s\" returned no rows",
+			                            type->create_function);
+		}
+		handle = RequireResourceMap(result->GetValue(0, 0), type->create_function, "handle");
+	}
+
+	// Ownership: when we provisioned the resource, we own its teardown until we successfully hand back the
+	// deleter binding below; on any failure in between (status 'failed', timeout, cancellation, malformed
+	// result, baseline violation) tear it down best-effort. When a handle was supplied the resource
+	// already existed and is not ours to destroy on failure, so the guard stays disarmed regardless of
+	// teardown_on_failure.
+	bool teardown_on_failure = !adopting && bind_data.teardown_on_failure;
 	bool deleter_returned = false;
 	struct TeardownGuard {
+		ClientContext &context;
+		const string &resource_type;
+		const string &resource_name;
 		Connection &con;
 		const string &destroy_function;
 		const Value &handle;
@@ -207,12 +248,16 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				return;
 			}
 			try {
-				con.Query("SELECT * FROM " + QualifiedName::Parse(destroy_function).ToString() + "(" +
-				          handle.ToSQLString() + ")");
+				auto sql = "SELECT * FROM " + QualifiedName::Parse(destroy_function).ToString() + "(" +
+				           handle.ToSQLString() + ")";
+				auto res = con.Query(sql);
+				LogExternalResourceOperation(context, resource_type, resource_name, "destroy",
+				                             res->HasError() ? res->GetError() : string(), NoExtraInfo());
 			} catch (...) { // best-effort: never mask the original failure with a teardown error
 			}
 		}
-	} teardown_guard {con, type->destroy_function, handle, bind_data.teardown_on_failure, deleter_returned};
+	} teardown_guard {context, bind_data.type_name, bind_data.resource_name, con, type->destroy_function,
+	                  handle,  teardown_on_failure, deleter_returned};
 
 	if (type->status_function.empty()) {
 		throw InvalidInputException(
@@ -232,6 +277,14 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 		auto status_sql = "SELECT state, result FROM " + QualifiedName::Parse(type->status_function).ToString() + "(" +
 		                  handle.ToSQLString() + ")";
 		auto sres = con.Query(status_sql);
+		string poll_state;
+		if (!sres->HasError() && sres->RowCount() > 0) {
+			auto sv = sres->GetValue(0, 0);
+			poll_state = sv.IsNull() ? string() : sv.ToString();
+		}
+		LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "status",
+		                             sres->HasError() ? sres->GetError() : string(),
+		                             poll_state.empty() ? NoExtraInfo() : ExtraInfo("state", poll_state));
 		if (sres->HasError()) {
 			throw IOException("create_external_resource: status function \"%s\" failed: %s", type->status_function,
 			                  sres->GetError());
@@ -309,6 +362,8 @@ void CreateExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("create_external_resource", {LogicalType::VARCHAR}, CreateExternalResourceFunction,
 	                 CreateExternalResourceBind, CreateExternalResourceInit);
 	fn.named_parameters["params"] = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	fn.named_parameters["resource_name"] = LogicalType::VARCHAR;
+	fn.named_parameters["handle"] = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	fn.named_parameters["teardown_on_failure"] = LogicalType::BOOLEAN;
 	fn.named_parameters["timeout_seconds"] = LogicalType::BIGINT;
 	fn.named_parameters["poll_interval_seconds"] = LogicalType::BIGINT;
@@ -362,6 +417,9 @@ static void DestroyExternalResourceFunction(ClientContext &context, TableFunctio
 	auto sql = "SELECT * FROM " + QualifiedName::Parse(bind_data.deleter_function).ToString() + "(" +
 	           bind_data.deleter_payload.ToSQLString() + ")";
 	auto result = con.Query(sql);
+	// resource_type/name are unknown at this callsite (the deleter binding does not carry them).
+	LogExternalResourceOperation(context, string(), string(), "destroy",
+	                             result->HasError() ? result->GetError() : string(), NoExtraInfo());
 	if (result->HasError()) {
 		throw IOException("destroy_external_resource: deleter function \"%s\" failed: %s", bind_data.deleter_function,
 		                  result->GetError());
