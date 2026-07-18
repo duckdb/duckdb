@@ -4665,6 +4665,36 @@ public:
 	                                         TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeNameListTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeAttachToExternalResourceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeAttachToExternalResourceTrampoline(PEGTransformer &transformer,
+	                                                                                   TransformStack &stack,
+	                                                                                   TransformStackFrame &frame);
+	static void InitializeConnectToExternalResourceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeConnectToExternalResourceTrampoline(PEGTransformer &transformer,
+	                                                                                    TransformStack &stack,
+	                                                                                    TransformStackFrame &frame);
+	static void InitializeExternalResourceSourceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeExternalResourceSourceTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeExternalResourceCreateClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeExternalResourceCreateClauseTrampoline(PEGTransformer &transformer,
+	                                                                                       TransformStack &stack,
+	                                                                                       TransformStackFrame &frame);
+	static void InitializeExternalResourceReferenceClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeExternalResourceReferenceClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static void InitializeExternalResourceOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                        TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeExternalResourceOptionsTrampoline(PEGTransformer &transformer,
+	                                                                                  TransformStack &stack,
+	                                                                                  TransformStackFrame &frame);
 	//===--------------------------------------------------------------------===//
 	// END GENERATED TRAMPOLINE RULES
 	//===--------------------------------------------------------------------===//
@@ -8263,6 +8293,30 @@ public:
 	static unique_ptr<TransformResultValue> TransformNameListInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static vector<string> TransformNameList(PEGTransformer &transformer, const vector<Identifier> &col_id);
+	static unique_ptr<TransformResultValue> TransformAttachToExternalResourceInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformAttachToExternalResource(
+	    PEGTransformer &transformer, unique_ptr<ExternalResourceOptions> external_resource_source,
+	    const optional<Identifier> &attach_alias, const optional<vector<GenericCopyOption>> &attach_options);
+	static unique_ptr<TransformResultValue> TransformConnectToExternalResourceInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<SQLStatement>
+	TransformConnectToExternalResource(PEGTransformer &transformer,
+	                                   unique_ptr<ExternalResourceOptions> external_resource_source,
+	                                   const optional<vector<GenericCopyOption>> &attach_options);
+	static unique_ptr<TransformResultValue> TransformExternalResourceSourceInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExternalResourceCreateClauseInternal(PEGTransformer &transformer,
+	                                                                                      ParseResult &parse_result);
+	static unique_ptr<ExternalResourceOptions>
+	TransformExternalResourceCreateClause(PEGTransformer &transformer, const string &string_literal,
+	                                      const optional<vector<GenericCopyOption>> &external_resource_options);
+	static unique_ptr<TransformResultValue>
+	TransformExternalResourceReferenceClauseInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ExternalResourceOptions> TransformExternalResourceReferenceClause(PEGTransformer &transformer,
+	                                                                                    const Identifier &col_id);
+	static unique_ptr<TransformResultValue> TransformExternalResourceOptionsInternal(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULES
 	//===--------------------------------------------------------------------===//

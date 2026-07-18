@@ -102,6 +102,8 @@ SQLStatement:
     - UseStatement
     - VacuumStatement
     - PragmaAssignOrFunction
+    - AttachToExternalResource
+    - ConnectToExternalResource
     - ExternalResourceStatement
     - CreateExternalResourceStmt
     - RegisterExternalResourceStmt
@@ -697,11 +699,20 @@ StringList:
     - UnpivotHeaderSingle
     - UnpivotHeaderList
 
+ExternalResourceOptionsPtr:
+  type: "unique_ptr<ExternalResourceOptions>"
+  by_value: true
+  rules:
+    - ExternalResourceSource
+    - ExternalResourceCreateClause
+    - ExternalResourceReferenceClause
+
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
   by_value: false
   rules:
     - AttachOptions
+    - ExternalResourceOptions
     - GenericCopyOptionList
     - CopyOptions
     - CopyOptionList

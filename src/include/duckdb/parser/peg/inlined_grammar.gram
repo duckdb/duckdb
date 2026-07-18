@@ -4,6 +4,8 @@ TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
 	ExternalResourceStatement /
+	AttachToExternalResource /
+	ConnectToExternalResource /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /
@@ -1910,4 +1912,11 @@ OptFreeze <- 'FREEZE'
 OptVerbose <- 'VERBOSE'
 
 NameList <- Parens(List(ColId))
+
+AttachToExternalResource <- 'ATTACH' 'TO' ExternalResourceSource AttachAlias? AttachOptions?
+ConnectToExternalResource <- 'CONNECT' 'TO' ExternalResourceSource AttachOptions?
+ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferenceClause
+ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' 'EXTERNAL' 'RESOURCE' StringLiteral ExternalResourceOptions?
+ExternalResourceReferenceClause <- 'EXTERNAL' 'RESOURCE' ColId
+ExternalResourceOptions <- GenericCopyOptionList
 

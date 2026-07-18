@@ -296,6 +296,7 @@ void AttachInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(201, "path", path);
 	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(202, "options", options);
 	serializer.WritePropertyWithDefault<OnCreateConflict>(203, "on_conflict", on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	serializer.WritePropertyWithDefault<unique_ptr<ExternalResourceOptions>>(204, "external_resource", external_resource);
 }
 
 unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
@@ -304,6 +305,7 @@ unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(201, "path", result->path);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(202, "options", result->options);
 	deserializer.ReadPropertyWithExplicitDefault<OnCreateConflict>(203, "on_conflict", result->on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ExternalResourceOptions>>(204, "external_resource", result->external_resource);
 	return std::move(result);
 }
 
@@ -354,6 +356,7 @@ void ConnectInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(201, "name_is_string_literal", name_is_string_literal);
 	serializer.WritePropertyWithDefault<bool>(202, "target_is_local", target_is_local);
 	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(203, "options", options);
+	serializer.WritePropertyWithDefault<unique_ptr<ExternalResourceOptions>>(204, "external_resource", external_resource);
 }
 
 unique_ptr<ParseInfo> ConnectInfo::Deserialize(Deserializer &deserializer) {
@@ -362,6 +365,7 @@ unique_ptr<ParseInfo> ConnectInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(201, "name_is_string_literal", result->name_is_string_literal);
 	deserializer.ReadPropertyWithDefault<bool>(202, "target_is_local", result->target_is_local);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(203, "options", result->options);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ExternalResourceOptions>>(204, "external_resource", result->external_resource);
 	return std::move(result);
 }
 

@@ -14,6 +14,7 @@ add_library_unity(
   transform_common.cpp
   transform_connect.cpp
   transform_external_resource.cpp
+  transform_with_external_resource.cpp
   transform_copy.cpp
   transform_create_index.cpp
   transform_create_macro.cpp
