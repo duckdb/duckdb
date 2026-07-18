@@ -1,4 +1,5 @@
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
