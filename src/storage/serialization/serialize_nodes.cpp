@@ -10,6 +10,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/operator/logical_external_resource.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -97,6 +98,24 @@ BoundCaseCheck BoundCaseCheck::Deserialize(Deserializer &deserializer) {
 	BoundCaseCheck result;
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "when_expr", result.when_expr);
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "then_expr", result.then_expr);
+	return result;
+}
+
+void BoundExternalResource::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<ExternalResourceOperation>(100, "operation", operation);
+	serializer.WritePropertyWithDefault<string>(101, "type", type);
+	serializer.WritePropertyWithDefault<string>(102, "name", name);
+	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(103, "params", params);
+	serializer.WriteProperty<Value>(104, "handle", handle);
+}
+
+BoundExternalResource BoundExternalResource::Deserialize(Deserializer &deserializer) {
+	BoundExternalResource result;
+	deserializer.ReadProperty<ExternalResourceOperation>(100, "operation", result.operation);
+	deserializer.ReadPropertyWithDefault<string>(101, "type", result.type);
+	deserializer.ReadPropertyWithDefault<string>(102, "name", result.name);
+	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(103, "params", result.params);
+	deserializer.ReadProperty<Value>(104, "handle", result.handle);
 	return result;
 }
 

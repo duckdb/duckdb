@@ -1180,6 +1180,24 @@
     ]
   },
   {
+    "class": "LogicalExternalResource",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXTERNAL_RESOURCE",
+    "includes": [
+      "duckdb/planner/operator/logical_external_resource.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "data",
+        "type": "BoundExternalResource"
+      }
+    ],
+    "constructor": [
+      "data"
+    ]
+  },
+  {
     "class": "LogicalDisconnect",
     "base": "LogicalOperator",
     "enum": "LOGICAL_DISCONNECT",

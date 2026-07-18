@@ -44,8 +44,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
 }
 
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransformer &transformer,
-                                                                    const ShowType &show_or_describe,
-                                                                    const bool &has_result) {
+                                                                    const ShowType &show_or_describe) {
 	auto result = make_uniq<ShowRef>();
 	// Legacy reasons, see bind_showref.cpp
 	result->SetTableName("__show_tables_expanded");

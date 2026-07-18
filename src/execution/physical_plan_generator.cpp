@@ -170,6 +170,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalConnect>());
 	case LogicalOperatorType::LOGICAL_DISCONNECT:
 		return CreatePlan(op.Cast<LogicalDisconnect>());
+	case LogicalOperatorType::LOGICAL_EXTERNAL_RESOURCE:
+		return CreatePlan(op.Cast<LogicalExternalResource>());
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return CreatePlan(op.Cast<LogicalRecursiveCTE>());
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
