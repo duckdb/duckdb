@@ -4,6 +4,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/transaction/transaction.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/main/settings.hpp"
 
+#include <string>
 #include <utility>
 
 namespace duckdb {
@@ -295,7 +297,7 @@ void AddProjectionNames(const ColumnIndex &index, const string &name, const Logi
 		return;
 	}
 
-	if (type.id() == LogicalTypeId::STRUCT) {
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::TUPLE) {
 		auto &child_types = StructType::GetChildTypes(type);
 		for (auto &child_index : index.GetChildIndexes()) {
 			if (child_index.HasPrimaryIndex()) {

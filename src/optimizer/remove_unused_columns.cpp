@@ -1,7 +1,9 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -579,13 +581,13 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 
 static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &context, unique_ptr<Expression> target,
                                                              const ColumnIndex &path) {
-	auto extract_function = GetKeyExtractFunction();
-
 	auto &struct_type = target->GetReturnType();
-	D_ASSERT(struct_type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(StructType::IsStruct(struct_type));
 	reference<const LogicalType> type_iter(struct_type);
 	reference<const ColumnIndex> path_iter(path);
 	while (true) {
+		// a TUPLE has no field names - its children can only be addressed by position
+		const bool is_tuple = type_iter.get().id() == LogicalTypeId::TUPLE;
 		auto child_index = path_iter.get().GetPrimaryIndex();
 		auto &child_types = StructType::GetChildTypes(type_iter.get());
 		D_ASSERT(child_index < child_types.size());
@@ -593,9 +595,16 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		type_iter = child_types[child_index].second;
 
 		vector<unique_ptr<Expression>> arguments(2);
-		arguments[0] = (std::move(target));
-		arguments[1] = (make_uniq<BoundConstantExpression>(Value(key)));
-		target = extract_function.Bind(context, std::move(arguments));
+		arguments[0] = std::move(target);
+		if (is_tuple) {
+			// struct_extract(TUPLE, <1-based position>)
+			arguments[1] = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_index + 1)));
+			target = GetIndexExtractFunction().Bind(context, std::move(arguments));
+		} else {
+			// struct_extract(STRUCT, <field name>)
+			arguments[1] = make_uniq<BoundConstantExpression>(Value(key));
+			target = GetKeyExtractFunction().Bind(context, std::move(arguments));
+		}
 		if (!path_iter.get().HasChildren()) {
 			break;
 		}
@@ -715,7 +724,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				//! Not a column reference, can't pull up the extract
 				continue;
 			}
-			if (expr.GetReturnType().id() != LogicalTypeId::STRUCT) {
+			if (!StructType::IsStruct(expr.GetReturnType())) {
 				//! Extract pull up only supported for STRUCT currently
 				continue;
 			}
@@ -962,13 +971,13 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> &expr_p,
                                            vector<ReferencedExtractComponent> &expressions) {
 	auto &function = expr_p->Cast<BoundFunctionExpression>();
 	auto &child = function.GetChildrenMutable()[0];
-	D_ASSERT(child->GetReturnType().id() == LogicalTypeId::STRUCT);
+	D_ASSERT(StructType::IsStruct(child->GetReturnType()));
 	auto &bind_data = function.BindInfo()->Cast<StructExtractBindData>();
 	// struct extract, check if left child is a bound column ref
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		// column reference - check if it is a struct
 		auto &ref = child->Cast<BoundColumnRefExpression>();
-		if (ref.GetReturnType().id() != LogicalTypeId::STRUCT) {
+		if (!StructType::IsStruct(ref.GetReturnType())) {
 			return false;
 		}
 		colref = &ref;
@@ -1051,6 +1060,7 @@ bool BaseColumnPruner::HandleExtractRecursive(unique_ptr<Expression> &expr_p,
 	auto child_type = child->GetReturnType().id();
 	switch (child_type) {
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 		return HandleStructExtract(expr_p, colref, path_ref, expressions);
 	case LogicalTypeId::VARIANT:
 		return HandleVariantExtract(expr_p, colref, path_ref, expressions);

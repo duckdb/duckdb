@@ -102,7 +102,8 @@
     {
       "reason": "Tuples cannot be persisted on older storage",
       "paths": [
-        "test/sql/types/struct/test_tuple.test"
+        "test/sql/types/struct/test_tuple.test",
+        "test/optimizer/unused_columns/push_down_tuple_child_column.test"
       ]
     },
     {
