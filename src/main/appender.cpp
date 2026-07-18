@@ -1,7 +1,9 @@
 #include "duckdb/main/appender.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
@@ -28,7 +30,9 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
+#include "duckdb/common/enums/database_modification_type.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -726,6 +730,78 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto table_ref = GetColumnDataTableRef(collection, table_name, names);
 	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(parsed_statement));
+}
+
+//===--------------------------------------------------------------------===//
+// DirectAppender
+//===--------------------------------------------------------------------===//
+
+DirectAppender::DirectAppender(Connection &con, const Identifier &database_name, const Identifier &schema_name,
+                               const Identifier &table_name, const idx_t flush_memory_threshold_p)
+    : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
+	flush_memory_threshold = (flush_memory_threshold_p == DConstants::INVALID_INDEX)
+	                             ? optional_idx::Invalid()
+	                             : optional_idx(flush_memory_threshold_p);
+
+	description = con.TableInfo(database_name, schema_name, table_name);
+	if (!description) {
+		throw CatalogException(
+		    StringUtil::Format("Table \"%s.%s.%s\" could not be found", database_name, schema_name, table_name));
+	}
+	if (description->readonly) {
+		throw InvalidInputException("Cannot append to a readonly database.");
+	}
+
+	types.reserve(description->columns.size());
+	for (auto &column : description->columns) {
+		if (column.Generated()) {
+			continue;
+		}
+		types.emplace_back(column.Type());
+	}
+
+	collection = make_uniq<ColumnDataCollection>(allocator, types);
+	InitializeChunk();
+}
+
+DirectAppender::DirectAppender(Connection &con, const Identifier &schema_name, const Identifier &table_name,
+                               const idx_t flush_memory_threshold_p)
+    : DirectAppender(con, Identifier::InvalidCatalog(), schema_name, table_name, flush_memory_threshold_p) {
+}
+
+DirectAppender::DirectAppender(Connection &con, const Identifier &table_name, const idx_t flush_memory_threshold_p)
+    : DirectAppender(con, Identifier::DefaultSchema(), table_name, flush_memory_threshold_p) {
+}
+
+DirectAppender::~DirectAppender() {
+	Destructor();
+}
+
+void DirectAppender::FlushInternal(ColumnDataCollection &collection_p) {
+	auto context_ref = context.lock();
+	if (!context_ref) {
+		throw InvalidInputException("DirectAppender: Attempting to flush data to a closed connection");
+	}
+
+	context_ref->RunFunctionInTransaction([&]() {
+		auto table_entry = Catalog::GetEntry<TableCatalogEntry>(*context_ref,
+		                                                        QualifiedName(description->qualified_name.Catalog(),
+		                                                                      description->qualified_name.Schema(),
+		                                                                      description->qualified_name.Name()),
+		                                                        OnEntryNotFound::THROW_EXCEPTION);
+		auto &duck_table = table_entry->Cast<DuckTableEntry>();
+
+		// Mark the database as modified so the transaction is not read-only when we commit.
+		auto &meta_tx = MetaTransaction::Get(*context_ref);
+		auto &attached = duck_table.catalog.GetAttached();
+		meta_tx.ModifyDatabase(attached, DatabaseModificationType());
+
+		auto binder = Binder::CreateBinder(*context_ref);
+		auto bound_constraints = binder->BindConstraints(*table_entry);
+
+		optional_ptr<const vector<LogicalIndex>> column_ids_ptr = column_ids.empty() ? nullptr : &column_ids;
+		duck_table.GetStorage().LocalAppend(duck_table, *context_ref, collection_p, bound_constraints, column_ids_ptr);
+	});
 }
 
 //===--------------------------------------------------------------------===//
