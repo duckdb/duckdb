@@ -526,8 +526,17 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 		new_card = MinValue(new_card, static_cast<double>(child_stats.cardinality));
 	}
 
-	// an ungrouped aggregate has 1 row
-	stats.cardinality = aggr.groups.empty() ? 1 : LossyNumericCast<idx_t>(new_card);
+	auto max_idx_double = static_cast<double>(NumericLimits<idx_t>::Maximum());
+	if (aggr.groups.empty()) {
+		// an ungrouped aggregate has 1 row
+		stats.cardinality = 1;
+	} else if (new_card >= max_idx_double) {
+		// Clamp to idx_t maximum to prevent float-to-integer overflow
+		stats.cardinality = NumericLimits<idx_t>::Maximum();
+	} else {
+		stats.cardinality = LossyNumericCast<idx_t>(new_card);
+	}
+
 	stats.column_names = child_stats.column_names;
 	stats.stats_initialized = true;
 	const auto aggr_column_bindings = aggr.GetColumnBindings();
@@ -537,8 +546,9 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 		const auto &binding = aggr_column_bindings[column_index];
 		if (binding.table_index == aggr.group_index && column_index < distinct_counts.size()) {
 			// Group column that we have the HLL of
-			stats.column_distinct_count.emplace_back(LossyNumericCast<idx_t>(distinct_counts[column_index]),
-			                                         DistinctCountSource::HLL);
+			auto dc = distinct_counts[column_index];
+			auto dc_idx = dc >= max_idx_double ? NumericLimits<idx_t>::Maximum() : LossyNumericCast<idx_t>(dc);
+			stats.column_distinct_count.emplace_back(dc_idx, DistinctCountSource::HLL);
 		} else {
 			// Non-group column, or we don't have the HLL
 			stats.column_distinct_count.emplace_back(child_stats.cardinality, DistinctCountSource::CARDINALITY);

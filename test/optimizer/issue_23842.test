@@ -1,0 +1,12 @@
+# name: test/optimizer/issue_23842.test
+# description: UBSan float-to-integer overflow in join-order cardinality estimation
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t AS SELECT 1 FROM range(600);
+
+# The subquery cross-joins t seven times, producing a cardinality estimate of 600^7
+# which exceeds the maximum value of idx_t and would cause a float-to-integer overflow
+# in ExtractAggregationStats without the clamp.
+statement ok
+EXPLAIN SELECT 1 FROM t GROUP BY NULL, (SELECT NULL FROM t,t,t,t,t,t,t);
