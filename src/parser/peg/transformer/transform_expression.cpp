@@ -103,7 +103,18 @@ PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
 			function_expr->GetArgumentsMutable().insert(function_expr->GetArgumentsMutable().begin(), std::move(expr));
-			expr = std::move(function_expr);
+			// Method-chained calls (a.f(b)) bypass the special-case name handling in TransformFunctionExpression.
+			// ifnull is a parser rewrite to a two-argument COALESCE (not a catalog function), so apply it here too.
+			auto &function_args = function_expr->GetArgumentsMutable();
+			if (StringUtil::Lower(function_expr->FunctionName().GetIdentifierName()) == "ifnull" &&
+			    function_args.size() == 2 && !function_args[0].HasName() && !function_args[1].HasName()) {
+				auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+				coalesce_op->GetChildrenMutable().push_back(std::move(function_args[0].GetExpressionMutable()));
+				coalesce_op->GetChildrenMutable().push_back(std::move(function_args[1].GetExpressionMutable()));
+				expr = std::move(coalesce_op);
+			} else {
+				expr = std::move(function_expr);
+			}
 			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			vector<unique_ptr<ParsedExpression>> struct_children;
