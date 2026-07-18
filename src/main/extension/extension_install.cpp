@@ -33,8 +33,8 @@ static void LogInstall(DatabaseInstance &db, const string &extension, optional_p
 		return;
 	}
 	string source = info->full_path.empty() ? info->repository_url : info->full_path;
-	DUCKDB_LOG(db, ExtensionLoadInstallLogType, "install", extension, info->version,
-	           EnumUtil::ToString(info->mode), source, reason);
+	DUCKDB_LOG(db, ExtensionLoadInstallLogType, "install", extension, info->version, EnumUtil::ToString(info->mode),
+	           source, reason);
 }
 
 //! Emit a structured log event for a failed install

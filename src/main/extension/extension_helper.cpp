@@ -204,7 +204,7 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, 
 }
 
 bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name,
-                                          const string &reason) noexcept {
+                                           const string &reason) noexcept {
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
@@ -235,7 +235,7 @@ static string GetAutoInstallExtensionsRepository(const DBConfig &config) {
 }
 
 bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const string &extension_name,
-                                          const string &reason) noexcept {
+                                           const string &reason) noexcept {
 	if (instance.ExtensionIsLoaded(extension_name)) {
 		return true;
 	}

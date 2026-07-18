@@ -223,8 +223,8 @@ public:
 
 	//! event is either "load" or "install". A non-empty error indicates the event failed.
 	static string ConstructLogMessage(const char *event, const string &extension_name, const string &version,
-	                                   const string &install_mode, const string &source, const string &reason,
-	                                   const string &error = "");
+	                                  const string &install_mode, const string &source, const string &reason,
+	                                  const string &error = "");
 };
 
 } // namespace duckdb
