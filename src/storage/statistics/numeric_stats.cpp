@@ -566,7 +566,7 @@ void NumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer
 
 void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &result) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(result);
-	if (!deserializer.CanDeserializeProperty(200, "min") || !deserializer.CanDeserializeProperty(201, "max")) {
+	if (!deserializer.CanDeserializeProperty(200, "min")) {
 		return;
 	}
 	deserializer.ReadObject(200, "min", [&](Deserializer &object) {
