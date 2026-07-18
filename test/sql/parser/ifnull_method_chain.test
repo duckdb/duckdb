@@ -1,0 +1,38 @@
+# name: test/sql/parser/ifnull_method_chain.test
+# description: ifnull works via method chaining like other functions (issue #11907)
+# group: [parser]
+
+# ifnull via method chaining: the receiver is the first COALESCE argument
+query I
+SELECT (3).ifnull(5);
+----
+3
+
+query I
+SELECT (NULL::INTEGER).ifnull(5);
+----
+5
+
+# non-chained ifnull still works
+query I
+SELECT ifnull(NULL::INTEGER, 5);
+----
+5
+
+# nullif chaining is unaffected
+query I
+SELECT (3).nullif(3);
+----
+NULL
+
+# the exact repro from the issue (list arguments)
+query I
+SELECT ['abc'].ifnull(['def']);
+----
+[abc]
+
+# a non-null first argument short-circuits
+query I
+SELECT ['abc'].ifnull(NULL);
+----
+[abc]
