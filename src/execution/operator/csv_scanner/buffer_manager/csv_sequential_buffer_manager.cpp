@@ -106,22 +106,22 @@ void CSVSequentialBufferManager::ResetBuffer(const idx_t buffer_idx) {
 		return;
 	}
 	// We only reset if previous one was also already reset
-	if (buffer_idx > 0 && !cached_buffers[buffer_idx - 1]) {
-		if (cached_buffers[buffer_idx]->last_buffer) {
-			// We clear the whole shebang
-			cached_buffers.clear();
-			reset_when_possible.clear();
-			return;
-		}
-		cached_buffers[buffer_idx].reset();
-		idx_t cur_buffer = buffer_idx + 1;
-		while (reset_when_possible.find(cur_buffer) != reset_when_possible.end()) {
-			cached_buffers[cur_buffer].reset();
-			reset_when_possible.erase(cur_buffer);
-			cur_buffer++;
-		}
-	} else {
+	if (buffer_idx == 0 || cached_buffers[buffer_idx - 1]) {
 		reset_when_possible.insert(buffer_idx);
+		return;
+	}
+	if (cached_buffers[buffer_idx]->last_buffer) {
+		// We clear the whole shebang
+		cached_buffers.clear();
+		reset_when_possible.clear();
+		return;
+	}
+	cached_buffers[buffer_idx].reset();
+	idx_t cur_buffer = buffer_idx + 1;
+	while (reset_when_possible.find(cur_buffer) != reset_when_possible.end()) {
+		cached_buffers[cur_buffer].reset();
+		reset_when_possible.erase(cur_buffer);
+		cur_buffer++;
 	}
 }
 
