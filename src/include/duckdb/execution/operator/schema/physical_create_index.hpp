@@ -17,6 +17,20 @@ namespace duckdb {
 
 class DuckTableEntry;
 
+class CreateIndexGlobalSinkState : public GlobalSinkState {
+public:
+	unique_ptr<IndexBuildState> gstate;
+	vector<unique_ptr<IndexBuildWorkState>> work_states;
+};
+
+// build sink init
+class CreateIndexLocalSinkState : public LocalSinkState {
+public:
+	unique_ptr<IndexBuildSinkState> lstate;
+	DataChunk key_chunk;
+	DataChunk row_chunk;
+};
+
 //! Physical index creation operator.
 class PhysicalCreateIndex : public PhysicalOperator {
 public:
@@ -77,5 +91,8 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+public:
+	void FinalizeIndexBuild(ClientContext &context, CreateIndexGlobalSinkState &state) const;
 };
 } // namespace duckdb
