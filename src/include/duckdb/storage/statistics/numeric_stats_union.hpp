@@ -29,7 +29,7 @@ struct NumericValueUnion {
 		float float_;   // NOLINT
 		double double_; // NOLINT
 		interval_t interval;
-	} value_;           // NOLINT
+	} value_; // NOLINT
 
 	template <class T>
 	T &GetReferenceUnsafe();
