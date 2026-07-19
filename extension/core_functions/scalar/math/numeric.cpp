@@ -1516,8 +1516,10 @@ struct ATanOperator {
 } // namespace
 
 ScalarFunction AtanFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, ATanOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                        ScalarFunction::UnaryFunction<double, double, ATanOperator>);
+	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1613,8 +1615,10 @@ struct SinhOperator {
 } // namespace
 
 ScalarFunction SinhFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, SinhOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                        ScalarFunction::UnaryFunction<double, double, SinhOperator>);
+	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1630,8 +1634,10 @@ struct AsinhOperator {
 } // namespace
 
 ScalarFunction AsinhFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, AsinhOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                        ScalarFunction::UnaryFunction<double, double, AsinhOperator>);
+	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1647,8 +1653,10 @@ struct TanhOperator {
 } // namespace
 
 ScalarFunction TanhFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, TanhOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                        ScalarFunction::UnaryFunction<double, double, TanhOperator>);
+	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
