@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+ATTACH ':memory:' AS memory_db;
+
+statement ok
 ATTACH '{TEST_DIR}/interval_prune.duckdb' AS db (ROW_GROUP_SIZE 2048, STORAGE_VERSION 'v2.0.0');
 
 statement ok
@@ -14,7 +17,7 @@ CREATE TABLE intervals AS
     FROM range(6144);
 
 statement ok
-USE memory;
+USE memory_db;
 
 statement ok
 DETACH db;
