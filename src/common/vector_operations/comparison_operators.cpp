@@ -183,10 +183,11 @@ static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &righ
 }
 
 template <class PREDICATE>
-static void ComparatorToBoolean(const Vector &left, const Vector &right, Vector &result, PREDICATE predicate) {
+static void ComparatorToBoolean(const Vector &left, const Vector &right, Vector &result, const bool inequality,
+                                PREDICATE predicate) {
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT);
-	VectorOperations::Comparator(left, right, comparator_result);
+	VectorOperations::Comparator(left, right, comparator_result, inequality);
 	const auto count = comparator_result.size();
 	auto cmp_data = comparator_result.Values<int8_t>();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -213,39 +214,39 @@ static idx_t GetComparisonCount(const Vector &left, const Vector &right, const c
 
 void VectorOperations::Equals(const Vector &left, const Vector &right, Vector &result) {
 	if (!TryPrimitiveComparisonExecute<duckdb::Equals>(left, right, result)) {
-		ComparatorToBoolean(left, right, result, [](int8_t v) { return v == 0; });
+		ComparatorToBoolean(left, right, result, false, [](int8_t v) { return v == 0; });
 	}
 }
 
 void VectorOperations::NotEquals(const Vector &left, const Vector &right, Vector &result) {
 	if (!TryPrimitiveComparisonExecute<duckdb::NotEquals>(left, right, result)) {
-		ComparatorToBoolean(left, right, result, [](int8_t v) { return v != 0; });
+		ComparatorToBoolean(left, right, result, false, [](int8_t v) { return v != 0; });
 	}
 }
 
 void VectorOperations::GreaterThan(const Vector &left, const Vector &right, Vector &result) {
 	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThan>(left, right, result)) {
-		ComparatorToBoolean(left, right, result, [](int8_t v) { return v > 0; });
+		ComparatorToBoolean(left, right, result, true, [](int8_t v) { return v > 0; });
 	}
 }
 
 void VectorOperations::GreaterThanEquals(const Vector &left, const Vector &right, Vector &result) {
 	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(left, right, result)) {
-		ComparatorToBoolean(left, right, result, [](int8_t v) { return v >= 0; });
+		ComparatorToBoolean(left, right, result, true, [](int8_t v) { return v >= 0; });
 	}
 }
 
 void VectorOperations::LessThan(const Vector &left, const Vector &right, Vector &result) {
 	// NOLINTNEXTLINE: flip right / left (left < right is equal to right > left)
 	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThan>(right, left, result)) {
-		ComparatorToBoolean(left, right, result, [](int8_t v) { return v < 0; });
+		ComparatorToBoolean(left, right, result, true, [](int8_t v) { return v < 0; });
 	}
 }
 
 void VectorOperations::LessThanEquals(const Vector &left, const Vector &right, Vector &result) {
 	// NOLINTNEXTLINE: flip right / left (left <= right is equal to right >= left)
 	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(right, left, result)) {
-		ComparatorToBoolean(left, right, result, [](int8_t v) { return v <= 0; });
+		ComparatorToBoolean(left, right, result, true, [](int8_t v) { return v <= 0; });
 	}
 }
 
@@ -310,11 +311,15 @@ static int8_t DistinctNullComparator(bool left_null, bool right_null) {
 
 static void ComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t *result_data,
                                  const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
-                                 ValidityMask &validity);
+                                 const bool inequality, ValidityMask &validity);
+
+static void InequalityComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t *result_data,
+                                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
+                                           idx_t sel_count, ValidityMask &validity);
 
 static void StructComparator(const Vector &left, const Vector &right, int8_t *result_data,
                              const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
-                             optional_ptr<ValidityMask> result_validity = nullptr) {
+                             const bool inequality, optional_ptr<ValidityMask> result_validity = nullptr) {
 	if (sel_count == 0) {
 		return;
 	}
@@ -378,8 +383,14 @@ static void StructComparator(const Vector &left, const Vector &right, int8_t *re
 		} else {
 			// regular comparison - set NULL if any value is NULL
 			child_validity.SetAllValid(remaining_count);
-			ComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(), remaining_lhs_sel,
-			                     remaining_rhs_sel, remaining_count, child_validity);
+			if (inequality) {
+				//	For inequalities of nested types, we only return NULL for nested op NULL comparisons.
+				InequalityComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(),
+				                               remaining_lhs_sel, remaining_rhs_sel, remaining_count, child_validity);
+			} else {
+				ComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(), remaining_lhs_sel,
+				                     remaining_rhs_sel, remaining_count, inequality, child_validity);
+			}
 		}
 
 		if (is_union && child_idx && result_validity) {
@@ -467,7 +478,8 @@ struct ArrayEntryAccessor {
 template <class ACCESSOR>
 static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_t *result_data,
                                   const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
-                                  ACCESSOR accessor, optional_ptr<ValidityMask> result_validity = nullptr) {
+                                  ACCESSOR accessor, const bool inequality,
+                                  optional_ptr<ValidityMask> result_validity = nullptr) {
 	if (sel_count == 0) {
 		return;
 	}
@@ -569,8 +581,14 @@ static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_
 		} else {
 			// regular comparison - set NULL if any value is NULL
 			child_validity.SetAllValid(remaining_count);
-			ComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel, right_child_sel,
-			                     active_count, child_validity);
+			if (inequality) {
+				//	For inequalities of nested types, we only return NULL for nested op NULL comparisons.
+				InequalityComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel,
+				                               right_child_sel, active_count, child_validity);
+			} else {
+				ComparatorTypeSwitch(left_child, right_child, child_result.get(), left_child_sel, right_child_sel,
+				                     active_count, inequality, child_validity);
+			}
 		}
 
 		// partition active into resolved vs still-remaining
@@ -593,17 +611,17 @@ static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_
 }
 
 static void ListComparator(const Vector &left, const Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
-                           const SelectionVector &rhs_sel, idx_t sel_count,
+                           const SelectionVector &rhs_sel, idx_t sel_count, const bool inequality,
                            optional_ptr<ValidityMask> result_validity = nullptr) {
 	ListEntryAccessor accessor;
-	ListOrArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor, result_validity);
+	ListOrArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor, inequality, result_validity);
 }
 
 static void ArrayComparator(const Vector &left, const Vector &right, int8_t *result_data,
                             const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
-                            optional_ptr<ValidityMask> result_validity = nullptr) {
+                            const bool inequality, optional_ptr<ValidityMask> result_validity = nullptr) {
 	ArrayEntryAccessor accessor(ArrayType::GetSize(left.GetType()));
-	ListOrArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor, result_validity);
+	ListOrArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor, inequality, result_validity);
 }
 
 static void DistinctComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t *result_data,
@@ -655,13 +673,13 @@ static void DistinctComparatorTypeSwitch(const Vector &left, const Vector &right
 		DistinctComparatorExecute::Execute<string_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::STRUCT:
-		StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count);
+		StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, false);
 		break;
 	case PhysicalType::LIST:
-		ListComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count);
+		ListComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, false);
 		break;
 	case PhysicalType::ARRAY:
-		ArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count);
+		ArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, false);
 		break;
 	default:
 		throw InternalException("Invalid type for comparator");
@@ -670,7 +688,7 @@ static void DistinctComparatorTypeSwitch(const Vector &left, const Vector &right
 
 static void ComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t *result_data,
                                  const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
-                                 ValidityMask &validity) {
+                                 const bool inequality, ValidityMask &validity) {
 	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -717,16 +735,34 @@ static void ComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t
 		StandardComparatorExecute::Execute<string_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count, validity);
 		break;
 	case PhysicalType::STRUCT:
-		StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, validity);
+		StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, inequality, validity);
 		break;
 	case PhysicalType::LIST:
-		ListComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, validity);
+		ListComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, inequality, validity);
 		break;
 	case PhysicalType::ARRAY:
-		ArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, validity);
+		ArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, inequality, validity);
 		break;
 	default:
 		throw InternalException("Invalid type for comparator");
+	}
+}
+
+static void InequalityComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t *result_data,
+                                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
+                                           idx_t sel_count, ValidityMask &validity) {
+	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
+	switch (left.GetType().InternalType()) {
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
+		//	For nested types, we propagate the inequality setting
+		ComparatorTypeSwitch(left, right, result_data, lhs_sel, rhs_sel, sel_count, true, validity);
+		break;
+	default:
+		//	For scalars inside nested types, we use NULLS LAST semantics
+		DistinctComparatorTypeSwitch(left, right, result_data, lhs_sel, rhs_sel, sel_count);
+		break;
 	}
 }
 
@@ -791,21 +827,22 @@ static bool TryPrimitiveComparatorExecute(const Vector &left, const Vector &righ
 #endif
 }
 
-void VectorOperations::ComparatorFill(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+void VectorOperations::ComparatorFill(const Vector &left, const Vector &right, Vector &result, idx_t count,
+                                      const bool inequality) {
 	D_ASSERT(result.GetType() == LogicalType::TINYINT);
 	if (!TryPrimitiveComparatorExecute<duckdb::Comparator>(left, right, result, count)) {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 		auto &sel = *FlatVector::IncrementalSelectionVector();
 		auto &validity = FlatVector::ValidityMutable(result);
-		ComparatorTypeSwitch(left, right, result_data, sel, sel, count, validity);
+		ComparatorTypeSwitch(left, right, result_data, sel, sel, count, inequality, validity);
 	}
 	FlatVector::SetSize(result, count);
 }
 
-void VectorOperations::Comparator(const Vector &left, const Vector &right, Vector &result) {
+void VectorOperations::Comparator(const Vector &left, const Vector &right, Vector &result, const bool inequality) {
 	const auto count = GetComparisonCount(left, right, "Comparator");
-	ComparatorFill(left, right, result, count);
+	ComparatorFill(left, right, result, count, inequality);
 }
 
 template <class T, class OP>
