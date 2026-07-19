@@ -24,6 +24,7 @@
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -181,7 +182,7 @@ bool DisjunctiveJoinRewriter::FlattenOR(const Expression &expr, const unordered_
                                         const unordered_set<TableIndex> &right_tables, vector<Branch> &out) const {
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		for (const auto &child : conj.children) {
+		for (const auto &child : conj.GetChildren()) {
 			if (!FlattenOR(*child, left_tables, right_tables, out)) {
 				return false;
 			}
@@ -280,9 +281,9 @@ DisjunctiveJoinRewriter::RowIDResult DisjunctiveJoinRewriter::InjectRowNumRowID(
 
 	auto win_expr = RowNumberFun::GetFunction().Bind(context);
 
-	win_expr->SetAlias(alias);
-	win_expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	win_expr->end = WindowBoundary::CURRENT_ROW_ROWS;
+	win_expr->SetAlias(alias.data());
+	win_expr->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	win_expr->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 
 	auto child_types = child->types;
 	auto child_bindings = child->GetColumnBindings();
@@ -439,10 +440,10 @@ bool DisjunctiveJoinRewriter::PassHeuristics(const LogicalAnyJoin &join, const v
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::MakeCTERef(const CTEInfo &cte, TableIndex ref_idx) const {
-	vector<string> bound_columns;
+	vector<Identifier> bound_columns;
 	bound_columns.reserve(cte.output_types.size());
 	for (idx_t i = 0; i < cte.output_types.size(); ++i) {
-		bound_columns.push_back("col_" + to_string(i));
+		bound_columns.emplace_back("col_" + to_string(i));
 	}
 
 	return make_uniq<LogicalCTERef>(TableIndex(ref_idx), TableIndex(cte.table_index), cte.output_types,
@@ -489,11 +490,11 @@ DisjunctiveJoinRewriter::BuildMatchCTE(const CTEInfo &left_cte, const CTEInfo &r
 		// filter out nulls so is not null does not match
 		auto left_is_not_null =
 		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-		left_is_not_null->children.push_back(left_expr->Copy());
+		left_is_not_null->GetChildrenMutable().push_back(left_expr->Copy());
 
 		auto right_is_not_null =
 		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-		right_is_not_null->children.push_back(right_expr->Copy());
+		right_is_not_null->GetChildrenMutable().push_back(right_expr->Copy());
 
 		auto left_filter = make_uniq<LogicalFilter>();
 		left_filter->expressions.push_back(std::move(left_is_not_null));
@@ -707,7 +708,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormaliseOutput(unique_ptr<
 
 unique_ptr<Expression> DisjunctiveJoinRewriter::ColRef(ColumnBinding binding, const LogicalType &type,
                                                        const string &alias) {
-	return make_uniq<BoundColumnRefExpression>(alias, type, binding);
+	return make_uniq<BoundColumnRefExpression>(Identifier(alias), type, binding);
 }
 
 idx_t DisjunctiveJoinRewriter::GetCTEColumnIndex(const CTEInfo &cte, ColumnBinding original_binding) {
@@ -764,11 +765,11 @@ double DisjunctiveJoinRewriter::EstimateBranchSelectivity(const Branch &branch, 
 	auto right_base = ExtractBaseColumnRef(*branch.right_expr);
 
 	if (left_base && left_stats.stats_initialized) {
-		left_col_idx = left_base->binding.column_index;
+		left_col_idx = left_base->Binding().column_index;
 	}
 
 	if (right_base && right_stats.stats_initialized) {
-		right_col_idx = right_base->binding.column_index;
+		right_col_idx = right_base->Binding().column_index;
 	}
 
 	bool left_has_distinct = (left_col_idx != idx_t(-1)) && (left_col_idx < left_stats.column_distinct_count.size()) &&
@@ -824,8 +825,8 @@ DisjunctiveJoinRewriter::ExtractBaseColumnRef(const Expression &expr) const {
 
 		bool is_injective = false;
 
-		if (func.children.size() == 2) {
-			auto &name = func.function.GetName();
+		if (func.GetChildren().size() == 2) {
+			auto &name = func.Function().GetName();
 
 			if (name == OperatorAddFun::Name || name == OperatorSubtractFun::Name ||
 			    name == OperatorMultiplyFun::Name) {
@@ -833,7 +834,7 @@ DisjunctiveJoinRewriter::ExtractBaseColumnRef(const Expression &expr) const {
 			}
 		}
 
-		if (func.children.size() == 1 && expr.GetExpressionType() == ExpressionType::OPERATOR_CAST) {
+		if (func.GetChildren().size() == 1 && expr.GetExpressionType() == ExpressionType::OPERATOR_CAST) {
 			is_injective = true;
 		}
 
@@ -841,7 +842,7 @@ DisjunctiveJoinRewriter::ExtractBaseColumnRef(const Expression &expr) const {
 			return nullptr;
 		}
 
-		for (auto &child : func.children) {
+		for (auto &child : func.GetChildren()) {
 			if (auto found = ExtractBaseColumnRef(*child)) {
 				return found;
 			}
