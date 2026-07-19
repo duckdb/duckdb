@@ -44,28 +44,6 @@ BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockMemory> block_memory_p, idx
 	D_ASSERT(!memory_p.expired());
 }
 
-bool BufferEvictionNode::CanUnload(BlockMemory &memory) {
-	if (handle_sequence_number != memory.GetEvictionSequenceNumber()) {
-		// handle was used in between
-		return false;
-	}
-	return memory.CanUnload();
-}
-
-shared_ptr<BlockMemory> BufferEvictionNode::TryGetBlockMemory() {
-	auto shared_memory_p = memory_p.lock();
-	if (!shared_memory_p) {
-		// The block memory has been destroyed.
-		return nullptr;
-	}
-	if (!CanUnload(*shared_memory_p)) {
-		// The memory handle was used in between.
-		return nullptr;
-	}
-	// The node is the latest node in the queue with this memory.
-	return shared_memory_p;
-}
-
 bool BufferEvictionNode::IsDeadNode(optional_idx debug_sleep_micros) {
 	auto shared_memory_p = memory_p.lock();
 	if (debug_sleep_micros.IsValid()) {
@@ -290,24 +268,29 @@ BufferPool::BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bo
 BufferPool::~BufferPool() {
 }
 
-bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+bool BufferPool::AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
 	auto &memory = handle->GetMemory();
+	// Verify the caller passed this block's lock before we mutate any of its state.
+	// The block lock is held throughout: Unpin holds it; ConvertToPersistent acquires the
+	// (uncontended) lock of the freshly created block before calling.
+	memory.VerifyMutex(lock);
 	auto &queue = GetEvictionQueueForBlockMemory(memory);
 
-	// The block handle is locked during this operation (Unpin),
-	// or the block handle is still a local variable (ConvertToPersistent)
 	D_ASSERT(memory.GetReaders() == 0);
+	if (memory.HasLiveQueueEntry(lock)) {
+		// Count the previous live entry before bumping the sequence number. PurgeIteration
+		// reads sequence numbers without the block lock; bumping first could let it see the
+		// previous entry as stale and decrement dead_nodes before this matching increment.
+		queue.IncrementDeadNodes();
+	}
+
 	auto ts = memory.NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
 		memory.SetLRUTimestamp(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 		                           .time_since_epoch()
 		                           .count());
 	}
-
-	if (ts != 1) {
-		// we add a newer version, i.e., we kill exactly one previous version
-		queue.IncrementDeadNodes();
-	}
+	memory.SetHasLiveQueueEntry(lock, true);
 
 	// Get the eviction queue for the block and add it
 	BufferEvictionNode node(handle->GetMemoryWeak(), ts);
@@ -391,10 +374,10 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 	return {success, std::move(r)};
 }
 
-BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
-                                                   unique_ptr<FileBuffer> *buffer) {
+BufferPool::EvictionResult BufferPool::EvictBlocks(QueryContext context, MemoryTag tag, idx_t extra_memory,
+                                                   idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
 	for (auto &queue : queues) {
-		auto block_result = EvictBlocksInternal(*queue, tag, extra_memory, memory_limit, buffer);
+		auto block_result = EvictBlocksInternal(context, *queue, tag, extra_memory, memory_limit, buffer);
 		if (block_result.success) {
 			return block_result;
 		}
@@ -405,8 +388,9 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 	return EvictObjectCacheEntries(tag, extra_memory, memory_limit);
 }
 
-BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
-                                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
+BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context, EvictionQueue &queue, MemoryTag tag,
+                                                           idx_t extra_memory, idx_t memory_limit,
+                                                           unique_ptr<FileBuffer> *buffer) {
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 	bool found = false;
 
@@ -421,13 +405,13 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 		// hooray, we can unload the block
 		if (buffer && handle->GetBuffer(lock)->AllocSize() == extra_memory) {
 			// we can re-use the memory directly
-			*buffer = handle->UnloadAndTakeBlock(lock);
+			*buffer = handle->UnloadAndTakeBlock(lock, context);
 			found = true;
 			return false;
 		}
 
 		// release the memory and mark the block as unloaded
-		handle->Unload(lock);
+		handle->Unload(lock, context);
 
 		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 			found = true;
@@ -492,7 +476,7 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		}
 
 		// get a reference to the underlying block pointer
-		auto handle = node.TryGetBlockMemory();
+		auto handle = node.memory_p.lock();
 		if (debug_sleep_micros > 0) {
 			// Debug race conditions regarding the ownership of the BlockMemory.
 			// Note that for this to trigger we need at least one purge iteration with the setting active.
@@ -505,9 +489,17 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 
 		// we might be able to free this block: grab the mutex and check if we can free it
 		auto lock = handle->GetLock();
-		if (!node.CanUnload(*handle)) {
-			// something changed in the mean-time, bail out
+		if (node.handle_sequence_number != handle->GetEvictionSequenceNumber()) {
+			// A newer entry superseded this node: it was counted as dead when that entry was added.
 			DecrementDeadNodes();
+			continue;
+		}
+		// This node is the block's live queue entry, and we just dequeued it: the block no longer
+		// has an entry in the queue. Live entries are never counted as dead, so no decrement.
+		handle->SetHasLiveQueueEntry(lock, false);
+		if (!handle->CanUnload()) {
+			// The block cannot be unloaded right now (e.g. it is pinned). It gets a new queue
+			// entry when it is unpinned again.
 			continue;
 		}
 
@@ -530,7 +522,7 @@ void BufferPool::PurgeQueue(const BlockHandle &block) {
 void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	lock_guard<mutex> l_lock(limit_lock);
 	// try to evict until the limit is reached
-	if (!EvictBlocks(MemoryTag::EXTENSION, 0, limit).success) {
+	if (!EvictBlocks(QueryContext(), MemoryTag::EXTENSION, 0, limit).success) {
 		throw OutOfMemoryException(
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
@@ -539,7 +531,7 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	// set the global maximum memory to the new limit if successful
 	maximum_memory = limit;
 	// evict again
-	if (!EvictBlocks(MemoryTag::EXTENSION, 0, limit).success) {
+	if (!EvictBlocks(QueryContext(), MemoryTag::EXTENSION, 0, limit).success) {
 		// failed: go back to old limit
 		maximum_memory = old_limit;
 		throw OutOfMemoryException(

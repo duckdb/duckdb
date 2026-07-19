@@ -149,8 +149,8 @@ jobs:
         include:
           - name: Ingestion Perf
             benchmarks: .github/regression/ingestion.csv
-          - name: Micro + TPCH + TPCH-PARQUET + TPCDS
-            benchmarks: .github/regression/micro.csv .github/regression/tpch.csv .github/regression/tpch_parquet.csv .github/regression/tpcds.csv
+          - name: Micro + TPCH-PARQUET
+            benchmarks: .github/regression/micro.csv .github/regression/tpch_parquet.csv
           - name: H2OAI + IMDB + CSV
             benchmarks: .github/regression/h2oai.csv .github/regression/imdb.csv .github/regression/csv.csv
           - name: RealNest
@@ -220,6 +220,64 @@ jobs:
           done
 
           exit $status
+
+  regression-bench-tpc:
+    name: Bench ${{ matrix.name }}
+    if: ${{ github.repository_owner == 'duckdb' }}
+    needs:
+      - linux-base
+    runs-on: namespace-profile-linux-x64
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: TPCH SF10
+            benchmarks: .github/regression/tpch_sf10.csv
+          - name: TPCDS SF3
+            benchmarks: .github/regression/tpcds_sf3.csv
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GIT_REF }}
+
+      - name: Install
+        run: |
+          python3 scripts/ci/retry.py -- make toolsci
+
+      - name: Download current release artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-release-build
+          path: build/current
+
+      - name: Extract current release artifact
+        run: |
+          rm -rf build/current/release
+          tar -xzf build/current/release-artifact.tar.gz -C build/current
+
+      - name: Download base artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-base-build
+          path: build/base
+
+      - name: Extract base artifact
+        run: |
+          rm -rf build/base/release
+          tar -xzf build/base/release-artifact.tar.gz -C build/base
+
+      - name: Run regression benchmark
+        run: |
+          python scripts/regression/test_runner.py \
+            --old build/base/release/benchmark/benchmark_runner \
+            --new build/current/release/benchmark/benchmark_runner \
+            --benchmarks ${{ matrix.benchmarks }} \
+            --verbose \
+            --clear-benchmark-cache \
+            --disable-timeout \
+            --max-timeout 3600 \
+            --timed-runs 20
 
   regression-bench-fivetran:
     name: Bench Fivetran

@@ -5,13 +5,14 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
-GroupBinder::GroupBinder(Binder &binder, ClientContext &context, TableIndex group_index, SelectBindState &bind_state)
-    : ExpressionBinder(binder, context), bind_state(bind_state), group_index(group_index) {
+GroupBinder::GroupBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, SelectBindState &bind_state)
+    : ExpressionBinder(binder, context), node(node), bind_state(bind_state) {
 }
 
 BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -22,12 +23,22 @@ BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	case ExpressionClass::WINDOW:
 		return BindUnsupportedExpression(expr, depth, "GROUP BY clause cannot contain window functions!");
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
 	}
 }
 
 string GroupBinder::UnsupportedAggregateMessage() {
 	return "GROUP BY clause cannot contain aggregates!";
+}
+
+void GroupBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
+	for (auto &node_pair : node.unnests.GroupBy()) {
+		auto &unnest_node = node_pair.second;
+		if (unnest_node.index == column_binding.table_index &&
+		    column_binding.column_index < unnest_node.expressions.size()) {
+			throw BinderException("UNNEST in lambda expressions is not supported");
+		}
+	}
 }
 
 void GroupBinder::ReplaceSelectRef(SelectNode &node, SelectBindState &bind_state, ProjectionIndex group_index,
@@ -89,8 +100,8 @@ void GroupBinder::ReplaceSelectRef(SelectNode &node, SelectBindState &bind_state
 	// move the expression that this refers to into the group expression
 	expr_ptr = std::move(node.select_list[select_list_idx]);
 	// now replace the original expression in the select list with a reference to this group
-	bind_state.group_alias_map[to_string(select_list_idx)] = group_index;
-	node.select_list[select_list_idx] = make_uniq<ColumnRefExpression>(to_string(select_list_idx));
+	bind_state.group_alias_map[Identifier(to_string(select_list_idx))] = group_index;
+	node.select_list[select_list_idx] = make_uniq<ColumnRefExpression>(Identifier(to_string(select_list_idx)));
 	// insert into the set of used aliases
 	used_aliases.insert(select_list_idx);
 }

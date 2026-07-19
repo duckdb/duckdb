@@ -9,14 +9,16 @@
 #pragma once
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/parser_packrat.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
 
 namespace duckdb {
+class ClientContext;
 class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
@@ -52,6 +54,11 @@ struct AutoCompleteCandidate {
 	AutoCompleteCandidate(const char *candidate_p, SuggestionState suggestion_type, int32_t score_bonus = 0,
 	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
 	    : AutoCompleteCandidate(string(candidate_p), suggestion_type, score_bonus, candidate_type) {
+	}
+	// NOLINTNEXTLINE: allow implicit conversion from Identifier
+	AutoCompleteCandidate(const Identifier &candidate_p, SuggestionState suggestion_type, int32_t score_bonus = 0,
+	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
+	    : AutoCompleteCandidate(candidate_p.GetIdentifierName(), suggestion_type, score_bonus, candidate_type) {
 	}
 
 	string candidate;
@@ -116,14 +123,16 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true)
-	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator),
-	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
+	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
+	           ParserPackratCache *packrat_cache_p = nullptr)
+	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
+	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p),
+	      packrat_cache(packrat_cache_p) {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
 	      allocator(state.allocator), max_token_index(state.max_token_index),
-	      preserve_identifier_case(state.preserve_identifier_case) {
+	      preserve_identifier_case(state.preserve_identifier_case), packrat_cache(state.packrat_cache) {
 	}
 
 	vector<MatcherToken> &tokens;
@@ -133,6 +142,7 @@ struct MatchState {
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
 	bool preserve_identifier_case = true;
+	ParserPackratCache *packrat_cache;
 
 	void UpdateMaxTokenIndex() {
 		if (token_index > max_token_index) {
@@ -147,7 +157,18 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
-enum class MatcherType { KEYWORD, LIST, OPTIONAL, CHOICE, REPEAT, VARIABLE, STRING_LITERAL, NUMBER_LITERAL, OPERATOR };
+enum class MatcherType {
+	KEYWORD,
+	LIST,
+	OPTIONAL,
+	CHOICE,
+	REPEAT,
+	VARIABLE,
+	STRING_LITERAL,
+	NUMBER_LITERAL,
+	OPERATOR,
+	END_OF_INPUT
+};
 
 class Matcher {
 public:
@@ -157,7 +178,8 @@ public:
 
 	//! Match
 	virtual MatchResultType Match(MatchState &state) const = 0;
-	virtual optional_ptr<ParseResult> MatchParseResult(MatchState &state) const = 0;
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const;
+	virtual optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
@@ -169,7 +191,19 @@ public:
 	void SetName(string name_p) {
 		name = std::move(name_p);
 	}
+	bool HasName() const {
+		return !name.empty();
+	}
 	string GetName() const;
+	optional_idx GetPackratId() const {
+		return packrat_id;
+	}
+	void SetPackratMemoized() {
+		packrat_memoized = true;
+	}
+	bool IsPackratMemoized() const {
+		return packrat_memoized;
+	}
 
 public:
 	template <class TARGET>
@@ -189,8 +223,11 @@ public:
 	}
 
 protected:
+	friend class MatcherAllocator;
 	MatcherType type;
 	string name;
+	optional_idx packrat_id;
+	bool packrat_memoized = false;
 };
 
 class MatcherAllocator {
@@ -212,8 +249,11 @@ private:
 struct PEGMatcher {
 	MatcherAllocator allocator;
 
-	Matcher &Root() {
-		return *root;
+	Matcher &ProgramMatcher() {
+		return *program_matcher;
+	}
+	Matcher &TopLevelStatementMatcher() {
+		return *top_level_statement_matcher;
 	}
 
 	static shared_ptr<PEGMatcher> Get(ClientContext &context);
@@ -221,7 +261,8 @@ struct PEGMatcher {
 
 private:
 	friend struct ParserCache;
-	optional_ptr<Matcher> root;
+	optional_ptr<Matcher> program_matcher;
+	optional_ptr<Matcher> top_level_statement_matcher;
 };
 
 //! Per-database cache holder for the compiled PEG root matcher and transformer factory.

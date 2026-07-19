@@ -5,6 +5,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -101,7 +102,7 @@ struct TestVectorFlat {
 		}
 		default: {
 			auto entry = info.test_type_map.find(type.id());
-			if (entry == info.test_type_map.end()) {
+			if (entry == info.test_type_map.end() || entry->second.type != type) {
 				throw NotImplementedException("Unimplemented type for test_vector_types %s", type.ToString());
 			}
 			result.push_back(entry->second.min_value);
@@ -133,7 +134,6 @@ struct TestVectorFlat {
 					result->data[c].Append(result_values.GetValue(cur_row + i, c));
 				}
 			}
-			result->SetChildCardinality(cardinality);
 			info.entries.push_back(std::move(result));
 		}
 	}
@@ -149,7 +149,6 @@ struct TestVectorConstant {
 			for (idx_t c = 0; c < info.types.size(); c++) {
 				result->data[c].Reference(values.GetValue(0, c), count_t(cardinality));
 			}
-			result->SetCardinality(cardinality);
 
 			info.entries.push_back(std::move(result));
 		}
@@ -272,6 +271,10 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 			name += to_string(i + 1);
 		}
 		auto &input_val = input.inputs[i];
+		if (TypeVisitor::Contains(input_val.type(), LogicalTypeId::VARIANT)) {
+			throw NotImplementedException("Unimplemented type for test_vector_types");
+		}
+
 		names.emplace_back(name);
 		return_types.push_back(input_val.type());
 		result->types.push_back(input_val.type());
@@ -298,7 +301,8 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 
 	map<LogicalTypeId, TestType> test_type_map;
 	for (auto &test_type : test_types) {
-		test_type_map.insert(make_pair(test_type.type.id(), std::move(test_type)));
+		auto type_id = test_type.type.id();
+		test_type_map.insert(make_pair(type_id, std::move(test_type)));
 	}
 
 	TestVectorInfo info(bind_data.types, test_type_map, result->entries);

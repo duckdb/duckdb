@@ -60,7 +60,7 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	                     vector<LogicalType> &expected_types) override;
 	bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
 	                 BaseFileReaderOptions &options) override;
-	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
 	                MultiFileBindData &bind_data) override;
 	unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                 unique_ptr<BaseFileReaderOptions> options) override;
@@ -70,7 +70,11 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	                        FileExpandResult expand_result) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
-	unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &) override;
+	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) override;
+
+	bool SupportsReadAhead() const override {
+		return true;
+	}
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                        BaseUnionData &union_data, const MultiFileBindData &bind_data_p) override;
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,

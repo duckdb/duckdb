@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/arena_linked_list.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
@@ -26,6 +25,7 @@
 
 namespace duckdb {
 
+class DictionaryEntry;
 class Event;
 class Executor;
 class PhysicalOperator;
@@ -74,7 +74,8 @@ public:
 		return InsertionOrderPreservingMap<string>();
 	}
 	static void SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result, idx_t estimated_cardinality);
-	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	virtual string ToString(optional_ptr<ClientContext> context = nullptr,
+	                        const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 
@@ -171,11 +172,6 @@ public:
 		return source_progress;
 	}
 
-	virtual InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
-	                                                              LocalSourceState &lstate) const {
-		return InsertionOrderPreservingMap<string>();
-	}
-
 public:
 	// Sink interface
 
@@ -251,6 +247,12 @@ public:
 	}
 };
 
+//! Accumulator that lets a dictionary column survive the cache: pinned entry + concatenated per-chunk sels
+struct CachedDictColumn {
+	buffer_ptr<DictionaryEntry> entry;
+	SelectionVector accumulated_sel;
+};
+
 //! Contains state for the CachingPhysicalOperator
 class CachingOperatorState : public OperatorState {
 public:
@@ -266,6 +268,13 @@ public:
 		can_cache_chunk = OperatorCachingMode::NONE;
 		must_return_continuation_chunk = false;
 		cached_result = OperatorResultType::NEED_MORE_INPUT;
+		ResetDictCache();
+	}
+
+	//! Drop the dictionary accumulators, returning the cache to plain flat caching
+	void ResetDictCache() {
+		dict_columns.clear();
+		dict_cache_active = false;
 	}
 
 	unique_ptr<DataChunk> cached_chunk;
@@ -274,6 +283,11 @@ public:
 	OperatorCachingMode can_cache_chunk = OperatorCachingMode::NONE;
 	bool must_return_continuation_chunk = false;
 	OperatorResultType cached_result;
+
+	//! One slot per cached column. Invariant: entry != null iff the column is accumulating a dictionary
+	//! (pinned by entry pointer identity); entry == null iff plain flat caching (the common case)
+	vector<CachedDictColumn> dict_columns;
+	bool dict_cache_active = false;
 };
 
 //! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also

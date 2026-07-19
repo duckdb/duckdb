@@ -28,11 +28,12 @@ public:
 	friend class RecursiveCTEState;
 
 public:
-	PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, TableIndex table_index, vector<LogicalType> types,
-	                     bool union_all, PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality);
+	PhysicalRecursiveCTE(PhysicalPlan &physical_plan, Identifier ctename, TableIndex table_index,
+	                     vector<LogicalType> types, bool union_all, PhysicalOperator &top, PhysicalOperator &bottom,
+	                     idx_t estimated_cardinality);
 	~PhysicalRecursiveCTE() override;
 
-	string ctename;
+	Identifier ctename;
 	TableIndex table_index;
 	// Flag if recurring table is referenced, if not we do not copy ht into ColumnDataCollection
 	bool ref_recurring;

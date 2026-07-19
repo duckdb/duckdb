@@ -31,8 +31,8 @@ ReadJSONRelation::ReadJSONRelation(const shared_ptr<ClientContext> &context, str
 ReadJSONRelation::~ReadJSONRelation() {
 }
 
-string ReadJSONRelation::GetAlias() {
-	return alias;
+Identifier ReadJSONRelation::GetAlias() {
+	return Identifier(alias);
 }
 
 } // namespace duckdb

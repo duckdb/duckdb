@@ -15,10 +15,13 @@
 
 namespace duckdb {
 
-Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes, vector<string> colnames,
-                 TableIndex index)
-    : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)),
-      names(std::move(colnames)) {
+Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes,
+                 vector<Identifier> colnames, TableIndex index)
+    : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)) {
+	names.reserve(colnames.size());
+	for (auto &colname : colnames) {
+		names.emplace_back(std::move(colname));
+	}
 	Initialize();
 }
 
@@ -50,7 +53,7 @@ const vector<LogicalType> &Binding::GetColumnTypes() {
 	return types;
 }
 
-const vector<string> &Binding::GetColumnNames() {
+const vector<Identifier> &Binding::GetColumnNames() {
 	return names;
 }
 
@@ -62,11 +65,11 @@ void Binding::SetColumnType(idx_t col_idx, LogicalType type_p) {
 	types[col_idx] = std::move(type_p);
 }
 
-string Binding::GetAlias() const {
+const Identifier &Binding::GetAlias() const {
 	return alias.GetAlias();
 }
 
-bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
+bool Binding::TryGetBindingIndex(const Identifier &column_name, column_t &result) {
 	auto entry = name_map.find(column_name);
 	if (entry == name_map.end()) {
 		return false;
@@ -76,7 +79,7 @@ bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
 	return true;
 }
 
-column_t Binding::GetBindingIndex(const string &column_name) {
+column_t Binding::GetBindingIndex(const Identifier &column_name) {
 	column_t result;
 	if (!TryGetBindingIndex(column_name, result)) {
 		throw InternalException("Binding index for column \"%s\" not found", column_name);
@@ -84,12 +87,12 @@ column_t Binding::GetBindingIndex(const string &column_name) {
 	return result;
 }
 
-bool Binding::HasMatchingBinding(const string &column_name) {
+bool Binding::HasMatchingBinding(const Identifier &column_name) {
 	column_t result;
 	return TryGetBindingIndex(column_name, result);
 }
 
-ErrorData Binding::ColumnNotFoundError(const string &column_name) const {
+ErrorData Binding::ColumnNotFoundError(const Identifier &column_name) const {
 	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"",
 	                                                           GetAlias(), column_name));
 }
@@ -108,14 +111,14 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (colref.GetAlias().empty()) {
 		colref.SetAlias(names[column_index]);
 	}
-	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), sql_type, binding, depth));
 }
 
 optional_ptr<StandardEntry> Binding::GetStandardEntry() {
 	return nullptr;
 }
 
-BindingAlias Binding::GetAlias(const string &explicit_alias, const StandardEntry &entry) {
+BindingAlias Binding::GetAlias(const Identifier &explicit_alias, const StandardEntry &entry) {
 	if (!explicit_alias.empty()) {
 		return BindingAlias(explicit_alias);
 	}
@@ -123,7 +126,7 @@ BindingAlias Binding::GetAlias(const string &explicit_alias, const StandardEntry
 	return BindingAlias(entry);
 }
 
-BindingAlias Binding::GetAlias(const string &explicit_alias, optional_ptr<StandardEntry> entry) {
+BindingAlias Binding::GetAlias(const Identifier &explicit_alias, optional_ptr<StandardEntry> entry) {
 	if (!explicit_alias.empty()) {
 		return BindingAlias(explicit_alias);
 	}
@@ -134,8 +137,8 @@ BindingAlias Binding::GetAlias(const string &explicit_alias, optional_ptr<Standa
 	return BindingAlias(*entry);
 }
 
-EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, TableIndex index,
-                           StandardEntry &entry)
+EntryBinding::EntryBinding(const Identifier &alias, vector<LogicalType> types_p, vector<Identifier> names_p,
+                           TableIndex index, StandardEntry &entry)
     : Binding(BindingType::CATALOG_ENTRY, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
       entry(entry) {
 }
@@ -144,7 +147,7 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 	return &entry;
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
+TableBinding::TableBinding(const Identifier &alias, vector<LogicalType> types_p, vector<Identifier> names_p,
                            vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
                            virtual_column_map_t virtual_columns_p)
     : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
@@ -172,21 +175,21 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 }
 
 static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
-                           const unordered_map<idx_t, string> &alias_map) {
+                           const unordered_map<idx_t, Identifier> &alias_map) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		D_ASSERT(!colref.IsQualified());
-		auto &col_names = colref.column_names;
+		auto &col_names = colref.ColumnNamesMutable();
 		D_ASSERT(col_names.size() == 1);
 		auto idx_entry = list.GetColumnIndex(col_names[0]);
 		auto &alias = alias_map.at(idx_entry.index);
-		col_names = {alias};
+		col_names = vector<Identifier> {alias};
 	});
 }
 
 static void BakeTableName(ParsedExpression &root_expr, const BindingAlias &binding_alias) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		D_ASSERT(!colref.IsQualified());
-		auto &col_names = colref.column_names;
+		auto &col_names = colref.ColumnNamesMutable();
 		col_names.insert(col_names.begin(), binding_alias.GetAlias());
 		if (!binding_alias.GetSchema().empty()) {
 			col_names.insert(col_names.begin(), binding_alias.GetSchema());
@@ -197,7 +200,7 @@ static void BakeTableName(ParsedExpression &root_expr, const BindingAlias &bindi
 	});
 }
 
-unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &column_name) {
+unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const Identifier &column_name) {
 	auto catalog_entry = GetStandardEntry();
 	D_ASSERT(catalog_entry); // Should only be called on a TableBinding
 
@@ -209,7 +212,7 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 	D_ASSERT(table_entry.GetColumn(LogicalIndex(column_index)).Generated());
 	// Get a copy of the generated column
 	auto expression = table_entry.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
-	unordered_map<idx_t, string> alias_map;
+	unordered_map<idx_t, Identifier> alias_map;
 	for (auto &entry : name_map) {
 		alias_map[entry.second] = entry.first;
 	}
@@ -227,7 +230,7 @@ const vector<ColumnIndex> &TableBinding::GetBoundColumnIds() const {
 		// assert that all entries in the bound_column_ids are unique
 		D_ASSERT(result.second);
 		auto it = std::find_if(name_map.begin(), name_map.end(),
-		                       [&](const std::pair<const string, idx_t> &it) { return it.second == id; });
+		                       [&](const std::pair<const Identifier, idx_t> &it) { return it.second == id; });
 		// assert that every id appears in the name_map
 		D_ASSERT(it != name_map.end());
 		// the order that they appear in is not guaranteed to be sequential
@@ -290,21 +293,22 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		}
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
-	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), col_type, binding, depth));
 }
 
 optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 	return entry;
 }
 
-ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
-	auto candidate_message = StringUtil::CandidatesErrorMessage(names, column_name, "Candidate bindings: ");
+ErrorData TableBinding::ColumnNotFoundError(const Identifier &column_name) const {
+	auto candidate_message = StringUtil::CandidatesErrorMessage(
+	    IdentifiersToStrings(names), column_name.GetIdentifierName(), "Candidate bindings: ");
 	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table \"%s\" does not have a column named \"%s\"\n%s",
 	                                                           alias.GetAlias(), column_name, candidate_message));
 }
 
-DummyBinding::DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name)
-    : Binding(BindingType::DUMMY, BindingAlias(DummyBinding::DUMMY_NAME + dummy_name), std::move(types),
+DummyBinding::DummyBinding(vector<LogicalType> types, vector<Identifier> names, string dummy_name)
+    : Binding(BindingType::DUMMY, BindingAlias(Identifier(DummyBinding::DUMMY_NAME + dummy_name)), std::move(types),
               std::move(names), TableIndex()),
       dummy_name(std::move(dummy_name)) {
 }
@@ -317,17 +321,18 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	ColumnBinding binding(index, ProjectionIndex(column_index));
 
 	// we are binding a parameter to create the dummy binding, no arguments are supplied
-	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
+	return BindResult(
+	    make_uniq<BoundColumnRefExpression>(Identifier(colref.GetName()), types[column_index], binding, depth));
 }
 
 BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {
 	column_t column_index;
-	if (!TryGetBindingIndex(lambdaref.GetName(), column_index)) {
+	if (!TryGetBindingIndex(Identifier(lambdaref.GetName()), column_index)) {
 		throw InternalException("Column %s not found in bindings", lambdaref.GetName());
 	}
 	ColumnBinding binding(index, ProjectionIndex(column_index));
 	return BindResult(make_uniq<BoundLambdaRefExpression>(lambdaref.GetName(), types[column_index], binding,
-	                                                      lambdaref.lambda_idx, depth));
+	                                                      lambdaref.LambdaIndex(), depth));
 }
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {
@@ -340,14 +345,14 @@ unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colre
 	return arg;
 }
 
-CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, TableIndex index,
+CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<Identifier> names, TableIndex index,
                        CTEType cte_type)
     : Binding(BindingType::CTE, std::move(alias), std::move(types), std::move(names), index), cte_type(cte_type),
       reference_count(0) {
 }
 
 CTEBinding::CTEBinding(BindingAlias alias_p, shared_ptr<CTEBindState> bind_state_p, TableIndex index)
-    : Binding(BindingType::CTE, std::move(alias_p), vector<LogicalType>(), vector<string>(), index),
+    : Binding(BindingType::CTE, std::move(alias_p), vector<LogicalType>(), vector<Identifier>(), index),
       cte_type(CTEType::CAN_BE_REFERENCED), reference_count(0), bind_state(std::move(bind_state_p)) {
 }
 

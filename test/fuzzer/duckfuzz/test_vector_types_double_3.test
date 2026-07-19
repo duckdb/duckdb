@@ -1,0 +1,8 @@
+# name: test/fuzzer/duckfuzz/test_vector_types_double_3.test
+# description: Fuzzyduck issue #4563
+# group: [duckfuzz]
+
+statement error
+FROM test_vector_types(CAST(NULL AS DOUBLE[3]), CAST(NULL AS DOUBLE[3]))
+----
+Unimplemented type for test_vector_types DOUBLE[3]

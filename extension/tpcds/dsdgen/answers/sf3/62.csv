@@ -1,0 +1,101 @@
+w_substr|sm_type|web_name|30 days|31-60 days|61-90 days|91-120 days|>120 days
+NULL|EXPRESS|site_0|698|624|674|637|0
+NULL|EXPRESS|site_1|612|625|618|647|0
+NULL|EXPRESS|site_2|649|598|667|622|0
+NULL|EXPRESS|site_3|626|649|636|640|0
+NULL|EXPRESS|site_4|654|604|646|654|0
+NULL|EXPRESS|site_5|398|404|398|443|0
+NULL|LIBRARY|site_0|474|505|456|489|0
+NULL|LIBRARY|site_1|429|467|463|462|0
+NULL|LIBRARY|site_2|475|442|473|494|0
+NULL|LIBRARY|site_3|477|516|463|484|0
+NULL|LIBRARY|site_4|460|473|490|504|0
+NULL|LIBRARY|site_5|297|326|307|305|0
+NULL|NEXT DAY|site_0|665|609|661|659|0
+NULL|NEXT DAY|site_1|629|608|567|620|0
+NULL|NEXT DAY|site_2|638|657|657|631|0
+NULL|NEXT DAY|site_3|617|628|625|623|0
+NULL|NEXT DAY|site_4|665|639|654|623|0
+NULL|NEXT DAY|site_5|405|421|428|405|0
+NULL|OVERNIGHT|site_0|496|488|462|470|0
+NULL|OVERNIGHT|site_1|490|456|461|459|0
+NULL|OVERNIGHT|site_2|482|490|484|478|0
+NULL|OVERNIGHT|site_3|461|474|479|450|0
+NULL|OVERNIGHT|site_4|469|494|493|474|0
+NULL|OVERNIGHT|site_5|310|302|339|364|0
+NULL|REGULAR|site_0|483|483|474|485|0
+NULL|REGULAR|site_1|493|470|483|503|0
+NULL|REGULAR|site_2|465|540|500|459|0
+NULL|REGULAR|site_3|449|482|505|490|0
+NULL|REGULAR|site_4|484|478|473|520|0
+NULL|REGULAR|site_5|339|307|319|344|0
+NULL|TWO DAY|site_0|466|467|453|477|0
+NULL|TWO DAY|site_1|507|459|475|517|0
+NULL|TWO DAY|site_2|472|481|527|508|0
+NULL|TWO DAY|site_3|484|486|443|495|0
+NULL|TWO DAY|site_4|503|486|454|484|0
+NULL|TWO DAY|site_5|329|321|300|327|0
+Bad cards must make.|EXPRESS|site_0|621|658|648|629|0
+Bad cards must make.|EXPRESS|site_1|628|685|607|650|0
+Bad cards must make.|EXPRESS|site_2|631|624|680|629|0
+Bad cards must make.|EXPRESS|site_3|602|628|670|679|0
+Bad cards must make.|EXPRESS|site_4|649|660|639|657|0
+Bad cards must make.|EXPRESS|site_5|422|437|419|418|0
+Bad cards must make.|LIBRARY|site_0|504|479|430|448|0
+Bad cards must make.|LIBRARY|site_1|459|526|495|461|0
+Bad cards must make.|LIBRARY|site_2|467|515|483|515|0
+Bad cards must make.|LIBRARY|site_3|497|491|464|517|0
+Bad cards must make.|LIBRARY|site_4|439|428|437|486|0
+Bad cards must make.|LIBRARY|site_5|300|303|288|303|0
+Bad cards must make.|NEXT DAY|site_0|628|610|625|617|0
+Bad cards must make.|NEXT DAY|site_1|680|637|648|629|0
+Bad cards must make.|NEXT DAY|site_2|642|613|618|642|0
+Bad cards must make.|NEXT DAY|site_3|636|654|633|612|0
+Bad cards must make.|NEXT DAY|site_4|648|699|625|667|0
+Bad cards must make.|NEXT DAY|site_5|369|433|444|447|0
+Bad cards must make.|OVERNIGHT|site_0|479|474|453|458|0
+Bad cards must make.|OVERNIGHT|site_1|458|493|469|538|0
+Bad cards must make.|OVERNIGHT|site_2|478|486|463|528|0
+Bad cards must make.|OVERNIGHT|site_3|495|495|494|451|0
+Bad cards must make.|OVERNIGHT|site_4|506|457|451|482|0
+Bad cards must make.|OVERNIGHT|site_5|345|281|303|317|0
+Bad cards must make.|REGULAR|site_0|475|492|456|456|0
+Bad cards must make.|REGULAR|site_1|481|474|475|537|0
+Bad cards must make.|REGULAR|site_2|443|503|500|524|0
+Bad cards must make.|REGULAR|site_3|511|455|485|476|0
+Bad cards must make.|REGULAR|site_4|491|492|494|515|0
+Bad cards must make.|REGULAR|site_5|314|318|337|321|0
+Bad cards must make.|TWO DAY|site_0|487|474|451|453|0
+Bad cards must make.|TWO DAY|site_1|502|478|458|501|0
+Bad cards must make.|TWO DAY|site_2|472|446|500|502|0
+Bad cards must make.|TWO DAY|site_3|489|486|456|489|0
+Bad cards must make.|TWO DAY|site_4|472|463|479|449|0
+Bad cards must make.|TWO DAY|site_5|330|289|313|320|0
+Conventional childr|EXPRESS|site_0|591|635|642|630|0
+Conventional childr|EXPRESS|site_1|625|632|608|592|0
+Conventional childr|EXPRESS|site_2|609|576|640|634|0
+Conventional childr|EXPRESS|site_3|620|632|628|625|0
+Conventional childr|EXPRESS|site_4|607|611|621|616|0
+Conventional childr|EXPRESS|site_5|399|382|457|461|0
+Conventional childr|LIBRARY|site_0|471|476|476|509|0
+Conventional childr|LIBRARY|site_1|454|483|464|444|0
+Conventional childr|LIBRARY|site_2|470|483|469|492|0
+Conventional childr|LIBRARY|site_3|472|468|482|438|0
+Conventional childr|LIBRARY|site_4|465|467|479|484|0
+Conventional childr|LIBRARY|site_5|310|358|300|306|0
+Conventional childr|NEXT DAY|site_0|612|644|646|636|0
+Conventional childr|NEXT DAY|site_1|615|636|642|617|0
+Conventional childr|NEXT DAY|site_2|603|634|644|661|0
+Conventional childr|NEXT DAY|site_3|651|589|627|626|0
+Conventional childr|NEXT DAY|site_4|633|627|620|642|0
+Conventional childr|NEXT DAY|site_5|438|401|402|431|0
+Conventional childr|OVERNIGHT|site_0|495|403|501|464|0
+Conventional childr|OVERNIGHT|site_1|460|465|477|486|0
+Conventional childr|OVERNIGHT|site_2|453|458|514|480|0
+Conventional childr|OVERNIGHT|site_3|517|475|468|481|0
+Conventional childr|OVERNIGHT|site_4|524|481|494|503|0
+Conventional childr|OVERNIGHT|site_5|296|293|321|346|0
+Conventional childr|REGULAR|site_0|429|499|497|478|0
+Conventional childr|REGULAR|site_1|489|504|499|517|0
+Conventional childr|REGULAR|site_2|463|521|509|500|0
+Conventional childr|REGULAR|site_3|511|466|474|490|0

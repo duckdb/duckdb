@@ -176,7 +176,7 @@ jobs:
             exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
             opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
             extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
-            extra_toolchains: unixodbc
+            extra_toolchains: unixodbc;parser_tools
           - name: Rust-based Extensions
             artifact_prefix: rust-based-extensions
             exclude_archs: ${{ needs.load-extension-configs.outputs.rust_based_extensions_exclude_archs }}
@@ -247,6 +247,37 @@ jobs:
 
           ls /tmp/repository_generation/*/*/*.duckdb_extension*
 
+      - name: Install rclone
+        shell: bash
+        run:
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
+
+      - name: Validate extension signing
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: https://example.com
+          AWS_ACCESS_KEY_ID: duckdb-signing-validation
+          AWS_SECRET_ACCESS_KEY: duckdb-signing-validation
+          DUCKDB_EXTENSION_SIGNING_OUTPUT_DIR: /tmp/repository_signed_validation
+        run: |
+          set -euo pipefail
+
+          private_key_file=$(mktemp "${TMPDIR:-/tmp}/duckdb-extension-signing-validation.XXXXXX.pem")
+          public_key_file=$(mktemp "${TMPDIR:-/tmp}/duckdb-extension-signing-validation.XXXXXX.pub")
+          trap 'rm -f "$private_key_file" "$public_key_file"' EXIT
+
+          openssl genrsa -out "$private_key_file" 2048
+          openssl rsa -in "$private_key_file" -pubout -out "$public_key_file"
+          DUCKDB_EXTENSION_SIGNING_PK="$(cat "$private_key_file")"
+          export DUCKDB_EXTENSION_SIGNING_PK
+
+          rm -rf /tmp/repository_signed_validation
+          make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/repository_generation
+          make verify-extension-signing \
+            SIGNED_EXTENSIONS_DIR=/tmp/repository_signed_validation \
+            EXTENSION_SIGNING_PUBLIC_KEY_FILE="$public_key_file"
+
       - name: Deploy extensions
         shell: bash
         env:
@@ -256,7 +287,6 @@ jobs:
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/repository_generation
 
       - name: Setup Build Environment

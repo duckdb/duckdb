@@ -1,0 +1,392 @@
+# name: test/extension/test_function_named_args.test
+# description: Named function arguments - reordering, defaults, varargs and overload resolution
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+# The inspection functions return a string "<overload_idx>|arg|arg|..." that shows both which
+# overload was selected and the final positional argument list after reordering/defaults/varargs.
+
+#===--------------------------------------------------------------------===#
+# Reordering and defaults (single overload: a INT, b INT = 100, c INT = 200)
+#===--------------------------------------------------------------------===#
+
+# Purely positional - baseline (and regression for the positional path)
+query I
+SELECT test_named_inspect(1);
+----
+<1>|1|100|200|
+
+query I
+SELECT test_named_inspect(1, 2);
+----
+<1>|1|2|200|
+
+query I
+SELECT test_named_inspect(1, 2, 3);
+----
+<1>|1|2|3|
+
+# All named, declaration order
+query I
+SELECT test_named_inspect(a := 1, b := 2, c := 3);
+----
+<1>|1|2|3|
+
+# All named, shuffled - must reorder to declaration order
+query I
+SELECT test_named_inspect(c := 3, b := 2, a := 1);
+----
+<1>|1|2|3|
+
+query I
+SELECT test_named_inspect(b := 2, c := 3, a := 1);
+----
+<1>|1|2|3|
+
+# Name a later parameter, leave a middle one to its default
+query I
+SELECT test_named_inspect(c := 3, a := 1);
+----
+<1>|1|100|3|
+
+# Only the required arg named, both optionals default
+query I
+SELECT test_named_inspect(a := 1);
+----
+<1>|1|100|200|
+
+# Mix: positional prefix + named suffix
+query I
+SELECT test_named_inspect(1, c := 3);
+----
+<1>|1|100|3|
+
+query I
+SELECT test_named_inspect(1, b := 2);
+----
+<1>|1|2|200|
+
+query I
+SELECT test_named_inspect(1, 2, c := 3);
+----
+<1>|1|2|3|
+
+query I
+SELECT test_named_inspect(1, c := 3, b := 2);
+----
+<1>|1|2|3|
+
+# '=>' is also accepted as the named-argument assignment operator
+query I
+SELECT test_named_inspect(a => 1, c => 3);
+----
+<1>|1|100|3|
+
+#===--------------------------------------------------------------------===#
+# Case-insensitive name matching (consistent with SQL identifiers)
+#===--------------------------------------------------------------------===#
+
+# Unquoted names are folded to lower case by the parser
+query I
+SELECT test_named_inspect(A := 1, B := 2);
+----
+<1>|1|2|200|
+
+# Quoted names preserve case but must still match case-insensitively
+query I
+SELECT test_named_inspect("A" := 1, "B" := 2);
+----
+<1>|1|2|200|
+
+query I
+SELECT test_named_inspect("C" := 3, "A" := 1);
+----
+<1>|1|100|3|
+
+query I
+SELECT test_named_inspect(1, "B" := 2);
+----
+<1>|1|2|200|
+
+#===--------------------------------------------------------------------===#
+# NULL placement vs NULL short-circuit
+#===--------------------------------------------------------------------===#
+
+# test_named_inspect uses SPECIAL null handling: a NULL keeps its (reordered) position
+query I
+SELECT test_named_inspect(NULL);
+----
+<1>|NULL|100|200|
+
+query I
+SELECT test_named_inspect(a := NULL, c := 3);
+----
+<1>|NULL|100|3|
+
+# test_named_nullshort uses DEFAULT null handling: any NULL short-circuits the whole call to NULL,
+# even when the NULL arrives via a named/reordered argument
+query I
+SELECT test_named_nullshort(1);
+----
+<6>|1|100|
+
+query I
+SELECT test_named_nullshort(1, 2);
+----
+<6>|1|2|
+
+query I
+SELECT test_named_nullshort(NULL);
+----
+NULL
+
+query I
+SELECT test_named_nullshort(a := NULL);
+----
+NULL
+
+query I
+SELECT test_named_nullshort(b := NULL, a := 1);
+----
+NULL
+
+query I
+SELECT test_named_nullshort(a := 1, b := NULL);
+----
+NULL
+
+#===--------------------------------------------------------------------===#
+# Varargs (a INT, b INT = 100, ... INT) - varargs are appended trailing
+#===--------------------------------------------------------------------===#
+
+query I
+SELECT test_named_varargs(1);
+----
+<2>|1|100|
+
+query I
+SELECT test_named_varargs(1, 2);
+----
+<2>|1|2|
+
+query I
+SELECT test_named_varargs(1, 2, 3);
+----
+<2>|1|2|3|
+
+query I
+SELECT test_named_varargs(1, 2, 3, 4, 5);
+----
+<2>|1|2|3|4|5|
+
+# Named varargs: the names are discarded, the values are appended in call order
+query I
+SELECT test_named_varargs(1, 2, x := 3, y := 4);
+----
+<2>|1|2|3|4|
+
+# Order of multiple named varargs is preserved
+query I
+SELECT test_named_varargs(1, 2, z := 30, w := 40, m := 50);
+----
+<2>|1|2|30|40|50|
+
+# Defaults are filled before varargs are appended
+query I
+SELECT test_named_varargs(1, x := 10);
+----
+<2>|1|100|10|
+
+# Named non-vararg parameter + named vararg
+query I
+SELECT test_named_varargs(a := 1, b := 2, x := 3);
+----
+<2>|1|2|3|
+
+# A castable vararg value is cast to the vararg type
+query I
+SELECT test_named_varargs(1, 2, 3::SMALLINT);
+----
+<2>|1|2|3|
+
+#===--------------------------------------------------------------------===#
+# Overload resolution driven by types/arity, including via named arguments
+#   <10> (a INT, b INT)   <11> (a INT, b VARCHAR)   <12> (a INT)
+#===--------------------------------------------------------------------===#
+
+query I
+SELECT test_named_overload(1, 2);
+----
+<10>|1|2|
+
+query I
+SELECT test_named_overload(1, 'x');
+----
+<11>|1|'x'|
+
+query I
+SELECT test_named_overload(1);
+----
+<12>|1|
+
+# Named + reordered must resolve the same overload as the positional call
+query I
+SELECT test_named_overload(b := 2, a := 1);
+----
+<10>|1|2|
+
+query I
+SELECT test_named_overload(a := 1, b := 'x');
+----
+<11>|1|'x'|
+
+query I
+SELECT test_named_overload(b := 'y', a := 1);
+----
+<11>|1|'y'|
+
+#===--------------------------------------------------------------------===#
+# Ambiguity: symmetric overloads tie in cost (even after reordering)
+#   <13> (x INT, y BIGINT)   <14> (x BIGINT, y INT)
+#===--------------------------------------------------------------------===#
+
+statement error
+SELECT test_named_ambig(1::INTEGER, 2::INTEGER);
+----
+<REGEX>:Binder Error:.*Could not choose a best candidate.*
+
+statement error
+SELECT test_named_ambig(y := 2::INTEGER, x := 1::INTEGER);
+----
+<REGEX>:Binder Error:.*Could not choose a best candidate.*
+
+# An exact match on one overload breaks the tie
+query I
+SELECT test_named_ambig(1::INTEGER, 2::BIGINT);
+----
+<13>|1|2|
+
+#===--------------------------------------------------------------------===#
+# Error paths
+#===--------------------------------------------------------------------===#
+
+# No arguments at all: fewer than the minimum required, so no overload matches
+statement error
+SELECT test_named_inspect();
+----
+<REGEX>:Binder Error:.*No function matches.*
+
+# A named argument fills an optional slot, but the required 'a' is still missing.
+# Here the argument count is enough to match the overload, so the error comes from
+# argument resolution rather than from "no matching function".
+statement error
+SELECT test_named_inspect(b := 2);
+----
+<REGEX>:Binder Error:.*Missing value for parameter 'a'.*
+
+# A named vararg cannot satisfy a required positional parameter
+statement error
+SELECT test_named_varargs(x := 5);
+----
+<REGEX>:Binder Error:.*Missing value for parameter 'a'.*
+
+# Unknown parameter name on a function without varargs -> no candidate overload
+statement error
+SELECT test_named_inspect(z := 1);
+----
+<REGEX>:Binder Error:.*No function matches.*
+
+# A named argument targeting a slot already filled positionally
+statement error
+SELECT test_named_inspect(1, a := 2);
+----
+<REGEX>:Binder Error:.*already been provided as a positional argument.*
+
+# Duplicate named argument (case-insensitive detection)
+statement error
+SELECT test_named_inspect(a := 1, a := 2);
+----
+<REGEX>:Binder Error:.*Duplicate named argument.*
+
+statement error
+SELECT test_named_inspect(a := 1, A := 2);
+----
+<REGEX>:Binder Error:.*Duplicate named argument.*
+
+# A positional argument cannot follow a named argument
+statement error
+SELECT test_named_inspect(a := 1, 2);
+----
+<REGEX>:Binder Error:.*cannot follow named arguments.*
+
+#===--------------------------------------------------------------------===#
+# Aggregate named arguments (same resolution path as scalars)
+#   test_named_agg_inspect(a INTEGER, b INTEGER = 100, c INTEGER = 200) -> VARCHAR
+# Emits "<7>|a|b|c|" from the first row's reordered/default-filled arguments.
+#===--------------------------------------------------------------------===#
+
+query I
+SELECT test_named_agg_inspect(1);
+----
+<7>|1|100|200|
+
+query I
+SELECT test_named_agg_inspect(1, 2);
+----
+<7>|1|2|200|
+
+query I
+SELECT test_named_agg_inspect(1, 2, 3);
+----
+<7>|1|2|3|
+
+# all named, shuffled
+query I
+SELECT test_named_agg_inspect(c := 3, b := 2, a := 1);
+----
+<7>|1|2|3|
+
+# name a later parameter, leave a middle one to its default
+query I
+SELECT test_named_agg_inspect(c := 3, a := 1);
+----
+<7>|1|100|3|
+
+# positional prefix + named suffix
+query I
+SELECT test_named_agg_inspect(1, c := 3);
+----
+<7>|1|100|3|
+
+# positional column argument + named default, over a single-row relation
+query I
+SELECT test_named_agg_inspect(x, c := 9) FROM (VALUES (5)) t(x);
+----
+<7>|5|100|9|
+
+# missing required argument goes through the shared argument resolution
+statement error
+SELECT test_named_agg_inspect(b := 2);
+----
+<REGEX>:Binder Error:.*Missing value for parameter 'a'.*
+
+###===--------------------------------------------------------------------===#
+## Automatic capturing of aliases as named arguments
+###===--------------------------------------------------------------------===#
+# `struct_pack` automatically captures aliases as arguments, so it should be
+# possible to pass positional arguments after in this case (as they get named)
+
+statement ok
+create table test(a int, i int);
+
+query I
+select i from test order by struct_pack(a:=0, i) desc;
+----

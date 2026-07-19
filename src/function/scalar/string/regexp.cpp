@@ -132,7 +132,7 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto &patterns = args.data[1];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RegexpMatchesBindData>();
+	auto &info = func_expr.BindInfo()->Cast<RegexpMatchesBindData>();
 
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
@@ -187,7 +187,7 @@ static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input)
 
 static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RegexpReplaceBindData>();
+	auto &info = func_expr.BindInfo()->Cast<RegexpReplaceBindData>();
 
 	const auto &strings = args.data[0];
 	const auto &patterns = args.data[1];
@@ -198,11 +198,16 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, replaces, result, [&](string_t input, string_t replace) {
+			    auto replace_piece = CreateStringPiece(replace);
+			    std::string rewrite_error;
+			    if (!lstate.constant_pattern.CheckRewriteString(replace_piece, &rewrite_error)) {
+				    throw InvalidInputException("Invalid replacement string for regexp_replace: %s", rewrite_error);
+			    }
 			    std::string sstring = input.GetString();
 			    if (info.global_replace) {
-				    RE2::GlobalReplace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
+				    RE2::GlobalReplace(&sstring, lstate.constant_pattern, replace_piece);
 			    } else {
-				    RE2::Replace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
+				    RE2::Replace(&sstring, lstate.constant_pattern, replace_piece);
 			    }
 			    return heap.AddString(sstring);
 		    });
@@ -213,11 +218,16 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 			    if (!re.ok()) {
 				    throw InvalidInputException(re.error());
 			    }
+			    auto replace_piece = CreateStringPiece(replace);
+			    std::string rewrite_error;
+			    if (!re.CheckRewriteString(replace_piece, &rewrite_error)) {
+				    throw InvalidInputException("Invalid replacement string for regexp_replace: %s", rewrite_error);
+			    }
 			    std::string sstring = input.GetString();
 			    if (info.global_replace) {
-				    RE2::GlobalReplace(&sstring, re, CreateStringPiece(replace));
+				    RE2::GlobalReplace(&sstring, re, replace_piece);
 			    } else {
-				    RE2::Replace(&sstring, re, CreateStringPiece(replace));
+				    RE2::Replace(&sstring, re, replace_piece);
 			    }
 			    return heap.AddString(sstring);
 		    });
@@ -249,7 +259,7 @@ bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
 
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<RegexpExtractBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<RegexpExtractBindData>();
 
 	const auto &strings = args.data[0];
 	const auto &patterns = args.data[1];
@@ -385,8 +395,8 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			}
 			vector<string> dummy_names; // not reused after bind
 			child_list_t<LogicalType> struct_children;
-			regexp_util::ParseGroupNameList(context, bound_function.GetName(), *arguments[2], constant_string, options,
-			                                constant_pattern, dummy_names, struct_children);
+			regexp_util::ParseGroupNameList(context, bound_function.GetName().GetIdentifierName(), *arguments[2],
+			                                constant_string, options, constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		} else {
 			int32_t group_idx = group.GetValue<int32_t>();

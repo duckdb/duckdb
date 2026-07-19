@@ -11,6 +11,8 @@
 
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -104,7 +106,7 @@ static idx_t SelectDynamicFilter(Vector &input, ExpressionType comparison_type, 
 static idx_t DynamicFilterSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
                                  optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &func_data = func_expr.bind_info->Cast<DynamicFilterFunctionData>();
+	auto &func_data = func_expr.BindInfo()->Cast<DynamicFilterFunctionData>();
 	auto count = args.size();
 	if (!func_data.filter_data || !func_data.filter_data->initialized.load()) {
 		return SetAllTrueSelection(count, sel, true_sel, false_sel);
@@ -146,7 +148,11 @@ FilterPropagateResult DynamicFilterScalarFun::FilterPrune(const FunctionStatisti
 	if (!data.filter_data->initialized) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	return DynamicFilterData::CheckStatistics(input.stats, data.filter_data->comparison_type,
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return DynamicFilterData::CheckStatistics(*column_stats, data.filter_data->comparison_type,
 	                                          data.filter_data->constant);
 }
 

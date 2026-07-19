@@ -42,6 +42,11 @@ StructColumnReader::StructColumnReader(const ParquetReader &reader, const Parque
                                        vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
+	for (auto &child : child_readers) {
+		if (child) {
+			child->SetParent(*this);
+		}
+	}
 }
 
 ColumnReader &StructColumnReader::GetChildReader(idx_t child_idx) {

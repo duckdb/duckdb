@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/logging/log_storage.hpp"
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
 
@@ -78,6 +79,9 @@ public:
 	virtual bool SupportsHighlight() {
 		return true;
 	}
+
+	// Print a complete SQL statement, applying syntax highlighting when the output stream supports it
+	void PrintSQL(const string &sql);
 
 	void RenderAlignedValue(const string &str, idx_t width, TextAlignment alignment = TextAlignment::CENTER);
 	void RenderAlignedValue(const char *str, idx_t str_len, idx_t width,

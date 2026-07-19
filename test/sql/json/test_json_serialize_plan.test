@@ -3,6 +3,16 @@
 
 require json
 
+statement error
+SELECT json_copy_to_json({'d': DATE '2026-01-02'}, '%d/%m/%Y', NULL);
+----
+<REGEX>:Catalog Error:.*json_copy_to_json.*
+
+statement error
+SELECT __internal_json_copy_to_json({'d': DATE '2026-01-02'}, '%d/%m/%Y', NULL);
+----
+<REGEX>:Binder Error:.*internal use only.*
+
 statement ok
 CREATE TABLE tbl1 (i int);
 

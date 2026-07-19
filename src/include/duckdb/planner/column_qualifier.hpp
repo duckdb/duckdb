@@ -22,26 +22,25 @@ public:
 	virtual ~ColumnQualifier() = default;
 
 	//! Returns the STRUCT_EXTRACT operator expression
-	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
+	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const Identifier &field_name);
 	//! Returns a STRUCT_PACK function expression
 	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
 
 	//! Returns a qualified column reference from a column name
-	unique_ptr<ParsedExpression> QualifyColumnName(const ParsedExpression &expr, const string &column_name,
+	unique_ptr<ParsedExpression> QualifyColumnName(const ParsedExpression &expr, const Identifier &column_name,
 	                                               ErrorData &error);
 	//! Returns a qualified column reference from a column reference with column_names.size() > 2
 	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, ErrorData &error);
 	//! Returns a qualified column reference from a column reference
 	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
 	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
-	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params);
 	//! Recursively qualifies the column references in the (children) of the expression. Passes on the
 	//! within_function_expression state from outer expressions, or sets it
-	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params,
+	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params,
 	                        const bool within_function_expression = false);
 
 	optional_ptr<CatalogEntry> QualifyFunction(FunctionExpression &function);
-	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
 private:
 	Binder &binder;

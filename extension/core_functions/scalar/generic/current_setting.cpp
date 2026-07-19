@@ -1,6 +1,5 @@
 #include "core_functions/scalar/generic_functions.hpp"
 
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -29,7 +28,7 @@ public:
 
 void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<CurrentSettingBindData>();
+	auto &info = func_expr.BindInfo()->Cast<CurrentSettingBindData>();
 	result.Reference(info.value, count_t(args.size()));
 }
 

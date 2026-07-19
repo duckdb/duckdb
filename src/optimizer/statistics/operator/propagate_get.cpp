@@ -19,10 +19,10 @@ static bool IsDirectFilterColumnRef(const Expression &expr) {
 	       expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
 
-static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, string &alias) {
+static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, Identifier &alias) {
 	if (expr->GetExpressionType() == ExpressionType::BOUND_REF) {
 		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
-		index = bound_ref.index;
+		index = bound_ref.Index();
 		alias = bound_ref.GetAlias();
 		return;
 	}
@@ -37,7 +37,7 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 	// get physical storage index of the filter
 	// since it is a table filter, every storage index is the same
 	idx_t physical_index = DConstants::INVALID_INDEX;
-	string column_alias;
+	Identifier column_alias;
 	GetColumnIndex(expr_filter.expr, physical_index, column_alias);
 	D_ASSERT(physical_index != DConstants::INVALID_INDEX);
 
@@ -84,15 +84,15 @@ void StatisticsPropagator::UpdateExpressionFilterStatistics(BaseStatistics &inpu
 		auto &right = BoundComparisonExpression::Right(comp);
 		if (IsDirectFilterColumnRef(left) && right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 			auto &constant = right.Cast<BoundConstantExpression>();
-			if (constant.value.type().InternalType() == input.GetType().InternalType()) {
-				UpdateFilterStatistics(input, comp.GetExpressionType(), constant.value);
+			if (constant.GetValue().type().InternalType() == input.GetType().InternalType()) {
+				UpdateFilterStatistics(input, comp.GetExpressionType(), constant.GetValue());
 			} else if (!is_compare_distinct) {
 				input.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 			}
 		} else if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT && IsDirectFilterColumnRef(right)) {
 			auto &constant = left.Cast<BoundConstantExpression>();
-			if (constant.value.type().InternalType() == input.GetType().InternalType()) {
-				UpdateFilterStatistics(input, FlipComparisonExpression(comp.GetExpressionType()), constant.value);
+			if (constant.GetValue().type().InternalType() == input.GetType().InternalType()) {
+				UpdateFilterStatistics(input, FlipComparisonExpression(comp.GetExpressionType()), constant.GetValue());
 			} else if (!is_compare_distinct) {
 				input.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 			}
@@ -102,7 +102,7 @@ void StatisticsPropagator::UpdateExpressionFilterStatistics(BaseStatistics &inpu
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
 		if (conj.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-			for (auto &child : conj.children) {
+			for (auto &child : conj.GetChildren()) {
 				UpdateExpressionFilterStatistics(input, *child);
 			}
 		}
@@ -110,8 +110,8 @@ void StatisticsPropagator::UpdateExpressionFilterStatistics(BaseStatistics &inpu
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op = expr.Cast<BoundOperatorExpression>();
-		if (expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL && !op.children.empty() &&
-		    IsDirectFilterColumnRef(*op.children[0])) {
+		if (expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL && !op.GetChildren().empty() &&
+		    IsDirectFilterColumnRef(*op.GetChildren()[0])) {
 			input.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		}
 		break;
@@ -137,7 +137,7 @@ static bool CanReplaceConstantOrNull(const TableFilter &table_filter) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "CanReplaceConstantOrNull");
 	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
 	if (ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true))) {
-		for (auto child = ++func.children.begin(); child != func.children.end(); child++) {
+		for (auto child = ++func.GetChildren().begin(); child != func.GetChildren().end(); child++) {
 			switch (child->get()->GetExpressionType()) {
 			case ExpressionType::BOUND_REF:
 			case ExpressionType::VALUE_CONSTANT:

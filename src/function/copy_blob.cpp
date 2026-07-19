@@ -34,7 +34,7 @@ string ParseStringOption(const Value &value, const string &loption) {
 }
 
 unique_ptr<FunctionData> WriteBlobBind(ClientContext &context, CopyFunctionBindInput &input,
-                                       const vector<string> &names, const vector<LogicalType> &sql_types) {
+                                       const vector<Identifier> &names, const vector<LogicalType> &sql_types) {
 	if (sql_types.size() != 1 || sql_types.back().id() != LogicalTypeId::BLOB) {
 		throw BinderException("\"COPY (FORMAT BLOB)\" only supports a single BLOB column");
 	}

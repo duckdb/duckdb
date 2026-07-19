@@ -23,12 +23,14 @@ SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, Data
 	// get the name and path of the database
 	auto &name = info->name;
 	auto &path = info->path;
+	// preserve the verbatim path before extension-prefix stripping
+	options.original_path = path;
 	if (options.db_type.empty()) {
 		DBPathAndType::ExtractExtensionPrefix(path, options.db_type);
 	}
 	if (name.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context.client);
-		name = AttachedDatabase::ExtractDatabaseName(path, fs);
+		name = Identifier(AttachedDatabase::ExtractDatabaseName(path, fs));
 	}
 
 	// check ATTACH IF NOT EXISTS

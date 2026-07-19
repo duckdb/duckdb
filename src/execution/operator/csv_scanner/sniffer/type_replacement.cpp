@@ -13,7 +13,7 @@ void CSVSniffer::ReplaceTypes() {
 		// types supplied as name -> value map
 		idx_t found = 0;
 		for (idx_t i = 0; i < names.size(); i++) {
-			auto it = sniffing_state_machine.options.sql_types_per_column.find(names[i]);
+			auto it = sniffing_state_machine.options.sql_types_per_column.find(Identifier(names[i]));
 			if (it != sniffing_state_machine.options.sql_types_per_column.end()) {
 				best_sql_types_candidates_per_column_idx[i] = {
 				    sniffing_state_machine.options.sql_type_list[it->second]};
@@ -23,7 +23,7 @@ void CSVSniffer::ReplaceTypes() {
 			}
 		}
 		if (!file_options.union_by_name && found < sniffing_state_machine.options.sql_types_per_column.size()) {
-			auto error_msg = CSVError::ColumnTypesError(options.sql_types_per_column, names);
+			auto error_msg = CSVError::ColumnTypesError(options.sql_types_per_column, StringsToIdentifiers(names));
 			error_handler->Error(error_msg);
 		}
 		return;

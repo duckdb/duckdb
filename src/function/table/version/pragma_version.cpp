@@ -35,7 +35,6 @@ static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &da
 		// finished returning values
 		return;
 	}
-	output.SetCardinality(1);
 	output.data[0].Append(Value(DuckDB::LibraryVersion()));
 	output.data[1].Append(Value(DuckDB::SourceID()));
 	output.data[2].Append(Value(DuckDB::ReleaseCodename()));
@@ -64,7 +63,7 @@ const char *DuckDB::LibraryVersion() {
 
 const char *DuckDB::ReleaseCodename() {
 	// dev releases have no name
-	if (StringUtil::Contains(DUCKDB_VERSION, "-dev")) {
+	if (!VersioningUtils::IsReleaseVersion(DUCKDB_VERSION)) {
 		return "Development Version";
 	}
 	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.2.")) {
@@ -78,6 +77,9 @@ const char *DuckDB::ReleaseCodename() {
 	}
 	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.5.")) {
 		return "Variegata";
+	}
+	if (StringUtil::StartsWith(DUCKDB_VERSION, "v2.0.")) {
+		return "Cyanoptera";
 	}
 	// add new version names here
 
@@ -113,7 +115,6 @@ static void PragmaPlatformFunction(ClientContext &context, TableFunctionInput &d
 		// finished returning values
 		return;
 	}
-	output.SetCardinality(1);
 	output.data[0].Append(Value(DuckDB::Platform()));
 	data.finished = true;
 }

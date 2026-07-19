@@ -3,7 +3,7 @@
 # group: [extensions]
 
 # Note that this behavior is subject to change
-# When we register extensions in a separate extension schema
+# When we register all extensions in a separate extension schema
 
 # Behavior: with aliasing; you load can reload extensions with identical names under a different alias
 # for now, this means that their function names need to differ
@@ -59,6 +59,21 @@ LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'
 ----
 Extension 'loadable_extension_demo' already exists under alias 'demo'
 
+# when we load this extension, this is loaded in a dedicated schema
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/explicit_extension_schema_alias.duckdb_extension' AS dedicated_schema
+
+# the alias is now used as the schema
+query I
+SELECT dedicated_schema.dedicated_schema_function_alias();
+----
+Hello from the explicit_extension_schema_alias
+
+# this also works without qualifying the function
+query I
+SELECT dedicated_schema_function_alias();
+----
+Hello from the explicit_extension_schema_alias
 
 # ONCE the PEG parser issue is fixed
 # we can check functions with

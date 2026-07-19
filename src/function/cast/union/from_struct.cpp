@@ -30,7 +30,7 @@ bool StructToUnionCast::AllowImplicitCastFromStruct(const LogicalType &source, c
 			}
 			continue;
 		}
-		if (!StringUtil::CIEquals(target_field_name, field_name)) {
+		if (target_field_name != field_name) {
 			return false;
 		}
 		if (target_field != field && field != LogicalType::VARCHAR) {

@@ -2,11 +2,16 @@
   "description": "Run with SET debug_disable_optimizer=true;.",
   "on_init": "SET debug_disable_optimizer=true;",
   "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
       "reason": "Zone map pruning requires filter pushdown from optimizer.",
       "paths": [
-        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
+        "test/sql/types/geo/geometry_parquet_pushdown.test",
+        "test/optimizer/statistics/statistics_filter_pruning.test",
+        "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
+        "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test"
       ]
     },
     {
@@ -34,7 +39,10 @@
         "test/sql/window/test_window_constant_allocator.test",
         "test/parquet/variant/variant_stats_propagation.test",
         "test/sql/types/geo/geometry_compatability.test",
-        "test/sql/copy/parquet/parquet_glob_cache.test"
+        "test/sql/types/geo/geometry_vertex_extract.test",
+        "test/sql/copy/parquet/parquet_glob_cache.test",
+        "test/optimizer/joins/fkpk_composite_key_ce.test",
+        "test/sql/cast/signed_cast_repro.test"
       ]
     },
     {
@@ -44,7 +52,8 @@
         "test/optimizer/joins/no_duplicate_elimination_join.test",
         "test/optimizer/joins/tpcds_nofail.test",
         "test/sql/limit/test_limit0.test",
-        "test/sql/optimizer/plan/test_filter_pushdown_large.test"
+        "test/sql/optimizer/plan/test_filter_pushdown_large.test",
+        "test/optimizer/joins/denominator_cardinality_estimation.test"
       ]
     },
     {
@@ -67,9 +76,18 @@
       "reason": "References explicit optimizer logging.",
       "paths": [
         "test/sql/pragma/profiling/test_custom_profiling_optimizer_settings.test",
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
+        "test/sql/detailed_profiler/test_detailed_profiler.test",
+        "test/sql/copy/csv/parallel/csv_parallel_null_option.test",
         "test/sql/transactions/concurrent_drop_table.test",
         "test/sql/index/art/scan/test_art_prepared_scan.test",
-        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test"
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
+        "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
+        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model_remote.test"
       ]
     },
     {
@@ -79,35 +97,13 @@
       ]
     },
     {
-      "reason": "Statistics are not set without optimizers.",
+      "reason": "Type and function pushdown optimizers changes output types",
       "paths": [
-        "test/optimizer/statistics/statistics_numeric.test",
-        "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
-        "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
-        "test/parquet/parquet_stats_function.test",
-        "test/parquet/issue_22144.test",
-        "test/sql/types/struct/struct_stats.test",
-        "test/sql/types/list/list_stats.test",
-        "test/sql/types/nested/array/array_statistics.test",
-        "test/sql/vacuum/test_analyze.test",
-        "test/sql/function/date/date_part_stats.test",
-        "test/sql/function/date/test_date_trunc.test",
-        "test/sql/function/time/test_extract_stats.test",
-        "test/sql/function/generic/test_stats.test",
-        "test/sql/function/timetz/test_date_part.test",
-        "test/sql/storage/types/variant/variant_extract_stats.test",
-        "test/sql/alter/alter_type/test_alter_type.test",
-        "test/sql/alter/add_col/test_add_col_stats.test",
-        "test/sql/copy/return_stats.test",
-        "test/sql/copy/parquet/parquet_stats.test",
-        "test/sql/copy/parquet/writer/parquet_write_decimals.test",
-        "test/sql/copy/parquet/shredded_variant_stats.test",
-        "test/sql/copy/parquet/corrupt_stats.test",
-        "test/sql/copy/parquet/parquet_row_number.test",
-        "test/sql/copy/parquet/parquet_string_stats.test",
-        "test/sql/storage/extended_string_stats.test",
-        "test/sql/storage/min_string_length_too_large.test_slow",
-        "test/sql/storage/total_string_length_repeated_insert.test"
+        "test/optimizer/pushdown/csv_type_pushdown.test",
+        "test/optimizer/pushdown/scalar_function_pushdown.test",
+        "test/sql/copy/csv/test_insert_into_types.test",
+        "test/sql/copy/csv/test_csv_error_message_type.test",
+        "test/sql/copy/csv/test_timestamptz_12926.test"
       ]
     },
     {

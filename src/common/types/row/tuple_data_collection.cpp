@@ -1,3 +1,4 @@
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -14,18 +15,20 @@
 #include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include <algorithm>
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
-                                         MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p)
+                                         MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p,
+                                         QueryContext context)
     : scheduler(TaskScheduler::GetScheduler(buffer_manager.GetDatabase())),
       stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
                                     : make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())),
       layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr), tag(tag_p),
-      allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr, tag, stl_allocator)),
+      allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr, tag, stl_allocator, context)),
       segments(*stl_allocator), scatter_functions(*stl_allocator), gather_functions(*stl_allocator) {
 	Initialize();
 }
@@ -33,7 +36,7 @@ TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_p
 TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
                                          shared_ptr<ArenaAllocator> stl_allocator)
     : TupleDataCollection(BufferManager::GetBufferManager(context), std::move(layout_ptr), tag,
-                          std::move(stl_allocator)) {
+                          std::move(stl_allocator), context) {
 }
 
 TupleDataCollection::~TupleDataCollection() {
@@ -66,7 +69,8 @@ void TupleDataCollection::Initialize() {
 }
 
 unique_ptr<TupleDataCollection> TupleDataCollection::CreateUnique() const {
-	return make_uniq<TupleDataCollection>(allocator->GetBufferManager(), layout_ptr, tag);
+	return make_uniq<TupleDataCollection>(allocator->GetBufferManager(), layout_ptr, tag, nullptr,
+	                                      allocator->GetContext());
 }
 
 void GetAllColumnIDsInternal(vector<column_t> &column_ids, const idx_t column_count) {
@@ -529,19 +533,24 @@ void TupleDataCollection::Reset() {
 	for (idx_t i = 0; i < segments.size(); i++) {
 		if (segments[i]) {
 			live_idx = i;
-			segments[i]->Reset();
 			break;
 		}
 	}
 
 	if (live_idx < segments.size()) {
-		// At least one live segment found: reset in-place to avoid per-iteration mutex create/destroy.
-		// We own all the blocks, so it is safe to clear the allocator's block list directly.
+		// At least one live segment found. Keep exactly one live segment and make the collection-level allocator
+		// match that segment allocator before resetting to preserve segment/allocator consistency.
 		if (live_idx > 0) {
 			segments[0] = std::move(segments[live_idx]);
 		}
 		segments.resize(1);
+		allocator = segments[0]->allocator;
+		segments[0]->Reset();
 		allocator->Reset();
+		D_ASSERT(segments[0]->allocator.get() == allocator.get());
+		D_ASSERT(segments[0]->count == 0);
+		D_ASSERT(segments[0]->chunks.empty());
+		D_ASSERT(segments[0]->chunk_parts.empty());
 	} else {
 		// All segments were null (moved out by Combine).  The old allocator is still shared by
 		// those moved-out segments and must keep its row_blocks intact.  Create a fresh allocator.
@@ -646,7 +655,7 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 		if (!segments.empty()) {
 			FinalizePinState(state.pin_state, *segments[segment_index_before]);
 		}
-		result.SetCardinality(0);
+		result.SetChildCardinality(0);
 		return false;
 	}
 	if (segment_index_before != DConstants::INVALID_INDEX && segment_index != segment_index_before) {
@@ -666,7 +675,7 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 			if (!segments.empty()) {
 				FinalizePinState(lstate.pin_state, *segments[segment_index_before]);
 			}
-			result.SetCardinality(0);
+			result.SetChildCardinality(0);
 			return false;
 		}
 	}

@@ -1,0 +1,64 @@
+# name: test/sql/storage/rowid_gaps/bulk_append_after_gap_checkpoint.test
+# description: bulk appends merge transaction-local storage after persisted rowid gaps
+# group: [rowid_gaps]
+
+# A bulk append goes through LocalStorage::MergeStorage rather than row-by-row
+# append. The appended row groups must start at next_row_id, not total_rows,
+# when the persistent table has a rowid gap.
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_bulk_append.db' AS rowid_gap_bulk_append (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE TABLE rowid_gap_bulk_append.t AS SELECT i FROM range(6144) tbl(i);
+
+statement ok
+CREATE UNIQUE INDEX idx_i ON rowid_gap_bulk_append.t(i);
+
+statement ok
+CHECKPOINT rowid_gap_bulk_append;
+
+statement ok
+DELETE FROM rowid_gap_bulk_append.t WHERE i >= 2048 AND i < 4096;
+
+statement ok
+CHECKPOINT rowid_gap_bulk_append;
+
+statement ok
+DETACH rowid_gap_bulk_append;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_bulk_append.db' AS rowid_gap_bulk_append;
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_bulk_append.t;
+----
+0	6143	4096
+
+statement ok
+INSERT INTO rowid_gap_bulk_append.t SELECT 1000000 + i FROM range(4096) tbl(i);
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_bulk_append.t WHERE i >= 1000000;
+----
+6144	10239	4096
+
+statement ok
+CHECKPOINT rowid_gap_bulk_append;
+
+statement ok
+DETACH rowid_gap_bulk_append;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_bulk_append.db' AS rowid_gap_bulk_append;
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_bulk_append.t WHERE i >= 1000000;
+----
+6144	10239	4096
+
+query II
+SELECT rowid, i FROM rowid_gap_bulk_append.t WHERE i IN (1000000, 1004095) ORDER BY i;
+----
+6144	1000000
+10239	1004095

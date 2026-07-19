@@ -103,9 +103,8 @@ bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.GetArguments().size() == 2);
+	D_ASSERT(input.GetBoundFunction().GetArguments().size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -163,6 +162,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetArrayFunction());
 	functions.push_back(GetObjectFunction());
 	AddAliases({"to_json", "json_quote"}, GetToJSONFunction(), functions);
+	functions.push_back(ScalarFunctionSet(GetJSONCopyToJSONFunction()));
 	functions.push_back(GetArrayToJSONFunction());
 	functions.push_back(GetRowToJSONFunction());
 	functions.push_back(GetMergePatchFunction());
@@ -189,6 +189,10 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetPrettyPrintFunction());
 	functions.push_back(GetNormalizeFunction());
 	functions.push_back(GetStripNullsFunction());
+	functions.push_back(GetInsertFunction());
+	functions.push_back(GetRemoveFunction());
+	functions.push_back(GetReplaceFunction());
+	functions.push_back(GetSetFunction());
 
 	return functions;
 }
@@ -236,7 +240,7 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}
 
 	return std::move(table_function);

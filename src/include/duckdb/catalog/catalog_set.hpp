@@ -42,12 +42,12 @@ public:
 	void AddEntry(unique_ptr<CatalogEntry> entry);
 	void UpdateEntry(unique_ptr<CatalogEntry> entry);
 	void DropEntry(CatalogEntry &entry);
-	case_insensitive_tree_t<unique_ptr<CatalogEntry>> &Entries();
-	optional_ptr<CatalogEntry> GetEntry(const string &name);
+	identifier_tree_t<unique_ptr<CatalogEntry>> &Entries();
+	optional_ptr<CatalogEntry> GetEntry(const Identifier &name);
 
 private:
-	//! Mapping of string to catalog entry
-	case_insensitive_tree_t<unique_ptr<CatalogEntry>> entries;
+	//! Mapping of identifier to catalog entry
+	identifier_tree_t<unique_ptr<CatalogEntry>> entries;
 };
 
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
@@ -65,16 +65,16 @@ public:
 
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
-	DUCKDB_API bool CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
+	DUCKDB_API bool CreateEntry(CatalogTransaction transaction, const Identifier &name, unique_ptr<CatalogEntry> value,
 	                            const LogicalDependencyList &dependencies);
-	DUCKDB_API bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
+	DUCKDB_API bool CreateEntry(ClientContext &context, const Identifier &name, unique_ptr<CatalogEntry> value,
 	                            const LogicalDependencyList &dependencies);
 
-	DUCKDB_API bool AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info);
+	DUCKDB_API bool AlterEntry(CatalogTransaction transaction, const Identifier &name, AlterInfo &alter_info);
 
-	DUCKDB_API bool DropEntry(CatalogTransaction transaction, const string &name, bool cascade,
+	DUCKDB_API bool DropEntry(CatalogTransaction transaction, const Identifier &name, bool cascade,
 	                          bool allow_drop_internal = false);
-	DUCKDB_API bool DropEntry(ClientContext &context, const string &name, bool cascade,
+	DUCKDB_API bool DropEntry(ClientContext &context, const Identifier &name, bool cascade,
 	                          bool allow_drop_internal = false);
 	//! Verify that the entry referenced by the dependency is still alive
 	DUCKDB_API void VerifyExistenceOfDependency(transaction_t commit_id, CatalogEntry &entry);
@@ -88,13 +88,13 @@ public:
 	void CleanupEntry(CatalogEntry &catalog_entry);
 
 	//! Returns the entry with the specified name
-	DUCKDB_API EntryLookup GetEntryDetailed(CatalogTransaction transaction, const string &name);
-	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, const string &name);
-	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &name);
+	DUCKDB_API EntryLookup GetEntryDetailed(CatalogTransaction transaction, const Identifier &name);
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, const Identifier &name);
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const Identifier &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).
-	SimilarCatalogEntry SimilarEntry(CatalogTransaction transaction, const string &name);
+	SimilarCatalogEntry SimilarEntry(CatalogTransaction transaction, const Identifier &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry
@@ -104,7 +104,7 @@ public:
 	DUCKDB_API void Scan(const std::function<void(CatalogEntry &)> &callback);
 	//! Scan the catalog set, invoking the callback method for every entry
 	DUCKDB_API void ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
-	                               const string &prefix);
+	                               const Identifier &prefix);
 	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
 	DUCKDB_API void ScanWithReturn(CatalogTransaction transaction, const std::function<bool(CatalogEntry &)> &callback);
 	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
@@ -135,7 +135,7 @@ public:
 	void SetDefaultGenerator(unique_ptr<DefaultGenerator> defaults);
 
 private:
-	bool DropDependencies(CatalogTransaction transaction, const string &name, bool cascade,
+	bool DropDependencies(CatalogTransaction transaction, const Identifier &name, bool cascade,
 	                      bool allow_drop_internal = false);
 	//! Given a root entry, gets the entry valid for this transaction, 'visible' is used to indicate whether the entry
 	//! is actually visible to the transaction
@@ -143,25 +143,25 @@ private:
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
-	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name);
+	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const Identifier &name);
 	optional_ptr<CatalogEntry> CreateCommittedEntry(unique_ptr<CatalogEntry> entry);
 
 	//! Create all default entries
 	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock);
 	//! Attempt to create a default entry with the specified name. Returns the entry if successful, nullptr otherwise.
-	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &name,
+	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const Identifier &name,
 	                                              unique_lock<mutex> &lock);
 
-	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false);
+	bool DropEntryInternal(CatalogTransaction transaction, const Identifier &name, bool allow_drop_internal = false);
 
-	bool CreateEntryInternal(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
+	bool CreateEntryInternal(CatalogTransaction transaction, const Identifier &name, unique_ptr<CatalogEntry> value,
 	                         unique_lock<mutex> &read_lock, bool should_be_empty = true);
-	void CheckCatalogEntryInvariants(CatalogEntry &value, const string &name);
+	void CheckCatalogEntryInvariants(CatalogEntry &value, const Identifier &name);
 	//! Verify that the previous entry in the chain is dropped.
 	bool VerifyVacancy(CatalogTransaction transaction, CatalogEntry &entry);
 	//! Start the catalog entry chain with a dummy node
-	bool StartChain(CatalogTransaction transaction, const string &name, unique_lock<mutex> &read_lock);
-	bool RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const string &new_name,
+	bool StartChain(CatalogTransaction transaction, const Identifier &name, unique_lock<mutex> &read_lock);
+	bool RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const Identifier &new_name,
 	                         AlterInfo &alter_info, unique_lock<mutex> &read_lock);
 
 private:

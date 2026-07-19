@@ -20,9 +20,13 @@ public:
 public:
 	explicit BoundConstantExpression(Value value);
 
-	Value value;
-
 public:
+	const Value &GetValue() const {
+		return value;
+	}
+	Value &GetValueMutable() {
+		return value;
+	}
 	string ToString() const override;
 
 	bool Equals(const BaseExpression &other) const override;
@@ -32,5 +36,8 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	Value value;
 };
 } // namespace duckdb

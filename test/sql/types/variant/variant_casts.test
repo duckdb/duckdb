@@ -7,6 +7,11 @@ statement ok
 CREATE TABLE struct AS SELECT {'a': 42, 'b': 84} s
 
 query I
+select variant 'a'
+----
+a
+
+query I
 select s::VARIANT FROM struct
 ----
 {'a': 42, 'b': 84}

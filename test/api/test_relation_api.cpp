@@ -512,7 +512,7 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	string db_path = test_dir + "/my_db.db";
 	REQUIRE_NO_FAIL(con.Query("ATTACH '" + db_path + "' AS my_db;"));
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
-	REQUIRE_NOTHROW(values->Create(std::string("my_db"), std::string(), std::string("integers")));
+	REQUIRE_NOTHROW(values->Create(Identifier("my_db"), Identifier(), Identifier("integers")));
 	result = con.Query("SELECT * FROM my_db.integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
@@ -1137,7 +1137,8 @@ TEST_CASE("Test materialized relations", "[relation_api]") {
 		auto result = con.Query("insert into tbl values ('test') returning *");
 		auto &materialized_result = result->Cast<MaterializedQueryResult>();
 		auto materialized_relation = make_shared_ptr<MaterializedRelation>(
-		    con.context, materialized_result.TakeCollection(), result->names, "vw");
+		    con.context, materialized_result.TakeCollection(), duckdb::StringsToIdentifiers(result->names),
+		    duckdb::Identifier("vw"));
 		materialized_relation->CreateView("vw");
 		materialized_relation.reset();
 

@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 
 namespace duckdb {
+
 void PEGTransformerFactory::AddPivotEntry(PEGTransformer &transformer, string enum_name, unique_ptr<SelectNode> base,
                                           unique_ptr<ParsedExpression> column, unique_ptr<QueryNode> subquery,
                                           bool has_parameters) {
@@ -17,18 +18,14 @@ void PEGTransformerFactory::AddPivotEntry(PEGTransformer &transformer, string en
 	transformer.pivot_entries.push_back(std::move(result));
 }
 
-vector<PivotColumn> PEGTransformerFactory::TransformPivotOn(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<vector<PivotColumn>>(list_pr.GetChild(1));
+vector<PivotColumn> PEGTransformerFactory::TransformPivotOn(PEGTransformer &transformer,
+                                                            vector<PivotColumn> pivot_column_list) {
+	return pivot_column_list;
 }
 
 vector<PivotColumn> PEGTransformerFactory::TransformPivotColumnList(PEGTransformer &transformer,
-                                                                    ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto pivot_column_list = ExtractParseResultsFromList(list_pr.GetChild(0));
-	vector<PivotColumn> result;
-	for (auto &pivot_column : pivot_column_list) {
-		auto col = transformer.Transform<PivotColumn>(pivot_column);
+                                                                    vector<PivotColumn> pivot_column_entry) {
+	for (auto &col : pivot_column_entry) {
 		// Re-wrap multiple pivot expressions into a single row() only when IN entries are
 		// scalar (size 1). For tuple IN entries the unpacked expressions must stay separate
 		// so that each value maps to its corresponding pivot expression.
@@ -41,8 +38,7 @@ vector<PivotColumn> PEGTransformerFactory::TransformPivotColumnList(PEGTransform
 				}
 			}
 			if (!has_tuple_entries) {
-				auto row_function = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row",
-				                                                  std::move(col.pivot_expressions));
+				auto row_function = make_uniq<FunctionExpression>("row", std::move(col.pivot_expressions));
 				col.pivot_expressions.push_back(std::move(row_function));
 			}
 		}
@@ -55,32 +51,23 @@ vector<PivotColumn> PEGTransformerFactory::TransformPivotColumnList(PEGTransform
 				throw ParserException(expr->GetQueryLocation(), "Cannot pivot on subquery \"%s\"", expr->ToString());
 			}
 		}
-		result.push_back(std::move(col));
 	}
-	return result;
-}
-
-PivotColumn PEGTransformerFactory::TransformPivotColumnEntry(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<PivotColumn>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+	return pivot_column_entry;
 }
 
 PivotColumn PEGTransformerFactory::TransformPivotColumnSubquery(PEGTransformer &transformer,
-                                                                ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                unique_ptr<ParsedExpression> base_expression,
+                                                                unique_ptr<SelectStatement> select_statement_internal) {
 	PivotColumn result;
-	result.pivot_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
-	auto &select_subquery = ExtractResultFromParens(list_pr.GetChild(2));
-	auto select = transformer.Transform<unique_ptr<SelectStatement>>(select_subquery);
-	result.subquery = std::move(select->node);
+	result.pivot_expressions.push_back(std::move(base_expression));
+	result.subquery = std::move(select_statement_internal->node);
 	return result;
 }
 
-PivotColumn PEGTransformerFactory::TransformPivotColumnEntryInternal(PEGTransformer &transformer,
-                                                                     ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+PivotColumn PEGTransformerFactory::TransformPivotColumnExpression(PEGTransformer &transformer,
+                                                                  unique_ptr<ParsedExpression> expression) {
 	PivotColumn result;
-	result.pivot_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
+	result.pivot_expressions.push_back(std::move(expression));
 	return result;
 }
 
@@ -89,20 +76,20 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
 	auto current_param_count = transformer.ParamCount();
-	auto source = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(1));
+	auto source = TransformTableRef(transformer, list_pr.GetChild(1));
 	auto next_param_count = transformer.ParamCount();
 	bool has_parameters = next_param_count > current_param_count;
 	auto &pivot_columns = list_pr.Child<OptionalParseResult>(2);
 	auto select_node = make_uniq<SelectNode>();
 	auto &pivot_group = list_pr.Child<OptionalParseResult>(4);
 	if (!pivot_columns.HasResult()) {
-		select_node->from_table = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(1));
+		select_node->from_table = TransformTableRef(transformer, list_pr.GetChild(1));
 		if (pivot_group.HasResult()) {
 			auto pivot_group_list = transformer.Transform<vector<string>>(pivot_group.GetResult());
 			GroupingSet set;
 			for (idx_t gr = 0; gr < pivot_group_list.size(); gr++) {
 				auto &group = pivot_group_list[gr];
-				auto colref = make_uniq<ColumnRefExpression>(group);
+				auto colref = make_uniq<ColumnRefExpression>(Identifier(group));
 				select_node->select_list.push_back(colref->Copy());
 				select_node->groups.group_expressions.push_back(std::move(colref));
 				set.insert(ProjectionIndex(gr));
@@ -135,7 +122,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 		new_select->from_table = source->Copy();
 		AddPivotEntry(transformer, enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(),
 		              std::move(col.subquery), has_parameters);
-		col.pivot_enum = enum_name;
+		col.pivot_enum = Identifier(enum_name);
 	}
 
 	// Generate the actual query, including the pivot
@@ -154,7 +141,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 		pivot_ref->aggregates.push_back(std::move(function));
 	}
 	if (pivot_group.HasResult()) {
-		pivot_ref->groups = transformer.Transform<vector<string>>(pivot_group.GetResult());
+		pivot_ref->groups = transformer.Transform<vector<Identifier>>(pivot_group.GetResult());
 	}
 	pivot_ref->pivots = std::move(columns);
 	select_node->from_table = std::move(pivot_ref);
@@ -163,47 +150,146 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 	return select_statement;
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformPivotUsing(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.GetChild(1));
+void PEGTransformerFactory::InitializePivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.manual_state = transformer.ParamCount();
+	frame.ReserveChildSlots(5);
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("TableRef"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
-vector<string> PEGTransformerFactory::TransformUnpivotHeader(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<vector<string>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotStatementTrampoline(PEGTransformer &transformer,
+                                                                                         TransformStack &stack,
+                                                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	if (!frame.child_results[4]) {
+		bool has_parameters = transformer.ParamCount() > frame.manual_state;
+		frame.SetChildResult(4, make_uniq<TypedTransformResult<bool>>(has_parameters));
+		auto &pivot_columns = list_pr.Child<OptionalParseResult>(2);
+		auto &pivot_aggregates = list_pr.Child<OptionalParseResult>(3);
+		auto &pivot_group = list_pr.Child<OptionalParseResult>(4);
+		bool pushed_child = false;
+		if (pivot_group.HasResult()) {
+			stack.PushFrame(pivot_group.GetResult(), PEGTransformerFactory::GetTrampolineOps("PivotGroupByList"),
+			                TransformFrameResultTarget(frame.frame_index, 3));
+			pushed_child = true;
+		}
+		if (pivot_aggregates.HasResult()) {
+			stack.PushFrame(pivot_aggregates.GetResult(), PEGTransformerFactory::GetTrampolineOps("PivotUsing"),
+			                TransformFrameResultTarget(frame.frame_index, 2));
+			pushed_child = true;
+		}
+		if (pivot_columns.HasResult()) {
+			stack.PushFrame(pivot_columns.GetResult(), PEGTransformerFactory::GetTrampolineOps("PivotOn"),
+			                TransformFrameResultTarget(frame.frame_index, 1));
+			pushed_child = true;
+		}
+		if (pushed_child) {
+			return nullptr;
+		}
+	}
+	auto source = frame.TakeResult<unique_ptr<TableRef>>(0);
+	auto has_parameters = frame.TakeResult<bool>(4);
+	auto &pivot_columns = list_pr.Child<OptionalParseResult>(2);
+	auto &pivot_group = list_pr.Child<OptionalParseResult>(4);
+	auto select_node = make_uniq<SelectNode>();
+	if (!pivot_columns.HasResult()) {
+		select_node->from_table = std::move(source);
+		if (pivot_group.HasResult()) {
+			auto pivot_group_list = frame.TakeResult<vector<string>>(3);
+			GroupingSet set;
+			for (idx_t gr = 0; gr < pivot_group_list.size(); gr++) {
+				auto &group = pivot_group_list[gr];
+				auto colref = make_uniq<ColumnRefExpression>(Identifier(group));
+				select_node->select_list.push_back(colref->Copy());
+				select_node->groups.group_expressions.push_back(std::move(colref));
+				set.insert(ProjectionIndex(gr));
+			}
+			select_node->groups.grouping_sets.push_back(std::move(set));
+		}
+		auto &pivot_using_opt = list_pr.Child<OptionalParseResult>(3);
+		if (pivot_using_opt.HasResult()) {
+			auto pivot_using = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(2);
+			for (auto &col : pivot_using) {
+				select_node->select_list.push_back(std::move(col));
+			}
+		}
+		auto result = make_uniq<SelectStatement>();
+		result->node = std::move(select_node);
+		return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+	}
+	auto columns = frame.TakeResult<vector<PivotColumn>>(1);
+	for (idx_t c = 0; c < columns.size(); c++) {
+		auto &col = columns[c];
+		if (!col.pivot_enum.empty() || !col.entries.empty()) {
+			continue;
+		}
+		if (col.pivot_expressions.size() != 1) {
+			throw InternalException("PIVOT statement with multiple names in pivot entry!?");
+		}
+		auto enum_name = "__pivot_enum_" + UUID::ToString(UUID::GenerateRandomUUID());
+
+		auto new_select = make_uniq<SelectNode>();
+		transformer.ExtractCTEsRecursive(new_select->cte_map);
+		new_select->from_table = source->Copy();
+		AddPivotEntry(transformer, enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(),
+		              std::move(col.subquery), has_parameters);
+		col.pivot_enum = Identifier(enum_name);
+	}
+
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	auto pivot_ref = make_uniq<PivotRef>();
+	pivot_ref->source = std::move(source);
+	auto &pivot_aggregates = list_pr.Child<OptionalParseResult>(3);
+	if (pivot_aggregates.HasResult()) {
+		pivot_ref->aggregates = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(2);
+	} else {
+		vector<unique_ptr<ParsedExpression>> children;
+		auto function = make_uniq<FunctionExpression>("count_star", std::move(children));
+		pivot_ref->aggregates.push_back(std::move(function));
+	}
+	if (pivot_group.HasResult()) {
+		pivot_ref->groups = StringsToIdentifiers(frame.TakeResult<vector<string>>(3));
+	}
+	pivot_ref->pivots = std::move(columns);
+	select_node->from_table = std::move(pivot_ref);
+	auto result = make_uniq<SelectStatement>();
+	result->node = std::move(select_node);
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformPivotUsing(PEGTransformer &transformer,
+                                           vector<unique_ptr<ParsedExpression>> target_list) {
+	return target_list;
 }
 
 vector<string> PEGTransformerFactory::TransformUnpivotHeaderSingle(PEGTransformer &transformer,
-                                                                   ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                   const Identifier &col_id_or_string) {
 	vector<string> result;
-	result.push_back(transformer.Transform<string>(list_pr.GetChild(0)));
+	result.push_back(col_id_or_string.GetIdentifierName());
 	return result;
 }
 
 vector<string> PEGTransformerFactory::TransformUnpivotHeaderList(PEGTransformer &transformer,
-                                                                 ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &extract_parens = ExtractResultFromParens(list_pr.GetChild(0));
-	auto col_list = ExtractParseResultsFromList(extract_parens);
-	vector<string> result;
-	for (auto col : col_list) {
-		result.push_back(transformer.Transform<string>(col));
-	}
-	return result;
+                                                                 const vector<Identifier> &col_id_or_string) {
+	return IdentifiersToStrings(col_id_or_string);
 }
 
-bool PEGTransformerFactory::TransformIncludeOrExcludeNulls(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<bool>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+bool PEGTransformerFactory::TransformIncludeNulls(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformExcludeNulls(PEGTransformer &transformer) {
+	return false;
 }
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEGTransformer &transformer,
                                                                              ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto current_param_count = transformer.ParamCount();
-	auto source = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(1));
+	auto source = TransformTableRef(transformer, list_pr.GetChild(1));
 	auto next_param_count = transformer.ParamCount();
 	bool has_parameters = next_param_count > current_param_count;
 	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.GetChild(3));
@@ -252,7 +338,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEG
 		new_select->from_table = source->Copy();
 		AddPivotEntry(transformer, enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(),
 		              std::move(col.subquery), has_parameters);
-		col.pivot_enum = enum_name;
+		col.pivot_enum = Identifier(enum_name);
 	}
 
 	auto pivot_ref = make_uniq<PivotRef>();
@@ -272,17 +358,107 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEG
 	return result;
 }
 
+void PEGTransformerFactory::InitializeUnpivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.manual_state = transformer.ParamCount();
+	frame.ReserveChildSlots(4);
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("TableRef"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUnpivotStatementTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	if (!frame.child_results[3]) {
+		bool has_parameters = transformer.ParamCount() > frame.manual_state;
+		frame.SetChildResult(3, make_uniq<TypedTransformResult<bool>>(has_parameters));
+		auto &unpivot_names_opt = list_pr.Child<OptionalParseResult>(4);
+		if (unpivot_names_opt.HasResult()) {
+			stack.PushFrame(unpivot_names_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("IntoNameValues"),
+			                TransformFrameResultTarget(frame.frame_index, 2));
+		}
+		stack.PushFrame(list_pr.GetChild(3), PEGTransformerFactory::GetTrampolineOps("TargetList"),
+		                TransformFrameResultTarget(frame.frame_index, 1));
+		return nullptr;
+	}
+	auto source = frame.TakeResult<unique_ptr<TableRef>>(0);
+	auto has_parameters = frame.TakeResult<bool>(3);
+	auto target_list = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1);
+	auto &unpivot_names_opt = list_pr.Child<OptionalParseResult>(4);
+	vector<PivotColumn> columns;
+	UnpivotNameValues name_and_values;
+	if (!unpivot_names_opt.HasResult()) {
+		PivotColumn col;
+		col.unpivot_names.push_back("name");
+		for (auto &expr : target_list) {
+			PivotColumnEntry entry;
+			entry.alias = expr->GetAlias();
+			entry.expr = std::move(expr);
+			col.entries.push_back(std::move(entry));
+		}
+		columns.push_back(std::move(col));
+	} else {
+		name_and_values = frame.TakeResult<UnpivotNameValues>(2);
+		auto unpivot_list_size = name_and_values.column.unpivot_names.size();
+		if (unpivot_list_size != 1) {
+			throw NotImplementedException("Only expected a single value after NAME, got %d instead.",
+			                              unpivot_list_size);
+		}
+		auto &col = name_and_values.column;
+		for (auto &expr : target_list) {
+			PivotColumnEntry entry;
+			entry.alias = expr->GetAlias();
+			entry.expr = std::move(expr);
+			col.entries.push_back(std::move(entry));
+		}
+		columns.push_back(std::move(col));
+	}
+
+	for (idx_t c = 0; c < columns.size(); c++) {
+		auto &col = columns[c];
+		if (!col.pivot_enum.empty() || !col.entries.empty()) {
+			continue;
+		}
+		if (col.pivot_expressions.size() != 1) {
+			throw InternalException("PIVOT statement with multiple names in pivot entry!?");
+		}
+		auto enum_name = "__pivot_enum_" + UUID::ToString(UUID::GenerateRandomUUID());
+
+		auto new_select = make_uniq<SelectNode>();
+		transformer.ExtractCTEsRecursive(new_select->cte_map);
+		new_select->from_table = source->Copy();
+		AddPivotEntry(transformer, enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(),
+		              std::move(col.subquery), has_parameters);
+		col.pivot_enum = Identifier(enum_name);
+	}
+
+	auto pivot_ref = make_uniq<PivotRef>();
+	pivot_ref->source = std::move(source);
+	if (!unpivot_names_opt.HasResult()) {
+		pivot_ref->unpivot_names.push_back("value");
+	} else {
+		pivot_ref->unpivot_names = name_and_values.unpivot_names;
+	}
+
+	pivot_ref->pivots = std::move(columns);
+	auto select_node = make_uniq<SelectNode>();
+	select_node->from_table = std::move(pivot_ref);
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	auto result = make_uniq<SelectStatement>();
+	result->node = std::move(select_node);
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+}
+
 UnpivotNameValues PEGTransformerFactory::TransformIntoNameValues(PEGTransformer &transformer,
-                                                                 ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                 const Identifier &col_id_or_string,
+                                                                 const vector<Identifier> &identifier) {
 	UnpivotNameValues result;
 	PivotColumn column;
-	column.unpivot_names.push_back(transformer.Transform<string>(list_pr.GetChild(2)));
+	column.unpivot_names.push_back(Identifier(col_id_or_string));
 	result.column = std::move(column);
-	auto unpivot_name_list = ExtractParseResultsFromList(list_pr.GetChild(4));
-	for (auto identifier : unpivot_name_list) {
-		result.unpivot_names.push_back(identifier.get().Cast<IdentifierParseResult>().identifier);
-	}
+	result.unpivot_names = identifier;
 	return result;
 }
 } // namespace duckdb

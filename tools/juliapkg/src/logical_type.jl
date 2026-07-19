@@ -63,7 +63,7 @@ function create_logical_type(::Type{T}) where {T <: FixedDecimal}
 end
 
 function create_logical_type(::Type{T}) where {T}
-    throw(NotImplementedException("Unsupported type for create_logical_type"))
+    return throw(NotImplementedException("Unsupported type for create_logical_type"))
 end
 
 function get_type_id(type::LogicalType)

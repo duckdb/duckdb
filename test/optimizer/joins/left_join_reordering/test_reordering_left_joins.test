@@ -1,0 +1,125 @@
+# name: test/optimizer/joins/left_join_reordering/test_reordering_left_joins.test
+# description: Reordering left joins produces valid results
+# group: [left_join_reordering]
+
+# make sure no illegal left join reordering happens
+
+statement ok
+pragma disabled_optimizers='build_side_probe_side';
+
+statement ok
+create table t1 as from values (0), (1), (2), (3), (NULL) t(a);
+
+statement ok
+create table t2 as from values (0), (1) t(b);
+
+statement ok
+create table t3 as from values (1), (2) t(c);
+
+# Post-LEFT filters that reference nullable-side columns must stay above the LEFT join.
+# If this filter is reconstructed before the LEFT join, the NULL-extended rows disappear.
+statement ok
+create table lj_pin_l(id integer, v integer);
+
+statement ok
+insert into lj_pin_l values (1, 10), (2, 20);
+
+statement ok
+create table lj_pin_n(dx integer);
+
+statement ok
+insert into lj_pin_n values (0), (1);
+
+statement ok
+create table lj_pin_r(id integer, v integer);
+
+statement ok
+insert into lj_pin_r values (1, 10);
+
+query IIII
+select l.id, n.dx, r.id, r.v
+from (lj_pin_l l cross join lj_pin_n n)
+left join lj_pin_r r on l.id + n.dx = r.id
+where l.v is distinct from r.v
+order by all;
+----
+1	1	NULL	NULL
+2	0	NULL	NULL
+2	1	NULL	NULL
+
+
+# filters (a ⟕ (b ⨝ c))
+query III
+select * from t1 left join (select * from t2, t3 where b = c) on a = c order by all;
+----
+0	NULL	NULL
+1	1	1
+2	NULL	NULL
+3	NULL	NULL
+NULL	NULL	NULL
+
+# illegal reordering of test above ((a ⟕ c) ⨝ b)
+query III
+select * from (from t1 left join t3 on a=c), t2 where b = c order by all;
+----
+1	1	1
+
+# this can be reordered
+# from (a ⨝ b) ⟕ c) to ((b ⟕ c) ⨝ a)
+query III
+select * from t1 join t2 on a = b left join t3 on b = c order by all;
+----
+0	0	NULL
+1	1	1
+
+# two && three left joins.
+
+# (a ⟕ b) ⨝ c ON b.col = c.col: inner join references LOJ RHS (the primary fix case)
+# This was previously crashing with infinite recursion / stack overflow
+query III
+select * from t1 left join t2 on a = b join t3 on b = c order by all;
+----
+1	1	1
+
+# (a ⟕ b) ⨝ c ON a.col = c.col: inner join references only LOJ LHS (valid reordering allowed)
+query III
+select * from t1 left join t2 on a = b join t3 on a = c order by all;
+----
+1	1	1
+2	NULL	2
+
+# chained left joins: (a ⟕ b) ⟕ c
+query III
+select * from t1 left join t2 on a = b left join t3 on b = c order by all;
+----
+0	0	NULL
+1	1	1
+2	NULL	NULL
+3	NULL	NULL
+NULL	NULL	NULL
+
+# chained left joins with inner join: ((a ⟕ b) ⟕ c) ⨝ d ON c.col = d.col
+statement ok
+create table t4 as from values (1), (3) t(d);
+
+query IIII
+select * from t1 left join t2 on a = b left join t3 on b = c join t4 on c = d order by all;
+----
+1	1	1	1
+
+# A LEFT join should not be planned before an available INNER equality from its preserved side.
+# The plan may be reconstructed as a RIGHT join after build/probe swapping, but the optional
+# table join must remain above the selective fact/dimension INNER join.
+statement ok
+create table lj_fact as select range f_k, range % 100 f_d from range(10000);
+
+statement ok
+create table lj_dim as select 0 d_d;
+
+statement ok
+create table lj_opt as select range o_k from range(10000);
+
+query II
+explain select count(*) from lj_fact join lj_dim on f_d = d_d left join lj_opt on f_k = o_k;
+----
+physical_plan	<REGEX>:.*f_k = o_k.*f_d = CAST\(d_d AS BIGINT\).*

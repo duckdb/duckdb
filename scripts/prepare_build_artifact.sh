@@ -25,8 +25,8 @@ mkdir -p "$ARTIFACT_DIR"/test/extension "$ARTIFACT_DIR"/src
 # Required by CI jobs that run the CLI from build/<type>/duckdb.
 cp -av "$BUILD_DIR/duckdb" "$ARTIFACT_DIR"/
 
-# Required by CI test jobs that run the prebuilt unittest binary.
-cp -av "$BUILD_DIR/test/unittest" "$ARTIFACT_DIR"/test/
+# Required by CI test jobs that run the prebuilt unittest binary and runner.
+cp -av "$BUILD_DIR/"test/{run,unittest} "$ARTIFACT_DIR"/test/
 
 # Required by ADBC and other tests that need the shared library.
 shopt -s nullglob

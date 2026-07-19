@@ -222,7 +222,7 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		}
 		auto &delim_colref = delim_side.Cast<BoundColumnRefExpression>();
 		auto &other_colref = other_side.Cast<BoundColumnRefExpression>();
-		replacement_bindings.emplace_back(delim_colref.binding, other_colref.binding);
+		replacement_bindings.emplace_back(delim_colref.Binding(), other_colref.Binding());
 
 		// Only add IS NOT NULL filter for regular equality/inequality comparisons
 		// Do NOT add for DISTINCT FROM variants, as they handle NULL correctly
@@ -230,7 +230,7 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		    cond.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM) {
 			auto is_not_null_expr =
 			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-			is_not_null_expr->children.push_back(other_side.Copy());
+			is_not_null_expr->GetChildrenMutable().push_back(other_side.Copy());
 			filter_expressions.push_back(std::move(is_not_null_expr));
 		}
 	}
@@ -276,7 +276,7 @@ bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings, const vector
 		}
 
 		auto &colref = expressions[current_idx]->Cast<BoundColumnRefExpression>();
-		binding = colref.binding;
+		binding = colref.Binding();
 	}
 	return true;
 }
@@ -311,7 +311,7 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 			return false;
 		}
 		auto &colref = cond.GetRHS().Cast<BoundColumnRefExpression>();
-		traced_bindings.emplace_back(colref.binding);
+		traced_bindings.emplace_back(colref.Binding());
 	}
 
 	// Now we trace down the bindings to the join (for now, we only trace it through a few operators)
@@ -348,7 +348,7 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 		for (auto &join_condition : join_conditions) {
 			auto &delim_side = delim_idx == 0 ? join_condition.GetLHS() : join_condition.GetRHS();
 			auto &colref = delim_side.Cast<BoundColumnRefExpression>();
-			if (colref.binding == traced_binding) {
+			if (colref.Binding() == traced_binding) {
 				if (!join_condition.IsComparison()) {
 					continue;
 				}
@@ -413,7 +413,7 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 			return;
 		}
 		auto &colref = cond.GetRHS().Cast<BoundColumnRefExpression>();
-		join_bindings.emplace_back(colref.binding);
+		join_bindings.emplace_back(colref.Binding());
 	}
 
 	// Now try to find an aggr in the RHS such that the join_column_bindings is a superset of the groups

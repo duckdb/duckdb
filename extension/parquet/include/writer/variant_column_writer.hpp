@@ -24,8 +24,8 @@ struct ArrayAnalyzeData;
 
 struct VariantAnalyzeData {
 public:
-	VariantAnalyzeData() {
-	}
+	VariantAnalyzeData();
+	~VariantAnalyzeData();
 
 public:
 	//! Map for every value what type it is
@@ -36,8 +36,8 @@ public:
 	idx_t total_count = 0;
 
 	//! Map for every decimal value what physical type it has
-	unique_ptr<ObjectAnalyzeData> object_data = nullptr;
-	unique_ptr<ArrayAnalyzeData> array_data = nullptr;
+	unique_ptr<ObjectAnalyzeData> object_data;
+	unique_ptr<ArrayAnalyzeData> array_data;
 };
 
 struct ObjectAnalyzeData {
@@ -71,7 +71,7 @@ public:
 
 class VariantColumnWriter : public StructColumnWriter {
 public:
-	VariantColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p,
+	VariantColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path_p,
 	                    vector<unique_ptr<ColumnWriter>> child_writers_p)
 	    : StructColumnWriter(writer, std::move(column_schema), std::move(schema_path_p), std::move(child_writers_p)) {
 	}

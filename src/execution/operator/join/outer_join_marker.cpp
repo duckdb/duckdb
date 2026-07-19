@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -100,7 +102,6 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 				result.data[col_idx].Slice(lstate.scan_chunk.data[col_idx - left_column_count], lstate.match_sel,
 				                           result_count);
 			}
-			result.SetCardinality(result_count);
 			return;
 		}
 	}

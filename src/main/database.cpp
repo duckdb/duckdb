@@ -1,4 +1,6 @@
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/arrow/arrow_type_extension.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -18,6 +20,7 @@
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/external_resource_type_registry.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/error_manager.hpp"
@@ -124,6 +127,13 @@ DatabaseManager &DatabaseInstance::GetDatabaseManager() {
 	return *db_manager;
 }
 
+ExternalResourceTypeRegistry &DatabaseInstance::GetExternalResourceTypeRegistry() {
+	if (!external_resource_type_registry) {
+		throw InternalException("Missing external resource type registry");
+	}
+	return *external_resource_type_registry;
+}
+
 Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
 	return db.GetDatabaseManager().GetSystemCatalog();
 }
@@ -207,7 +217,7 @@ shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 
 void DatabaseInstance::CreateMainDatabase() {
 	AttachInfo info;
-	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
+	info.name = Identifier(AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem()));
 	info.path = config.options.database_path;
 
 	Connection con(*this);
@@ -292,6 +302,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
+	external_resource_type_registry = make_uniq<ExternalResourceTypeRegistry>();
 	if (config.buffer_manager) {
 		buffer_manager = config.buffer_manager;
 	} else {
@@ -300,6 +311,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	log_manager = make_uniq<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
+
+	metrics_manager = make_uniq<MetricsManager>();
 
 	bool enable_external_file_cache = Settings::Get<EnableExternalFileCacheSetting>(config);
 	external_file_cache = make_uniq<ExternalFileCache>(*this, enable_external_file_cache);
@@ -340,6 +353,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
+	scheduler->SetAsyncThreads(config.options.async_threads);
 	scheduler->RelaunchThreads();
 }
 
@@ -415,8 +429,7 @@ LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
 }
 
 FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
-	if (vfs.SubSystemIsDisabled(local_fs.GetName())) {
+	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
 	return local_fs;
@@ -502,6 +515,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
 		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
 	}
+	if (new_config.options.async_threads == DConstants::INVALID_INDEX) {
+		config.options.async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
+	}
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
 		config.allocator = make_uniq<Allocator>();
@@ -548,7 +564,7 @@ const DBConfig &DBConfig::GetConfig(const ClientContext &context) {
 }
 
 idx_t DatabaseInstance::NumberOfThreads() {
-	return NumericCast<idx_t>(scheduler->NumberOfThreads());
+	return scheduler->NumberOfThreads();
 }
 
 idx_t DuckDB::NumberOfThreads() {
@@ -628,6 +644,10 @@ const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 
 LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
+}
+
+MetricsManager &DatabaseInstance::GetMetricsManager() {
+	return *metrics_manager;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {

@@ -1,4 +1,5 @@
 #include "duckdb/common/helper.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
@@ -15,7 +16,7 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 		case_insensitive_set_t child_names;
 		child_list_t<LogicalType> child_types;
 		for (auto &child_type : StructType::GetChildTypes(type)) {
-			auto insert_success = child_names.insert(child_type.first).second;
+			auto insert_success = child_names.insert(child_type.first.GetIdentifierName()).second;
 			if (!insert_success) {
 				if (ignore_errors) {
 					continue;
@@ -147,7 +148,7 @@ private:
 };
 
 void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
-                          vector<string> &names) {
+                          vector<Identifier> &names) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 
 	MutableDateFormatMap date_format_map(*json_data.date_format_map);
@@ -160,7 +161,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	bind_data.union_readers.resize(files.empty() ? 0 : files.size());
 
 	AutoDetectState auto_detect_state(context, bind_data, files, date_format_map);
-	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	const auto files_per_task = (file_count + num_threads - 1) / num_threads;
 	const auto num_tasks = (file_count + files_per_task - 1) / files_per_task;
 	vector<JSONStructureNode> task_nodes(num_tasks);
@@ -253,7 +254,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 
 TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info) {
 	auto table_function = JSONFunctions::GetReadJSONTableFunction(std::move(info));
-	table_function.name = std::move(name);
+	table_function.SetName(Identifier(std::move(name)));
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;

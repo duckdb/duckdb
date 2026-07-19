@@ -115,7 +115,45 @@ FROM assert_bloom_filter_hit('{TEST_DIR}/bloom1.parquet', 'r_blob', 'blob_200'::
 ----
 true
 
+# BLOB bloom filters must hash the raw bytes rather than the escaped display string
+statement ok
+COPY (SELECT from_hex('FF')::BLOB AS b FROM range(10))
+TO '{TEST_DIR}/bloom_blob.parquet' (FORMAT PARQUET, WRITE_BLOOM_FILTER TRUE, DICTIONARY_SIZE_LIMIT 1000);
 
+query I
+SELECT bool_and(b = from_hex('FF')::BLOB) FROM '{TEST_DIR}/bloom_blob.parquet';
+----
+true
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_blob.parquet' WHERE b = from_hex('FF')::BLOB;
+----
+10
+
+query I
+SELECT bloom_filter_excludes
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_blob.parquet', 'b', from_hex('FF')::BLOB);
+----
+false
+
+query I
+SELECT bloom_filter_excludes
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_blob.parquet', 'b', from_hex('FE')::BLOB);
+----
+true
+
+# Computed expressions do not operate in the raw column's bloom filter domain
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_blob.parquet' WHERE to_hex(b) = 'FF';
+----
+10
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/bloom_blob.parquet' lhs
+JOIN '{TEST_DIR}/bloom_blob.parquet' rhs ON lhs.b = rhs.b;
+----
+100
 
 # some tests for dictionary_size_limit
 

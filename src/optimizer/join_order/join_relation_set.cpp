@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -9,6 +9,10 @@ namespace duckdb {
 
 using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
 
+JoinRelationSet::JoinRelationSet(unsafe_unique_array<RelationIndex> relations, idx_t count)
+    : relations(std::move(relations)), count(count) {
+}
+
 // LCOV_EXCL_START
 string JoinRelationSet::ToString() const {
 	string result = "[";
@@ -18,6 +22,10 @@ string JoinRelationSet::ToString() const {
 	return result;
 }
 // LCOV_EXCL_STOP
+
+bool JoinRelationSet::Empty() const {
+	return count == 0;
+}
 
 //! Returns true if sub is a subset of super
 bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
@@ -65,6 +73,14 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(RelationIndex index) {
 	relations[0] = index;
 	idx_t count = 1;
 	return GetJoinRelation(std::move(relations), count);
+}
+
+JoinRelationSet &JoinRelationSetManager::GetEmptyJoinRelationSet() {
+	if (!empty_relation_set) {
+		const unordered_set<RelationIndex> empty_bindings = {};
+		empty_relation_set = GetJoinRelation(empty_bindings);
+	}
+	return *empty_relation_set.get();
 }
 
 JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<RelationIndex> &bindings) {

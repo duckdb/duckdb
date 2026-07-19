@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
@@ -62,6 +63,10 @@ public:
 	//! or the file's block allocation size, if it is an existing database.
 	void Initialize(QueryContext context);
 
+	static bool TargetAtLeastVersion(StorageVersion version, idx_t target_version);
+	static bool TargetAtLeastVersion(StorageVersion version, StorageVersion target_version);
+	static bool IsPriorToVersion(StorageVersion version, StorageVersion target_version);
+
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() const {
 		return db;
@@ -111,15 +116,22 @@ public:
 	virtual BlockManager &GetBlockManager() = 0;
 	virtual void Destroy();
 
-	void SetStorageVersion(idx_t version) {
+	void SetStorageVersion(const StorageVersion &version) {
 		storage_version = version;
 	}
-	bool HasStorageVersion() const {
-		return storage_version.IsValid();
+	StorageVersion GetLatestStorageVersion() const {
+		return StorageVersion::LATEST;
 	}
-	idx_t GetStorageVersion() const {
+	StorageVersion GetStorageVersion() const {
 		D_ASSERT(HasStorageVersion());
-		return storage_version.GetIndex();
+		return storage_version;
+	}
+	bool HasStorageVersion() const {
+		return storage_version != StorageVersion::INVALID;
+	}
+	string_t GetDuckDBVersionString() const {
+		D_ASSERT(HasStorageVersion());
+		return StorageVersionInfo::GetStorageVersionString(storage_version);
 	}
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
@@ -166,14 +178,16 @@ protected:
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
 	//! return nullptr when loading a database
 	bool load_complete = false;
-	//! The serialization compatibility version when reading and writing from this database
-	optional_idx storage_version;
+	//! The storage compatibility version when reading and writing from this database
+	StorageVersion storage_version;
 	//! Estimated size of changes for determining automatic checkpointing on in-memory databases and databases without a
 	//! WAL.
 	atomic<idx_t> wal_size;
 	atomic<idx_t> wal_entries_count;
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
+	//! Header prefetched during file-type detection, consumed by LoadDatabase. Empty unless a DuckDB file via ATTACH.
+	PrefetchedFileData prefetched_file;
 
 public:
 	template <class TARGET>

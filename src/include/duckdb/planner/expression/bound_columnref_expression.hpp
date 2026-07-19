@@ -22,13 +22,7 @@ public:
 
 public:
 	BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth = 0);
-	BoundColumnRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t depth = 0);
-
-	//! Column index set by the binder, used to generate the final BoundExpression
-	ColumnBinding binding;
-	//! The subquery depth (i.e. depth 0 = current query, depth 1 = parent query, depth 2 = parent of parent, etc...).
-	//! This is only non-zero for correlated expressions inside subqueries.
-	idx_t depth;
+	BoundColumnRefExpression(Identifier alias, LogicalType type, ColumnBinding binding, idx_t depth = 0);
 
 public:
 	bool IsScalar() const override {
@@ -38,8 +32,21 @@ public:
 		return false;
 	}
 
+	const ColumnBinding &Binding() const {
+		return binding;
+	}
+	ColumnBinding &BindingMutable() {
+		return binding;
+	}
+	idx_t Depth() const {
+		return depth;
+	}
+	idx_t &DepthMutable() {
+		return depth;
+	}
+
 	string ToString() const override;
-	string GetName() const override;
+	Identifier GetName() const override;
 
 	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
@@ -48,5 +55,12 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! Column index set by the binder, used to generate the final BoundExpression
+	ColumnBinding binding;
+	//! The subquery depth (i.e. depth 0 = current query, depth 1 = parent query, depth 2 = parent of parent, etc...).
+	//! This is only non-zero for correlated expressions inside subqueries.
+	idx_t depth;
 };
 } // namespace duckdb

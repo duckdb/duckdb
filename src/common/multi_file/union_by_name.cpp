@@ -1,5 +1,6 @@
 #include "duckdb/common/multi_file/union_by_name.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 
 namespace duckdb {
 
@@ -33,10 +34,12 @@ private:
 	MultiFileReaderInterface &interface;
 };
 
-vector<shared_ptr<BaseUnionData>>
-UnionByName::UnionCols(ClientContext &context, const vector<OpenFileInfo> &files, vector<LogicalType> &union_col_types,
-                       vector<string> &union_col_names, BaseFileReaderOptions &options, MultiFileOptions &file_options,
-                       MultiFileReader &multi_file_reader, MultiFileReaderInterface &interface) {
+vector<shared_ptr<BaseUnionData>> UnionByName::UnionCols(ClientContext &context, const vector<OpenFileInfo> &files,
+                                                         vector<LogicalType> &union_col_types,
+                                                         vector<Identifier> &union_col_names,
+                                                         BaseFileReaderOptions &options, MultiFileOptions &file_options,
+                                                         MultiFileReader &multi_file_reader,
+                                                         MultiFileReaderInterface &interface) {
 	vector<shared_ptr<BaseUnionData>> union_readers;
 	union_readers.resize(files.size());
 
@@ -51,7 +54,7 @@ UnionByName::UnionCols(ClientContext &context, const vector<OpenFileInfo> &files
 	executor.WorkOnTasks();
 
 	// now combine the result schemas
-	case_insensitive_map_t<idx_t> union_names_map;
+	identifier_map_t<idx_t> union_names_map;
 	for (auto &reader : union_readers) {
 		auto &col_names = reader->names;
 		auto &sql_types = reader->types;

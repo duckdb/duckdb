@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
@@ -52,18 +51,36 @@ public:
 	vector<Vector> data;
 
 public:
-	inline idx_t size() const { // NOLINT
-		return count;
+	inline idx_t size() const {
+		if (count.IsValid()) {
+			return count.GetIndex();
+		}
+		return DeriveSize();
 	}
 	inline idx_t ColumnCount() const {
 		return data.size();
 	}
-	void SetCardinality(idx_t count_p);
-	inline void SetCardinality(const DataChunk &other) {
-		SetCardinality(other.size());
-	}
+	//! Verify all child vectors have the expected cardinality
+	void CheckCardinality(idx_t count_p);
 	//! Sets the cardinality of all child vectors of this chunk
 	void SetChildCardinality(idx_t count_p);
+	//! Sets only the logical cardinality; child vector sizes must be synchronized separately.
+	void SetCardinalityUnsafe(idx_t count_p) {
+		this->count = count_p;
+	}
+	//! Deprecated: use SetChildCardinality instead.
+	//! NOTE: this only sets the chunk's cardinality, it does NOT resize the child vectors (matching the historical
+	//! behavior on main). Callers that mutate the child vectors directly (e.g. Vector::Append/SetValue) and then call
+	//! SetCardinality rely on this - forwarding to SetChildCardinality would resize/overwrite their data.
+	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void
+	SetCardinality(idx_t count_p) {
+		SetCardinalityUnsafe(count_p);
+	}
+	//! Deprecated: use SetChildCardinality instead
+	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void
+	SetCardinality(const DataChunk &chunk) {
+		this->count = chunk.size();
+	}
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	[[deprecated("Use Vector::Append on data[col_idx] instead (or Vector::SetValue for write-at-index "
@@ -169,12 +186,16 @@ public:
 	DUCKDB_API void Verify();
 
 private:
-	//! The amount of tuples stored in the data chunk
-	idx_t count;
+	optional_idx count;
+
+private:
 	//! Vector caches, used to store data when ::Initialize is called
 	vector<VectorCache> vector_caches;
 
 private:
 	void VerifyInternal(DebugVerificationMode mode, optional_ptr<DatabaseInstance> db);
+	//! Derives the cardinality from the child vectors when no explicit count is set.
+	//! Kept out-of-line so that ::size() inlines down to a load and a branch.
+	DUCKDB_API idx_t DeriveSize() const;
 };
 } // namespace duckdb

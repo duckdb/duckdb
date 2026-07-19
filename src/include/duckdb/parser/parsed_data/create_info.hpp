@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -23,19 +25,16 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_INFO;
 
 public:
-	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog_p = INVALID_CATALOG)
-	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(std::move(schema)),
-	      on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
+	explicit CreateInfo(CatalogType type, Identifier schema = Identifier::DefaultSchema(),
+	                    Identifier catalog_p = Identifier::InvalidCatalog())
+	    : ParseInfo(TYPE), type(type), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false),
+	      internal(false), qualified_name(std::move(catalog_p), std::move(schema), Identifier()) {
 	}
 	~CreateInfo() override {
 	}
 
 	//! The to-be-created catalog type
 	CatalogType type;
-	//! The catalog name of the entry
-	string catalog;
-	//! The schema name of the entry
-	string schema;
 	//! What to do on create conflict
 	OnCreateConflict on_conflict;
 	//! Whether or not the entry is temporary
@@ -43,7 +42,7 @@ public:
 	//! Whether or not the entry is an internal entry
 	bool internal;
 	//! The name of the extension that registered this entry (empty for core entries)
-	string extension_name;
+	Identifier extension_name;
 	//! The SQL string of the CREATE statement
 	string sql;
 	//! The inherent dependencies of the created entry
@@ -52,6 +51,36 @@ public:
 	Value comment;
 	//! Key-value tags with additional metadata
 	InsertionOrderPreservingMap<string> tags;
+
+public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
+	}
+	//! Set the name, keeping the catalog/schema qualification
+	void SetName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
+	}
+	//! Set the catalog/schema qualification, keeping the name
+	void SetQualification(Identifier catalog, Identifier schema) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
+	}
+	//! Set the schema, keeping the catalog and name
+	void SetSchema(Identifier schema) {
+		qualified_name = QualifiedName(qualified_name.Catalog(), std::move(schema), qualified_name.Name());
+	}
+	//! Set the catalog, keeping the schema and name
+	void SetCatalog(Identifier catalog) {
+		qualified_name = QualifiedName(std::move(catalog), qualified_name.Schema(), qualified_name.Name());
+	}
+	//! Renders the qualified name for ToString - the catalog is omitted for temporary entries and the default schema is
+	//! hidden
+	DUCKDB_API string QualifiedNameToString() const;
 
 public:
 	void Serialize(Serializer &serializer) const override;
@@ -69,6 +98,10 @@ public:
 		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
 		                              EnumUtil::ToString(info_type));
 	}
+
+protected:
+	//! Qualified name of the created entry (catalog.schema.name)
+	QualifiedName qualified_name;
 };
 
 } // namespace duckdb

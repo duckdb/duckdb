@@ -19,7 +19,9 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
@@ -27,6 +29,9 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -43,8 +48,10 @@
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/common/enums/current_transaction_state.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -55,6 +62,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -218,6 +226,47 @@ unique_ptr<ClientContextLock> ClientContext::LockContext() {
 	return make_uniq<ClientContextLock>(context_lock);
 }
 
+void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target) {
+	D_ASSERT(target);
+	// Pre-flight: Supports(RemoteCapability::CONNECT) is the capability declaration; catalogs that
+	// return true MUST implement RemoteExecute(string). Validation runs before mutation so a throw
+	// leaves the client unbound.
+	if (!target->GetCatalog().Supports(RemoteCapability::CONNECT)) {
+		throw InvalidInputException("Database \"%s\" does not support CONNECT", target->GetName());
+	}
+	connected_to_database = target;
+	is_connected = true;
+}
+
+void ClientContext::DisconnectFromCatalog() {
+	connected_to_database.reset();
+	is_connected = false;
+}
+
+shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
+	if (!is_connected) {
+		return nullptr;
+	}
+	return connected_to_database.lock();
+}
+
+//! True if `type` is a CONNECT control statement that must execute against LOCAL even while a
+//! CONNECT binding is active (i.e. the chokepoint must let it fall through, not rewrite it).
+static bool IsConnectControlStatement(StatementType type) {
+	return type == StatementType::CONNECT_STATEMENT || type == StatementType::DISCONNECT_STATEMENT;
+}
+
+//! Wrap a TableRef returned from Catalog::RemoteExecute into `SELECT * FROM <ref>` for the chokepoint.
+static unique_ptr<SQLStatement> WrapAsSelect(unique_ptr<TableRef> from_ref) {
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(from_ref);
+
+	auto select_stmt = make_uniq<SelectStatement>();
+	select_stmt->node = std::move(select_node);
+	return std::move(select_stmt);
+}
+
 void ClientContext::Destroy() {
 	auto lock = LockContext();
 	if (transaction.HasActiveTransaction()) {
@@ -327,7 +376,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	// Refresh the logger
 	logger->Flush();
 	LoggingContext context(LogContextScope::CONNECTION);
-	context.connection_id = reinterpret_cast<idx_t>(this);
+	context.connection_id = connection_id;
 	logger = db->GetLogManager().CreateLogger(context, true);
 
 	// Notify any registered state of query end
@@ -426,7 +475,6 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()));
-	profiler.StartPhase(MetricType::PLANNER);
 	Planner logical_planner(*this);
 	if (parameters.parameters) {
 		auto &parameter_values = *parameters.parameters;
@@ -435,9 +483,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		}
 	}
 
-	logical_planner.CreatePlan(std::move(statement));
-	D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
-	profiler.EndPhase();
+	{
+		auto planner_timer = profiler.StartTimer<MetricPlannerTotalTime>();
+		logical_planner.CreatePlan(std::move(statement));
+		D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
+	}
 
 	auto logical_plan = std::move(logical_planner.plan);
 	// extract the result column names from the plan
@@ -452,7 +502,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 #ifdef DEBUG
 	logical_plan->Verify(*this);
 #endif
-	if (result->properties.parameter_count > 0 && !parameters.parameters) {
+	if (!result->value_map.empty() && !parameters.parameters) {
 		// if this is a prepared statement we can choose not to fully plan
 		// if we have parameters, we might want to re-bind when they are available as we can then do more optimizations
 		// in this situation we check if we want to cache the plan at all
@@ -463,7 +513,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		}
 	}
 
-	bool optimize = config.enable_optimizer;
+	bool optimize = Settings::Get<EnableOptimizerSetting>(*this);
 	if (Settings::Get<DebugDisableOptimizerSetting>(*this)) {
 		// verify disable optimizer - disable EXCEPT for explain, otherwise every single EXPLAIN query breaks
 		if (logical_plan->type != LogicalOperatorType::LOGICAL_EXPLAIN) {
@@ -471,22 +521,23 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		}
 	}
 	if (optimize && logical_plan->RequireOptimizer()) {
-		profiler.StartPhase(MetricType::ALL_OPTIMIZERS);
-		Optimizer optimizer(*logical_planner.binder, *this);
-		logical_plan = optimizer.Optimize(std::move(logical_plan));
-		D_ASSERT(logical_plan);
-		profiler.EndPhase();
-
+		{
+			auto optimizer_timer = profiler.StartTimer<MetricOptimizerTotalTime>();
+			Optimizer optimizer(*logical_planner.binder, *this);
+			logical_plan = optimizer.Optimize(std::move(logical_plan));
+			D_ASSERT(logical_plan);
+		}
 #ifdef DEBUG
 		logical_plan->Verify(*this);
 #endif
 	}
 
 	// Convert the logical query plan into a physical query plan.
-	profiler.StartPhase(MetricType::PHYSICAL_PLANNER);
-	PhysicalPlanGenerator physical_planner(*this);
-	result->physical_plan = physical_planner.Plan(std::move(logical_plan));
-	profiler.EndPhase();
+	{
+		auto physical_timer = profiler.StartTimer<MetricPhysicalPlannerTotalTime>();
+		PhysicalPlanGenerator physical_planner(*this);
+		result->physical_plan = physical_planner.Plan(std::move(logical_plan));
+	}
 	D_ASSERT(result->physical_plan);
 	return result;
 }
@@ -543,15 +594,16 @@ QueryProgress ClientContext::GetQueryProgress() {
 	return query_progress;
 }
 
-void BindPreparedStatementParameters(PreparedStatementData &statement, const PendingQueryParameters &parameters) {
-	case_insensitive_map_t<BoundParameterData> owned_values;
+void BindPreparedStatementParameters(ClientContext &context, PreparedStatementData &statement,
+                                     const PendingQueryParameters &parameters) {
+	identifier_map_t<BoundParameterData> owned_values;
 	if (parameters.parameters) {
 		auto &params = *parameters.parameters;
 		for (auto &val : params) {
 			owned_values.emplace(val);
 		}
 	}
-	statement.Bind(std::move(owned_values));
+	statement.Bind(context, owned_values);
 }
 
 void ClientContext::RebindPreparedStatement(ClientContextLock &lock, const string &query,
@@ -598,7 +650,7 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
                                                 const PendingQueryParameters &parameters) {
 	D_ASSERT(active_query);
 	auto &statement_data = *statement_data_p;
-	BindPreparedStatementParameters(statement_data, parameters);
+	BindPreparedStatementParameters(*this, statement_data, parameters);
 
 	// Create the query executor.
 	active_query->executor = make_uniq<Executor>(*this);
@@ -690,6 +742,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	D_ASSERT(active_query->IsOpenResult(result));
 	bool invalidate_transaction = true;
 	try {
+		// Surface a pending interrupt even when this thread runs no task that reaches InterruptCheck.
+		// IsInterrupted() rather than InterruptCheck(): we must not enforce query_deadline here.
+		if (!dry_run && IsInterrupted()) {
+			throw InterruptException();
+		}
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
 		if (active_query->progress_bar) {
 			auto is_finished = PendingQueryResult::IsResultReady(query_result);
@@ -733,39 +790,49 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 }
 
-vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &query) {
-	auto lock = LockContext();
-	return ParseStatementsInternal(*lock, query);
+StatementIterator ClientContext::IterateStatements(const string &query) {
+	// The iterator yields ready-to-execute (engine-facing) statements: PRAGMA reparse,
+	// MULTI_STATEMENT unpack and transaction wrapping per peel — matches the eager API users expect.
+	// Callers that want raw parse-facing statements and drive their own preprocessing construct a
+	// ParseIterator directly (e.g. Query / ParseStatementsInternal below, which hold the lock).
+	return StatementIterator(ParseIterator(*this, query));
 }
+
+void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
+                                         optional_ptr<ClientContextLock> lock) {
+	// Acquire our own lock if the caller doesn't hold one (e.g. the shell); own_lock keeps it alive
+	// for the duration of the preprocess pass.
+	unique_ptr<ClientContextLock> own_lock;
+	if (!lock) {
+		own_lock = LockContext();
+		lock = own_lock.get();
+	}
+	StatementPreprocessor preprocessor(*this);
+	const CurrentTransactionState transaction_state =
+	    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
+	preprocessor.Preprocess(*lock, buffer, transaction_state);
+}
+
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	try {
-		Parser parser(GetParserOptions());
-		auto &profiler = QueryProfiler::Get(*this);
-		profiler.StartQuery(query);
-		profiler.StartPhase(MetricType::PARSER);
-		parser.ParseQuery(query);
+		QueryProfiler::Get(*this).StartQuery(query);
 
-		StatementPreprocessor preprocessor(*this);
-
-		const CurrentTransactionState transaction_context_state =
-		    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
-		preprocessor.Preprocess(lock, parser.statements, transaction_context_state);
-
-		return std::move(parser.statements);
+		// Drain the lazy iterator into a vector for callers that want the eager shape.
+		StatementIterator iterator {ParseIterator(*this, query)};
+		vector<unique_ptr<SQLStatement>> result;
+		while (iterator.Peek()) {
+			auto stmt = iterator.GetStatementWithLock(lock);
+			if (!stmt) {
+				continue; // a peel that preprocessing swallowed
+			}
+			result.push_back(std::move(stmt));
+		}
+		return result;
 	} catch (std::exception &ex) {
 		auto error = ErrorData(ex);
 		ProcessError(error, query);
 		error.Throw();
 	}
-}
-
-void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &statements) {
-	auto lock = LockContext();
-
-	StatementPreprocessor preprocessor(*this);
-	const CurrentTransactionState transaction_context_state =
-	    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
-	preprocessor.Preprocess(*lock, statements, transaction_context_state);
 }
 
 unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
@@ -784,10 +851,8 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 
 		plan = std::move(planner.plan);
 
-		if (config.enable_optimizer) {
-			Optimizer optimizer(*planner.binder, *this);
-			plan = optimizer.Optimize(std::move(plan));
-		}
+		Optimizer optimizer(*planner.binder, *this);
+		plan = optimizer.Optimize(std::move(plan));
 
 		ColumnBindingResolver resolver;
 		resolver.Verify(*this, *plan);
@@ -829,6 +894,50 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 	} catch (std::exception &ex) {
 		return ErrorResult<PreparedStatement>(ErrorData(ex), query);
 	}
+}
+
+StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> statement) {
+	auto lock = LockContext();
+	auto named_param_map = statement->named_param_map;
+	StatementSignature signature;
+	ErrorData bind_error;
+	RunFunctionInTransactionInternal(
+	    *lock,
+	    [&]() {
+		    try {
+			    Planner planner(*this);
+			    planner.CreatePlan(std::move(statement));
+			    signature.names = planner.names;
+			    signature.types = planner.types;
+			    signature.properties = std::move(planner.properties);
+			    // Parameter types from the bound parameter map (as in PreparedStatementData::TryGetType).
+			    // An un-anchored parameter (e.g. SELECT $1) gets no value_map entry, so its
+			    // type stays UNKNOWN; do not assume every parameter is present.
+			    for (auto &entry : named_param_map) {
+				    LogicalType type(LogicalTypeId::UNKNOWN);
+				    auto it = planner.value_map.find(entry.first);
+				    if (it != planner.value_map.end()) {
+					    type = it->second->return_type.id() != LogicalTypeId::INVALID ? it->second->return_type
+					                                                                  : it->second->GetValue().type();
+				    }
+				    signature.parameters.push_back({entry.first, entry.second, std::move(type)});
+			    }
+		    } catch (const std::exception &ex) {
+			    ErrorData error(ex);
+			    // Binding is read-only: a recoverable bind error changed nothing, so leave
+			    // the caller's transaction intact (rethrow after the wrapper). A database-
+			    // fatal error still propagates so invalidation runs as usual.
+			    if (Exception::InvalidatesDatabase(error.Type())) {
+				    throw;
+			    }
+			    bind_error = std::move(error);
+		    }
+	    },
+	    false);
+	if (bind_error.HasError()) {
+		bind_error.Throw();
+	}
+	return signature;
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
@@ -880,7 +989,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-                                               case_insensitive_map_t<BoundParameterData> &values,
+                                               identifier_map_t<BoundParameterData> &values,
                                                QueryParameters query_parameters) {
 	PendingQueryParameters parameters;
 	parameters.parameters = &values;
@@ -892,19 +1001,16 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
 	// prepare the query for execution
-	if (parameters.parameters) {
-		PreparedStatement::VerifyParameters(*parameters.parameters, statement->named_param_map);
+	if (!statement->named_param_map.empty() && parameters.parameters) {
+		PreparedStatement::VerifyParameters(*parameters.parameters, statement->named_param_map, this);
+	} else if (!statement->named_param_map.empty()) {
+		identifier_map_t<BoundParameterData> empty_parameters;
+		PreparedStatement::VerifyParameters(empty_parameters, statement->named_param_map, this);
 	}
 
 	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters,
 	                                        PreparedStatementMode::PREPARE_AND_EXECUTE);
 
-	idx_t parameter_count = !parameters.parameters ? 0 : parameters.parameters->size();
-	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
-		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
-		                                          prepared->properties.parameter_count);
-		return ErrorResult<PendingQueryResult>(InvalidInputException(error_message), query);
-	}
 	if (!prepared->properties.bound_all_parameters) {
 		return ErrorResult<PendingQueryResult>(InvalidInputException("Not all parameters were bound"), query);
 	}
@@ -942,6 +1048,46 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
+	// CONNECT chokepoint: when connected, non-control SQL is rewritten in place and falls through to
+	// the normal pipeline. No recursion — the rewrite goes through PendingStatementInternal, not back here.
+	if (is_connected) {
+		bool is_control = false;
+		if (statement && IsConnectControlStatement(statement->type)) {
+			is_control = true;
+		}
+		if (!is_control) {
+			if (!statement) {
+				// Prepared-statement execution path (statement is null, prepared is set). Parameterized
+				// prepared statements would need parameter substitution we don't do in v0 — reject.
+				// No-param prepared statements have a fully-resolved `query` already, route them.
+				if (!prepared || prepared->properties.parameter_count > 0) {
+					return ErrorResult<PendingQueryResult>(
+					    ErrorData(InvalidInputException(
+					        "Parameterized prepared statements cannot be executed while CONNECT-ed; "
+					        "DISCONNECT first, or run the SQL as a fresh statement to route through "
+					        "the CONNECT binding")),
+					    query);
+				}
+				// Clear prepared so the rest of the function takes the fresh-statement path on the
+				// rewritten SELECT below.
+				prepared.reset();
+			}
+			auto live = connected_to_database.lock();
+			if (!live) {
+				// Target was detached elsewhere; user must explicitly DISCONNECT to clear is_connected.
+				return ErrorResult<PendingQueryResult>(
+				    ErrorData(InvalidInputException(
+				        "The connected database has been detached out from under this connection. Issue "
+				        "DISCONNECT to clear the connection before running further SQL.")),
+				    query);
+			}
+			// Dispatch via the catalog — Supports(CONNECT) was validated at CONNECT time, so RemoteExecute
+			// is contracted to be implemented. Wrap the returned TableRef into a SelectStatement.
+			auto remote_ref = live->GetCatalog().RemoteExecute(*this, query);
+			statement = WrapAsSelect(std::move(remote_ref));
+			// statement is now SELECT * FROM <remote-ref>; fall through.
+		}
+	}
 	unique_ptr<PendingQueryResult> pending;
 	try {
 		BeginQueryInternal(lock, query);
@@ -1018,13 +1164,37 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameters query_parameters) {
 	auto lock = LockContext();
-	vector<unique_ptr<SQLStatement>> statements;
+	// The lazy path bypasses ParseStatementsInternal → InitialCleanup, so clear leftover query state
+	// (interrupt flag, etc.) ourselves.
+	InitialCleanup(*lock);
+	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartQuery(query);
+	// ParseIterator's constructor runs UTF-8 validation / Unicode-space strip and can throw — route
+	// through ErrorResult so the source location attaches the same way Peek failures do.
+	optional_ptr<StatementIterator> iterator_ptr;
+	unique_ptr<StatementIterator> iterator_storage;
 	try {
-		statements = ParseStatements(*lock, query);
+		iterator_storage = make_uniq<StatementIterator>(ParseIterator(*this, query));
+		iterator_ptr = *iterator_storage;
 	} catch (const std::exception &ex) {
 		return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 	}
-	if (statements.empty()) {
+	auto &iterator = *iterator_ptr;
+
+	auto peek_or_error = [&](bool &has_now) -> unique_ptr<QueryResult> {
+		try {
+			has_now = iterator.Peek();
+			return nullptr;
+		} catch (const std::exception &ex) {
+			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
+		}
+	};
+
+	bool has_current = false;
+	if (auto error = peek_or_error(has_current)) {
+		return error;
+	}
+	if (!has_current) {
 		// no statements, return empty successful result
 		StatementProperties properties;
 		vector<string> names;
@@ -1036,70 +1206,80 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	unique_ptr<QueryResult> result;
 	optional_ptr<QueryResult> last_result;
 	bool last_had_result = false;
-	for (idx_t i = 0; i < statements.size(); i++) {
-		auto &statement = statements[i];
-		bool is_last_statement = i + 1 == statements.size();
-		PendingQueryParameters parameters;
-		parameters.query_parameters = query_parameters;
-		if (!is_last_statement) {
-			parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	while (has_current) {
+		// Get + preprocess the next engine-facing statement, reusing the lock we already hold. PRAGMA
+		// reparse / MULTI_STATEMENT unpacking happen inside GetStatementWithLock, which sees the
+		// transaction state left by the previously executed statement. A peel can preprocess to
+		// nothing, in which case statement is null and there is nothing to execute.
+		unique_ptr<SQLStatement> statement;
+		try {
+			statement = iterator.GetStatementWithLock(*lock);
+		} catch (const std::exception &ex) {
+			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 		}
-		auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
-		auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
-		unique_ptr<QueryResult> current_result;
-		if (pending_query->HasError()) {
-			current_result = ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
-		} else {
-			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
-		}
-		if (current_result->HasError()) {
-			if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
-				transaction.Rollback(current_result->GetErrorObject());
+
+		// Look ahead WITHOUT parsing: HasMore() only walks the token cursor, so it never parses (and
+		// never throws) the next statement here. The next statement is parsed later, in this loop's
+		// next GetStatementWithLock — after the current statement has executed. This lets a statement
+		// register grammar (e.g. LOAD an extension) that a following statement then uses.
+		bool has_next = iterator.HasMore();
+
+		if (statement) {
+			bool is_last_overall = !has_next;
+			PendingQueryParameters parameters;
+			parameters.query_parameters = query_parameters;
+			if (!is_last_overall) {
+				parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 			}
-			// Reset the interrupted flag, this was set by the task that found the error
-			// Next statements should not be bothered by that interruption
-			interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
-			return current_result;
-		}
-		// now append the result to the list of results
-		if (!last_result || !last_had_result) {
-			// first result of the query
-			result = std::move(current_result);
-			last_result = result.get();
-			last_had_result = has_result;
-		} else {
-			// later results; attach to the result chain
-			// but only if there is a result
-			if (!has_result) {
-				continue;
+			auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
+			auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
+			unique_ptr<QueryResult> current_result;
+			if (pending_query->HasError()) {
+				current_result = ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
+			} else {
+				current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 			}
-			last_result->next = std::move(current_result);
-			last_result = last_result->next.get();
+			if (current_result->HasError()) {
+				if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
+					transaction.Rollback(current_result->GetErrorObject());
+				}
+				// Reset the interrupted flag, this was set by the task that found the error
+				// Next statements should not be bothered by that interruption
+				interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
+				return current_result;
+			}
+			// now append the result to the list of results
+			if (!last_result || !last_had_result) {
+				// first result of the query
+				result = std::move(current_result);
+				last_result = result.get();
+				last_had_result = has_result;
+			} else if (has_result) {
+				// later results; attach to the result chain, but only if there is a result
+				last_result->next = std::move(current_result);
+				last_result = last_result->next.get();
+			}
+			D_ASSERT(last_result);
 		}
-		D_ASSERT(last_result);
+
+		has_current = has_next;
 	}
 	return result;
 }
 
-vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(ClientContextLock &lock, const string &query) {
-	InitialCleanup(lock);
-	// parse the query and transform it into a set of statements
-	return ParseStatementsInternal(lock, query);
-}
-
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, QueryParameters parameters) {
-	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	identifier_map_t<BoundParameterData> empty_param_list;
 	return PendingQuery(query, empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
                                                            QueryParameters parameters) {
-	case_insensitive_map_t<BoundParameterData> empty_param_list;
+	identifier_map_t<BoundParameterData> empty_param_list;
 	return PendingQuery(std::move(statement), empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
-                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           identifier_map_t<BoundParameterData> &values,
                                                            QueryParameters parameters) {
 	PendingQueryParameters params;
 	params.parameters = values;
@@ -1129,7 +1309,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, 
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                           case_insensitive_map_t<BoundParameterData> &values,
+                                                           identifier_map_t<BoundParameterData> &values,
                                                            QueryParameters parameters) {
 	auto lock = LockContext();
 	auto query = statement->query;
@@ -1192,7 +1372,7 @@ void ClientContext::InterruptCheck() const {
 	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
 		auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
 		if (now >= query_deadline.GetIndex()) {
-			throw InterruptException();
+			throw InterruptException("Query exceeded maximum execution time");
 		}
 	}
 }
@@ -1206,7 +1386,6 @@ void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
 	auto &client_config = ClientConfig::GetConfig(*this);
 	client_config.enable_profiler = true;
-	client_config.emit_profiler_output = true;
 }
 
 void ClientContext::DisableProfiling() {
@@ -1217,8 +1396,10 @@ void ClientContext::DisableProfiling() {
 
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
-		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, INVALID_CATALOG, info.schema,
-		                                                                       info.name, OnEntryNotFound::RETURN_NULL);
+		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
+		    *this,
+		    QualifiedName(Identifier::InvalidCatalog(), info.GetQualifiedName().Schema(), info.GetFunctionName()),
+		    OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
 			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
@@ -1275,18 +1456,18 @@ void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fu
 	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_name, const string &schema_name,
-                                                      const string &table_name) {
+unique_ptr<TableDescription> ClientContext::TableInfo(const Identifier &database_name, const Identifier &schema_name,
+                                                      const Identifier &table_name) {
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
 		// Obtain the table from the catalog.
-		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, database_name, schema_name, table_name,
+		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, QualifiedName(database_name, schema_name, table_name),
 		                                                  OnEntryNotFound::RETURN_NULL);
 		if (!table) {
 			return;
 		}
 		// Create the table description.
-		result = make_uniq<TableDescription>(database_name, schema_name, table_name);
+		result = make_uniq<TableDescription>(QualifiedName(database_name, schema_name, table_name));
 		auto &catalog = Catalog::GetCatalog(*this, database_name);
 		result->readonly = catalog.GetAttached().IsReadOnly();
 		for (auto &column : table->GetColumns().Logical()) {
@@ -1296,8 +1477,8 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_nam
 	return result;
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name) {
-	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+unique_ptr<TableDescription> ClientContext::TableInfo(const Identifier &schema_name, const Identifier &table_name) {
+	return TableInfo(Identifier::InvalidCatalog(), schema_name, table_name);
 }
 
 void ClientContext::Append(unique_ptr<SQLStatement> stmt) {
@@ -1308,11 +1489,11 @@ void ClientContext::Append(unique_ptr<SQLStatement> stmt) {
 }
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
-	string table_name = "__duckdb_internal_appended_data";
-	vector<string> expected_names;
+	Identifier table_name("__duckdb_internal_appended_data");
+	vector<Identifier> expected_names;
 	auto query = Appender::ConstructQuery(description, table_name, expected_names);
 	auto table_ref = BaseAppender::GetColumnDataTableRef(collection, table_name, expected_names);
-	auto stmt = BaseAppender::ParseStatement(std::move(table_ref), query, table_name);
+	auto stmt = BaseAppender::ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
 	Append(std::move(stmt));
 }
 
@@ -1339,6 +1520,9 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 unordered_set<string> ClientContext::GetTableNames(const string &query, const bool qualified) {
 	auto lock = LockContext();
 
+	// Preprocess before binding so PRAGMA reparse / macro expansion happens up front — GetTableNames
+	// extracts names from the *underlying* query (e.g. `PRAGMA tpch(1)` -> the TPC-H SELECT, whose
+	// tables are what the caller wants). A raw, un-preprocessed PRAGMA would never surface them.
 	auto statements = ParseStatementsInternal(*lock, query);
 	if (statements.size() != 1) {
 		throw InvalidInputException("Expected a single statement");
@@ -1454,6 +1638,8 @@ ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
 	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
+	options.debug_transformer_trampoline_style = Settings::Get<DebugTransformerTrampolineStyleSetting>(*this);
+	options.regex_match_operator_semantics = Settings::Get<RegexMatchOperatorSemanticsSetting>(*this);
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);

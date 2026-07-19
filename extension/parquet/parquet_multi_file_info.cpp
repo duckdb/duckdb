@@ -1,13 +1,14 @@
 #include "parquet_multi_file_info.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <stdint.h>
-#include <atomic>
 #include <unordered_map>
-#include <vector>
 
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "parquet_crypto.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/common/assert.hpp"
@@ -29,6 +30,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_file_metadata_cache.hpp"
+#include "parquet_reader.hpp"
 #include "parquet_types.h"
 
 namespace duckdb {
@@ -57,6 +59,7 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t initial_file_data_size = 0;
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	unique_ptr<ParquetFileReaderOptions> options;
+	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;
 
 	ParquetOptions &GetParquetOptions() {
 		return options->options;
@@ -73,6 +76,7 @@ struct ParquetReadBindData : public TableFunctionData {
 		result->initial_file_data_size = initial_file_data_size;
 		result->explicit_cardinality = explicit_cardinality;
 		result->options = make_uniq<ParquetFileReaderOptions>(options->options);
+		result->projection_expressions = projection_expressions;
 		return std::move(result);
 	}
 
@@ -84,24 +88,25 @@ private:
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
-	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p)
-	    : row_group_index(0), batch_index(0), op(op_p) {
+	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p) : row_group_index(0), op(op_p) {
 	}
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
-	//! Batch index of the next row group to be scanned
-	idx_t batch_index;
 	//! (Optional) pointer to physical operator performing the scan
 	optional_ptr<const PhysicalOperator> op;
+	//! Row groups read but not yet reported to the profiler
+	atomic<idx_t> row_groups_scanned_unreported {0};
+	//! Total considered, across all scan states
+	atomic<idx_t> total_row_groups_to_scan {0};
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
 	ParquetReaderScanState scan_state;
-	vector<idx_t> group_indexes;
+	idx_t group_index;
 };
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
-                                     vector<LogicalType> &return_types, vector<string> &names) {
+                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 	if (options.file_row_number) {
 		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
 			throw BinderException(
@@ -113,7 +118,7 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 	}
 }
 
-static void BindSchema(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+static void BindSchema(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
                        MultiFileBindData &bind_data) {
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
 	auto &options = parquet_bind.GetParquetOptions();
@@ -125,7 +130,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	}
 	auto &reader_bind = bind_data.reader_bind;
 
-	vector<string> schema_col_names;
+	vector<Identifier> schema_col_names;
 	vector<LogicalType> schema_col_types;
 	schema_col_names.reserve(options.schema.size());
 	schema_col_types.reserve(options.schema.size());
@@ -143,7 +148,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 
 	for (idx_t i = 0; i < options.schema.size(); i++) {
 		const auto &column = options.schema[i];
-		schema_col_names.push_back(column.name);
+		schema_col_names.push_back(Identifier(column.name));
 		schema_col_types.push_back(column.type);
 
 		auto res = MultiFileColumnDefinition(column.name, column.type);
@@ -163,7 +168,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	if (options.file_row_number) {
 		MultiFileColumnDefinition res("file_row_number", LogicalType::BIGINT);
 		res.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
-		schema_col_names.push_back(res.name);
+		schema_col_names.push_back(Identifier(res.name));
 		schema_col_types.push_back(res.type);
 		reader_bind.schema.emplace_back(res);
 	}
@@ -187,8 +192,8 @@ unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::CreateInterface(Clien
 	return make_uniq<ParquetMultiFileInfo>();
 }
 
-void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-                                      MultiFileBindData &bind_data) {
+void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types,
+                                      vector<Identifier> &names, MultiFileBindData &bind_data) {
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
 	auto &options = parquet_bind.GetParquetOptions();
 	if (!options.schema.empty()) {
@@ -248,21 +253,21 @@ static void VerifyParquetSchemaParameter(const Value &schema) {
 		throw InvalidInputException(
 		    "'schema' expects the STRUCT to have 3 children, 'name', 'type' and 'default_value");
 	}
-	if (!StringUtil::CIEquals(children[0].first, "name")) {
+	if (children[0].first != "name") {
 		throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
 	}
 	if (children[0].second.id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("'schema' expects the 'name' field to be of type VARCHAR, not %s",
 		                            LogicalTypeIdToString(children[0].second.id()));
 	}
-	if (!StringUtil::CIEquals(children[1].first, "type")) {
+	if (children[1].first != "type") {
 		throw InvalidInputException("'schema' expects the second field of the struct to be called 'type'");
 	}
 	if (children[1].second.id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("'schema' expects the 'type' field to be of type VARCHAR, not %s",
 		                            LogicalTypeIdToString(children[1].second.id()));
 	}
-	if (!StringUtil::CIEquals(children[2].first, "default_value")) {
+	if (children[2].first != "default_value") {
 		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
 	}
 	//! NOTE: default_value can be any type
@@ -288,9 +293,14 @@ static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<Func
 	serializer.WriteProperty(102, "names", bind_data.names);
 	ParquetOptionsSerialization serialization(parquet_data.GetParquetOptions(), bind_data.file_options);
 	serializer.WriteProperty(103, "parquet_options", serialization);
-	if (serializer.ShouldSerialize(3)) {
+	// previously serialization version 3
+	if (serializer.ShouldSerialize(StorageVersion::V1_2_0)) {
 		serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
 	}
+	// Old clients won't be able to read the plan even if we
+	// don't push this field. If projection expression worked,
+	// it modified "types" which we serialize ultimately
+	serializer.WriteProperty(105, "projection_expressions", parquet_data.projection_expressions);
 }
 
 static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserializer, TableFunction &function) {
@@ -301,12 +311,16 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	auto serialization = deserializer.ReadProperty<ParquetOptionsSerialization>(103, "parquet_options");
 	auto table_columns =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<string>>(104, "table_columns", vector<string> {});
+	auto projection_expressions =
+	    deserializer.ReadPropertyWithExplicitDefault<unordered_map<idx_t, ParquetReaderProjectionExpression>>(
+	        105, "projection_expressions", unordered_map<idx_t, ParquetReaderProjectionExpression> {});
 
 	vector<Value> file_path;
 	for (auto &path : files) {
 		file_path.emplace_back(path);
 	}
 	FileGlobInput input(FileGlobOptions::FALLBACK_GLOB, "parquet");
+	input.allow_empty = serialization.file_options.allow_empty;
 
 	auto multi_file_reader = MultiFileReader::Create(function);
 	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path), input);
@@ -315,7 +329,33 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	auto bind_data = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindInternal(
 	    context, std::move(multi_file_reader), std::move(file_list), types, names,
 	    std::move(serialization.file_options), std::move(parquet_options), std::move(interface));
-	bind_data->Cast<MultiFileBindData>().table_columns = std::move(table_columns);
+	auto &inner_bind_data = bind_data->Cast<MultiFileBindData>();
+	inner_bind_data.table_columns = std::move(table_columns);
+	auto &parquet_bind_data = inner_bind_data.bind_data->Cast<ParquetReadBindData>();
+	parquet_bind_data.projection_expressions = std::move(projection_expressions);
+
+	for (const auto &[idx, expr] : parquet_bind_data.projection_expressions) {
+		if (idx < inner_bind_data.columns.size()) {
+			inner_bind_data.columns[idx].type = expr.return_type;
+		}
+		if (idx < inner_bind_data.types.size()) {
+			inner_bind_data.types[idx] = expr.return_type;
+		}
+		if (auto &schema = inner_bind_data.reader_bind.schema; !schema.empty() && idx < schema.size()) {
+			schema[idx].type = expr.return_type;
+		}
+		if (!inner_bind_data.initial_reader) {
+			continue;
+		}
+		auto &reader = inner_bind_data.initial_reader->Cast<ParquetReader>();
+		reader.projection_expressions[idx] = expr;
+		if (idx < reader.columns.size()) {
+			reader.columns[idx].type = expr.return_type;
+		}
+		if (idx < reader.root_schema->children.size()) {
+			reader.root_schema->children[idx].type = expr.return_type;
+		}
+	}
 	return bind_data;
 }
 
@@ -324,6 +364,111 @@ static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_
 	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX);
 	result.emplace_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
 	return result;
+}
+
+static void ParquetScanGetMetrics(TableFunctionGetMetricsInput &input) {
+	// emit the shared multi-file metrics (files read, filenames, rows scanned)
+	MultiFileFunction<ParquetMultiFileInfo>::MultiFileGetMetrics(input);
+	if (!input.global_state) {
+		return;
+	}
+	auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
+	if (!gstate.global_state) {
+		return;
+	}
+	auto &parquet_gstate = gstate.global_state->Cast<ParquetReadGlobalState>();
+	// each local state drains the not-yet-reported count
+	input.operator_metrics.row_groups_scanned = parquet_gstate.row_groups_scanned_unreported.exchange(0);
+	input.operator_metrics.total_row_groups_to_scan = parquet_gstate.total_row_groups_to_scan.load();
+}
+
+static bool ParquetProjectionExpressionPushdown(ClientContext &context,
+                                                const TableFunctionProjectionExpressionInput &input) {
+	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	const auto &fn = input.expr.Cast<BoundFunctionExpression>();
+	if (const Identifier &name = fn.Function().GetName(); name != "strlen" && name != "octet_length") {
+		return false;
+	}
+
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	// Don't do pushdown on custom schema users like Ducklake.
+	// We may support it and UNION readers in the future
+	if (!bind_data.reader_bind.schema.empty() || !bind_data.union_readers.empty()) {
+		return false;
+	}
+
+	const auto &column_id = input.get.GetColumnIds()[input.column_index];
+	// Pushdown extract columns i.e. SELECT x.y.z have a complex nested type update
+	if (column_id.IsPushdownExtract()) {
+		return false;
+	}
+	const idx_t idx = column_id.GetPrimaryIndex();
+
+	// Don't do pushdown of strlen to hive and filename columns.
+	// See src/function/table/read_csv.cpp : PushdownProjectionExpression
+	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
+		if (partition.index == idx) {
+			return false;
+		}
+	}
+	if (bind_data.reader_bind.filename_idx.IsValid() && bind_data.reader_bind.filename_idx.GetIndex() == idx) {
+		return false;
+	}
+
+	// We run scalar function pushdown after filter pushdown. If a filter was
+	// pushed into get.table_filters, we don't see it here and can't
+	// proceed with pushdown
+	if (input.get.table_filters.HasFilter(input.column_index)) {
+		return false;
+	}
+
+	auto &parquet_bind_data = bind_data.bind_data->Cast<ParquetReadBindData>();
+	// Don't do pushdown with multiple files. As metadata for all but first file is not
+	// available upfront, we need to TryLoadCaches and check cache validity which complicates
+	// things. Another complication is that different files may have separate schemas:
+	// if we're reading file 1 (int, str) and file 2 (str, int) and trying to push down
+	// strlen for column 2, query will fail on file 2 as it compares column indices and
+	// not names
+	if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+		return false;
+	}
+	if (!bind_data.initial_reader) {
+		return false;
+	}
+
+	auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
+	auto &children = reader.root_schema->children;
+	if (idx >= children.size()) {
+		return false;
+	}
+
+	const idx_t column_flat_idx = children[idx].column_index;
+	for (const auto &group : reader.GetFileMetadata()->row_groups) {
+		D_ASSERT(column_flat_idx < group.columns.size());
+		for (const Encoding::type type : group.columns[column_flat_idx].meta_data.encodings) {
+			if (type == duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY) {
+				return false;
+			}
+		}
+	}
+
+	const LogicalType type = LogicalType::BIGINT;
+	bind_data.types[idx] = type;
+	bind_data.columns[idx].type = type;
+
+	const ParquetReaderProjectionExpression expression {ParquetReaderProjectionExpressionType::BYTE_LENGTH, type};
+
+	parquet_bind_data.projection_expressions[idx] = expression;
+
+	// initial reader was created before scalar function pushdown optimizer pass, update its types.
+	reader.projection_expressions[idx] = expression;
+	if (idx < reader.columns.size()) {
+		reader.columns[idx].type = type;
+	}
+	children[idx].type = type;
+	return true;
 }
 
 ParquetMetadataCacheEntry::ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata_p,
@@ -420,7 +565,10 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
+	table_function.get_metrics = ParquetScanGetMetrics;
+	table_function.projection_expression_pushdown = ParquetProjectionExpressionPushdown;
 	table_function.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
@@ -472,6 +620,13 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 			throw BinderException("Parquet can_have_nan cannot be empty!");
 		}
 		options.can_have_nan = GetBooleanArgument(key, values);
+		return true;
+	}
+	if (key == "prefetch_strategy") {
+		if (values.size() != 1) {
+			throw BinderException("Parquet prefetch_strategy cannot be empty!");
+		}
+		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(values[0]));
 		return true;
 	}
 	return false;
@@ -526,6 +681,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 	}
 	if (key == "encryption_config") {
 		options.encryption_config = ParquetEncryptionConfig::Create(context, val);
+		return true;
+	}
+	if (key == "prefetch_strategy") {
+		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(val));
 		return true;
 	}
 	return false;
@@ -656,7 +815,7 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(ClientContext &c
 	return make_uniq<NodeStatistics>(per_file_cardinality * file_count);
 }
 
-unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const Identifier &name) {
 	return ReadStatistics(name);
 }
 
@@ -668,6 +827,8 @@ double ParquetReader::GetProgressInFile(ClientContext &context) {
 void ParquetMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
 	result.insert(make_pair(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER,
 	                        TableColumn("file_row_number", LogicalType::BIGINT)));
+	result.insert(make_pair(ParquetReader::COLUMN_IDENTIFIER_FILE_ROW_GROUP_NUMBER,
+	                        TableColumn("file_row_group_number", LogicalType::UBIGINT)));
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,
@@ -681,7 +842,8 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
                                                               const OpenFileInfo &file, idx_t file_idx,
                                                               const MultiFileBindData &multi_bind_data) {
 	auto &bind_data = multi_bind_data.bind_data->Cast<ParquetReadBindData>();
-	return make_shared_ptr<ParquetReader>(context, file, bind_data.GetParquetOptions());
+	return make_shared_ptr<ParquetReader>(context, file, bind_data.GetParquetOptions(), nullptr,
+	                                      bind_data.projection_expressions);
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
@@ -696,7 +858,7 @@ shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	result->names.reserve(columns.size());
 	result->types.reserve(columns.size());
 	for (auto &column : columns) {
-		result->names.push_back(column.name);
+		result->names.push_back(column.name.GetIdentifierName());
 		result->types.push_back(column.type);
 	}
 
@@ -715,7 +877,7 @@ unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState
 	return make_uniq<ParquetReadGlobalState>(global_state.op);
 }
 
-unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ExecutionContext &,
+unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ClientContext &,
                                                                                GlobalTableFunctionState &) {
 	return make_uniq<ParquetReadLocalState>();
 }
@@ -729,15 +891,32 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
 		return false;
 	}
 	// The current reader has rowgroups left to be scanned
-	lstate.group_indexes = {gstate.row_group_index};
+	lstate.group_index = gstate.row_group_index;
 	gstate.row_group_index++;
 	return true;
 }
 
 void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                 LocalTableFunctionState &lstate_p) {
+	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
-	InitializeScan(context, lstate.scan_state, lstate.group_indexes);
+	lstate.scan_state.op = gstate.op;
+	InitializeScan(context, lstate.scan_state, lstate.group_index);
+}
+
+AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                      LocalTableFunctionState &lstate_p) {
+	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
+	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
+	auto &scan_state = lstate.scan_state;
+	auto read_before = scan_state.row_groups_read;
+	auto skipped_before = scan_state.row_groups_skipped;
+	auto strategy = RegisterRowGroupReads(context, scan_state);
+	auto read = scan_state.row_groups_read - read_before;
+	auto skipped = scan_state.row_groups_skipped - skipped_before;
+	gstate.row_groups_scanned_unreported += read;
+	gstate.total_row_groups_to_scan += read + skipped;
+	return ScheduleRowGroupReads(scan_state, strategy);
 }
 
 void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
@@ -755,10 +934,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
 		}
 	}
 #endif
-	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
-	local_state.scan_state.op = gstate.op;
-	return Scan(context, local_state.scan_state, chunk);
+	return Process(context, local_state.scan_state, chunk);
 }
 
 unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::Copy() {

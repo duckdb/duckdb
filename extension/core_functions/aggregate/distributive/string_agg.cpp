@@ -13,9 +13,11 @@ namespace duckdb {
 namespace {
 
 struct StringAggState {
-	idx_t size;
-	idx_t alloc_size;
-	char *dataptr;
+	using STATE_TYPE = OptionalStateType<StateString<StateReturnType>>;
+
+	string_t value;
+	bool is_set;
+	uint32_t alloc_size;
 };
 
 struct StringAggBindData : public FunctionData {
@@ -34,19 +36,12 @@ struct StringAggBindData : public FunctionData {
 };
 
 struct StringAggFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.dataptr = nullptr;
-		state.alloc_size = 0;
-		state.size = 0;
-	}
-
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.dataptr) {
+		if (!state.is_set) {
 			finalize_data.ReturnNull();
 		} else {
-			target = string_t(state.dataptr, state.size);
+			target = state.value;
 		}
 	}
 
@@ -56,31 +51,41 @@ struct StringAggFunction {
 
 	static inline void PerformOperation(StringAggState &state, ArenaAllocator &allocator, const char *str,
 	                                    const char *sep, idx_t str_size, idx_t sep_size) {
-		if (!state.dataptr) {
-			// first iteration: allocate space for the string and copy it into the state
-			state.alloc_size = MaxValue<idx_t>(8, NextPowerOfTwo(str_size));
-			state.dataptr = char_ptr_cast(allocator.Allocate(state.alloc_size));
-			state.size = str_size;
-			memcpy(state.dataptr, str, str_size);
+		idx_t new_size;
+		auto current_size = state.value.GetSize();
+		if (!state.is_set) {
+			new_size = str_size;
 		} else {
-			// subsequent iteration: first check if we have space to place the string and separator
-			idx_t required_size = state.size + str_size + sep_size;
-			if (required_size > state.alloc_size) {
-				// no space! allocate extra space
-				const auto old_size = state.alloc_size;
-				while (state.alloc_size < required_size) {
-					state.alloc_size *= 2;
-				}
-				state.dataptr =
-				    char_ptr_cast(allocator.Reallocate(data_ptr_cast(state.dataptr), old_size, state.alloc_size));
-			}
-			// copy the separator
-			memcpy(state.dataptr + state.size, sep, sep_size);
-			state.size += sep_size;
-			// copy the string
-			memcpy(state.dataptr + state.size, str, str_size);
-			state.size += str_size;
+			new_size = current_size + sep_size + str_size;
 		}
+		char *target_data;
+		if (new_size > state.alloc_size && new_size > string_t::INLINE_LENGTH) {
+			// need to (re-)allocate space
+			if (new_size > NumericLimits<uint32_t>::Maximum()) {
+				throw InvalidInputException("string_agg string size exceeds maximum string size");
+			}
+			state.alloc_size = NextPowerOfTwo(new_size);
+			target_data = char_ptr_cast(allocator.Allocate(state.alloc_size));
+			if (current_size > 0) {
+				// copy over the current data
+				memcpy(target_data, state.value.GetData(), current_size);
+			}
+			state.value = string_t(target_data, new_size);
+		} else {
+			target_data = state.value.GetDataWriteable();
+		}
+		if (!state.is_set) {
+			memcpy(target_data, str, str_size);
+			state.is_set = true;
+		} else {
+			// copy the separator
+			target_data += current_size;
+			memcpy(target_data, sep, sep_size);
+			// copy the string
+			target_data += sep_size;
+			memcpy(target_data, str, str_size);
+		}
+		state.value.SetSizeAndFinalize(new_size, state.alloc_size);
 	}
 
 	static inline void PerformOperation(StringAggState &state, ArenaAllocator &allocator, string_t str,
@@ -104,12 +109,11 @@ struct StringAggFunction {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
-		if (!source.dataptr) {
+		if (!source.is_set) {
 			// source is not set: skip combining
 			return;
 		}
-		PerformOperation(target, aggr_input_data.allocator,
-		                 string_t(source.dataptr, UnsafeNumericCast<uint32_t>(source.size)), aggr_input_data.bind_data);
+		PerformOperation(target, aggr_input_data.allocator, source.value, aggr_input_data.bind_data);
 	}
 };
 
@@ -156,6 +160,20 @@ unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, BoundA
 	return make_uniq<StringAggBindData>(std::move(sep));
 }
 
+AggregateStateLayout StringAggStateType(AggregateLayoutInput &input) {
+	auto &function = input.function;
+	using ST = StringAggState::STATE_TYPE;
+	AggregateStateLayout layout;
+	layout.type = AggregateFunction::BuildStateLogical<ST, StringAggState>(function);
+	layout.total_state_size = AlignValue<idx_t>(sizeof(StringAggState));
+	layout.field = BuildStateField<ST>();
+	if (function.GetOriginalArguments().size() == 2) {
+		// record the value of the separator if explicitly provided
+		layout.constant_parameters.emplace(1, Value(input.bind_data->Cast<StringAggBindData>().sep));
+	}
+	return layout;
+}
+
 } // namespace
 
 AggregateFunctionSet StringAggFun::GetFunctions() {
@@ -170,6 +188,7 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), StringAggBind);
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
+	string_agg_param.SetStructStateExport(StringAggStateType);
 	string_agg.AddFunction(string_agg_param);
 	string_agg_param.GetSignature().AddParameter(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);

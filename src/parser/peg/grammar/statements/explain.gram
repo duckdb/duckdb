@@ -1,7 +1,9 @@
-ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptionList? ExplainableStatements
+ExplainStatement <- 'EXPLAIN' AnalyzeKeyword? ExplainOptionList? ExplainableStatements
 ExplainOptionList <- Parens(List(ExplainOption))
 ExplainOption <- ExplainOptionName Expression?
-ExplainOptionName <- 'ANALYZE' / 'ANALYSE' / ColId / FuncNameKeyword / TypeNameKeyword
+ExplainOptionName <- AnalyzeKeyword / ColId / FuncNameKeyword / TypeNameKeyword
+
+ExplainSelectStatement <- SelectStatementInternal
 
 ExplainableStatements <-
     AlterStatement /
@@ -19,7 +21,7 @@ ExplainableStatements <-
     MergeIntoStatement /
     PragmaStatement /
     PrepareStatement /
-    SelectStatementInternal /
+    ExplainSelectStatement /
     TransactionStatement /
     UpdateStatement /
     VacuumStatement /

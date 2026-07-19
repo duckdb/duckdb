@@ -148,7 +148,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 
 	ret->Initialize(allocator, reservoir_types, STANDARD_VECTOR_SIZE);
 	ret->Slice(Chunk(), ret_sel, return_chunk_size);
-	ret->SetCardinality(return_chunk_size);
 	return ret;
 }
 
@@ -488,7 +487,7 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	    MinValue<idx_t>(FIXED_SAMPLE_SIZE, static_cast<idx_t>(SAVE_PERCENTAGE * static_cast<double>(GetTuplesSeen())));
 
 	if (num_samples_to_keep <= 0) {
-		reservoir_chunk->chunk.SetCardinality(0);
+		reservoir_chunk->chunk.SetChildCardinality(0);
 		return;
 	}
 
@@ -537,7 +536,6 @@ void ReservoirSample::EvictOverBudgetSamples() {
 
 	UpdateSampleAppend(new_reservoir_chunk->chunk, reservoir_chunk->chunk, new_sel, num_samples_to_keep);
 	// set the cardinality
-	new_reservoir_chunk->chunk.SetCardinality(num_samples_to_keep);
 	reservoir_chunk = std::move(new_reservoir_chunk);
 	sel_size = num_samples_to_keep;
 	base_reservoir_sample->UpdateMinWeightThreshold();
@@ -553,7 +551,6 @@ void ReservoirSample::ExpandSerializedSample() {
 	auto copy_count = reservoir_chunk->chunk.size();
 	SelectionVector tmp_sel = SelectionVector(static_cast<idx_t>(0), copy_count);
 	UpdateSampleAppend(new_res_chunk->chunk, reservoir_chunk->chunk, tmp_sel, copy_count);
-	new_res_chunk->chunk.SetCardinality(copy_count);
 	std::swap(reservoir_chunk, new_res_chunk);
 }
 
@@ -710,7 +707,7 @@ void ReservoirSample::UpdateSampleAppend(DataChunk &this_, DataChunk &other, Sel
 			VectorOperations::Copy(other.data[i], this_.data[i], other_sel, append_count, 0, this_.size());
 		}
 	}
-	this_.SetCardinality(new_size);
+	this_.SetChildCardinality(new_size);
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &chunk) {
@@ -744,7 +741,6 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 		}
 		slice->Initialize(Allocator::DefaultAllocator(), types, samples_remaining);
 		slice->Slice(chunk, input_sel, samples_remaining);
-		slice->SetCardinality(samples_remaining);
 		AddToReservoir(*slice);
 		return;
 	}
@@ -857,7 +853,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 				current_sample->AddToReservoir(new_chunk);
 			} else {
 				input.Flatten();
-				input.SetCardinality(append_to_current_sample_count);
+				input.SetChildCardinality(append_to_current_sample_count);
 				current_sample->AddToReservoir(input);
 			}
 		}

@@ -12,26 +12,26 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 	// then propagate to each of the order expressions
 	for (auto &window_expr : window.expressions) {
 		auto &over_expr = window_expr->Cast<BoundWindowExpression>();
-		for (auto &expr : over_expr.partitions) {
-			over_expr.partitions_stats.push_back(PropagateExpression(expr));
+		for (auto &expr : over_expr.PartitionsMutable()) {
+			over_expr.PartitionsStatsMutable().push_back(PropagateExpression(expr));
 		}
-		for (auto &bound_order : over_expr.orders) {
+		for (auto &bound_order : over_expr.OrderByMutable()) {
 			bound_order.stats = PropagateExpression(bound_order.expression);
 		}
 
-		if (over_expr.start_expr) {
-			over_expr.expr_stats.push_back(PropagateExpression(over_expr.start_expr));
+		if (over_expr.StartExpr()) {
+			over_expr.ExprStatsMutable().push_back(PropagateExpression(over_expr.StartExprMutable()));
 		} else {
-			over_expr.expr_stats.push_back(nullptr);
+			over_expr.ExprStatsMutable().push_back(nullptr);
 		}
 
-		if (over_expr.end_expr) {
-			over_expr.expr_stats.push_back(PropagateExpression(over_expr.end_expr));
+		if (over_expr.EndExpr()) {
+			over_expr.ExprStatsMutable().push_back(PropagateExpression(over_expr.EndExprMutable()));
 		} else {
-			over_expr.expr_stats.push_back(nullptr);
+			over_expr.ExprStatsMutable().push_back(nullptr);
 		}
 
-		for (auto &bound_order : over_expr.arg_orders) {
+		for (auto &bound_order : over_expr.ArgOrdersMutable()) {
 			bound_order.stats = PropagateExpression(bound_order.expression);
 		}
 	}

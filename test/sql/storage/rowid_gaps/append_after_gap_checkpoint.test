@@ -1,0 +1,113 @@
+# name: test/sql/storage/rowid_gaps/append_after_gap_checkpoint.test
+# description: appends use the correct rowid frontier after checkpointed row-group gaps
+# group: [rowid_gaps]
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_append_latest.db' AS rowid_gap_append_latest (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE TABLE rowid_gap_append_latest.t AS SELECT i FROM range(6144) tbl(i);
+
+statement ok
+CREATE UNIQUE INDEX idx_i ON rowid_gap_append_latest.t(i);
+
+statement ok
+CHECKPOINT rowid_gap_append_latest;
+
+statement ok
+DELETE FROM rowid_gap_append_latest.t WHERE i >= 2048 AND i < 4096;
+
+statement ok
+CHECKPOINT rowid_gap_append_latest;
+
+statement ok
+DETACH rowid_gap_append_latest;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_append_latest.db' AS rowid_gap_append_latest;
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_append_latest.t;
+----
+0	6143	4096
+
+statement ok
+INSERT INTO rowid_gap_append_latest.t VALUES (999999);
+
+query II
+SELECT rowid, i FROM rowid_gap_append_latest.t WHERE i = 999999;
+----
+6144	999999
+
+statement ok
+CHECKPOINT rowid_gap_append_latest;
+
+statement ok
+DETACH rowid_gap_append_latest;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_append_latest.db' AS rowid_gap_append_latest;
+
+query II
+SELECT rowid, i FROM rowid_gap_append_latest.t WHERE i = 999999;
+----
+6144	999999
+
+statement ok
+DROP INDEX rowid_gap_append_latest.idx_i;
+
+statement ok
+CHECKPOINT rowid_gap_append_latest;
+
+statement ok
+DETACH rowid_gap_append_latest;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_append_latest.db' AS rowid_gap_append_latest;
+
+query II
+SELECT rowid, i FROM rowid_gap_append_latest.t WHERE i = 999999;
+----
+4096	999999
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_append_latest.t;
+----
+0	4096	4097
+
+statement ok
+DETACH rowid_gap_append_latest;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_append_old_storage.db' AS rowid_gap_append_old_storage (STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE TABLE rowid_gap_append_old_storage.t AS SELECT i FROM range(6144) tbl(i);
+
+statement ok
+CHECKPOINT rowid_gap_append_old_storage;
+
+statement ok
+DELETE FROM rowid_gap_append_old_storage.t WHERE i >= 2048 AND i < 4096;
+
+statement ok
+CHECKPOINT rowid_gap_append_old_storage;
+
+statement ok
+DETACH rowid_gap_append_old_storage;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_append_old_storage.db' AS rowid_gap_append_old_storage;
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_append_old_storage.t;
+----
+0	4095	4096
+
+statement ok
+INSERT INTO rowid_gap_append_old_storage.t VALUES (999999);
+
+query II
+SELECT rowid, i FROM rowid_gap_append_old_storage.t WHERE i = 999999;
+----
+4096	999999

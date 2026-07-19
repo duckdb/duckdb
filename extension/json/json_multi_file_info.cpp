@@ -1,4 +1,5 @@
 #include "json_multi_file_info.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "json_scan.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parallel/async_result.hpp"
@@ -86,7 +87,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 			if (val.IsNull()) {
 				throw BinderException("read_json \"columns\" parameter type specification cannot be NULL.");
 			}
-			options.name_list.push_back(name);
+			options.name_list.emplace_back(name);
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR.");
 			}
@@ -232,7 +233,9 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 		} else {
 			JSONCheckSingleParameter(key, values);
 			options.auto_detect = BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
-			options.format = JSONFormat::NEWLINE_DELIMITED;
+			if (options.format == JSONFormat::AUTO_DETECT) {
+				options.format = JSONFormat::NEWLINE_DELIMITED;
+			}
 		}
 		return true;
 	}
@@ -267,12 +270,12 @@ unique_ptr<TableFunctionData> JSONMultiFileInfo::InitializeBindData(MultiFileBin
 	return std::move(json_data);
 }
 
-void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
                                    MultiFileBindData &bind_data) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 
 	auto &options = json_data.options;
-	names = options.name_list;
+	names = StringsToIdentifiers(options.name_list);
 	return_types = options.sql_type_list;
 	if (options.record_type == JSONRecordType::AUTO_DETECT && return_types.size() > 1) {
 		// More than one specified column implies records
@@ -303,7 +306,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 		JSONScan::AutoDetect(context, bind_data, return_types, names);
 		D_ASSERT(return_types.size() == names.size());
 	}
-	json_data.key_names = names;
+	json_data.key_names = IdentifiersToStrings(names);
 
 	bind_data.multi_file_reader->BindOptions(bind_data.file_options, *bind_data.file_list, return_types, names,
 	                                         bind_data.reader_bind);
@@ -320,12 +323,12 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
 		// We rename them so we can parse the file anyway. Note that we can't change json_data.key_names,
 		// because the JSON reader gets columns by exact name, not position
-		case_insensitive_map_t<idx_t> name_collision_count;
+		identifier_map_t<idx_t> name_collision_count;
 		for (auto &col_name : names) {
 			// Taken from CSV header_detection.cpp
 			while (name_collision_count.find(col_name) != name_collision_count.end()) {
 				name_collision_count[col_name] += 1;
-				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
+				col_name = Identifier(col_name + "_" + to_string(name_collision_count[col_name]));
 			}
 			name_collision_count[col_name] = 0;
 		}
@@ -349,7 +352,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 		// re-use readers
 		for (auto &union_reader : bind_data.union_readers) {
 			auto &json_reader = union_reader->reader->Cast<JSONReader>();
-			union_reader->names = names;
+			union_reader->names = IdentifiersToStrings(names);
 			union_reader->types = return_types;
 			union_reader->reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, return_types);
 			json_reader.Reset();
@@ -411,10 +414,10 @@ unique_ptr<GlobalTableFunctionState> JSONMultiFileInfo::InitializeGlobalState(Cl
 	return std::move(json_state);
 }
 
-unique_ptr<LocalTableFunctionState> JSONMultiFileInfo::InitializeLocalState(ExecutionContext &context,
+unique_ptr<LocalTableFunctionState> JSONMultiFileInfo::InitializeLocalState(ClientContext &context,
                                                                             GlobalTableFunctionState &global_state) {
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>();
-	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
+	auto result = make_uniq<JSONLocalTableFunctionState>(context, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
 	result->state.transform_options = gstate.state.transform_options;
@@ -431,7 +434,8 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
                                                            const MultiFileBindData &bind_data_p) {
 	auto &json_data = bind_data_p.bind_data->Cast<JSONScanData>();
 	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, union_data.GetFileName());
-	reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(union_data.names, union_data.types);
+	reader->columns =
+	    MultiFileColumnDefinition::ColumnsFromNamesAndTypes(StringsToIdentifiers(union_data.names), union_data.types);
 	return std::move(reader);
 }
 

@@ -39,6 +39,7 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'vergesort')]
     includes += [os.path.join('third_party', 'yyjson', 'include')]
     includes += [os.path.join('third_party', 'zstd', 'include')]
+    includes += [os.path.join('third_party', 'jemalloc', 'include')]
     return includes
 
 
@@ -55,6 +56,7 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'mbedtls')]
     sources += [os.path.join('third_party', 'yyjson')]
     sources += [os.path.join('third_party', 'zstd')]
+    sources += [os.path.join('third_party', 'jemalloc')]
     return sources
 
 
@@ -169,6 +171,8 @@ def get_git_describe():
             )
         except subprocess.CalledProcessError:
             return "v0.0.0-0-gdeadbeeff"
+    if is_explicit_prerelease_version(override_git_describe):
+        return override_git_describe
     if len(override_git_describe.split('-')) == 3:
         return override_git_describe
     if len(override_git_describe.split('-')) == 1:
@@ -184,11 +188,17 @@ def get_git_describe():
         return override_git_describe + "-g" + "deadbeeff"
 
 
+def is_explicit_prerelease_version(version):
+    return re.match(r"^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|rc)[0-9]+$", version) is not None
+
+
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
         return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
         git_describe = get_git_describe()
+        if is_explicit_prerelease_version(git_describe):
+            return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
         hash = git_describe.split('-')[2].lstrip('g')
         return hash
     except:
@@ -207,6 +217,8 @@ def git_dev_version():
         return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
     try:
         long_version = get_git_describe()
+        if is_explicit_prerelease_version(long_version):
+            return long_version
         version_splits = long_version.split('-')[0].lstrip('v').split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
@@ -236,12 +248,15 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
 
     ext_include_dirs = ext_pkg.include_directories
     ext_source_files = ext_pkg.source_files
+    ext_kind = getattr(ext_pkg, 'extension_kind', 'CPP').upper()
 
     include_files += amalgamation.list_includes_files(ext_include_dirs)
     include_list += ext_include_dirs
     source_list += ext_source_files
 
     sys.path = original_path
+
+    return ext_kind
 
 
 def get_extension_linked_define(extension):
@@ -307,9 +322,10 @@ def build_package(
     ext_loader_defines = ''
     ext_headers = ''
     ext_name_vector_initializer = ''
+    ext_capi_declarations = ''
     for ext in extensions:
         ext_path = os.path.join(scripts_dir, '..', 'extension', ext)
-        include_package(ext, ext_path, include_files, include_list, source_list)
+        ext_kind = include_package(ext, ext_path, include_files, include_list, source_list)
 
         ext_linked_define = get_extension_linked_define(ext)
         ext_linked_default = 1 if ext in default_linked_extensions else 0
@@ -318,26 +334,40 @@ def build_package(
             f"#ifndef {ext_linked_define}\n" f"#define {ext_linked_define} {ext_linked_default}\n" "#endif\n\n"
         )
 
-        ext_headers += f'#if {ext_linked_define}\n#include "{ext}_extension.hpp"\n#endif\n'
-
         # handle generated_extension_loader
         # this - beautifully - approximates code in extension/CMakeLists.txt
-        ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
-
-        ext_loader_body += (
-            f"#if {ext_linked_define}\n"
-            f"    if (extension==\"{ext}\") {{\n"
-            f"        db.LoadStaticExtension<{ext_name_camelcase}Extension>();\n"
-            "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
-            "    }\n"
-            "#endif\n"
-        )
+        if ext_kind == 'CAPI':
+            ext_capi_declarations += (
+                f'#if {ext_linked_define}\n'
+                f'extern "C" bool {ext}_init_c_api(duckdb_extension_info, duckdb_extension_access *);\n'
+                "#endif\n"
+            )
+            ext_loader_body += (
+                f"#if {ext_linked_define}\n"
+                f"    if (extension==\"{ext}\") {{\n"
+                f"        db.LoadStaticCAPIExtension(\"{ext}\", {ext}_init_c_api);\n"
+                "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
+                "    }\n"
+                "#endif\n"
+            )
+        else:
+            ext_headers += f'#if {ext_linked_define}\n#include "{ext}_extension.hpp"\n#endif\n'
+            ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
+            ext_loader_body += (
+                f"#if {ext_linked_define}\n"
+                f"    if (extension==\"{ext}\") {{\n"
+                f"        db.LoadStaticExtension<{ext_name_camelcase}Extension>();\n"
+                "        return ExtensionLoadResult::LOADED_EXTENSION;\n"
+                "    }\n"
+                "#endif\n"
+            )
 
         ext_name_vector_initializer += f"\n#if {ext_linked_define}\n" f"        \"{ext}\",\n" "#endif"
 
     loader_code = open(os.path.join('extension', 'generated_extension_loader.cpp.in'), 'rb').read().decode('utf8')
     loader_code = (
         loader_code.replace('${EXT_LOADER_BODY}', ext_loader_body)
+        .replace('${EXT_CAPI_DECLARATIONS}', ext_capi_declarations)
         .replace('${EXT_NAME_VECTOR_INITIALIZER}', ext_name_vector_initializer)
         .replace('${EXT_TEST_PATH_INITIALIZER}', '')
         .replace('CMake', 'package_build.py')
@@ -474,6 +504,7 @@ def build_package(
                     # directly use the source files
                     new_source_files += [os.path.join(folder_name, file) for file in current_files]
             if unity_files:
+                unity_files.sort()
                 unity_base = dirname.replace(os.path.sep, '_')
                 unity_name = f'ub_{unity_base}.cpp'
                 new_source_files.append(generate_unity_build(unity_files, unity_name, linenumbers))

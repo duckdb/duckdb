@@ -22,8 +22,8 @@ public:
 		for (auto &exp : select_list) {
 			D_ASSERT(exp->GetExpressionType() == ExpressionType::BOUND_UNNEST);
 			auto &bue = exp->Cast<BoundUnnestExpression>();
-			list_data_types.push_back(bue.child->GetReturnType());
-			executor.AddExpression(*bue.child.get());
+			list_data_types.push_back(bue.Child()->GetReturnType());
+			executor.AddExpression(*bue.Child().get());
 
 			unnest_sels.emplace_back(STANDARD_VECTOR_SIZE);
 			null_sels.emplace_back(STANDARD_VECTOR_SIZE);
@@ -217,7 +217,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			}
 		}
 		idx_t col_offset = 0;
-		chunk.SetCardinality(result_length);
+		chunk.SetChildCardinality(result_length);
 		if (result_length == 0) {
 			// nothing to unnest - skip column processing entirely
 			continue;

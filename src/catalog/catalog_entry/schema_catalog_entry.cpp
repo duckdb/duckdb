@@ -11,7 +11,7 @@
 namespace duckdb {
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.schema) {
+    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.SchemaName()) {
 	this->internal = info.internal;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -30,18 +30,18 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
                                                         const EntryLookupInfo &lookup_info) {
 	SimilarCatalogEntry result;
 	Scan(transaction.GetContext(), lookup_info.GetCatalogType(), [&](CatalogEntry &entry) {
-		auto entry_score = StringUtil::SimilarityRating(entry.name, lookup_info.GetEntryName());
+		auto entry_score = StringUtil::SimilarityRating(entry.name.GetIdentifierName(), lookup_info.GetEntryName());
 		if (entry_score > result.score) {
 			result.score = entry_score;
-			result.name = entry.name;
+			result.name = Identifier(entry.name.GetIdentifierName());
 		}
 	});
 	return result;
 }
 
 optional_ptr<CatalogEntry> SchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
-                                                        const string &name) {
-	EntryLookupInfo lookup_info(type, name);
+                                                        const Identifier &name) {
+	EntryLookupInfo lookup_info(type, QualifiedName(name));
 	return LookupEntry(transaction, lookup_info);
 }
 
@@ -61,7 +61,7 @@ CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransacti
 
 unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSchemaInfo>();
-	result->schema = name;
+	result->SetQualifiedName(QualifiedName({name}, Identifier()));
 	result->comment = comment;
 	result->tags = tags;
 	return std::move(result);

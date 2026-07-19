@@ -5,19 +5,21 @@
 namespace duckdb {
 
 CreateTriggerInfo::CreateTriggerInfo()
-    : CreateInfo(CatalogType::TRIGGER_ENTRY, INVALID_SCHEMA), timing(TriggerTiming::AFTER),
+    : CreateInfo(CatalogType::TRIGGER_ENTRY, Identifier::InvalidSchema()), timing(TriggerTiming::AFTER),
       event_type(TriggerEventType::INSERT_EVENT), for_each(TriggerForEach::STATEMENT) {
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	auto result = make_uniq<CreateTriggerInfo>();
 	CopyProperties(*result);
-	result->trigger_name = trigger_name;
+	result->SetTriggerName(GetTriggerName());
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(base_table->Copy());
 	result->timing = timing;
 	result->event_type = event_type;
 	result->columns = columns;
 	result->for_each = for_each;
+	result->referencing_new_table = referencing_new_table;
+	result->referencing_old_table = referencing_old_table;
 	result->trigger_action = trigger_action->Copy();
 	return std::move(result);
 }
@@ -32,10 +34,10 @@ string CreateTriggerInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << "IF NOT EXISTS ";
 	}
-	if (!IsInvalidSchema(schema)) {
-		ss << SQLIdentifier(schema) << ".";
+	if (!IsInvalidSchema(GetQualifiedName().Schema())) {
+		ss << SQLIdentifier(GetQualifiedName().Schema()) << ".";
 	}
-	ss << SQLIdentifier(trigger_name);
+	ss << SQLIdentifier(GetTriggerName());
 	ss << " ";
 	ss << EnumUtil::ToString(timing);
 	ss << " ";
@@ -51,6 +53,15 @@ string CreateTriggerInfo::ToString() const {
 	}
 	ss << " ON ";
 	ss << base_table->ToString();
+	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
+		ss << " REFERENCING";
+		if (!referencing_new_table.empty()) {
+			ss << " NEW TABLE AS " << SQLIdentifier(referencing_new_table);
+		}
+		if (!referencing_old_table.empty()) {
+			ss << " OLD TABLE AS " << SQLIdentifier(referencing_old_table);
+		}
+	}
 	ss << " FOR EACH " << EnumUtil::ToString(for_each);
 	ss << " " << trigger_action->ToString();
 	ss << ";";

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
@@ -34,8 +35,8 @@ struct CreateInfo;
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
 public:
-	CatalogEntry(CatalogType type, Catalog &catalog, string name);
-	CatalogEntry(CatalogType type, string name, idx_t oid);
+	CatalogEntry(CatalogType type, Catalog &catalog, Identifier name);
+	CatalogEntry(CatalogType type, Identifier name, idx_t oid);
 	virtual ~CatalogEntry();
 
 	//! The oid of the entry
@@ -45,7 +46,7 @@ public:
 	//! Reference to the catalog set this entry is stored in
 	optional_ptr<CatalogSet> set;
 	//! The name of the entry
-	string name;
+	Identifier name;
 	//! Whether or not the object is deleted
 	bool deleted;
 	//! Whether or not the object is temporary and should not be added to the WAL
@@ -53,7 +54,7 @@ public:
 	//! Whether or not the entry is an internal entry (cannot be deleted, not dumped, etc)
 	bool internal;
 	//! The name of the extension that registered this entry (empty for core entries)
-	string extension_name;
+	Identifier extension_name;
 	//! Timestamp at which the catalog entry was created
 	atomic<transaction_t> timestamp;
 	//! (optional) comment on this entry
@@ -65,7 +66,7 @@ private:
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that dependents_map this node)
-	optional_ptr<CatalogEntry> parent;
+	atomic<CatalogEntry *> parent;
 
 public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info);
@@ -119,7 +120,7 @@ public:
 
 class InCatalogEntry : public CatalogEntry {
 public:
-	InCatalogEntry(CatalogType type, Catalog &catalog, string name);
+	InCatalogEntry(CatalogType type, Catalog &catalog, Identifier name);
 	~InCatalogEntry() override;
 
 	//! The catalog the entry belongs to

@@ -1,4 +1,5 @@
 #include "capi_tester.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 
@@ -217,7 +218,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 				for (idx_t row = 0; row < STANDARD_VECTOR_SIZE; row++) {
 					col.Append(duckdb::Value(i));
 				}
-				data_chunk->SetCardinality(STANDARD_VECTOR_SIZE);
+				data_chunk->SetChildCardinality(STANDARD_VECTOR_SIZE);
 				appender.Append(*data_chunk, 0, data_chunk->size(), data_chunk->size());
 			}
 

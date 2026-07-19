@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
@@ -50,8 +50,9 @@ public:
 	shared_ptr<ClientContext> context;
 
 public:
-	//! Returns query profiling information for the current query
-	DUCKDB_API string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);
+	//! Returns query profiling information for the current query, formatted according to the given ProfilerPrintFormat
+	//! (e.g. ProfilerPrintFormat::JSON()). ProfilerPrintFormat::Default() uses the configured default profiler format.
+	DUCKDB_API string GetProfilingInformation(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default());
 
 	//! Interrupt execution of the current query
 	DUCKDB_API void Interrupt();
@@ -105,10 +106,10 @@ public:
 	PendingQuery(unique_ptr<SQLStatement> statement,
 	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(unique_ptr<SQLStatement> statement, case_insensitive_map_t<BoundParameterData> &named_values,
+	PendingQuery(unique_ptr<SQLStatement> statement, identifier_map_t<BoundParameterData> &named_values,
 	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, case_insensitive_map_t<BoundParameterData> &named_values,
+	PendingQuery(const string &query, identifier_map_t<BoundParameterData> &named_values,
 	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 	DUCKDB_API unique_ptr<PendingQueryResult>
 	PendingQuery(const string &query, vector<Value> &values,
@@ -124,13 +125,13 @@ public:
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
-	                                                  const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &database_name, const Identifier &schema_name,
+	                                                  const Identifier &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &schema_name, const Identifier &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG and
 	//! DEFAULT_SCHEMA.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &table_name);
 
 	//! Extract a set of SQL statements from a specific query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ExtractStatements(const string &query);
@@ -141,13 +142,13 @@ public:
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
 
 	//! Returns a relation that produces a table from this connection
-	DUCKDB_API shared_ptr<Relation> Table(const string &tname);
-	DUCKDB_API shared_ptr<Relation> Table(const string &schema_name, const string &table_name);
-	DUCKDB_API shared_ptr<Relation> Table(const string &catalog_name, const string &schema_name,
-	                                      const string &table_name);
+	DUCKDB_API shared_ptr<Relation> Table(const Identifier &tname);
+	DUCKDB_API shared_ptr<Relation> Table(const Identifier &schema_name, const Identifier &table_name);
+	DUCKDB_API shared_ptr<Relation> Table(const Identifier &catalog_name, const Identifier &schema_name,
+	                                      const Identifier &table_name);
 	//! Returns a relation that produces a view from this connection
-	DUCKDB_API shared_ptr<Relation> View(const string &tname);
-	DUCKDB_API shared_ptr<Relation> View(const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> View(const Identifier &tname);
+	DUCKDB_API shared_ptr<Relation> View(const Identifier &schema_name, const Identifier &table_name);
 	//! Returns a relation that calls a specified table function
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname);
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values,

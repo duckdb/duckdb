@@ -137,6 +137,19 @@ public:
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
 	}
+	inline bool IsSkipped() const {
+		return !chunk;
+	}
+	//! Set the parent reader (the composite reader this reader is a child of). Top-level readers have no parent.
+	void SetParent(ColumnReader &parent_p) {
+		parent = parent_p;
+	}
+	//! Whether this is a top-level reader (i.e. it has no parent reader)
+	bool IsRoot() const {
+		return !parent;
+	}
+	//! Whether every value in the current row group's column chunk is NULL (according to its statistics)
+	bool AllValuesAreNull() const;
 
 	void InitializeCryptoMetadata(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm,
 	                              idx_t row_group_ordinal_p) {
@@ -159,7 +172,7 @@ public:
 	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
-	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
+	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
 
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES>
 	void PlainTemplatedDefines(ByteBuffer &plain_data, const uint8_t *defines, uint64_t num_values, idx_t result_offset,
@@ -361,6 +374,8 @@ private:
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;
+	//! The composite reader this reader is a child of (struct/list/variant/expression). Null for top-level readers.
+	optional_ptr<ColumnReader> parent;
 
 	TProtocol *protocol;
 	idx_t page_rows_available;

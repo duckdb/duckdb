@@ -1,0 +1,293 @@
+# name: test/sql/copy/parquet/parquet_expression_filter_pruning.test
+# description: Test row group pruning with arithmetic expression filters
+# group: [parquet]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+require parquet
+
+# 10 row groups of 10240 rows (multiple of vector size -> deterministic boundaries)
+statement ok
+COPY (SELECT range AS a FROM range(102400)) TO '{TEST_DIR}/expr_prune_int.parquet' (ROW_GROUP_SIZE 10240)
+
+statement ok
+COPY (SELECT range::DOUBLE AS d FROM range(102400)) TO '{TEST_DIR}/expr_prune_double.parquet' (ROW_GROUP_SIZE 10240)
+
+statement ok
+COPY (SELECT range::FLOAT AS f FROM range(102400)) TO '{TEST_DIR}/expr_prune_float.parquet' (ROW_GROUP_SIZE 10240)
+
+statement ok
+COPY (SELECT CASE WHEN range = 95000 THEN 'nan'::DOUBLE ELSE range::DOUBLE END AS d FROM range(102400)) TO '{TEST_DIR}/expr_prune_nan.parquet' (ROW_GROUP_SIZE 10240)
+
+# constants are not divisible by the multiplier, so the optimizer keeps the expression filter
+# instead of folding it into a plain comparison
+
+# a * 4 + 4 > 327681  <=>  a >= 81920  -> last 2 row groups
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_int.parquet' WHERE a * 4 + 4 > 327681
+----
+20480
+
+statement ok
+CALL disable_logging()
+
+# count(*) is fully precomputed from row-group statistics (groups 8-9 always-true, 0-7 always-false),
+# so the Parquet scan is eliminated entirely and no row group log events are emitted
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# a * 4 - 4 < 40961  <=>  a <= 10241  -> first 2 row groups
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_int.parquet' WHERE a * 4 - 4 < 40961
+----
+10242
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	2
+SkipRowGroup	8
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# false for the whole file -> optimizer folds to EMPTY_RESULT from file-level stats
+query II
+EXPLAIN SELECT count(*) FROM '{TEST_DIR}/expr_prune_int.parquet' WHERE a * 4 + 4 > 409601
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+# d + d < 20479.5  <=>  d < 10239.75  -> first row group (d twice -> not foldable)
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_double.parquet' WHERE d + d < 20479.5e0
+----
+10240
+
+statement ok
+CALL disable_logging()
+
+# count(*) is fully precomputed from row-group statistics (group 0 always-true, 1-9 always-false),
+# so the Parquet scan is eliminated entirely and no row group log events are emitted
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# abs(d) is not globally monotone, but row-group stats can still prune ranges that are known to be nonnegative
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_double.parquet' WHERE abs(d) = 42.0
+----
+1
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_float.parquet' WHERE abs(f) = 42.0::FLOAT
+----
+1
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# NaN at row 95000 -> its row group has no min/max stats and is never pruned; the others are pruned
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_nan.parquet' WHERE d + d > 184318.5e0
+----
+10240
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# can_have_nan=true disables stats pruning entirely (NaN compares larger than anything),
+# but the NaN row must still survive the filter
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query III
+SELECT count(*), min(d), max(d) FROM read_parquet('{TEST_DIR}/expr_prune_nan.parquet', can_have_nan=true) WHERE d + d > 184318.5e0
+----
+10240	92160.0	nan
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	10
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# OR of prefix predicates should still prune row groups that cannot match any branch
+statement ok
+COPY (
+	SELECT range::INTEGER AS x, 'p' || lpad(range::VARCHAR, 6, '0') AS s
+	FROM range(8192)
+) TO '{TEST_DIR}/expr_prune_prefix_or.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+query II
+SELECT count(*), sum(x)
+FROM '{TEST_DIR}/expr_prune_prefix_or.parquet'
+WHERE prefix(s, 'p0000') OR prefix(s, 'p0050')
+----
+200	509900
+
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(x)
+FROM '{TEST_DIR}/expr_prune_prefix_or.parquet'
+WHERE prefix(s, 'p0000') OR prefix(s, 'p0050')
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 2 / 4.*
+
+# Prefix pruning corner cases: NULL-only row groups, empty prefixes, NULL prefixes, and non-constant prefixes
+statement ok
+CREATE TABLE expr_prune_prefix_corner AS
+	SELECT range::INTEGER AS x,
+		CASE
+			WHEN range < 2048 THEN NULL
+			WHEN range < 4096 THEN 'a' || lpad((range - 2048)::VARCHAR, 4, '0')
+			WHEN range < 6144 THEN 'b' || lpad((range - 4096)::VARCHAR, 4, '0')
+			ELSE 'c' || lpad((range - 6144)::VARCHAR, 4, '0')
+		END AS s,
+		CASE WHEN range % 2 = 0 THEN 'a' ELSE 'b' END AS p
+	FROM range(8192)
+
+statement ok
+COPY expr_prune_prefix_corner TO '{TEST_DIR}/expr_prune_prefix_corner.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, 'b') OR prefix(s, 'd')
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, 'b') OR prefix(s, 'd')
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 4.*
+
+# Empty prefixes match all non-NULL strings but not NULL strings
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, '') OR prefix(s, 'zz')
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 4 / 4.*
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, '') OR prefix(s, 'zz')
+----
+6144
+
+# Prefixes longer than the maximum string length can never match
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, 'bbbbbbbb') OR prefix(s, 'dddddddd')
+----
+0
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, 'bbbbbbbb') OR prefix(s, 'dddddddd')
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+# Non-constant prefixes are not pruned using constant-prefix statistics
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, p) OR prefix(s, 'd')
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_corner.parquet'
+WHERE prefix(s, p) OR prefix(s, 'd')
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 4 / 4.*
+
+# Byte-wise prefix successor should prune across a UTF-8 byte boundary
+statement ok
+COPY (
+	SELECT CASE WHEN range < 2048 THEN chr(255) || 'a' ELSE chr(256) || 'a' END AS s
+	FROM range(4096)
+) TO '{TEST_DIR}/expr_prune_prefix_utf8_boundary.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_utf8_boundary.parquet'
+WHERE prefix(s, chr(255)) OR prefix(s, 'zz')
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_utf8_boundary.parquet'
+WHERE prefix(s, chr(255)) OR prefix(s, 'zz')
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*

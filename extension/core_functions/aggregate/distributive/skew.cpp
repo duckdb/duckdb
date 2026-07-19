@@ -3,25 +3,23 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include <limits>
 
 namespace duckdb {
 
 namespace {
 
 struct SkewState {
-	size_t n;
+	static constexpr const char *STATE_NAMES[] = {"n", "sum", "sum_sqr", "sum_cub"};
+	using STATE_TYPE = StructStateType<idx_t, double, double, double>;
+
+	idx_t n;
 	double sum;
 	double sum_sqr;
 	double sum_cub;
 };
 
 struct SkewnessOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.n = 0;
-		state.sum = state.sum_sqr = state.sum_cub = 0;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
@@ -58,15 +56,21 @@ struct SkewnessOperation {
 		}
 		double n = state.n;
 		double temp = 1 / n;
-		auto p = std::pow(temp * (state.sum_sqr - state.sum * state.sum * temp), 3);
-		if (p < 0) {
-			p = 0; // Shouldn't be below 0 but floating points are weird
-		}
-		double div = std::sqrt(p);
-		if (div == 0) {
-			target = NAN;
+		double raw_m2 = state.sum_sqr - state.sum * state.sum * temp;
+		// Only treat finite second-moment noise as zero; overflow should still surface as out-of-range.
+		if (Value::DoubleIsFinite(raw_m2) && Value::DoubleIsFinite(state.sum_sqr) &&
+		    // Scale the tolerance by the accumulated squared magnitude instead of using a fixed epsilon.
+		    std::abs(raw_m2) <= std::numeric_limits<double>::epsilon() * std::max(1.0, std::abs(state.sum_sqr))) {
+			finalize_data.ReturnNull();
 			return;
 		}
+		double variance = temp * raw_m2;
+		if (variance <= 0) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		auto p = std::pow(variance, 3);
+		double div = std::sqrt(p);
 		double temp1 = std::sqrt(n * (n - 1)) / (n - 2);
 		target = temp1 * temp *
 		         (state.sum_cub - 3 * state.sum_sqr * state.sum * temp + 2 * pow(state.sum, 3) * temp * temp) / div;

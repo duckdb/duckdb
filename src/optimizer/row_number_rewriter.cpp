@@ -20,7 +20,7 @@ bool RowNumberRewriter::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 	auto &window_expr = expression->Cast<BoundWindowExpression>();
-	if (!window_expr.partitions.empty() || !window_expr.orders.empty()) {
+	if (!window_expr.Partitions().empty() || !window_expr.OrderBy().empty()) {
 		return false;
 	}
 
@@ -34,6 +34,15 @@ bool RowNumberRewriter::CanOptimize(LogicalOperator &op) {
 
 	// the get must support the row_number virtual column
 	if (get.virtual_columns.find(COLUMN_IDENTIFIER_ROW_NUMBER) == get.virtual_columns.end()) {
+		return false;
+	}
+
+	// only rewrite for a base-table scan: its virtual row_number column has SQL
+	// window semantics (dense, over the visible rows of this scan). Table
+	// functions such as read_duckdb also expose a row_number virtual column, but
+	// with different (e.g. file-local) semantics, so mapping ROW_NUMBER() OVER ()
+	// onto it would return the wrong values (issue #23586).
+	if (!get.GetTable()) {
 		return false;
 	}
 

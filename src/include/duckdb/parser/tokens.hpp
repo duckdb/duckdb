@@ -59,6 +59,7 @@ class StatementNode;
 class UpdateQueryNode;
 class DeleteQueryNode;
 class InsertQueryNode;
+class MergeQueryNode;
 
 //===--------------------------------------------------------------------===//
 // Expressions
@@ -81,6 +82,7 @@ class ParameterExpression;
 class PositionalReferenceExpression;
 class StarExpression;
 class SubqueryExpression;
+class TypeExpression;
 class WindowExpression;
 
 //===--------------------------------------------------------------------===//

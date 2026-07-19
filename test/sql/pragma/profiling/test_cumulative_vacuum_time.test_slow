@@ -39,7 +39,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/cumulative_vacuum_time_vacuum.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
+SET tracked_metrics = ['storage.total_vacuum_time', 'storage.checkpoint_latency'];
 
 statement ok
 SET profiling_coverage='ALL';
@@ -55,7 +55,7 @@ CREATE OR REPLACE TABLE vacuum_metrics AS SELECT * FROM '{TEST_DIR}/cumulative_v
 
 query I
 SELECT CASE
-	WHEN cumulative_vacuum_time > 0 THEN 'true'
+	WHEN storage.total_vacuum_time > 0 THEN 'true'
 	ELSE 'false'
 	END
 FROM vacuum_metrics;
@@ -83,7 +83,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/cumulative_vacuum_time_drop.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
+SET tracked_metrics = ['storage.total_vacuum_time', 'storage.checkpoint_latency'];
 
 statement ok
 SET profiling_coverage='ALL';
@@ -99,7 +99,7 @@ CREATE OR REPLACE TABLE drop_metrics AS SELECT * FROM '{TEST_DIR}/cumulative_vac
 
 query I
 SELECT CASE
-	WHEN cumulative_vacuum_time = 0 THEN 'true'
+	WHEN storage.total_vacuum_time = 0 THEN 'true'
 	ELSE 'false'
 	END
 FROM drop_metrics;
@@ -130,7 +130,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/cumulative_vacuum_time_index.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
+SET tracked_metrics = ['storage.total_vacuum_time', 'storage.checkpoint_latency'];
 
 statement ok
 SET profiling_coverage='ALL';
@@ -146,7 +146,7 @@ CREATE OR REPLACE TABLE index_metrics AS SELECT * FROM '{TEST_DIR}/cumulative_va
 
 query I
 SELECT CASE
-	WHEN cumulative_vacuum_time > 0 THEN 'true'
+	WHEN storage.total_vacuum_time > 0 THEN 'true'
 	ELSE 'false'
 	END
 FROM index_metrics;

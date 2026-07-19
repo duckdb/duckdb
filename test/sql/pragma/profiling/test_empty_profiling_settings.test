@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{}'
+SET tracked_metrics = [];
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -22,7 +22,7 @@ PRAGMA disable_profiling;
 # Evaluate results.
 
 query I
-SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL
+SELECT unnest(current_setting('tracked_metrics')) ORDER BY ALL
 ----
 
 statement ok

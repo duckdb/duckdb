@@ -23,7 +23,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equal(const BetweenExpression &a, const BetweenExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

@@ -5,6 +5,8 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
@@ -111,13 +113,13 @@ SinkFinalizeType PhysicalArrowCollector::Finalize(Pipeline &pipeline, Event &eve
 			    "PhysicalArrowCollector Finalize contains no chunks, but tuple_count is non-zero (%d)",
 			    gstate.tuple_count);
 		}
-		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
+		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, IdentifiersToStrings(names), types,
 		                                            context.GetClientProperties(), record_batch_size);
 		return SinkFinalizeType::READY;
 	}
 
-	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
-	                                            record_batch_size);
+	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, IdentifiersToStrings(names), types,
+	                                            context.GetClientProperties(), record_batch_size);
 	auto &arrow_result = gstate.result->Cast<ArrowQueryResult>();
 	arrow_result.SetArrowData(std::move(gstate.chunks));
 

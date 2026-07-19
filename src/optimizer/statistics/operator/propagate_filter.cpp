@@ -18,7 +18,7 @@ static bool IsCompareDistinct(ExpressionType type) {
 bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
 	Value expr_value;
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		expr_value = expr.Cast<BoundConstantExpression>().value;
+		expr_value = expr.Cast<BoundConstantExpression>().GetValue();
 	} else if (expr.IsFoldable()) {
 		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, expr_value)) {
 			return false;
@@ -163,10 +163,10 @@ void StatisticsPropagator::UpdateFilterStatistics(const Expression &left, const 
 	// any column ref involved in a comparison will not be null after the comparison
 	bool compare_distinct = IsCompareDistinct(comparison_type);
 	if (!compare_distinct && left.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).binding);
+		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).Binding());
 	}
 	if (!compare_distinct && right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
+		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).Binding());
 	}
 	// check if this is a comparison between a constant and a column ref
 	optional_ptr<const BoundConstantExpression> constant;
@@ -185,8 +185,8 @@ void StatisticsPropagator::UpdateFilterStatistics(const Expression &left, const 
 		// comparison between two column refs
 		auto &left_column_ref = left.Cast<BoundColumnRefExpression>();
 		auto &right_column_ref = right.Cast<BoundColumnRefExpression>();
-		auto lentry = statistics_map.find(left_column_ref.binding);
-		auto rentry = statistics_map.find(right_column_ref.binding);
+		auto lentry = statistics_map.find(left_column_ref.Binding());
+		auto rentry = statistics_map.find(right_column_ref.Binding());
 		if (lentry == statistics_map.end() || rentry == statistics_map.end()) {
 			return;
 		}
@@ -197,11 +197,11 @@ void StatisticsPropagator::UpdateFilterStatistics(const Expression &left, const 
 	}
 	if (constant && columnref) {
 		// comparison between columnref
-		auto entry = statistics_map.find(columnref->binding);
+		auto entry = statistics_map.find(columnref->Binding());
 		if (entry == statistics_map.end()) {
 			return;
 		}
-		UpdateFilterStatistics(*entry->second, comparison_type, constant->value);
+		UpdateFilterStatistics(*entry->second, comparison_type, constant->GetValue());
 	}
 }
 

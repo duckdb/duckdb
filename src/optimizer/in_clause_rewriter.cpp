@@ -38,35 +38,35 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		return nullptr;
 	}
 	D_ASSERT(root);
-	auto in_type = expr.children[0]->GetReturnType();
+	auto in_type = expr.GetChildrenMutable()[0]->GetReturnType();
 	bool is_regular_in = expr.GetExpressionType() == ExpressionType::COMPARE_IN;
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
-	for (idx_t i = 1; i < expr.children.size(); i++) {
-		if (!expr.children[i]->IsFoldable()) {
+	for (idx_t i = 1; i < expr.GetChildrenMutable().size(); i++) {
+		if (!expr.GetChildrenMutable()[i]->IsFoldable()) {
 			// non-scalar expression
 			all_scalar = false;
 		}
 	}
-	if (expr.children.size() == 2) {
+	if (expr.GetChildrenMutable().size() == 2) {
 		// only one child
 		// IN: turn into X = 1
 		// NOT IN: turn into X <> 1
-		return BoundComparisonExpression::Create(is_regular_in ? ExpressionType::COMPARE_EQUAL
-		                                                       : ExpressionType::COMPARE_NOTEQUAL,
-		                                         std::move(expr.children[0]), std::move(expr.children[1]));
+		return BoundComparisonExpression::Create(
+		    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
+		    std::move(expr.GetChildrenMutable()[0]), std::move(expr.GetChildrenMutable()[1]));
 	}
-	if (expr.children.size() < IN_CLAUSE_REWRITE_THRESHOLD || !all_scalar) {
+	if (expr.GetChildrenMutable().size() < IN_CLAUSE_REWRITE_THRESHOLD || !all_scalar) {
 		// low amount of children or not all scalar
 		// IN: turn into (X = 1 OR X = 2 OR X = 3...)
 		// NOT IN: turn into (X <> 1 AND X <> 2 AND X <> 3 ...)
 		auto conjunction = make_uniq<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_OR
 		                                                                       : ExpressionType::CONJUNCTION_AND);
-		for (idx_t i = 1; i < expr.children.size(); i++) {
-			conjunction->children.push_back(BoundComparisonExpression::Create(
+		for (idx_t i = 1; i < expr.GetChildrenMutable().size(); i++) {
+			conjunction->GetChildrenMutable().push_back(BoundComparisonExpression::Create(
 			    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
-			    expr.children[0]->Copy(), std::move(expr.children[i])));
+			    expr.GetChildrenMutable()[0]->Copy(), std::move(expr.GetChildrenMutable()[i])));
 		}
 		return std::move(conjunction);
 	}
@@ -80,16 +80,15 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 
 	DataChunk chunk;
 	chunk.Initialize(context, types);
-	for (idx_t i = 1; i < expr.children.size(); i++) {
+	for (idx_t i = 1; i < expr.GetChildrenMutable().size(); i++) {
 		// resolve this expression to a constant
 		Value value;
-		if (!ExpressionExecutor::TryEvaluateScalar(context, *expr.children[i], value)) {
+		if (!ExpressionExecutor::TryEvaluateScalar(context, *expr.GetChildrenMutable()[i], value)) {
 			// error while evaluating scalar
 			return nullptr;
 		}
-		chunk.SetCardinality(chunk.size() + 1);
 		chunk.data[0].Append(value);
-		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
+		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.GetChildrenMutable().size()) {
 			// chunk full: append to chunk collection
 			collection->Append(append_state, chunk);
 			chunk.Reset();
@@ -106,7 +105,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	join->AddChild(std::move(root));
 	join->AddChild(std::move(chunk_scan));
 	// create the JOIN condition
-	JoinCondition cond(std::move(expr.children[0]),
+	JoinCondition cond(std::move(expr.GetChildrenMutable()[0]),
 	                   make_uniq<BoundColumnRefExpression>(in_type, ColumnBinding(chunk_index, ProjectionIndex(0))),
 	                   ExpressionType::COMPARE_EQUAL);
 	join->conditions.push_back(std::move(cond));
@@ -131,7 +130,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	if (!is_regular_in) {
 		// NOT IN: invert
 		auto invert = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
-		invert->children.push_back(std::move(result));
+		invert->GetChildrenMutable().push_back(std::move(result));
 		result = std::move(invert);
 	}
 	return result;

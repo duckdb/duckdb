@@ -193,6 +193,14 @@ bool StreamQueryResult::IsOpen() {
 
 void StreamQueryResult::Close() {
 	buffered_data->Close();
+	if (context) {
+		auto lock = LockContext();
+		if (context->IsActiveResult(*lock, *this)) {
+			// Abandoned before the stream was fully drained: release the active-query state now
+			// (matching InitialCleanup) instead of leaking it until the next query or context teardown.
+			context->CleanupInternal(*lock, this, false);
+		}
+	}
 	context.reset();
 }
 

@@ -15,6 +15,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include <cstring>
 #include <type_traits>
 #include <utility>
 
@@ -486,6 +487,12 @@ public:
 	static inline void
 	ExecuteUnaryClusteredDispatch(const INPUT_TYPE *vals, const ClusteredAggr &clustered, const ValidityMask &validity,
 	                              const SelectionVector *isel = nullptr, const sel_t *cluster_iter = nullptr) {
+		if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
+			if (!validity.CanHaveNull()) {
+				OP::template ExecuteFlatI64HugeintSum<STATE_TYPE, INPUT_TYPE>(vals, clustered, isel, cluster_iter);
+				return;
+			}
+		}
 		if (OP::IgnoreNull() && validity.CanHaveNull()) {
 			ExecuteUnaryClusteredOpt<true, STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, validity, isel, cluster_iter);
 		} else {
@@ -560,11 +567,18 @@ public:
 	}
 
 	// true if OP defines ClusteredOp (early-exit optimization for first/last/any_value).
-	template <class OP, class = void>
+	template <class OP, class INPUT_TYPE, class STATE_TYPE, class = void>
 	struct HasClusteredOperation : std::false_type {};
-	template <class OP>
-	struct HasClusteredOperation<OP, void_t_helper<decltype(&OP::template ClusteredOp<int32_t, int32_t, OP>)>>
+	template <class OP, class INPUT_TYPE, class STATE_TYPE>
+	struct HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE,
+	                             void_t_helper<decltype(&OP::template ClusteredOp<INPUT_TYPE, STATE_TYPE, OP>)>>
 	    : std::true_type {};
+
+	template <class INPUT_TYPE, class OP, class = void>
+	struct HasI64HugeintSumFastPath : std::false_type {};
+	template <class INPUT_TYPE, class OP>
+	struct HasI64HugeintSumFastPath<INPUT_TYPE, OP, void_t_helper<decltype(OP::ClusteredI64HugeintSum)>>
+	    : std::integral_constant<bool, std::is_integral<INPUT_TYPE>::value && OP::ClusteredI64HugeintSum> {};
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryClustConstantCustomState(Vector &input, AggregateInputData &aggr_input_data,
@@ -584,7 +598,7 @@ public:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryNoClusteredOpt(Vector &input, AggregateInputData &aggr_input_data,
 	                                       const ClusteredAggr &clustered, idx_t count) {
-		static_assert(HasClusteredOperation<OP>::value, "Expected custom clustered operation");
+		static_assert(HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE>::value, "Expected custom clustered operation");
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			ExecuteUnaryClustConstantCustomState<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered);
 			return;
@@ -613,6 +627,15 @@ public:
 				ExecuteUnaryClusteredConstantOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered);
 				return;
 			case VectorType::DICTIONARY_VECTOR: {
+				if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
+					if (clustered.state) {
+						auto props = clustered.state->GetDictProps(input);
+						if (props && *props) {
+							OP::template ExecuteDictI64HugeintSum<STATE_TYPE>(input, clustered, props->get());
+							return;
+						}
+					}
+				}
 				auto *cluster_iter = clustered.ClusterIter(input, count);
 				if (cluster_iter) {
 					ExecuteUnaryClusteredDictOpt<true, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count,
@@ -627,7 +650,7 @@ public:
 				return;
 			}
 		}
-		if constexpr (HasClusteredOperation<OP>::value) {
+		if constexpr (HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE>::value) {
 			ExecuteUnaryNoClusteredOpt<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered, count);
 		} else {
 			D_ASSERT(false);
@@ -752,20 +775,179 @@ public:
 		    (STATE_TYPE *)state, count, *adata.sel, *bdata.sel, adata.validity, bdata.validity);
 	}
 
+	template <class STATE_TYPE, class OP, class = void>
+	struct HasRepeatedCombine : std::false_type {};
 	template <class STATE_TYPE, class OP>
-	static void Combine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
-		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
+	struct HasRepeatedCombine<STATE_TYPE, OP,
+	                          void_t_helper<decltype(OP::template RepeatedCombine<STATE_TYPE, OP>(
+	                              std::declval<const STATE_TYPE &>(), std::declval<STATE_TYPE &>(),
+	                              std::declval<AggregateInputData &>(), std::declval<idx_t>()))>> : std::true_type {};
+
+	template <class STATE_TYPE, class OP, class = void>
+	struct HasInitialize : std::false_type {};
+	template <class STATE_TYPE, class OP>
+	struct HasInitialize<STATE_TYPE, OP, void_t_helper<decltype(OP::Initialize(std::declval<STATE_TYPE &>()))>>
+	    : std::true_type {};
+
+	template <class STATE_TYPE, class OP, class = void>
+	struct HasDestroy : std::false_type {};
+	template <class STATE_TYPE, class OP>
+	struct HasDestroy<STATE_TYPE, OP,
+	                  void_t_helper<decltype(OP::template Destroy<STATE_TYPE>(
+	                      std::declval<STATE_TYPE &>(), std::declval<AggregateInputData &>()))>> : std::true_type {};
+
+	template <class STATE_TYPE, class OP>
+	static void InitializeState(STATE_TYPE &state) {
+		if constexpr (HasInitialize<STATE_TYPE, OP>::value) {
+			OP::Initialize(state);
+		} else {
+			memset(&state, 0, sizeof(STATE_TYPE));
+		}
+	}
+
+	template <class STATE_TYPE, class OP>
+	static void DestroyState(STATE_TYPE &state, AggregateInputData &aggr_input_data) {
+		if constexpr (HasDestroy<STATE_TYPE, OP>::value) {
+			OP::template Destroy<STATE_TYPE>(state, aggr_input_data);
+		}
+	}
+
+	template <class STATE_TYPE, class OP>
+	class AggregateStateGuard {
+	public:
+		explicit AggregateStateGuard(AggregateInputData &aggr_input_data) : aggr_input_data(aggr_input_data) {
+		}
+
+		AggregateStateGuard(const AggregateStateGuard &) = delete;
+		AggregateStateGuard &operator=(const AggregateStateGuard &) = delete;
+
+		~AggregateStateGuard() {
+			Destroy();
+		}
+
+		STATE_TYPE &Get() {
+			return *reinterpret_cast<STATE_TYPE *>(&storage);
+		}
+
+		void Initialize() {
+			D_ASSERT(!initialized);
+			InitializeState<STATE_TYPE, OP>(Get());
+			initialized = true;
+		}
+
+		void Destroy() {
+			if (!initialized) {
+				return;
+			}
+			DestroyState<STATE_TYPE, OP>(Get(), aggr_input_data);
+			initialized = false;
+		}
+
+	private:
+		typename std::aligned_storage<sizeof(STATE_TYPE), alignof(STATE_TYPE)>::type storage;
+		AggregateInputData &aggr_input_data;
+		bool initialized = false;
+	};
+
+	template <class STATE_TYPE, class OP>
+	static void GenericRepeatedCombine(const STATE_TYPE &source, STATE_TYPE &target,
+	                                   AggregateInputData &aggr_input_data, idx_t multiplicity) {
+		AggregateInputData combine_input(aggr_input_data.function, aggr_input_data.bind_data, aggr_input_data.allocator,
+		                                 AggregateCombineType::PRESERVE_INPUT);
+
+		AggregateStateGuard<STATE_TYPE, OP> result(combine_input);
+		AggregateStateGuard<STATE_TYPE, OP> power_a(combine_input);
+		AggregateStateGuard<STATE_TYPE, OP> power_b(combine_input);
+
+		result.Initialize();
+		power_a.Initialize();
+		OP::template Combine<STATE_TYPE, OP>(source, power_a.Get(), combine_input);
+
+		auto power = &power_a;
+		auto next_power = &power_b;
+		while (multiplicity > 0) {
+			if (multiplicity & 1) {
+				OP::template Combine<STATE_TYPE, OP>(power->Get(), result.Get(), combine_input);
+			}
+			multiplicity >>= 1;
+			if (multiplicity == 0) {
+				break;
+			}
+			next_power->Initialize();
+			OP::template Combine<STATE_TYPE, OP>(power->Get(), next_power->Get(), combine_input);
+			OP::template Combine<STATE_TYPE, OP>(power->Get(), next_power->Get(), combine_input);
+			power->Destroy();
+			std::swap(power, next_power);
+		}
+		OP::template Combine<STATE_TYPE, OP>(result.Get(), target, combine_input);
+	}
+
+	template <class STATE_TYPE, class OP>
+	static void RepeatedCombine(const STATE_TYPE &source, STATE_TYPE &target, AggregateInputData &aggr_input_data,
+	                            idx_t multiplicity) {
+		if constexpr (HasRepeatedCombine<STATE_TYPE, OP>::value) {
+			AggregateInputData combine_input(aggr_input_data.function, aggr_input_data.bind_data,
+			                                 aggr_input_data.allocator, aggr_input_data.combine_type);
+			OP::template RepeatedCombine<STATE_TYPE, OP>(source, target, combine_input, multiplicity);
+		} else {
+			GenericRepeatedCombine<STATE_TYPE, OP>(source, target, aggr_input_data, multiplicity);
+		}
+	}
+
+	template <class STATE_TYPE, class OP>
+	static void CombineWithoutMultiplicities(Vector &source, Vector &target, AggregateInputData &aggr_input_data,
+	                                         idx_t count) {
 		auto sdata = source.Values<const STATE_TYPE *>();
 		auto tdata = target.Values<STATE_TYPE *>();
-
 		for (idx_t i = 0; i < count; i++) {
 			OP::template Combine<STATE_TYPE, OP>(*sdata[i].GetValueUnsafe(), *tdata[i].GetValueUnsafe(),
 			                                     aggr_input_data);
 		}
 	}
 
+	template <class STATE_TYPE, class OP>
+	static void CombineWithMultiplicities(Vector &source, Vector &target, AggregateInputData &aggr_input_data,
+	                                      idx_t count) {
+		auto sdata = source.Values<const STATE_TYPE *>();
+		auto tdata = target.Values<STATE_TYPE *>();
+		UnifiedVectorFormat multiplicities;
+		aggr_input_data.combine_multiplicities->ToUnifiedFormat(multiplicities);
+		auto multiplicity_data = UnifiedVectorFormat::GetData<int64_t>(multiplicities);
+		for (idx_t i = 0; i < count; i++) {
+			auto multiplicity_idx = multiplicities.sel->get_index(i);
+			if (!multiplicities.validity.RowIsValid(multiplicity_idx)) {
+				continue;
+			}
+			const auto multiplicity = multiplicity_data[multiplicity_idx];
+			if (multiplicity < 0) {
+				throw InvalidInputException("combine_aggr multiplicity must be non-negative");
+			}
+			if (multiplicity == 0) {
+				continue;
+			}
+			auto &source_state = *sdata[i].GetValueUnsafe();
+			auto &target_state = *tdata[i].GetValueUnsafe();
+			if (multiplicity == 1) {
+				OP::template Combine<STATE_TYPE, OP>(source_state, target_state, aggr_input_data);
+				continue;
+			}
+			RepeatedCombine<STATE_TYPE, OP>(source_state, target_state, aggr_input_data,
+			                                static_cast<idx_t>(multiplicity));
+		}
+	}
+
+	template <class STATE_TYPE, class OP>
+	static void Combine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
+		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
+		if (aggr_input_data.combine_multiplicities) {
+			CombineWithMultiplicities<STATE_TYPE, OP>(source, target, aggr_input_data, count);
+		} else {
+			CombineWithoutMultiplicities<STATE_TYPE, OP>(source, target, aggr_input_data, count);
+		}
+	}
+
 	template <class STATE_TYPE, class RESULT_TYPE, class OP>
-	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
 	                     idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -773,7 +955,7 @@ public:
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
+			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(**sdata, *rdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -781,7 +963,7 @@ public:
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
+			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			for (idx_t i = 0; i < count; i++) {
 				finalize_data.result_idx = i + offset;
 				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(*sdata[i], rdata[finalize_data.result_idx],
@@ -791,21 +973,21 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP>
-	static void VoidFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-	                         idx_t offset) {
+	static void VoidFinalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                         idx_t count, idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			FlatVector::SetSize(result, count);
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
+			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			OP::template Finalize<STATE_TYPE>(**sdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			AggregateFinalizeData finalize_data(result, aggr_input_data);
+			AggregateFinalizeData finalize_data(result, finalize_input_data);
 			for (idx_t i = 0; i < count; i++) {
 				finalize_data.result_idx = i + offset;
 				OP::template Finalize<STATE_TYPE>(*sdata[i], finalize_data);

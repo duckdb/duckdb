@@ -5,11 +5,12 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
-#include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -118,6 +119,7 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 		parallel_streaming_insert = false;
 	}
 	if (!op.column_index_map.empty()) {
+		//! Deprecated: The column_index_map is only populated by older versions.
 		plan = planner.ResolveDefaultsProjection(op, *plan);
 	}
 	if (use_batch_index && !parallel_streaming_insert) {

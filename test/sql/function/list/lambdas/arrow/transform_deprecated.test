@@ -234,28 +234,28 @@ ORDER BY ct.n
 3
 
 query I
-SELECT (SELECT list_transform(l, elem -> elem + 1)) FROM corr_test
+SELECT (SELECT list_transform(l, elem -> elem + 1)) FROM corr_test ORDER BY ALL
 ----
+[]
 [3, 2, 2]
 [NULL, 3, 5, 5]
 NULL
-[]
 
 query I
-SELECT (SELECT list_transform(l, elem -> elem + n)) FROM corr_test
+SELECT (SELECT list_transform(l, elem -> elem + n)) FROM corr_test ORDER BY ALL
 ----
+[]
 [3, 2, 2]
 [NULL, 5, 7, 7]
 NULL
-[]
 
 query I
-SELECT (SELECT (SELECT (SELECT list_transform(l, elem -> elem + 1)))) FROM corr_test
+SELECT (SELECT (SELECT (SELECT list_transform(l, elem -> elem + 1)))) FROM corr_test ORDER BY ALL
 ----
+[]
 [3, 2, 2]
 [NULL, 3, 5, 5]
 NULL
-[]
 
 # positional references in lambda functions
 query I

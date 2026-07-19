@@ -39,8 +39,9 @@ QUACK
 QUACK
 
 query I
-quACk QUaCk
+quACk QUaCk QUACK
 ----
+QUACK
 QUACK
 QUACK
 
@@ -53,7 +54,7 @@ QUAC
 statement error
 QUACK NOT QUACK
 ----
-<REGEX>:Parser Error: This is not a quack.*
+<REGEX>:Parser Error: syntax error at or near.*
 
 query I
 SELECT contains(loaded_extensions(), 'loadable_extension_demo')

@@ -1,5 +1,7 @@
 #include "duckdb/execution/executor.hpp"
 
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
@@ -429,12 +431,15 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 void Executor::CancelTasks() {
 	task.reset();
+	reference_map_t<Task, shared_ptr<Task>> to_destroy;
 	{
 		lock_guard<mutex> elock(executor_lock);
 		// mark the query as cancelled so tasks will early-out
 		cancelled = true;
+		to_destroy = std::move(to_be_rescheduled_tasks);
 		to_be_rescheduled_tasks.clear();
 	}
+	to_destroy.clear();
 	// Drain all tasks first — they hold references to pipelines/events/states,
 	// so those must stay alive until all tasks have completed
 	while (executor_tasks > 0) {
@@ -475,22 +480,21 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
-	auto begin = std::chrono::high_resolution_clock::now();
+	auto begin = TimePoint::Tick();
 	std::unique_lock<mutex> l(executor_lock);
-	auto end = std::chrono::high_resolution_clock::now();
-	auto dur = end - begin;
-	auto ms = NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(dur).count());
+	auto end = TimePoint::Tick();
+	auto blocked_micros = NumericCast<idx_t>(TimePoint::ElapsedMicros(begin, end));
 	if (to_be_rescheduled_tasks.empty()) {
-		blocked_thread_time += ms;
+		blocked_thread_time += blocked_micros;
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
 		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
-		blocked_thread_time += ms;
+		blocked_thread_time += blocked_micros;
 		return;
 	}
 
-	blocked_thread_time += ms + WAIT_TIME_MS.count();
+	blocked_thread_time += blocked_micros + WAIT_TIME_MS.count();
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
 #endif
 }
@@ -502,10 +506,10 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 		if (cancelled) {
 			return;
 		}
-		auto entry = to_be_rescheduled_tasks.find(task_p.get());
+		auto entry = to_be_rescheduled_tasks.find(*task_p);
 		if (entry != to_be_rescheduled_tasks.end()) {
 			auto &scheduler = TaskScheduler::GetScheduler(context);
-			to_be_rescheduled_tasks.erase(task_p.get());
+			to_be_rescheduled_tasks.erase(*task_p);
 			scheduler.ScheduleTask(GetToken(), task_p);
 			SignalTaskRescheduled(l);
 			break;
@@ -542,12 +546,12 @@ void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	if (cancelled) {
 		return;
 	}
-	if (to_be_rescheduled_tasks.find(task_p.get()) != to_be_rescheduled_tasks.end()) {
+	if (to_be_rescheduled_tasks.find(*task_p) != to_be_rescheduled_tasks.end()) {
 		return;
 	}
-	// Save raw pointer before move — evaluation order of operator[] key and assignment value is unspecified pre-C++17
-	auto raw_ptr = task_p.get();
-	to_be_rescheduled_tasks[raw_ptr] = std::move(task_p);
+	// Save the reference before move — evaluation order of operator[] key and assignment value is unspecified pre-C++17
+	auto &task_ref = *task_p;
+	to_be_rescheduled_tasks[task_ref] = std::move(task_p);
 }
 
 bool Executor::ExecutionIsFinished() {

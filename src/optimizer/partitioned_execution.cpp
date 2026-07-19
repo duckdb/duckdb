@@ -10,12 +10,13 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/function/partition_stats.hpp"
 
 namespace duckdb {
 
 PartitionedExecution::PartitionedExecution(Optimizer &optimizer_p, unique_ptr<LogicalOperator> &root_p)
     : optimizer(optimizer_p), root(root_p),
-      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(optimizer.context).NumberOfThreads())) {
+      num_threads(TaskScheduler::GetScheduler(optimizer.context).NumberOfThreads()) {
 }
 
 struct PartitionedExecutionConfig {
@@ -32,7 +33,7 @@ struct PartitionedExecutionConfig {
 struct PartitionedExecutionColumn {
 	explicit PartitionedExecutionColumn(idx_t original_idx_p, Expression &expr,
 	                                    OrderType order_type_p = OrderType::ASCENDING)
-	    : original_idx(original_idx_p), column_binding(expr.Cast<BoundColumnRefExpression>().binding),
+	    : original_idx(original_idx_p), column_binding(expr.Cast<BoundColumnRefExpression>().Binding()),
 	      order_type(order_type_p) {
 	}
 
@@ -74,7 +75,7 @@ static bool PartitionedExecutionGetColumns(LogicalOperator &op, vector<Partition
 				return false;
 			}
 		}
-		for (auto &partition : expr.partitions) {
+		for (auto &partition : expr.Partitions()) {
 			if (partition->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 				columns.emplace_back(columns.size(), *partition);
 			}
@@ -115,7 +116,7 @@ static optional_ptr<LogicalGet> PartitionedExecutionTraceColumns(LogicalOperator
 			for (auto it = columns.begin(); it != columns.end();) {
 				auto &expr = *proj.expressions[it->column_binding.column_index.GetIndex()];
 				if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					it->column_binding = expr.Cast<BoundColumnRefExpression>().binding;
+					it->column_binding = expr.Cast<BoundColumnRefExpression>().Binding();
 					it++;
 				} else {
 					it = PartitionedExecutionHandleColumnRemoval(op.type, columns, it);

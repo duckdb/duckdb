@@ -3,6 +3,7 @@ if(NOT CLANG_TIDY)
 endif()
 add_subdirectory(extension)
 add_subdirectory(http)
+add_subdirectory(profiler)
 add_subdirectory(relation)
 add_subdirectory(secret)
 add_subdirectory(settings)
@@ -34,11 +35,14 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  parse_iterator.cpp
+  statement_iterator.cpp
   database_file_path_manager.cpp
   database_path_and_type.cpp
   database_manager.cpp
   db_instance_cache.cpp
   error_manager.cpp
+  external_resource_type_registry.cpp
   extension.cpp
   extension_callback_manager.cpp
   extension_install_info.cpp
@@ -47,8 +51,6 @@ add_library_unity(
   pending_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
-  profiling_info.cpp
-  profiling_utils.cpp
   relation.cpp
   query_profiler.cpp
   query_result.cpp

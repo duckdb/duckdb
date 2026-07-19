@@ -280,49 +280,50 @@ void ListColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &t
 unique_ptr<BaseStatistics> ListColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
-
-void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                              row_t row_id, Vector &result, idx_t result_idx) {
-	// insert any child states that are required
-	// we need two (validity & list child)
-	// note that we need a scan state for the child vector
-	// this is because we will (potentially) fetch more than one tuple from the list child
+void ListColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                               const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                               idx_t result_offset) {
+	// insert the validity child state
 	if (state.child_states.empty()) {
 		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
 
-	// now perform the fetch within the segment
-	auto start_offset = row_id == 0 ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
-	auto end_offset = FetchListOffset(UnsafeNumericCast<idx_t>(row_id));
-	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
+	validity->FetchRowsAtSegmentLevel(transaction, *state.child_states[0], offsets, sel, fetch_count, result,
+	                                  result_offset);
 
 	auto &validity_mask = FlatVector::ValidityMutable(result);
 	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &list_entry = list_data[result_idx];
-	// set the list entry offset to the size of the current list
-	list_entry.offset = ListVector::GetListSize(result);
-	list_entry.length = end_offset - start_offset;
-	if (!validity_mask.RowIsValid(result_idx)) {
-		// the list is NULL! no need to fetch the child
-		D_ASSERT(list_entry.length == 0);
-		return;
-	}
+	for (idx_t idx = 0; idx < fetch_count; idx++) {
+		const auto row_id = offsets[sel.get_index(idx)];
+		auto start_offset = row_id == 0 ? 0 : FetchListOffset(row_id - 1);
+		auto end_offset = FetchListOffset(row_id);
+		auto result_idx = result_offset + idx;
+		auto &list_entry = list_data[result_idx];
+		// set the list entry offset to the size of the current list
+		list_entry.offset = ListVector::GetListSize(result);
+		list_entry.length = end_offset - start_offset;
+		if (!validity_mask.RowIsValid(result_idx)) {
+			// the list is NULL! no need to fetch the child
+			D_ASSERT(list_entry.length == 0);
+			continue;
+		}
 
-	// now we need to read from the child all the elements between [offset...length]
-	auto child_scan_count = list_entry.length;
-	if (child_scan_count > 0) {
-		ColumnScanState child_state(nullptr);
-		auto &child_type = ListType::GetChildType(result.GetType());
-		Vector child_scan(child_type, child_scan_count);
-		// seek the scan towards the specified position and read [length] entries
-		child_state.Initialize(state.context, child_type, nullptr);
-		child_column->InitializeScanWithOffset(child_state, start_offset);
-		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
-		         child_state.offset_in_column + child_scan_count <= child_column->GetMaxEntry());
-		child_column->ScanCount(child_state, child_scan, child_scan_count);
+		// now we need to read from the child all the elements between [offset...length]
+		auto child_scan_count = list_entry.length;
+		if (child_scan_count > 0) {
+			ColumnScanState child_state(nullptr);
+			auto &child_type = ListType::GetChildType(result.GetType());
+			Vector child_scan(child_type, child_scan_count);
+			// seek the scan towards the specified position and read [length] entries
+			child_state.Initialize(state.context, child_type, nullptr);
+			child_column->InitializeScanWithOffset(child_state, start_offset);
+			D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
+			         child_state.offset_in_column + child_scan_count <= child_column->GetMaxEntry());
+			child_column->ScanCount(child_state, child_scan, child_scan_count);
 
-		ListVector::Append(result, child_scan, child_scan_count);
+			ListVector::Append(result, child_scan, child_scan_count);
+		}
 	}
 }
 
@@ -439,12 +440,13 @@ void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSta
 }
 
 void ListColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                          vector<ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                          vector<ColumnSegmentInfo> &result,
+                                          const ColumnSegmentInfoScanOptions &options) {
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 }
 
 } // namespace duckdb

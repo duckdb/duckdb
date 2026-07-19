@@ -53,7 +53,7 @@ unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto &func = cases->Cast<BoundFunctionExpression>();
-	if (func.function.GetName() != "map") {
+	if (func.Function().GetName() != "map") {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto map_value = ExpressionExecutor::EvaluateScalar(context, *cases);
@@ -66,13 +66,13 @@ void ExtractConstantExprFromList(unique_ptr<Expression> &expr, vector<unique_ptr
 		throw BinderException("Expected a function for the cases");
 	}
 	auto &list_function = expr->Cast<BoundFunctionExpression>();
-	if (list_function.function.GetName() != "list_value") {
+	if (list_function.Function().GetName() != "list_value") {
 		throw BinderException("Expected a list function");
 	}
-	if (list_function.children.empty()) {
+	if (list_function.GetChildren().empty()) {
 		throw BinderException("No values provided for SWITCH expression");
 	}
-	for (auto &list_child : list_function.children) {
+	for (auto &list_child : list_function.GetChildrenMutable()) {
 		if (list_child->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 			throw NotImplementedException("Only constant expressions are supported for keys inside SWITCH");
 		}
@@ -100,22 +100,22 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 		cases = std::move(input.children[map_index]);
 	} else if (input.children[map_index]->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
 		auto &cast_expr = input.children[map_index]->Cast<BoundCastExpression>();
-		if (cast_expr.child->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		if (cast_expr.Child().GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 			throw BinderException("SWITCH expected a map function for the cases");
 		}
-		cases = std::move(cast_expr.child);
+		cases = std::move(cast_expr.ChildMutable());
 	} else {
 		throw BinderException("SWITCH expected a map function for the cases");
 	}
 	auto &cases_func = cases->Cast<BoundFunctionExpression>();
-	D_ASSERT(cases_func.children.size() == 2);
+	D_ASSERT(cases_func.GetChildren().size() == 2);
 
 	vector<unique_ptr<Expression>> keys_unpacked;
 	vector<unique_ptr<Expression>> values_unpacked;
-	ExtractConstantExprFromList(cases_func.children[0], keys_unpacked);
-	ExtractConstantExprFromList(cases_func.children[1], values_unpacked);
+	ExtractConstantExprFromList(cases_func.GetChildrenMutable()[0], keys_unpacked);
+	ExtractConstantExprFromList(cases_func.GetChildrenMutable()[1], values_unpacked);
 
-	result->case_checks.reserve(keys_unpacked.size());
+	result->CaseChecksMutable().reserve(keys_unpacked.size());
 	for (idx_t i = 0; i < keys_unpacked.size(); i++) {
 		BoundCaseCheck case_check;
 		if (base_expr) {
@@ -136,12 +136,12 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 			    function_data.return_type.ToString(), then_type.ToString());
 		}
 		case_check.then_expr = std::move(values_unpacked[i]);
-		result->case_checks.push_back(std::move(case_check));
+		result->CaseChecksMutable().push_back(std::move(case_check));
 	}
 	if (default_expr) {
-		result->else_expr = std::move(default_expr);
+		result->ElseMutable() = std::move(default_expr);
 	} else {
-		result->else_expr = BoundCastExpression::AddCastToType(
+		result->ElseMutable() = BoundCastExpression::AddCastToType(
 		    input.context, make_uniq<BoundConstantExpression>(Value()), function_data.return_type);
 	}
 	return std::move(result);

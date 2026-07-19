@@ -26,7 +26,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalAggregate::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_ALTER:
-		result = LogicalSimple::Deserialize(deserializer);
+		result = LogicalAlter::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		result = LogicalAnyJoin::Deserialize(deserializer);
@@ -35,7 +35,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalComparisonJoin::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_ATTACH:
-		result = LogicalSimple::Deserialize(deserializer);
+		result = LogicalAttach::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
 		result = LogicalColumnDataGet::Deserialize(deserializer);
@@ -44,7 +44,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalComparisonJoin::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CONNECT:
-		result = LogicalSimple::Deserialize(deserializer);
+		result = LogicalConnect::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		result = LogicalCopyDatabase::Deserialize(deserializer);
@@ -92,16 +92,16 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalComparisonJoin::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DETACH:
-		result = LogicalSimple::Deserialize(deserializer);
+		result = LogicalDetach::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DISCONNECT:
-		result = LogicalSimple::Deserialize(deserializer);
+		result = LogicalDisconnect::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		result = LogicalDistinct::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DROP:
-		result = LogicalSimple::Deserialize(deserializer);
+		result = LogicalDrop::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		result = LogicalDummyScan::Deserialize(deserializer);
@@ -140,7 +140,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalLimit::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_LOAD:
-		result = LogicalSimple::Deserialize(deserializer);
+		result = LogicalLoad::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 		result = LogicalMaterializedCTE::Deserialize(deserializer);
@@ -176,7 +176,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalTopN::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
-		result = LogicalSimple::Deserialize(deserializer);
+		result = LogicalTransaction::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 		result = LogicalSetOperation::Deserialize(deserializer);
@@ -209,7 +209,11 @@ void BoundMergeIntoAction::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "condition", condition);
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(202, "columns", columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
-	serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map, IndexVector<idx_t, PhysicalIndex>());
+	} else {
+		serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", column_index_map);
+	}
 	serializer.WritePropertyWithDefault<bool>(205, "update_is_del_and_insert", update_is_del_and_insert);
 }
 
@@ -219,7 +223,7 @@ unique_ptr<BoundMergeIntoAction> BoundMergeIntoAction::Deserialize(Deserializer 
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "condition", result->condition);
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(202, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", result->expressions);
-	deserializer.ReadProperty<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", result->column_index_map);
+	deserializer.ReadPropertyWithExplicitDefault<IndexVector<idx_t, PhysicalIndex>>(204, "column_index_map", result->column_index_map, IndexVector<idx_t, PhysicalIndex>());
 	deserializer.ReadPropertyWithDefault<bool>(205, "update_is_del_and_insert", result->update_is_del_and_insert);
 	return result;
 }
@@ -277,6 +281,17 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserial
 	return std::move(result);
 }
 
+void LogicalAlter::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<AlterInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalAlter::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalAlter>(new LogicalAlter(std::move(info)));
+	return std::move(result);
+}
+
 void LogicalAnyJoin::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty<JoinType>(200, "join_type", join_type);
@@ -296,12 +311,23 @@ unique_ptr<LogicalOperator> LogicalAnyJoin::Deserialize(Deserializer &deserializ
 	return std::move(result);
 }
 
+void LogicalAttach::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<AttachInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalAttach::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalAttach>(new LogicalAttach(std::move(info)));
+	return std::move(result);
+}
+
 void LogicalCTERef::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<TableIndex>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<TableIndex>(201, "cte_index", cte_index);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "chunk_types", chunk_types);
-	serializer.WritePropertyWithDefault<vector<string>>(203, "bound_columns", bound_columns);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(203, "bound_columns", bound_columns);
 	/* [Deleted] (CTEMaterialize) "materialized_cte" */
 	serializer.WritePropertyWithDefault<bool>(205, "is_recurring", is_recurring);
 }
@@ -310,7 +336,7 @@ unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(Deserializer &deserialize
 	auto table_index = deserializer.ReadPropertyWithDefault<TableIndex>(200, "table_index");
 	auto cte_index = deserializer.ReadPropertyWithDefault<TableIndex>(201, "cte_index");
 	auto chunk_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "chunk_types");
-	auto bound_columns = deserializer.ReadPropertyWithDefault<vector<string>>(203, "bound_columns");
+	auto bound_columns = deserializer.ReadPropertyWithDefault<vector<Identifier>>(203, "bound_columns");
 	auto result = duckdb::unique_ptr<LogicalCTERef>(new LogicalCTERef(table_index, cte_index, std::move(chunk_types), std::move(bound_columns)));
 	deserializer.ReadDeletedProperty<CTEMaterialize>(204, "materialized_cte");
 	deserializer.ReadPropertyWithDefault<bool>(205, "is_recurring", result->is_recurring);
@@ -356,6 +382,17 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "delim_flipped", result->delim_flipped, false);
 	deserializer.ReadDeletedProperty<unique_ptr<Expression>>(208, "predicate");
+	return std::move(result);
+}
+
+void LogicalConnect::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<ConnectInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalConnect::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalConnect>(new LogicalConnect(std::move(info)));
 	return std::move(result);
 }
 
@@ -448,6 +485,28 @@ unique_ptr<LogicalOperator> LogicalDelimGet::Deserialize(Deserializer &deseriali
 	return std::move(result);
 }
 
+void LogicalDetach::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<DetachInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalDetach::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalDetach>(new LogicalDetach(std::move(info)));
+	return std::move(result);
+}
+
+void LogicalDisconnect::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<DisconnectInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalDisconnect::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalDisconnect>(new LogicalDisconnect(std::move(info)));
+	return std::move(result);
+}
+
 void LogicalDistinct::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty<DistinctType>(200, "distinct_type", distinct_type);
@@ -460,6 +519,17 @@ unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(Deserializer &deseriali
 	auto distinct_targets = deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "distinct_targets");
 	auto result = duckdb::unique_ptr<LogicalDistinct>(new LogicalDistinct(std::move(distinct_targets), distinct_type));
 	deserializer.ReadPropertyWithDefault<unique_ptr<BoundOrderModifier>>(202, "order_by", result->order_by);
+	return std::move(result);
+}
+
+void LogicalDrop::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<DropInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalDrop::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalDrop>(new LogicalDrop(std::move(info)));
 	return std::move(result);
 }
 
@@ -549,7 +619,11 @@ void LogicalInsert::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
 	serializer.WritePropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(201, "insert_values", insert_values);
-	serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map, IndexVector<idx_t, PhysicalIndex>());
+	} else {
+		serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map);
+	}
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(203, "expected_types", expected_types);
 	serializer.WritePropertyWithDefault<TableIndex>(204, "table_index", table_index);
 	serializer.WritePropertyWithDefault<bool>(205, "return_chunk", return_chunk);
@@ -572,7 +646,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserialize
 	auto table_info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info");
 	auto result = duckdb::unique_ptr<LogicalInsert>(new LogicalInsert(deserializer.Get<ClientContext &>(), std::move(table_info)));
 	deserializer.ReadPropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(201, "insert_values", result->insert_values);
-	deserializer.ReadProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", result->column_index_map);
+	deserializer.ReadPropertyWithExplicitDefault<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", result->column_index_map, IndexVector<idx_t, PhysicalIndex>());
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(203, "expected_types", result->expected_types);
 	deserializer.ReadPropertyWithDefault<TableIndex>(204, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<bool>(205, "return_chunk", result->return_chunk);
@@ -605,11 +679,22 @@ unique_ptr<LogicalOperator> LogicalLimit::Deserialize(Deserializer &deserializer
 	return std::move(result);
 }
 
+void LogicalLoad::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<LoadInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalLoad::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalLoad>(new LogicalLoad(std::move(info)));
+	return std::move(result);
+}
+
 void LogicalMaterializedCTE::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<TableIndex>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
-	serializer.WritePropertyWithDefault<string>(202, "ctename", ctename);
+	serializer.WritePropertyWithDefault<Identifier>(202, "ctename", ctename);
 	serializer.WritePropertyWithDefault<CTEMaterialize>(203, "materialize", materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 }
 
@@ -617,7 +702,7 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 	auto result = duckdb::unique_ptr<LogicalMaterializedCTE>(new LogicalMaterializedCTE());
 	deserializer.ReadPropertyWithDefault<TableIndex>(200, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count", result->column_count);
-	deserializer.ReadPropertyWithDefault<string>(202, "ctename", result->ctename);
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "ctename", result->ctename);
 	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(203, "materialize", result->materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	return std::move(result);
 }
@@ -698,7 +783,7 @@ unique_ptr<LogicalOperator> LogicalProjection::Deserialize(Deserializer &deseria
 void LogicalRecursiveCTE::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<bool>(200, "union_all", union_all);
-	serializer.WritePropertyWithDefault<string>(201, "ctename", ctename);
+	serializer.WritePropertyWithDefault<Identifier>(201, "ctename", ctename);
 	serializer.WritePropertyWithDefault<TableIndex>(202, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(203, "column_count", column_count);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(204, "key_targets", key_targets);
@@ -710,7 +795,7 @@ void LogicalRecursiveCTE::Serialize(Serializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LogicalRecursiveCTE>(new LogicalRecursiveCTE());
 	deserializer.ReadPropertyWithDefault<bool>(200, "union_all", result->union_all);
-	deserializer.ReadPropertyWithDefault<string>(201, "ctename", result->ctename);
+	deserializer.ReadPropertyWithDefault<Identifier>(201, "ctename", result->ctename);
 	deserializer.ReadPropertyWithDefault<TableIndex>(202, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(203, "column_count", result->column_count);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(204, "key_targets", result->key_targets);
@@ -722,12 +807,12 @@ unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(Deserializer &deser
 
 void LogicalReset::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "name", name);
+	serializer.WritePropertyWithDefault<Identifier>(200, "name", name);
 	serializer.WriteProperty<SetScope>(201, "scope", scope);
 }
 
 unique_ptr<LogicalOperator> LogicalReset::Deserialize(Deserializer &deserializer) {
-	auto name = deserializer.ReadPropertyWithDefault<string>(200, "name");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
 	auto scope = deserializer.ReadProperty<SetScope>(201, "scope");
 	auto result = duckdb::unique_ptr<LogicalReset>(new LogicalReset(std::move(name), scope));
 	return std::move(result);
@@ -746,13 +831,13 @@ unique_ptr<LogicalOperator> LogicalSample::Deserialize(Deserializer &deserialize
 
 void LogicalSet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "name", name);
+	serializer.WritePropertyWithDefault<Identifier>(200, "name", name);
 	serializer.WriteProperty<Value>(201, "value", value);
 	serializer.WriteProperty<SetScope>(202, "scope", scope);
 }
 
 unique_ptr<LogicalOperator> LogicalSet::Deserialize(Deserializer &deserializer) {
-	auto name = deserializer.ReadPropertyWithDefault<string>(200, "name");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(200, "name");
 	auto value = deserializer.ReadProperty<Value>(201, "value");
 	auto scope = deserializer.ReadProperty<SetScope>(202, "scope");
 	auto result = duckdb::unique_ptr<LogicalSet>(new LogicalSet(std::move(name), value, scope));
@@ -776,17 +861,6 @@ unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(Deserializer &deser
 	return std::move(result);
 }
 
-void LogicalSimple::Serialize(Serializer &serializer) const {
-	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParseInfo>>(200, "info", info);
-}
-
-unique_ptr<LogicalOperator> LogicalSimple::Deserialize(Deserializer &deserializer) {
-	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
-	auto result = duckdb::unique_ptr<LogicalSimple>(new LogicalSimple(deserializer.Get<LogicalOperatorType>(), std::move(info)));
-	return std::move(result);
-}
-
 void LogicalTopN::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(200, "orders", orders);
@@ -799,6 +873,17 @@ unique_ptr<LogicalOperator> LogicalTopN::Deserialize(Deserializer &deserializer)
 	auto limit = deserializer.ReadPropertyWithDefault<idx_t>(201, "limit");
 	auto offset = deserializer.ReadPropertyWithDefault<idx_t>(202, "offset");
 	auto result = duckdb::unique_ptr<LogicalTopN>(new LogicalTopN(std::move(orders), limit, offset));
+	return std::move(result);
+}
+
+void LogicalTransaction::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TransactionInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalTransaction::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalTransaction>(new LogicalTransaction(std::move(info)));
 	return std::move(result);
 }
 

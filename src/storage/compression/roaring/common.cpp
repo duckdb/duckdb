@@ -168,7 +168,9 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	// check if the storage version we are writing to supports roaring
 	const auto storage_version = col_data.GetStorageManager().GetStorageVersion();
-	if (storage_version < 4 || (type == PhysicalType::BOOL && storage_version < 7)) {
+	// before: serialization version 4 and ser version 7
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version) ||
+	    (type == PhysicalType::BOOL && StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, storage_version))) {
 		// compatibility mode with old versions - disable roaring
 		return nullptr;
 	}

@@ -11,12 +11,11 @@
 #include "duckdb/common/enums/tuple_data_layout_enums.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
-#include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
 enum class SortKeyType : uint8_t;
+struct BoundOrderByNode;
 
 class TupleDataLayout {
 public:
@@ -129,6 +128,8 @@ public:
 	inline bool CanHaveNull() const {
 		return validity_type != TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;
 	}
+	//! Returns whether any of the columns are nested (they can compare equal even if there are no explicit NULLs)
+	bool HasNestedTypes() const;
 
 private:
 	//! The types of the data columns

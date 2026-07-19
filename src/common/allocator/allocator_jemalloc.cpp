@@ -1,5 +1,6 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <thread>
 #include <cstdint>
@@ -18,7 +19,7 @@ extern "C" {
 
 unsigned duckdb_malloc_ncpus() {
 #ifdef DUCKDB_NO_THREADS
-	return 1
+	return 1;
 #else
 	unsigned concurrency = duckdb::NumericCast<unsigned>(std::thread::hardware_concurrency());
 	return std::max(concurrency, 1u);
@@ -79,6 +80,11 @@ bool Allocator::SupportsFlush() {
 }
 
 void Allocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) {
+	// jemalloc only manages allocation done through the Allocator interface.
+	// Any allocations done directly through "malloc" or "operator new" still
+	// go to the system allocator. So we also trim the system heap here.
+	MallocTrim(thread_count * threshold);
+
 	if (!allocator_background_threads) {
 		// We flush after exceeding the threshold
 		if (GetJemallocCTL<uint64_t>("thread.peak.read") <= threshold) {
@@ -111,6 +117,9 @@ void Allocator::FlushAll() {
 
 	// Reset the peak after resetting
 	SetJemallocCTL("thread.peak.reset");
+
+	// Also return the system heap (see ThreadFlush) to the OS
+	MallocTrim(0);
 }
 
 void Allocator::SetBackgroundThreads(bool enable) {

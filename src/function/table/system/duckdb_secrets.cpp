@@ -132,7 +132,6 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		data.offset++;
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBSecretsFun::RegisterFunction(BuiltinFunctions &set) {

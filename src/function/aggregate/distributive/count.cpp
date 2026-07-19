@@ -1,5 +1,7 @@
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -8,14 +10,20 @@ namespace duckdb {
 
 namespace {
 struct BaseCountFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state = 0;
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target += source;
+	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &, idx_t count) {
+		STATE repeated_count;
+		if (!TryMultiplyOperator::Operation(source, static_cast<STATE>(count), repeated_count)) {
+			throw OutOfRangeException("Overflow in repeated aggregate state combine");
+		}
+		if (!TryAddOperator::Operation(target, repeated_count, target)) {
+			throw OutOfRangeException("Overflow in repeated aggregate state combine");
+		}
 	}
 
 	template <class T, class STATE>
@@ -261,19 +269,18 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-LogicalType GetCountStateType(const BoundAggregateFunction &function) {
-	child_list_t<LogicalType> children;
-	children.emplace_back("count", LogicalType::BIGINT);
-	return LogicalType::STRUCT(std::move(children));
+AggregateStateLayout GetCountStateType(AggregateLayoutInput &input) {
+	auto &function = input.function;
+	return AggregateStateLayout(LogicalType::BIGINT, AlignValue(function.GetStateSizeCallback()(function)));
 }
 
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                AggregateStatisticsInput &input) {
 	if (!expr.IsDistinct() && !input.child_stats[0].CanHaveNull()) {
 		// count on a column without null values: use count star
-		expr.function.ReplaceImplementation(CountStarFun::GetFunction());
-		expr.function.SetName("count_star");
-		expr.children.clear();
+		expr.FunctionMutable().ReplaceImplementation(CountStarFun::GetFunction());
+		expr.FunctionMutable().SetName("count_star");
+		expr.GetChildrenMutable().clear();
 	}
 	return nullptr;
 }
@@ -286,7 +293,7 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	                      AggregateFunction::StateCombine<int64_t, CountFunction>,
 	                      AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
 	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountClusterUpdate);
-	fun.name = "count";
+	fun.SetName("count");
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetStructStateExport(GetCountStateType);
 	fun.SetStatisticsCallback(CountPropagateStats);
@@ -295,11 +302,10 @@ AggregateFunction CountFunctionBase::GetFunction() {
 
 AggregateFunction CountStarFun::GetFunction() {
 	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
-	fun.name = "count_star";
+	fun.SetName("count_star");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetWindowBatchCallback(CountStarFunction::Window<int64_t>);
-	fun.SetStructStateExport(GetCountStateType);
 	return fun;
 }
 

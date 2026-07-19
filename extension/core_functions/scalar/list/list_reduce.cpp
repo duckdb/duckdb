@@ -1,6 +1,7 @@
 #include "core_functions/scalar/list_functions.hpp"
 
 #include "duckdb/function/lambda_functions.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
@@ -155,7 +156,7 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	// create the input chunk
 	DataChunk input_chunk;
 	input_chunk.InitializeEmpty(execute_info.input_types);
-	input_chunk.SetCardinality(reduced_row_idx);
+	input_chunk.SetChildCardinality(reduced_row_idx);
 
 	const idx_t element_offset = info.has_index ? 1 : 0;
 	const idx_t accumulator_offset = element_offset + 1;
@@ -190,7 +191,7 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	}
 
 	result_chunk.Reset();
-	result_chunk.SetCardinality(reduced_row_idx);
+	result_chunk.SetChildCardinality(reduced_row_idx);
 	execute_info.expr_executor->Execute(input_chunk, result_chunk);
 
 	// We need to copy the result into left_slice to avoid data loss due to vector.Reference(...).
@@ -232,13 +233,13 @@ unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
 	if (has_initial) {
 		const auto &initial_value_type = arguments[2]->GetReturnType();
 		auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-		auto &lambda_return_type = bound_lambda_expr.lambda_expr->GetReturnType();
+		auto &lambda_return_type = bound_lambda_expr.LambdaExpr()->GetReturnType();
 		accumulator_type = ResolveReduceAccumulatorType(context, initial_value_type, lambda_return_type);
 		arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), accumulator_type);
 	} else {
 		auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 		auto list_child_type = LambdaFunctions::DetermineListChildType(arguments[0]->GetReturnType());
-		auto &lambda_return_type = bound_lambda_expr.lambda_expr->GetReturnType();
+		auto &lambda_return_type = bound_lambda_expr.LambdaExpr()->GetReturnType();
 		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
 			throw BinderException("No common super type between list element type %s and lambda return type %s",
 			                      list_child_type.ToString(), lambda_return_type.ToString());
@@ -246,14 +247,14 @@ unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
 	}
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	if (bound_lambda_expr.parameter_count < 2 || bound_lambda_expr.parameter_count > 3) {
+	if (bound_lambda_expr.ParameterCount() < 2 || bound_lambda_expr.ParameterCount() > 3) {
 		throw BinderException("list_reduce expects a function with 2 or 3 arguments");
 	}
-	auto has_index = bound_lambda_expr.parameter_count == 3;
+	auto has_index = bound_lambda_expr.ParameterCount() == 3;
 
-	const auto lambda_return_type = bound_lambda_expr.lambda_expr->GetReturnType();
+	const auto lambda_return_type = bound_lambda_expr.LambdaExpr()->GetReturnType();
 	auto cast_lambda_expr =
-	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), accumulator_type);
+	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.LambdaExprMutable()), accumulator_type);
 	if (!cast_lambda_expr) {
 		throw BinderException("Could not cast lambda return type %s to accumulator type %s",
 		                      lambda_return_type.ToString(), accumulator_type.ToString());
@@ -310,6 +311,7 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	idx_t loops = 0;
 	bool end = false;
 	while (!end) {
+		state.GetContext().InterruptCheck();
 		auto &result_chunk = loops % 2 ? odd_result_chunk : even_result_chunk;
 		auto &spare_result_chunk = loops % 2 ? even_result_chunk : odd_result_chunk;
 

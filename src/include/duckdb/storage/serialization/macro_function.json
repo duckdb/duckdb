@@ -20,7 +20,7 @@
       {
         "id": 102,
         "name": "default_parameters",
-        "type": "InsertionOrderPreservingMap<ParsedExpression*>"
+        "type": "InsertionOrderPreservingMap<ParsedExpression*, Identifier, identifier_map_t<idx_t>>"
       },
       {
         "id": 103,

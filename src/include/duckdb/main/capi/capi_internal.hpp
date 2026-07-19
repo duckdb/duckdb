@@ -49,7 +49,7 @@ struct CClientArrowOptionsWrapper {
 
 struct PreparedStatementWrapper {
 	//! Map of name -> values
-	case_insensitive_map_t<BoundParameterData> values;
+	identifier_map_t<BoundParameterData> values;
 	unique_ptr<PreparedStatement> statement;
 	bool success = true;
 	ErrorData error_data;

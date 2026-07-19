@@ -56,7 +56,6 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 		combined_chunk.data[i].Reference(index_column_chunk.data[i]);
 	}
 	combined_chunk.data.back().Reference(row_ids);
-	combined_chunk.SetCardinality(index_column_chunk.size());
 
 	auto &buffer = buffered_replays.GetBuffer(replay_type);
 	if (buffer == nullptr) {

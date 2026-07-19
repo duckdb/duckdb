@@ -9,9 +9,7 @@
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
-#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -30,28 +28,7 @@ unique_ptr<FunctionData> VariantExtractBindData::Copy() const {
 
 bool VariantExtractBindData::Equals(const FunctionData &other) const {
 	auto &bind_data = other.Cast<VariantExtractBindData>();
-	if (bind_data.component.lookup_mode != component.lookup_mode) {
-		return false;
-	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_INDEX &&
-	    bind_data.component.index != component.index) {
-		return false;
-	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_KEY && bind_data.component.key != component.key) {
-		return false;
-	}
-	return true;
-}
-
-static bool GetConstantArgument(ClientContext &context, Expression &expr, Value &constant_arg) {
-	if (!expr.IsFoldable()) {
-		return false;
-	}
-	constant_arg = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!constant_arg.IsNull()) {
-		return true;
-	}
-	return false;
+	return component == bind_data.component;
 }
 
 static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -83,14 +60,14 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 	if (arguments.size() != 2) {
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
-	auto &path = *arguments[1];
+	const auto &path = *arguments[1];
 	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER) {
 		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
 		                      path.GetReturnType().ToString());
 	}
 
 	Value constant_arg;
-	if (!GetConstantArgument(context, path, constant_arg)) {
+	if (!VariantBindUtils::GetConstantArgument(context, path, constant_arg)) {
 		throw BinderException("'variant_extract' expects the second argument to be a constant expression");
 	}
 
@@ -133,6 +110,10 @@ static bool TryShreddedExtractRecursive(const Vector &input, const vector<Varian
 		// only by key supported
 		return false;
 	}
+	if (input.GetType().id() != LogicalTypeId::STRUCT) {
+		//! Not shredded on OBJECT, can't extract a key
+		return false;
+	}
 	// first entry is "typed_value"
 	auto &typed_entries = StructVector::GetEntries(input);
 	auto &typed_value = typed_entries[0];
@@ -142,7 +123,7 @@ static bool TryShreddedExtractRecursive(const Vector &input, const vector<Varian
 	auto &child_entries = StructVector::GetEntries(typed_value);
 	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 		auto &entry = child_types[child_idx];
-		if (StringUtil::CIEquals(entry.first, component.key)) {
+		if (entry.first == component.key) {
 			// key found - move onto next component
 			return TryShreddedExtractRecursive(child_entries[child_idx], components, result, count, path_index + 1);
 		}
@@ -170,7 +151,6 @@ void VariantUtils::VariantExtract(const Vector &variant_vec, const vector<Varian
 	if (TryFromShreddedExtract(variant_vec, components, result, count)) {
 		return;
 	}
-	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
@@ -188,8 +168,8 @@ void VariantUtils::VariantExtract(const Vector &variant_vec, const vector<Varian
 		value_index_sel[i] = 0;
 	}
 
-	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
+	const auto owned_nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr nested_data(owned_nested_data.get(), count);
 
 	//! Perform the extract
 	ValidityMask validity(count);
@@ -302,7 +282,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	(void)path;
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantExtractBindData>();
+	auto &info = func_expr.BindInfo()->Cast<VariantExtractBindData>();
 	VariantUtils::VariantExtract(variant_vec, {info.component}, result, count);
 }
 

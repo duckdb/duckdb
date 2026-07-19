@@ -424,11 +424,6 @@ struct MinMaxFixedValueOrNull {
 // MinMaxN Operation (common for both ArgMinMaxN and MinMaxN)
 //------------------------------------------------------------------------------
 struct MinMaxNOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		new (&state) STATE();
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
 		if (!source.is_initialized) {
@@ -447,7 +442,7 @@ struct MinMaxNOperation {
 	}
 
 	template <class STATE>
-	static void Finalize(Vector &state_vector, AggregateInputData &input_data, Vector &result, idx_t count,
+	static void Finalize(Vector &state_vector, AggregateFinalizeInputData &input_data, Vector &result, idx_t count,
 	                     idx_t offset) {
 		// We only expect bind data from arg_max, otherwise nulls last is the default
 		const bool nulls_last =

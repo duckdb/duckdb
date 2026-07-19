@@ -144,7 +144,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto sniffer_options = data.options;
 	sniffer_options.file_path = files[0].path;
 
-	auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, sniffer_options, sniffer_options.file_path, 0);
+	auto buffer_manager = CSVBufferManager::Open(context, sniffer_options, sniffer_options.file_path, false);
 	if (sniffer_options.name_list.empty()) {
 		sniffer_options.name_list = data.names_csv;
 	}
@@ -176,8 +176,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	string str_opt;
 	string separator = ", ";
-	// Set output
-	output.SetCardinality(1);
+	// Set output (called after all Appends below)
 
 	// 1. Delimiter
 	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.FormatValue();
@@ -207,7 +206,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		child_list_t<Value> struct_children {{"name", sniffer_result.names[i]},
 		                                     {"type", {sniffer_result.return_types[i].ToString()}}};
 		values.emplace_back(Value::STRUCT(struct_children));
-		columns << "'" << sniffer_result.names[i] << "': '" << sniffer_result.return_types[i].ToString() << "'";
+		columns << "'" << sniffer_result.names[i].GetIdentifierName() << "': '"
+		        << sniffer_result.return_types[i].ToString() << "'";
 		if (i != sniffer_result.return_types.size() - 1) {
 			columns << separator;
 		}

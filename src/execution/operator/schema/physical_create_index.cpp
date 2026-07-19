@@ -10,6 +10,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/execution/index/index_type.hpp"
 
 namespace duckdb {
 
@@ -93,7 +94,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	if (alter_table_info) {
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
 			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
-				throw ConstraintException("NOT NULL constraint failed: %s", info->index_name);
+				throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());
 			}
 		}
 	}
@@ -143,10 +144,11 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
-		auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->index_name);
+		auto entry =
+		    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->GetIndexName());
 		if (entry) {
 			if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-				throw CatalogException("Index with name \"%s\" already exists!", info->index_name);
+				throw CatalogException("Index with name \"%s\" already exists!", info->GetIndexName());
 			}
 			// IF NOT EXISTS on existing index. We are done.
 			return SinkFinalizeType::READY;
@@ -161,12 +163,13 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		// Ensure that there are no other indexes with that name on this table.
 		auto &indexes = storage.GetDataTableInfo()->GetIndexes();
 		for (auto &index : indexes.Indexes()) {
-			if (index.GetIndexName() == info->index_name) {
-				throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
+			if (index.GetIndexName() == info->GetIndexName()) {
+				throw CatalogException("an index with that name already exists for this table: %s",
+				                       info->GetIndexName());
 			}
 		}
 
-		auto &catalog = Catalog::GetCatalog(context, info->catalog);
+		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
 		catalog.Alter(context, *alter_table_info);
 	}
 

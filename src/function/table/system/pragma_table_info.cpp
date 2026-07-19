@@ -85,7 +85,7 @@ struct PragmaTableInfoHelper {
 		output.data[5].Append(Value::BOOLEAN(constraint_info.pk));
 	}
 
-	static void GetViewColumns(idx_t i, const string &name, const LogicalType &type, DataChunk &output) {
+	static void GetViewColumns(idx_t i, const Identifier &name, const LogicalType &type, DataChunk &output) {
 		// "cid", INTEGER
 		output.data[0].Append(Value::INTEGER((int32_t)i));
 		// "name", VARCHAR
@@ -142,7 +142,7 @@ struct PragmaShowHelper {
 		output.data[5].Append(Value());
 	}
 
-	static void GetViewColumns(idx_t i, const string &name, const LogicalType &type, DataChunk &output) {
+	static void GetViewColumns(idx_t i, const Identifier &name, const LogicalType &type, DataChunk &output) {
 		// "column_name", VARCHAR
 		output.data[0].Append(Value(name));
 		// "column_type", VARCHAR
@@ -170,8 +170,8 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
-	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
-	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
+	Binder::BindSchemaOrCatalog(context, qname);
+	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname);
 	return make_uniq<PragmaTableFunctionData>(entry, IS_PRAGMA_TABLE_INFO);
 }
 
@@ -227,7 +227,6 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table.GetColumns().LogicalColumnCount());
-	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto &column = table.GetColumn(LogicalIndex(i));
@@ -257,11 +256,10 @@ static void PragmaTableInfoView(ClientContext &context, PragmaTableOperatorData 
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, view_types.size());
-	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto type = view_types[i];
-		auto &name = i < view.aliases.size() ? view.aliases[i] : view_names[i];
+		auto name = i < view.aliases.size() ? view.aliases[i] : view_names[i];
 
 		if (is_table_info) {
 			PragmaTableInfoHelper::GetViewColumns(i, name, type, output);

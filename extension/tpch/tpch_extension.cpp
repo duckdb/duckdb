@@ -1,6 +1,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -8,21 +9,42 @@
 #include "dbgen/dbgen.hpp"
 #include "tpch_extension.hpp"
 
+#include <atomic>
+#include <mutex>
+
 namespace duckdb {
 
 struct DBGenFunctionData : public TableFunctionData {
 	DBGenFunctionData() {
 	}
 
-	bool finished = false;
 	double sf = 0;
-	string catalog = INVALID_CATALOG;
-	string schema = DEFAULT_SCHEMA;
+	Identifier catalog = INVALID_CATALOG;
+	Identifier schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
 	uint32_t children = 1;
 	int step = -1;
 };
+
+struct DBGenGlobalState : public GlobalTableFunctionState {
+	bool schema_created = false;
+	atomic<bool> finished {false};
+	mutable mutex generator_lock;
+	unique_ptr<tpch::DBGenGenerator> generator;
+};
+
+class DBGenYieldTask : public AsyncTask {
+public:
+	void Execute() override {
+	}
+};
+
+static AsyncResult DBGenYield() {
+	vector<unique_ptr<AsyncTask>> tasks;
+	tasks.push_back(make_uniq<DBGenYieldTask>());
+	return AsyncResult(std::move(tasks));
+}
 
 static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
                                           vector<LogicalType> &return_types, vector<string> &names) {
@@ -30,7 +52,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 
 	// Set the current catalog and schema.
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
-	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().GetSchema();
 	result->catalog = current_catalog;
 	result->schema = current_schema;
 
@@ -41,9 +63,9 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
 		} else if (kv.first == "catalog") {
-			result->catalog = StringValue::Get(kv.second);
+			result->catalog = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "schema") {
-			result->schema = StringValue::Get(kv.second);
+			result->schema = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "suffix") {
 			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
@@ -70,16 +92,59 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 	return std::move(result);
 }
 
+unique_ptr<GlobalTableFunctionState> DbgenInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<DBGenGlobalState>();
+}
+
 static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.bind_data->CastNoConst<DBGenFunctionData>();
-	if (data.finished) {
+	auto &data = data_p.bind_data->Cast<DBGenFunctionData>();
+	auto &state = data_p.global_state->Cast<DBGenGlobalState>();
+	if (state.finished.load()) {
+		data_p.async_result = AsyncResultType::FINISHED;
 		return;
 	}
-	tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
-	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.catalog, data.schema, data.suffix, data.children,
-	                                 data.step);
+	if (!state.schema_created) {
+		tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
+		auto generator = tpch::CreateDBGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix,
+		                                            data.children, data.step);
+		{
+			lock_guard<mutex> guard(state.generator_lock);
+			state.generator = std::move(generator);
+		}
+		state.schema_created = true;
+	}
 
-	data.finished = true;
+	while (true) {
+		bool finished = false;
+		{
+			lock_guard<mutex> guard(state.generator_lock);
+			finished = !state.generator || state.generator->GenerateNext();
+		}
+		if (finished) {
+			state.finished.store(true);
+			data_p.async_result = AsyncResultType::FINISHED;
+			return;
+		}
+		if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+			data_p.async_result = DBGenYield();
+			return;
+		}
+	}
+}
+
+static double DbgenProgress(ClientContext &context, const FunctionData *bind_data,
+                            const GlobalTableFunctionState *global_state) {
+	if (!global_state) {
+		return 0.0;
+	}
+	auto &state = global_state->Cast<DBGenGlobalState>();
+	{
+		lock_guard<mutex> guard(state.generator_lock);
+		if (state.generator) {
+			return state.generator->Progress();
+		}
+	}
+	return state.finished.load() ? 100.0 : 0.0;
 }
 
 struct TPCHData : public GlobalTableFunctionState {
@@ -125,7 +190,6 @@ static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static duckdb::unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
@@ -170,7 +234,6 @@ static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
@@ -179,7 +242,7 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
+	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind, DbgenInit);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dbgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
@@ -187,6 +250,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
 	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
+	dbgen_func.call_return_type = StatementReturnType::NOTHING;
+	dbgen_func.table_scan_progress = DbgenProgress;
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query

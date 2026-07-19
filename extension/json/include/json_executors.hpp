@@ -41,7 +41,7 @@ public:
 	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		const auto &info = func_expr.bind_info->Cast<JSONReadFunctionData>();
+		const auto &info = func_expr.BindInfo()->Cast<JSONReadFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -80,7 +80,7 @@ public:
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
 						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
-						auto fun_result = fun(val, alc, result);
+						auto fun_result = fun(val, alc, child_entry);
 						if (fun_result.has_value()) {
 							child_vals[current_size + i] = fun_result.value();
 						} else {
@@ -120,7 +120,7 @@ public:
 	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
 	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		const auto &info = func_expr.bind_info->Cast<JSONReadManyFunctionData>();
+		const auto &info = func_expr.BindInfo()->Cast<JSONReadManyFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 		D_ASSERT(info.ptrs.size() == info.lens.size());

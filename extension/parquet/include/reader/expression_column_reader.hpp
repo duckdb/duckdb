@@ -42,12 +42,13 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
 
 public:
-	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr,
-	                       const ParquetColumnSchema &schema);
-	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr,
-	                       unique_ptr<ParquetColumnSchema> owned_schema);
+	ExpressionColumnReader(ClientContext &context, vector<unique_ptr<ColumnReader>> child_readers,
+	                       unique_ptr<Expression> expr, const ParquetColumnSchema &schema);
+	ExpressionColumnReader(ClientContext &context, vector<unique_ptr<ColumnReader>> child_readers,
+	                       unique_ptr<Expression> expr, unique_ptr<ParquetColumnSchema> owned_schema);
 
-	unique_ptr<ColumnReader> child_reader;
+	//! Reader(s) to produce the input(s) for the expression
+	vector<unique_ptr<ColumnReader>> child_readers;
 	DataChunk intermediate_chunk;
 	unique_ptr<Expression> expr;
 	ExpressionExecutor executor;
@@ -64,16 +65,25 @@ public:
 	idx_t GroupRowsAvailable() override;
 
 	uint64_t TotalCompressedSize() override {
-		return child_reader->TotalCompressedSize();
+		idx_t total_compressed_size = 0;
+		for (auto &child_reader : child_readers) {
+			total_compressed_size += child_reader->TotalCompressedSize();
+		}
+		return total_compressed_size;
 	}
 
 	idx_t FileOffset() const override {
-		return child_reader->FileOffset();
+		return child_readers[0]->FileOffset();
 	}
 
 	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) override {
-		child_reader->RegisterPrefetch(transport, allow_merge);
+		for (auto &child_reader : child_readers) {
+			child_reader->RegisterPrefetch(transport, allow_merge);
+		}
 	}
+
+private:
+	void InitializeChunk();
 };
 
 } // namespace duckdb

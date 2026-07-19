@@ -93,7 +93,9 @@ public:
 	static bool PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan);
 	//! The order preservation type of the given operator decided by recursively looking at its children
 	static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op);
-
+	//! Determine whether a child has a single value partitioning for the given expressions.
+	static bool HasSingleValuePartitions(ClientContext &context, const vector<unique_ptr<Expression>> &partitions,
+	                                     PhysicalOperator &child, vector<column_t> &partition_columns);
 	//! Make a physical operator in the physical plan.
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
@@ -145,7 +147,15 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalSample &op);
 	PhysicalOperator &CreatePlan(LogicalSet &op);
 	PhysicalOperator &CreatePlan(LogicalReset &op);
-	PhysicalOperator &CreatePlan(LogicalSimple &op);
+	PhysicalOperator &CreatePlan(LogicalAlter &op);
+	PhysicalOperator &CreatePlan(LogicalAttach &op);
+	PhysicalOperator &CreatePlan(LogicalConnect &op);
+	PhysicalOperator &CreatePlan(LogicalDetach &op);
+	PhysicalOperator &CreatePlan(LogicalDisconnect &op);
+	PhysicalOperator &CreatePlan(LogicalDrop &op);
+	PhysicalOperator &CreatePlan(LogicalLoad &op);
+	PhysicalOperator &CreatePlan(LogicalTransaction &op);
+	PhysicalOperator &CreatePlan(LogicalUpdateExtensions &op);
 	PhysicalOperator &CreatePlan(LogicalVacuum &op);
 	PhysicalOperator &CreatePlan(LogicalUnnest &op);
 	PhysicalOperator &CreatePlan(LogicalRecursiveCTE &op);

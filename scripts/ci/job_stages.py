@@ -35,9 +35,9 @@ PULL_REQUEST_JOBS = COMMON_JOBS + PULL_REQUEST_ONLY_JOBS
 
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
-    "valgrind",
     "static-libs-osx",
     "static-libs-windows-mingw",
+    "codecov",
 ]
 
 NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
@@ -54,6 +54,7 @@ RELEASE_JOBS = [
     "static-libs-linux",
     "static-libs-osx",
     "static-libs-windows-mingw",
+    "staged-extension-install",
 ]
 
 SKIP_TESTS_JOBS = {

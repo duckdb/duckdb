@@ -2,13 +2,9 @@
 # description: Test that pipeline correctly flushes operators after STREAMING_LIMIT finishes
 # group: [limit]
 
-require tpch
+set variable sf 0.01
 
-statement ok
-LOAD tpch;
-
-statement ok
-CALL dbgen(sf=0.01);
+include test/sql/tpch/tpch_setup.test_template
 
 # The optimizer pushes down filters which reduces cardinality estimates, causing it to
 # place STREAMING_LIMIT on the right side. We disable it to keep it on the left side, to trigger the pipeline flush bug

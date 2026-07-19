@@ -9,6 +9,7 @@
 #pragma once
 
 #include "json_common.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 #include "json_enums.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
@@ -43,7 +44,11 @@ public:
 		auto &formats = candidate_formats[type];
 		formats.emplace_back();
 		formats.back().format_specifier = format_string;
-		StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
+		const auto error = StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
+		if (!error.empty()) {
+			formats.pop_back();
+			throw InvalidInputException(error);
+		}
 	}
 
 	static bool HasFormats(const type_id_map_t<vector<StrpTimeFormat>> &candidate_formats, LogicalTypeId type) {

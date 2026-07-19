@@ -78,7 +78,7 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		break;
 	}
 	if (is_equality) {
-		res = LogicalType::ForceMaxLogicalType(left_type, right_type);
+		res = LogicalType::ForceMaxLogicalType(context, left_type, right_type);
 	} else {
 		if (!LogicalType::TryGetMaxLogicalType(context, left_type, right_type, res)) {
 			return false;
@@ -147,8 +147,8 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 		}
 		if (expr.GetReturnType().IsIntegral()) {
 			auto &constant = expr.Cast<BoundConstantExpression>();
-			if (!constant.value.IsNull()) {
-				return LogicalType::INTEGER_LITERAL(constant.value);
+			if (!constant.GetValue().IsNull()) {
+				return LogicalType::INTEGER_LITERAL(constant.GetValue());
 			}
 		}
 	}
@@ -158,15 +158,15 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	ErrorData error;
-	BindChild(expr.left, depth, error);
-	BindChild(expr.right, depth, error);
+	BindChild(expr.LeftMutable(), depth, error);
+	BindChild(expr.RightMutable(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
 
 	// the children have been successfully resolved
-	auto &left = BoundExpression::GetExpression(*expr.left);
-	auto &right = BoundExpression::GetExpression(*expr.right);
+	auto &left = BoundExpression::GetExpression(*expr.LeftMutable());
+	auto &right = BoundExpression::GetExpression(*expr.RightMutable());
 	auto left_sql_type = ExpressionBinder::GetExpressionReturnType(*left);
 	auto right_sql_type = ExpressionBinder::GetExpressionReturnType(*right);
 	// cast the input types to the same type

@@ -20,9 +20,13 @@ public:
 public:
 	explicit BoundUnnestExpression(LogicalType return_type);
 
-	unique_ptr<Expression> child;
-
 public:
+	const unique_ptr<Expression> &Child() const {
+		return child;
+	}
+	unique_ptr<Expression> &ChildMutable() {
+		return child;
+	}
 	bool IsFoldable() const override;
 	string ToString() const override;
 
@@ -33,5 +37,8 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	unique_ptr<Expression> child;
 };
 } // namespace duckdb

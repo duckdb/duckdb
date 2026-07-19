@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_serialization.hpp"
@@ -18,7 +19,8 @@ BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr
 }
 
 string BoundWindowExpression::ToString() const {
-	string function_name = aggregate.get() ? aggregate->GetName() : window->GetName();
+	string function_name =
+	    aggregate.get() ? aggregate->GetName().GetIdentifierName() : window->GetName().GetIdentifierName();
 	return WindowExpression::ToString<BoundWindowExpression, Expression, BoundOrderByNode>(*this, string(),
 	                                                                                       function_name);
 }
@@ -201,7 +203,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() const {
 vector<unique_ptr<Expression>> BoundWindowExpression::SerializedChildren(Serializer &serializer) const {
 	vector<unique_ptr<Expression>> result;
 	idx_t nargs = children.size();
-	if (!serializer.ShouldSerialize(8) && window) {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && window) {
 		const auto &function_name = window->GetName();
 		if (function_name == "lead" || function_name == "lag") {
 			nargs = 1;
@@ -216,7 +218,7 @@ vector<unique_ptr<Expression>> BoundWindowExpression::SerializedChildren(Seriali
 }
 
 unique_ptr<Expression> BoundWindowExpression::SerializedOffset(Serializer &serializer) const {
-	if (!serializer.ShouldSerialize(8) && children.size() > 1 && window) {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && children.size() > 1 && window) {
 		const auto &function_name = window->GetName();
 		if (function_name == "lead" || function_name == "lag") {
 			return children[1]->Copy();
@@ -227,7 +229,7 @@ unique_ptr<Expression> BoundWindowExpression::SerializedOffset(Serializer &seria
 }
 
 unique_ptr<Expression> BoundWindowExpression::SerializedDefault(Serializer &serializer) const {
-	if (!serializer.ShouldSerialize(8) && children.size() > 2 && window) {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && children.size() > 2 && window) {
 		const auto &function_name = window->GetName();
 		if (function_name == "lead" || function_name == "lag") {
 			return children[2]->Copy();
@@ -320,8 +322,9 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 
 		auto &context = deserializer.Get<ClientContext &>();
 		auto binder = Binder::CreateBinder(context);
-		EntryLookupInfo lookup(CatalogType::SCALAR_FUNCTION_ENTRY, name);
-		auto entry = binder->GetCatalogEntry(SYSTEM_CATALOG, DEFAULT_SCHEMA, lookup, OnEntryNotFound::THROW_EXCEPTION);
+		EntryLookupInfo lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(Identifier(name)));
+		auto entry = binder->GetCatalogEntry(Identifier::SystemCatalog(), Identifier::DefaultSchema(), lookup,
+		                                     OnEntryNotFound::THROW_EXCEPTION);
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();
 
 		FunctionBinder function_binder(*binder);

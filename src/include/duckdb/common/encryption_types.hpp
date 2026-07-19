@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 

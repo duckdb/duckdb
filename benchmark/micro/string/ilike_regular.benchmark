@@ -1,0 +1,19 @@
+# name: benchmark/micro/string/ilike_regular.benchmark
+# description: Case-insensitive contains word 'regular' in the l_comment (11.5%~)
+# group: [string]
+
+name ILike ('%REGULAR%')
+group string
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(*) FROM lineitem WHERE l_comment ILIKE '%REGULAR%'
+
+result I
+687323

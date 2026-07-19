@@ -11,9 +11,9 @@ mkdir -p build/coverage
 (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_EXTENSIONS="parquet;json;autocomplete;icu" -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
 
 # run tests
-python3 scripts/ci/run_tests.py build/coverage/test/unittest
-python3 scripts/ci/run_tests.py build/coverage/test/unittest "[detailed_profiler]"
-python3 scripts/ci/run_tests.py build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
+build/coverage/test/run
+build/coverage/test/run "[detailed_profiler]"
+build/coverage/test/run test/sql/tpch/tpch_sf01.test_slow
 python3 -m pytest --shell-binary build/coverage/duckdb tools/shell/tests/
 
 # finalize coverage file

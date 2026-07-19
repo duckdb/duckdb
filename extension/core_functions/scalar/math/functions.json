@@ -55,6 +55,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "binom",
+        "parameters": "n,k",
+        "description": "Returns binom(n,k)",
+        "example": "binom(5,2)",
+        "type": "scalar_function"
+    },
+    {
         "name": "bit_count",
         "parameters": "x",
         "description": "Returns the number of bits that are set",

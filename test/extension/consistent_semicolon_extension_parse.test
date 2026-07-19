@@ -27,4 +27,4 @@ Catalog Error: Type with name unrecognizedkeyword does not exist!
 statement error
 QUACK string_split('hello-world', ';');QUACK string_split('hello-world', ';')
 ----
-Parser Error: This is not a quack: string_split('hello-world', ';')
+<REGEX>:Parser Error: syntax error at or near.*

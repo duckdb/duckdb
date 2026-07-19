@@ -133,7 +133,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 		}
 	}
 
-	state.PrintF("BEGIN TRANSACTION;\n");
+	state.PrintSQL("BEGIN TRANSACTION;\n");
 	state.showHeader = 0;
 	state.nErr = 0;
 	if (zLike.empty()) {
@@ -151,7 +151,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	for (auto &row : *result) {
 		auto schema = row.GetValue<string>(0);
 		auto create_schema = StringUtil::Format("CREATE SCHEMA IF NOT EXISTS %s;", SQLIdentifier(schema));
-		state.PrintF("%s;\n", create_schema.c_str());
+		state.PrintSQL(create_schema + ";\n");
 	}
 
 	zSql = StringUtil::Format("SELECT name, type, sql FROM sqlite_schema "
@@ -165,7 +165,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	                          "  AND type IN ('index','trigger','view')",
 	                          zLike);
 	state.RunTableDumpQuery(zSql);
-	state.PrintF(state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
+	state.PrintSQL(state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
 	state.showHeader = savedShowHeader;
 	state.shellFlgs = savedShellFlags;
 	return MetadataResult::SUCCESS;
@@ -272,7 +272,19 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult OpenProfileWeb(ShellState &state, const vector<string> &args) {
+	if (state.safe_mode) {
+		state.Print(PrintOutput::STDERR, ".web cannot be used in -safe mode\n");
+		return MetadataResult::FAIL;
+	}
+	return OpenProfileInBrowser(state) ? MetadataResult::SUCCESS : MetadataResult::FAIL;
+}
+
 MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
+	// if the last query produced a profiling tree (e.g. EXPLAIN ANALYZE), show the full expanded query tree
+	if (RenderExpandedQueryTree(state)) {
+		return MetadataResult::SUCCESS;
+	}
 	if (state.last_result) {
 		auto renderer = state.GetRenderer();
 		renderer->RemoveRenderLimits();
@@ -280,6 +292,38 @@ MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
 		if (res == SuccessState::FAILURE) {
 			return MetadataResult::FAIL;
 		}
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult PrintHistory(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	// query the history through the shell_history() table function
+	auto result = state.conn->Query("SELECT id, sql FROM shell_history()");
+	if (result->HasError()) {
+		state.PrintF(PrintOutput::STDERR, "%s: %s\n", state.program_name, result->GetError().c_str());
+		return MetadataResult::FAIL;
+	}
+	idx_t row_count = result->RowCount();
+	idx_t start = 0;
+	if (args.size() == 2) {
+		// .history N - only show the last N entries
+		auto limit = static_cast<idx_t>(ShellState::StringToInt(args[1]));
+		if (limit < row_count) {
+			start = row_count - limit;
+		}
+	}
+	for (idx_t row = start; row < row_count; row++) {
+		auto id = result->GetValue(0, row).GetValue<int64_t>();
+		auto sql = result->GetValue(1, row).GetValue<string>();
+		state.HighlightSQL(sql);
+		// prefix each entry with its index - align any continuation lines (from multi-line
+		// statements) underneath the SQL by padding them with spaces to the prefix width
+		string prefix = StringUtil::Format("%5lld  ", static_cast<long long>(id));
+		sql = StringUtil::Replace(sql, "\n", "\n" + string(prefix.size(), ' '));
+		state.PrintF("%s%s\n", prefix.c_str(), sql.c_str());
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -528,6 +572,10 @@ MetadataResult SetWidths(ShellState &state, const vector<string> &args) {
 
 MetadataResult ShowIndexes(ShellState &state, const vector<string> &args) {
 	return state.DisplayEntries(args, 'i');
+}
+
+MetadataResult ShowManual(ShellState &state, const vector<string> &args) {
+	return state.DisplayManual(args);
 }
 
 MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
@@ -872,6 +920,8 @@ static const MetadataCommand metadata_commands[] = {
     {"highlight_mode", 2, ToggleHighlightMode, "mixed|dark|light", "Toggle the highlight mode to dark or light mode", 0,
      ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
+    {"history", 0, PrintHistory, "?N?", "Show the command history with syntax highlighting", 0,
+     "If N is given, only the last N entries are shown.\nUse the shell_history() table function to query the history."},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0,
      "Options:\n\t--csv\tImport data from CSV (read_csv)\n\t--json\tImport data from JSON "
      "(read_json)\n\t--parquet\tImport data from Parquet (read_parquet)\n\t--[parameter] [value]\tProvides a parameter "
@@ -884,10 +934,14 @@ static const MetadataCommand metadata_commands[] = {
     {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for keywords", 0, nullptr},
 #endif
-    {"last", 1, RenderLastResult, "", "Render the last result without truncating", 0, ""},
+    {"last", 1, RenderLastResult, "",
+     "Render the last result in full (after EXPLAIN ANALYZE: the full, expanded query tree)", 0, ""},
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
+    {"manual", 2, ShowManual, "FUNCTION", "Show the manual page for a SQL function", 0,
+     "Displays the signatures, descriptions and examples of all overloads of FUNCTION.\n"
+     "FUNCTION may be qualified: [database.][schema.]function."},
     {"maxrows", 0, SetMaxRows, "COUNT",
      "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0, ""},
     {"maxwidth", 0, SetMaxWidth, "COUNT",
@@ -937,7 +991,9 @@ static const MetadataCommand metadata_commands[] = {
     {"safe_mode", 0, ShellState::EnableSafeMode, "", "Enable safe-mode", 0, ""},
     {"separator", 0, ShellState::SetSeparator, "COL ?ROW?", "Change the column and row separators", 0, ""},
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0,
-     "Options:\n\t--indent\tTry to pretty-print the schema"},
+     "By default the schema is pretty-printed using the SQL formatter.\nOptions:\n\t--no-indent\tPrint the schema as "
+     "it is stored, without formatting\n\t--no-format\tAlias for --no-indent\n\t--indent\tForce pretty-printing (the "
+     "default)\n\t--format\tAlias for --indent"},
     {"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0, ""},
     {"show", 1, ShowConfiguration, "", "Show the current values for various settings", 0, ""},
 #ifdef HAVE_LINENOISE
@@ -952,6 +1008,7 @@ static const MetadataCommand metadata_commands[] = {
     {"timer", 2, ShellState::ToggleTimer, "on|off", "Turn SQL timer on or off", 0, ""},
     {"ui_command", 0, SetUICommand, "[command]", "Set the UI command", 0, ""},
     {"version", 1, ShowVersion, "", "Show the version", 0, ""},
+    {"web", 1, OpenProfileWeb, "", "Open the last query profile (EXPLAIN ANALYZE) in a web browser", 0, ""},
     {"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0,
      "Negative values right-justify"},
 #if defined(_WIN32) || defined(WIN32)

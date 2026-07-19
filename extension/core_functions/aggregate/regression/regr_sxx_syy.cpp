@@ -11,17 +11,14 @@ namespace duckdb {
 
 namespace {
 struct RegrSState {
+	static constexpr const char *STATE_NAMES[] = {"count", "var_pop"};
+	using STATE_TYPE = StructStateType<uint64_t, StddevState>;
+
 	uint64_t count;
 	StddevState var_pop;
 };
 
 struct RegrBaseOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		RegrCountFunction::Initialize<uint64_t>(state.count);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop);
-	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		RegrCountFunction::Combine<uint64_t, OP>(source.count, target.count, aggr_input_data);
@@ -60,31 +57,16 @@ struct RegrSYYOperation : RegrBaseOperation {
 	}
 };
 
-LogicalType GetRegrSStateType(const BoundAggregateFunction &) {
-	child_list_t<LogicalType> stddev_types;
-	stddev_types.emplace_back("count", LogicalType::UBIGINT);
-	stddev_types.emplace_back("mean", LogicalType::DOUBLE);
-	stddev_types.emplace_back("dsquared", LogicalType::DOUBLE);
-	auto stddev_type = LogicalType::STRUCT(std::move(stddev_types));
-
-	child_list_t<LogicalType> state_children;
-	state_children.emplace_back("count", LogicalType::UBIGINT);
-	state_children.emplace_back("var_pop", stddev_type);
-	return LogicalType::STRUCT(std::move(state_children));
-}
-
 } // namespace
 
 AggregateFunction RegrSXXFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSXXOperation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrSStateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 AggregateFunction RegrSYYFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSYYOperation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrSStateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

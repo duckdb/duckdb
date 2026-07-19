@@ -138,6 +138,43 @@ struct ExtensionAccess {
 };
 
 //===--------------------------------------------------------------------===//
+// Static C API Extension Loading
+//===--------------------------------------------------------------------===//
+void DuckDB::LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun) {
+	auto &manager = ExtensionManager::Get(*instance);
+	auto load_info = manager.BeginLoad({name});
+	if (!load_info) {
+		// already loaded
+		return;
+	}
+
+	ExtensionInitResult init_result;
+	init_result.filename = name;
+	init_result.filebase = name;
+	// Statically compiled extensions are always tied to the exact DuckDB version
+	init_result.abi_type = ExtensionABIType::C_STRUCT_UNSTABLE;
+	init_result.lib_hdl = nullptr;
+
+	DuckDBExtensionLoadState load_state(*instance, init_result);
+
+	// For static loading, get_api is null - the extension uses direct DuckDB symbols (no vtable needed)
+	duckdb_extension_access access;
+	access.set_error = ExtensionAccess::SetError;
+	access.get_database = ExtensionAccess::GetDatabase;
+	access.get_api = nullptr;
+
+	if (!(*init_fun)(load_state.ToCStruct(), &access)) {
+		string msg = load_state.has_error ? load_state.error_data.Message() : "unknown error";
+		load_info->LoadFail(ErrorData(msg));
+		throw IOException("Failed to load static C API extension '%s': %s", name, msg);
+	}
+
+	ExtensionInstallInfo install_info;
+	install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
+	load_info->FinishLoad(install_info);
+}
+
+//===--------------------------------------------------------------------===//
 // Load External Extension
 //===--------------------------------------------------------------------===//
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -608,6 +645,26 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options) {
+	// If this is a logical extension name (not an explicit path), prefer the
+	// statically linked implementation for built-in linked extensions only.
+	// This avoids loading a second copy from disk (ASan ODR violation) while
+	// keeping externally installed/autoloaded extensions on the normal path.
+	auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name);
+	if (!ExtensionHelper::IsFullPath(options.extension_name)) {
+		for (idx_t i = 0; i < ExtensionHelper::DefaultExtensionCount(); i++) {
+			auto default_extension = ExtensionHelper::GetDefaultExtension(i);
+			if (!default_extension.statically_loaded || logical_name != default_extension.name) {
+				continue;
+			}
+			DuckDB db_wrapper(db);
+			auto load_result = ExtensionHelper::LoadExtension(db_wrapper, logical_name);
+			if (load_result == ExtensionLoadResult::LOADED_EXTENSION) {
+				return;
+			}
+			break;
+		}
+	}
+
 	auto &manager = ExtensionManager::Get(db);
 	auto info = manager.BeginLoad(options);
 	if (!info) {

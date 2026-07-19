@@ -45,6 +45,10 @@ public:
 	static constexpr uint8_t MAX_WIDTH_DECIMAL = MAX_WIDTH_INT128;
 
 public:
+	//! Whether width/scale form a valid DECIMAL type: width in [1, MAX_WIDTH_DECIMAL] and scale not exceeding width.
+	static bool IsValidWidthScale(uint8_t width, uint8_t scale) {
+		return width >= 1 && width <= MAX_WIDTH_DECIMAL && scale <= width;
+	}
 	static string ToString(int16_t value, uint8_t width, uint8_t scale);
 	static string ToString(int32_t value, uint8_t width, uint8_t scale);
 	static string ToString(int64_t value, uint8_t width, uint8_t scale);

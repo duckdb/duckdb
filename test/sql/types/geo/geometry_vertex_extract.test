@@ -1,0 +1,266 @@
+# name: test/sql/types/geo/geometry_vertex_extract.test
+# group: [geo]
+
+# ------------------------------------------------------------------------------
+# Basic extraction via the vertex_extract function
+# ------------------------------------------------------------------------------
+
+query I
+SELECT vertex_extract('POINT(1 2)'::GEOMETRY, 'x');
+----
+1
+
+query I
+SELECT vertex_extract('POINT(1 2)'::GEOMETRY, 'y');
+----
+2
+
+# The ordinate argument is case-insensitive
+query II
+SELECT vertex_extract('POINT(1 2)'::GEOMETRY, 'X'), vertex_extract('POINT(1 2)'::GEOMETRY, 'Y');
+----
+1	2
+
+# ------------------------------------------------------------------------------
+# The .x / .y / .z / .m dot syntax
+# ------------------------------------------------------------------------------
+
+query II
+SELECT ('POINT(1 2)'::GEOMETRY).x, ('POINT(1 2)'::GEOMETRY).y
+----
+1	2
+
+# Fractional and negative coordinates round-trip exactly
+query II
+SELECT ('POINT(-1.5 2.25)'::GEOMETRY).x, ('POINT(-1.5 2.25)'::GEOMETRY).y
+----
+-1.5	2.25
+
+# ------------------------------------------------------------------------------
+# Z / M ordinates on the various vertex types
+# ------------------------------------------------------------------------------
+
+# POINT Z carries x, y, z (no m)
+query IIII
+SELECT ('POINT Z (1 2 3)'::GEOMETRY).x, ('POINT Z (1 2 3)'::GEOMETRY).y,
+       ('POINT Z (1 2 3)'::GEOMETRY).z, ('POINT Z (1 2 3)'::GEOMETRY).m
+----
+1	2	3	NULL
+
+# POINT M carries x, y, m (no z) - m must not be read from the z slot
+query IIII
+SELECT ('POINT M (1 2 4)'::GEOMETRY).x, ('POINT M (1 2 4)'::GEOMETRY).y,
+       ('POINT M (1 2 4)'::GEOMETRY).z, ('POINT M (1 2 4)'::GEOMETRY).m
+----
+1	2	NULL	4
+
+# POINT ZM carries all four ordinates
+query IIII
+SELECT ('POINT ZM (1 2 3 4)'::GEOMETRY).x, ('POINT ZM (1 2 3 4)'::GEOMETRY).y,
+       ('POINT ZM (1 2 3 4)'::GEOMETRY).z, ('POINT ZM (1 2 3 4)'::GEOMETRY).m
+----
+1	2	3	4
+
+# Requesting z or m from a plain 2D point yields NULL (the ordinate is absent)
+query II
+SELECT ('POINT(1 2)'::GEOMETRY).z, ('POINT(1 2)'::GEOMETRY).m
+----
+NULL	NULL
+
+# ------------------------------------------------------------------------------
+# Non-point geometries always return NULL (vertex extraction is point-only)
+# ------------------------------------------------------------------------------
+
+query I
+SELECT ('LINESTRING(0 0, 1 1)'::GEOMETRY).x
+----
+NULL
+
+query I
+SELECT ('POLYGON((0 0, 1 0, 1 1, 0 0))'::GEOMETRY).x
+----
+NULL
+
+query I
+SELECT ('MULTIPOINT(1 2, 3 4)'::GEOMETRY).x
+----
+NULL
+
+query I
+SELECT ('GEOMETRYCOLLECTION(POINT(1 2))'::GEOMETRY).x
+----
+NULL
+
+# ------------------------------------------------------------------------------
+# Empty points and NULL geometries return NULL
+# ------------------------------------------------------------------------------
+
+# An empty point has no vertices - every ordinate is NULL
+query IIII
+SELECT ('POINT EMPTY'::GEOMETRY).x, ('POINT EMPTY'::GEOMETRY).y,
+       ('POINT EMPTY'::GEOMETRY).z, ('POINT EMPTY'::GEOMETRY).m
+----
+NULL	NULL	NULL	NULL
+
+query I
+SELECT (NULL::GEOMETRY).x
+----
+NULL
+
+# ------------------------------------------------------------------------------
+# Per-row extraction over a column of mixed geometries
+# ------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE geometries(id INTEGER, geom GEOMETRY);
+
+statement ok
+INSERT INTO geometries VALUES
+    (1, 'POINT(1 2)'),
+    (2, 'POINT Z (3 4 5)'),
+    (3, 'POINT M (6 7 8)'),
+    (4, 'POINT ZM (9 10 11 12)'),
+    (5, 'POINT EMPTY'),
+    (6, 'LINESTRING(0 0, 1 1)'),
+    (7, NULL);
+
+query IIIII
+SELECT id, geom.x, geom.y, geom.z, geom.m FROM geometries ORDER BY id;
+----
+1	1	2	NULL	NULL
+2	3	4	5	NULL
+3	6	7	NULL	8
+4	9	10	11	12
+5	NULL	NULL	NULL	NULL
+6	NULL	NULL	NULL	NULL
+7	NULL	NULL	NULL	NULL
+
+# ------------------------------------------------------------------------------
+# Error handling
+# ------------------------------------------------------------------------------
+
+# An unknown ordinate name is rejected at bind time
+statement error
+SELECT vertex_extract('POINT(1 2)'::GEOMETRY, 'w');
+----
+<REGEX>:Binder Error:.*invalid vertex argument.*
+
+# A NULL ordinate is rejected at bind time (special null handling lets the bind run)
+statement error
+SELECT vertex_extract('POINT(1 2)'::GEOMETRY, NULL::VARCHAR);
+----
+<REGEX>:Binder Error:.*cannot be NULL.*
+
+# The ordinate must be a constant, not a per-row value
+statement error
+SELECT geom.x, vertex_extract(geom, ord) FROM (SELECT 'POINT(1 2)'::GEOMETRY AS geom, 'x' AS ord);
+----
+<REGEX>:Binder Error:.*must be constant.*
+
+# ------------------------------------------------------------------------------
+# Statistics propagation
+# ------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE pts(geom GEOMETRY);
+
+statement ok
+INSERT INTO pts VALUES ('POINT(1 2)'), ('POINT(5 8)'), ('POINT(-3 4)');
+
+# X / Y stats are derived from the geometry extent (min/max bounding box)
+query I
+SELECT stats(geom.x) FROM pts LIMIT 1;
+----
+{'has_no_null': true, 'has_null': false, 'max': 5.0, 'min': -3.0}
+
+query I
+SELECT stats(geom.y) FROM pts LIMIT 1;
+----
+{'has_no_null': true, 'has_null': false, 'max': 8.0, 'min': 2.0}
+
+# Z is absent from every point, so extraction always yields NULL: the stats
+# recognise this and report "always NULL" (folded to a constant).
+query I
+SELECT stats(geom.z) FROM pts LIMIT 1;
+----
+{'has_no_null': false, 'has_null': true}
+
+statement ok
+CREATE TABLE pts_zm(geom GEOMETRY);
+
+statement ok
+INSERT INTO pts_zm VALUES ('POINT ZM (1 2 3 4)'), ('POINT ZM (5 6 7 8)');
+
+# Z / M stats are derived from the extent when those ordinates are present
+query I
+SELECT stats(geom.z) FROM pts_zm LIMIT 1;
+----
+{'has_no_null': true, 'has_null': false, 'max': 7.0, 'min': 3.0}
+
+query I
+SELECT stats(geom.m) FROM pts_zm LIMIT 1;
+----
+{'has_no_null': true, 'has_null': false, 'max': 8.0, 'min': 4.0}
+
+# When the requested ordinate is absent from some (but not all) points, the
+# result can contain NULLs that the input column did not - so the stats must
+# report has_null even though the geometry column has no NULL rows.
+statement ok
+CREATE TABLE pts_mixed_dim(geom GEOMETRY);
+
+statement ok
+INSERT INTO pts_mixed_dim VALUES ('POINT(1 2)'), ('POINT M (3 4 9)');
+
+query I
+SELECT stats(geom.m) FROM pts_mixed_dim LIMIT 1;
+----
+{'has_no_null': true, 'has_null': true, 'max': 9.0, 'min': 9.0}
+
+# Likewise, mixing point and non-point geometries makes extraction nullable
+statement ok
+CREATE TABLE pts_and_lines(geom GEOMETRY);
+
+statement ok
+INSERT INTO pts_and_lines VALUES ('POINT(1 2)'), ('LINESTRING(0 0, 10 10)');
+
+query I
+SELECT stats(geom.x) FROM pts_and_lines LIMIT 1;
+----
+{'has_no_null': true, 'has_null': true, 'max': 10.0, 'min': 0.0}
+
+# A column of only non-empty 2D points keeps the no-NULL guarantee for x / y
+statement ok
+CREATE TABLE pts_2d_only(geom GEOMETRY);
+
+statement ok
+INSERT INTO pts_2d_only VALUES ('POINT(1 2)'), ('POINT(5 8)');
+
+query I
+SELECT stats(geom.x) FROM pts_2d_only LIMIT 1;
+----
+{'has_no_null': true, 'has_null': false, 'max': 5.0, 'min': 1.0}
+
+# When the column can contain no non-empty points, extraction is folded to a
+# constant NULL: the stats reflect "always NULL".
+statement ok
+CREATE TABLE lines_only(geom GEOMETRY);
+
+statement ok
+INSERT INTO lines_only VALUES ('LINESTRING(0 0, 1 1)'), ('LINESTRING(2 2, 3 3)');
+
+query I
+SELECT stats(geom.x) FROM lines_only LIMIT 1;
+----
+{'has_no_null': false, 'has_null': true}
+
+# The same folding applies when the column contains only empty points
+statement ok
+CREATE TABLE empty_pts(geom GEOMETRY);
+
+statement ok
+INSERT INTO empty_pts VALUES ('POINT EMPTY'), ('POINT EMPTY');
+
+query I
+SELECT stats(geom.x) FROM empty_pts LIMIT 1;
+----
+{'has_no_null': false, 'has_null': true}

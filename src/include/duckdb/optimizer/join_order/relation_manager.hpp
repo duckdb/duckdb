@@ -11,10 +11,10 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
@@ -25,22 +25,21 @@ class FilterInfo;
 
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {
+public:
+	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent);
+	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats);
+
+public:
 	LogicalOperator &op;
 	optional_ptr<LogicalOperator> parent;
 	RelationStats stats;
-
-	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent) : op(op), parent(parent) {
-	}
-	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats)
-	    : op(op), parent(parent), stats(std::move(stats)) {
-	}
 };
 
 class RelationManager {
 public:
-	explicit RelationManager(ClientContext &context) : context(context) {
-	}
+	explicit RelationManager(ClientContext &context);
 
+public:
 	idx_t NumRelations();
 
 	bool ExtractJoinRelations(JoinOrderOptimizer &optimizer, LogicalOperator &input_op,
@@ -72,6 +71,12 @@ public:
 	bool CrossProductWithRelationAllowed(idx_t relation_id);
 
 	void PrintRelationStats();
+
+private:
+	optional_ptr<JoinRelationSet> GetJoinRelations(column_binding_set_t &column_bindings,
+	                                               JoinRelationSetManager &set_manager);
+	void GetColumnBindingsFromExpression(const Expression &expression, column_binding_set_t &column_bindings);
+	void GetColumnBindingsFromOperator(LogicalOperator &op, column_binding_set_t &column_bindings);
 
 private:
 	ClientContext &context;

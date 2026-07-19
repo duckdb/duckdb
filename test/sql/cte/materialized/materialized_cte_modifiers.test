@@ -2,6 +2,9 @@
 # description: TopN should still work with materialized CTE (internal issue 2569)
 # group: [materialized]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require tpcds
 
 statement ok

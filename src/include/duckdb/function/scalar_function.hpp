@@ -9,32 +9,18 @@
 #pragma once
 
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
-struct FunctionLocalState {
-	DUCKDB_API virtual ~FunctionLocalState();
-
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-};
-
+class BaseStatistics;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -74,12 +60,22 @@ class ScalarFunctionCatalogEntry;
 struct StatementProperties;
 
 struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, const BaseStatistics &stats_p)
-	    : bind_data(bind_data_p), stats(stats_p) {
+	FunctionStatisticsPruneInput(const BoundFunctionExpression &function_p, optional_ptr<FunctionData> bind_data_p,
+	                             const vector<optional_ptr<const BaseStatistics>> &child_stats_p)
+	    : function(function_p), bind_data(bind_data_p), child_stats(child_stats_p) {
 	}
 
+	//! The bound function expression being checked (gives access to the argument expressions)
+	const BoundFunctionExpression &function;
 	optional_ptr<FunctionData> bind_data;
-	const BaseStatistics &stats;
+
+	//! Statistics for each function argument (an entry is null if it could not be derived for that argument)
+	const vector<optional_ptr<const BaseStatistics>> &child_stats;
+
+	//! Convenience accessor: statistics of the i-th argument, or null if absent / not derivable
+	optional_ptr<const BaseStatistics> ChildStats(idx_t i) const {
+		return i < child_stats.size() ? child_stats[i] : optional_ptr<const BaseStatistics>();
+	}
 };
 
 struct FunctionStatisticsInput {
@@ -238,6 +234,9 @@ public: // Properties
 	auto GetCollationHandling() const -> FunctionCollationHandling { return properties.collation_handling; }
 	auto SetCollationHandling(FunctionCollationHandling value) -> void { properties.collation_handling = value; }
 
+	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
+	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
+
 	//! Set this functions error-mode as fallible (can throw runtime errors)
 	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
 	//! Set this functions stability as volatile (can not be cached per row)
@@ -362,7 +361,8 @@ public:
 class ScalarFunction : public BaseScalarFunction<ScalarFunction>,
                        public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
-	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+	DUCKDB_API ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function);
+	DUCKDB_API ScalarFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),

@@ -4,5 +4,7 @@
 
 require json
 
+load {TEST_DIR}/test_zstd.db readwrite v1.2.0
+
 statement ok
 create table foo2 (bar JSON using compression 'zstd');

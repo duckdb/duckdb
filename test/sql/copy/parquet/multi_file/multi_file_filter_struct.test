@@ -4,9 +4,6 @@
 
 require parquet
 
-# statement ok
-# PRAGMA enable_verification
-
 statement ok
 COPY (SELECT {'f': f, 'i': i} struct_val FROM (VALUES ('f1', 42::INT), ('f1', 8::INT), ('f1', NULL::INT)) t(f, i)) TO '{TEST_DIR}/multi_file_filter_f1.parquet'
 

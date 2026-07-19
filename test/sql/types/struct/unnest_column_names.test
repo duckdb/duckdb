@@ -64,7 +64,7 @@ element1	INTEGER
 query II
 SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42))));
 ----
-element1	STRUCT(INTEGER)
+element1	TUPLE(INTEGER)
 
 # Check empty names
 
@@ -83,7 +83,7 @@ SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'': {'': 12}}], r
 statement error
 SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{}], recursive := true, keep_parent_names := true));
 ----
-Parser Error: syntax error
+UNNEST of an empty struct is not supported
 
 statement error
 SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([]), recursive := true, keep_parent_names := true));

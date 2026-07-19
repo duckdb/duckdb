@@ -15,6 +15,8 @@ namespace duckdb {
 class DuckTableEntry;
 class TableStatistics;
 class SingleFileCheckpointWriter;
+class RowGroupCollection;
+struct RowGroupPointer;
 
 //! The table data writer is responsible for writing the data of a table to storage.
 //
@@ -31,7 +33,7 @@ public:
 	void WriteTableData(Serializer &metadata_serializer);
 
 	virtual void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
-	                                 idx_t total_rows) = 0;
+	                                 idx_t total_rows, idx_t next_row_id) = 0;
 	virtual void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
 	                           Serializer &serializer) = 0;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
@@ -55,6 +57,9 @@ public:
 	bool RequireLegacyStartRow() const {
 		return require_legacy_start_row;
 	}
+	bool CanPersistRowIdGaps() const {
+		return can_persist_rowid_gaps;
+	}
 	void SetRowIdsChanged() {
 		row_ids_changed = true;
 	}
@@ -76,6 +81,7 @@ protected:
 	optional_idx row_group_count;
 	bool rebuild_indexes = false;
 	bool require_legacy_start_row = false;
+	bool can_persist_rowid_gaps = false;
 	atomic<bool> row_ids_changed {false};
 };
 
@@ -86,7 +92,7 @@ public:
 
 public:
 	void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
-	                         idx_t total_rows) override;
+	                         idx_t total_rows, idx_t next_row_id) override;
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
 	                   Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
@@ -101,6 +107,7 @@ private:
 	//! The root pointer, if we are re-using metadata of the table
 	MetaBlockPointer existing_pointer;
 	optional_idx existing_rows;
+	optional_idx existing_next_row_id;
 	vector<MetaBlockPointer> existing_pointers;
 };
 

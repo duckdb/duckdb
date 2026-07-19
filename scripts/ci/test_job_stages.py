@@ -135,7 +135,6 @@ class JobStagesTest(unittest.TestCase):
     def test_main_includes_main_only_jobs(self):
         selection = self._compute_job_selection("push", "main", "duckdb/duckdb")
         self.assertIn("main_julia", selection.enabled_jobs)
-        self.assertIn("valgrind", selection.enabled_jobs)
         self.assertTrue(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
@@ -155,7 +154,6 @@ class JobStagesTest(unittest.TestCase):
     def test_regular_branch_excludes_main_only_jobs(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
         self.assertNotIn("main_julia", selection.enabled_jobs)
-        self.assertNotIn("valgrind", selection.enabled_jobs)
         self.assertFalse(selection.save_cache)
 
     def test_fork_saves_cache(self):
@@ -311,7 +309,7 @@ class JobStagesTest(unittest.TestCase):
             f"summary.needs references unknown jobs: {sorted(extra_in_summary)}",
         )
 
-    def test_workflow_unittest_commands_use_run_tests_py(self):
+    def test_workflow_unittest_commands_use_wrapped_runner(self):
         violations: list[str] = []
 
         for workflow_path in self._workflow_paths():
@@ -319,7 +317,7 @@ class JobStagesTest(unittest.TestCase):
             for line_no, command in self._extract_run_commands(workflow_text):
                 if not self._has_direct_unittest_invocation(command):
                     continue
-                if "scripts/ci/run_tests.py" in command:
+                if re.search(r"(?:^|[\s\"'])\.?/build/[^/\s\"']+/test/run(?:$|[\s\"'])", command):
                     continue
                 snippet = " ".join(command.strip().split())
                 if len(snippet) > 180:
@@ -328,7 +326,9 @@ class JobStagesTest(unittest.TestCase):
 
         if violations:
             formatted = "\n\n".join(f"- {entry}" for entry in violations)
-            self.fail("workflow `run:` commands using `unittest` must use scripts/ci/run_tests.py:\n\n" + formatted)
+            self.fail(
+                "workflow `run:` commands using `unittest` must use `build/*/test/run` as test runner:\n\n" + formatted
+            )
 
 
 if __name__ == "__main__":

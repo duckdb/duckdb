@@ -29,7 +29,7 @@ void ExpressionHeuristics::VisitOperator(LogicalOperator &op) {
 
 unique_ptr<Expression> ExpressionHeuristics::VisitReplace(BoundConjunctionExpression &expr,
                                                           unique_ptr<Expression> *expr_ptr) {
-	ReorderExpressions(expr.children);
+	ReorderExpressions(expr.GetChildrenMutable());
 	return nullptr;
 }
 
@@ -78,11 +78,11 @@ idx_t ExpressionHeuristics::BetweenExpressionCost(const BoundFunctionExpression 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundCaseExpression &expr) {
 	// CASE WHEN check THEN result_if_true ELSE result_if_false END
 	idx_t case_cost = 0;
-	for (auto &case_check : expr.case_checks) {
+	for (auto &case_check : expr.CaseChecks()) {
 		case_cost += Cost(*case_check.then_expr);
 		case_cost += Cost(*case_check.when_expr);
 	}
-	case_cost += Cost(*expr.else_expr);
+	case_cost += Cost(expr.Else());
 	return case_cost;
 }
 
@@ -100,7 +100,7 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundCastExpression &expr) {
 			cast_cost = 5;
 		}
 	}
-	return Cost(*expr.child) + cast_cost;
+	return Cost(expr.Child()) + cast_cost;
 }
 
 idx_t ExpressionHeuristics::ComparisonExpressionCost(const BoundFunctionExpression &expr) {
@@ -114,7 +114,7 @@ idx_t ExpressionHeuristics::ComparisonExpressionCost(const BoundFunctionExpressi
 idx_t ExpressionHeuristics::ExpressionCost(const BoundConjunctionExpression &expr) {
 	// CONJUNCTION_AND, CONJUNCTION_OR
 	idx_t cost = 5;
-	for (auto &child : expr.children) {
+	for (auto &child : expr.GetChildren()) {
 		cost += Cost(*child);
 	}
 	return cost;
@@ -127,19 +127,18 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) 
 	if (BoundComparisonExpression::IsComparison(expr)) {
 		return ComparisonExpressionCost(expr);
 	}
-	unordered_map<std::string, idx_t> function_costs = {
-	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
-	    {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
-	    {"%", 10},      {"/", 15},   {"date_part", 20}, {"year", 20},
-	    {"round", 100}, {"~~", 200}, {"!~~", 200},      {"regexp_matches", 200},
-	    {"||", 200}};
+	identifier_map_t<idx_t> function_costs = {{"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
+	                                          {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
+	                                          {"%", 10},      {"/", 15},   {"date_part", 20}, {"year", 20},
+	                                          {"round", 100}, {"~~", 200}, {"!~~", 200},      {"regexp_matches", 200},
+	                                          {"||", 200}};
 
 	idx_t cost_children = 0;
-	for (auto &child : expr.children) {
+	for (auto &child : expr.GetChildren()) {
 		cost_children += Cost(*child);
 	}
 
-	auto cost_function = function_costs.find(expr.function.GetName());
+	auto cost_function = function_costs.find(expr.Function().GetName());
 	if (cost_function != function_costs.end()) {
 		return cost_children + cost_function->second;
 	} else {
@@ -149,7 +148,7 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) 
 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundOperatorExpression &expr, ExpressionType expr_type) {
 	idx_t sum = 0;
-	for (auto &child : expr.children) {
+	for (auto &child : expr.GetChildren()) {
 		sum += Cost(*child);
 	}
 
@@ -158,7 +157,7 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundOperatorExpression &expr, 
 		return sum + 5;
 	} else if (expr_type == ExpressionType::COMPARE_IN || expr_type == ExpressionType::COMPARE_NOT_IN) {
 		// COMPARE_IN, COMPARE_NOT_IN
-		return sum + (expr.children.size() - 1) * 100;
+		return sum + (expr.GetChildren().size() - 1) * 100;
 	} else if (expr_type == ExpressionType::OPERATOR_NOT) {
 		// OPERATOR_NOT
 		return sum + 10; // TODO: evaluate via measured runtimes

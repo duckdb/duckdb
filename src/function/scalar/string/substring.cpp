@@ -139,7 +139,7 @@ string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_
 				}
 			}
 		}
-		while (!IsCharacter(input_data[start_pos])) {
+		while (start_pos < input_size && !IsCharacter(input_data[start_pos])) {
 			start_pos++;
 		}
 		while (end_pos < input_size && !IsCharacter(input_data[end_pos])) {
@@ -308,7 +308,7 @@ unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, Funct
 	// can only propagate stats if the children have stats
 	// we only care about the stats of the first child (i.e. the string)
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.SetFunctionCallback(SubstringFunctionASCII);
+		expr.FunctionMutable().SetFunctionCallback(SubstringFunctionASCII);
 	}
 	return nullptr;
 }

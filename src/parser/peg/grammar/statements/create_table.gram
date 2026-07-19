@@ -6,7 +6,8 @@ Persistent <- 'PERSISTENT'
 TempPersistent <- 'TEMP'
 TemporaryPersistent <- 'TEMPORARY'
 
-CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
+CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName CreateTableDefinition CommitAction?
+CreateTableDefinition <- CreateTableAs / CreateColumnList
 
 CreateTableAs <- IdentifierList? PartitionSortedOptions? WithList? 'AS' Statement WithData?
 PartitionSortedOptions <- PartitionOptSortedOptions / SortedOptPartitionOptions
@@ -15,7 +16,9 @@ SortedOptPartitionOptions <- SortedOptions PartitionOptions?
 PartitionOptions <- 'PARTITIONED' 'BY' Parens(List(Expression))
 SortedOptions <- 'SORTED' 'BY' Parens(List(Expression))
 
-WithData <- 'WITH' 'NO'? 'DATA'
+WithData <- WithDataOnly / WithNoData
+WithDataOnly <- 'WITH' 'DATA'
+WithNoData <- 'WITH' 'NO' 'DATA'
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList?) PartitionSortedOptions? WithList?
 IfNotExists <- 'IF' 'NOT' 'EXISTS'
@@ -31,10 +34,14 @@ TableQualification <- TableName '.'
 ReservedTableQualification <- ReservedTableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)
-CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
+CreateTableColumnElement <- CreateTableColumnDefinition / CreateTableConstraint
+CreateTableColumnDefinition <- ColumnDefinition
+CreateTableConstraint <- TopLevelConstraint
 ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ConstraintNameClause? ColumnConstraint*
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
-NotNullConstraint <- 'NOT'? 'NULL'
+NotNullConstraint <- NullConstraint / NotNullColumnConstraint
+NullConstraint <- 'NULL'
+NotNullColumnConstraint <- 'NOT' 'NULL'
 UniqueConstraint <- 'UNIQUE'
 PrimaryKeyConstraint <- 'PRIMARY' 'KEY'
 DefaultValue <- 'DEFAULT' ColumnDefaultExpr
@@ -54,8 +61,9 @@ SetNullKeyAction <- 'SET' 'NULL'
 SetDefaultKeyAction <- 'SET' 'DEFAULT'
 
 TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
-TopLevelConstraintList <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
+TopLevelConstraintList <- TopPrimaryKeyConstraint / TopCheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
 ConstraintNameClause <- 'CONSTRAINT' Identifier
+TopCheckConstraint <- CheckConstraint
 TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList
 TopUniqueConstraint <- 'UNIQUE' ColumnIdList
 TopForeignKeyConstraint <- 'FOREIGN' 'KEY' ColumnIdList ForeignKeyConstraint
@@ -63,20 +71,27 @@ ColumnIdList <- Parens(List(ColId))
 
 PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
-DottedIdentifier <- Identifier ('.' ColLabel)*
+DottedIdentifier <- Identifier DotColLabel*
+DotColLabel <- '.' ColLabel
 Identifier <- QuotedIdentifier / PlainIdentifier
 
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
-ColIdOrString <- ColId / StringLiteral
+ColIdOrString <- ColId / StringLiteralIdentifier
 TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
-ColLabelOrString <- ColLabel / StringLiteral
+ColLabelOrString <- ColLabelIdentifier / StringLiteralIdentifier
+ColLabelIdentifier <- ColLabel
+StringLiteralIdentifier <- StringLiteral
 GeneratedColumn <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
 
 Generated <- 'GENERATED' AlwaysOrByDefault?
 AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
-GeneratedColumnType <- 'VIRTUAL' / 'STORED'
+GeneratedColumnType <- VirtualGeneratedColumn / StoredGeneratedColumn
 
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'
-PreserveOrDelete <- 'PRESERVE' / 'DELETE'
+PreserveOrDelete <- PreserveRows / DeleteRows
+PreserveRows <- 'PRESERVE'
+DeleteRows <- 'DELETE'
+VirtualGeneratedColumn <- 'VIRTUAL'
+StoredGeneratedColumn <- 'STORED'

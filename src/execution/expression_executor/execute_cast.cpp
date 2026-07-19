@@ -1,7 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
@@ -9,13 +7,13 @@ namespace duckdb {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCastExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExecuteFunctionState>(expr, root);
-	result->AddChild(*expr.child);
+	result->AddChild(expr.Child());
 	result->Finalize();
 
-	if (expr.bound_cast.HasInitLocalState()) {
+	if (expr.GetBoundCast().HasInitLocalState()) {
 		auto context_ptr = root.executor->HasContext() ? &root.executor->GetContext() : nullptr;
-		CastLocalStateParameters parameters(context_ptr, expr.bound_cast.GetCastData());
-		result->local_state = expr.bound_cast.InitLocalState(parameters);
+		CastLocalStateParameters parameters(context_ptr, expr.GetBoundCast().GetCastData());
+		result->local_state = expr.GetBoundCast().InitLocalState(parameters);
 	}
 	return std::move(result);
 }
@@ -30,13 +28,13 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	auto &child = state->intermediate_chunk.data[0];
 	auto child_state = state->child_states[0].get();
 
-	Execute(*expr.child, child_state, sel, count, child);
+	Execute(expr.Child(), child_state, sel, count, child);
 
 	string error_message;
-	auto error_ref = expr.try_cast ? &error_message : nullptr;
-	CastParameters parameters(expr.bound_cast.GetCastData(), false, error_ref, lstate);
+	auto error_ref = expr.IsTryCast() ? &error_message : nullptr;
+	CastParameters parameters(expr.GetBoundCast().GetCastData(), false, error_ref, lstate);
 	parameters.query_location = expr.GetQueryLocation();
-	parameters.cast_source = expr.child.get();
+	parameters.cast_source = &expr.Child();
 	parameters.cast_target = expr;
 	idx_t cast_count = count;
 	bool all_constant = child.GetVectorType() == VectorType::CONSTANT_VECTOR;
@@ -52,7 +50,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 		FlatVector::SetSize(child, 1ULL);
 		cast_count = 1;
 	}
-	expr.bound_cast.Cast(child, result, cast_count, parameters);
+	expr.GetBoundCast().Cast(child, result, cast_count, parameters);
 	if (all_constant) {
 		if (child.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			child.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -60,11 +58,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 		// restore the size of the input vector
 		FlatVector::SetSize(child, count);
 		// ensure the result type is constant
-		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
-		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.Flatten();
-		}
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		result.FlattenAndSetConstant();
 	}
 	FlatVector::SetSize(result, count_t(count));
 }

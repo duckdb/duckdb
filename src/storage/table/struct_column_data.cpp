@@ -16,10 +16,8 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
     : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
-	D_ASSERT(!child_types.empty());
-	if (type.id() != LogicalTypeId::UNION && StructType::IsUnnamed(type)) {
-		throw InvalidInputException("A table cannot be created from an unnamed struct");
-	}
+	// unnamed structs are deserialized as TUPLEs and never produced as a column type otherwise
+	D_ASSERT(type.id() != LogicalTypeId::STRUCT || child_types.empty() || !StructType::IsUnnamed(type));
 	if (type.id() == LogicalTypeId::VARIANT) {
 		throw NotImplementedException("A table cannot be created from a VARIANT column yet");
 	}
@@ -137,7 +135,6 @@ static void ScanChild(ColumnScanState &state, Vector &result, const std::functio
 		input.Reset();
 		auto scan_count = callback(input.data[0]);
 		FlatVector::SetSize(input.data[0], scan_count);
-		input.SetCardinality(scan_count);
 		executor.Execute(input, target);
 		result.Reference(target.data[0]);
 	} else {
@@ -325,10 +322,11 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	return stats.ToUnique();
 }
 
-void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                                row_t row_id, Vector &result, idx_t result_idx) {
+void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
+                                 const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
+                                 idx_t fetch_count, Vector &result, idx_t result_offset) {
 	// fetch the validity state
-	validity->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
+	validity->FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
 	if (storage_index.IsPushdownExtract()) {
 		auto &index_children = storage_index.GetChildIndexes();
 		D_ASSERT(index_children.size() == 1);
@@ -338,14 +336,19 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 		auto &child_type = StructType::GetChildTypes(type)[child_index].second;
 		if (!child_storage_index.HasChildren() && child_storage_index.HasType() &&
 		    child_storage_index.GetType() != child_type) {
-			Vector intermediate(child_type, 1);
-			sub_column.FetchRow(transaction, state, child_storage_index, row_id, intermediate, 0);
 			auto context = transaction.transaction->context.lock();
-			auto fetched_row = intermediate.GetValue(0).CastAs(*context, result.GetType());
-			result.SetValue(result_idx, fetched_row);
+			for (idx_t idx = 0; idx < fetch_count; idx++) {
+				const idx_t offset = offsets[sel.get_index(idx)];
+				Vector intermediate(child_type, 1);
+				sub_column.FetchRows(transaction, state, child_storage_index, &offset,
+				                     *FlatVector::IncrementalSelectionVector(), /*count=*/1, intermediate, 0);
+				auto fetched_row = intermediate.GetValue(0).CastAs(*context, result.GetType());
+				result.SetValue(result_offset + idx, fetched_row);
+			}
 			return;
 		} else {
-			sub_column.FetchRow(transaction, state, child_storage_index, row_id, result, result_idx);
+			sub_column.FetchRows(transaction, state, child_storage_index, offsets, sel, fetch_count, result,
+			                     result_offset);
 			return;
 		}
 	}
@@ -353,7 +356,8 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 	auto &child_entries = StructVector::GetEntries(result);
 	// fetch the sub-column states
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->FetchRow(transaction, state, storage_index, row_id, child_entries[i], result_idx);
+		sub_columns[i]->FetchRows(transaction, state, storage_index, offsets, sel, fetch_count, child_entries[i],
+		                          result_offset);
 	}
 }
 
@@ -514,12 +518,13 @@ void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseS
 }
 
 void StructColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                            vector<ColumnSegmentInfo> &result) {
+                                            vector<ColumnSegmentInfo> &result,
+                                            const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
-		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	}
 }
 

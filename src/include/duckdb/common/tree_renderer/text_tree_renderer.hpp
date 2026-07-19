@@ -10,7 +10,6 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/main/profiling_node.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/render_tree.hpp"
 
@@ -21,25 +20,20 @@ class Pipeline;
 struct PipelineRenderNode;
 
 struct TextTreeRendererConfig {
-	void EnableDetailed() {
-		max_extra_lines = 1000;
-		detailed = true;
-	}
-
-	void EnableStandard() {
-		max_extra_lines = 30;
-		detailed = false;
-	}
-
 	idx_t maximum_render_width = 240;
 	idx_t node_render_width = 29;
 	idx_t minimum_render_width = 15;
 	idx_t max_extra_lines = 30;
-	bool detailed = false;
 
 	// Formatting options
 	char thousand_separator = ',';
 	char decimal_separator = '.';
+
+	//! When set, render every operator as a full box (disable the timing-based folding/merging of operators).
+	//! Defaults to the full plan; only the interactive CLI opts into folding (where ".last" can re-expand it).
+	bool expand_all = true;
+	//! When set, operator names are rendered raw/upper-case (e.g. HASH_JOIN) instead of title-cased (Hash Join)
+	bool upper_case_operators = false;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *LTCORNER = "\342\224\214"; // NOLINT "┌";
@@ -86,19 +80,18 @@ public:
 	string ToString(const ProfilingNode &op);
 	string ToString(const Pipeline &op);
 
-	void Render(const LogicalOperator &op, std::ostream &ss);
-	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const ProfilingNode &op, std::ostream &ss) override;
-	void Render(const Pipeline &op, std::ostream &ss);
+	void Render(const LogicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const PhysicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const ProfilingNode &op, BaseTreeRenderer &ss) override;
+	void Render(const Pipeline &op, BaseTreeRenderer &ss);
 
-	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
+	void ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) override;
 
-	void EnableDetailed() {
-		config.EnableDetailed();
-	}
-	void EnableStandard() {
-		config.EnableStandard();
-	}
+	//! Profiler text output: the framed query tree (with phase timings, total time, etc.)
+	void RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) override;
+
+	void Configure(const unordered_map<string, Value> &settings) override;
+
 	bool UsesRawKeyNames() override {
 		return true;
 	}
@@ -106,20 +99,6 @@ public:
 private:
 	//! The configuration used for rendering
 	TextTreeRendererConfig config;
-
-private:
-	string ExtraInfoSeparator();
-	void RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y);
-	void RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y);
-	void RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y);
-
-	bool CanSplitOnThisChar(char l);
-	bool IsPadding(char l);
-	string RemovePadding(string l);
-	void SplitUpExtraInfo(const InsertionOrderPreservingMap<string> &extra_info, vector<string> &result,
-	                      idx_t max_lines);
-	void SplitStringBuffer(const string &source, vector<string> &result);
-	string FormatNumber(const string &input);
 };
 
 } // namespace duckdb

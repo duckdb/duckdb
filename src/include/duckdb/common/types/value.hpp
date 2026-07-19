@@ -20,6 +20,8 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 class String;
@@ -52,7 +54,8 @@ public:
 	//! Create a DOUBLE value
 	DUCKDB_API Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
-	DUCKDB_API Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const char *val);       // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const Identifier &val); // NOLINT: Allow implicit conversion from `Identifier`
 	//! Create a NULL value
 	DUCKDB_API Value(std::nullptr_t val); // NOLINT: Allow implicit conversion from `nullptr_t`
 	//! Create a VARCHAR value
@@ -171,6 +174,8 @@ public:
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
 	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
+	//! Create an unnamed TUPLE value of the given child values
+	DUCKDB_API static Value TUPLE(vector<Value> values);
 	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, vector<Value> underlying_struct_values);
 	//! Create a variant value with given list of internal variant data (keys/children/values/data)
 	DUCKDB_API static Value VARIANT(vector<Value> children);
@@ -484,6 +489,11 @@ struct TypeValue {
 	DUCKDB_API static LogicalType GetType(const Value &value);
 };
 
+struct VariantValue {
+	//! Convert a (non-null) VARIANT-typed Value back to a plain Value
+	DUCKDB_API static Value GetValue(const Value &variant_val);
+};
+
 //! Return the internal integral value for any type that is stored as an integral value internally
 //! This can be used on values of type integer, uinteger, but also date, timestamp, decimal, etc
 struct IntegralValue {
@@ -654,9 +664,13 @@ template <>
 DUCKDB_API interval_t Value::GetValueUnsafe() const;
 
 template <>
-DUCKDB_API bool Value::IsNan(float input);
+inline bool Value::IsNan(float input) {
+	return std::isnan(input);
+}
 template <>
-DUCKDB_API bool Value::IsNan(double input);
+inline bool Value::IsNan(double input) {
+	return std::isnan(input);
+}
 
 template <>
 DUCKDB_API bool Value::IsFinite(float input);

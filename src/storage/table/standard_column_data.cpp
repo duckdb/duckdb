@@ -80,8 +80,9 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	// the compression functions need to support this
 	auto compression = GetCompressionFunction();
 	bool has_filter = compression && compression->filter;
+	bool filter_includes_validity = compression && compression->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
 	auto validity_compression = validity->GetCompressionFunction();
-	bool validity_has_filter = validity_compression && validity_compression->filter;
+	bool validity_has_filter = filter_includes_validity || (validity_compression && validity_compression->filter);
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
@@ -92,7 +93,11 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 		return;
 	}
 	FilterVector(state, result, target_count, sel, count, filter, filter_state);
-	validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+	if (!filter_includes_validity) {
+		validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+	} else {
+		validity->Skip(state.child_states[0], target_count);
+	}
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -195,15 +200,16 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
-                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
-	// find the segment the row belongs to
+void StandardColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
+                                   const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
+                                   idx_t fetch_count, Vector &result, idx_t result_offset) {
 	if (state.child_states.empty()) {
-		auto child_state = make_uniq<ColumnFetchState>();
-		state.child_states.push_back(std::move(child_state));
+		state.child_states.emplace_back(make_uniq<ColumnFetchState>());
 	}
-	ColumnData::FetchRow(transaction, state, storage_index, row_id, result, result_idx);
-	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
+	// Bulk fetch the data and the validity in two passes.
+	FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
+	validity->FetchRowsAtSegmentLevel(transaction, *state.child_states[0], offsets, sel, fetch_count, result,
+	                                  result_offset);
 }
 
 void StandardColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
@@ -331,11 +337,11 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 }
 
 void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
-                                              vector<duckdb::idx_t> col_path,
-                                              vector<duckdb::ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                              vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
+                                              const ColumnSegmentInfoScanOptions &options) {
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result);
+	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result, options);
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {

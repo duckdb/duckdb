@@ -341,7 +341,7 @@ static bool HasCorrelatedColumns(const Expression &root_expr) {
 	bool has_correlated_columns = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
 	                                                              [&](const BoundColumnRefExpression &colref) {
-		                                                              if (colref.depth > 0) {
+		                                                              if (colref.Depth() > 0) {
 			                                                              has_correlated_columns = true;
 		                                                              }
 	                                                              });
@@ -379,7 +379,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	if (ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
-	    ClientConfig::GetConfig(context).enable_optimizer &&
 	    !Optimizer::OptimizerDisabled(context, OptimizerType::BUILD_SIDE_PROBE_SIDE)) {
 		// we turn any right outer joins into left outer joins for optimization purposes
 		// they are the same but with sides flipped, so treating them the same simplifies life
@@ -416,7 +415,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		filter->AddChild(std::move(root));
 		return std::move(filter);
 	}
-
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(context, ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));
@@ -430,40 +428,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
 	}
-	for (auto &child : join->children) {
-		if (child->type == LogicalOperatorType::LOGICAL_FILTER) {
-			auto &filter = child->Cast<LogicalFilter>();
-			for (auto &expr : filter.expressions) {
-				PlanSubqueries(expr, filter.children[0]);
-			}
-		}
-	}
-
-	// we visit the expressions depending on the type of join
-	switch (join->type) {
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &comp_join = join->Cast<LogicalComparisonJoin>();
-		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
-			auto &cond = comp_join.conditions[i];
-			if (cond.IsComparison()) {
-				PlanSubqueries(cond.LeftReference(), comp_join.children[0]);
-				PlanSubqueries(cond.RightReference(), comp_join.children[1]);
-			}
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-		auto &any_join = join->Cast<LogicalAnyJoin>();
-		// for the any join we just visit the condition
-		if (any_join.condition->HasSubquery()) {
-			throw NotImplementedException("Cannot perform non-inner join on subquery!");
-		}
-		break;
-	}
-	default:
-		break;
-	}
+	RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(*this, *join);
 	if (!ref.duplicate_eliminated_columns.empty()) {
 		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;

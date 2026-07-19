@@ -12,6 +12,9 @@ bool LimitModifier::Equals(const ResultModifier &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<LimitModifier>();
+	if (limit_type != other.limit_type) {
+		return false;
+	}
 	if (!ParsedExpression::Equals(limit, other.limit)) {
 		return false;
 	}
@@ -23,6 +26,7 @@ bool LimitModifier::Equals(const ResultModifier &other_p) const {
 
 unique_ptr<ResultModifier> LimitModifier::Copy() const {
 	auto copy = make_uniq<LimitModifier>();
+	copy->limit_type = limit_type;
 	if (limit) {
 		copy->limit = limit->Copy();
 	}
@@ -30,6 +34,21 @@ unique_ptr<ResultModifier> LimitModifier::Copy() const {
 		copy->offset = offset->Copy();
 	}
 	return std::move(copy);
+}
+
+bool LimitModifier::UseLegacySerialization() const {
+	return limit_type == LimitValueType::PERCENTAGE;
+}
+
+void LimitModifier::LegacySerialize(Serializer &serializer) const {
+	LegacyLimitPercentModifier legacy_serialization;
+	if (limit) {
+		legacy_serialization.limit = limit->Copy();
+	}
+	if (offset) {
+		legacy_serialization.offset = offset->Copy();
+	}
+	legacy_serialization.Serialize(serializer);
 }
 
 bool DistinctModifier::Equals(const ResultModifier &other_p) const {
@@ -114,29 +133,22 @@ string OrderByNode::ToString() const {
 	return str;
 }
 
-bool LimitPercentModifier::Equals(const ResultModifier &other_p) const {
-	if (!ResultModifier::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<LimitPercentModifier>();
-	if (!ParsedExpression::Equals(limit, other.limit)) {
-		return false;
-	}
-	if (!ParsedExpression::Equals(offset, other.offset)) {
-		return false;
-	}
-	return true;
+bool LegacyLimitPercentModifier::Equals(const ResultModifier &other) const {
+	throw InternalException("Legacy Limit Percent modifier should not be used anymore");
 }
 
-unique_ptr<ResultModifier> LimitPercentModifier::Copy() const {
-	auto copy = make_uniq<LimitPercentModifier>();
-	if (limit) {
-		copy->limit = limit->Copy();
-	}
-	if (offset) {
-		copy->offset = offset->Copy();
-	}
-	return std::move(copy);
+unique_ptr<ResultModifier> LegacyLimitPercentModifier::Copy() const {
+	throw InternalException("Legacy Limit Percent modifier should not be used anymore");
+}
+
+unique_ptr<ResultModifier>
+LegacyLimitPercentModifier::DeserializeLegacyLimitPercentModifier(unique_ptr<ParsedExpression> limit_p,
+                                                                  unique_ptr<ParsedExpression> offset_p) {
+	auto result = make_uniq<LimitModifier>();
+	result->limit = std::move(limit_p);
+	result->offset = std::move(offset_p);
+	result->limit_type = LimitValueType::PERCENTAGE;
+	return std::move(result);
 }
 
 } // namespace duckdb

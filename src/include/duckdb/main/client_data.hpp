@@ -36,7 +36,7 @@ public:
 	//! The set of temporary objects belonging to this client.
 	shared_ptr<AttachedDatabase> temporary_objects;
 	//! The set of bound prepared statements belonging to this client.
-	case_insensitive_map_t<shared_ptr<PreparedStatementData>> prepared_statements;
+	identifier_map_t<shared_ptr<PreparedStatementData>> prepared_statements;
 
 	//! The random generator used by random().
 	//! Its seed value can be set by setseed().

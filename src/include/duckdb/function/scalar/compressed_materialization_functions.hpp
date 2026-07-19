@@ -115,6 +115,26 @@ struct InternalCompressStringHugeintFun {
 	static ScalarFunction GetFunction();
 };
 
+struct InternalCompressGeometryPointFun {
+	static constexpr const char *Name = "__internal_compress_geometry_point";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct InternalDecompressGeometryPointFun {
+	static constexpr const char *Name = "__internal_decompress_geometry_point";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "";
+	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct InternalDecompressIntegralSmallintFun {
 	static constexpr const char *Name = "__internal_decompress_integral_smallint";
 	static constexpr const char *Parameters = "";

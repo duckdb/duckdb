@@ -13,6 +13,7 @@
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/enums/row_group_append_mode.hpp"
 
@@ -44,6 +45,15 @@ class DuckTableEntry;
 class RowGroupIterationHelper;
 class TableScanState;
 
+//! Snapshot state used to iterate row groups without holding the row-group segment-tree
+//! lock for the duration of the scan. Holding row_groups pins the snapshot alive; consistency
+//! follows the same model as table scans.
+struct ColumnSegmentInfoScanState {
+	shared_ptr<RowGroupSegmentTree> row_groups;
+	optional_ptr<SegmentNode<RowGroup>> current_row_group;
+	ColumnSegmentInfoScanOptions options;
+};
+
 class RowGroupCollection {
 public:
 	RowGroupCollection(shared_ptr<DataTableInfo> info, TableIOManager &io_manager, vector<LogicalType> types,
@@ -53,6 +63,7 @@ public:
 
 public:
 	idx_t GetTotalRows() const;
+	idx_t GetNextRowId() const;
 	idx_t GetRowGroupCount() const;
 	Allocator &GetAllocator() const;
 
@@ -96,8 +107,9 @@ public:
 	//! Initialize an append with a variable number of rows. FinalizeAppend should not be called after appending is
 	//! done.
 	void InitializeAppend(TransactionData transaction, TableAppendState &state);
-	//! Appends to the row group collection. Returns true if a new row group has been created to append to
-	bool Append(DataChunk &chunk, TableAppendState &state);
+	//! Appends to the row group collection. Returns the finished row group index if a new row group has been appended
+	//! to
+	optional_idx Append(DataChunk &chunk, TableAppendState &state);
 	//! FinalizeAppend flushes an append with a variable number of rows.
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
@@ -134,10 +146,16 @@ public:
 	//! Drops every row group and immediately marks the blocks as modified.
 	void CommitDropTable();
 
-	vector<PartitionStatistics> GetPartitionStats() const;
+	vector<PartitionStatistics> GetPartitionStats(TransactionData transaction) const;
 	vector<ColumnSegmentInfo>
 	GetColumnSegmentInfo(const QueryContext &context,
-	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL) const;
+	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {}) const;
+	//! Initialize an incremental scan over column segment info, pinning the current row groups for consistency.
+	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) const;
+	//! Append the next row group's column segment info to result. Returns false when no row groups remain.
+	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	                           vector<ColumnSegmentInfo> &result) const;
+	bool SupportsPerColumnWrites() const;
 	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
 
@@ -145,7 +163,8 @@ public:
 	                                         ExpressionExecutor &default_executor);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
-	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
+	                                         vector<StorageIndex> bound_columns, Expression &cast_expr,
+	                                         TransactionData transaction);
 	void VerifyNewConstraint(const QueryContext &context, DataTable &parent, const BoundConstraint &constraint);
 
 	void SetStats(TableStatistics &new_stats);
@@ -194,6 +213,9 @@ private:
 	const idx_t row_group_size;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
+	//! Next rowid offset relative to the row group tree base rowid.
+	//! For main table storage the base is 0, so this is also the absolute next rowid.
+	atomic<idx_t> next_row_id;
 	//! The data table info
 	shared_ptr<DataTableInfo> info;
 	//! The column types of the row group collection

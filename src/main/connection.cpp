@@ -15,6 +15,7 @@
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 
 namespace duckdb {
 
@@ -46,9 +47,8 @@ Connection::~Connection() {
 	ConnectionManager::Get(*context->db).RemoveConnection(*context);
 }
 
-string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
-	auto &profiler = QueryProfiler::Get(*context);
-	return profiler.ToString(format);
+string Connection::GetProfilingInformation(const ProfilerPrintFormat &format) {
+	return QueryProfiler::Get(*context).ToString(format);
 }
 
 void Connection::Interrupt() {
@@ -113,22 +113,22 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement>
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
-                                                        case_insensitive_map_t<BoundParameterData> &named_values,
+                                                        identifier_map_t<BoundParameterData> &named_values,
                                                         QueryParameters query_parameters) {
 	return context->PendingQuery(query, named_values, query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                        case_insensitive_map_t<BoundParameterData> &named_values,
+                                                        identifier_map_t<BoundParameterData> &named_values,
                                                         QueryParameters query_parameters) {
 	return context->PendingQuery(std::move(statement), named_values, query_parameters);
 }
 
-static case_insensitive_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
-	case_insensitive_map_t<BoundParameterData> named_values;
+static identifier_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
+	identifier_map_t<BoundParameterData> named_values;
 	for (idx_t i = 0; i < param_list.size(); i++) {
 		auto &val = param_list[i];
-		named_values[std::to_string(i + 1)] = BoundParameterData(val);
+		named_values[Identifier(std::to_string(i + 1))] = BoundParameterData(val);
 	}
 	return named_values;
 }
@@ -170,21 +170,31 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	return pending->Execute();
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &database_name, const string &schema_name,
-                                                   const string &table_name) {
+unique_ptr<TableDescription> Connection::TableInfo(const Identifier &database_name, const Identifier &schema_name,
+                                                   const Identifier &table_name) {
 	return context->TableInfo(database_name, schema_name, table_name);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name) {
-	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+unique_ptr<TableDescription> Connection::TableInfo(const Identifier &schema_name, const Identifier &table_name) {
+	return TableInfo(Identifier::InvalidCatalog(), schema_name, table_name);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
-	return TableInfo(INVALID_CATALOG, DEFAULT_SCHEMA, table_name);
+unique_ptr<TableDescription> Connection::TableInfo(const Identifier &table_name) {
+	return TableInfo(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), table_name);
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
-	return context->ParseStatements(query);
+	// Eager convenience over the lazy ClientContext::ExtractStatements iterator: drain the
+	// engine-facing statements into a vector.
+	auto &client_context = *context;
+	auto iterator = client_context.IterateStatements(query);
+	vector<unique_ptr<SQLStatement>> result;
+	while (iterator.Peek()) {
+		if (auto statement = iterator.GetStatement()) {
+			result.push_back(std::move(statement));
+		}
+	}
+	return result;
 }
 
 unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
@@ -195,20 +205,22 @@ void Connection::Append(TableDescription &description, ColumnDataCollection &col
 	context->Append(description, collection);
 }
 
-shared_ptr<Relation> Connection::Table(const string &table_name) {
-	return Table(DEFAULT_SCHEMA, table_name);
+shared_ptr<Relation> Connection::Table(const Identifier &table_name) {
+	return Table(Identifier::DefaultSchema(), table_name);
 }
 
-shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
-	auto table_info = TableInfo(INVALID_CATALOG, schema_name, table_name);
+shared_ptr<Relation> Connection::Table(const Identifier &schema_name, const Identifier &table_name) {
+	auto table_info = TableInfo(Identifier::InvalidCatalog(), schema_name, table_name);
 	if (!table_info) {
-		throw CatalogException("Table %s does not exist!", ParseInfo::QualifierToString("", schema_name, table_name));
+		throw CatalogException("Table %s does not exist!",
+		                       QualifiedName(Identifier(), schema_name, table_name)
+		                           .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }
 
-shared_ptr<Relation> Connection::Table(const string &catalog_name, const string &schema_name,
-                                       const string &table_name) {
+shared_ptr<Relation> Connection::Table(const Identifier &catalog_name, const Identifier &schema_name,
+                                       const Identifier &table_name) {
 	unique_ptr<TableDescription> table_info;
 	do {
 		table_info = TableInfo(catalog_name, schema_name, table_name);
@@ -217,22 +229,23 @@ shared_ptr<Relation> Connection::Table(const string &catalog_name, const string 
 		}
 
 		if (catalog_name.empty() && !schema_name.empty()) {
-			table_info = TableInfo(schema_name, DEFAULT_SCHEMA, table_name);
+			table_info = TableInfo(schema_name, Identifier::DefaultSchema(), table_name);
 		}
 	} while (false);
 
 	if (!table_info) {
 		throw CatalogException("Table %s does not exist!",
-		                       ParseInfo::QualifierToString(catalog_name, schema_name, table_name));
+		                       QualifiedName(catalog_name, schema_name, table_name)
+		                           .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }
 
-shared_ptr<Relation> Connection::View(const string &tname) {
-	return View(DEFAULT_SCHEMA, tname);
+shared_ptr<Relation> Connection::View(const Identifier &tname) {
+	return View(Identifier::DefaultSchema(), tname);
 }
 
-shared_ptr<Relation> Connection::View(const string &schema_name, const string &table_name) {
+shared_ptr<Relation> Connection::View(const Identifier &schema_name, const Identifier &table_name) {
 	return make_shared_ptr<ViewRelation>(context, schema_name, table_name);
 }
 
@@ -299,7 +312,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 			throw ParserException("Expected a single column definition");
 		}
 		auto &col_def = col_list.GetColumnMutable(LogicalIndex(0));
-		column_list.push_back({col_def.GetName(), col_def.GetType().ToString()});
+		column_list.emplace_back(col_def.GetName().GetIdentifierName(), col_def.GetType().ToString());
 	}
 	vector<string> files {csv_file};
 	return make_shared_ptr<ReadCSVRelation>(context, files, std::move(options));

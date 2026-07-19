@@ -31,22 +31,20 @@ struct NextSequenceValueOperator {
 	}
 };
 
-SequenceCatalogEntry &BindSequence(Binder &binder, string &catalog, string &schema, const string &name) {
-	// fetch the sequence from the catalog
-	Binder::BindSchemaOrCatalog(binder.context, catalog, schema);
+SequenceCatalogEntry &BindSequence(Binder &binder, QualifiedName name) {
+	// resolve the (optional) catalog/schema qualification and fetch the sequence from the catalog
+	Binder::BindSchemaOrCatalog(binder.context, name);
 	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, name);
-	return binder.EntryRetriever().GetEntry(catalog, schema, sequence_lookup)->Cast<SequenceCatalogEntry>();
+	return binder.EntryRetriever().GetEntry(sequence_lookup)->Cast<SequenceCatalogEntry>();
 }
 
-SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, string &catalog, string &schema,
-                                              const string &name) {
-	Binder::BindSchemaOrCatalog(context, catalog, schema);
-	return Catalog::GetEntry<SequenceCatalogEntry>(context, catalog, schema, name);
+SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, QualifiedName name) {
+	Binder::BindSchemaOrCatalog(context, name);
+	return Catalog::GetEntry<SequenceCatalogEntry>(context, name);
 }
 
-SequenceCatalogEntry &BindSequence(Binder &binder, const string &name) {
-	auto qname = QualifiedName::Parse(name);
-	return BindSequence(binder, qname.catalog, qname.schema, qname.name);
+SequenceCatalogEntry &BindSequence(Binder &binder, const Identifier &name) {
+	return BindSequence(binder, QualifiedName::Parse(name.GetIdentifierName()));
 }
 
 struct NextValLocalState : public FunctionLocalState {
@@ -73,7 +71,7 @@ unique_ptr<FunctionLocalState> NextValLocalFunction(ExpressionState &state, cons
 template <class OP>
 void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	if (!func_expr.bind_info) {
+	if (!func_expr.BindInfo()) {
 		// no bind info - return null
 		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
@@ -107,7 +105,7 @@ unique_ptr<FunctionData> NextValBind(BindScalarFunctionInput &input) {
 	if (seqname.IsNull()) {
 		return nullptr;
 	}
-	auto &seq = BindSequence(binder, seqname.ToString());
+	auto &seq = BindSequence(binder, Identifier(seqname.ToString()));
 	return make_uniq<NextvalBindData>(seq);
 }
 
@@ -124,7 +122,7 @@ unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunc
 	}
 	auto &seq_info = create_info->Cast<CreateSequenceInfo>();
 	auto &context = deserializer.Get<ClientContext &>();
-	auto &sequence = BindSequenceFromContext(context, seq_info.catalog, seq_info.schema, seq_info.name);
+	auto &sequence = BindSequenceFromContext(context, seq_info.GetQualifiedName());
 	return make_uniq<NextvalBindData>(sequence);
 }
 

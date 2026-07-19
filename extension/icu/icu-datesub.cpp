@@ -95,7 +95,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 		const auto &enddate_arg = args.data[2];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
 		if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -132,8 +132,8 @@ struct ICUCalendarSub : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateSubFunction<TA>, Bind);
 	}
 
-	static void AddFunctions(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunctions(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(GetFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.SetArgProperties(1, ArgProperties().NonIncreasing());
 		set.SetArgProperties(2, ArgProperties().NonDecreasing());
@@ -187,20 +187,29 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 // MS-SQL differences can be computed using ICU by truncating both arguments
 // to the desired part precision and then applying ICU subtraction/difference
 struct ICUCalendarDiff : public ICUDateFunc {
-	template <typename T>
-	static int64_t DifferenceFunc(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date,
-	                              part_trunc_t trunc_func, part_sub_t sub_func) {
-		// Truncate the two arguments. This is safe because we will stay in range
-		auto micros = SetTime(calendar, start_date);
+	static timestamp_tz_t TruncateForDiff(icu::Calendar *calendar, timestamp_tz_t date, part_trunc_t trunc_func) {
+		auto micros = SetTime(calendar, date);
 		trunc_func(calendar, micros);
-		start_date = GetTimeUnsafe(calendar, micros);
+		return GetTimeUnsafe(calendar, micros);
+	}
 
-		micros = SetTime(calendar, end_date);
+	static timestamp_tz_t TruncateForDiff(icu::Calendar *calendar, timestamp_tz_ns_t date, part_trunc_t trunc_func) {
+		auto nanos = SetTimeNS(calendar, date);
+		// Adapt TIMESTAMPTZ_NS to the existing microsecond-or-coarser date_diff path.
+		uint64_t micros = nanos / Interval::NANOS_PER_MICRO;
 		trunc_func(calendar, micros);
-		end_date = GetTimeUnsafe(calendar, micros);
+		return GetTimeUnsafe(calendar, micros);
+	}
+
+	template <typename T>
+	static int64_t DifferenceFunc(icu::Calendar *calendar, T start_date, T end_date, part_trunc_t trunc_func,
+	                              part_sub_t sub_func) {
+		// Truncate the two arguments. This is safe because we will stay in range
+		auto start_micros = TruncateForDiff(calendar, start_date, trunc_func);
+		auto end_micros = TruncateForDiff(calendar, end_date, trunc_func);
 
 		// Now use ICU difference
-		return sub_func(calendar, start_date, end_date);
+		return sub_func(calendar, start_micros, end_micros);
 	}
 
 	static part_trunc_t DiffTruncationFactory(DatePartSpecifier type) {
@@ -222,7 +231,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		const auto &enddate_arg = args.data[2];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -238,7 +247,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 				BinaryExecutor::Execute<T, T, int64_t>(
 				    startdate_arg, enddate_arg, result, [&](T start_date, T end_date) -> optional<int64_t> {
 					    if (start_date.IsFinite() && end_date.IsFinite()) {
-						    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
+						    return DifferenceFunc(calendar, start_date, end_date, trunc_func, sub_func);
 					    } else {
 						    return nullopt;
 					    }
@@ -252,7 +261,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 					    const auto part = GetDatePartSpecifier(specifier.GetString());
 					    auto trunc_func = DiffTruncationFactory(part);
 					    auto sub_func = SubtractFactory(part);
-					    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
+					    return DifferenceFunc(calendar, start_date, end_date, trunc_func, sub_func);
 				    } else {
 					    return nullopt;
 				    }
@@ -265,9 +274,10 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, Bind);
 	}
 
-	static void AddFunctions(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunctions(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(GetFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetFunction<timestamp_tz_ns_t>(LogicalType::TIMESTAMP_TZ_NS));
 		set.SetArgProperties(1, ArgProperties().NonIncreasing());
 		set.SetArgProperties(2, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);

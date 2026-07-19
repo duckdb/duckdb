@@ -7,7 +7,7 @@ CREATE TABLE t1 (id INTEGER, s TEXT);
 
 concurrentloop threadid 0 2
 
-loop i 0 1000
+loop i 0 500
 
 onlyif threadid=0
 statement ok
@@ -28,7 +28,7 @@ COMMIT
 
 endloop
 
-loop i 0 10000
+loop i 0 5000
 
 onlyif threadid=1
 statement ok

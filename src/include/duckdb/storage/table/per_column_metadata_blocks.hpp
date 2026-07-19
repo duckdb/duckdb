@@ -34,6 +34,8 @@ public:
 	void AddColumn(idx_t col_idx, const vector<idx_t> &blocks);
 	//! Remove a column entry and all its block IDs (linear scan)
 	void RemoveColumn(idx_t col_idx);
+	//! Merge two PerColumnMetadataBlocks sorted by column index with disjoint column sets
+	static PerColumnMetadataBlocks Merge(const PerColumnMetadataBlocks &a, const PerColumnMetadataBlocks &b);
 
 	//! Iterate over all block IDs, passing (column_index, block_id) to the callback
 	template <typename Func>

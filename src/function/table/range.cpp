@@ -148,7 +148,6 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 		}
 		if (state.empty_range) {
 			// empty range
-			output.SetCardinality(0);
 			state.current_input_row++;
 			state.initialized_row = false;
 			return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -170,7 +169,6 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 		output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment), remaining);
 		// increment the index pointer by the remaining count
 		state.current_idx += remaining;
-		output.SetCardinality(remaining);
 		if (remaining == 0) {
 			// move to next row
 			state.current_input_row++;
@@ -282,6 +280,14 @@ template <bool GENERATE_SERIES>
 static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, RangeDateTimeLocalState &result) {
 	input.Flatten();
 
+	// The local state is reused for every input row, so empty_range must be reset
+	// here. Without this it is only ever set to true and never back to false, so
+	// once ONE row produces an empty range every subsequent row is treated as
+	// empty and silently emits nothing. The integer overload
+	// (GenerateRangeParameters) already resets it, which is why only the
+	// timestamp overload was affected.
+	result.empty_range = false;
+
 	for (idx_t c = 0; c < input.ColumnCount(); c++) {
 		if (FlatVector::IsNull(input.data[c], row_id)) {
 			result.start = timestamp_t(0);
@@ -348,7 +354,6 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 		}
 		if (state.empty_range) {
 			// empty range
-			output.SetCardinality(0);
 			state.current_input_row++;
 			state.initialized_row = false;
 			return OperatorResultType::HAVE_MORE_OUTPUT;

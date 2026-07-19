@@ -1,0 +1,125 @@
+# name: test/sql/order/test_order_by_non_ordinal_literal.test
+# description: Non-ordinal literal validation (ORDER BY, DISTINCT ON, UNION)
+# group: [order]
+
+statement ok
+CREATE TABLE t (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t VALUES (11, 22), (12, 21), (13, 22);
+
+# integer ordinals still work (ORDER BY 1 is a column index, not a literal rejection)
+query II
+SELECT a, b FROM t ORDER BY 1, 2
+----
+11	22
+12	21
+13	22
+
+# ---------------------------------------------------------------------------
+# Query ORDER BY: non-ordinal literals are rejected by default
+# ---------------------------------------------------------------------------
+
+statement error
+SELECT a FROM t ORDER BY NULL, a
+----
+ORDER BY non-integer literal has no effect
+
+statement error
+SELECT a FROM t ORDER BY true, a
+----
+ORDER BY non-integer literal has no effect
+
+statement error
+SELECT a FROM t ORDER BY false, a
+----
+ORDER BY non-integer literal has no effect
+
+# ---------------------------------------------------------------------------
+# User-written casts: not treated as non-ordinal literals (pre-existing behavior)
+# Bare 'hello' / true are rejected; CAST(...) forms are still bound as sort keys.
+# ---------------------------------------------------------------------------
+
+statement ok
+SELECT a FROM t ORDER BY CAST('a' AS VARCHAR), a
+
+statement ok
+SELECT a FROM t ORDER BY CAST('t' AS BOOLEAN), a
+
+statement ok
+SELECT a FROM t ORDER BY CAST('yes' AS BOOLEAN), a
+
+# ---------------------------------------------------------------------------
+# UNION ORDER BY: same validation via OrderBinder
+# ---------------------------------------------------------------------------
+
+statement error
+SELECT a FROM t UNION SELECT b FROM t ORDER BY true
+----
+ORDER BY non-integer literal has no effect
+
+statement error
+SELECT a FROM t UNION SELECT b FROM t ORDER BY false
+----
+ORDER BY non-integer literal has no effect
+
+statement error
+SELECT a AS k FROM t UNION SELECT a AS k FROM t ORDER BY true, k
+----
+ORDER BY non-integer literal has no effect
+
+# ---------------------------------------------------------------------------
+# DISTINCT ON: distinct targets use OrderBinder with DISTINCT ON error prefix
+# ---------------------------------------------------------------------------
+
+statement error
+SELECT DISTINCT ON (true) a, b FROM t ORDER BY a, b
+----
+DISTINCT ON non-integer literal has no effect
+
+statement error
+SELECT DISTINCT ON (false) a, b FROM t ORDER BY a, b
+----
+DISTINCT ON non-integer literal has no effect
+
+# ORDER BY clause in a DISTINCT ON query is validated separately
+statement error
+SELECT DISTINCT ON (a) a, b FROM t ORDER BY true, a
+----
+ORDER BY non-integer literal has no effect
+
+# ---------------------------------------------------------------------------
+# With order_by_non_integer_literal=true: literals are allowed and skipped
+# ---------------------------------------------------------------------------
+
+statement ok
+SET order_by_non_integer_literal=true
+
+query I
+SELECT a FROM t ORDER BY true, a
+----
+11
+12
+13
+
+query I
+SELECT a FROM t ORDER BY false, a
+----
+11
+12
+13
+
+query I
+SELECT a AS k FROM t UNION SELECT a AS k FROM t ORDER BY true, k
+----
+11
+12
+13
+
+query II
+SELECT DISTINCT ON (a) a, b FROM t ORDER BY true, a, b
+----
+11	22
+12	21
+13	22
+

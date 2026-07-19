@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -56,11 +57,11 @@ ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &ex
 		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 
 		// This bound column ref is for another table
-		if (table_index != bound_colref.binding.table_index) {
+		if (table_index != bound_colref.Binding().table_index) {
 			return;
 		}
 
-		auto lookup = known_column_values.find(bound_colref.binding.column_index);
+		auto lookup = known_column_values.find(bound_colref.Binding().column_index);
 		if (lookup != known_column_values.end()) {
 			auto &partition_val = lookup->second;
 			Value result_val;

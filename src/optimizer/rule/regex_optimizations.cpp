@@ -153,15 +153,15 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
                                                     bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
-	D_ASSERT(root.children.size() == 2 || root.children.size() == 3);
-	auto regexp_bind_data = root.bind_info.get()->Cast<RegexpMatchesBindData>();
+	D_ASSERT(root.GetChildrenMutable().size() == 2 || root.GetChildrenMutable().size() == 3);
+	auto regexp_bind_data = root.BindInfo().get()->Cast<RegexpMatchesBindData>();
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr.GetReturnType());
 
 	duckdb_re2::RE2::Options parsed_options = regexp_bind_data.options;
 
-	if (constant_expr.value.IsNull()) {
+	if (constant_expr.GetValue().IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 	}
 	auto patt_str = StringValue::Get(constant_value);
@@ -188,15 +188,15 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		}
 
 		// if regexp had options, remove them so the new Contains Expression can be matched for other optimizers.
-		if (root.children.size() == 3) {
-			root.children.pop_back();
-			D_ASSERT(root.children.size() == 2);
+		if (root.GetChildrenMutable().size() == 3) {
+			root.GetChildrenMutable().pop_back();
+			D_ASSERT(root.GetChildrenMutable().size() == 2);
 		}
 
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
-		auto contains = GetStringContains().Bind(GetContext(), std::move(root.children));
+		auto contains = GetStringContains().Bind(GetContext(), std::move(root.GetChildrenMutable()));
 
-		contains->children[1] = std::move(parameter);
+		contains->GetChildrenMutable()[1] = std::move(parameter);
 
 		return std::move(contains);
 	} else if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
@@ -210,18 +210,18 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	}
 
 	// if regexp had options, remove them so the new Like Expression can be matched for other optimizers.
-	if (root.children.size() == 3) {
-		root.children.pop_back();
-		D_ASSERT(root.children.size() == 2);
+	if (root.GetChildrenMutable().size() == 3) {
+		root.GetChildrenMutable().pop_back();
+		D_ASSERT(root.GetChildrenMutable().size() == 2);
 	}
 
-	auto like_expression = LikeFun::GetFunction().Bind(GetContext(), std::move(root.children));
+	auto like_expression = LikeFun::GetFunction().Bind(GetContext(), std::move(root.GetChildrenMutable()));
 
 	// Clear the bind info, as the LikeFun bind info is not valid for this new expression.
-	like_expression->bind_info.reset();
+	like_expression->BindInfoMutable().reset();
 
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
-	like_expression->children[1] = std::move(parameter);
+	like_expression->GetChildrenMutable()[1] = std::move(parameter);
 	return std::move(like_expression);
 }
 
@@ -250,10 +250,10 @@ static bool RegexpHasWholeTextAnchors(duckdb_re2::Regexp *regexp) {
 unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                        bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
-	if (!root.bind_info) {
+	if (!root.BindInfo()) {
 		return nullptr;
 	}
-	auto &bind_data = root.bind_info->Cast<RegexpReplaceBindData>();
+	auto &bind_data = root.BindInfo()->Cast<RegexpReplaceBindData>();
 	if (!bind_data.constant_pattern || bind_data.global_replace) {
 		return nullptr;
 	}
@@ -263,10 +263,10 @@ unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vect
 	}
 
 	const auto &replace_const = bindings[3].get().Cast<BoundConstantExpression>();
-	if (replace_const.value.IsNull() || replace_const.value.type().id() != LogicalTypeId::VARCHAR) {
+	if (replace_const.GetValue().IsNull() || replace_const.GetValue().type().id() != LogicalTypeId::VARCHAR) {
 		return nullptr;
 	}
-	const auto &replace_str = StringValue::Get(replace_const.value);
+	const auto &replace_str = StringValue::Get(replace_const.GetValue());
 	int32_t group_index;
 	// Only a bare backreference can be represented by regexp_extract. Replacement literals or
 	// composites such as `x\1`, `\1x`, and `\1\2` must stay on regexp_replace.
@@ -282,23 +282,24 @@ unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vect
 	}
 
 	string options_str = "k";
-	if (root.children.size() == 4) {
-		auto &options_const = root.children[3]->Cast<BoundConstantExpression>();
-		if (options_const.value.IsNull() || options_const.value.type().id() != LogicalTypeId::VARCHAR) {
+	if (root.GetChildrenMutable().size() == 4) {
+		auto &options_const = root.GetChildrenMutable()[3]->Cast<BoundConstantExpression>();
+		if (options_const.GetValue().IsNull() || options_const.GetValue().type().id() != LogicalTypeId::VARCHAR) {
 			return nullptr;
 		}
-		options_str = StringValue::Get(options_const.value) + options_str;
+		options_str = StringValue::Get(options_const.GetValue()) + options_str;
 	}
 
 	vector<unique_ptr<Expression>> extract_children;
-	extract_children.emplace_back(std::move(root.children[0]));
+	extract_children.emplace_back(std::move(root.GetChildrenMutable()[0]));
 	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(pattern)));
 	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value::INTEGER(group_index)));
 	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(std::move(options_str))));
 
 	FunctionBinder binder(rewriter.context);
 	ErrorData error;
-	auto extract_expr = binder.BindScalarFunction(DEFAULT_SCHEMA, "regexp_extract", std::move(extract_children), error);
+	auto extract_expr =
+	    binder.BindScalarFunction(Identifier::DefaultSchema(), "regexp_extract", std::move(extract_children), error);
 	if (!extract_expr) {
 		return nullptr;
 	}

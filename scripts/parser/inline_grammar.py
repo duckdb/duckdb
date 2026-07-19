@@ -9,7 +9,7 @@ statements_dir = peg_dir / 'grammar' / 'statements'
 keywords_dir = peg_dir / 'grammar' / 'keywords'
 target_file = scripts_dir.parent / 'src' / 'include' / 'duckdb' / 'parser' / 'peg' / 'inlined_grammar.hpp'
 
-IMPLICIT_RULES = {'%whitespace'}
+IMPLICIT_RULES = {'%whitespace', 'EndOfInput'}
 
 # Maps filenames to string categories.
 # typefunc_keyword_map is the union of type name and func name keywords.
@@ -299,6 +299,9 @@ def check_undefined_rules(all_rules):
         for ref in rule.references():
             if ref in rule.parameters:
                 continue
+            if ref in IMPLICIT_RULES:
+                # Rule is provided at runtime via MatcherFactory::AddRuleOverride.
+                continue
             if ref not in all_rules:
                 print(f"Error: rule '{rule_name}' references undefined rule '{ref}'")
                 found = True
@@ -323,7 +326,7 @@ def load_all_rules():
     contents = ""
     rules = {}
 
-    for filepath in keywords_dir.iterdir():
+    for filepath in sorted(keywords_dir.iterdir()):
         if filepath.name not in FILENAME_TO_CATEGORY:
             continue
         category = FILENAME_TO_CATEGORY[filepath.name]
@@ -351,7 +354,7 @@ def load_all_rules():
             raise Exception(f"common.gram: {e}") from None
         contents += file_content + "\n"
 
-    for filepath in keywords_dir.iterdir():
+    for filepath in sorted(keywords_dir.iterdir()):
         if filepath.suffix != '.list':
             continue
         rule_name = filename_to_upper_camel(filepath)
@@ -362,7 +365,7 @@ def load_all_rules():
         contents += rule
         update_rules(rules, parse_peg_grammar(rule), filepath.name)
 
-    for filepath in statements_dir.iterdir():
+    for filepath in sorted(statements_dir.iterdir()):
         if filepath.suffix != '.gram':
             if not filepath.is_dir():
                 raise Exception(f"File {filepath.name} does not end with .gram")

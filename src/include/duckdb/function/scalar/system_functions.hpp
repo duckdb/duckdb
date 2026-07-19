@@ -22,7 +22,7 @@ struct FinalizeFun {
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunctionSet GetFunctions();
+	static ScalarFunction GetFunction();
 };
 
 struct CombineFun {
@@ -30,6 +30,16 @@ struct CombineFun {
 	static constexpr const char *Parameters = "col0,col1";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ToAggregateStateFun {
+	static constexpr const char *Name = "to_aggregate_state";
+	static constexpr const char *Parameters = "data,name,signature";
+	static constexpr const char *Description = "Converts a value into the aggregate state of the aggregate function with the given name and signature. The type of the value must exactly match the state layout of the aggregate function. An optional fourth argument supplies constant parameter values (e.g. string_agg's separator) as a list with one entry per argument, using NULL for arguments that are not bound to a constant.";
+	static constexpr const char *Example = "to_aggregate_state({'count': 1, 'value': 42.0}, 'avg', ['DOUBLE'])";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();

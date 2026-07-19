@@ -1,0 +1,4 @@
+{
+  "description": "Run tests with the trampoline-style PEG transformer backend enabled",
+  "on_init": "SET debug_transformer_trampoline_style=true;"
+}

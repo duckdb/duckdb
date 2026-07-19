@@ -54,7 +54,7 @@ void RegisterICUCurrentFunctions(ExtensionLoader &loader) {
 	current_date.AddFunction(GetCurrentDateFun());
 	loader.RegisterFunction(current_date);
 
-	current_date.name = "today";
+	current_date.SetName("today");
 	loader.RegisterFunction(current_date);
 }
 

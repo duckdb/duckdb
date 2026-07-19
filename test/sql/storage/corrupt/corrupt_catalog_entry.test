@@ -1,0 +1,13 @@
+# name: test/sql/storage/corrupt/corrupt_catalog_entry.test
+# description: Reject checkpoint catalog entries without create info
+# group: [corrupt]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/duckdb_fuzzer_4671.db.gz {TEST_DIR}/duckdb_fuzzer_4671.db
+
+# Regression test for duckdb-fuzzer issue #4671
+statement error
+ATTACH '{TEST_DIR}/duckdb_fuzzer_4671.db' AS corrupt_db (READ_ONLY)
+----
+corrupt database file - schema entry without create info

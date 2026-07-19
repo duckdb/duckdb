@@ -21,7 +21,6 @@ namespace duckdb {
 
 class BaseStatistics;
 class Expression;
-class PerfectHashJoinExecutor;
 class PrefixRangeFilter;
 struct DynamicFilterData;
 
@@ -60,7 +59,7 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 	}
 };
 
-enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ, PRF };
+enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX = 0, BF = 1, PRF = 3 };
 
 void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &selectivity_threshold,
                                    idx_t &n_vectors_to_check);
@@ -76,7 +75,7 @@ unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterDat
 //! Bind function that prevents user access to internal tablefilter functions
 struct TableFilterFunctions {
 	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
-	static bool IsTableFilterFunction(const string &name);
+	static bool IsTableFilterFunction(const Identifier &name);
 	static bool IsTableFilterFunction(const BoundScalarFunction &function) {
 		return IsTableFilterFunction(function.GetName());
 	}
@@ -90,6 +89,9 @@ public:
 
 	void InsertHashes(const Vector &hashes_v) const;
 	idx_t LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, idx_t count) const;
+	//! result_sel contains local positions into sel rather than source row ids.
+	idx_t LookupHashes(const Vector &hashes_v, const SelectionVector &sel, SelectionVector &result_sel,
+	                   idx_t count) const;
 
 	void InsertOne(hash_t hash) const;
 	bool LookupOne(hash_t hash) const;
@@ -99,6 +101,8 @@ public:
 	bool IsInitialized() const {
 		return initialized;
 	}
+
+	static idx_t GetNumberOfSectors(idx_t number_of_rows);
 
 private:
 	idx_t num_sectors;
@@ -126,20 +130,6 @@ struct BloomFilterFunctionData : public FunctionData {
 	bool Equals(const FunctionData &other) const override;
 };
 
-//! FunctionData for perfect hash join internal function
-struct PerfectHashJoinFunctionData : public FunctionData {
-	PerfectHashJoinFunctionData(optional_ptr<const PerfectHashJoinExecutor> executor_p, const string &key_column_name_p,
-	                            float selectivity_threshold_p, idx_t n_vectors_to_check_p);
-
-	optional_ptr<const PerfectHashJoinExecutor> executor;
-	string key_column_name;
-	float selectivity_threshold;
-	idx_t n_vectors_to_check;
-
-	unique_ptr<FunctionData> Copy() const override;
-	bool Equals(const FunctionData &other) const override;
-};
-
 //! Runtime prefix-range filter state used by join pushdown and internal tablefilter functions.
 class PrefixRangeFilter {
 public:
@@ -159,11 +149,14 @@ public:
 	};
 
 	virtual ~PrefixRangeFilter() = default;
-	virtual void Initialize(ClientContext &context, idx_t number_of_rows, Value min, Value max) = 0;
+	virtual void Initialize(ClientContext &context, idx_t number_of_rows, Value min, Value max, idx_t max_bits) = 0;
 	virtual unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const = 0;
 	virtual void InsertKeys(Vector &keys, BuildState &state) const = 0;
 	virtual void MergeBuildState(BuildState &state) = 0;
 	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
+	//! result_sel contains local positions into sel rather than source row ids.
+	virtual idx_t LookupKeys(Vector &keys, const SelectionVector &sel, SelectionVector &result_sel,
+	                         idx_t count) const = 0;
 	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
 	virtual bool IsInitialized() const = 0;
 	static bool SupportedType(const LogicalType &type);
@@ -244,15 +237,6 @@ struct SelectivityOptionalFilterFunctionData : public FunctionData {
 struct BloomFilterScalarFun : public TableFilterBloomFilterFun {
 	using TableFilterBloomFilterFun::GetFunction;
 	static constexpr const char *NAME = TableFilterBloomFilterFun::Name;
-	static ScalarFunction GetFunction(const LogicalType &input_type);
-	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
-	static string ToString(const string &column_name, const string &key_column_name);
-};
-
-//! Factory for perfect hash join internal function
-struct PerfectHashJoinScalarFun : public TableFilterPerfectHashJoinFun {
-	using TableFilterPerfectHashJoinFun::GetFunction;
-	static constexpr const char *NAME = TableFilterPerfectHashJoinFun::Name;
 	static ScalarFunction GetFunction(const LogicalType &input_type);
 	static FilterPropagateResult FilterPrune(const FunctionStatisticsPruneInput &input);
 	static string ToString(const string &column_name, const string &key_column_name);

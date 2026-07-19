@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
+#include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,8 @@ public:
 	idx_t GetRowCount(ScanOptions options, idx_t count);
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
-	bool Fetch(TransactionData transaction, idx_t row);
+	//! Bulk visibility check. Returns the number of visible rows.
+	idx_t GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
 
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);
 	void CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count);
@@ -41,6 +43,8 @@ public:
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 	bool HasUnserializedChanges();
+	bool HasDeletes();
+	bool HasUncommittedChanges();
 	vector<MetaBlockPointer> GetStoragePointers();
 
 private:

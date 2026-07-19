@@ -28,8 +28,11 @@ static tokenType convertToken(TokenType token_type) {
 		return tokenType::TOKEN_KEYWORD;
 	case TokenType::COMMENT:
 		return tokenType::TOKEN_COMMENT;
-	case TokenType::ERROR:
+	case TokenType::TOKEN_ERROR:
 		return tokenType::TOKEN_ERROR;
+	case TokenType::END_OF_INPUT:
+	case TokenType::END_OF_INPUT_AUTOCOMPLETE:
+		return tokenType::TOKEN_OPERATOR;
 	default:
 		throw duckdb::InternalException("Unrecognized token type");
 	}

@@ -204,6 +204,7 @@ public:
 
 	// Setters
 	DUCKDB_API void SetVectorType(VectorType vector_type);
+	DUCKDB_API void FlattenAndSetConstant();
 
 	// Transform vector to an equivalent dictionary vector
 	static void DebugTransformToDictionary(Vector &vector);

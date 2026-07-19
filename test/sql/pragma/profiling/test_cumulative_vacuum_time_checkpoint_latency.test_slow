@@ -51,7 +51,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/single_thread_vacuum_latency.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
+SET tracked_metrics = ['storage.total_vacuum_time', 'storage.checkpoint_latency'];
 
 statement ok
 SET profiling_coverage='ALL';
@@ -67,8 +67,8 @@ CREATE OR REPLACE TABLE single_thread_vacuum_metrics AS SELECT * FROM '{TEST_DIR
 
 query T
 SELECT CASE
-	WHEN cumulative_vacuum_time > 0 AND cumulative_vacuum_time < checkpoint_latency THEN 'true'
-	ELSE printf('single_thread vacuum=%.9f checkpoint=%.9f', cumulative_vacuum_time, checkpoint_latency)
+	WHEN storage.total_vacuum_time > 0 AND storage.total_vacuum_time < storage.checkpoint_latency THEN 'true'
+	ELSE printf('single_thread vacuum=%.9f checkpoint=%.9f', storage.total_vacuum_time, storage.checkpoint_latency)
 	END
 FROM single_thread_vacuum_metrics;
 ----

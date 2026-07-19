@@ -20,7 +20,7 @@ restart
 
 # verify no columns are loaded after restart (all lazy)
 query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', include_segment_info=true, loaded_segments_only=true)
 ----
 0
 
@@ -32,7 +32,7 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
+SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', include_segment_info=true, loaded_segments_only=true)
 ----
 c20
 
@@ -63,7 +63,7 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', include_segment_info=true, loaded_segments_only=true)
 ----
 0
 
@@ -79,7 +79,7 @@ statement ok
 UPDATE wide_tbl SET c0 = c0 + 1 WHERE c0 < 100
 
 query I
-SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
+SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', include_segment_info=true, loaded_segments_only=true)
 ----
 c0
 
@@ -121,7 +121,7 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
+SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', include_segment_info=true, loaded_segments_only=true)
 ----
 c1
 

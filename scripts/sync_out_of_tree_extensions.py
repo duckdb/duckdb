@@ -146,7 +146,13 @@ def apply_patches_as_commits(ext_dir, patch_dir, patches):
     """
     for patch_name in patches:
         patch_file = patch_dir / patch_name
-        run_cmd(['git', 'apply', '--index', str(patch_file)], cwd=ext_dir)
+        # Apply to the working tree (not --index): a patch may touch files inside a checked-out
+        # submodule (e.g. database-connector/...), and "git apply --index" cannot stage paths that
+        # live in a submodule ("does not exist in index"). We stage everything explicitly afterwards.
+        # --whitespace=nowarn: never rewrite patch content; --whitespace=fix corrupts
+        # patches that themselves add patch files containing trailing whitespace.
+        run_cmd(['git', 'apply', '--whitespace=nowarn', str(patch_file)], cwd=ext_dir)
+        run_cmd(['git', 'add', '-A'], cwd=ext_dir)
         run_cmd(
             [
                 'git',
@@ -198,7 +204,8 @@ def export_commits_as_patches(name, ext_dir, resolved_git_tag, patch_dir):
     status = run_cmd(['git', 'status', '--porcelain'], cwd=ext_dir)
     if status.stdout.strip():
         raise ExtensionNotCleanError(
-            f"Extension '{name}' has uncommitted changes; cannot export patches:\n" f"{status.stdout.rstrip()}"
+            f"Extension '{name}' has uncommitted changes; cannot export patches, please commit or discard and try again:\n"
+            f"{status.stdout.rstrip()}"
         )
 
     log = run_cmd(['git', 'log', '--format=%H %s', f'{resolved_git_tag}..HEAD'], cwd=ext_dir)
@@ -220,8 +227,12 @@ def export_commits_as_patches(name, ext_dir, resolved_git_tag, patch_dir):
 
     patch_dir.mkdir(parents=True, exist_ok=True)
     for commit_hash, msg in commits:
-        patch_content = run_cmd(['git', 'diff', f'{commit_hash}^', commit_hash], cwd=ext_dir).stdout
-        (patch_dir / msg).write_text(patch_content, encoding='utf-8')
+        # Capture raw bytes: text-mode capture would translate CRLF line endings
+        # in the diff to LF, corrupting patches that touch CRLF files.
+        diff_proc = subprocess.run(
+            ['git', 'diff', f'{commit_hash}^', commit_hash], cwd=ext_dir, capture_output=True, check=True
+        )
+        (patch_dir / msg).write_bytes(diff_proc.stdout)
         print(f"    Exported: {msg}")
 
     print(f"  {name}: wrote {len(commits)} patch(es) to .github/patches/extensions/{name}/")
@@ -304,7 +315,9 @@ def sync_extension(ext, external_dir, repo_root):
         run_cmd(['git', 'checkout', git_tag], cwd=ext_dir)
 
         if submodules:
-            run_cmd(['git', 'submodule', 'update', '--init', '--'] + submodules, cwd=ext_dir)
+            # --force so a submodule with a dirty working tree (e.g. from previously applied
+            # patches) is hard-reset to its pinned commit before patches are re-applied.
+            run_cmd(['git', 'submodule', 'update', '--init', '--force', '--'] + submodules, cwd=ext_dir)
 
         if patches and not skip_patches:
             apply_patches_as_commits(ext_dir, patch_dir, patches)
@@ -353,7 +366,9 @@ def sync_extension(ext, external_dir, repo_root):
             run_cmd(['git', 'checkout', git_tag], cwd=ext_dir)
 
         if submodules:
-            run_cmd(['git', 'submodule', 'update', '--init', '--'] + submodules, cwd=ext_dir)
+            # --force so a submodule with a dirty working tree (e.g. from previously applied
+            # patches) is hard-reset to its pinned commit before patches are re-applied.
+            run_cmd(['git', 'submodule', 'update', '--init', '--force', '--'] + submodules, cwd=ext_dir)
 
         if patches:
             apply_patches_as_commits(ext_dir, patch_dir, patches)
@@ -405,10 +420,15 @@ VCPKG_REGISTRY_BASELINE = 'd485389ad737bb05a5e8afd1fbde5672b559f19e'
 VCPKG_REGISTRY_PACKAGES = ['avro-c', 'vcpkg-cmake']
 
 
-def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root, output_dir):
+def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root, output_dir, local_manifest_dirs=None):
     """
     Collect vcpkg.json files from all synced extensions, merge their dependencies
     and overlay configuration, and write the result to <output_dir>/vcpkg.json.
+
+    local_manifest_dirs lists directories of "driving" (in-tree) extensions — the
+    repos whose extension config was passed via --extension-configs. Their own
+    vcpkg.json is folded into the merge as well, since sync only clones out-of-tree
+    dependencies and would otherwise drop the driving extension's own dependencies.
 
     Overlay paths are stored as absolute paths so the manifest is valid regardless
     of which directory cmake is invoked from.
@@ -421,13 +441,16 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root, outpu
 
     openssl_version = os.environ.get('OPENSSL_VERSION_OVERRIDE', '3.6.0')
 
-    for name in synced_extension_names:
-        vcpkg_json_path = external_dir / name / 'vcpkg.json'
+    def fold_in_manifest(manifest_dir):
+        # Read <manifest_dir>/vcpkg.json (if present) into the accumulators, resolving
+        # its overlay paths relative to that directory. Returns True if it was read.
+        nonlocal found_any
+        vcpkg_json_path = manifest_dir / 'vcpkg.json'
         if not vcpkg_json_path.exists():
-            continue
+            return False
 
         found_any = True
-        ext_dir = (external_dir / name).resolve()
+        base_dir = manifest_dir.resolve()
 
         with open(vcpkg_json_path, encoding='utf-8') as f:
             data = json.load(f)
@@ -440,9 +463,16 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root, outpu
 
         config = data.get('vcpkg-configuration', {})
         for rel_path in config.get('overlay-ports', []):
-            overlay_ports.append(str((ext_dir / rel_path).resolve()))
+            overlay_ports.append(str((base_dir / rel_path).resolve()))
         for rel_path in config.get('overlay-triplets', []):
-            overlay_triplets.append(str((ext_dir / rel_path).resolve()))
+            overlay_triplets.append(str((base_dir / rel_path).resolve()))
+        return True
+
+    for name in synced_extension_names:
+        fold_in_manifest(external_dir / name)
+
+    for manifest_dir in local_manifest_dirs or []:
+        fold_in_manifest(Path(manifest_dir))
 
     out_path = output_dir / 'vcpkg.json'
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -458,10 +488,11 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root, outpu
         return
 
     if not os.environ.get('VCPKG_TOOLCHAIN_PATH'):
-        extensions_with_vcpkg = [n for n in synced_extension_names if (external_dir / n / 'vcpkg.json').exists()]
+        sources_with_vcpkg = [n for n in synced_extension_names if (external_dir / n / 'vcpkg.json').exists()]
+        sources_with_vcpkg += [str(d) for d in (local_manifest_dirs or []) if (Path(d) / 'vcpkg.json').exists()]
         print(
             f"ERROR: the following extensions have vcpkg dependencies but VCPKG_TOOLCHAIN_PATH is not set: "
-            f"{', '.join(extensions_with_vcpkg)}",
+            f"{', '.join(sources_with_vcpkg)}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -478,6 +509,10 @@ def merge_vcpkg_manifests(synced_extension_names, external_dir, repo_root, outpu
         if dep not in seen:
             final_deps.append(dep)
             seen.add(dep)
+
+    # Deduplicate overlay paths (local and out-of-tree extensions may share one)
+    overlay_ports = list(dict.fromkeys(overlay_ports))
+    overlay_triplets = list(dict.fromkeys(overlay_triplets))
 
     manifest = {
         'description': "Auto-generated vcpkg.json for combined DuckDB extension build, generated by 'scripts/sync_out_of_tree_extensions.py'",
@@ -527,6 +562,20 @@ def main():
 
     extensions = collect_extensions(repo_root, args.build_extensions, args.extension_configs)
 
+    # The directory of each --extension-configs file is the driving extension's repo
+    # root; fold its own vcpkg.json (if any) into the merged manifest so the driving
+    # extension's dependencies are installed alongside the out-of-tree ones.
+    local_manifest_dirs = []
+    raw_extension_configs = args.extension_configs or os.environ.get('EXTENSION_CONFIGS') or ''
+    for config_path_str in re.split(r'[;]+', raw_extension_configs):
+        config_path_str = config_path_str.strip()
+        if not config_path_str:
+            continue
+        full_path = Path(config_path_str) if os.path.isabs(config_path_str) else repo_root / config_path_str
+        manifest_dir = full_path.parent.resolve()
+        if (manifest_dir / 'vcpkg.json').exists() and manifest_dir not in local_manifest_dirs:
+            local_manifest_dirs.append(manifest_dir)
+
     if not extensions:
         print("No out-of-tree extensions to sync.")
     else:
@@ -542,7 +591,7 @@ def main():
     # VCPKG_MANIFEST_DIR can be set unconditionally in the Makefile.  When no
     # extensions need vcpkg the file contains an empty dependency list and
     # CMake/vcpkg will install nothing.
-    merge_vcpkg_manifests(list(extensions.keys()), external_dir, repo_root, output_dir)
+    merge_vcpkg_manifests(list(extensions.keys()), external_dir, repo_root, output_dir, local_manifest_dirs)
 
     print("Sync complete.")
 

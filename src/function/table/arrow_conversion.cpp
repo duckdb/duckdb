@@ -11,8 +11,6 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/table/arrow.hpp"
 
 #include "duckdb/common/bswap.hpp"
@@ -430,7 +428,7 @@ static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			// dtime_ns_t.micros actually holds nanos (!)
-			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].value)) {
 				throw ConversionException("Could not convert TimeNS to Nanoseconds");
 			}
 		}
@@ -440,7 +438,7 @@ static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 				continue;
 			}
 			// dtime_ns_t.micros actually holds nanos (!)
-			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].value)) {
 				throw ConversionException("Could not convert TimeNS to Nanoseconds");
 			}
 		}
@@ -992,7 +990,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			auto src_ptr = ArrowBufferData<int64_t>(array, 1) +
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
 			for (idx_t row = 0; row < size; row++) {
-				tgt_ptr[row].micros = src_ptr[row] / 1000;
+				tgt_ptr[row].value = src_ptr[row] / 1000;
 			}
 			break;
 		}
@@ -1182,7 +1180,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		ArrowToDuckDBMapVerify(vector, size);
 		break;
 	}
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		//! Fill the children
 		auto &struct_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
 		auto &child_entries = StructVector::GetEntries(vector);
@@ -1459,7 +1458,11 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		default:
 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
 		};
-		// the dictionary buffer holds dict_length entries plus one trailing NULL sentinel slot
+		// the dictionary buffer holds dict_length entries plus one trailing NULL sentinel slot.
+		// the inner ColumnArrowToDuckDB call may have replaced the buffer via FlatVector::SetData
+		// (e.g. DirectConversion's zero-copy path), shrinking capacity from dict_length+1 to
+		// dict_length. Re-extend before sizing so the sentinel slot stays in bounds.
+		base_vector->Reserve(dict_length + 1);
 		FlatVector::SetSize(*base_vector, count_t(dict_length + 1));
 		array_state.AddDictionary(std::move(base_vector), array.dictionary);
 	}
@@ -1471,8 +1474,11 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 
 	SelectionVector sel;
 	if (has_nulls) {
-		ValidityMask indices_validity;
-		GetValidityMask(indices_validity, array, chunk_offset, size, NumericCast<int64_t>(parent_offset));
+		// size may exceed STANDARD_VECTOR_SIZE, so the scratch mask must be sized for it.
+		ValidityMask indices_validity(size);
+		// validity must be read from the same effective offset as the indices
+		GetValidityMask(indices_validity, array, chunk_offset, size, NumericCast<int64_t>(parent_offset),
+		                nested_offset);
 		if (parent_mask && parent_mask->CanHaveNull()) {
 			auto &struct_validity_mask = *parent_mask;
 			for (idx_t i = 0; i < size; i++) {

@@ -58,6 +58,8 @@ static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
 	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
 }
 
+//! Throw a ParserException if `query` contains invalid UTF-8, so the tokenizer never reads past
+//! bad bytes (a bad-byte query can otherwise recurse the tokenizer — see ossfuzz clusterfuzz-test-24).
 static void ValidateUTF8Query(const string &query) {
 	UnicodeInvalidReason reason = UnicodeInvalidReason::INVALID_UNICODE;
 	size_t invalid_pos = 0;
@@ -220,15 +222,18 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 	}
 }
 
-void Parser::ParseQuery(const string &query) {
+string Parser::NormalizeSQLString(const string &query) {
+	// Validate before strip: StripUnicodeSpaces walks multi-byte sequences and assumes valid UTF-8.
 	ValidateUTF8Query(query);
-	{
-		string new_query;
-		if (StripUnicodeSpaces(query, new_query)) {
-			ParseQuery(new_query);
-			return;
-		}
+	string normalized;
+	if (StripUnicodeSpaces(query, normalized)) {
+		return normalized;
 	}
+	return query;
+}
+
+void Parser::ParseQuery(const string &query_p) {
+	const string query = NormalizeSQLString(query_p);
 	if (options.extensions) {
 		bool has_strict_extension_error = false;
 		ErrorData last_strict_extension_error;
@@ -258,45 +263,25 @@ void Parser::ParseQuery(const string &query) {
 			last_strict_extension_error.Throw();
 		}
 	}
-	// PEG parser: tokenize then transform
-	auto &cache = GetCache();
-	auto peg_matcher = cache.GetMatcher();
-	auto peg_factory = cache.GetTransformerFactory();
-
+	// PEG parser: tokenize, then peel one TopLevelStatement at a time. On per-statement PEG
+	// failure, hand the rest of the query to parse_function extensions; the extension reports
+	// how many bytes it consumed and we advance the token cursor past them.
 	vector<MatcherToken> tokens;
 	ParserTokenizer tokenizer(query, tokens);
 	tokenizer.TokenizeInput();
-	if (!tokens.empty()) {
+	idx_t token_cursor = 0;
+	while (token_cursor < tokens.size()) {
 		try {
-			auto peg_statements = peg_factory->Transform(tokens, options, peg_matcher->Root());
-			for (auto &stmt : peg_statements) {
+			auto stmt = ParseTopLevelStatement(tokens, token_cursor);
+			if (stmt) {
 				statements.push_back(std::move(stmt));
 			}
 		} catch (ParserException &e) {
-			// fall back to parse_function extensions for unknown statement types
-			bool parsed = false;
-			if (options.extensions && options.extensions->HasParserExtensions()) {
-				for (auto &ext : options.extensions->ParserExtensions()) {
-					if (!ext.parse_function) {
-						continue;
-					}
-					auto result = ext.parse_function(ext.parser_info.get(), query);
-					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
-						auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-						estmt->stmt_location = 0;
-						estmt->stmt_length = query.size();
-						statements.push_back(std::move(estmt));
-						parsed = true;
-						break;
-					}
-					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-						throw ParserException::SyntaxError(query, result.error, result.error_location);
-					}
-				}
-			}
-			if (!parsed) {
+			auto ext_stmt = TryParseExtensionStatement(tokens, token_cursor, query);
+			if (!ext_stmt) {
 				throw;
 			}
+			statements.push_back(std::move(ext_stmt));
 		}
 	}
 
@@ -315,6 +300,64 @@ void Parser::ParseQuery(const string &query) {
 			}
 		}
 	}
+}
+
+unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(vector<MatcherToken> &tokens, idx_t &token_cursor,
+                                                            const string &query) {
+	if (!options.extensions || !options.extensions->HasParserExtensions()) {
+		return nullptr;
+	}
+	idx_t failure_byte = token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
+	// SimpleToken view of the tail: text + classified type, in source order, so extensions can
+	// dispatch on the token stream without re-tokenizing. The extension reports how many of these
+	// tokens it consumed.
+	vector<SimpleToken> simple_tokens;
+	simple_tokens.reserve(tokens.size() - token_cursor);
+	for (idx_t i = token_cursor; i < tokens.size(); i++) {
+		simple_tokens.emplace_back(tokens[i].text, tokens[i].type);
+	}
+	for (auto &ext : options.extensions->ParserExtensions()) {
+		if (!ext.parse_function) {
+			continue;
+		}
+		auto result = ext.parse_function(ext.parser_info.get(), simple_tokens);
+		if (result.consumed_tokens < 0) {
+			// The extension wants to surface an error.
+			throw ParserException::SyntaxError(query, result.error, result.error_location);
+		}
+		if (result.consumed_tokens == 0) {
+			// The extension ran but did not claim this input — let the next one try.
+			continue;
+		}
+		// consumed_tokens > 0: the extension accepted that many leading tokens.
+		auto consumed = NumericCast<idx_t>(result.consumed_tokens);
+		if (consumed > simple_tokens.size()) {
+			throw ParserException("Extension returned consumed_tokens=%llu — only %llu tokens are available",
+			                      (uint64_t)consumed, (uint64_t)simple_tokens.size());
+		}
+		// The claimed span runs from the failure point to the end of the last consumed token;
+		// advancing the cursor by consumed_tokens lands on a token boundary.
+		auto &last_token = tokens[token_cursor + consumed - 1];
+		const idx_t span_end_byte = last_token.offset + last_token.length;
+		auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
+		estmt->stmt_location = failure_byte;
+		estmt->stmt_length = span_end_byte - failure_byte;
+		token_cursor += consumed;
+		return std::move(estmt);
+	}
+	return nullptr;
+}
+
+unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(vector<MatcherToken> &tokens, idx_t &token_cursor) {
+	if (token_cursor >= tokens.size()) {
+		return nullptr;
+	}
+	auto &cache = GetCache();
+	auto peg_matcher = cache.GetMatcher();
+	auto peg_factory = cache.GetTransformerFactory();
+
+	return peg_factory->TransformTopLevelStatement(tokens, options, peg_matcher->TopLevelStatementMatcher(),
+	                                               token_cursor);
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
@@ -592,7 +635,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 	return std::move(order.orders);
 }
 
-void Parser::ParseUpdateList(const string &update_list, vector<string> &update_columns,
+void Parser::ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
                              vector<unique_ptr<ParsedExpression>> &expressions, ParserOptions options) {
 	// construct a mock query
 	string mock_query = "UPDATE tbl SET " + update_list;
@@ -604,7 +647,7 @@ void Parser::ParseUpdateList(const string &update_list, vector<string> &update_c
 		throw ParserException("Expected a single UPDATE statement");
 	}
 	auto &update = parser.statements[0]->Cast<UpdateStatement>();
-	update_columns = std::move(update.node->set_info->columns);
+	update_columns = update.node->set_info->columns;
 	expressions = std::move(update.node->set_info->expressions);
 }
 

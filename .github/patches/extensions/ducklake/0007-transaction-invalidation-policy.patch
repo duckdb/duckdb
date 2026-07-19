@@ -1,5 +1,5 @@
 diff --git a/src/storage/ducklake_transaction.cpp b/src/storage/ducklake_transaction.cpp
-index 1187022e..04bbae66 100644
+index 2ce7ae24..dbc7fa53 100644
 --- a/src/storage/ducklake_transaction.cpp
 +++ b/src/storage/ducklake_transaction.cpp
 @@ -730,6 +730,7 @@ Connection &DuckLakeTransaction::GetConnection() {

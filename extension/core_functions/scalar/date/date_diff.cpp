@@ -4,7 +4,6 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 
@@ -284,27 +283,27 @@ int64_t DateDiff::ISOYearOperator::Operation(dtime_t startdate, dtime_t enddate)
 
 template <>
 int64_t DateDiff::MicrosecondsOperator::Operation(dtime_t startdate, dtime_t enddate) {
-	return enddate.micros - startdate.micros;
+	return enddate.value - startdate.value;
 }
 
 template <>
 int64_t DateDiff::MillisecondsOperator::Operation(dtime_t startdate, dtime_t enddate) {
-	return enddate.micros / Interval::MICROS_PER_MSEC - startdate.micros / Interval::MICROS_PER_MSEC;
+	return enddate.value / Interval::MICROS_PER_MSEC - startdate.value / Interval::MICROS_PER_MSEC;
 }
 
 template <>
 int64_t DateDiff::SecondsOperator::Operation(dtime_t startdate, dtime_t enddate) {
-	return enddate.micros / Interval::MICROS_PER_SEC - startdate.micros / Interval::MICROS_PER_SEC;
+	return enddate.value / Interval::MICROS_PER_SEC - startdate.value / Interval::MICROS_PER_SEC;
 }
 
 template <>
 int64_t DateDiff::MinutesOperator::Operation(dtime_t startdate, dtime_t enddate) {
-	return enddate.micros / Interval::MICROS_PER_MINUTE - startdate.micros / Interval::MICROS_PER_MINUTE;
+	return enddate.value / Interval::MICROS_PER_MINUTE - startdate.value / Interval::MICROS_PER_MINUTE;
 }
 
 template <>
 int64_t DateDiff::HoursOperator::Operation(dtime_t startdate, dtime_t enddate) {
-	return enddate.micros / Interval::MICROS_PER_HOUR - startdate.micros / Interval::MICROS_PER_HOUR;
+	return enddate.value / Interval::MICROS_PER_HOUR - startdate.value / Interval::MICROS_PER_HOUR;
 }
 
 template <typename TA, typename TB, typename TR>

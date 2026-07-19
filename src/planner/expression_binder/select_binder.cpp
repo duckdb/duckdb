@@ -1,6 +1,5 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
@@ -16,7 +15,7 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 		return false;
 	}
 
-	const auto &alias_name = colref.column_names.back();
+	const auto &alias_name = colref.ColumnNames().back();
 	auto entry = node.bind_state.alias_map.find(alias_name);
 	if (entry == node.bind_state.alias_map.end()) {
 		return false;
@@ -27,7 +26,7 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 	if (alias_index >= node.bound_column_count) {
 		throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
 		                      "cannot be referenced before it is defined",
-		                      colref.column_names.back());
+		                      colref.ColumnNames().back());
 	}
 
 	if (node.bind_state.AliasHasSubquery(alias_index)) {

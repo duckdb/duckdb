@@ -68,7 +68,7 @@ unique_ptr<FunctionData> ParseLogMessageBind(BindScalarFunctionInput &input) {
 
 void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<ParseLogMessageData>();
+	const auto &info = func_expr.BindInfo()->Cast<ParseLogMessageData>();
 
 	if (info.log_type.is_structured) {
 		// TODO: allow more complex parsing operations than DefaultCast

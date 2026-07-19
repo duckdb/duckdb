@@ -26,7 +26,7 @@ unique_ptr<QueryNode> LimitRelation::GetQueryNode() {
 	return child_node;
 }
 
-string LimitRelation::GetAlias() {
+Identifier LimitRelation::GetAlias() {
 	return child->GetAlias();
 }
 

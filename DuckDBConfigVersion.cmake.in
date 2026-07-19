@@ -1,5 +1,11 @@
 set(PACKAGE_VERSION "@DUCKDB_VERSION@")
 
+# The format of DUCKDB_VERSION is either:
+#   - v1.2.3
+#   - v1.2.3-devxxxx
+# CMake won't recognize these formats. Leave "1.2.3" only.
+string(REGEX REPLACE "^v([0-9]+\\.[0-9]+\\.[0-9]+)" "\\1" PACKAGE_VERSION "${PACKAGE_VERSION}")
+
 if("${PACKAGE_VERSION}" VERSION_LESS "${PACKAGE_FIND_VERSION}")
     set(PACKAGE_VERSION_COMPATIBLE FALSE)
 else()

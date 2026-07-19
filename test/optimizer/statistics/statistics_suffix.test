@@ -1,0 +1,62 @@
+# name: test/optimizer/statistics/statistics_suffix.test
+# description: Row-group pruning for suffix predicates using string statistics
+# group: [statistics]
+
+statement ok
+CREATE TABLE suffix_constants AS
+SELECT i, CASE WHEN i < 122880 THEN 'abc' ELSE 'xyz' END AS s
+FROM range(245760) tbl(i);
+
+# Exact min/max prove the predicate false for the first row group and true for the second
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM suffix_constants WHERE suffix(s, 'z');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*) FROM suffix_constants WHERE suffix(s, 'z');
+----
+122880
+
+# Both exact row-group values prove the predicate false
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM suffix_constants WHERE suffix(s, 'q');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 2.*
+
+# Exact min/max with NULL values: false-or-NULL can be pruned, while true-or-NULL must be scanned
+statement ok
+CREATE TABLE nullable_suffix_constants AS
+SELECT i, CASE
+         WHEN i % 2 = 0 THEN NULL
+         WHEN i < 122880 THEN 'abc'
+         ELSE 'xyz'
+       END AS s
+FROM range(245760) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM nullable_suffix_constants WHERE suffix(s, 'z');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*) FROM nullable_suffix_constants WHERE suffix(s, 'z');
+----
+61440
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM nullable_suffix_constants WHERE suffix(s, 'q');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 2.*
+
+statement ok
+CREATE TABLE suffix_lengths AS
+SELECT i, CASE WHEN i < 122880 THEN 'short' ELSE repeat('x', 50) END AS s
+FROM range(245760) tbl(i);
+
+# The first row group's maximum string length is shorter than the constant suffix
+query II
+EXPLAIN ANALYZE
+SELECT sum(i) FROM suffix_lengths WHERE suffix(s, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
