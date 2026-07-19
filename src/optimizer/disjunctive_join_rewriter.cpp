@@ -1,6 +1,5 @@
 #include "duckdb/optimizer/disjunctive_join_rewriter.hpp"
 
-#include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -21,6 +20,10 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/function/scalar/operator_functions.hpp"
 
 namespace duckdb {
 
@@ -67,6 +70,10 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::OptimizeInternal(unique_ptr
 		return op;
 	}
 
+	if (!PassHeuristics(join, branches)) {
+		return op;
+	}
+
 	auto orig_bindings = join.GetColumnBindings();
 	auto orig_types = join.types;
 
@@ -75,12 +82,6 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::OptimizeInternal(unique_ptr
 
 	vector<ColumnBinding> left_orig_bindings = left_child->GetColumnBindings();
 	vector<ColumnBinding> right_orig_bindings = right_child->GetColumnBindings();
-
-	// fast path for inner join: union of joins without row-IDs
-	if (join.join_type == JoinType::INNER) {
-		return BuildInnerUnion(std::move(left_child), std::move(right_child), std::move(left_orig_bindings),
-		                       std::move(right_orig_bindings), orig_bindings, orig_types, branches);
-	}
 
 	auto left_base = InjectRowID(std::move(left_child), "left_rowid");
 	auto right_base = InjectRowID(std::move(right_child), "right_rowid");
@@ -98,13 +99,16 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::OptimizeInternal(unique_ptr
 
 	unique_ptr<LogicalOperator> epilogue;
 	switch (join.join_type) {
+	case JoinType::INNER:
+		epilogue = BuildInner(match_cte, left_cte, right_cte, left_base.rowid_col, right_base.rowid_col);
+		break;
 	case JoinType::LEFT:
 		epilogue = BuildLeft(match_cte, left_cte, right_cte, left_base.rowid_col, right_base.rowid_col);
 		break;
 	case JoinType::RIGHT:
 		epilogue = BuildRight(match_cte, left_cte, right_cte, left_base.rowid_col, right_base.rowid_col);
 		break;
-	case JoinType::OUTER: // OUTER in DuckDB maps to Full Outer Join
+	case JoinType::OUTER:
 		epilogue = BuildFull(match_cte, left_cte, right_cte, left_base.rowid_col, right_base.rowid_col);
 		break;
 	case JoinType::SEMI:
@@ -125,13 +129,15 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::OptimizeInternal(unique_ptr
 	                                             std::move(match_result.plan), std::move(epilogue),
 	                                             CTEMaterialize::CTE_MATERIALIZE_NEVER);
 
+	CTEMaterialize right_materialize =
+	    right_base.used_physical_rowid ? CTEMaterialize::CTE_MATERIALIZE_NEVER : CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 	epilogue = make_uniq<LogicalMaterializedCTE>("right_cte", right_cte.table_index, right_cte.output_types.size(),
-	                                             std::move(right_base.plan), std::move(epilogue),
-	                                             CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
+	                                             std::move(right_base.plan), std::move(epilogue), right_materialize);
 
+	CTEMaterialize left_materialize =
+	    left_base.used_physical_rowid ? CTEMaterialize::CTE_MATERIALIZE_NEVER : CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 	epilogue = make_uniq<LogicalMaterializedCTE>("left_cte", left_cte.table_index, left_cte.output_types.size(),
-	                                             std::move(left_base.plan), std::move(epilogue),
-	                                             CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
+	                                             std::move(left_base.plan), std::move(epilogue), left_materialize);
 
 	return epilogue;
 }
@@ -155,17 +161,16 @@ bool DisjunctiveJoinRewriter::ShouldRewrite(const LogicalAnyJoin &join, const un
 		return false;
 	}
 
+	if (!IsSimpleTableScan(*join.children[0]) || !IsSimpleTableScan(*join.children[1])) {
+		return false;
+	}
+
 	const Expression &expr = *join.condition;
 	if (expr.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
 		return false;
 	}
 
 	if (!FlattenOR(expr, left_tables, right_tables, out_branches)) {
-		return false;
-	}
-
-	// TODO: derive branch threshold from cardinality estimates
-	if (out_branches.size() > 8) {
 		return false;
 	}
 
@@ -224,8 +229,53 @@ bool DisjunctiveJoinRewriter::FlattenOR(const Expression &expr, const unordered_
 	return true;
 }
 
-DisjunctiveJoinRewriter::RowIDResult DisjunctiveJoinRewriter::InjectRowID(unique_ptr<LogicalOperator> child,
-                                                                          const string &alias) {
+bool DisjunctiveJoinRewriter::TryInjectPhysicalRowID(LogicalOperator &child, const string &alias,
+                                                     ColumnBinding &out_rowid_binding) {
+	if (child.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = child.Cast<LogicalGet>();
+
+		bool already_has_rowid = false;
+		idx_t existing_rowid_idx = 0;
+
+		for (idx_t i = 0; i < get.GetColumnIds().size(); i++) {
+			if (get.GetColumnIds()[i].IsRowIdColumn()) {
+				already_has_rowid = true;
+				existing_rowid_idx = i;
+				break;
+			}
+		}
+
+		if (already_has_rowid) {
+			auto bindings = get.GetColumnBindings();
+			out_rowid_binding = bindings[existing_rowid_idx];
+			return true;
+		}
+
+		get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+
+		auto updated_bindings = get.GetColumnBindings();
+		out_rowid_binding = updated_bindings[updated_bindings.size() - 1];
+		return true;
+	}
+
+	switch (child.type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		for (auto &child_op : child.children) {
+			if (TryInjectPhysicalRowID(*child_op, alias, out_rowid_binding)) {
+				return true;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+
+	return false;
+}
+
+DisjunctiveJoinRewriter::RowIDResult DisjunctiveJoinRewriter::InjectRowNumRowID(unique_ptr<LogicalOperator> child,
+                                                                                const string &alias) {
 	TableIndex win_tbl = NewTableIndex();
 
 	auto win_expr = RowNumberFun::GetFunction().Bind(context);
@@ -248,8 +298,144 @@ DisjunctiveJoinRewriter::RowIDResult DisjunctiveJoinRewriter::InjectRowID(unique
 	result.all_types.push_back(LogicalType::BIGINT);
 	result.all_bindings = child_bindings;
 	result.all_bindings.push_back(result.rowid_col);
+	result.used_physical_rowid = false;
 
 	return result;
+}
+
+DisjunctiveJoinRewriter::RowIDResult DisjunctiveJoinRewriter::InjectRowID(unique_ptr<LogicalOperator> child,
+                                                                          const string &alias) {
+	ColumnBinding physical_binding;
+
+	if (TryInjectPhysicalRowID(*child, alias, physical_binding)) {
+		RowIDResult result;
+		result.plan = std::move(child);
+		result.rowid_col = physical_binding;
+		result.all_types = result.plan->types;
+		result.all_types.push_back(LogicalType::BIGINT);
+		result.all_bindings = result.plan->GetColumnBindings();
+		result.all_bindings.push_back(physical_binding);
+		result.used_physical_rowid = true;
+		return result;
+	}
+
+	return InjectRowNumRowID(std::move(child), alias);
+}
+
+bool DisjunctiveJoinRewriter::HasPhysicalRowID(const LogicalOperator &op) const {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		for (auto &col_id : get.GetColumnIds()) {
+			if (col_id.IsRowIdColumn()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		for (const auto &child : op.children) {
+			if (HasPhysicalRowID(*child)) {
+				return true;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+
+	return false;
+}
+
+idx_t DisjunctiveJoinRewriter::GetBaseCardinality(LogicalOperator &op) const {
+	if (op.has_estimated_cardinality) {
+		return op.estimated_cardinality;
+	}
+	return op.EstimateCardinality(context);
+}
+
+idx_t DisjunctiveJoinRewriter::GetConfiguredMemoryLimit() const {
+	auto &config = DBConfig::GetConfig(context);
+	return config.options.maximum_memory;
+}
+
+double DisjunctiveJoinRewriter::ComputeMaterializationCost(vector<LogicalType> types, idx_t cardinality) {
+	if (cardinality == 0) {
+		return 0.0;
+	}
+
+	types.push_back(LogicalType::HASH);
+
+	auto tuple_layout = TupleDataLayout();
+	tuple_layout.Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	auto row_width = tuple_layout.GetRowWidth();
+
+	for (const auto &type : types) {
+		switch (type.InternalType()) {
+		case PhysicalType::VARCHAR:
+			row_width += 8;
+			break;
+		case PhysicalType::LIST:
+		case PhysicalType::ARRAY:
+			row_width += 32;
+			break;
+		default:
+			break;
+		}
+		row_width += COLUMN_COUNT_PENALTY;
+	}
+
+	row_width += 3 * sizeof(ht_entry_t);
+
+	return static_cast<double>(row_width) * static_cast<double>(cardinality);
+}
+
+bool DisjunctiveJoinRewriter::PassHeuristics(const LogicalAnyJoin &join, const vector<Branch> &branches) const {
+	auto &left_child = *join.children[0];
+	auto &right_child = *join.children[1];
+
+	const auto left_card = left_child.has_estimated_cardinality ? left_child.estimated_cardinality
+	                                                            : left_child.EstimateCardinality(context);
+	const auto right_card = right_child.has_estimated_cardinality ? right_child.estimated_cardinality
+	                                                              : right_child.EstimateCardinality(context);
+
+	if (std::min(left_card, right_card) < TINY_TABLE_ROW_THRESHOLD) {
+		return false;
+	}
+
+	LogicalGet *left_get = FindBaseTableScan(left_child);
+	LogicalGet *right_get = FindBaseTableScan(right_child);
+
+	D_ASSERT(left_get != nullptr);
+	D_ASSERT(right_get != nullptr);
+
+	RelationStats left_stats = RelationStatisticsHelper::ExtractGetStats(*left_get, context);
+	RelationStats right_stats = RelationStatisticsHelper::ExtractGetStats(*right_get, context);
+
+	bool left_has_rowid = HasPhysicalRowID(*join.children[0]);
+	bool right_has_rowid = HasPhysicalRowID(*join.children[1]);
+
+	vector<LogicalType> left_types = join.children[0]->types;
+	vector<LogicalType> right_types = join.children[1]->types;
+
+	left_types.push_back(LogicalType::BIGINT);
+	right_types.push_back(LogicalType::BIGINT);
+
+	double left_cost = left_has_rowid ? 0.0 : ComputeMaterializationCost(left_types, left_card);
+	double right_cost = right_has_rowid ? 0.0 : ComputeMaterializationCost(right_types, right_card);
+
+	idx_t estimated_match_rows = EstimateORJoinOutput(left_stats, right_stats, branches, left_card, right_card);
+
+	vector<LogicalType> match_types = {LogicalType::BIGINT, LogicalType::BIGINT};
+	double match_cost = ComputeMaterializationCost(match_types, estimated_match_rows);
+
+	double total_cost = left_cost + right_cost + match_cost;
+
+	double budget = static_cast<double>(GetConfiguredMemoryLimit()) * H2_MEMORY_FRACTION;
+
+	return total_cost <= budget;
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::MakeCTERef(const CTEInfo &cte, TableIndex ref_idx) const {
@@ -348,106 +534,6 @@ DisjunctiveJoinRewriter::BuildMatchCTE(const CTEInfo &left_cte, const CTEInfo &r
 	return result;
 }
 
-unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildInnerUnion(
-    unique_ptr<LogicalOperator> left_child, unique_ptr<LogicalOperator> right_child,
-    vector<ColumnBinding> left_orig_bindings, vector<ColumnBinding> right_orig_bindings,
-    const vector<ColumnBinding> &orig_bindings, const vector<LogicalType> &orig_types, const vector<Branch> &branches) {
-	TableIndex left_cte_idx = NewTableIndex();
-	TableIndex right_cte_idx = NewTableIndex();
-
-	CTEInfo left_cte {left_cte_idx, left_child->types, left_child->GetColumnBindings(), std::move(left_orig_bindings)};
-	CTEInfo right_cte {right_cte_idx, right_child->types, right_child->GetColumnBindings(),
-	                   std::move(right_orig_bindings)};
-
-	vector<unique_ptr<LogicalOperator>> union_children;
-	TableIndex union_tbl = NewTableIndex();
-
-	for (const auto &branch : branches) {
-		TableIndex left_ref_idx = NewTableIndex();
-		TableIndex right_ref_idx = NewTableIndex();
-		TableIndex proj_tbl = NewTableIndex();
-
-		auto left_scan = MakeCTERef(left_cte, left_ref_idx);
-		auto right_scan = MakeCTERef(right_cte, right_ref_idx);
-
-		auto left_expr = branch.left_expr->Copy();
-		auto right_expr = branch.right_expr->Copy();
-
-		// remap left expression to cte-ref bindings
-		ColumnBindingReplacer expr_replacer;
-		for (idx_t i = 0; i < left_cte.original_bindings.size(); i++) {
-			expr_replacer.replacement_bindings.emplace_back(left_cte.original_bindings[i],
-			                                                ColumnBinding(left_ref_idx, ProjectionIndex(i)),
-			                                                left_cte.output_types[i]);
-		}
-		expr_replacer.VisitExpression(&left_expr);
-
-		// remap right expression to cte-ref bindings
-		expr_replacer.replacement_bindings.clear();
-		for (idx_t i = 0; i < right_cte.original_bindings.size(); i++) {
-			expr_replacer.replacement_bindings.emplace_back(right_cte.original_bindings[i],
-			                                                ColumnBinding(right_ref_idx, ProjectionIndex(i)),
-			                                                right_cte.output_types[i]);
-		}
-		expr_replacer.VisitExpression(&right_expr);
-
-		// filter out nulls so is not null does not match
-		auto left_is_not_null =
-		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-		left_is_not_null->children.push_back(left_expr->Copy());
-
-		auto right_is_not_null =
-		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-		right_is_not_null->children.push_back(right_expr->Copy());
-
-		auto left_filter = make_uniq<LogicalFilter>();
-		left_filter->expressions.push_back(std::move(left_is_not_null));
-		left_filter->AddChild(std::move(left_scan));
-
-		auto right_filter = make_uniq<LogicalFilter>();
-		right_filter->expressions.push_back(std::move(right_is_not_null));
-		right_filter->AddChild(std::move(right_scan));
-
-		auto inner_join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-		inner_join->conditions.push_back(
-		    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL));
-		inner_join->AddChild(std::move(left_filter));
-		inner_join->AddChild(std::move(right_filter));
-
-		vector<unique_ptr<Expression>> proj_exprs;
-		proj_exprs.reserve(orig_bindings.size());
-		for (idx_t i = 0; i < left_cte.output_types.size(); i++) {
-			proj_exprs.push_back(ColRef(ColumnBinding(left_ref_idx, ProjectionIndex(i)), orig_types[i]));
-		}
-		for (idx_t i = 0; i < right_cte.output_types.size(); i++) {
-			proj_exprs.push_back(
-			    ColRef(ColumnBinding(right_ref_idx, ProjectionIndex(i)), orig_types[left_cte.output_types.size() + i]));
-		}
-
-		auto branch_proj = make_uniq<LogicalProjection>(proj_tbl, std::move(proj_exprs));
-		branch_proj->AddChild(std::move(inner_join));
-
-		union_children.push_back(std::move(branch_proj));
-	}
-
-	auto native_union = make_uniq<LogicalSetOperation>(union_tbl, orig_bindings.size(), std::move(union_children),
-	                                                   LogicalOperatorType::LOGICAL_UNION, false, true);
-
-	auto result = NormaliseInnerUnionOutput(std::move(native_union), orig_bindings, orig_types,
-	                                        left_cte.output_types.size(), right_cte.output_types.size());
-
-	// wrap in CTEs
-	result = make_uniq<LogicalMaterializedCTE>("right_cte", right_cte_idx, right_cte.output_types.size(),
-	                                           std::move(right_child), std::move(result),
-	                                           CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
-
-	result =
-	    make_uniq<LogicalMaterializedCTE>("left_cte", left_cte_idx, left_cte.output_types.size(), std::move(left_child),
-	                                      std::move(result), CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
-
-	return result;
-}
-
 unique_ptr<LogicalOperator>
 DisjunctiveJoinRewriter::BuildTwoSidedJoin(const CTEInfo &match_cte, const CTEInfo &left_cte, const CTEInfo &right_cte,
                                            ColumnBinding left_rowid, ColumnBinding right_rowid,
@@ -504,7 +590,7 @@ DisjunctiveJoinRewriter::BuildTwoSidedJoin(const CTEInfo &match_cte, const CTEIn
 	final_join->AddChild(std::move(first_join));
 	final_join->AddChild(std::move(second_scan));
 
-	return final_join;
+	return std::move(final_join);
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildOneSidedJoin(const CTEInfo &match_cte,
@@ -527,7 +613,13 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildOneSidedJoin(const CTE
 	single_join->AddChild(std::move(left_scan));
 	single_join->AddChild(std::move(match_scan));
 
-	return single_join;
+	return std::move(single_join);
+}
+
+unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildInner(const CTEInfo &match_cte, const CTEInfo &left_cte,
+                                                                const CTEInfo &right_cte, ColumnBinding left_rowid,
+                                                                ColumnBinding right_rowid) {
+	return BuildTwoSidedJoin(match_cte, left_cte, right_cte, left_rowid, right_rowid, JoinType::INNER, JoinType::INNER);
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildLeft(const CTEInfo &match_cte, const CTEInfo &left_cte,
@@ -557,34 +649,6 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildSemi(const CTEInfo &ma
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildAnti(const CTEInfo &match_cte, const CTEInfo &left_cte,
                                                                ColumnBinding left_rowid) {
 	return BuildOneSidedJoin(match_cte, left_cte, left_rowid, JoinType::ANTI);
-}
-
-unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormaliseInnerUnionOutput(
-    unique_ptr<LogicalOperator> epilogue, const vector<ColumnBinding> &orig_bindings,
-    const vector<LogicalType> &orig_types, idx_t left_col_count, idx_t right_col_count) {
-	auto epilogue_bindings = epilogue->GetColumnBindings();
-	vector<unique_ptr<Expression>> proj_exprs;
-	proj_exprs.reserve(orig_bindings.size());
-
-	for (idx_t i = 0; i < left_col_count; i++) {
-		proj_exprs.push_back(ColRef(epilogue_bindings[i], orig_types[i]));
-	}
-	for (idx_t i = 0; i < right_col_count; i++) {
-		proj_exprs.push_back(ColRef(epilogue_bindings[left_col_count + i], orig_types[left_col_count + i]));
-	}
-
-	D_ASSERT(proj_exprs.size() == orig_bindings.size());
-
-	TableIndex norm_tbl = NewTableIndex();
-	auto proj = make_uniq<LogicalProjection>(norm_tbl, std::move(proj_exprs));
-	proj->AddChild(std::move(epilogue));
-
-	for (idx_t i = 0; i < orig_bindings.size(); i++) {
-		replacer.replacement_bindings.emplace_back(orig_bindings[i], ColumnBinding(norm_tbl, ProjectionIndex(i)),
-		                                           orig_types[i]);
-	}
-
-	return proj;
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormaliseOutput(unique_ptr<LogicalOperator> epilogue,
@@ -638,10 +702,11 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormaliseOutput(unique_ptr<
 		                                           orig_types[i]);
 	}
 
-	return proj;
+	return std::move(proj);
 }
 
-unique_ptr<Expression> DisjunctiveJoinRewriter::ColRef(ColumnBinding binding, LogicalType type, const string &alias) {
+unique_ptr<Expression> DisjunctiveJoinRewriter::ColRef(ColumnBinding binding, const LogicalType &type,
+                                                       const string &alias) {
 	return make_uniq<BoundColumnRefExpression>(alias, type, binding);
 }
 
@@ -652,6 +717,142 @@ idx_t DisjunctiveJoinRewriter::GetCTEColumnIndex(const CTEInfo &cte, ColumnBindi
 		}
 	}
 	throw InternalException("Binding not found in CTE");
+}
+
+bool DisjunctiveJoinRewriter::IsSimpleTableScan(LogicalOperator &op) const {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		return true;
+	}
+
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		if (op.children.size() == 1) {
+			return IsSimpleTableScan(*op.children[0]);
+		}
+		return false;
+
+	default:
+		return false;
+	}
+}
+
+LogicalGet *DisjunctiveJoinRewriter::FindBaseTableScan(LogicalOperator &op) const {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		return &op.Cast<LogicalGet>();
+	}
+
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		if (op.children.size() == 1) {
+			return FindBaseTableScan(*op.children[0]);
+		}
+		return nullptr;
+
+	default:
+		return nullptr;
+	}
+}
+
+double DisjunctiveJoinRewriter::EstimateBranchSelectivity(const Branch &branch, const RelationStats &left_stats,
+                                                          const RelationStats &right_stats) const {
+	idx_t left_col_idx = idx_t(-1);
+	idx_t right_col_idx = idx_t(-1);
+
+	auto left_base = ExtractBaseColumnRef(*branch.left_expr);
+	auto right_base = ExtractBaseColumnRef(*branch.right_expr);
+
+	if (left_base && left_stats.stats_initialized) {
+		left_col_idx = left_base->binding.column_index;
+	}
+
+	if (right_base && right_stats.stats_initialized) {
+		right_col_idx = right_base->binding.column_index;
+	}
+
+	bool left_has_distinct = (left_col_idx != idx_t(-1)) && (left_col_idx < left_stats.column_distinct_count.size()) &&
+	                         (left_stats.column_distinct_count[left_col_idx].distinct_count > 0);
+
+	bool right_has_distinct = (right_col_idx != idx_t(-1)) &&
+	                          (right_col_idx < right_stats.column_distinct_count.size()) &&
+	                          (right_stats.column_distinct_count[right_col_idx].distinct_count > 0);
+
+	if (!left_has_distinct || !right_has_distinct) {
+		return DEFAULT_BRANCH_SELECTIVITY;
+	}
+
+	idx_t probe_distinct = left_stats.column_distinct_count[left_col_idx].distinct_count;
+	idx_t build_distinct = right_stats.column_distinct_count[right_col_idx].distinct_count;
+
+	double selectivity =
+	    1.0 / std::max({static_cast<double>(probe_distinct), static_cast<double>(build_distinct), 1.0});
+
+	selectivity = std::clamp(selectivity, 0.001, 1.0);
+
+	return selectivity;
+}
+
+idx_t DisjunctiveJoinRewriter::EstimateORJoinOutput(const RelationStats &left_stats, const RelationStats &right_stats,
+                                                    const vector<Branch> &branches, idx_t left_card,
+                                                    idx_t right_card) const {
+	if (left_card == 0 || right_card == 0) {
+		return 0;
+	}
+
+	idx_t probe_card = std::min(left_card, right_card);
+
+	double total_output = 0.0;
+
+	for (const auto &branch : branches) {
+		double branch_selectivity = EstimateBranchSelectivity(branch, left_stats, right_stats);
+		double branch_output = static_cast<double>(probe_card) * branch_selectivity;
+		total_output += branch_output;
+	}
+
+	return static_cast<idx_t>(std::max(total_output, 1.0));
+}
+
+optional_ptr<const BoundColumnRefExpression>
+DisjunctiveJoinRewriter::ExtractBaseColumnRef(const Expression &expr) const {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COLUMN_REF:
+		return &expr.Cast<BoundColumnRefExpression>();
+
+	case ExpressionClass::BOUND_FUNCTION: {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+
+		bool is_injective = false;
+
+		if (func.children.size() == 2) {
+			auto &name = func.function.GetName();
+
+			if (name == OperatorAddFun::Name || name == OperatorSubtractFun::Name ||
+			    name == OperatorMultiplyFun::Name) {
+				is_injective = true;
+			}
+		}
+
+		if (func.children.size() == 1 && expr.GetExpressionType() == ExpressionType::OPERATOR_CAST) {
+			is_injective = true;
+		}
+
+		if (!is_injective) {
+			return nullptr;
+		}
+
+		for (auto &child : func.children) {
+			if (auto found = ExtractBaseColumnRef(*child)) {
+				return found;
+			}
+		}
+
+		return nullptr;
+	}
+
+	default:
+		return nullptr;
+	}
 }
 
 } // namespace duckdb

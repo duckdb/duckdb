@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
@@ -11,7 +12,7 @@ public:
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
-	static unique_ptr<Expression> ColRef(ColumnBinding binding, LogicalType type, const string &alias = "");
+	static unique_ptr<Expression> ColRef(ColumnBinding binding, const LogicalType &type, const string &alias = "");
 
 private:
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op);
@@ -35,6 +36,7 @@ private:
 		ColumnBinding rowid_col;
 		vector<LogicalType> all_types;
 		vector<ColumnBinding> all_bindings;
+		bool used_physical_rowid;
 	};
 
 	struct KeyTableResult {
@@ -50,6 +52,12 @@ private:
 		vector<ColumnBinding> output_bindings;
 	};
 
+	static constexpr idx_t TINY_TABLE_ROW_THRESHOLD = 2048;
+
+	static constexpr double H2_MEMORY_FRACTION = 0.50;
+
+	static constexpr idx_t COLUMN_COUNT_PENALTY = 2;
+
 	//! checks if join has OR of equalities we can rewrite
 	bool ShouldRewrite(const LogicalAnyJoin &join, const unordered_set<TableIndex> &left_tables,
 	                   const unordered_set<TableIndex> &right_tables, vector<Branch> &out_branches) const;
@@ -58,10 +66,23 @@ private:
 	bool FlattenOR(const Expression &expr, const unordered_set<TableIndex> &left_tables,
 	               const unordered_set<TableIndex> &right_tables, vector<Branch> &out) const;
 
-	TableIndex NewTableIndex();
+	bool HasPhysicalRowID(const LogicalOperator &op) const;
 
-	//! injects row_number window for rowid tracking
+	idx_t GetBaseCardinality(LogicalOperator &op) const;
+
+	idx_t GetConfiguredMemoryLimit() const;
+
+	static double ComputeMaterializationCost(vector<LogicalType> types, idx_t cardinality);
+
+	bool PassHeuristics(const LogicalAnyJoin &join, const vector<Branch> &branches) const;
+
+	bool TryInjectPhysicalRowID(LogicalOperator &child, const string &alias, ColumnBinding &out_rowid_binding);
+
+	RowIDResult InjectRowNumRowID(unique_ptr<LogicalOperator> child, const string &alias);
+
 	RowIDResult InjectRowID(unique_ptr<LogicalOperator> child, const string &alias);
+
+	TableIndex NewTableIndex();
 
 	unique_ptr<LogicalOperator> MakeCTERef(const CTEInfo &cte, TableIndex ref_idx) const;
 
@@ -69,13 +90,8 @@ private:
 	MatchCTEResult BuildMatchCTE(const CTEInfo &left_cte, const CTEInfo &right_cte, ColumnBinding left_rowid,
 	                             ColumnBinding right_rowid, const vector<Branch> &branches);
 
-	//! optimized inner join: union of joins without row-IDs
-	unique_ptr<LogicalOperator> BuildInnerUnion(unique_ptr<LogicalOperator> left_child,
-	                                            unique_ptr<LogicalOperator> right_child,
-	                                            vector<ColumnBinding> left_orig_bindings,
-	                                            vector<ColumnBinding> right_orig_bindings,
-	                                            const vector<ColumnBinding> &orig_bindings,
-	                                            const vector<LogicalType> &orig_types, const vector<Branch> &branches);
+	unique_ptr<LogicalOperator> BuildInner(const CTEInfo &match_cte, const CTEInfo &left_cte, const CTEInfo &right_cte,
+	                                       ColumnBinding left_rowid, ColumnBinding right_rowid);
 
 	unique_ptr<LogicalOperator> BuildLeft(const CTEInfo &match_cte, const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                      ColumnBinding left_rowid, ColumnBinding right_rowid);
@@ -98,12 +114,6 @@ private:
 	unique_ptr<LogicalOperator> BuildOneSidedJoin(const CTEInfo &match_cte, const CTEInfo &left_cte,
 	                                              ColumnBinding left_rowid, JoinType join_type);
 
-	//! normalizes inner union output to original binding order
-	unique_ptr<LogicalOperator> NormaliseInnerUnionOutput(unique_ptr<LogicalOperator> epilogue,
-	                                                      const vector<ColumnBinding> &orig_bindings,
-	                                                      const vector<LogicalType> &orig_types, idx_t left_col_count,
-	                                                      idx_t right_col_count);
-
 	//! normalizes full rewrite output to original binding order
 	unique_ptr<LogicalOperator> NormaliseOutput(unique_ptr<LogicalOperator> epilogue,
 	                                            const vector<ColumnBinding> &orig_bindings,
@@ -115,6 +125,21 @@ private:
 	ClientContext &context;
 	Binder &binder;
 	ColumnBindingReplacer replacer;
+
+private:
+	static constexpr double DEFAULT_BRANCH_SELECTIVITY = 0.20;
+
+	bool IsSimpleTableScan(LogicalOperator &op) const;
+
+	LogicalGet *FindBaseTableScan(LogicalOperator &op) const;
+
+	double EstimateBranchSelectivity(const Branch &branch, const RelationStats &left_stats,
+	                                 const RelationStats &right_stats) const;
+
+	idx_t EstimateORJoinOutput(const RelationStats &left_stats, const RelationStats &right_stats,
+	                           const vector<Branch> &branches, idx_t left_card, idx_t right_card) const;
+
+	optional_ptr<const BoundColumnRefExpression> ExtractBaseColumnRef(const Expression &expr) const;
 };
 
 } // namespace duckdb
