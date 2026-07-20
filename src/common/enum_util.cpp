@@ -2074,7 +2074,7 @@ const StringUtil::EnumStringLiteral *GetExpressionClassValues() {
 		{ static_cast<uint32_t>(ExpressionClass::TYPE), "TYPE" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_AGGREGATE), "BOUND_AGGREGATE" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_CASE), "BOUND_CASE" },
-		{ static_cast<uint32_t>(ExpressionClass::BOUND_CAST), "BOUND_CAST" },
+		{ static_cast<uint32_t>(ExpressionClass::LEGACY_BOUND_CAST), "LEGACY_BOUND_CAST" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_COLUMN_REF), "BOUND_COLUMN_REF" },
 		{ static_cast<uint32_t>(ExpressionClass::LEGACY_BOUND_COMPARISON), "LEGACY_BOUND_COMPARISON" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_CONJUNCTION), "BOUND_CONJUNCTION" },

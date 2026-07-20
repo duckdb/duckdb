@@ -49,11 +49,14 @@ bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference<Expressio
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
+	if (!BoundCastExpression::IsCast(expr_p)) {
+		return false;
+	}
 	if (!matcher) {
 		return true;
 	}
-	auto &expr = expr_p.Cast<BoundCastExpression>();
-	return matcher->Match(*expr.ChildMutable(), bindings);
+	auto &expr = expr_p.Cast<BoundFunctionExpression>();
+	return matcher->Match(*BoundCastExpression::ChildMutable(expr), bindings);
 }
 
 bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {

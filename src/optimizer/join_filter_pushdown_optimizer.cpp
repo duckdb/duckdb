@@ -59,17 +59,24 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 		filter.probe_column_index = colref.Binding();
 		return true;
 	}
-	case ExpressionClass::BOUND_CAST: {
+	case ExpressionClass::BOUND_FUNCTION: {
+		if (!BoundCastExpression::IsCast(expr)) {
+			auto &function_expr = expr.Cast<BoundFunctionExpression>();
+			if (function_expr.Function().GetName() != "variant_normalize" || function_expr.GetChildren().size() != 1) {
+				return false;
+			}
+			return PushdownJoinFilterExpressionInternal(*function_expr.GetChildren()[0], filter);
+		}
 		// We allow pushing through integral casts and integral/VARIANT casts.
-		const auto &bound_cast = expr.Cast<BoundCastExpression>();
-		const auto &src = bound_cast.Child().GetReturnType();
+		const auto &bound_cast = expr.Cast<BoundFunctionExpression>();
+		const auto &src = BoundCastExpression::Child(bound_cast).GetReturnType();
 		const auto &tgt = bound_cast.GetReturnType();
 		const bool integral_cast = IsJoinFilterPushdownIntegralCast(src, tgt);
 		const bool variant_integral_cast = IsJoinFilterPushdownVariantIntegralCast(src, tgt);
 		if (!integral_cast && !variant_integral_cast) {
 			return false;
 		}
-		if (!PushdownJoinFilterExpressionInternal(bound_cast.Child(), filter)) {
+		if (!PushdownJoinFilterExpressionInternal(BoundCastExpression::Child(bound_cast), filter)) {
 			return false;
 		}
 		if (variant_integral_cast) {
@@ -90,13 +97,6 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 			filter.runtime_filter_type = LogicalType::INVALID;
 		}
 		return true;
-	}
-	case ExpressionClass::BOUND_FUNCTION: {
-		auto &function_expr = expr.Cast<BoundFunctionExpression>();
-		if (function_expr.Function().GetName() != "variant_normalize" || function_expr.GetChildren().size() != 1) {
-			return false;
-		}
-		return PushdownJoinFilterExpressionInternal(*function_expr.GetChildren()[0], filter);
 	}
 	default:
 		return false;

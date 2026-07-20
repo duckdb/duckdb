@@ -10,25 +10,6 @@
 
 namespace duckdb {
 
-static BoundCastInfo BindCastFunction(ClientContext &context, const LogicalType &source, const LogicalType &target) {
-	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
-	GetCastFunctionInput input(context);
-	return cast_functions.GetCastFunction(source, target, input);
-}
-
-BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p,
-                                         BoundCastInfo bound_cast_p, bool try_cast_p)
-    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, std::move(target_type_p)),
-      child(std::move(child_p)), try_cast(try_cast_p), bound_cast(std::move(bound_cast_p)) {
-}
-
-BoundCastExpression::BoundCastExpression(ClientContext &context, unique_ptr<Expression> child_p,
-                                         LogicalType target_type_p)
-    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, std::move(target_type_p)),
-      child(std::move(child_p)), try_cast(false),
-      bound_cast(BindCastFunction(context, child->GetReturnType(), return_type)) {
-}
-
 static unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
                                                         BoundCastInfo bound_cast, bool try_cast) {
 	if (ExpressionBinder::GetExpressionReturnType(*expr) == target_type) {
@@ -42,9 +23,7 @@ static unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> e
 			return expr;
 		}
 	}
-	auto result = make_uniq<BoundCastExpression>(std::move(expr), target_type, std::move(bound_cast), try_cast);
-	result->SetQueryLocation(result->Child().GetQueryLocation());
-	return std::move(result);
+	return BoundCastExpression::Create(std::move(expr), target_type, std::move(bound_cast), try_cast);
 }
 
 static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
@@ -214,43 +193,16 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	return true;
 }
 
-string BoundCastExpression::ToString() const {
-	return (try_cast ? "TRY_CAST(" : "CAST(") + child->GetName() + " AS " + return_type.ToString() + ")";
-}
-
-bool BoundCastExpression::Equals(const BaseExpression &other_p) const {
-	if (!Expression::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<BoundCastExpression>();
-	if (!Expression::Equals(*child, *other.child)) {
-		return false;
-	}
-	if (try_cast != other.try_cast) {
-		return false;
-	}
-	return true;
-}
-
-unique_ptr<Expression> BoundCastExpression::Copy() const {
-	auto copy = make_uniq<BoundCastExpression>(child->Copy(), return_type, bound_cast.Copy(), try_cast);
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
-bool BoundCastExpression::CanThrow() const {
-	const auto child_type = child->GetReturnType();
-	if (return_type.id() != child_type.id() &&
-	    LogicalType::DefaultForceMaxLogicalType(return_type, child_type) == child_type.id()) {
+bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const LogicalType &target_type) {
+	if (target_type.id() != source_type.id() &&
+	    LogicalType::DefaultForceMaxLogicalType(target_type, source_type) == source_type.id()) {
 		return true;
 	}
 	// Casting VARCHAR to JSON involves parsing and validation that can throw on malformed input
-	if (return_type.IsJSONType() && !child_type.IsJSONType()) {
+	if (target_type.IsJSONType() && !source_type.IsJSONType()) {
 		return true;
 	}
-	bool changes_type = false;
-	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { changes_type |= child.CanThrow(); });
-	return changes_type;
+	return false;
 }
 
 } // namespace duckdb
