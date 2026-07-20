@@ -191,6 +191,8 @@ protected:
 //! That gives automatic, crash-robust cleanup (the secrets die with the ClientContext) and full isolation between
 //! connections. A context-less lookup (e.g. a system/background call) simply returns no match, so it never leaks
 //! across connections and never resolves where there is no connection to attribute the request to.
+//! The per-connection container is a CatalogSet, so these secrets get the same MVCC visibility and rollback behaviour
+//! as the global storages: a CREATE or DROP inside an aborted transaction is undone.
 class ConnectionSecretStorage : public SecretStorage {
 public:
 	explicit ConnectionSecretStorage(const string &name_p) : SecretStorage(name_p, CONNECTION_STORAGE_OFFSET) {
