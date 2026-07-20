@@ -362,8 +362,9 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 }
 
 unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transaction, const string &name,
-                                                       const string &storage) {
+                                                       const string &storage_p) {
 	InitializeSecrets(transaction);
+	auto storage = Identifier(storage_p);
 	if (storage.empty() || storage == TRANSACTION_STORAGE_NAME) {
 		if (auto transaction_storage = GetTransactionSecretStorage(transaction)) {
 			auto result = transaction_storage->GetSecretByName(name, &transaction);
@@ -379,7 +380,7 @@ unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transa
 	bool found = false;
 
 	if (!storage.empty()) {
-		auto storage_lookup = GetSecretStorage(Identifier(storage));
+		auto storage_lookup = GetSecretStorage(storage);
 
 		if (!storage_lookup) {
 			throw InvalidInputException("Unknown secret storage found: '%s'", storage);
