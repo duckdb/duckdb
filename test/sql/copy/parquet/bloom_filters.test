@@ -150,7 +150,9 @@ COPY (
         (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP AS ts,
         (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP_MS AS ts_ms,
         (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP_NS AS ts_ns,
-        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMPTZ AS ts_tz
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMPTZ AS ts_tz,
+        (TIME '00:00:00' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIME AS tm,
+        (TIMETZ '12:00:00+02' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMETZ AS tm_tz
     FROM range(8192) t(i)
 ) TO '{TEST_DIR}/bloom_temporal.parquet' (
     FORMAT PARQUET,
@@ -170,6 +172,8 @@ ORDER BY column_id;
 2	true	true
 3	true	true
 4	true	true
+5	true	true
+6	true	true
 
 query I
 SELECT bool_and(bloom_filter_excludes)
@@ -205,6 +209,25 @@ FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts_tz',
 ----
 true
 
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'tm', TIME '00:16:41');
+----
+true
+
+# Parquet normalizes TIME WITH TIME ZONE to UTC before hashing
+query I
+SELECT bool_or(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'tm_tz', TIMETZ '12:00:00+02');
+----
+false
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'tm_tz', TIMETZ '12:16:41+02');
+----
+true
+
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
 WHERE dt = DATE '2000-01-01' + 1001;
@@ -232,6 +255,18 @@ analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
 WHERE ts_tz = (TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND)::TIMESTAMPTZ;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE tm = TIME '00:16:41';
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE tm_tz = TIMETZ '12:16:41+02';
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
 

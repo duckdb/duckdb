@@ -728,6 +728,60 @@ static uint64_t ValueXH64FixedWidth(const Value &constant) {
 	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
 }
 
+template <class T>
+static uint64_t ValueXH64FixedWidth(T val) {
+	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
+}
+
+static bool TryHashTime(const Value &constant, const ParquetColumnSchema &schema, uint64_t &hash) {
+	switch (constant.type().id()) {
+	case LogicalTypeId::TIME: {
+		auto value = constant.GetValue<dtime_t>().value;
+		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			hash = ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));
+			return true;
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			hash = ValueXH64FixedWidth(value);
+			return true;
+		default:
+			return false;
+		}
+	}
+	case LogicalTypeId::TIME_NS: {
+		auto value = constant.GetValue<dtime_ns_t>().value;
+		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			hash = ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::NANOS_PER_MSEC));
+			return true;
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			hash = ValueXH64FixedWidth(value / Interval::NANOS_PER_MICRO);
+			return true;
+		case ParquetExtraTypeInfo::UNIT_NS:
+			hash = ValueXH64FixedWidth(value);
+			return true;
+		default:
+			return false;
+		}
+	}
+	case LogicalTypeId::TIME_TZ: {
+		auto value = Time::NormalizeTimeTZ(constant.GetValue<dtime_tz_t>()).value;
+		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			hash = ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));
+			return true;
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			hash = ValueXH64FixedWidth(value);
+			return true;
+		default:
+			return false;
+		}
+	}
+	default:
+		return false;
+	}
+}
+
 // Recreate the Parquet millisecond hash input from DuckDB's microsecond timestamp representation.
 static bool TryHashTimestampMillis(const Value &constant, const ParquetColumnSchema &schema, uint64_t &hash) {
 	if (constant.type().id() != LogicalTypeId::TIMESTAMP && constant.type().id() != LogicalTypeId::TIMESTAMP_TZ) {
@@ -746,6 +800,16 @@ static bool TryHashTimestampMillis(const Value &constant, const ParquetColumnSch
 // TODO TEST THIS!
 // TODO perhaps we can re-use some writer infra here
 static uint64_t ValueXXH64(const Value &constant, const ParquetColumnSchema &schema) {
+	switch (constant.type().id()) {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
+	case LogicalTypeId::TIME_TZ: {
+		uint64_t time_hash = 0;
+		return TryHashTime(constant, schema, time_hash) ? time_hash : 0;
+	}
+	default:
+		break;
+	}
 	uint64_t timestamp_hash = 0;
 	if (TryHashTimestampMillis(constant, schema, timestamp_hash)) {
 		return timestamp_hash;
@@ -842,6 +906,18 @@ bool ParquetStatisticsUtils::BloomFilterSupported(const ParquetColumnSchema &sch
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return schema.parquet_type == duckdb_parquet::Type::INT64 && schema.type_info == ParquetExtraTypeInfo::UNIT_NS;
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+		return (schema.parquet_type == duckdb_parquet::Type::INT32 &&
+		        schema.type_info == ParquetExtraTypeInfo::UNIT_MS) ||
+		       (schema.parquet_type == duckdb_parquet::Type::INT64 &&
+		        schema.type_info == ParquetExtraTypeInfo::UNIT_MICROS);
+	case LogicalTypeId::TIME_NS:
+		return (schema.parquet_type == duckdb_parquet::Type::INT32 &&
+		        schema.type_info == ParquetExtraTypeInfo::UNIT_MS) ||
+		       (schema.parquet_type == duckdb_parquet::Type::INT64 &&
+		        (schema.type_info == ParquetExtraTypeInfo::UNIT_MICROS ||
+		         schema.type_info == ParquetExtraTypeInfo::UNIT_NS));
 	default:
 		return false;
 	}
