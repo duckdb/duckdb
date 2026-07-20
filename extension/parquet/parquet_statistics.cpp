@@ -777,16 +777,14 @@ static optional<uint64_t> TryHashTime(const Value &constant, const ParquetColumn
 }
 
 // Recreate the Parquet millisecond hash input from DuckDB's microsecond timestamp representation.
-static optional<uint64_t> TryHashTimestampMillis(const Value &constant, const ParquetColumnSchema &schema) {
-	if (constant.type().id() != LogicalTypeId::TIMESTAMP && constant.type().id() != LogicalTypeId::TIMESTAMP_TZ) {
-		return nullopt;
-	}
+static optional<uint64_t> TryHashTimestamp(const Value &constant, const ParquetColumnSchema &schema) {
+	D_ASSERT(constant.type().id() == LogicalTypeId::TIMESTAMP || constant.type().id() == LogicalTypeId::TIMESTAMP_TZ);
 	if (schema.type_info != ParquetExtraTypeInfo::UNIT_MS) {
 		return nullopt;
 	}
 	// DuckDB stores timestamps in microseconds, while the Parquet bloom filter hashes the stored milliseconds.
 	auto value = constant.GetValue<int64_t>();
-	if (timestamp_t(value).IsFinite()) {
+	if (timestamp_t {value}.IsFinite()) {
 		value /= Interval::MICROS_PER_MSEC;
 	}
 	return duckdb_zstd::XXH64(&value, sizeof(value), 0);
@@ -796,18 +794,19 @@ static optional<uint64_t> TryHashTimestampMillis(const Value &constant, const Pa
 // TODO TEST THIS!
 // TODO perhaps we can re-use some writer infra here
 static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnSchema &schema) {
+	// Handle time-related types.
 	switch (constant.type().id()) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 		return TryHashTime(constant, schema);
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return TryHashTimestamp(constant, schema);
 	default:
 		break;
 	}
-	auto timestamp_hash = TryHashTimestampMillis(constant, schema);
-	if (timestamp_hash) {
-		return timestamp_hash;
-	}
+
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:
 		return ValueXH64FixedWidth<int32_t>(constant);
