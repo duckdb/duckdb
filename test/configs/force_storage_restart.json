@@ -10,7 +10,8 @@
       "paths": [
         "test/sql/table_function/external_resource_types.test",
         "test/sql/table_function/create_external_resource.test",
-        "test/sql/table_function/register_external_resource.test"
+        "test/sql/table_function/register_external_resource.test",
+        "test/sql/table_function/external_resource_logging.test"
       ]
     },
     {
