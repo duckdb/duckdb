@@ -380,6 +380,10 @@ static vector<unique_ptr<AsyncTask>> CollectClaimIOTasks(CSVLocalState &lstate) 
 	auto &manager = lstate.file_scan->buffer_manager;
 	const idx_t start_buffer_idx = lstate.iterator.GetBufferIdx();
 	vector<unique_ptr<AsyncTask>> io_tasks;
+	if (manager->HasKnownBufferRanges() && start_buffer_idx >= manager->KnownBufferCount()) {
+		// the claim starts past the last buffer (e.g. skipping the header consumed the whole file)
+		return io_tasks;
+	}
 	TryPushBufferLoadTask(manager, start_buffer_idx, io_tasks);
 	if (lstate.iterator.IsBoundarySet() &&
 	    (!manager->HasKnownBufferRanges() ||
