@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
@@ -7,6 +8,7 @@
 
 namespace duckdb {
 
+class Logger;
 struct RecursiveCTEDistinctPartition;
 
 struct RecursiveExecutorPool {
@@ -50,6 +52,9 @@ public:
 	void RebindRecursiveScans();
 	void CommitUsingKeyUpdates();
 	void PromoteDistinctState(ClientContext &context, idx_t partition_count);
+	void RecordSinkMetrics(idx_t wait_ns, idx_t work_ns, idx_t rows);
+	void LogThreadLimitChanged(idx_t previous_limit, idx_t new_limit, idx_t elapsed_us, idx_t work_units,
+	                           idx_t frontier_rows);
 	void PrepareCachedExecutorEntry(Pipeline &pipeline);
 	void PrepareCachedExecutors(Pipeline &pipeline, idx_t max_threads);
 	vector<unique_ptr<PipelineExecutor>> &GetCachedExecutors(Pipeline &pipeline);
@@ -61,6 +66,8 @@ public:
 	ExpressionExecutor executor;
 	DataChunk payload_rows;
 	const bool allow_executor_reuse;
+	shared_ptr<Logger> runtime_logger;
+	const bool collect_runtime_metrics;
 	shared_ptr<RecursiveExecutorPool> executor_pool;
 
 	mutex intermediate_table_lock;
@@ -96,6 +103,21 @@ public:
 	idx_t recursive_thread_candidate = 1;
 	idx_t recursive_thread_candidate_votes = 0;
 	double serial_cost_per_work_unit_us = 0;
+	idx_t cumulative_epoch_count = 0;
+	idx_t cumulative_worker_count = 0;
+	atomic<idx_t> cumulative_task_count {0};
+	idx_t cumulative_elapsed_us = 0;
+	idx_t cumulative_frontier_rows = 0;
+	idx_t cumulative_frontier_chunks = 0;
+	idx_t cumulative_frontier_storage_bytes = 0;
+	atomic<idx_t> cumulative_sink_wait_ns {0};
+	atomic<idx_t> cumulative_sink_work_ns {0};
+	atomic<idx_t> cumulative_sink_rows {0};
+	atomic<idx_t> cumulative_sink_calls {0};
+	atomic<idx_t> cumulative_hash_rows {0};
+	atomic<idx_t> cumulative_recurring_scan_rows {0};
+	idx_t cumulative_final_state_rows = 0;
+	idx_t retained_build_executions = 0;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
 };

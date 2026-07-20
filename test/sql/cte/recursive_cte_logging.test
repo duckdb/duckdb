@@ -1,0 +1,77 @@
+# name: test/sql/cte/recursive_cte_logging.test
+# description: Structured PhysicalOperator logging for recursive CTE runtime metrics
+# group: [cte]
+
+statement ok
+SET threads=8;
+
+statement ok
+CALL disable_logging();
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+WITH RECURSIVE t(i) AS (
+	SELECT 1
+	UNION ALL
+	SELECT i + 1 FROM t WHERE i < 10
+)
+SELECT max(i) FROM t;
+----
+10
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE';
+----
+0
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# This broad CPU-heavy recursion reliably crosses the adaptive parallelism threshold.
+query II
+WITH RECURSIVE t(i, digest, level) AS (
+	SELECT i, md5(i::VARCHAR), 0 FROM range(50000) r(i)
+	UNION
+	SELECT i, md5(md5(md5(md5(digest)))), level + 1 FROM t WHERE level < 7
+)
+SELECT count(*), max(level) FROM t;
+----
+400000	7
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+query III
+SELECT info.epochs::UBIGINT > 0,
+       info.scheduled_tasks::UBIGINT >= info.epochs::UBIGINT,
+       info.hash_rows::UBIGINT >= 400000
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1	1
+
+query I
+SELECT count(*) > 0 FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'ThreadLimitChanged';
+----
+1
+
+query I
+SELECT count(*) = 1 FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'DistinctPromoted'
+  AND info.partitions::UBIGINT BETWEEN 2 AND 4
+  AND info.migrated_rows::UBIGINT > 0;
+----
+1

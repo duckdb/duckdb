@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -36,6 +37,9 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 //===--------------------------------------------------------------------===//
 RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
     : op(op), executor(context), allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)),
+      runtime_logger(context.logger),
+      collect_runtime_metrics(runtime_logger &&
+                              runtime_logger->ShouldLog(PhysicalOperatorLogType::NAME, PhysicalOperatorLogType::LEVEL)),
       executor_pool(op.shared_executor_pool),
       intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()) {
 	vector<LogicalType> aggr_input_types;
@@ -75,7 +79,45 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 }
 
 RecursiveCTEState::~RecursiveCTEState() {
+	if (collect_runtime_metrics) {
+		DUCKDB_LOG(runtime_logger, PhysicalOperatorLogType, op, "PhysicalRecursiveCTE", "RuntimeMetrics",
+		           {{"epochs", to_string(cumulative_epoch_count)},
+		            {"scheduled_workers", to_string(cumulative_worker_count)},
+		            {"scheduled_tasks", to_string(cumulative_task_count.load())},
+		            {"elapsed_us", to_string(cumulative_elapsed_us)},
+		            {"frontier_rows", to_string(cumulative_frontier_rows)},
+		            {"frontier_chunks", to_string(cumulative_frontier_chunks)},
+		            {"frontier_storage_bytes", to_string(cumulative_frontier_storage_bytes)},
+		            {"sink_lock_wait_ns", to_string(cumulative_sink_wait_ns.load())},
+		            {"sink_lock_work_ns", to_string(cumulative_sink_work_ns.load())},
+		            {"sink_lock_rows", to_string(cumulative_sink_rows.load())},
+		            {"sink_lock_calls", to_string(cumulative_sink_calls.load())},
+		            {"hash_rows", to_string(cumulative_hash_rows.load())},
+		            {"recurring_scan_rows", to_string(cumulative_recurring_scan_rows.load())},
+		            {"final_state_rows", to_string(cumulative_final_state_rows)},
+		            {"retained_build_executions", to_string(retained_build_executions)}});
+	}
 	ClearCachedExecutors();
+}
+
+void RecursiveCTEState::RecordSinkMetrics(idx_t wait_ns, idx_t work_ns, idx_t rows) {
+	cumulative_sink_wait_ns.fetch_add(wait_ns);
+	cumulative_sink_work_ns.fetch_add(work_ns);
+	cumulative_sink_rows.fetch_add(rows);
+	cumulative_sink_calls.fetch_add(1);
+}
+
+void RecursiveCTEState::LogThreadLimitChanged(idx_t previous_limit, idx_t new_limit, idx_t elapsed_us, idx_t work_units,
+                                              idx_t frontier_rows) {
+	if (!collect_runtime_metrics) {
+		return;
+	}
+	DUCKDB_LOG(runtime_logger, PhysicalOperatorLogType, op, "PhysicalRecursiveCTE", "ThreadLimitChanged",
+	           {{"previous_limit", to_string(previous_limit)},
+	            {"new_limit", to_string(new_limit)},
+	            {"elapsed_us", to_string(elapsed_us)},
+	            {"work_units", to_string(work_units)},
+	            {"frontier_rows", to_string(frontier_rows)}});
 }
 
 void RecursiveCTEState::InitializeIntermediateAppend() {
@@ -286,11 +328,27 @@ unique_ptr<LocalSinkState> PhysicalRecursiveCTE::GetLocalSinkState(ExecutionCont
 
 static void SinkSerialDistinctChunk(DataChunk &chunk, RecursiveCTEState &gstate, RecursiveCTELocalState &lstate) {
 	D_ASSERT(gstate.ht);
+	const auto before_lock =
+	    gstate.collect_runtime_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 	idx_t new_group_count;
 	{
 		lock_guard<mutex> guard(gstate.intermediate_table_lock);
+		const auto after_lock =
+		    gstate.collect_runtime_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		if (gstate.collect_runtime_metrics) {
+			gstate.cumulative_hash_rows.fetch_add(chunk.size());
+		}
 		new_group_count = gstate.ht->FindOrCreateGroups(chunk, lstate.dummy_addresses, lstate.new_groups);
 		chunk.Slice(lstate.new_groups, new_group_count);
+		if (gstate.collect_runtime_metrics) {
+			const auto after_work = std::chrono::steady_clock::now();
+			gstate.RecordSinkMetrics(
+			    NumericCast<idx_t>(
+			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
+			    NumericCast<idx_t>(
+			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
+			    chunk.size());
+		}
 	}
 	if (new_group_count > 0) {
 		lstate.output->Append(lstate.append_state, chunk);
@@ -298,7 +356,7 @@ static void SinkSerialDistinctChunk(DataChunk &chunk, RecursiveCTEState &gstate,
 }
 
 static void SinkDistinctChunk(DataChunk &chunk, RecursiveCTEState &gstate, RecursiveCTELocalState &lstate,
-                              bool emit_rows = true) {
+                              bool emit_rows = true, bool record_sink_metrics = true) {
 	auto &partitions = gstate.distinct_partitions;
 	D_ASSERT(!partitions.empty());
 	D_ASSERT((partitions.size() & (partitions.size() - 1)) == 0);
@@ -323,12 +381,29 @@ static void SinkDistinctChunk(DataChunk &chunk, RecursiveCTEState &gstate, Recur
 		lstate.partition_chunk.Slice(chunk, lstate.partition_selections[partition_idx], partition_count);
 		lstate.partition_hashes.Slice(lstate.hashes, lstate.partition_selections[partition_idx], partition_count);
 		auto &partition = *partitions[partition_idx];
+		const auto collect_sink_metrics = gstate.collect_runtime_metrics && record_sink_metrics;
+		const auto before_lock =
+		    collect_sink_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		idx_t new_group_count;
 		{
 			lock_guard<mutex> guard(partition.lock);
+			const auto after_lock =
+			    collect_sink_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+			if (gstate.collect_runtime_metrics) {
+				gstate.cumulative_hash_rows.fetch_add(partition_count);
+			}
 			new_group_count = partition.ht.FindOrCreateGroups(lstate.partition_chunk, lstate.partition_hashes,
 			                                                  lstate.dummy_addresses, lstate.new_groups);
 			lstate.partition_chunk.Slice(lstate.new_groups, new_group_count);
+			if (collect_sink_metrics) {
+				const auto after_work = std::chrono::steady_clock::now();
+				gstate.RecordSinkMetrics(
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
+				    partition_count);
+			}
 		}
 		if (emit_rows && new_group_count > 0) {
 			lstate.output->Append(lstate.append_state, lstate.partition_chunk);
@@ -342,6 +417,9 @@ void RecursiveCTEState::PromoteDistinctState(ClientContext &context, idx_t parti
 		return;
 	}
 	D_ASSERT(ht);
+	const auto migrated_rows = ht->Count();
+	const auto promotion_start =
+	    collect_runtime_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 	distinct_partitions.reserve(partition_count);
 	for (idx_t partition_idx = 0; partition_idx < partition_count; partition_idx++) {
 		distinct_partitions.push_back(make_uniq<RecursiveCTEDistinctPartition>(context, op.distinct_types));
@@ -356,10 +434,19 @@ void RecursiveCTEState::PromoteDistinctState(ClientContext &context, idx_t parti
 	while (ht->Scan(scan_state, groups, payload)) {
 		context.InterruptCheck();
 		if (groups.size() > 0) {
-			SinkDistinctChunk(groups, *this, migration_state, false);
+			SinkDistinctChunk(groups, *this, migration_state, false, false);
 		}
 	}
 	ht.reset();
+	if (collect_runtime_metrics) {
+		const auto promotion_end = std::chrono::steady_clock::now();
+		const auto elapsed_us = NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::microseconds>(promotion_end - promotion_start).count());
+		DUCKDB_LOG(runtime_logger, PhysicalOperatorLogType, op, "PhysicalRecursiveCTE", "DistinctPromoted",
+		           {{"partitions", to_string(partition_count)},
+		            {"migrated_rows", to_string(migrated_rows)},
+		            {"elapsed_us", to_string(elapsed_us)}});
+	}
 }
 
 static void GatherChunk(DataChunk &output_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set) {
@@ -381,6 +468,9 @@ void RecursiveCTEState::CommitUsingKeyUpdates() {
 	ColumnDataScanState update_scan_state;
 	intermediate_table.InitializeScan(update_scan_state);
 	while (intermediate_table.Scan(update_scan_state, update_rows)) {
+		if (collect_runtime_metrics) {
+			cumulative_hash_rows.fetch_add(update_rows.size());
+		}
 		distinct_rows.Reset();
 		GatherChunk(distinct_rows, update_rows, op.distinct_idx);
 		if (!executor.expressions.empty()) {
@@ -447,6 +537,9 @@ SourceResultType PhysicalRecursiveCTEStateScan::GetDataInternal(ExecutionContext
 		ScatterChunk(chunk, lstate.distinct_rows, distinct_idx);
 		ScatterChunk(chunk, lstate.payload_rows, payload_idx);
 		chunk.SetCardinalityUnsafe(lstate.distinct_rows.size());
+		if (recursive_state.collect_runtime_metrics) {
+			recursive_state.cumulative_recurring_scan_rows.fetch_add(chunk.size());
+		}
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 	return SourceResultType::FINISHED;
@@ -479,9 +572,24 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	lock_guard<mutex> guard(gstate.intermediate_table_lock);
-	// Collect updates without mutating the hash state read by recurring.T in this epoch.
-	gstate.intermediate_table.Append(gstate.intermediate_append_state, chunk);
+	const auto before_lock =
+	    gstate.collect_runtime_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	{
+		lock_guard<mutex> guard(gstate.intermediate_table_lock);
+		const auto after_lock =
+		    gstate.collect_runtime_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		// Collect updates without mutating the hash state read by recurring.T in this epoch.
+		gstate.intermediate_table.Append(gstate.intermediate_append_state, chunk);
+		if (gstate.collect_runtime_metrics) {
+			const auto after_work = std::chrono::steady_clock::now();
+			gstate.RecordSinkMetrics(
+			    NumericCast<idx_t>(
+			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
+			    NumericCast<idx_t>(
+			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
+			    chunk.size());
+		}
+	}
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -497,8 +605,24 @@ SinkCombineResultType PhysicalRecursiveCTE::Combine(ExecutionContext &context, O
 		auto &gstate = input.global_state.Cast<RecursiveCTEState>();
 		auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
 		D_ASSERT(lstate.output);
-		lock_guard<mutex> guard(gstate.intermediate_table_lock);
-		gstate.CurrentOutputTable().Combine(*lstate.output);
+		const auto before_lock =
+		    gstate.collect_runtime_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		{
+			lock_guard<mutex> guard(gstate.intermediate_table_lock);
+			const auto after_lock = gstate.collect_runtime_metrics ? std::chrono::steady_clock::now()
+			                                                       : std::chrono::steady_clock::time_point();
+			const auto row_count = lstate.output->Count();
+			gstate.CurrentOutputTable().Combine(*lstate.output);
+			if (gstate.collect_runtime_metrics) {
+				const auto after_work = std::chrono::steady_clock::now();
+				gstate.RecordSinkMetrics(
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
+				    row_count);
+			}
+		}
 	}
 	return SinkCombineResultType::FINISHED;
 }
@@ -550,6 +674,9 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 					ScatterChunk(chunk, distinct_rows, distinct_idx);
 					ScatterChunk(chunk, payload_rows, payload_idx);
 					chunk.SetCardinalityUnsafe(distinct_rows.size());
+					if (gstate.collect_runtime_metrics) {
+						gstate.cumulative_final_state_rows += chunk.size();
+					}
 					return SourceResultType::HAVE_MORE_OUTPUT;
 				}
 				gstate.key_source_phase = RecursiveCTEKeySourcePhase::FINISHED;
