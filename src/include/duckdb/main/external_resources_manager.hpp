@@ -16,10 +16,12 @@ namespace duckdb {
 class DatabaseInstance;
 class ClientContext;
 
-//! A provisioned external resource this instance owns, registered under a local name (from CREATE/REGISTER
-//! EXTERNAL RESOURCE). The durable identity is `(type, handle)`: everything else is the binding derived
-//! from it by the type's status/destroy callbacks and cached here for display + teardown. Parallels
-//! ExternalResourceType (the recipe) — this is one provisioned instance of it.
+//! An external resource this instance tracks, registered under a local name (from CREATE/REGISTER EXTERNAL
+//! RESOURCE). `name` is the local alias and the only key enforced here: `(type, handle)` identifies the
+//! external thing, but the handle is opaque - two different maps may well denote the same resource, and only
+//! the provider could say, at the cost of a round-trip that is not always possible. The rest is the binding
+//! kept for display + teardown: from the type's status callback on create, from the caller on register.
+//! Parallels ExternalResourceType (the recipe) — one provisioned instance of it.
 struct ExternalResource {
 	//! The local registration name.
 	string name;
