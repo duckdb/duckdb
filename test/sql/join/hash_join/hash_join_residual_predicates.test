@@ -323,3 +323,40 @@ INNER JOIN orders o ON l.l_orderkey = o.o_orderkey
     AND l.l_discount * 100 + (l.l_commitdate::DATE - o.o_orderdate::DATE) > o.o_shippriority + 10;
 ----
 5
+
+statement ok
+CREATE TABLE l(k INTEGER, v INTEGER);
+
+statement ok
+CREATE TABLE r(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO l VALUES
+    (1, 1),
+    (-1, 5),
+    (2, 1);
+
+statement ok
+INSERT INTO r VALUES
+     (1, 5),
+     (-1, 0),
+     (1, 1);
+
+query II rowsort
+SELECT *
+FROM l ANTI JOIN r
+  ON l.k = r.k
+ AND l.v + r.v > 2
+ORDER BY k;
+----
+2	1
+
+query II rowsort
+SELECT *
+FROM l SEMI JOIN r
+  ON l.k = r.k
+ AND l.v + r.v > 2
+ORDER BY k;
+----
+-1	5
+1	1
