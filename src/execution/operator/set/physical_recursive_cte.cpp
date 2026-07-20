@@ -538,7 +538,7 @@ SourceResultType PhysicalRecursiveCTEStateScan::GetDataInternal(ExecutionContext
 		}
 		ScatterChunk(chunk, lstate.distinct_rows, distinct_idx);
 		ScatterChunk(chunk, lstate.payload_rows, payload_idx);
-		chunk.SetCardinalityUnsafe(lstate.distinct_rows.size());
+		chunk.CheckCardinality(lstate.distinct_rows.size());
 		if (recursive_state.collect_runtime_metrics) {
 			recursive_state.cumulative_recurring_scan_rows.fetch_add(chunk.size());
 		}
@@ -675,7 +675,7 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 					}
 					ScatterChunk(chunk, distinct_rows, distinct_idx);
 					ScatterChunk(chunk, payload_rows, payload_idx);
-					chunk.SetCardinalityUnsafe(distinct_rows.size());
+					chunk.CheckCardinality(distinct_rows.size());
 					if (gstate.collect_runtime_metrics) {
 						gstate.cumulative_final_state_rows += chunk.size();
 					}

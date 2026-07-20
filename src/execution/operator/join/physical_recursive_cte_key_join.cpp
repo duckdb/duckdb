@@ -98,7 +98,7 @@ OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext
 	for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
 		state.probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
 	}
-	state.probe_keys.SetCardinalityUnsafe(input.size());
+	state.probe_keys.CheckCardinality(input.size());
 	const auto non_null_count = SelectNonNullKeys(state.probe_keys, state.key_formats, state.non_null_sel);
 	if (non_null_count == 0) {
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -134,7 +134,7 @@ OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext
 	recursive_state.ht->GatherGroups(state.lookup_state, state.found_key_sel, match_count, state.state_keys);
 
 	state.payload_rows.Reset();
-	state.payload_rows.SetCardinalityUnsafe(match_count);
+	state.payload_rows.SetChildCardinality(match_count);
 	if (!payload_types.empty()) {
 		lock_guard<mutex> guard(recursive_state.ht_finalize_lock);
 		auto layout = recursive_state.ht->GetLayoutPtr();
@@ -166,7 +166,11 @@ OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext
 		emit_probe(left_projection_map);
 		emit_state(right_projection_map);
 	}
-	chunk.SetCardinalityUnsafe(match_count);
+	if (output_idx != chunk.ColumnCount()) {
+		throw InternalException("USING KEY direct probe produced %d columns, expected %d", output_idx,
+		                        chunk.ColumnCount());
+	}
+	chunk.CheckCardinality(match_count);
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
