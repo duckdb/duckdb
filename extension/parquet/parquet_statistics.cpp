@@ -15,6 +15,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
@@ -727,7 +728,12 @@ static bool HasFilterConstants(const TableFilter &duckdb_filter) {
 
 template <class T>
 static uint64_t ValueXH64FixedWidth(const Value &constant) {
-	T val = constant.GetValue<T>();
+	T val;
+	if (constant.type().id() == LogicalTypeId::DECIMAL) {
+		val = Hugeint::Cast<T>(IntegralValue::Get(constant));
+	} else {
+		val = constant.GetValue<T>();
+	}
 	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
 }
 
