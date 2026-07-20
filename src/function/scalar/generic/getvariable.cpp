@@ -29,16 +29,16 @@ unique_ptr<FunctionData> GetVariableBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto &function = input.GetBoundFunction();
 
-	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	if (!arguments[0]->IsFoldable()) {
+	auto variable_name = input.TryGetConstant(0);
+	if (!variable_name) {
 		throw NotImplementedException("getvariable requires a constant input");
 	}
 	Value value;
-	auto variable_name = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	if (!variable_name.IsNull()) {
-		ClientConfig::GetConfig(context).GetUserVariable(variable_name.ToString(), value);
+	if (!variable_name->IsNull()) {
+		ClientConfig::GetConfig(context).GetUserVariable(variable_name->ToString(), value);
 	}
 	function.SetReturnType(value.type());
 	return make_uniq<GetVariableBindData>(std::move(value));

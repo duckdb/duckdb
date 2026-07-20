@@ -38,7 +38,8 @@ unique_ptr<FunctionData> ParseLogMessageBind(BindScalarFunctionInput &input) {
 		throw BinderException("structured_log_schema: expects 1 argument", arguments[0]->GetAlias());
 	}
 
-	if (!arguments[0]->IsFoldable()) {
+	auto type_val = input.TryGetConstant(0);
+	if (!type_val) {
 		throw BinderException("structured_log_schema: argument '%s' must be constant", arguments[0]->GetAlias());
 	}
 
@@ -46,7 +47,7 @@ unique_ptr<FunctionData> ParseLogMessageBind(BindScalarFunctionInput &input) {
 		throw BinderException("structured_log_schema: 'log_type' argument must be a string");
 	}
 
-	auto type = StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arguments[0]));
+	auto type = StringValue::Get(*type_val);
 
 	auto lookup = LogManager::Get(context).LookupLogType(type);
 

@@ -79,13 +79,11 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
+	auto structure_constant = input.TryGetConstant(1);
+	if (!structure_constant) {
 		throw BinderException("JSON structure must be a constant!");
 	}
-	auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	auto structure_val = std::move(*structure_constant);
 	if (structure_val.IsNull() || arguments[1]->GetReturnType() == LogicalTypeId::SQLNULL) {
 		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 	} else {

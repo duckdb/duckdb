@@ -54,10 +54,11 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 	if (arguments[0]->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 		throw BinderException("current_schemas requires a boolean input");
 	}
-	if (!arguments[0]->IsFoldable()) {
+	auto schema_constant = input.TryGetConstant(0);
+	if (!schema_constant) {
 		throw NotImplementedException("current_schemas requires a constant input");
 	}
-	Value schema_value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
+	Value schema_value = std::move(*schema_constant);
 	Value result_val;
 	if (schema_value.IsNull()) {
 		// null

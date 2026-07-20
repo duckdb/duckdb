@@ -71,20 +71,16 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
 	auto &function = input.GetBoundFunction();
 
-	if (arguments[0]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[0]->IsFoldable()) {
+	auto value = input.TryGetConstant(0);
+	if (!value) {
 		throw BinderException("ConstantOrNull requires a constant input");
 	}
 	D_ASSERT(arguments.size() >= 2);
-	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 	function.SetReturnType(arguments[0]->GetReturnType());
-	return make_uniq<ConstantOrNullBindData>(std::move(value));
+	return make_uniq<ConstantOrNullBindData>(std::move(*value));
 }
 
 } // namespace

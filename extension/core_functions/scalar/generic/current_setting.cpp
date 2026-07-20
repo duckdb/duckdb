@@ -40,11 +40,11 @@ unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 	if (key_child->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	if (key_child->GetReturnType().id() != LogicalTypeId::VARCHAR ||
-	    key_child->GetReturnType().id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
+	auto key_constant = input.TryGetConstant(0);
+	if (!key_constant || key_child->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 		throw ParserException("Key name for current_setting needs to be a constant string");
 	}
-	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
+	Value key_val = std::move(*key_constant);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	if (key_val.IsNull() || StringValue::Get(key_val).empty()) {
 		throw ParserException("Key name for current_setting needs to be neither NULL nor empty");

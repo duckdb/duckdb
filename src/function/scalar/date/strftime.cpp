@@ -44,17 +44,14 @@ struct StrfTimeBindData : public FunctionData {
 
 template <bool REVERSED>
 static unique_ptr<FunctionData> StrfTimeBindFunction(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
 	auto format_idx = REVERSED ? 0U : 1U;
 	auto &format_arg = arguments[format_idx];
-	if (format_arg->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!format_arg->IsFoldable()) {
+	auto format_constant = input.TryGetConstant(format_idx);
+	if (!format_constant) {
 		throw InvalidInputException(*format_arg, "strftime format must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(context, *format_arg);
+	Value options_str = std::move(*format_constant);
 	auto format_string = options_str.GetValue<string>();
 	StrfTimeFormat format;
 	bool is_null = options_str.IsNull();
@@ -195,16 +192,13 @@ struct StrpTimeFunction {
 	}
 
 	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
-		auto &context = input.GetClientContext();
 		auto &bound_function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		if (arguments[1]->HasParameter()) {
-			throw ParameterNotResolvedException();
-		}
-		if (!arguments[1]->IsFoldable()) {
+		auto format_constant = input.TryGetConstant(1);
+		if (!format_constant) {
 			throw InvalidInputException(*arguments[0], "strptime format must be a constant");
 		}
-		Value format_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+		Value format_value = std::move(*format_constant);
 		string format_string;
 		StrpTimeFormat format;
 		if (format_value.IsNull()) {

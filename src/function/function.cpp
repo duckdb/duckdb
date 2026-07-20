@@ -276,7 +276,7 @@ optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {
 	if (arg_idx >= arguments.size()) {
 		throw BinderException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
 	}
-	auto &expr = arguments[arg_idx];
+	const auto &expr = arguments[arg_idx];
 	if (expr->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}

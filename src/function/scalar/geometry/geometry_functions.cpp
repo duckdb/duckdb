@@ -301,7 +301,6 @@ struct VertexExtractBindData final : public FunctionData {
 } // namespace
 
 static auto VertexExtractBind(BindScalarFunctionInput &input) -> unique_ptr<FunctionData> {
-
 	const auto vertex_val = input.GetConstant(1);
 
 	if (vertex_val.IsNull()) {

@@ -646,18 +646,15 @@ void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vect
 
 template <typename NEGOP, typename POSOP>
 unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto &decimal_type = arguments[0]->GetReturnType();
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
 	auto fname = StringUtil::Upper(bound_function.GetName().GetIdentifierName());
-	if (!arguments[1]->IsFoldable()) {
+	auto precision_constant = input.TryGetConstant(1);
+	if (!precision_constant) {
 		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
 	}
-	Value val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]).DefaultCastAs(LogicalType::INTEGER);
+	Value val = precision_constant->DefaultCastAs(LogicalType::INTEGER);
 	if (val.IsNull()) {
 		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
 	}

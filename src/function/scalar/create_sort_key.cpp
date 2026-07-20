@@ -44,16 +44,14 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	}
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
-		if (!arguments[i]->IsFoldable()) {
+		auto sort_specifier = input.TryGetConstant(i);
+		if (!sort_specifier) {
 			throw BinderException("sort_specifier must be a constant value - but got %s", arguments[i]->ToString());
 		}
-
-		// Rebind to return a date if we are truncating that far
-		Value sort_specifier = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[i]);
-		if (sort_specifier.IsNull()) {
+		if (sort_specifier->IsNull()) {
 			throw BinderException("sort_specifier cannot be NULL");
 		}
-		auto sort_specifier_str = sort_specifier.ToString();
+		auto sort_specifier_str = sort_specifier->ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
 	// check if all types are constant
@@ -1048,11 +1046,11 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		// Parse column definition
-		const auto &col_arg = *arguments[i];
-		if (!col_arg.IsFoldable()) {
-			throw BinderException("col must be a constant value - but got %s", col_arg.ToString());
+		auto col_constant = input.TryGetConstant(i);
+		if (!col_constant) {
+			throw BinderException("col must be a constant value - but got %s", arguments[i]->ToString());
 		}
-		Value col = ExpressionExecutor::EvaluateScalar(context, col_arg);
+		Value col = std::move(*col_constant);
 		const auto col_list = Parser::ParseColumnList(col.ToString());
 		if (col_list.LogicalColumnCount() != 1) {
 			throw BinderException("decode_sort_key col must contain exactly one column");
@@ -1074,11 +1072,11 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 		children.emplace_back(col_name, col_type);
 
 		// Parse sort specifier
-		const auto &specifier_arg = *arguments[i + 1];
-		if (!specifier_arg.IsFoldable()) {
-			throw BinderException("sort_specifier must be a constant value - but got %s", specifier_arg.ToString());
+		auto specifier_constant = input.TryGetConstant(i + 1);
+		if (!specifier_constant) {
+			throw BinderException("sort_specifier must be a constant value - but got %s", arguments[i + 1]->ToString());
 		}
-		Value sort_specifier = ExpressionExecutor::EvaluateScalar(context, specifier_arg);
+		Value sort_specifier = std::move(*specifier_constant);
 		if (sort_specifier.IsNull()) {
 			throw BinderException("sort_specifier cannot be NULL");
 		}

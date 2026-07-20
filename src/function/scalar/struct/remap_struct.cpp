@@ -529,7 +529,6 @@ struct RemapEntry {
 };
 
 unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 4);
@@ -565,13 +564,14 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 		                      from_type.ToString(), to_type.ToString());
 	}
 
-	if (!arguments[2]->IsFoldable()) {
+	auto remap_constant = input.TryGetConstant(2);
+	if (!remap_constant) {
 		throw BinderException("Remap keys for remap_struct needs to be a constant value");
 	}
 	auto source_map = RemapIndex::GetMap(from_type);
 	auto target_map = RemapIndex::GetMap(to_type);
 
-	Value remap_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
+	Value remap_val = std::move(*remap_constant);
 
 	// (recursively) generate the remap entries
 	identifier_map_t<RemapEntry> remap_map;

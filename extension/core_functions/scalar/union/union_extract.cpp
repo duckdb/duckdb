@@ -43,7 +43,6 @@ void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &resul
 }
 
 unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
@@ -60,14 +59,11 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 
 	auto &key_child = arguments[1];
-	if (key_child->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-
-	if (key_child->GetReturnType().id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
+	auto key_constant = input.TryGetConstant(1);
+	if (!key_constant || key_child->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("Key name for union_extract needs to be a constant string");
 	}
-	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
+	Value key_val = std::move(*key_constant);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
 	if (key_val.IsNull() || key_str.empty()) {

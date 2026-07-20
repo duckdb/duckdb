@@ -484,10 +484,8 @@ struct ICUDatePart : public ICUDateFunc {
 		auto &arguments = input.GetArguments();
 
 		// collect names and deconflict, construct return type
-		if (arguments[0]->HasParameter()) {
-			throw ParameterNotResolvedException();
-		}
-		if (!arguments[0]->IsFoldable()) {
+		auto parts_constant = input.TryGetConstant(0);
+		if (!parts_constant) {
 			throw BinderException("%s can only take constant lists of part names", bound_function.GetName());
 		}
 
@@ -495,7 +493,7 @@ struct ICUDatePart : public ICUDateFunc {
 		child_list_t<LogicalType> struct_children;
 		BindStructData::part_codes_t part_codes;
 
-		Value parts_list = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
+		Value parts_list = std::move(*parts_constant);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
 			auto &list_children = ListValue::GetChildren(parts_list);
 			if (list_children.empty()) {
