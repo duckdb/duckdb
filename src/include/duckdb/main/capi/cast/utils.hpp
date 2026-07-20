@@ -83,6 +83,9 @@ struct ToCStringCastWrapper {
 		auto result_data = result_string.GetData();
 
 		char *allocated_data = char_ptr_cast(duckdb_malloc(result_size + 1));
+		if (!allocated_data) {
+			return false;
+		}
 		memcpy(allocated_data, result_data, result_size);
 		allocated_data[result_size] = '\0';
 		result.data = allocated_data;
