@@ -228,6 +228,18 @@ FROM range(10) t(x)
 ----
 4
 
+# an oversized constant n stays within the memory limit: small groups pass through unchanged
+statement ok
+SET memory_limit = '500MB'
+
+query I
+SELECT lttb(x::DOUBLE, x::DOUBLE, 5000000000 ORDER BY x) FROM range(3) t(x)
+----
+[{'x': 0.0, 'y': 0.0}, {'x': 1.0, 'y': 1.0}, {'x': 2.0, 'y': 2.0}]
+
+# the remaining tests store an aggregate state column, which requires storage version v2.0.0
+require noforcestorage
+
 # imported states may contain NULL points (unlike the update path, the import does no element filtering).
 # The data behind a NULL point is never written, so those points must be dropped rather than read.
 # Finalizing a large state with NULLs alongside a smaller clean one must also not leak NULLs between them.
@@ -262,12 +274,3 @@ SELECT finalize(st) FROM lttb_states
 [{'x': 100.0, 'y': 1.0}, {'x': 101.0, 'y': 2.0}, {'x': 102.0, 'y': 3.0}]
 NULL
 [{'x': 2.0, 'y': 5.0}, {'x': 3.0, 'y': 6.0}]
-
-# an oversized constant n stays within the memory limit: small groups pass through unchanged
-statement ok
-SET memory_limit = '500MB'
-
-query I
-SELECT lttb(x::DOUBLE, x::DOUBLE, 5000000000 ORDER BY x) FROM range(3) t(x)
-----
-[{'x': 0.0, 'y': 0.0}, {'x': 1.0, 'y': 1.0}, {'x': 2.0, 'y': 2.0}]
