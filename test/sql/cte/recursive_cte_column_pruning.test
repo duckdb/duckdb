@@ -1,0 +1,84 @@
+# name: test/sql/cte/recursive_cte_column_pruning.test
+# description: Prune UNION ALL recursive state using fixed-point column liveness
+# group: [cte]
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# The unused wide payload and its recursive expression disappear from the optimized plan.
+query II
+EXPLAIN WITH RECURSIVE t(i, unused) AS (
+	SELECT 1, repeat('x', 1000)
+	UNION ALL
+	SELECT i + 1, unused || 'y' FROM t WHERE i < 3
+)
+SELECT i FROM t;
+----
+logical_opt	<!REGEX>:.*repeat.*
+
+statement ok
+PRAGMA explain_output='all';
+
+query I
+WITH RECURSIVE t(i, unused) AS (
+	SELECT 1, repeat('x', 1000)
+	UNION ALL
+	SELECT i + 1, unused || 'y' FROM t WHERE i < 3
+)
+SELECT i FROM t ORDER BY i;
+----
+1
+2
+3
+
+# Liveness is transitive across recursive output positions; only payload d can be removed.
+query IIII
+WITH RECURSIVE t(a, b, c, level, d) AS (
+	SELECT 1, 2, 3, 0, repeat('x', 1000)
+	UNION ALL
+	SELECT c, a, b, level + 1, d || 'y' FROM t WHERE level < 3
+)
+SELECT a, b, c, level FROM t ORDER BY level;
+----
+1	2	3	0
+3	1	2	1
+2	3	1	2
+1	2	3	3
+
+# Both the current frontier and recurring snapshot contribute to liveness.
+query I
+WITH RECURSIVE t(i, payload, unused) AS (
+	SELECT 1, 10, repeat('x', 1000)
+	UNION ALL
+	SELECT n.i + 1, r.payload + 10, n.unused || 'y'
+	FROM t n
+	JOIN recurring.t r ON r.i = n.i
+	WHERE n.i < 3
+)
+SELECT payload FROM t ORDER BY i;
+----
+10
+20
+30
+
+# UNION DISTINCT needs every column for row identity even when the outer query only reads i.
+query I
+WITH RECURSIVE t(i, identity_payload) AS (
+	SELECT 1, 0
+	UNION
+	SELECT i, identity_payload + 1 FROM t WHERE identity_payload < 3
+)
+SELECT count(i) FROM t;
+----
+4
+
+# USING KEY retains its complete key/update schema.
+query II rowsort
+WITH RECURSIVE t(i, payload) USING KEY (i) AS (
+	SELECT 1, 10
+	UNION ALL
+	SELECT i, payload + 1 FROM t WHERE payload < 12
+)
+SELECT i, payload FROM t;
+----
+1	12
