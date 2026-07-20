@@ -1,4 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -194,18 +197,26 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 		}
 		auto sql = "SELECT * FROM " + QualifiedName::Parse(type->create_function).ToString() + "(" +
 		           bind_data.params.ToSQLString() + ")";
-		auto result = con.Query(sql);
-		LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "create",
-		                             result->HasError() ? result->GetError() : string(), NoExtraInfo());
-		if (result->HasError()) {
-			throw IOException("create_external_resource: create function \"%s\" failed: %s", type->create_function,
-			                  result->GetError());
+		// Log the operation's real outcome: the callback query returning without error is not yet success, the
+		// result still has to satisfy the contract below. Logging from the catch also covers throws added later.
+		try {
+			auto result = con.Query(sql);
+			if (result->HasError()) {
+				throw IOException("create_external_resource: create function \"%s\" failed: %s", type->create_function,
+				                  result->GetError());
+			}
+			if (result->RowCount() == 0) {
+				throw InvalidInputException("create_external_resource: create function \"%s\" returned no rows",
+				                            type->create_function);
+			}
+			handle = RequireResourceMap(result->GetValue(0, 0), type->create_function, "handle");
+			LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "create", string(),
+			                             NoExtraInfo());
+		} catch (std::exception &ex) {
+			LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "create",
+			                             ErrorData(ex).RawMessage(), NoExtraInfo());
+			throw;
 		}
-		if (result->RowCount() == 0) {
-			throw InvalidInputException("create_external_resource: create function \"%s\" returned no rows",
-			                            type->create_function);
-		}
-		handle = RequireResourceMap(result->GetValue(0, 0), type->create_function, "handle");
 	}
 
 	// Ownership: when we provisioned the resource, we own its teardown until we successfully hand back the
@@ -234,7 +245,15 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				auto res = con.Query(sql);
 				LogExternalResourceOperation(context, resource_type, resource_name, "destroy",
 				                             res->HasError() ? res->GetError() : string(), NoExtraInfo());
-			} catch (...) { // best-effort: never mask the original failure with a teardown error
+			} catch (std::exception &ex) {
+				// best-effort: never mask the original failure with a teardown error, but do record it - a
+				// throwing Query() would otherwise leave the failed teardown invisible.
+				try {
+					LogExternalResourceOperation(context, resource_type, resource_name, "destroy",
+					                             ErrorData(ex).RawMessage(), NoExtraInfo());
+				} catch (...) { // logging must not throw out of a destructor
+				}
+			} catch (...) {
 			}
 		}
 	} teardown_guard {context, bind_data.type_name, bind_data.resource_name, con, type->destroy_function,
@@ -257,35 +276,41 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 		context.InterruptCheck();
 		auto status_sql = "SELECT state, result FROM " + QualifiedName::Parse(type->status_function).ToString() + "(" +
 		                  handle.ToSQLString() + ")";
-		auto sres = con.Query(status_sql);
-		string poll_state;
-		if (!sres->HasError() && sres->RowCount() > 0) {
-			auto sv = sres->GetValue(0, 0);
-			poll_state = sv.IsNull() ? string() : sv.ToString();
+		// One log entry per poll, written once the poll's outcome is known, so a poll is never recorded as 'ok'
+		// only to fail validation a few lines later. The catch also covers the 'failed' and timeout throws.
+		bool ready = false;
+		try {
+			auto sres = con.Query(status_sql);
+			if (sres->HasError()) {
+				throw IOException("create_external_resource: status function \"%s\" failed: %s", type->status_function,
+				                  sres->GetError());
+			}
+			if (sres->RowCount() == 0) {
+				throw InvalidInputException("create_external_resource: status function \"%s\" returned no rows",
+				                            type->status_function);
+			}
+			auto state_val = sres->GetValue(0, 0);
+			auto status_state = state_val.IsNull() ? string() : state_val.ToString();
+			if (status_state == "failed") {
+				throw IOException("create_external_resource: resource \"%s\" reported state 'failed'",
+				                  bind_data.type_name);
+			}
+			if (status_state == "ready") {
+				status_result = RequireResourceMap(sres->GetValue(1, 0), type->status_function, "result");
+				ready = true;
+			} else if (has_deadline && std::chrono::steady_clock::now() >= deadline) {
+				throw IOException("create_external_resource: timed out awaiting readiness for \"%s\" (last state '%s')",
+				                  bind_data.type_name, status_state);
+			}
+			LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "status", string(),
+			                             status_state.empty() ? NoExtraInfo() : ExtraInfo("state", status_state));
+		} catch (std::exception &ex) {
+			LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "status",
+			                             ErrorData(ex).RawMessage(), NoExtraInfo());
+			throw;
 		}
-		LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "status",
-		                             sres->HasError() ? sres->GetError() : string(),
-		                             poll_state.empty() ? NoExtraInfo() : ExtraInfo("state", poll_state));
-		if (sres->HasError()) {
-			throw IOException("create_external_resource: status function \"%s\" failed: %s", type->status_function,
-			                  sres->GetError());
-		}
-		if (sres->RowCount() == 0) {
-			throw InvalidInputException("create_external_resource: status function \"%s\" returned no rows",
-			                            type->status_function);
-		}
-		auto state_val = sres->GetValue(0, 0);
-		auto status_state = state_val.IsNull() ? string() : state_val.ToString();
-		if (status_state == "ready") {
-			status_result = RequireResourceMap(sres->GetValue(1, 0), type->status_function, "result");
+		if (ready) {
 			break;
-		}
-		if (status_state == "failed") {
-			throw IOException("create_external_resource: resource \"%s\" reported state 'failed'", bind_data.type_name);
-		}
-		if (has_deadline && std::chrono::steady_clock::now() >= deadline) {
-			throw IOException("create_external_resource: timed out awaiting readiness for \"%s\" (last state '%s')",
-			                  bind_data.type_name, status_state);
 		}
 		// Interruptible wait: sleep the poll interval in short slices, checking for cancellation between them.
 		// The slice is small so InterruptCheck() is called often enough to honor max_execution_time promptly
@@ -397,13 +422,17 @@ static void DestroyExternalResourceFunction(ClientContext &context, TableFunctio
 	Connection con(DatabaseInstance::GetDatabase(context));
 	auto sql = "SELECT * FROM " + QualifiedName::Parse(bind_data.deleter_function).ToString() + "(" +
 	           bind_data.deleter_payload.ToSQLString() + ")";
-	auto result = con.Query(sql);
 	// resource_type/name are unknown at this callsite (the deleter binding does not carry them).
-	LogExternalResourceOperation(context, string(), string(), "destroy",
-	                             result->HasError() ? result->GetError() : string(), NoExtraInfo());
-	if (result->HasError()) {
-		throw IOException("destroy_external_resource: deleter function \"%s\" failed: %s", bind_data.deleter_function,
-		                  result->GetError());
+	try {
+		auto result = con.Query(sql);
+		if (result->HasError()) {
+			throw IOException("destroy_external_resource: deleter function \"%s\" failed: %s",
+			                  bind_data.deleter_function, result->GetError());
+		}
+		LogExternalResourceOperation(context, string(), string(), "destroy", string(), NoExtraInfo());
+	} catch (std::exception &ex) {
+		LogExternalResourceOperation(context, string(), string(), "destroy", ErrorData(ex).RawMessage(), NoExtraInfo());
+		throw;
 	}
 	output.data[0].Append(Value::BOOLEAN(true));
 	state.done = true;
