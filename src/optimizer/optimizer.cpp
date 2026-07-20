@@ -93,6 +93,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ContainsToInClauseRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<NotComparisonSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<NotConjunctionSimplificationRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
