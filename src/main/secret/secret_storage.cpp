@@ -12,6 +12,12 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/secret/secret.hpp"
 
 namespace duckdb {
 
@@ -319,6 +325,124 @@ void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound 
 		}
 		throw;
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// ConnectionSecretStorage
+//===--------------------------------------------------------------------===//
+namespace {
+
+constexpr const char *CONNECTION_SECRET_STATE_KEY = "connection_secret_storage";
+
+//! Per-connection secret container. Lives on the ClientContext's RegisteredStateManager, so it is destroyed exactly
+//! when the connection (its ClientContext) goes away - giving automatic, crash-robust cleanup with no cooperation.
+struct ConnectionSecretState : public ClientContextState {
+	mutex lock;
+	identifier_map_t<unique_ptr<SecretEntry>> secrets;
+};
+
+//! Fetch the calling connection's secret container. With create=false returns nullptr when there is no context or no
+//! container yet; with create=true it allocates the container on the context (used by StoreSecret).
+optional_ptr<ConnectionSecretState> GetConnectionState(optional_ptr<CatalogTransaction> transaction, bool create) {
+	if (!transaction || !transaction->HasContext()) {
+		return nullptr;
+	}
+	auto &context = transaction->GetContext();
+	if (create) {
+		return context.registered_state->GetOrCreate<ConnectionSecretState>(CONNECTION_SECRET_STATE_KEY).get();
+	}
+	return context.registered_state->Get<ConnectionSecretState>(CONNECTION_SECRET_STATE_KEY).get();
+}
+
+} // namespace
+
+unique_ptr<SecretEntry> ConnectionSecretStorage::StoreSecret(unique_ptr<const BaseSecret> secret,
+                                                             OnCreateConflict on_conflict,
+                                                             optional_ptr<CatalogTransaction> transaction) {
+	auto state = GetConnectionState(transaction, true);
+	if (!state) {
+		throw InvalidInputException("Cannot create a connection-scoped secret without an active client context");
+	}
+	lock_guard<mutex> guard(state->lock);
+	// Copy the name: we std::move(secret) below, after which a reference into it would dangle and the entry would be
+	// inserted under a garbage key (breaking later name-keyed lookups like DROP / GetSecretByName).
+	auto name = secret->GetName();
+
+	auto existing = state->secrets.find(name);
+	if (existing != state->secrets.end()) {
+		switch (on_conflict) {
+		case OnCreateConflict::ERROR_ON_CONFLICT:
+			throw InvalidInputException("Connection secret with name '%s' already exists", name.GetIdentifierName());
+		case OnCreateConflict::IGNORE_ON_CONFLICT:
+			return make_uniq<SecretEntry>(*existing->second);
+		default: // REPLACE_ON_CONFLICT
+			break;
+		}
+	}
+
+	auto entry = make_uniq<SecretEntry>(std::move(secret));
+	entry->persist_type = SecretPersistType::TEMPORARY;
+	entry->storage_mode = storage_name;
+	auto result = make_uniq<SecretEntry>(*entry);
+	state->secrets[name] = std::move(entry);
+	return result;
+}
+
+SecretMatch ConnectionSecretStorage::LookupSecret(const string &path, const string &type,
+                                                  optional_ptr<CatalogTransaction> transaction) {
+	auto state = GetConnectionState(transaction, false);
+	if (!state) {
+		// No connection context (or nothing stored yet) - decline, so the global storages serve this lookup.
+		return SecretMatch();
+	}
+	lock_guard<mutex> guard(state->lock);
+	auto best_match = SecretMatch();
+	for (auto &entry : state->secrets) {
+		if (entry.second->secret->GetType() == type) {
+			best_match = SelectBestMatch(*entry.second, path, tie_break_offset, best_match);
+		}
+	}
+	return best_match;
+}
+
+unique_ptr<SecretEntry> ConnectionSecretStorage::GetSecretByName(const string &name,
+                                                                 optional_ptr<CatalogTransaction> transaction) {
+	auto state = GetConnectionState(transaction, false);
+	if (!state) {
+		return nullptr;
+	}
+	lock_guard<mutex> guard(state->lock);
+	auto entry = state->secrets.find(Identifier(name));
+	if (entry == state->secrets.end()) {
+		return nullptr;
+	}
+	return make_uniq<SecretEntry>(*entry->second);
+}
+
+void ConnectionSecretStorage::DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
+                                               optional_ptr<CatalogTransaction> transaction) {
+	auto state = GetConnectionState(transaction, false);
+	idx_t erased = 0;
+	if (state) {
+		lock_guard<mutex> guard(state->lock);
+		erased = state->secrets.erase(name);
+	}
+	if (erased == 0 && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+		throw InvalidInputException("Connection secret with name '%s' not found", name.GetIdentifierName());
+	}
+}
+
+vector<SecretEntry> ConnectionSecretStorage::AllSecrets(optional_ptr<CatalogTransaction> transaction) {
+	vector<SecretEntry> result;
+	auto state = GetConnectionState(transaction, false);
+	if (!state) {
+		return result;
+	}
+	lock_guard<mutex> guard(state->lock);
+	for (auto &entry : state->secrets) {
+		result.push_back(*entry.second);
+	}
+	return result;
 }
 
 } // namespace duckdb
