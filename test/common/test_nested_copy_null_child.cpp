@@ -437,6 +437,31 @@ TEST_CASE("Verify rejects non-NULL children under a NULL ARRAY row", "[copy]") {
 		// the struct's own full-size NULL scan catches it even though the array sel excludes NULL rows
 		REQUIRE(message.find("Struct NULL mismatch") != string::npos);
 	}
+
+	SECTION("grandchild under a correctly-NULL array is caught by recursion (sliced path)") {
+		auto inner_type = LogicalType::ARRAY(LogicalType::VARCHAR, ARRAY_SIZE);
+		Vector v(LogicalType::ARRAY(inner_type, ARRAY_SIZE));
+		for (idx_t r = 0; r < row_count; r++) {
+			duckdb::vector<Value> inner_arrays;
+			for (idx_t e = 0; e < ARRAY_SIZE; e++) {
+				duckdb::vector<Value> leaves(ARRAY_SIZE, Value("ok"));
+				inner_arrays.push_back(Value::ARRAY(LogicalType::VARCHAR, leaves));
+			}
+			v.SetValue(r, Value::ARRAY(inner_type, inner_arrays));
+		}
+		FlatVector::SetSize(v, row_count);
+		auto &inner_child = ArrayVector::GetChildMutable(v);
+		FlatVector::ValidityMutable(v).SetInvalid(null_row);
+		for (idx_t e = 0; e < ARRAY_SIZE; e++) {
+			FlatVector::ValidityMutable(inner_child).SetInvalid(null_row * ARRAY_SIZE + e);
+		}
+		SelectionVector sel(row_count);
+		for (idx_t i = 0; i < row_count; i++) {
+			sel.set_index(i, i);
+		}
+		VerifyVectorsGuard guard;
+		REQUIRE_THROWS(v.Verify(sel, row_count));
+	}
 }
 
 namespace {
@@ -605,5 +630,29 @@ TEST_CASE("ColumnDataCollection append must not read child payloads under NULL r
 		REQUIRE(result.data[0].GetValue(0) == shared);
 		REQUIRE(result.data[0].GetValue(1).IsNull());
 		REQUIRE(!FlatVector::Validity(StructVector::GetEntries(result.data[0])[0]).RowIsValid(1));
+	}
+
+	SECTION("patching a STRUCT(LIST) child does not change an aliased column") {
+		auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
+		auto struct_type = LogicalType::STRUCT({{"l", list_type}});
+		const idx_t row_count = 2;
+		DataChunk chunk;
+		chunk.Initialize(allocator, {struct_type, list_type});
+		chunk.SetChildCardinality(row_count);
+		auto first = LeafList(0, 1);
+		auto second = LeafList(1, 1);
+		chunk.data[1].SetValue(0, first);
+		chunk.data[1].SetValue(1, second);
+		StructVector::GetEntries(chunk.data[0])[0].Reference(chunk.data[1]);
+		FlatVector::ValidityMutable(chunk.data[0]).SetInvalid(1);
+
+		ColumnDataCollection collection(allocator, {struct_type, list_type});
+		collection.Append(chunk);
+
+		DataChunk result;
+		ScanSingleChunk(collection, result);
+		REQUIRE(result.data[0].GetValue(1).IsNull());
+		REQUIRE(result.data[1].GetValue(0) == first);
+		REQUIRE(result.data[1].GetValue(1) == second);
 	}
 }

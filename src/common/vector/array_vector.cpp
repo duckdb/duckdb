@@ -89,22 +89,13 @@ void VectorArrayBuffer::VerifyInternal(const LogicalType &type, const SelectionV
 		child->Verify();
 		return;
 	}
-	// flat vector case - only verify children for valid (non-NULL) entries
-	idx_t selected_child_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto oidx = sel.get_index(i);
-		if (validity.RowIsValid(oidx)) {
-			selected_child_count += array_size;
-		}
-	}
-	SelectionVector child_sel(selected_child_count);
+	// recurse into all children (incl. under NULL rows, proven NULL above) to catch deeper violations
+	SelectionVector child_sel(count * array_size);
 	idx_t child_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto oidx = sel.get_index(i);
-		if (validity.RowIsValid(oidx)) {
-			for (idx_t r = 0; r < array_size; r++) {
-				child_sel.set_index(child_count++, oidx * array_size + r);
-			}
+		for (idx_t r = 0; r < array_size; r++) {
+			child_sel.set_index(child_count++, oidx * array_size + r);
 		}
 	}
 	child->Verify(child_sel, child_count);
