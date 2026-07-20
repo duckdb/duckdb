@@ -69,15 +69,3 @@ SELECT
 	(SELECT io.total_bytes_read FROM '{TEST_DIR}/variant_projection_full.json')
 ----
 true
-
-statement ok
-RESET disable_parquet_prefetching
-
-statement ok
-RESET enable_external_file_cache
-
-statement ok
-RESET tracked_metrics
-
-statement ok
-RESET profiling_output
