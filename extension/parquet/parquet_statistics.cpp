@@ -33,6 +33,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types.hpp"
@@ -733,85 +734,75 @@ static uint64_t ValueXH64FixedWidth(T val) {
 	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
 }
 
-static bool TryHashTime(const Value &constant, const ParquetColumnSchema &schema, uint64_t &hash) {
+static optional<uint64_t> TryHashTime(const Value &constant, const ParquetColumnSchema &schema) {
 	switch (constant.type().id()) {
 	case LogicalTypeId::TIME: {
 		auto value = constant.GetValue<dtime_t>().value;
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			hash = ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));
-			return true;
+			return ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
-			hash = ValueXH64FixedWidth(value);
-			return true;
+			return ValueXH64FixedWidth(value);
 		default:
-			return false;
+			return nullopt;
 		}
 	}
 	case LogicalTypeId::TIME_NS: {
 		auto value = constant.GetValue<dtime_ns_t>().value;
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			hash = ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::NANOS_PER_MSEC));
-			return true;
+			return ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::NANOS_PER_MSEC));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
-			hash = ValueXH64FixedWidth(value / Interval::NANOS_PER_MICRO);
-			return true;
+			return ValueXH64FixedWidth(value / Interval::NANOS_PER_MICRO);
 		case ParquetExtraTypeInfo::UNIT_NS:
-			hash = ValueXH64FixedWidth(value);
-			return true;
+			return ValueXH64FixedWidth(value);
 		default:
-			return false;
+			return nullopt;
 		}
 	}
 	case LogicalTypeId::TIME_TZ: {
 		auto value = Time::NormalizeTimeTZ(constant.GetValue<dtime_tz_t>()).value;
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			hash = ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));
-			return true;
+			return ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
-			hash = ValueXH64FixedWidth(value);
-			return true;
+			return ValueXH64FixedWidth(value);
 		default:
-			return false;
+			return nullopt;
 		}
 	}
 	default:
-		return false;
+		return nullopt;
 	}
 }
 
 // Recreate the Parquet millisecond hash input from DuckDB's microsecond timestamp representation.
-static bool TryHashTimestampMillis(const Value &constant, const ParquetColumnSchema &schema, uint64_t &hash) {
+static optional<uint64_t> TryHashTimestampMillis(const Value &constant, const ParquetColumnSchema &schema) {
 	if (constant.type().id() != LogicalTypeId::TIMESTAMP && constant.type().id() != LogicalTypeId::TIMESTAMP_TZ) {
-		return false;
+		return nullopt;
 	}
 	if (schema.type_info != ParquetExtraTypeInfo::UNIT_MS) {
-		return false;
+		return nullopt;
 	}
 	// DuckDB stores timestamps in microseconds, while the Parquet bloom filter hashes the stored milliseconds.
 	auto value = constant.GetValue<int64_t>() / Interval::MICROS_PER_MSEC;
-	hash = duckdb_zstd::XXH64(&value, sizeof(value), 0);
-	return true;
+	return duckdb_zstd::XXH64(&value, sizeof(value), 0);
 }
 
 // TODO we can only this if the parquet representation of the type exactly matches the duckdb rep!
 // TODO TEST THIS!
 // TODO perhaps we can re-use some writer infra here
-static uint64_t ValueXXH64(const Value &constant, const ParquetColumnSchema &schema) {
+static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnSchema &schema) {
 	switch (constant.type().id()) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_NS:
-	case LogicalTypeId::TIME_TZ: {
-		uint64_t time_hash = 0;
-		return TryHashTime(constant, schema, time_hash) ? time_hash : 0;
-	}
+	case LogicalTypeId::TIME_TZ:
+		return TryHashTime(constant, schema);
 	default:
 		break;
 	}
-	uint64_t timestamp_hash = 0;
-	if (TryHashTimestampMillis(constant, schema, timestamp_hash)) {
+	auto timestamp_hash = TryHashTimestampMillis(constant, schema);
+	if (timestamp_hash) {
 		return timestamp_hash;
 	}
 	switch (constant.type().InternalType()) {
@@ -840,7 +831,7 @@ static uint64_t ValueXXH64(const Value &constant, const ParquetColumnSchema &sch
 		return duckdb_zstd::XXH64(val.data(), val.size(), 0);
 	}
 	default:
-		return 0;
+		return nullopt;
 	}
 }
 
@@ -852,7 +843,7 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 			return false;
 		}
 		auto hash = ValueXXH64(constant->GetValue(), schema);
-		return hash > 0 && !bloom_filter.FilterCheck(hash);
+		return hash && !bloom_filter.FilterCheck(*hash);
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
