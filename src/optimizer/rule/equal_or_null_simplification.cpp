@@ -7,6 +7,22 @@
 
 namespace duckdb {
 
+static bool IsPredicateRoot(LogicalOperator &op, bool is_root) {
+	if (!is_root) {
+		return false;
+	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		return true;
+	default:
+		return false;
+	}
+}
+
 EqualOrNullSimplification::EqualOrNullSimplification(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on OR conjunction
 	auto op = make_uniq<ConjunctionExpressionMatcher>();
@@ -86,6 +102,10 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Ex
 
 unique_ptr<Expression> EqualOrNullSimplification::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                         bool &changes_made, bool is_root) {
+	if (!IsPredicateRoot(op, is_root)) {
+		return nullptr;
+	}
+
 	const Expression &or_exp = bindings[0].get();
 
 	if (or_exp.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {

@@ -18,10 +18,10 @@ SELECT i FROM test WHERE (i=j) OR (i IS NULL AND j IS NULL);
 2
 NULL
 
-query II nosort distinctrewrite1
+query II nosort nodistinctprojection1
 EXPLAIN SELECT (i=j) OR (i IS NULL AND j IS NULL) FROM test;
 ----
-physical_plan	<REGEX>:.*DISTINCT.*
+physical_plan	<REGEX>:.*OR.*
 
 query I rowsort
 SELECT i FROM test WHERE i IS NOT DISTINCT FROM j;
@@ -42,10 +42,26 @@ SELECT i FROM test WHERE (i IS NULL AND j IS NULL) OR (i=j);
 2
 NULL
 
-query II nosort distinctrewrite1
+query II nosort nodistinctprojection2
 EXPLAIN SELECT (i IS NULL AND j IS NULL) OR (i=j) FROM test;
 ----
-physical_plan	<REGEX>:.*DISTINCT.*
+physical_plan	<REGEX>:.*OR.*
+
+statement ok
+CREATE TABLE projection_test(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO projection_test VALUES (0, NULL);
+
+query I
+SELECT a = b OR (a IS NULL AND b IS NULL) AS v FROM projection_test;
+----
+NULL
+
+query I
+SELECT (a IS NULL AND b IS NULL) OR a = b AS v FROM projection_test;
+----
+NULL
 
 # do a hash join
 query I rowsort
