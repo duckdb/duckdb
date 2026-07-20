@@ -4,6 +4,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -105,6 +106,30 @@ void LTTBClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	}
 }
 
+//! Converts axis values to double. Timestamp axes are normalized against an origin taken from the data.
+//! Absolute epoch values do not fit the 53-bit double mantissa (nanoseconds around 2020 need ~61 bits).
+//! Translating an axis does not change any triangle area.
+template <class T>
+struct LTTBAxis {
+	explicit LTTBAxis(const T *) {
+	}
+	double operator()(const T value) const {
+		return static_cast<double>(value);
+	}
+};
+
+template <>
+struct LTTBAxis<int64_t> {
+	explicit LTTBAxis(const int64_t *values) : origin(values[0]) {
+	}
+	double operator()(const int64_t value) const {
+		// infinity timestamps are INT64_MIN/MAX, so the subtraction can overflow int64_t
+		return Hugeint::Cast<double>(hugeint_t(value) - hugeint_t(origin));
+	}
+
+	int64_t origin;
+};
+
 //! XTYPE/YTYPE are the physical C++ types of the x and y columns: float/double for a FLOAT/DOUBLE axis, int64_t for
 //! any of the TIMESTAMP axes. We perform all computations with doubles, but we need the templates to cast the input
 //! correctly.
@@ -186,6 +211,10 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 		const auto vx = FlatVector::GetData<XTYPE>(axes[0]);
 		const auto vy = FlatVector::GetData<YTYPE>(axes[1]);
 
+		// Functors to normalize the axis values, if required.
+		const LTTBAxis<XTYPE> to_x(vx);
+		const LTTBAxis<YTYPE> to_y(vy);
+
 		// Always keep the first and the last point
 		sel[0] = 0;
 		sel[n - 1] = v - 1;
@@ -217,8 +246,8 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 			double avg_x = 0;
 			double avg_y = 0;
 			for (idx_t j = next_beg; j < next_end; j++) {
-				avg_x += static_cast<double>(vx[j]);
-				avg_y += static_cast<double>(vy[j]);
+				avg_x += to_x(vx[j]);
+				avg_y += to_y(vy[j]);
 			}
 			avg_x /= static_cast<double>(next_len);
 			avg_y /= static_cast<double>(next_len);
@@ -231,8 +260,8 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 			idx_t best_idx = curr_beg;
 
 			// A
-			const auto ax = static_cast<double>(vx[prev_idx]);
-			const auto ay = static_cast<double>(vy[prev_idx]);
+			const auto ax = to_x(vx[prev_idx]);
+			const auto ay = to_y(vy[prev_idx]);
 
 			// B
 			const auto bx = avg_x;
@@ -240,8 +269,8 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 
 			for (idx_t curr_idx = curr_beg; curr_idx < curr_end; curr_idx++) {
 				// C
-				const auto cx = static_cast<double>(vx[curr_idx]);
-				const auto cy = static_cast<double>(vy[curr_idx]);
+				const auto cx = to_x(vx[curr_idx]);
+				const auto cy = to_y(vy[curr_idx]);
 
 				// Compute the area of the triangle formed by points A, B, C using the shoelace formula
 				const auto area = std::fabs((ax - bx) * (cy - ay) - (ax - cx) * (by - ay)) * 0.5;
@@ -341,6 +370,8 @@ void AddLTTBFunctions(AggregateFunctionSet &set, const LogicalType &x_type) {
 	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_S));
 	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_MS));
 	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_NS));
+	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_TZ));
+	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_TZ_NS));
 }
 
 } // namespace
@@ -353,6 +384,8 @@ AggregateFunctionSet LttbFun::GetFunctions() {
 	AddLTTBFunctions<int64_t>(lttb, LogicalType::TIMESTAMP_S);
 	AddLTTBFunctions<int64_t>(lttb, LogicalType::TIMESTAMP_MS);
 	AddLTTBFunctions<int64_t>(lttb, LogicalType::TIMESTAMP_NS);
+	AddLTTBFunctions<int64_t>(lttb, LogicalType::TIMESTAMP_TZ);
+	AddLTTBFunctions<int64_t>(lttb, LogicalType::TIMESTAMP_TZ_NS);
 	return lttb;
 }
 
