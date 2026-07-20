@@ -1038,11 +1038,11 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
                                        const shared_ptr<CSVFileScan> &csv_file_scan, bool sniffing,
                                        const CSVIterator &boundary, idx_t result_size, bool can_suspend_p)
     : BaseScanner(buffer_manager, state_machine, error_handler, sniffing, csv_file_scan, boundary),
-      scanner_idx(scanner_idx_p), can_suspend(can_suspend_p),
+      scanner_idx(scanner_idx_p),
       result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath(), scanner_idx_p, used_unstrictness),
-      start_pos(0) {
+      start_pos(0), can_suspend(can_suspend_p) {
 	if (scanner_idx == 0 && csv_file_scan) {
 		lines_read += csv_file_scan->skipped_rows;
 	}
@@ -1055,10 +1055,10 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
                                        const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size,
                                        const CSVIterator &boundary)
     : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, boundary), scanner_idx(0),
-      can_suspend(false), result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
-                                 iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
-                                 buffer_manager->GetFilePath(), 0, used_unstrictness),
-      start_pos(0) {
+      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
+             iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
+             buffer_manager->GetFilePath(), 0, used_unstrictness),
+      start_pos(0), can_suspend(false) {
 	if (scanner_idx == 0 && csv_file_scan) {
 		lines_read += csv_file_scan->skipped_rows;
 	}
@@ -1103,15 +1103,10 @@ void StringValueScanner::ResumeParse() {
 	const auto phase = resume_phase;
 	resume_phase = ResumePhase::NONE;
 	switch (phase) {
-	case ResumePhase::PENDING_BUFFER_BOUNDARY: {
-		const auto move_result = TryMoveToNextBuffer();
-		if (move_result == MoveBufferResult::NOT_IN_MEMORY) {
-			resume_phase = ResumePhase::PENDING_BUFFER_BOUNDARY;
-			return;
-		}
-		FinishBoundaryScan(move_result == MoveBufferResult::MOVED);
+	case ResumePhase::PENDING_BUFFER_BOUNDARY:
+		// the retried move cannot re-suspend, it blocks if the loaded buffer was evicted again
+		FinishBoundaryScan(TryMoveToNextBuffer() == MoveBufferResult::MOVED);
 		break;
-	}
 	case ResumePhase::PENDING_BUFFER_MAIN:
 		ProcessRemainingBuffers();
 		break;
@@ -1669,8 +1664,7 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 	const idx_t next_buffer_idx = iterator.pos.buffer_idx + 1;
 	shared_ptr<CSVBufferHandle> next_buffer;
 	if (buffer_manager->GetBufferResidency(next_buffer_idx, next_buffer) == CSVBufferResidency::NEEDS_LOAD) {
-		if (can_suspend) {
-			// The next buffer must be read first
+		if (can_suspend && pending_buffer_idx != next_buffer_idx) {
 			pending_buffer_idx = next_buffer_idx;
 			return MoveBufferResult::NOT_IN_MEMORY;
 		}

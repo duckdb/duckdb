@@ -359,12 +359,19 @@ bool CSVFileScan::TryInitializeScan(ClientContext &context, GlobalTableFunctionS
 	return gstate.Next(csv_reader_ptr, lstate);
 }
 
-// Adds a task that loads the buffer on the async pool, when the buffer is not in memory
+// A task that loads the buffer on the async pool, sized for the read-ahead I/O budget
+static unique_ptr<AsyncTask> BufferLoadTask(const shared_ptr<CSVBufferManager> &manager, const idx_t buffer_idx) {
+	const idx_t io_size =
+	    manager->HasKnownBufferRanges() ? manager->KnownBufferSize(buffer_idx) : manager->GetBufferSize();
+	return make_uniq<CallbackAsyncTask>([manager, buffer_idx] { manager->GetBuffer(buffer_idx); }, io_size);
+}
+
+// Adds a load task when the buffer is not in memory
 static void TryPushBufferLoadTask(const shared_ptr<CSVBufferManager> &manager, const idx_t buffer_idx,
                                   vector<unique_ptr<AsyncTask>> &io_tasks) {
 	shared_ptr<CSVBufferHandle> buffer_handle;
 	if (manager->GetBufferResidency(buffer_idx, buffer_handle) == CSVBufferResidency::NEEDS_LOAD) {
-		io_tasks.push_back(make_uniq<CallbackAsyncTask>([manager, buffer_idx] { manager->GetBuffer(buffer_idx); }));
+		io_tasks.push_back(BufferLoadTask(manager, buffer_idx));
 	}
 }
 
@@ -384,6 +391,17 @@ static vector<unique_ptr<AsyncTask>> CollectClaimIOTasks(CSVLocalState &lstate) 
 	return io_tasks;
 }
 
+AsyncResult CSVFileScan::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
+                                    LocalTableFunctionState &lstate_p) {
+	auto &lstate = lstate_p.Cast<CSVLocalState>();
+	D_ASSERT(lstate.claim_state == CSVLocalState::ClaimState::PENDING);
+	auto io_tasks = CollectClaimIOTasks(lstate);
+	if (!io_tasks.empty()) {
+		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
+	}
+	return SourceResultType::HAVE_MORE_OUTPUT;
+}
+
 AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                               LocalTableFunctionState &local_state, DataChunk &chunk) {
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
@@ -396,11 +414,6 @@ AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &
 #endif
 	auto &lstate = local_state.Cast<CSVLocalState>();
 	if (lstate.claim_state == CSVLocalState::ClaimState::PENDING) {
-		auto io_tasks = CollectClaimIOTasks(lstate);
-		if (!io_tasks.empty()) {
-			return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
-		}
-		// the claim was taken under the global lock, the scanner is constructed here on the decoding thread
 		lstate.Materialize();
 	}
 	auto &csv_reader = *lstate.csv_reader;
@@ -410,10 +423,8 @@ AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &
 	csv_reader.Flush(chunk);
 	if (csv_reader.IsSuspended()) {
 		// buffer is not in memory, we need to load it to the async pool
-		auto manager = csv_reader.buffer_manager;
-		const idx_t buffer_idx = csv_reader.PendingBufferIdx();
 		vector<unique_ptr<AsyncTask>> io_tasks;
-		io_tasks.push_back(make_uniq<CallbackAsyncTask>([manager, buffer_idx] { manager->GetBuffer(buffer_idx); }));
+		io_tasks.push_back(BufferLoadTask(csv_reader.buffer_manager, csv_reader.PendingBufferIdx()));
 		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
 	}
 	return chunk.size() == 0 ? AsyncResult(SourceResultType::FINISHED)

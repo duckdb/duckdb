@@ -364,9 +364,6 @@ public:
 	//! Variable that manages buffer tracking
 	shared_ptr<CSVBufferUsage> buffer_tracker;
 
-	//! Whether this scanner is allowed to pause for I/O. sniffing/line-finding/skipping can't pause.
-	const bool can_suspend;
-
 private:
 	//! Result of trying to move to the next buffer
 	enum class MoveBufferResult : uint8_t {
@@ -421,8 +418,11 @@ private:
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
 	//! Strict state machine is basically a state machine with rfc 4180 set to true, used to figure out a new line.
 	shared_ptr<CSVStateMachine> state_machine_strict;
+	//! Whether this scanner is allowed to pause for I/O. sniffing/line-finding/skipping can't pause.
+	const bool can_suspend;
 	//! Set when the scanner suspends on a buffer not in memory, dispatches the resume
 	ResumePhase resume_phase = ResumePhase::NONE;
+	//! The buffer a suspension waits on, a scanner suspends at most once per buffer
 	idx_t pending_buffer_idx = 0;
 };
 

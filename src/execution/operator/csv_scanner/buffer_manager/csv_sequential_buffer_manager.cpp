@@ -71,7 +71,8 @@ void CSVSequentialBufferManager::UnpinPrevious(const idx_t pos) {
 CSVBufferResidency CSVSequentialBufferManager::GetBufferResidency(const idx_t pos,
                                                                   shared_ptr<CSVBufferHandle> &handle) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (pos < cached_buffers.size() && cached_buffers[pos]) {
+	if (pos < cached_buffers.size()) {
+		D_ASSERT(cached_buffers[pos]);
 		if (!cached_buffers[pos]->IsInMemory()) {
 			return CSVBufferResidency::NEEDS_LOAD;
 		}
