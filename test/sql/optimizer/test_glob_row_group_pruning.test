@@ -47,8 +47,3 @@ query I
 SELECT count(*) FROM t WHERE s NOT GLOB 'qqq';
 ----
 6144
-
-query I
-SELECT count(*) FROM t WHERE s NOT GLOB 'qqq';
-----
-6144
