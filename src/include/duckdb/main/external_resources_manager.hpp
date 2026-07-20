@@ -47,6 +47,8 @@ string QualifyTableCallback(ClientContext &context, const string &name);
 //! In-memory, instance-scoped manager of external resource instances (shared across connections). The
 //! external resources themselves are durable, but this manager is not: it is the instance's local view of
 //! what it manages, rebuilt across restarts via REGISTER. A name is claimed by its first registration.
+//! Deliberately not transactional: the resource exists out in the world whether or not the transaction that
+//! registered it commits, so dropping the record on rollback would strand it with nothing left to reap it.
 class ExternalResourcesManager {
 public:
 	static ExternalResourcesManager &Get(DatabaseInstance &db);

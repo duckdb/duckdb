@@ -44,6 +44,37 @@ CALL register_external_resource('', 'r3', MAP {'id': 'x'});
 ----
 <REGEX>:.*a type is required.*
 
+# NULL is rejected up front: it would otherwise reach StringValue::Get and surface as an internal error.
+statement error
+CALL register_external_resource(NULL, 'r3', MAP {'id': 'x'});
+----
+<REGEX>:.*must not be NULL.*
+
+statement error
+CALL register_external_resource('mock@local', NULL, MAP {'id': 'x'});
+----
+<REGEX>:.*must not be NULL.*
+
+# A registration survives the rollback of the transaction that made it. This is deliberate, and the opposite
+# of what a catalog entry would do: the resource is already provisioned out in the world, so forgetting the
+# record here would strand it with nothing left to reap it.
+statement ok
+BEGIN;
+
+statement ok
+CALL register_external_resource('mock@local', 'r_txn', MAP {'id': 'txn'});
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT count(*) FROM duckdb_external_resources() WHERE name = 'r_txn';
+----
+1
+
+statement ok
+CALL deregister_external_resource('r_txn');
+
 # Deregister removes the entry (without tearing the resource down).
 statement ok
 CALL deregister_external_resource('r1');
