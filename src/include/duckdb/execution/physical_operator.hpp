@@ -36,6 +36,8 @@ class PhysicalPlan;
 
 enum class TableFunctionParallelism : uint8_t;
 enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
+enum class PipelineExternalInputSupport : uint8_t { UNSUPPORTED, SUPPORTED };
+enum class PipelineSourceConsumption : uint8_t { ALL_INPUT, MAY_STOP_EARLY };
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
 class PhysicalOperator {
@@ -110,6 +112,14 @@ public:
 		return false;
 	}
 
+	virtual PipelineExternalInputSupport GetExternalInputSupport() const {
+		return PipelineExternalInputSupport::UNSUPPORTED;
+	}
+
+	virtual PipelineSourceConsumption GetSourceConsumption() const {
+		return PipelineSourceConsumption::ALL_INPUT;
+	}
+
 	virtual bool RequiresFinalExecute() const {
 		return false;
 	}
@@ -165,6 +175,7 @@ public:
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+	virtual void SourceFinished(ClientContext &context, GlobalSourceState &gstate) const;
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
 	virtual ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,

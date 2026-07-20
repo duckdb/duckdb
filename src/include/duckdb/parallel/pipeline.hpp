@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -20,9 +20,19 @@
 namespace duckdb {
 
 class Executor;
+class Event;
 class MetaPipeline;
 class PipelineExecutor;
 class Pipeline;
+
+enum class PipelineInputMode : uint8_t { SCHEDULED_SOURCE, EXTERNAL_INPUT };
+enum class ExternalInputEventState : uint8_t {
+	EXTERNAL_INPUT_UNSET,
+	EXTERNAL_INPUT_REGISTERED,
+	EXTERNAL_INPUT_EVENT_SCHEDULED,
+	EXTERNAL_INPUT_COMPLETED_BEFORE_SCHEDULE,
+	EXTERNAL_INPUT_COMPLETED
+};
 
 class PipelineTask : public ExecutorTask {
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
@@ -86,7 +96,15 @@ public:
 	ClientContext &GetClientContext();
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
+	void AddDataflowDependency(shared_ptr<Pipeline> &pipeline);
+	void AddExternalFinishDependency(shared_ptr<Pipeline> &pipeline);
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
+	const vector<weak_ptr<Pipeline>> &GetDataflowDependencies() const {
+		return dataflow_dependencies;
+	}
+	bool HasDataflowDependencies() const {
+		return !dataflow_dependencies.empty();
+	}
 
 	void Ready();
 	void Reset();
@@ -94,6 +112,7 @@ public:
 	void ResetSinkForReschedule();
 	void ResetForReschedule(bool reset_sink);
 	void ResetSource(bool force);
+	void PrepareExternalInput();
 	void ClearSource();
 	void Schedule(shared_ptr<Event> &event);
 	void PrepareFinalize();
@@ -124,6 +143,15 @@ public:
 
 	//! Returns whether any of the operators in the pipeline care about preserving order
 	bool IsOrderDependent() const;
+	//! Marks this pipeline as fed externally instead of by scheduled source tasks
+	void SetExternalInput();
+	bool IsExternalInput() const {
+		return input_mode == PipelineInputMode::EXTERNAL_INPUT;
+	}
+	void SetExternalInputEvent(const shared_ptr<Event> &event);
+	void CompleteExternalInput();
+	bool CanUseExternalInput() const;
+	bool CanStopSourceEarly() const;
 
 	//! Registers a new batch index for a pipeline executor - returns the current minimum batch index
 	idx_t RegisterNewBatchIndex();
@@ -144,15 +172,29 @@ private:
 	optional_ptr<PhysicalOperator> sink;
 
 	//! The global source state
-	unique_ptr<GlobalSourceState> source_state;
+	shared_ptr<GlobalSourceState> source_state DUCKDB_GUARDED_BY(source_state_lock);
+	//! Lock for resetting or inspecting the global source state pointer
+	annotated_mutex source_state_lock;
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	vector<weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline
 	vector<weak_ptr<Pipeline>> dependencies;
+	//! Pipelines that must be initialized before this pipeline can consume their dataflow output
+	vector<weak_ptr<Pipeline>> dataflow_dependencies;
+	//! Pipelines that must run before this externally fed pipeline can finish its sink
+	vector<weak_ptr<Pipeline>> external_finish_dependencies;
 
 	//! The base batch index of this pipeline
 	idx_t base_batch_index = 0;
+	//! How this pipeline receives input chunks
+	PipelineInputMode input_mode = PipelineInputMode::SCHEDULED_SOURCE;
+	//! Event that represents execution of an externally fed pipeline
+	weak_ptr<Event> external_input_event DUCKDB_GUARDED_BY(external_input_lock);
+	ExternalInputEventState external_input_event_state DUCKDB_GUARDED_BY(external_input_lock) =
+	    ExternalInputEventState::EXTERNAL_INPUT_UNSET;
+	//! Lock for one-time external input initialization
+	annotated_mutex external_input_lock;
 	//! Lock for accessing the set of batch indexes
 	mutex batch_lock;
 	//! The set of batch indexes that are currently being processed
@@ -164,9 +206,17 @@ private:
 private:
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
+	void ResetSinkAndOperators();
+	shared_ptr<GlobalSourceState> GetSourceState();
+	void SetSourceState(shared_ptr<GlobalSourceState> state);
+	void FinishSourceAndPreventBlocking(ClientContext &context);
+	void PreventSourceBlocking();
+	void PreventSinkBlocking();
+	void PreventBlocking();
 
 	bool TryGetMaxThreads(idx_t &max_threads);
 	bool ScheduleParallel(shared_ptr<Event> &event);
+	void ScheduleExternalInputEvent(shared_ptr<Event> event);
 };
 
 } // namespace duckdb
