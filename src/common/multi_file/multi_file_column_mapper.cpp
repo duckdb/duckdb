@@ -1152,7 +1152,7 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 				auto index = local_id + i;
 				expression_column_indexes.push_back(reader.column_indexes[index]);
 			}
-			reader.expression_map.emplace(local_id,
+			reader.expression_map.emplace(ProjectionIndex(local_id.GetIndex()),
 			                              BaseFileReaderExpression(std::move(expr), expression_column_indexes));
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
