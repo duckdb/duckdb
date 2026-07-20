@@ -1034,7 +1034,7 @@ void GroupedAggregateHashTable::GatherGroups(AggregateHTLookupState &state, cons
 		                                         result.data[group_idx], *FlatVector::IncrementalSelectionVector(),
 		                                         nullptr);
 	}
-	result.SetCardinalityUnsafe(found_count);
+	result.SetChildCardinality(found_count);
 }
 
 struct FlushMoveState {
