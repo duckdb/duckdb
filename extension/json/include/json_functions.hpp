@@ -38,6 +38,9 @@ public:
 	const JSONCommon::JSONPathType path_type;
 	const char *ptr;
 	const idx_t len;
+	//! Path elements parsed once at bind time (constant regular '$' paths only)
+	vector<JSONPathElement> elements;
+	bool use_elements = false;
 };
 
 struct JSONReadManyFunctionData : public FunctionData {
@@ -51,6 +54,9 @@ public:
 	const vector<string> paths;
 	vector<const char *> ptrs;
 	const vector<idx_t> lens;
+	//! Per-path elements parsed once at bind time (regular '$' paths only)
+	vector<vector<JSONPathElement>> elements;
+	vector<bool> use_elements;
 };
 
 struct JSONFunctionLocalState : public FunctionLocalState {
