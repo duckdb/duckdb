@@ -1,0 +1,60 @@
+# name: test/sql/cte/recursive_cte_key_final_drain.test
+# description: Drain the final USING KEY state without re-executing the recursive member
+# group: [cte]
+
+statement ok
+SET threads=1;
+
+statement ok
+SET enable_caching_operators=true;
+
+# Final-state chunks must not trigger additional recursive epochs. The volatile build executes once.
+statement ok
+CREATE SEQUENCE keyed_drain_sequence START 1;
+
+query IIII
+WITH RECURSIVE t(k, v, x) USING KEY (k) AS (
+	SELECT i, 0, NULL::BIGINT FROM range(5000) r(i)
+	UNION ALL
+	SELECT n.k, n.v + 1, build.x
+	FROM t n
+	JOIN (
+		SELECT i AS k, nextval('keyed_drain_sequence') AS x
+		FROM range(5000) r(i)
+	) build USING (k)
+	WHERE n.v < 0
+)
+SELECT count(*), min(v), max(v), currval('keyed_drain_sequence') FROM t;
+----
+5000	0	0	5000
+
+# Exercise final states below, at, and above vector boundaries.
+query III
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0 FROM range(1) r(i)
+	UNION ALL
+	SELECT k, v + 1 FROM t WHERE v < 0
+)
+SELECT count(*), min(k), max(k) FROM t;
+----
+1	0	0
+
+query III
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0 FROM range(2048) r(i)
+	UNION ALL
+	SELECT k, v + 1 FROM t WHERE v < 0
+)
+SELECT count(*), min(k), max(k) FROM t;
+----
+2048	0	2047
+
+query III
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0 FROM range(2049) r(i)
+	UNION ALL
+	SELECT k, v + 1 FROM t WHERE v < 0
+)
+SELECT count(*), min(k), max(k) FROM t;
+----
+2049	0	2048

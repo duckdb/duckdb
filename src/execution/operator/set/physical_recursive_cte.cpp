@@ -512,12 +512,55 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 	if (!gstate.initialized) {
 		if (!using_key) {
 			gstate.CurrentOutputTable().InitializeScan(gstate.scan_state);
-		} else {
-			gstate.ht->InitializeScan(gstate.ht_scan_state);
-			recurring_table->InitializeScan(gstate.scan_state);
 		}
 		gstate.finished_scan = false;
 		gstate.initialized = true;
+	}
+	if (using_key) {
+		while (true) {
+			switch (gstate.key_source_phase) {
+			case RecursiveCTEKeySourcePhase::RECURSING: {
+				const auto expected_new = gstate.intermediate_table.Count();
+				working_table->Reset();
+				working_table->Combine(gstate.intermediate_table);
+				gstate.InitializeIntermediateAppend();
+
+				if (expected_new > 0) {
+					const auto desired_capacity =
+					    GroupedAggregateHashTable::GetCapacityForCount(gstate.ht->Count() + expected_new);
+					if (desired_capacity > gstate.ht->Capacity()) {
+						gstate.ht->Resize(desired_capacity);
+					}
+				}
+
+				ExecuteRecursivePipelines(context);
+				if (gstate.intermediate_table.Count() == 0) {
+					gstate.ht->InitializeScan(gstate.ht_scan_state);
+					gstate.key_source_phase = RecursiveCTEKeySourcePhase::DRAINING_FINAL_STATE;
+				}
+				break;
+			}
+			case RecursiveCTEKeySourcePhase::DRAINING_FINAL_STATE: {
+				auto &payload_rows = gstate.source_payload_rows;
+				auto &distinct_rows = gstate.source_distinct_rows;
+				while (gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows)) {
+					if (distinct_rows.size() == 0) {
+						continue;
+					}
+					ScatterChunk(chunk, distinct_rows, distinct_idx);
+					ScatterChunk(chunk, payload_rows, payload_idx);
+					chunk.SetCardinalityUnsafe(distinct_rows.size());
+					return SourceResultType::HAVE_MORE_OUTPUT;
+				}
+				gstate.key_source_phase = RecursiveCTEKeySourcePhase::FINISHED;
+				break;
+			}
+			case RecursiveCTEKeySourcePhase::FINISHED:
+				return SourceResultType::FINISHED;
+			default:
+				throw InternalException("Unsupported recursive CTE key source phase");
+			}
+		}
 	}
 	while (chunk.size() == 0) {
 		if (!gstate.finished_scan) {
@@ -538,7 +581,7 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 
 			// After an iteration, we reset the recurring table
 			// and fill it up with the new hash table rows for the next iteration.
-			if (!using_key && ref_recurring && current_output.Count() != 0) {
+			if (ref_recurring && current_output.Count() != 0) {
 				// we need to populate the recurring table from the intermediate table
 				// careful: we can not just use Combine here, because this destroys the intermediate table
 				// instead we need to scan and append to create a copy
@@ -552,15 +595,9 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 			}
 
 			gstate.finished_scan = false;
-			if (!using_key) {
-				gstate.AdvanceIterationBuffers();
-				gstate.ResetCurrentOutputTableForReuse();
-				gstate.RebindRecursiveScans();
-			} else {
-				working_table->Reset();
-				working_table->Combine(gstate.intermediate_table);
-				gstate.InitializeIntermediateAppend();
-			}
+			gstate.AdvanceIterationBuffers();
+			gstate.ResetCurrentOutputTableForReuse();
+			gstate.RebindRecursiveScans();
 
 			// Pre-grow the dedup HT to avoid costly Resize + ReinsertTuples during the next Sink phase.
 			// current_output.Count() is the count of rows output in the previous iteration — an upper bound
@@ -568,7 +605,7 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 			if (!union_all) {
 				const idx_t expected_new = current_output.Count();
 				if (expected_new > 0) {
-					if (using_key || gstate.distinct_partitions.empty()) {
+					if (gstate.distinct_partitions.empty()) {
 						const idx_t desired_capacity =
 						    GroupedAggregateHashTable::GetCapacityForCount(gstate.ht->Count() + expected_new);
 						if (desired_capacity > gstate.ht->Capacity()) {
@@ -595,21 +632,10 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 			// if not, we are done
 			if (gstate.CurrentOutputTable().Count() == 0) {
 				gstate.finished_scan = true;
-				if (using_key) {
-					auto &payload_rows = gstate.source_payload_rows;
-					auto &distinct_rows = gstate.source_distinct_rows;
-					distinct_rows.Reset();
-					payload_rows.Reset();
-					gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
-					ScatterChunk(chunk, distinct_rows, distinct_idx);
-					ScatterChunk(chunk, payload_rows, payload_idx);
-				}
 				break;
 			}
-			if (!using_key) {
-				// set up the scan again
-				gstate.CurrentOutputTable().InitializeScan(gstate.scan_state);
-			}
+			// set up the scan again
+			gstate.CurrentOutputTable().InitializeScan(gstate.scan_state);
 		}
 	}
 
