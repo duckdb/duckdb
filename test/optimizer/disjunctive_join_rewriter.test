@@ -48,7 +48,7 @@ EXPLAIN SELECT o.o_orderkey, l.l_partkey
 FROM tiny_orders o JOIN tiny_lineitem l
 ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
 ----
-physical_plan	<REGEX>:.*BLOCKWISE_NL_JOIN.*
+physical_plan	<REGEX>:.*Blockwise Nl Join.*
 
 query IIII rowsort
 SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
@@ -162,7 +162,7 @@ EXPLAIN SELECT COUNT(*)
 FROM med_orders o SEMI JOIN med_lineitem l
 ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
 ----
-physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+physical_plan	<!REGEX>:.*Blockwise Nl Join.*
 
 query I
 SELECT COUNT(*)
@@ -176,7 +176,7 @@ EXPLAIN SELECT COUNT(*)
 FROM med_orders o ANTI JOIN med_lineitem l
 ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
 ----
-physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+physical_plan	<!REGEX>:.*Blockwise Nl Join.*
 
 query I
 SELECT COUNT(*)
@@ -190,7 +190,7 @@ EXPLAIN SELECT COUNT(*)
 FROM med_orders o JOIN med_lineitem l
 ON o.o_orderkey > l.l_orderkey OR o.o_custkey = l.l_partkey;
 ----
-physical_plan	<REGEX>:.*BLOCKWISE_NL_JOIN.*
+physical_plan	<REGEX>:.*Blockwise Nl Join.*
 
 statement ok
 CREATE TABLE dups_a AS SELECT * FROM orders LIMIT 0;
@@ -212,7 +212,7 @@ query II
 EXPLAIN SELECT COUNT(*) FROM dups_a JOIN dups_b
 ON dups_a.o_orderkey = dups_b.l_orderkey OR dups_a.o_custkey = dups_b.l_partkey;
 ----
-physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+physical_plan	<!REGEX>:.*Blockwise Nl Join.*
 
 query I
 SELECT COUNT(*) FROM dups_a JOIN dups_b

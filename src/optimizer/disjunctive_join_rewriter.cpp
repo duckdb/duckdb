@@ -93,7 +93,8 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::OptimizeInternal(unique_ptr
 	CTEInfo left_cte {left_cte_idx, left_base.all_types, left_base.all_bindings, std::move(left_orig_bindings)};
 	CTEInfo right_cte {right_cte_idx, right_base.all_types, right_base.all_bindings, std::move(right_orig_bindings)};
 
-	auto match_result = BuildMatchCTE(left_cte, right_cte, left_base.rowid_col, right_base.rowid_col, branches);
+	bool one_sided = (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI);
+	auto match_result = BuildMatchCTE(left_cte, right_cte, left_base.rowid_col, right_base.rowid_col, branches, one_sided);
 
 	TableIndex match_cte_idx = NewTableIndex();
 	CTEInfo match_cte {match_cte_idx, match_result.output_types, match_result.output_bindings};
@@ -452,7 +453,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::MakeCTERef(const CTEInfo &c
 
 DisjunctiveJoinRewriter::MatchCTEResult
 DisjunctiveJoinRewriter::BuildMatchCTE(const CTEInfo &left_cte, const CTEInfo &right_cte, ColumnBinding left_rowid,
-                                       ColumnBinding right_rowid, const vector<Branch> &branches) {
+                                       ColumnBinding right_rowid, const vector<Branch> &branches, bool one_sided_join) {
 	idx_t left_rid_idx = GetCTEColumnIndex(left_cte, left_rowid);
 	idx_t right_rid_idx = GetCTEColumnIndex(right_cte, right_rowid);
 
@@ -513,9 +514,12 @@ DisjunctiveJoinRewriter::BuildMatchCTE(const CTEInfo &left_cte, const CTEInfo &r
 		TableIndex proj_tbl = NewTableIndex();
 		vector<unique_ptr<Expression>> proj_exprs;
 		proj_exprs.push_back(
-		    ColRef(ColumnBinding(left_ref_idx, ProjectionIndex(left_rid_idx)), LogicalType::BIGINT, "match_left"));
-		proj_exprs.push_back(
-		    ColRef(ColumnBinding(right_ref_idx, ProjectionIndex(right_rid_idx)), LogicalType::BIGINT, "match_right"));
+			ColRef(ColumnBinding(left_ref_idx, ProjectionIndex(left_rid_idx)), LogicalType::BIGINT, "match_left"));
+
+		if (!one_sided_join) {
+			proj_exprs.push_back(
+				ColRef(ColumnBinding(right_ref_idx, ProjectionIndex(right_rid_idx)), LogicalType::BIGINT, "match_right"));
+		}
 
 		auto proj = make_uniq<LogicalProjection>(proj_tbl, std::move(proj_exprs));
 		proj->AddChild(std::move(inner_join));
@@ -524,14 +528,22 @@ DisjunctiveJoinRewriter::BuildMatchCTE(const CTEInfo &left_cte, const CTEInfo &r
 	}
 
 	bool setop_all = false;
-	auto native_union = make_uniq<LogicalSetOperation>(union_tbl, 2, std::move(union_children),
+	idx_t union_columns = one_sided_join ? 1 : 2;
+	auto native_union = make_uniq<LogicalSetOperation>(union_tbl, union_columns, std::move(union_children),
 	                                                   LogicalOperatorType::LOGICAL_UNION, setop_all, true);
 
 	MatchCTEResult result;
 	result.plan = std::move(native_union);
-	result.output_types = {LogicalType::BIGINT, LogicalType::BIGINT};
-	result.output_bindings = {ColumnBinding(union_tbl, ProjectionIndex(0)),
-	                          ColumnBinding(union_tbl, ProjectionIndex(1))};
+
+	if (one_sided_join) {
+		result.output_types = {LogicalType::BIGINT};
+		result.output_bindings = {ColumnBinding(union_tbl, ProjectionIndex(0))};
+	} else {
+		result.output_types = {LogicalType::BIGINT, LogicalType::BIGINT};
+		result.output_bindings = {ColumnBinding(union_tbl, ProjectionIndex(0)),
+								  ColumnBinding(union_tbl, ProjectionIndex(1))};
+	}
+
 	return result;
 }
 

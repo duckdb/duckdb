@@ -88,7 +88,7 @@ private:
 
 	//! builds match cte from all branches (full rewrite path)
 	MatchCTEResult BuildMatchCTE(const CTEInfo &left_cte, const CTEInfo &right_cte, ColumnBinding left_rowid,
-	                             ColumnBinding right_rowid, const vector<Branch> &branches);
+	                             ColumnBinding right_rowid, const vector<Branch> &branches, bool one_sided_join);
 
 	unique_ptr<LogicalOperator> BuildInner(const CTEInfo &match_cte, const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                       ColumnBinding left_rowid, ColumnBinding right_rowid);

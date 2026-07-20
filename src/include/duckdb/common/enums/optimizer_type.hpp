@@ -57,6 +57,7 @@ enum class OptimizerType : uint32_t {
 	GROUPING_SETS = 40,
 	TYPE_PUSHDOWN = 41,
 	SCALAR_FN_PUSHDOWN = 42,
+	DISJUNCTIVE_JOIN_REWRITER = 43
 };
 
 string OptimizerTypeToString(OptimizerType type);
