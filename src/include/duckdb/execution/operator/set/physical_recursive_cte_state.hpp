@@ -71,6 +71,7 @@ public:
 	shared_ptr<RecursiveExecutorPool> executor_pool;
 
 	mutex intermediate_table_lock;
+	mutex ht_finalize_lock;
 	ColumnDataCollection intermediate_table;
 	ColumnDataAppendState intermediate_append_state;
 	ColumnDataAppendState working_append_state;
@@ -116,6 +117,8 @@ public:
 	atomic<idx_t> cumulative_sink_calls {0};
 	atomic<idx_t> cumulative_hash_rows {0};
 	atomic<idx_t> cumulative_recurring_scan_rows {0};
+	atomic<idx_t> cumulative_direct_probe_rows {0};
+	atomic<idx_t> cumulative_direct_probe_matches {0};
 	idx_t cumulative_final_state_rows = 0;
 	idx_t retained_build_executions = 0;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state

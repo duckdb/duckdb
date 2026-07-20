@@ -75,3 +75,32 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'DistinctPromoted'
   AND info.migrated_rows::UBIGINT > 0;
 ----
 1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0 FROM range(4096) r(i)
+	UNION ALL
+	SELECT n.k, r.v + 1
+	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.v < 2
+)
+SELECT count(*), max(v) FROM t;
+----
+4096	2
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT info.direct_probe_rows::UBIGINT > 0,
+       info.recurring_scan_rows::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1

@@ -38,7 +38,7 @@ public:
 
 public:
 	template <class T, class... ARGS>
-	PhysicalOperator &Make(ARGS &&... args) {
+	PhysicalOperator &Make(ARGS &&...args) {
 		static_assert(std::is_base_of<PhysicalOperator, T>::value, "T must be a physical operator");
 		auto ptr = arena.Make<T>(*this, std::forward<ARGS>(args)...);
 		ops.push_back(*ptr);
@@ -82,6 +82,8 @@ public:
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
 	//! USING KEY recurring references scan a frozen aggregate state directly.
 	unordered_set<TableIndex> using_key_recursive_ctes;
+	unordered_map<TableIndex, vector<idx_t>> using_key_distinct_indices;
+	unordered_map<TableIndex, vector<idx_t>> using_key_payload_indices;
 	unordered_map<TableIndex, vector<reference<PhysicalRecursiveCTEStateScan>>> recursive_state_scans;
 	//! Materialized CTE ids must be collected.
 	unordered_map<TableIndex, vector<const_reference<PhysicalOperator>>> materialized_ctes;
@@ -107,7 +109,7 @@ public:
 	                                     PhysicalOperator &child, vector<column_t> &partition_columns);
 	//! Make a physical operator in the physical plan.
 	template <class T, class... ARGS>
-	PhysicalOperator &Make(ARGS &&... args) {
+	PhysicalOperator &Make(ARGS &&...args) {
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
 	}
 

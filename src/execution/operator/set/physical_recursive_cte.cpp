@@ -94,6 +94,8 @@ RecursiveCTEState::~RecursiveCTEState() {
 		            {"sink_lock_calls", to_string(cumulative_sink_calls.load())},
 		            {"hash_rows", to_string(cumulative_hash_rows.load())},
 		            {"recurring_scan_rows", to_string(cumulative_recurring_scan_rows.load())},
+		            {"direct_probe_rows", to_string(cumulative_direct_probe_rows.load())},
+		            {"direct_probe_matches", to_string(cumulative_direct_probe_matches.load())},
 		            {"final_state_rows", to_string(cumulative_final_state_rows)},
 		            {"retained_build_executions", to_string(retained_build_executions)}});
 	}

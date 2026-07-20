@@ -422,6 +422,8 @@ enum class RecoveryMode : uint8_t;
 
 enum class RecursiveCTEInlineStageType : uint8_t;
 
+enum class RecursiveCTEKeySourcePhase : uint8_t;
+
 enum class RecursiveProbeSidePreference : uint8_t;
 
 enum class RegexMatchOperatorSemantics : uint8_t;
@@ -1167,6 +1169,9 @@ const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
 const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineStageType value);
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEKeySourcePhase>(RecursiveCTEKeySourcePhase value);
 
 template<>
 const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
@@ -1993,6 +1998,9 @@ RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
 RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(const char *value);
+
+template<>
+RecursiveCTEKeySourcePhase EnumUtil::FromString<RecursiveCTEKeySourcePhase>(const char *value);
 
 template<>
 RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);
