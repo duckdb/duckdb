@@ -41,6 +41,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		cast_cte.recurring_table = recurring_table;
 		cast_cte.distinct_types = op.types;
 		cast_cte.working_table = working_table;
+		cast_cte.non_repeatable_operators = non_repeatable_operators;
 		return cte;
 	}
 
@@ -81,6 +82,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	// If the key variant has been used, a recurring table will be created.
 	auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 	recurring_cte_tables[op.table_index] = recurring_table;
+	using_key_recursive_ctes.insert(op.table_index);
 
 	planning_recursive_cte_depth++;
 	auto &right = CreatePlan(*op.children[1]);
@@ -98,6 +100,16 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	cast_cte.ref_recurring = op.ref_recurring;
 	cast_cte.working_table = working_table;
 	cast_cte.recurring_table = recurring_table;
+	cast_cte.non_repeatable_operators = non_repeatable_operators;
+	auto state_scans = recursive_state_scans.find(op.table_index);
+	if (state_scans != recursive_state_scans.end()) {
+		for (auto &scan_ref : state_scans->second) {
+			auto &scan = scan_ref.get();
+			scan.recursive_cte = cast_cte;
+			scan.distinct_idx = distinct_idx;
+			scan.payload_idx = payload_idx;
+		}
+	}
 	return cte;
 }
 
@@ -141,6 +153,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 	auto cte = recursive_cte_tables.find(op.cte_index);
 	if (cte == recursive_cte_tables.end()) {
 		throw InvalidInputException("Referenced recursive CTE does not exist.");
+	}
+	if (op.is_recurring && using_key_recursive_ctes.find(op.cte_index) != using_key_recursive_ctes.end()) {
+		auto &state_scan = Make<PhysicalRecursiveCTEStateScan>(op.chunk_types, op.estimated_cardinality, op.cte_index)
+		                       .Cast<PhysicalRecursiveCTEStateScan>();
+		recursive_state_scans[op.cte_index].push_back(state_scan);
+		return state_scan;
 	}
 
 	// If we found a recursive CTE and we want to scan the recurring table, we search for it,

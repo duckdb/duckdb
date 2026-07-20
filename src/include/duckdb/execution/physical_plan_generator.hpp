@@ -22,6 +22,7 @@ namespace duckdb {
 class ClientContext;
 class ColumnDataCollection;
 class PipelineBroadcastExchange;
+class PhysicalRecursiveCTEStateScan;
 
 class PhysicalPlan {
 public:
@@ -79,6 +80,9 @@ public:
 	unordered_map<TableIndex, shared_ptr<PipelineBroadcastExchange>> materialized_cte_exchanges;
 	//! Used to reference the recurring tables
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
+	//! USING KEY recurring references scan a frozen aggregate state directly.
+	unordered_set<TableIndex> using_key_recursive_ctes;
+	unordered_map<TableIndex, vector<reference<PhysicalRecursiveCTEStateScan>>> recursive_state_scans;
 	//! Materialized CTE ids must be collected.
 	unordered_map<TableIndex, vector<const_reference<PhysicalOperator>>> materialized_ctes;
 	//! The index for duplicate eliminated joins.
@@ -178,8 +182,10 @@ protected:
 private:
 	ClientContext &context;
 	unique_ptr<PhysicalPlan> physical_plan;
+	reference_set_t<const PhysicalOperator> non_repeatable_operators;
 
 private:
+	PhysicalOperator &CreatePlanInternal(LogicalOperator &op);
 	PhysicalOperator &ResolveAndPlan(unique_ptr<LogicalOperator> logical);
 	unique_ptr<PhysicalPlan> PlanInternal(LogicalOperator &logical);
 	bool PreserveInsertionOrder(PhysicalOperator &plan);

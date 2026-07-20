@@ -48,12 +48,15 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 	                                          op.payload_types, std::move(payload_aggregates));
 	if (op.using_key) {
 		distinct_rows.Initialize(Allocator::DefaultAllocator(), op.distinct_types);
+		update_rows.Initialize(Allocator::DefaultAllocator(), op.internal_types);
 		source_distinct_rows.Initialize(Allocator::DefaultAllocator(), op.distinct_types);
 		source_payload_rows.Initialize(Allocator::DefaultAllocator(), op.payload_types);
 	}
 	source_result.Initialize(Allocator::DefaultAllocator(), op.GetTypes());
-	InitializeIntermediateAppend();
-	op.working_table->InitializeAppend(working_append_state);
+	if (op.using_key || !op.union_all) {
+		InitializeIntermediateAppend();
+		op.working_table->InitializeAppend(working_append_state);
+	}
 	if (op.recurring_table) {
 		op.recurring_table->InitializeAppend(recurring_append_state);
 	}
@@ -121,6 +124,9 @@ void RecursiveCTEState::AdvanceIterationBuffers() {
 void RecursiveCTEState::ResetCurrentOutputTableForReuse() {
 	auto &output = CurrentOutputTable();
 	output.ResetForReuse();
+	if (!op.using_key && op.union_all) {
+		return;
+	}
 	if (op.using_key || !output_is_working) {
 		InitializeIntermediateAppend();
 	} else {
@@ -140,26 +146,29 @@ void RecursiveCTEState::RebindRecursiveScans() {
 	}
 }
 
-vector<unique_ptr<PipelineExecutor>> &RecursiveCTEState::GetCachedExecutors(Pipeline &pipeline, idx_t max_threads) {
+void RecursiveCTEState::PrepareCachedExecutorEntry(Pipeline &pipeline) {
+	cached_executors.emplace(reference<Pipeline>(pipeline), vector<unique_ptr<PipelineExecutor>>());
+}
+
+void RecursiveCTEState::PrepareCachedExecutors(Pipeline &pipeline, idx_t max_threads) {
 	// Ordinary pipelines build PipelineExecutors once and discard them after the query finishes.
 	// Recursive CTEs re-enter the same pipelines many times, and correlated recursive invocations can
 	// construct several RecursiveCTEState objects for the same physical plan. Keep a state-local cache
 	// for cheap per-iteration reuse, and spill back into a shared pool so later states can recycle the
 	// already-initialized executors instead of reconstructing them from scratch.
-	lock_guard<mutex> guard(cached_executor_lock);
 	auto entry = cached_executors.find(pipeline);
-	if (entry == cached_executors.end()) {
-		entry = cached_executors.emplace(reference<Pipeline>(pipeline), vector<unique_ptr<PipelineExecutor>>()).first;
-	}
+	D_ASSERT(entry != cached_executors.end());
 	auto &executors = entry->second;
+	if (executors.size() >= max_threads) {
+		return;
+	}
 	if (!allow_executor_reuse) {
 		while (executors.size() < max_threads) {
 			executors.push_back(make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline));
 		}
-		return executors;
+		return;
 	}
 	D_ASSERT(executor_pool);
-	// Lock order: cached_executor_lock -> executor_pool->lock.
 	lock_guard<mutex> pool_guard(executor_pool->lock);
 	auto pool_entry = executor_pool->executors.find(pipeline);
 	if (pool_entry == executor_pool->executors.end()) {
@@ -176,11 +185,15 @@ vector<unique_ptr<PipelineExecutor>> &RecursiveCTEState::GetCachedExecutors(Pipe
 			executors.push_back(make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline));
 		}
 	}
-	return executors;
+}
+
+vector<unique_ptr<PipelineExecutor>> &RecursiveCTEState::GetCachedExecutors(Pipeline &pipeline) {
+	auto entry = cached_executors.find(pipeline);
+	D_ASSERT(entry != cached_executors.end());
+	return entry->second;
 }
 
 void RecursiveCTEState::ClearCachedExecutors() {
-	lock_guard<mutex> guard(cached_executor_lock);
 	if (cached_executors.empty()) {
 		return;
 	}
@@ -189,7 +202,6 @@ void RecursiveCTEState::ClearCachedExecutors() {
 		return;
 	}
 	D_ASSERT(executor_pool);
-	// Lock order: cached_executor_lock -> executor_pool->lock.
 	lock_guard<mutex> pool_guard(executor_pool->lock);
 	for (auto &entry : cached_executors) {
 		auto pool_entry = executor_pool->executors.find(entry.first.get());
@@ -206,6 +218,34 @@ void RecursiveCTEState::ClearCachedExecutors() {
 
 unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientContext &context) const {
 	return make_uniq<RecursiveCTEState>(context, *this);
+}
+
+class RecursiveCTELocalState : public LocalSinkState {
+public:
+	RecursiveCTELocalState(ClientContext &context, const PhysicalRecursiveCTE &op) {
+		if (!op.using_key && op.union_all) {
+			output = make_uniq<ColumnDataCollection>(context, op.GetTypes());
+			output->InitializeAppend(append_state);
+		}
+	}
+
+	unique_ptr<ColumnDataCollection> output;
+	ColumnDataAppendState append_state;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSinkState &gstate) override {
+		if (output) {
+			output->ResetForReuse();
+			output->InitializeAppend(append_state);
+		}
+	}
+};
+
+unique_ptr<LocalSinkState> PhysicalRecursiveCTE::GetLocalSinkState(ExecutionContext &context) const {
+	return make_uniq<RecursiveCTELocalState>(context.client, *this);
 }
 
 idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) const {
@@ -232,8 +272,98 @@ static void ScatterChunk(DataChunk &output_chunk, DataChunk &input_chunk, const 
 	}
 }
 
+void RecursiveCTEState::CommitUsingKeyUpdates() {
+	D_ASSERT(op.using_key);
+	ColumnDataScanState update_scan_state;
+	intermediate_table.InitializeScan(update_scan_state);
+	while (intermediate_table.Scan(update_scan_state, update_rows)) {
+		distinct_rows.Reset();
+		GatherChunk(distinct_rows, update_rows, op.distinct_idx);
+		if (!executor.expressions.empty()) {
+			payload_rows.Reset();
+			executor.Execute(update_rows, payload_rows);
+		}
+		ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
+	}
+}
+
+class RecursiveCTEStateScanGlobalState : public GlobalSourceState {
+public:
+	mutex lock;
+	AggregateHTScanState scan_state;
+	bool initialized = false;
+};
+
+class RecursiveCTEStateScanLocalState : public LocalSourceState {
+public:
+	RecursiveCTEStateScanLocalState(ClientContext &context, const PhysicalRecursiveCTE &op) {
+		distinct_rows.Initialize(Allocator::Get(context), op.distinct_types);
+		payload_rows.Initialize(Allocator::Get(context), op.payload_types);
+	}
+
+	DataChunk distinct_rows;
+	DataChunk payload_rows;
+};
+
+PhysicalRecursiveCTEStateScan::PhysicalRecursiveCTEStateScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                                             idx_t estimated_cardinality, TableIndex cte_index)
+    : PhysicalColumnDataScan(physical_plan, std::move(types), PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN,
+                             estimated_cardinality, cte_index) {
+}
+
+unique_ptr<GlobalSourceState> PhysicalRecursiveCTEStateScan::GetGlobalSourceState(ClientContext &context) const {
+	return make_uniq<RecursiveCTEStateScanGlobalState>();
+}
+
+unique_ptr<LocalSourceState> PhysicalRecursiveCTEStateScan::GetLocalSourceState(ExecutionContext &context,
+                                                                                GlobalSourceState &gstate) const {
+	if (!recursive_cte) {
+		throw InternalException("USING KEY state scan is not linked to its recursive CTE");
+	}
+	return make_uniq<RecursiveCTEStateScanLocalState>(context.client, *recursive_cte);
+}
+
+SourceResultType PhysicalRecursiveCTEStateScan::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                                OperatorSourceInput &input) const {
+	if (!recursive_cte || !recursive_cte->sink_state) {
+		throw InternalException("USING KEY state scan has no recursive state");
+	}
+	auto &recursive_state = recursive_cte->sink_state->Cast<RecursiveCTEState>();
+	auto &gstate = input.global_state.Cast<RecursiveCTEStateScanGlobalState>();
+	auto &lstate = input.local_state.Cast<RecursiveCTEStateScanLocalState>();
+	lock_guard<mutex> guard(gstate.lock);
+	if (!gstate.initialized) {
+		recursive_state.ht->InitializeScan(gstate.scan_state);
+		gstate.initialized = true;
+	}
+	while (recursive_state.ht->Scan(gstate.scan_state, lstate.distinct_rows, lstate.payload_rows)) {
+		if (lstate.distinct_rows.size() == 0) {
+			continue;
+		}
+		ScatterChunk(chunk, lstate.distinct_rows, distinct_idx);
+		ScatterChunk(chunk, lstate.payload_rows, payload_idx);
+		chunk.SetCardinalityUnsafe(lstate.distinct_rows.size());
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	}
+	return SourceResultType::FINISHED;
+}
+
+InsertionOrderPreservingMap<string> PhysicalRecursiveCTEStateScan::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["CTE Index"] = StringUtil::Format("%llu", cte_index.index);
+	SetEstimatedCardinality(result, estimated_cardinality);
+	return result;
+}
+
 SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+
+	if (!using_key && union_all) {
+		auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
+		D_ASSERT(lstate.output);
+		lstate.output->Append(lstate.append_state, chunk);
+		return SinkResultType::NEED_MORE_INPUT;
+	}
 
 	lock_guard<mutex> guard(gstate.intermediate_table_lock);
 	if (!using_key) {
@@ -248,24 +378,28 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 			output.Append(append_state, chunk);
 		}
 	} else {
-		// Split incoming DataChunk into payload and keys using the cached distinct_rows chunk
-		gstate.distinct_rows.Reset();
-		GatherChunk(gstate.distinct_rows, chunk, distinct_idx);
-
-		// Add result of recursive anchor to intermediate table
+		// Collect updates without mutating the hash state read by recurring.T in this epoch.
 		gstate.intermediate_table.Append(gstate.intermediate_append_state, chunk);
-
-		// Execute aggregate expressions on chunk if any
-		if (!gstate.executor.expressions.empty()) {
-			gstate.payload_rows.Reset();
-			gstate.executor.Execute(chunk, gstate.payload_rows);
-		}
-
-		// Add the result of the executed expressions to the hash table
-		gstate.ht->AddChunk(gstate.distinct_rows, gstate.payload_rows, AggregateType::NON_DISTINCT);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
+}
+
+void PhysicalRecursiveCTE::PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const {
+	if (using_key) {
+		sink_state.Cast<RecursiveCTEState>().CommitUsingKeyUpdates();
+	}
+}
+
+SinkCombineResultType PhysicalRecursiveCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	if (!using_key && union_all) {
+		auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+		auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
+		D_ASSERT(lstate.output);
+		lock_guard<mutex> guard(gstate.intermediate_table_lock);
+		gstate.CurrentOutputTable().Combine(*lstate.output);
+	}
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
@@ -303,23 +437,7 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 
 			// After an iteration, we reset the recurring table
 			// and fill it up with the new hash table rows for the next iteration.
-			if (using_key && ref_recurring && current_output.Count() != 0) {
-				gstate.ResetRecurringTable();
-				AggregateHTScanState scan_state;
-				gstate.ht->InitializeScan(scan_state);
-				auto &result = gstate.source_result;
-				auto &payload_rows = gstate.source_payload_rows;
-				auto &distinct_rows = gstate.source_distinct_rows;
-
-				while (gstate.ht->Scan(scan_state, distinct_rows, payload_rows)) {
-					result.Reset();
-					// Populate the result DataChunk with the keys and the payload.
-					ScatterChunk(result, distinct_rows, distinct_idx);
-					ScatterChunk(result, payload_rows, payload_idx);
-					// Append the result to the recurring table.
-					recurring_table->Append(gstate.recurring_append_state, result);
-				}
-			} else if (ref_recurring && current_output.Count() != 0) {
+			if (!using_key && ref_recurring && current_output.Count() != 0) {
 				// we need to populate the recurring table from the intermediate table
 				// careful: we can not just use Combine here, because this destroys the intermediate table
 				// instead we need to scan and append to create a copy
