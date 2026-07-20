@@ -99,9 +99,6 @@ public:
 	vector<const_reference<PhysicalOperator>> GetSources() const override;
 
 private:
-	//! Probe Hash Table and eliminate duplicate rows
-	idx_t ProbeHT(DataChunk &chunk, RecursiveCTEState &state) const;
-
 	void ExecuteRecursivePipelines(ExecutionContext &context) const;
 
 private:

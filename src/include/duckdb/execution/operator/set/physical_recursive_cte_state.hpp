@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+struct RecursiveCTEDistinctPartition;
+
 struct RecursiveExecutorPool {
 	mutex lock;
 	PhysicalRecursiveCTE::executor_cache_t executors;
@@ -45,12 +47,14 @@ public:
 	void ResetCurrentOutputTableForReuse();
 	void RebindRecursiveScans();
 	void CommitUsingKeyUpdates();
+	void PromoteDistinctState(ClientContext &context, idx_t partition_count);
 	void PrepareCachedExecutorEntry(Pipeline &pipeline);
 	void PrepareCachedExecutors(Pipeline &pipeline, idx_t max_threads);
 	vector<unique_ptr<PipelineExecutor>> &GetCachedExecutors(Pipeline &pipeline);
 	void ClearCachedExecutors();
 
 	unique_ptr<GroupedAggregateHashTable> ht;
+	vector<unique_ptr<RecursiveCTEDistinctPartition>> distinct_partitions;
 	const PhysicalRecursiveCTE &op;
 	ExpressionExecutor executor;
 	DataChunk payload_rows;
@@ -66,9 +70,6 @@ public:
 	bool initialized = false;
 	bool finished_scan = false;
 	bool output_is_working = false;
-	SelectionVector new_groups;
-	//! Cached dummy address vector for ProbeHT (avoids per-chunk VectorBuffer allocation)
-	Vector dummy_addresses;
 	//! Cached chunk for distinct key extraction in the using_key Sink path
 	DataChunk distinct_rows;
 	//! Cached chunks for source-side hash table scans and recurring table copy paths
@@ -88,14 +89,10 @@ public:
 	vector<idx_t> remaining_schedule_dependencies;
 	vector<idx_t> ready_schedule_stages;
 	//! Internal adaptive-scheduling state (not exposed through profiling or serialization)
-	idx_t recursive_epoch_count = 0;
 	idx_t recursive_thread_limit = 1;
 	idx_t recursive_thread_candidate = 1;
 	idx_t recursive_thread_candidate_votes = 0;
 	double serial_cost_per_work_unit_us = 0;
-	idx_t cumulative_frontier_rows = 0;
-	idx_t cumulative_frontier_chunks = 0;
-	idx_t cumulative_scheduler_time_us = 0;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
 };
