@@ -21,7 +21,7 @@ class ClientContext;
 //! from it by the type's status/destroy callbacks and cached here for display + teardown. Parallels
 //! ExternalResourceType (the recipe) — this is one provisioned instance of it.
 struct ExternalResource {
-	//! The local registration name (e.g. `yoooo`).
+	//! The local registration name.
 	string name;
 	//! The resource type (provider) that provisioned it — the key into the type registry.
 	string type;
@@ -31,6 +31,7 @@ struct ExternalResource {
 	string uri;
 	string attached_db_type;
 	//! Deleter binding for teardown: `<deleter_function>(<deleter_payload>)`. deleter_payload is the handle.
+	//! Stored fully qualified where possible, see QualifyTableCallback.
 	string deleter_function;
 	Value deleter_payload;
 };

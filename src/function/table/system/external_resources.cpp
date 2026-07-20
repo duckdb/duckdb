@@ -108,6 +108,9 @@ static unique_ptr<FunctionData> RegisterExternalResourceBind(ClientContext &cont
                                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<RegisterExternalResourceBindData>();
 	auto &resource = result->resource;
+	if (input.inputs[0].IsNull() || input.inputs[1].IsNull()) {
+		throw InvalidInputException("register_external_resource: the type and name must not be NULL");
+	}
 	resource.type = StringValue::Get(input.inputs[0]);
 	resource.name = StringValue::Get(input.inputs[1]);
 	// The handle is the durable identity and doubles as the deleter payload.
@@ -123,7 +126,12 @@ static unique_ptr<FunctionData> RegisterExternalResourceBind(ClientContext &cont
 		} else if (key == "attached_db_type") {
 			resource.attached_db_type = StringValue::Get(np.second);
 		} else if (key == "deleter_function") {
-			resource.deleter_function = StringValue::Get(np.second);
+			// Qualify against the registering connection's search path: teardown runs the deleter on a separate
+			// internal connection. Fall back to the name as given when it does not resolve (yet) - the defining
+			// extension may not be loaded at registration time.
+			auto deleter = StringValue::Get(np.second);
+			auto qualified = QualifyTableCallback(context, deleter);
+			resource.deleter_function = qualified.empty() ? deleter : qualified;
 		}
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
