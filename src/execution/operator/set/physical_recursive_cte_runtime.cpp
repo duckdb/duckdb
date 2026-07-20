@@ -100,6 +100,17 @@ static idx_t GetRecursiveFrontierRows(const RecursiveCTEState &state) {
 	return recursive_rows;
 }
 
+static idx_t GetRecursiveFrontierStorageBytes(const RecursiveCTEState &state) {
+	idx_t recursive_bytes = 0;
+	if (state.op.working_table && state.op.recursive_reference_count > 0) {
+		recursive_bytes += state.CurrentInputTable().SizeInBytes() * state.op.recursive_reference_count;
+	}
+	if (state.op.recurring_table && state.op.recurring_reference_count > 0 && !state.op.using_key) {
+		recursive_bytes += state.op.recurring_table->SizeInBytes() * state.op.recurring_reference_count;
+	}
+	return recursive_bytes;
+}
+
 static idx_t GetRecursiveThreadLimit(const RecursiveCTEState &state) {
 	const auto row_limit = MaxValue<idx_t>(
 	    (GetRecursiveFrontierRows(state) + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
@@ -109,13 +120,20 @@ static idx_t GetRecursiveThreadLimit(const RecursiveCTEState &state) {
 	                configured_threads);
 }
 
-static void UpdateRecursiveThreadLimit(RecursiveCTEState &state, idx_t elapsed_us, idx_t worker_count,
-                                       idx_t work_units) {
+static void UpdateRecursiveThreadLimit(RecursiveCTEState &state, idx_t elapsed_us, idx_t worker_count, idx_t work_units,
+                                       idx_t frontier_rows, idx_t frontier_storage_bytes) {
 	// Aim for several milliseconds of measured serial work per worker. This deliberately leaves cheap
 	// broad epochs inline: chunk/row width alone does not justify scheduler and sink contention.
 	static constexpr idx_t TARGET_WORK_PER_THREAD_US = 5000;
 	static constexpr idx_t REQUIRED_CANDIDATE_EPOCHS = 2;
 	static constexpr double SERIAL_EWMA_ALPHA = 0.25;
+	if (state.collect_runtime_metrics) {
+		state.cumulative_epoch_count++;
+		state.cumulative_elapsed_us += elapsed_us;
+		state.cumulative_frontier_rows += frontier_rows;
+		state.cumulative_frontier_chunks += work_units;
+		state.cumulative_frontier_storage_bytes += frontier_storage_bytes;
+	}
 
 	const auto cost_per_work_unit = static_cast<double>(elapsed_us) / static_cast<double>(work_units);
 	if (worker_count == 1) {
@@ -154,8 +172,10 @@ static void UpdateRecursiveThreadLimit(RecursiveCTEState &state, idx_t elapsed_u
 		return;
 	}
 	if (++state.recursive_thread_candidate_votes >= REQUIRED_CANDIDATE_EPOCHS) {
+		const auto previous_limit = state.recursive_thread_limit;
 		state.recursive_thread_limit = candidate;
 		state.recursive_thread_candidate_votes = 0;
+		state.LogThreadLimitChanged(previous_limit, candidate, elapsed_us, work_units, frontier_rows);
 	}
 }
 
@@ -265,6 +285,9 @@ public:
 		}
 
 		auto max_threads = GetRecursivePipelineMaxThreads(state, *pipeline);
+		if (state.collect_runtime_metrics) {
+			state.cumulative_task_count.fetch_add(max_threads);
+		}
 		state.PrepareCachedExecutors(*pipeline, max_threads);
 		auto &executors = state.GetCachedExecutors(*pipeline);
 		D_ASSERT(executors.size() >= max_threads);
@@ -857,6 +880,9 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 			auto &executors = state.GetCachedExecutors(pipeline);
 			D_ASSERT(executors.size() >= max_threads);
 			executors[0]->PrepareForExecution();
+			if (state.collect_runtime_metrics) {
+				state.cumulative_task_count.fetch_add(1);
+			}
 			ExecuteRecursivePipelineInline(*executors[0]);
 			break;
 		}
@@ -943,6 +969,8 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	}
 
 	const auto work_units = GetRecursiveWorkUnits(gstate);
+	const auto frontier_rows = GetRecursiveFrontierRows(gstate);
+	const auto frontier_storage_bytes = gstate.collect_runtime_metrics ? GetRecursiveFrontierStorageBytes(gstate) : 0;
 	const auto worker_count = GetRecursiveThreadLimit(gstate);
 	if (worker_count > 1 && !using_key && !union_all) {
 		const auto partition_count = MinValue<idx_t>(NextPowerOfTwo(worker_count), 4);
@@ -962,8 +990,14 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	const auto epoch_end = std::chrono::steady_clock::now();
 	const auto elapsed_us =
 	    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(epoch_end - epoch_start).count());
-	UpdateRecursiveThreadLimit(gstate, elapsed_us, worker_count, work_units);
+	if (gstate.collect_runtime_metrics) {
+		gstate.cumulative_worker_count += worker_count;
+	}
+	UpdateRecursiveThreadLimit(gstate, elapsed_us, worker_count, work_units, frontier_rows, frontier_storage_bytes);
 	if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
+		if (gstate.collect_runtime_metrics && !gstate.invariant_meta_pipelines_materialized) {
+			gstate.retained_build_executions += invariant_meta_pipelines.size();
+		}
 		gstate.invariant_meta_pipelines_materialized = true;
 	}
 }
