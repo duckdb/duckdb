@@ -462,6 +462,43 @@ TEST_CASE("Verify rejects non-NULL children under a NULL ARRAY row", "[copy]") {
 		VerifyVectorsGuard guard;
 		REQUIRE_THROWS(v.Verify(sel, row_count));
 	}
+
+	SECTION("deep violation is caught through two recursion levels (ARRAY(ARRAY(ARRAY)))") {
+		auto lvl1 = LogicalType::ARRAY(LogicalType::VARCHAR, ARRAY_SIZE);
+		auto lvl2 = LogicalType::ARRAY(lvl1, ARRAY_SIZE);
+		Vector v(LogicalType::ARRAY(lvl2, ARRAY_SIZE));
+		for (idx_t r = 0; r < row_count; r++) {
+			duckdb::vector<Value> mids;
+			for (idx_t a = 0; a < ARRAY_SIZE; a++) {
+				duckdb::vector<Value> inners;
+				for (idx_t b = 0; b < ARRAY_SIZE; b++) {
+					duckdb::vector<Value> leaves(ARRAY_SIZE, Value("ok"));
+					inners.push_back(Value::ARRAY(LogicalType::VARCHAR, leaves));
+				}
+				mids.push_back(Value::ARRAY(lvl1, inners));
+			}
+			v.SetValue(r, Value::ARRAY(lvl2, mids));
+		}
+		FlatVector::SetSize(v, row_count);
+		auto &mid_child = ArrayVector::GetChildMutable(v);
+		auto &inner_child = ArrayVector::GetChildMutable(mid_child);
+		// outer row NULL; middle and inner slots beneath it correctly NULL (reflected), but the deepest
+		// VARCHAR left valid -> the only violation is two levels down, reachable only via the recursion
+		FlatVector::ValidityMutable(v).SetInvalid(null_row);
+		for (idx_t e = 0; e < ARRAY_SIZE; e++) {
+			auto mid_slot = null_row * ARRAY_SIZE + e;
+			FlatVector::ValidityMutable(mid_child).SetInvalid(mid_slot);
+			for (idx_t f = 0; f < ARRAY_SIZE; f++) {
+				FlatVector::ValidityMutable(inner_child).SetInvalid(mid_slot * ARRAY_SIZE + f);
+			}
+		}
+		SelectionVector sel(row_count);
+		for (idx_t i = 0; i < row_count; i++) {
+			sel.set_index(i, i);
+		}
+		VerifyVectorsGuard guard;
+		REQUIRE_THROWS(v.Verify(sel, row_count));
+	}
 }
 
 namespace {
