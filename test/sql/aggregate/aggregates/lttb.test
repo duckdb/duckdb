@@ -79,6 +79,31 @@ GROUP BY g ORDER BY g
 1	5
 2	5
 
+# groups of very different sizes share one materialization buffer: each group keeps its own endpoints
+query IIII
+SELECT g, len(l), l[1].x, l[len(l)].x
+FROM (
+    SELECT g, lttb(x::DOUBLE, y::DOUBLE, 4 ORDER BY x) AS l
+    FROM (SELECT CASE WHEN i < 100 THEN 0 WHEN i < 110 THEN 1 ELSE 2 END AS g,
+                 i AS x, (i * i) AS y FROM range(115) t(i))
+    GROUP BY g
+) ORDER BY g
+----
+0	4	0.0	99.0
+1	4	100.0	109.0
+2	4	110.0	114.0
+
+# a group with NULLs followed by smaller groups (the reused buffer must not leak validity between groups)
+query II
+SELECT g, len(lttb(x::DOUBLE, y, 4 ORDER BY x))
+FROM (SELECT CASE WHEN i < 100 THEN 0 WHEN i < 110 THEN 1 ELSE 2 END AS g,
+             i AS x, CASE WHEN i % 3 = 0 THEN NULL ELSE (i % 7)::DOUBLE END AS y FROM range(115) t(i))
+GROUP BY g ORDER BY g
+----
+0	4
+1	4
+2	3
+
 # timestamp x keys: each timestamp overload resolves and downsamples
 query I
 SELECT len(lttb(ts, v, 4 ORDER BY ts))
@@ -101,29 +126,12 @@ FROM (SELECT TIMESTAMP '2020-01-01' + INTERVAL (i) DAY AS ts, (i * i)::DOUBLE AS
 ----
 [{'x': '2020-01-01 00:00:00', 'y': 0.0}, {'x': '2020-01-03 00:00:00', 'y': 4.0}, {'x': '2020-01-05 00:00:00', 'y': 16.0}]
 
-# timestamp values on the y-axis: point selection matches the equivalent numeric input, values are preserved
-query I
+# the y axis is a measurement: timestamps are only supported on the x axis
+statement error
 SELECT lttb(x::DOUBLE, ts, 3 ORDER BY x)
 FROM (SELECT i AS x, TIMESTAMP '2020-01-01' + INTERVAL (i * i) DAY AS ts FROM range(5) t(i))
 ----
-[{'x': 0.0, 'y': '2020-01-01 00:00:00'}, {'x': 2.0, 'y': '2020-01-05 00:00:00'}, {'x': 4.0, 'y': '2020-01-17 00:00:00'}]
-
-# each timestamp y overload resolves
-query III
-SELECT len(lttb(x::DOUBLE, ts::TIMESTAMP_S, 3 ORDER BY x)),
-       len(lttb(x::DOUBLE, ts::TIMESTAMP_MS, 3 ORDER BY x)),
-       len(lttb(x::DOUBLE, ts::TIMESTAMP_NS, 3 ORDER BY x))
-FROM (SELECT i AS x, TIMESTAMP '2020-01-01' + INTERVAL (i) HOUR AS ts FROM range(20) t(i))
-----
-3	3	3
-
-# timestamps on both axes
-query I
-SELECT lttb(ts, ts2, 3 ORDER BY ts)
-FROM (SELECT TIMESTAMP '2020-01-01' + INTERVAL (i) DAY AS ts,
-             TIMESTAMP '2021-01-01' + INTERVAL (i * i) DAY AS ts2 FROM range(5) t(i))
-----
-[{'x': '2020-01-01 00:00:00', 'y': '2021-01-01 00:00:00'}, {'x': '2020-01-03 00:00:00', 'y': '2021-01-05 00:00:00'}, {'x': '2020-01-05 00:00:00', 'y': '2021-01-17 00:00:00'}]
+<REGEX>:.*(No function matches|Could not|does not support).*
 
 # TIMESTAMPTZ is a timestamp type and should be accepted if lttb supports timestamp axes.
 statement ok
@@ -155,27 +163,6 @@ ns AS (
 )
 SELECT (SELECT list(p.x ORDER BY p.x) FROM num)
        = (SELECT list((epoch_ns(p.x) - 1577836800000000000)::DOUBLE ORDER BY epoch_ns(p.x)) FROM ns)
-----
-true
-
-# ... and under translating the y-axis.
-query T
-WITH data AS (
-    SELECT i,
-           (CASE WHEN i = 37 THEN 1000 ELSE i % 7 END) AS y,
-           make_timestamp_ns(1577836800000000000 + (CASE WHEN i = 37 THEN 1000 ELSE i % 7 END)) AS ts
-    FROM range(100) t(i)
-),
-num AS (
-    SELECT UNNEST(lttb(i::DOUBLE, y::DOUBLE, 10 ORDER BY i)) AS p
-    FROM data
-),
-ns AS (
-    SELECT UNNEST(lttb(i::DOUBLE, ts, 10 ORDER BY i)) AS p
-    FROM data
-)
-SELECT (SELECT list(p.y ORDER BY p.x) FROM num)
-       = (SELECT list((epoch_ns(p.y) - 1577836800000000000)::DOUBLE ORDER BY p.x) FROM ns)
 ----
 true
 
@@ -240,6 +227,41 @@ SELECT len(lttb((x // 2)::DOUBLE, x::DOUBLE, 4 ORDER BY x))
 FROM range(10) t(x)
 ----
 4
+
+# imported states may contain NULL points (unlike the update path, the import does no element filtering).
+# The data behind a NULL point is never written, so those points must be dropped rather than read.
+# Finalizing a large state with NULLs alongside a smaller clean one must also not leak NULLs between them.
+statement ok
+CREATE TABLE lttb_states AS
+SELECT lttb(x::DOUBLE, y::DOUBLE, 3) EXPORT_STATE AS st
+FROM (SELECT i x, (i * i)::DOUBLE y FROM range(10) t(i)) WHERE false;
+
+statement ok
+DELETE FROM lttb_states;
+
+statement ok
+INSERT INTO lttb_states VALUES ([{'x':0.0,'y':0.0}, NULL, NULL, {'x':3.0,'y':3.0}, {'x':4.0,'y':4.0},
+                                 {'x':5.0,'y':5.0}, {'x':6.0,'y':6.0}, {'x':7.0,'y':7.0}, {'x':8.0,'y':8.0},
+                                 {'x':9.0,'y':9.0}]);
+
+statement ok
+INSERT INTO lttb_states VALUES ([{'x':100.0,'y':1.0}, {'x':101.0,'y':2.0}, {'x':102.0,'y':3.0}]);
+
+# an all-NULL state behaves like an empty one
+statement ok
+INSERT INTO lttb_states VALUES ([NULL, NULL]);
+
+# a NULL on either axis drops the whole point, even when the point itself is not NULL
+statement ok
+INSERT INTO lttb_states VALUES ([{'x':1.0,'y':NULL}, {'x':2.0,'y':5.0}, {'x':3.0,'y':6.0}]);
+
+query I
+SELECT finalize(st) FROM lttb_states
+----
+[{'x': 0.0, 'y': 0.0}, {'x': 3.0, 'y': 3.0}, {'x': 9.0, 'y': 9.0}]
+[{'x': 100.0, 'y': 1.0}, {'x': 101.0, 'y': 2.0}, {'x': 102.0, 'y': 3.0}]
+NULL
+[{'x': 2.0, 'y': 5.0}, {'x': 3.0, 'y': 6.0}]
 
 # an oversized constant n stays within the memory limit: small groups pass through unchanged
 statement ok

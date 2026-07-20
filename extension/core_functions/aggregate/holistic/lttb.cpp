@@ -130,6 +130,38 @@ struct LTTBAxis<int64_t> {
 	int64_t origin;
 };
 
+//! Compacts the materialized points down to the non-NULL ones, returning the remaining count.
+//! The update path already drops NULL points, but an imported state can still contain them, so we do this to be safe.
+template <class XTYPE, class YTYPE>
+auto LTTBDropNullPoints(Vector &points, XTYPE *vx, YTYPE *vy, const idx_t v) -> idx_t {
+	auto &axes = StructVector::GetEntries(points);
+	auto &point_validity = FlatVector::Validity(points);
+	auto &x_validity = FlatVector::Validity(axes[0]);
+	auto &y_validity = FlatVector::Validity(axes[1]);
+
+	// the validity is reset (and so allocated) for every group, so the bits have to be checked rather than the mask
+	if (point_validity.CheckAllValid(v) && x_validity.CheckAllValid(v) && y_validity.CheckAllValid(v)) {
+		return v;
+	}
+
+	idx_t valid = 0;
+	for (idx_t i = 0; i < v; i++) {
+		if (!point_validity.RowIsValid(i) || !x_validity.RowIsValid(i) || !y_validity.RowIsValid(i)) {
+			continue;
+		}
+		vx[valid] = vx[i];
+		vy[valid] = vy[i];
+		valid++;
+	}
+
+	// the compacted prefix is fully valid
+	FlatVector::ValidityMutable(points).SetAllValid(valid);
+	for (auto &axis : axes) {
+		FlatVector::ValidityMutable(axis).SetAllValid(valid);
+	}
+	return valid;
+}
+
 //! XTYPE/YTYPE are the physical C++ types of the x and y columns: float/double for a FLOAT/DOUBLE axis, int64_t for
 //! any of the TIMESTAMP axes. We perform all computations with doubles, but we need the templates to cast the input
 //! correctly.
@@ -171,12 +203,15 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 		sel.Initialize(reinterpret_cast<sel_t *>(data.allocator.AllocateAligned(n * sizeof(sel_t))), n);
 	}
 
+	// Reusable vector for materializing each groups points, sized up-front to the largest group.
+	Vector points(struct_type, MaxValue<idx_t>(max_v, 1));
+
 	// Now do the selection for each list
 	for (idx_t state_idx = 0; state_idx < count; state_idx++) {
 		const auto rid = offset + state_idx;
 		const auto &state = *states[state_idx].GetValue();
 
-		const auto v = state.linked_list.total_capacity;
+		auto v = state.linked_list.total_capacity;
 
 		if (v == 0) {
 			// Empty list (or all points filtered out as NULL)
@@ -184,9 +219,24 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 			continue;
 		}
 
-		// Materialize the buffered (x, y) points (kept in insertion order, i.e. ordered by x)
-		Vector points(struct_type, v);
+		// Materialize the buffered (x, y) points (kept in insertion order, i.e. ordered by x).
+		// The scan only ever marks entries invalid, so the reused validity has to be cleared for each group.
+		FlatVector::ValidityMutable(points).SetAllValid(v);
+		for (auto &child : StructVector::GetEntries(points)) {
+			FlatVector::ValidityMutable(child).SetAllValid(v);
+		}
 		functions.BuildListVector(state.linked_list, points, 0);
+
+		auto &axes = StructVector::GetEntries(points);
+		const auto vx = FlatVector::GetDataMutable<XTYPE>(axes[0]);
+		const auto vy = FlatVector::GetDataMutable<YTYPE>(axes[1]);
+
+		// Imported states may contain NULL points, drop them before reading any of the axis data
+		v = LTTBDropNullPoints(points, vx, vy, v);
+		if (v == 0) {
+			FlatVector::SetNull(result, rid, true);
+			continue;
+		}
 
 		const auto old_size = ListVector::GetListSize(result);
 
@@ -207,10 +257,6 @@ auto LTTBFinalize(Vector &vec, AggregateFinalizeInputData &data, Vector &result,
 		}
 
 		// Downsample the v points into n buckets: the first point, n - 2 "middle" buckets, and the last point
-		const auto &axes = StructVector::GetEntries(points);
-		const auto vx = FlatVector::GetData<XTYPE>(axes[0]);
-		const auto vy = FlatVector::GetData<YTYPE>(axes[1]);
-
 		// Functors to normalize the axis values, if required.
 		const LTTBAxis<XTYPE> to_x(vx);
 		const LTTBAxis<YTYPE> to_y(vy);
@@ -361,17 +407,11 @@ AggregateFunction GetLTTBFunction(const LogicalType &x_type, const LogicalType &
 	return fun;
 }
 
-//! Adds the lttb overloads for one x type: y can be FLOAT, DOUBLE or any of the TIMESTAMP types
+//! Adds the lttb overloads for one x type: the y axis is always a measurement, so only FLOAT and DOUBLE
 template <class XTYPE>
 void AddLTTBFunctions(AggregateFunctionSet &set, const LogicalType &x_type) {
 	set.AddFunction(GetLTTBFunction<XTYPE, float>(x_type, LogicalType::FLOAT));
 	set.AddFunction(GetLTTBFunction<XTYPE, double>(x_type, LogicalType::DOUBLE));
-	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP));
-	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_S));
-	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_MS));
-	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_NS));
-	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_TZ));
-	set.AddFunction(GetLTTBFunction<XTYPE, int64_t>(x_type, LogicalType::TIMESTAMP_TZ_NS));
 }
 
 } // namespace
