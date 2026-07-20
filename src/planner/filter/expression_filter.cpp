@@ -394,6 +394,10 @@ static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContex
 	auto result =
 	    CheckZonemapAgainstConstants(*filter_stats, comparison_type, array_ptr<const Value>(&comparison_constant, 1));
 	if (filter_stats->CanHaveNull()) {
+		if (result == FilterPropagateResult::FILTER_ALWAYS_FALSE &&
+		    comparison_type != ExpressionType::COMPARE_DISTINCT_FROM) {
+			return result;
+		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return result;
@@ -429,6 +433,10 @@ static FilterPropagateResult CheckBetweenStatistics(optional_ptr<ClientContext> 
 	auto upper_res = CheckZonemapAgainstConstants(*input_stats, BoundBetweenExpression::UpperComparisonType(between),
 	                                              array_ptr<const Value>(&upper_val, 1));
 	if (input_stats->CanHaveNull()) {
+		if (lower_res == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		    upper_res == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	if (lower_res == FilterPropagateResult::FILTER_ALWAYS_FALSE ||

@@ -93,6 +93,35 @@ unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, Function
 	return result.ToUnique();
 }
 
+unique_ptr<BaseStatistics> StringSizePropagateStats(FunctionStatisticsInput &input, int64_t multiplier) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	D_ASSERT(child_stats.size() == 1);
+	if (!StringStats::HasMaxStringLength(child_stats[0])) {
+		return nullptr;
+	}
+
+	int64_t min_length = 0;
+	const auto min_string_length = StringStats::MinStringLength(child_stats[0]);
+	if (min_string_length.IsValid()) {
+		min_length = NumericCast<int64_t>(min_string_length.GetIndex()) * multiplier;
+	}
+	const auto max_length = NumericCast<int64_t>(StringStats::MaxStringLength(child_stats[0])) * multiplier;
+	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
+	NumericStats::SetMin(result, Value::BIGINT(min_length));
+	NumericStats::SetMax(result, Value::BIGINT(max_length));
+	result.CopyValidity(child_stats[0]);
+	return result.ToUnique();
+}
+
+unique_ptr<BaseStatistics> ByteLengthPropagateStats(ClientContext &, FunctionStatisticsInput &input) {
+	return StringSizePropagateStats(input, /*multiplier=*/1);
+}
+
+unique_ptr<BaseStatistics> BitLengthPropagateStats(ClientContext &, FunctionStatisticsInput &input) {
+	return StringSizePropagateStats(input, /*multiplier=*/8);
+}
+
 //------------------------------------------------------------------
 // ARRAY / LIST LENGTH
 //------------------------------------------------------------------
@@ -266,13 +295,15 @@ ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 
 ScalarFunction StrlenFun::GetFunction() {
 	return ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                      ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>);
+	                      ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
+	                      ByteLengthPropagateStats);
 }
 
 ScalarFunctionSet BitLengthFun::GetFunctions() {
 	ScalarFunctionSet bit_length("bit_length");
 	bit_length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>));
+	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>, nullptr,
+	                                      BitLengthPropagateStats));
 	bit_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                      ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
 	return (bit_length);
@@ -282,7 +313,8 @@ ScalarFunctionSet OctetLengthFun::GetFunctions() {
 	// length for BLOB type
 	ScalarFunctionSet octet_length("octet_length");
 	octet_length.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT,
-	                                        ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
+	                                        ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>, nullptr,
+	                                        ByteLengthPropagateStats));
 	octet_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                        ScalarFunction::UnaryFunction<string_t, int64_t, OctetLenOperator>));
 	return (octet_length);
