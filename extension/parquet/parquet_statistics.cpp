@@ -902,7 +902,7 @@ bool ParquetStatisticsUtils::BloomFilterSupported(const ParquetColumnSchema &sch
 		return true;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		// Nanosecond values lose sub-microsecond precision when read as TIMESTAMP, so their hash cannot be recovered.
+		// When type info is UNIT_NS, DuckDB type TIMESTAMP_NS/TIMESTAMP_TZ_NS is used.
 		return schema.parquet_type == duckdb_parquet::Type::INT64 &&
 		       (schema.type_info == ParquetExtraTypeInfo::UNIT_MS ||
 		        schema.type_info == ParquetExtraTypeInfo::UNIT_MICROS);
@@ -910,17 +910,30 @@ bool ParquetStatisticsUtils::BloomFilterSupported(const ParquetColumnSchema &sch
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return schema.parquet_type == duckdb_parquet::Type::INT64 && schema.type_info == ParquetExtraTypeInfo::UNIT_NS;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
-		return (schema.parquet_type == duckdb_parquet::Type::INT32 &&
-		        schema.type_info == ParquetExtraTypeInfo::UNIT_MS) ||
-		       (schema.parquet_type == duckdb_parquet::Type::INT64 &&
-		        schema.type_info == ParquetExtraTypeInfo::UNIT_MICROS);
-	case LogicalTypeId::TIME_NS:
-		return (schema.parquet_type == duckdb_parquet::Type::INT32 &&
-		        schema.type_info == ParquetExtraTypeInfo::UNIT_MS) ||
-		       (schema.parquet_type == duckdb_parquet::Type::INT64 &&
-		        (schema.type_info == ParquetExtraTypeInfo::UNIT_MICROS ||
-		         schema.type_info == ParquetExtraTypeInfo::UNIT_NS));
+	case LogicalTypeId::TIME_TZ: {
+		// Nanosecond values lose sub-microsecond precision when read as TIME or TIME_TZ.
+		if (schema.parquet_type == duckdb_parquet::Type::INT32 && schema.type_info == ParquetExtraTypeInfo::UNIT_MS) {
+			return true;
+		}
+		if (schema.parquet_type == duckdb_parquet::Type::INT64 &&
+		    schema.type_info == ParquetExtraTypeInfo::UNIT_MICROS) {
+			return true;
+		}
+		return false;
+	}
+	case LogicalTypeId::TIME_NS: {
+		if (schema.parquet_type == duckdb_parquet::Type::INT32 && schema.type_info == ParquetExtraTypeInfo::UNIT_MS) {
+			return true;
+		}
+		if (schema.parquet_type == duckdb_parquet::Type::INT64 &&
+		    schema.type_info == ParquetExtraTypeInfo::UNIT_MICROS) {
+			return true;
+		}
+		if (schema.parquet_type == duckdb_parquet::Type::INT64 && schema.type_info == ParquetExtraTypeInfo::UNIT_NS) {
+			return true;
+		}
+		return false;
+	}
 	default:
 		return false;
 	}
