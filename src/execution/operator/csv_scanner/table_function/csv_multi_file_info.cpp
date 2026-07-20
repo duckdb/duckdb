@@ -264,6 +264,12 @@ optional_idx CSVMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, co
 	return file_size / bytes_per_thread + 1;
 }
 
+bool CSVMultiFileInfo::SupportsReadAhead(const MultiFileBindData &bind_data) const {
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+	return csv_data.buffer_manager && csv_data.buffer_manager->file_handle &&
+	       csv_data.buffer_manager->file_handle->HasKnownBufferRanges();
+}
+
 unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(ClientContext &context,
                                                                              MultiFileBindData &bind_data,
                                                                              MultiFileGlobalState &global_state) {
