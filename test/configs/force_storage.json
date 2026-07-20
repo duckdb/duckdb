@@ -42,6 +42,8 @@
       "reason": "Measures memory usage.",
       "paths": [
         "test/sql/delete/in_memory_bulk_delete.test_slow",
+        "test/sql/delete/bulk_delete_version_info_memory.test",
+        "test/sql/delete/piecemeal_delete_checkpoint_compress.test_slow",
         "test/sql/pragma/profiling/test_custom_profiling_memory_and_temp_dir.test_slow",
         "test/sql/index/art/vacuum/test_art_vacuum_strings.test_slow",
         "test/sql/index/art/vacuum/test_art_vacuum_integers.test_slow"
