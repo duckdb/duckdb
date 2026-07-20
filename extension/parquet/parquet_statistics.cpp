@@ -743,6 +743,9 @@ static optional<uint64_t> TryHashTime(const Value &constant, const ParquetColumn
 			return ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 			return ValueXH64FixedWidth(value);
+		case ParquetExtraTypeInfo::UNIT_NS:
+			// TIME loses sub-microsecond precision, so the Parquet hash cannot be recovered.
+			return nullopt;
 		default:
 			return nullopt;
 		}
@@ -767,6 +770,9 @@ static optional<uint64_t> TryHashTime(const Value &constant, const ParquetColumn
 			return ValueXH64FixedWidth(NumericCast<int32_t>(value / Interval::MICROS_PER_MSEC));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 			return ValueXH64FixedWidth(value);
+		case ParquetExtraTypeInfo::UNIT_NS:
+			// TIME_TZ loses sub-microsecond precision, so the Parquet hash cannot be recovered.
+			return nullopt;
 		default:
 			return nullopt;
 		}
