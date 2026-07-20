@@ -101,6 +101,8 @@ public:
 	vector<idx_t> ready_schedule_stages;
 	//! Internal adaptive-scheduling state (not exposed through profiling or serialization)
 	idx_t recursive_thread_limit = 1;
+	idx_t recursive_epoch_thread_limit = 1;
+	bool recursive_thread_limit_initialized = false;
 	idx_t recursive_thread_candidate = 1;
 	idx_t recursive_thread_candidate_votes = 0;
 	double serial_cost_per_work_unit_us = 0;

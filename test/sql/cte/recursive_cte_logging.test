@@ -82,6 +82,40 @@ CALL enable_logging('PhysicalOperator');
 statement ok
 CALL truncate_duckdb_logs();
 
+# Broad UNION ALL recursion starts parallel and must not spend short recursions learning a serial baseline.
+query III
+WITH RECURSIVE t(i, digest, level) AS (
+	SELECT i, md5(i::VARCHAR), 0 FROM range(50000) r(i)
+	UNION ALL
+	SELECT i, md5(md5(md5(md5(digest)))), level + 1 FROM t WHERE level < 7
+)
+SELECT count(*), max(level), sum(length(digest)) FROM t;
+----
+400000	7	12800000
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'ThreadLimitChanged'
+  AND info.previous_limit::UBIGINT = 1 AND info.new_limit::UBIGINT > 1;
+----
+0
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
 query II
 WITH RECURSIVE t(k, v) USING KEY (k) AS (
 	SELECT i, 0 FROM range(4096) r(i)

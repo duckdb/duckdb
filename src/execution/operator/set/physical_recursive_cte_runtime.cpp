@@ -111,13 +111,12 @@ static idx_t GetRecursiveFrontierStorageBytes(const RecursiveCTEState &state) {
 	return recursive_bytes;
 }
 
-static idx_t GetRecursiveThreadLimit(const RecursiveCTEState &state) {
-	const auto row_limit = MaxValue<idx_t>(
-	    (GetRecursiveFrontierRows(state) + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
+static idx_t GetRecursiveThreadLimit(const RecursiveCTEState &state, idx_t work_units, idx_t frontier_rows) {
+	const auto row_limit =
+	    MaxValue<idx_t>((frontier_rows + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
 	const auto configured_threads =
 	    TaskScheduler::GetScheduler(state.op.recursive_meta_pipeline->GetExecutor().context).NumberOfThreads();
-	return MinValue(MinValue(MinValue(row_limit, GetRecursiveWorkUnits(state)), state.recursive_thread_limit),
-	                configured_threads);
+	return MinValue(MinValue(MinValue(row_limit, work_units), state.recursive_thread_limit), configured_threads);
 }
 
 static void UpdateRecursiveThreadLimit(RecursiveCTEState &state, idx_t elapsed_us, idx_t worker_count, idx_t work_units,
@@ -135,6 +134,7 @@ static void UpdateRecursiveThreadLimit(RecursiveCTEState &state, idx_t elapsed_u
 		state.cumulative_frontier_storage_bytes += frontier_storage_bytes;
 	}
 
+	const auto first_serial_measurement = worker_count == 1 && state.serial_cost_per_work_unit_us == 0;
 	const auto cost_per_work_unit = static_cast<double>(elapsed_us) / static_cast<double>(work_units);
 	if (worker_count == 1) {
 		if (state.serial_cost_per_work_unit_us == 0) {
@@ -147,7 +147,7 @@ static void UpdateRecursiveThreadLimit(RecursiveCTEState &state, idx_t elapsed_u
 
 	const auto estimated_serial_us =
 	    state.serial_cost_per_work_unit_us == 0
-	        ? elapsed_us
+	        ? elapsed_us * worker_count
 	        : LossyNumericCast<idx_t>(state.serial_cost_per_work_unit_us * static_cast<double>(work_units));
 	idx_t candidate = 1;
 	if (work_units > 1 && estimated_serial_us >= TARGET_WORK_PER_THREAD_US) {
@@ -159,6 +159,14 @@ static void UpdateRecursiveThreadLimit(RecursiveCTEState &state, idx_t elapsed_u
 	}
 	if (worker_count > 1 && state.serial_cost_per_work_unit_us != 0 && elapsed_us * 10 >= estimated_serial_us * 9) {
 		candidate = 1;
+	}
+	if (first_serial_measurement && state.recursive_thread_limit == 1 && candidate > 1) {
+		const auto previous_limit = state.recursive_thread_limit;
+		state.recursive_thread_limit = candidate;
+		state.recursive_thread_candidate = candidate;
+		state.recursive_thread_candidate_votes = 0;
+		state.LogThreadLimitChanged(previous_limit, candidate, elapsed_us, work_units, frontier_rows);
+		return;
 	}
 
 	if (candidate == state.recursive_thread_limit) {
@@ -184,7 +192,7 @@ static idx_t GetRecursivePipelineMaxThreads(RecursiveCTEState &state, Pipeline &
 	if (max_threads < 1) {
 		max_threads = 1;
 	}
-	return MinValue(max_threads, GetRecursiveThreadLimit(state));
+	return MinValue(max_threads, state.recursive_epoch_thread_limit);
 }
 
 static void ExecuteRecursivePipelineInline(PipelineExecutor &pipeline_executor) {
@@ -949,29 +957,41 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		gstate.ClearCachedExecutors();
 	}
 
-	// Materialize every state-local cache entry before events can run concurrently. Individual
-	// pipelines grow their stable executor vector after their source state has been reset.
-	reference_set_t<Pipeline> prepared_pipelines;
-	for (auto &meta_pipeline : active_meta_pipelines) {
-		vector<shared_ptr<Pipeline>> pipelines;
-		meta_pipeline->GetPipelines(pipelines, false);
-		for (auto &pipeline : pipelines) {
-			if (prepared_pipelines.insert(*pipeline).second) {
-				gstate.PrepareCachedExecutorEntry(*pipeline);
-			}
-		}
-	}
-
 	auto &schedule_plan =
 	    gstate.invariant_meta_pipelines_materialized ? gstate.invariant_schedule_plan : gstate.schedule_plan;
+	const auto prepare_cached_executor_entries = !allow_reuse || !schedule_plan;
 	if (!schedule_plan) {
 		schedule_plan = BuildRecursivePipelineSchedulePlan(active_meta_pipelines);
+	}
+
+	// Materialize every state-local cache entry before events can run concurrently. Individual
+	// pipelines grow their stable executor vector after their source state has been reset. Reusable
+	// entries only need to be registered when their immutable schedule plan is first constructed.
+	if (prepare_cached_executor_entries) {
+		reference_set_t<Pipeline> prepared_pipelines;
+		for (auto &meta_pipeline : active_meta_pipelines) {
+			vector<shared_ptr<Pipeline>> pipelines;
+			meta_pipeline->GetPipelines(pipelines, false);
+			for (auto &pipeline : pipelines) {
+				if (prepared_pipelines.insert(*pipeline).second) {
+					gstate.PrepareCachedExecutorEntry(*pipeline);
+				}
+			}
+		}
 	}
 
 	const auto work_units = GetRecursiveWorkUnits(gstate);
 	const auto frontier_rows = GetRecursiveFrontierRows(gstate);
 	const auto frontier_storage_bytes = gstate.collect_runtime_metrics ? GetRecursiveFrontierStorageBytes(gstate) : 0;
-	const auto worker_count = GetRecursiveThreadLimit(gstate);
+	if (!gstate.recursive_thread_limit_initialized) {
+		gstate.recursive_thread_limit_initialized = true;
+		if (!using_key && union_all) {
+			gstate.recursive_thread_limit =
+			    TaskScheduler::GetScheduler(recursive_meta_pipeline->GetExecutor().context).NumberOfThreads();
+		}
+	}
+	const auto worker_count = GetRecursiveThreadLimit(gstate, work_units, frontier_rows);
+	gstate.recursive_epoch_thread_limit = worker_count;
 	if (worker_count > 1 && !using_key && !union_all) {
 		const auto partition_count = MinValue<idx_t>(NextPowerOfTwo(worker_count), 4);
 		gstate.PromoteDistinctState(context.client, partition_count);
