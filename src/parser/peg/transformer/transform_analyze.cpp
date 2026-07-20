@@ -5,6 +5,7 @@
 
 namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTransformer &transformer,
+                                                                          const Identifier &analyze_keyword,
                                                                           const optional<bool> &analyze_verbose,
                                                                           optional<AnalyzeTarget> analyze_target) {
 	VacuumOptions vacuum_options;

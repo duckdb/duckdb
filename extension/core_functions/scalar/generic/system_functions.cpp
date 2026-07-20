@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"

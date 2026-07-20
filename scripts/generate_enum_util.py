@@ -14,6 +14,7 @@ blacklist = [
     "Type",
     "DictionaryAppendState",
     "DictFSSTMode",
+    "DictFSSTCompressResult",
     "ComplexJSONType",
     "UnavailableReason",
     "VirtualColumnBindingType",
@@ -25,6 +26,8 @@ blacklist = [
     "BatchDrainMode",
     "PendingTaskCountMode",
     "PartitionKeyTrackerState",
+    "ClaimState",
+    "MoveBufferResult",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")

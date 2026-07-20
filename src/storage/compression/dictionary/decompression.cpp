@@ -61,27 +61,48 @@ string_t CompressedStringScanState::FetchStringFromDict(int32_t dict_offset, uin
 }
 
 void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initialize_dictionary) {
-	baseptr = handle->GetDataMutable() + segment.GetBlockOffset();
+	block_size = segment.GetBlockSize();
+	auto block_offset = segment.GetBlockOffset();
+	if (block_offset > block_size || DictionaryCompression::DICTIONARY_HEADER_SIZE > block_size - block_offset) {
+		throw IOException(
+		    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
+	}
+	auto segment_capacity = block_size - block_offset;
+	baseptr = handle->GetDataMutable() + block_offset;
 
 	// Load header values
 	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
 	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
 	index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
-	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
-	if (segment.GetBlockOffset() + index_buffer_offset + sizeof(uint32_t) * index_buffer_count >
-	    segment.GetBlockSize()) {
+	auto stored_width = Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width));
+	if (index_buffer_count == 0) {
+		throw IOException(
+		    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
+	}
+	auto expected_width = BitpackingPrimitives::MinimumBitWidth(index_buffer_count - 1);
+	if (stored_width != expected_width) {
+		throw IOException(
+		    "Failed to scan dictionary string - bitpacking width was invalid. Database file appears to be "
+		    "corrupted.");
+	}
+	current_width = expected_width;
+	auto selection_buffer_size = BitpackingPrimitives::GetRequiredSize(segment.count.load(), current_width);
+	auto expected_index_buffer_offset = DictionaryCompression::DICTIONARY_HEADER_SIZE + selection_buffer_size;
+	if (index_buffer_offset != expected_index_buffer_offset) {
+		throw IOException("Failed to scan dictionary string - selection buffer was out of range. Database file appears "
+		                  "to be corrupted.");
+	}
+	if (index_buffer_offset > segment_capacity ||
+	    index_buffer_count > (segment_capacity - index_buffer_offset) / sizeof(uint32_t)) {
 		throw IOException(
 		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
 	}
 	index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 	base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
 
-	block_size = segment.GetBlockSize();
-
 	dict = DictionaryCompression::GetDictionary(segment, *handle);
 	auto index_buffer_end = index_buffer_offset + sizeof(uint32_t) * index_buffer_count;
-	if (dict.size > block_size || dict.end > block_size || dict.size > dict.end || index_buffer_count == 0 ||
-	    dict.end - dict.size < index_buffer_end) {
+	if (dict.end > segment_capacity || dict.size > dict.end || dict.end - dict.size < index_buffer_end) {
 		throw IOException(
 		    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
 	}

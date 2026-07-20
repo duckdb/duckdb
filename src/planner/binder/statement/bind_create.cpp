@@ -823,6 +823,21 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
+		// Skip real catalog/schema resolution in EXTRACT_NAMES or EXTRACT_QUALIFIED_NAMES mode
+		if (GetBindingMode() == BindingMode::EXTRACT_NAMES ||
+		    GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+			auto &create_info = stmt.info->Cast<CreateTableInfo>();
+			if (GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+				AddTableName(create_info.GetQualifiedName().ToString());
+			} else {
+				AddTableName(create_info.GetQualifiedName().Name().GetIdentifierName());
+			}
+			if (create_info.query) {
+				auto query_obj = Bind(*create_info.query);
+				result.plan = std::move(query_obj.plan);
+			}
+			break;
+		}
 		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
 		auto root = std::move(bound_info->query);
 
