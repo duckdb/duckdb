@@ -1,8 +1,4 @@
 #include "duckdb/function/table/system_functions.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/entry_lookup_info.hpp"
-#include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -10,6 +6,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/external_resource_type_registry.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -73,22 +70,6 @@ static Value RequireResourceMap(const Value &value, const string &function_name,
 		    column, value.type().ToString());
 	}
 	return value.DefaultCastAs(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
-}
-
-//! Resolve a table-producing callback (a table function or table macro) to its fully-qualified
-//! `catalog.schema.name` in `context`'s search path, so the returned deleter stays resolvable from any other
-//! connection later (e.g. when DETACH fires it). Returns empty if the callback can't be resolved.
-static string QualifyTableCallback(ClientContext &context, const string &name) {
-	EntryLookupInfo table_fn(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName::Parse(name));
-	auto entry = Catalog::GetEntry(context, table_fn, OnEntryNotFound::RETURN_NULL);
-	if (!entry) {
-		EntryLookupInfo table_macro(CatalogType::TABLE_MACRO_ENTRY, QualifiedName::Parse(name));
-		entry = Catalog::GetEntry(context, table_macro, OnEntryNotFound::RETURN_NULL);
-	}
-	if (!entry) {
-		return string();
-	}
-	return QualifiedName(entry->ParentCatalog().GetName(), entry->ParentSchema().name, entry->name).ToString();
 }
 
 //===--------------------------------------------------------------------===//

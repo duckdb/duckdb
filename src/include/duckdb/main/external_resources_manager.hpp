@@ -35,6 +35,12 @@ struct ExternalResource {
 	Value deleter_payload;
 };
 
+//! Resolve a table-producing callback (a table function or table macro) to its fully-qualified
+//! `catalog.schema.name` in `context`'s search path, so it stays resolvable from any other connection later:
+//! teardown runs the deleter on a separate internal connection, under a search path that need not match the
+//! one in effect at registration. Returns empty if the callback cannot be resolved.
+string QualifyTableCallback(ClientContext &context, const string &name);
+
 //! In-memory, instance-scoped manager of external resource instances (shared across connections). The
 //! external resources themselves are durable, but this manager is not: it is the instance's local view of
 //! what it manages, rebuilt across restarts via REGISTER. A name is claimed by its first registration.
