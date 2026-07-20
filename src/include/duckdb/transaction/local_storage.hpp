@@ -119,11 +119,10 @@ private:
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> table_storage;
 };
 
+enum class LocalStorageTableFlushCheck : uint8_t { CAN_FLUSH, TABLE_DROPPED, ROWS_DELETED };
+
 //! The LocalStorage class holds appends that have not been committed yet
 class LocalStorage {
-public:
-	using CommitState = LocalStorageCommitState;
-
 public:
 	explicit LocalStorage(ClientContext &context, DuckTransaction &transaction);
 
@@ -205,6 +204,7 @@ private:
 	LocalTableManager table_manager;
 
 private:
+	LocalStorageTableFlushCheck CheckTableFlushEligibility(LocalTableStorage &table) const;
 	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<TableAppendState> append_state,
 	           optional_ptr<StorageCommitState> commit_state);
 };

@@ -592,16 +592,32 @@ void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<Physic
 	storage->GetCollection().Update(TransactionData(0, 0), table, ids, column_ids, updates);
 }
 
-void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<TableAppendState> append_state,
-                         optional_ptr<StorageCommitState> commit_state) {
+LocalStorageTableFlushCheck LocalStorage::CheckTableFlushEligibility(LocalTableStorage &storage) const {
 	if (storage.is_dropped) {
-		return;
+		return LocalStorageTableFlushCheck::TABLE_DROPPED;
 	}
 	if (storage.GetCollection().GetTotalRows() <= storage.deleted_rows) {
+		return LocalStorageTableFlushCheck::ROWS_DELETED;
+	}
+	return LocalStorageTableFlushCheck::CAN_FLUSH;
+}
+
+void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<TableAppendState> append_state,
+                         optional_ptr<StorageCommitState> commit_state) {
+	auto flush_eligibility = CheckTableFlushEligibility(storage);
+	switch (flush_eligibility) {
+	case LocalStorageTableFlushCheck::ROWS_DELETED: {
 		// all rows that we added were deleted
 		// rollback any partial blocks that are still outstanding
 		storage.Rollback();
 		return;
+	}
+	case LocalStorageTableFlushCheck::TABLE_DROPPED:
+		return;
+	case LocalStorageTableFlushCheck::CAN_FLUSH:
+		break;
+	default:
+		throw InternalException("LocalStorageTableFlushCheck not handled: %s", EnumUtil::ToString(flush_eligibility));
 	}
 
 	auto append_count = storage.GetCollection().GetTotalRows() - storage.deleted_rows;
@@ -647,9 +663,12 @@ void LocalStorage::Commit(LocalStorageCommitState &local_commit_state,
 	vector<reference<DataTable>> append_tables;
 	for (auto &entry : table_storage) {
 		auto &storage = *entry.second;
-		if (!storage.is_dropped && storage.GetCollection().GetTotalRows() > storage.deleted_rows) {
-			append_tables.emplace_back(entry.first);
+		auto flush_eligibility = CheckTableFlushEligibility(storage);
+		if (flush_eligibility != LocalStorageTableFlushCheck::CAN_FLUSH) {
+			//! No need to grab its lock, as we won't need to flush its data
+			continue;
 		}
+		append_tables.emplace_back(entry.first);
 	}
 	std::sort(append_tables.begin(), append_tables.end(),
 	          [](const reference<DataTable> &left, const reference<DataTable> &right) {

@@ -302,8 +302,10 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 			                           table_name, table_modification);
 		}
 		// mark the tuples as committed
-		auto append_state =
-		    local_commit_state ? local_commit_state->GetAppendState(*info->table) : optional_ptr<TableAppendState>();
+		optional_ptr<TableAppendState> append_state;
+		if (local_commit_state) {
+			append_state = local_commit_state->GetAppendState(*info->table);
+		}
 		info->table->CommitAppend(commit_id, info->start_row, info->count, append_state);
 		break;
 	}
