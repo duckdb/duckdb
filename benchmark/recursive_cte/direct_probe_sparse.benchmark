@@ -1,3 +1,6 @@
+# name: benchmark/recursive_cte/direct_probe_sparse.benchmark
+# group: [recursive_cte]
+
 template benchmark/recursive_cte/recursive_cte.benchmark.in
 TIER=performance
 QUERY=direct_probe_sparse
