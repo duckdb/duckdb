@@ -13,10 +13,7 @@ static bool IsPredicateRoot(LogicalOperator &op, bool is_root) {
 	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		return true;
 	default:
 		return false;

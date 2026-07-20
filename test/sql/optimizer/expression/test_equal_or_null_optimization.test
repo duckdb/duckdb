@@ -63,6 +63,15 @@ SELECT (a IS NULL AND b IS NULL) OR a = b AS v FROM projection_test;
 ----
 NULL
 
+# A root expression of a comparison join operand is not a predicate root
+query I
+SELECT count(*)
+FROM (VALUES (0::INTEGER, NULL::INTEGER)) l(a, b)
+JOIN (VALUES (false)) r(c)
+  ON (l.a = l.b OR (l.a IS NULL AND l.b IS NULL)) = r.c;
+----
+0
+
 # do a hash join
 query I rowsort
 SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i=test2.j) OR (test1.i IS NULL AND test2.j IS NULL) ORDER BY 1;
