@@ -1,13 +1,22 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include "duckdb/main/settings.hpp"
-#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
+
+struct RecursiveCTEDistinctPartition {
+	RecursiveCTEDistinctPartition(ClientContext &context, const vector<LogicalType> &types)
+	    : ht(context, BufferAllocator::Get(context), types) {
+	}
+
+	mutex lock;
+	GroupedAggregateHashTable ht;
+};
 
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, Identifier ctename, TableIndex table_index,
                                            vector<LogicalType> types, bool union_all, PhysicalOperator &top,
@@ -28,8 +37,7 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
     : op(op), executor(context), allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)),
       executor_pool(op.shared_executor_pool),
-      intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE),
-      dummy_addresses(LogicalType::POINTER) {
+      intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()) {
 	vector<LogicalType> aggr_input_types;
 	vector<AggregateObject> payload_aggregates;
 	for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
@@ -44,8 +52,12 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 
 	payload_rows.Initialize(Allocator::Get(context), aggr_input_types);
 
-	ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
-	                                          op.payload_types, std::move(payload_aggregates));
+	if (op.using_key) {
+		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
+		                                          op.payload_types, std::move(payload_aggregates));
+	} else if (!op.union_all) {
+		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types);
+	}
 	if (op.using_key) {
 		distinct_rows.Initialize(Allocator::DefaultAllocator(), op.distinct_types);
 		update_rows.Initialize(Allocator::DefaultAllocator(), op.internal_types);
@@ -53,7 +65,7 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 		source_payload_rows.Initialize(Allocator::DefaultAllocator(), op.payload_types);
 	}
 	source_result.Initialize(Allocator::DefaultAllocator(), op.GetTypes());
-	if (op.using_key || !op.union_all) {
+	if (op.using_key) {
 		InitializeIntermediateAppend();
 		op.working_table->InitializeAppend(working_append_state);
 	}
@@ -124,7 +136,7 @@ void RecursiveCTEState::AdvanceIterationBuffers() {
 void RecursiveCTEState::ResetCurrentOutputTableForReuse() {
 	auto &output = CurrentOutputTable();
 	output.ResetForReuse();
-	if (!op.using_key && op.union_all) {
+	if (!op.using_key) {
 		return;
 	}
 	if (op.using_key || !output_is_working) {
@@ -222,15 +234,39 @@ unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientConte
 
 class RecursiveCTELocalState : public LocalSinkState {
 public:
-	RecursiveCTELocalState(ClientContext &context, const PhysicalRecursiveCTE &op) {
-		if (!op.using_key && op.union_all) {
+	RecursiveCTELocalState(ClientContext &context, const PhysicalRecursiveCTE &op)
+	    : hashes(LogicalType::HASH), partition_hashes(LogicalType::HASH), dummy_addresses(LogicalType::POINTER),
+	      new_groups(STANDARD_VECTOR_SIZE) {
+		if (!op.using_key) {
 			output = make_uniq<ColumnDataCollection>(context, op.GetTypes());
 			output->InitializeAppend(append_state);
+		}
+		if (!op.using_key && !op.union_all) {
+			partition_chunk.Initialize(Allocator::Get(context), op.GetTypes());
 		}
 	}
 
 	unique_ptr<ColumnDataCollection> output;
 	ColumnDataAppendState append_state;
+	Vector hashes;
+	Vector partition_hashes;
+	Vector dummy_addresses;
+	SelectionVector new_groups;
+	DataChunk partition_chunk;
+	vector<SelectionVector> partition_selections;
+	vector<idx_t> partition_counts;
+
+	void InitializePartitions(idx_t partition_count) {
+		if (partition_selections.size() == partition_count) {
+			return;
+		}
+		partition_selections.clear();
+		partition_selections.reserve(partition_count);
+		for (idx_t partition_idx = 0; partition_idx < partition_count; partition_idx++) {
+			partition_selections.emplace_back(STANDARD_VECTOR_SIZE);
+		}
+		partition_counts.resize(partition_count);
+	}
 
 	bool SupportsReuse() const override {
 		return true;
@@ -248,14 +284,82 @@ unique_ptr<LocalSinkState> PhysicalRecursiveCTE::GetLocalSinkState(ExecutionCont
 	return make_uniq<RecursiveCTELocalState>(context.client, *this);
 }
 
-idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) const {
-	// Use the HT to eliminate duplicate rows
-	idx_t new_group_count = state.ht->FindOrCreateGroups(chunk, state.dummy_addresses, state.new_groups);
+static void SinkSerialDistinctChunk(DataChunk &chunk, RecursiveCTEState &gstate, RecursiveCTELocalState &lstate) {
+	D_ASSERT(gstate.ht);
+	idx_t new_group_count;
+	{
+		lock_guard<mutex> guard(gstate.intermediate_table_lock);
+		new_group_count = gstate.ht->FindOrCreateGroups(chunk, lstate.dummy_addresses, lstate.new_groups);
+		chunk.Slice(lstate.new_groups, new_group_count);
+	}
+	if (new_group_count > 0) {
+		lstate.output->Append(lstate.append_state, chunk);
+	}
+}
 
-	// we only return entries we have not seen before (i.e. new groups)
-	chunk.Slice(state.new_groups, new_group_count);
+static void SinkDistinctChunk(DataChunk &chunk, RecursiveCTEState &gstate, RecursiveCTELocalState &lstate,
+                              bool emit_rows = true) {
+	auto &partitions = gstate.distinct_partitions;
+	D_ASSERT(!partitions.empty());
+	D_ASSERT((partitions.size() & (partitions.size() - 1)) == 0);
+	lstate.InitializePartitions(partitions.size());
+	std::fill(lstate.partition_counts.begin(), lstate.partition_counts.end(), 0);
 
-	return new_group_count;
+	chunk.Hash(lstate.hashes);
+	auto hash_data = FlatVector::GetData<hash_t>(lstate.hashes);
+	const auto partition_mask = partitions.size() - 1;
+	for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
+		const auto partition_idx = hash_data[row_idx] & partition_mask;
+		auto &partition_count = lstate.partition_counts[partition_idx];
+		lstate.partition_selections[partition_idx].set_index(partition_count++, row_idx);
+	}
+
+	for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
+		const auto partition_count = lstate.partition_counts[partition_idx];
+		if (partition_count == 0) {
+			continue;
+		}
+		lstate.partition_chunk.Reset();
+		lstate.partition_chunk.Slice(chunk, lstate.partition_selections[partition_idx], partition_count);
+		lstate.partition_hashes.Slice(lstate.hashes, lstate.partition_selections[partition_idx], partition_count);
+		auto &partition = *partitions[partition_idx];
+		idx_t new_group_count;
+		{
+			lock_guard<mutex> guard(partition.lock);
+			new_group_count = partition.ht.FindOrCreateGroups(lstate.partition_chunk, lstate.partition_hashes,
+			                                                  lstate.dummy_addresses, lstate.new_groups);
+			lstate.partition_chunk.Slice(lstate.new_groups, new_group_count);
+		}
+		if (emit_rows && new_group_count > 0) {
+			lstate.output->Append(lstate.append_state, lstate.partition_chunk);
+		}
+	}
+}
+
+void RecursiveCTEState::PromoteDistinctState(ClientContext &context, idx_t partition_count) {
+	D_ASSERT(!op.using_key && !op.union_all);
+	if (!distinct_partitions.empty() || partition_count <= 1) {
+		return;
+	}
+	D_ASSERT(ht);
+	distinct_partitions.reserve(partition_count);
+	for (idx_t partition_idx = 0; partition_idx < partition_count; partition_idx++) {
+		distinct_partitions.push_back(make_uniq<RecursiveCTEDistinctPartition>(context, op.distinct_types));
+	}
+
+	RecursiveCTELocalState migration_state(context, op);
+	DataChunk groups;
+	groups.Initialize(Allocator::Get(context), op.distinct_types);
+	DataChunk payload;
+	AggregateHTScanState scan_state;
+	ht->InitializeScan(scan_state);
+	while (ht->Scan(scan_state, groups, payload)) {
+		context.InterruptCheck();
+		if (groups.size() > 0) {
+			SinkDistinctChunk(groups, *this, migration_state, false);
+		}
+	}
+	ht.reset();
 }
 
 static void GatherChunk(DataChunk &output_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set) {
@@ -364,23 +468,20 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		lstate.output->Append(lstate.append_state, chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
+	if (!using_key) {
+		auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
+		D_ASSERT(lstate.output);
+		if (gstate.distinct_partitions.empty()) {
+			SinkSerialDistinctChunk(chunk, gstate, lstate);
+		} else {
+			SinkDistinctChunk(chunk, gstate, lstate);
+		}
+		return SinkResultType::NEED_MORE_INPUT;
+	}
 
 	lock_guard<mutex> guard(gstate.intermediate_table_lock);
-	if (!using_key) {
-		auto &output = gstate.CurrentOutputTable();
-		auto &append_state = gstate.CurrentOutputAppendState();
-		if (!union_all) {
-			idx_t match_count = ProbeHT(chunk, gstate);
-			if (match_count > 0) {
-				output.Append(append_state, chunk);
-			}
-		} else {
-			output.Append(append_state, chunk);
-		}
-	} else {
-		// Collect updates without mutating the hash state read by recurring.T in this epoch.
-		gstate.intermediate_table.Append(gstate.intermediate_append_state, chunk);
-	}
+	// Collect updates without mutating the hash state read by recurring.T in this epoch.
+	gstate.intermediate_table.Append(gstate.intermediate_append_state, chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -392,7 +493,7 @@ void PhysicalRecursiveCTE::PrepareFinalize(ClientContext &context, GlobalSinkSta
 }
 
 SinkCombineResultType PhysicalRecursiveCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
-	if (!using_key && union_all) {
+	if (!using_key) {
 		auto &gstate = input.global_state.Cast<RecursiveCTEState>();
 		auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
 		D_ASSERT(lstate.output);
@@ -467,10 +568,22 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 			if (!union_all) {
 				const idx_t expected_new = current_output.Count();
 				if (expected_new > 0) {
-					const idx_t desired_capacity =
-					    GroupedAggregateHashTable::GetCapacityForCount(gstate.ht->Count() + expected_new);
-					if (desired_capacity > gstate.ht->Capacity()) {
-						gstate.ht->Resize(desired_capacity);
+					if (using_key || gstate.distinct_partitions.empty()) {
+						const idx_t desired_capacity =
+						    GroupedAggregateHashTable::GetCapacityForCount(gstate.ht->Count() + expected_new);
+						if (desired_capacity > gstate.ht->Capacity()) {
+							gstate.ht->Resize(desired_capacity);
+						}
+					} else {
+						const auto expected_per_partition =
+						    (expected_new + gstate.distinct_partitions.size() - 1) / gstate.distinct_partitions.size();
+						for (auto &partition : gstate.distinct_partitions) {
+							const auto desired_capacity = GroupedAggregateHashTable::GetCapacityForCount(
+							    partition->ht.Count() + expected_per_partition);
+							if (desired_capacity > partition->ht.Capacity()) {
+								partition->ht.Resize(desired_capacity);
+							}
+						}
 					}
 				}
 			}

@@ -109,18 +109,13 @@ static idx_t GetRecursiveThreadLimit(const RecursiveCTEState &state) {
 	                configured_threads);
 }
 
-static void UpdateRecursiveThreadLimit(RecursiveCTEState &state, idx_t elapsed_us, idx_t worker_count, idx_t work_units,
-                                       idx_t frontier_rows) {
+static void UpdateRecursiveThreadLimit(RecursiveCTEState &state, idx_t elapsed_us, idx_t worker_count,
+                                       idx_t work_units) {
 	// Aim for several milliseconds of measured serial work per worker. This deliberately leaves cheap
 	// broad epochs inline: chunk/row width alone does not justify scheduler and sink contention.
 	static constexpr idx_t TARGET_WORK_PER_THREAD_US = 5000;
 	static constexpr idx_t REQUIRED_CANDIDATE_EPOCHS = 2;
 	static constexpr double SERIAL_EWMA_ALPHA = 0.25;
-
-	state.recursive_epoch_count++;
-	state.cumulative_frontier_rows += frontier_rows;
-	state.cumulative_frontier_chunks += work_units;
-	state.cumulative_scheduler_time_us += elapsed_us;
 
 	const auto cost_per_work_unit = static_cast<double>(elapsed_us) / static_cast<double>(work_units);
 	if (worker_count == 1) {
@@ -270,7 +265,6 @@ public:
 		}
 
 		auto max_threads = GetRecursivePipelineMaxThreads(state, *pipeline);
-
 		state.PrepareCachedExecutors(*pipeline, max_threads);
 		auto &executors = state.GetCachedExecutors(*pipeline);
 		D_ASSERT(executors.size() >= max_threads);
@@ -949,8 +943,11 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	}
 
 	const auto work_units = GetRecursiveWorkUnits(gstate);
-	const auto frontier_rows = GetRecursiveFrontierRows(gstate);
 	const auto worker_count = GetRecursiveThreadLimit(gstate);
+	if (worker_count > 1 && !using_key && !union_all) {
+		const auto partition_count = MinValue<idx_t>(NextPowerOfTwo(worker_count), 4);
+		gstate.PromoteDistinctState(context.client, partition_count);
+	}
 	const auto epoch_start = std::chrono::steady_clock::now();
 	auto inline_execution = allow_reuse && worker_count == 1;
 
@@ -965,7 +962,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	const auto epoch_end = std::chrono::steady_clock::now();
 	const auto elapsed_us =
 	    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(epoch_end - epoch_start).count());
-	UpdateRecursiveThreadLimit(gstate, elapsed_us, worker_count, work_units, frontier_rows);
+	UpdateRecursiveThreadLimit(gstate, elapsed_us, worker_count, work_units);
 	if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
 		gstate.invariant_meta_pipelines_materialized = true;
 	}
