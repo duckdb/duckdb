@@ -1089,8 +1089,8 @@ bool StringValueScanner::FinishedIterator() const {
 }
 
 StringValueResult &StringValueScanner::ParseChunk() {
-	if (resume_phase != ResumePhase::NONE) {
-		// Resuming a chunk that suspended on a buffer load: keep the partially parsed rows
+	if (suspended) {
+		// Resuming a chunk that suspended on a buffer load, we keep the parsed rows until here
 		ResumeParse();
 		return result;
 	}
@@ -1100,18 +1100,12 @@ StringValueResult &StringValueScanner::ParseChunk() {
 }
 
 void StringValueScanner::ResumeParse() {
-	const auto phase = resume_phase;
-	resume_phase = ResumePhase::NONE;
-	switch (phase) {
-	case ResumePhase::PENDING_BUFFER_BOUNDARY:
-		// the retried move cannot re-suspend, it blocks if the loaded buffer was evicted again
+	suspended = false;
+	if (iterator.IsBoundarySet()) {
+		// This got blocked at TryMoveToNextBuffer(); so we gotta finish the boundary scan
 		FinishBoundaryScan(TryMoveToNextBuffer() == MoveBufferResult::MOVED);
-		break;
-	case ResumePhase::PENDING_BUFFER_MAIN:
+	} else {
 		ProcessRemainingBuffers();
-		break;
-	default:
-		throw InternalException("Unexpected resume phase in the CSV Scanner");
 	}
 }
 
@@ -2015,7 +2009,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		const auto move_result = TryMoveToNextBuffer();
 		if (move_result == MoveBufferResult::NOT_IN_MEMORY) {
-			resume_phase = ResumePhase::PENDING_BUFFER_BOUNDARY;
+			suspended = true;
 			return;
 		}
 		FinishBoundaryScan(move_result == MoveBufferResult::MOVED);
@@ -2069,7 +2063,7 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 void StringValueScanner::ProcessRemainingBuffers() {
 	while (!FinishedFile() && static_cast<idx_t>(result.number_of_rows) < result.result_size) {
 		if (TryMoveToNextBuffer() == MoveBufferResult::NOT_IN_MEMORY) {
-			resume_phase = ResumePhase::PENDING_BUFFER_MAIN;
+			suspended = true;
 			return;
 		}
 		if (static_cast<idx_t>(result.number_of_rows) >= result.result_size) {

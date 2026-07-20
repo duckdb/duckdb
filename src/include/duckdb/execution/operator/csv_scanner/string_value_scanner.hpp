@@ -350,7 +350,7 @@ public:
 
 	//! Whether the scanner is suspended waiting for a buffer
 	bool IsSuspended() const {
-		return resume_phase != ResumePhase::NONE;
+		return suspended;
 	}
 	//! The buffer a suspended scanner is waiting for
 	idx_t PendingBufferIdx() const {
@@ -370,13 +370,6 @@ private:
 		MOVED,        //! Advanced to the next buffer, stitching any value that straddled the edge
 		NOT_MOVED,    //! The buffer still has bytes left, or the file has ended
 		NOT_IN_MEMORY //! The next buffer is not in memory, the scanner suspended on its load
-	};
-
-	//! Where a suspended scanner resumes once the pending buffer is loaded
-	enum class ResumePhase : uint8_t {
-		NONE,                    //! Not suspended, ParseChunk starts a fresh chunk
-		PENDING_BUFFER_BOUNDARY, //! Suspended finishing a boundary scan, resume retries the move
-		PENDING_BUFFER_MAIN      //! Suspended in the boundary-less scan loop, resume continues it
 	};
 
 	void Initialize() override;
@@ -420,8 +413,8 @@ private:
 	shared_ptr<CSVStateMachine> state_machine_strict;
 	//! Whether this scanner is allowed to pause for I/O. sniffing/line-finding/skipping can't pause.
 	const bool can_suspend;
-	//! Set when the scanner suspends on a buffer not in memory, dispatches the resume
-	ResumePhase resume_phase = ResumePhase::NONE;
+	//! Set when the scanner suspends on a buffer not in memory
+	bool suspended = false;
 	//! The buffer a suspension waits on, a scanner suspends at most once per buffer
 	idx_t pending_buffer_idx = 0;
 };
