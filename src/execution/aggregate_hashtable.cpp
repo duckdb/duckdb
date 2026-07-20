@@ -1045,7 +1045,7 @@ bool GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk
 	}
 }
 
-void GroupedAggregateHashTable::ResetForNewIteration(idx_t initial_capacity, idx_t radix_bits_p) {
+void GroupedAggregateHashTable::ResetForNewIteration(idx_t radix_bits_p) {
 	// Save the previous iteration's group count before destroying aggregate states.
 	// This lets us size the pointer table based on actual prior data rather than the
 	// global sink capacity, which is typically much larger than recursive iteration sizes.

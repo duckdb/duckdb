@@ -14,8 +14,8 @@ struct RecursiveExecutorPool {
 
 enum class RecursiveCTEInlineStageType : uint8_t { EXECUTE, PREPARE_FINISH, FINISH };
 
-struct RecursiveCTEInlineStage {
-	RecursiveCTEInlineStage(RecursiveCTEInlineStageType type_p, Pipeline &pipeline_p)
+struct RecursiveCTEScheduleStage {
+	RecursiveCTEScheduleStage(RecursiveCTEInlineStageType type_p, Pipeline &pipeline_p)
 	    : type(type_p), pipeline(pipeline_p), dependency_count(0) {
 	}
 
@@ -25,8 +25,8 @@ struct RecursiveCTEInlineStage {
 	idx_t dependency_count;
 };
 
-struct RecursiveCTEInlinePlan {
-	vector<RecursiveCTEInlineStage> stages;
+struct RecursiveCTEPipelineSchedulePlan {
+	vector<RecursiveCTEScheduleStage> stages;
 	vector<reference<Pipeline>> initialize_on_schedule_pipelines;
 };
 
@@ -44,7 +44,10 @@ public:
 	void AdvanceIterationBuffers();
 	void ResetCurrentOutputTableForReuse();
 	void RebindRecursiveScans();
-	vector<unique_ptr<PipelineExecutor>> &GetCachedExecutors(Pipeline &pipeline, idx_t max_threads);
+	void CommitUsingKeyUpdates();
+	void PrepareCachedExecutorEntry(Pipeline &pipeline);
+	void PrepareCachedExecutors(Pipeline &pipeline, idx_t max_threads);
+	vector<unique_ptr<PipelineExecutor>> &GetCachedExecutors(Pipeline &pipeline);
 	void ClearCachedExecutors();
 
 	unique_ptr<GroupedAggregateHashTable> ht;
@@ -70,18 +73,29 @@ public:
 	DataChunk distinct_rows;
 	//! Cached chunks for source-side hash table scans and recurring table copy paths
 	DataChunk source_result;
+	DataChunk update_rows;
 	DataChunk source_payload_rows;
 	DataChunk source_distinct_rows;
 	AggregateHTScanState ht_scan_state;
 
 	//! Cached PipelineExecutors per pipeline for reuse across recursive iterations
-	//! When both locks are needed, always acquire cached_executor_lock before executor_pool->lock.
-	mutex cached_executor_lock;
 	PhysicalRecursiveCTE::executor_cache_t cached_executors;
-	//! Cached dependency graph for the single-thread inline recursive fast path
-	unique_ptr<RecursiveCTEInlinePlan> inline_plan;
+	//! Immutable recursive pipeline topology, shared by inline and event execution
+	unique_ptr<RecursiveCTEPipelineSchedulePlan> schedule_plan;
 	//! Cached dependency graph after invariant meta-pipelines have been materialized once
-	unique_ptr<RecursiveCTEInlinePlan> invariant_inline_plan;
+	unique_ptr<RecursiveCTEPipelineSchedulePlan> invariant_schedule_plan;
+	//! Epoch-reset runtime for scheduler-free execution
+	vector<idx_t> remaining_schedule_dependencies;
+	vector<idx_t> ready_schedule_stages;
+	//! Internal adaptive-scheduling state (not exposed through profiling or serialization)
+	idx_t recursive_epoch_count = 0;
+	idx_t recursive_thread_limit = 1;
+	idx_t recursive_thread_candidate = 1;
+	idx_t recursive_thread_candidate_votes = 0;
+	double serial_cost_per_work_unit_us = 0;
+	idx_t cumulative_frontier_rows = 0;
+	idx_t cumulative_frontier_chunks = 0;
+	idx_t cumulative_scheduler_time_us = 0;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
 };
