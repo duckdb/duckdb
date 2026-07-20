@@ -49,6 +49,20 @@ from times
 statement ok
 copy times to '{TEST_DIR}/time_ns.parquet' (PARQUET_VERSION V2);
 
+query TT
+SELECT duckdb_type, logical_type LIKE 'TimeType%NANOS%'
+FROM parquet_schema('{TEST_DIR}/time_ns.parquet')
+WHERE name = 'tns';
+----
+TIME_NS	true
+
+query TT
+SELECT typeof(tns), tns::VARCHAR
+FROM '{TEST_DIR}/time_ns.parquet'
+WHERE tns = '23:59:59.123456789';
+----
+TIME_NS	23:59:59.123456789
+
 query I nosort t0
 from '{TEST_DIR}/time_ns.parquet';
 ----
