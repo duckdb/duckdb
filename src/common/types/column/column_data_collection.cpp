@@ -882,10 +882,8 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 // Independent flat copy carrying patched_validity, so SetValidity does not mutate child's possibly-shared buffer.
 static unique_ptr<Vector> PatchedListChildCopy(const Vector &child, const ValidityMask &patched_validity) {
 	auto count = child.size();
-	SelectionVector identity(count);
-	for (idx_t i = 0; i < count; i++) {
-		identity.set_index(i, i);
-	}
+	// a set (non-identity-optimized) selection forces a dictionary that Flatten materializes into a private buffer
+	SelectionVector identity(idx_t(0), count);
 	auto copy = make_uniq<Vector>(child, identity, count);
 	copy->Flatten();
 	FlatVector::SetValidity(*copy, patched_validity);
@@ -1006,20 +1004,20 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	if (source_data.validity.IsMaskSet()) {
 		child_vector_data.validity.EnsureWritable();
 		D_ASSERT(!child_vector_data.sel->IsSet());
-		// a child slot still valid under a NULL array row is an unreflected violation
-		bool child_violation = false;
+		// a child slot still valid under a NULL array row is unreflected
+		bool has_unreflected_child = false;
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
 			if (!source_data.validity.RowIsValid(source_idx)) {
 				for (idx_t j = 0; j < array_size; j++) {
 					auto slot = source_idx * array_size + j;
-					child_violation |= child_vector_data.validity.RowIsValid(slot);
+					has_unreflected_child |= child_vector_data.validity.RowIsValid(slot);
 					child_vector_data.validity.SetInvalidUnsafe(slot);
 				}
 			}
 		}
 		// only a flat LIST child reads validity off the Vector (GetConsecutiveChildListInfo); patch a copy
-		if (child_violation && child_vector.GetType().InternalType() == PhysicalType::LIST &&
+		if (has_unreflected_child && child_vector.GetType().InternalType() == PhysicalType::LIST &&
 		    child_vector.GetVectorType() == VectorType::FLAT_VECTOR) {
 			patched_child = PatchedListChildCopy(child_vector, child_vector_data.validity);
 			array_child_source = *patched_child;
