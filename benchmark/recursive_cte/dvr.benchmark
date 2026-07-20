@@ -1,3 +1,6 @@
+# name: benchmark/recursive_cte/dvr.benchmark
+# group: [recursive_cte]
+
 template benchmark/recursive_cte/recursive_cte.benchmark.in
 TIER=smoke
 QUERY=dvr
