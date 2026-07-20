@@ -359,6 +359,7 @@ public:
 	void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &gstate) override;
 
 public:
+	//! Initialize the state for the next rowgroup to read
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const;
 
 	idx_t NumRows() const;

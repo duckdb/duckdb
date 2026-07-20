@@ -1600,10 +1600,6 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.filter_count = 0;
 	state.group_index = group_to_read;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
-	{
-		const annotated_lock_guard<annotated_mutex> guard(variant_stats_lock);
-		variant_stats_cache.clear();
-	}
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
 		state.prefetch_mode = ShouldAndCanPrefetch(context, *file_handle);
 		// all scan states share one handle (opened with parallel access), so open handles and
@@ -1635,7 +1631,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 	state.column_readers.resize(column_indexes.size());
 	for (idx_t i = 0; i < column_indexes.size(); i++) {
-		auto it = expression_map.find(i);
+		auto it = expression_map.find(ProjectionIndex(i));
 		auto &index = column_indexes[i];
 		auto column_id = index.GetPrimaryIndex();
 		if (auto it = projection_expressions.find(column_id);
