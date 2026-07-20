@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 using namespace duckdb;
 
