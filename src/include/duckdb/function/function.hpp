@@ -15,6 +15,8 @@
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "fmt/core.h"
 
 namespace duckdb {
@@ -550,6 +552,43 @@ public:
 	auto SetReturnType(LogicalType return_type_p) -> void {
 		return_type = std::move(return_type_p);
 	}
+};
+
+//! Shared state of the "bind" callback inputs of scalar, aggregate and window functions: the arguments the function
+//! was called with, their resolved names, and helpers to extract constant arguments during binding.
+class BindFunctionInput {
+public:
+	BindFunctionInput(ClientContext &context_p, const BoundSimpleFunction &function_p,
+	                  vector<unique_ptr<Expression>> &arguments_p,
+	                  optional_ptr<const vector<Identifier>> argument_names_p)
+	    : context(context_p), function(function_p), arguments(arguments_p), argument_names(argument_names_p) {
+	}
+
+	ClientContext &GetClientContext() const {
+		return context;
+	}
+	vector<unique_ptr<Expression>> &GetArguments() const {
+		return arguments;
+	}
+	//! The resolved name of every argument, parallel to GetArguments(). Not set if the names are unavailable.
+	optional_ptr<const vector<Identifier>> GetArgumentNames() const {
+		return argument_names;
+	}
+
+	//! Get the constant value of an argument, throwing if it is not constant.
+	DUCKDB_API Value GetConstant(idx_t arg_idx) const;
+	DUCKDB_API Value GetConstant(const Identifier &name) const;
+	//! Get the constant value of an argument, returning nullopt if it is not constant (or, when looking up by name,
+	//! if no argument with that name was provided).
+	DUCKDB_API optional<Value> TryGetConstant(idx_t arg_idx) const;
+	DUCKDB_API optional<Value> TryGetConstant(const Identifier &name) const;
+
+private:
+	ClientContext &context;
+	//! Only used to name the function in error messages
+	const BoundSimpleFunction &function;
+	vector<unique_ptr<Expression>> &arguments;
+	optional_ptr<const vector<Identifier>> argument_names;
 };
 
 } // namespace duckdb

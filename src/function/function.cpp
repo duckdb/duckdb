@@ -2,6 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -252,6 +253,52 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 		return false;
 	}
 	return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Bind Function Input
+//----------------------------------------------------------------------------------------------------------------------
+Value BindFunctionInput::GetConstant(idx_t arg_idx) const {
+	if (auto constant = TryGetConstant(arg_idx)) {
+		return *constant;
+	}
+	throw BinderException("%s: Argument at position %llu must be constant", function.GetName(), arg_idx);
+}
+
+Value BindFunctionInput::GetConstant(const Identifier &name) const {
+	if (auto constant = TryGetConstant(name)) {
+		return *constant;
+	}
+	throw BinderException("%s: Argument '%s' must be constant", function.GetName(), name.GetIdentifierName());
+}
+
+optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {
+	if (arg_idx >= arguments.size()) {
+		throw BinderException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
+	}
+	auto &expr = arguments[arg_idx];
+	if (expr->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	if (!expr->IsFoldable()) {
+		return {};
+	}
+	return ExpressionExecutor::EvaluateScalar(context, *expr);
+}
+
+optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const {
+	if (!argument_names) {
+		throw InternalException("Function '%s' was bound without argument names, cannot look up argument '%s' by name",
+		                        function.GetName().GetIdentifierName(), name.GetIdentifierName());
+	}
+	// The binder resolves every argument to a slot and reports its name: the signature parameter name for positional
+	// slots, or the name the caller used for named varargs.
+	for (idx_t arg_idx = 0; arg_idx < argument_names->size(); arg_idx++) {
+		if ((*argument_names)[arg_idx] == name) {
+			return TryGetConstant(arg_idx);
+		}
+	}
+	return {};
 }
 
 } // namespace duckdb

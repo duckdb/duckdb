@@ -301,15 +301,9 @@ struct VertexExtractBindData final : public FunctionData {
 } // namespace
 
 static auto VertexExtractBind(BindScalarFunctionInput &input) -> unique_ptr<FunctionData> {
-	auto &arguments = input.GetArguments();
 
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("vertex_extract: vertex argument must be constant!");
-	}
-	const auto vertex_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[1]);
+	const auto vertex_val = input.GetConstant(1);
+
 	if (vertex_val.IsNull()) {
 		throw BinderException("vertex_extract: vertex argument cannot be NULL!");
 	}

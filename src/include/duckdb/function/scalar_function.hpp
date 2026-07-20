@@ -510,21 +510,24 @@ public:
 	bool operator!=(const BoundScalarFunction &rhs) const;
 };
 
-class BindScalarFunctionInput {
+class BindScalarFunctionInput : public BindFunctionInput {
 public:
 	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p), binder(binder_p) {
+	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
+	                        optional_ptr<Binder> binder_p = nullptr)
+	    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p),
+	      bound_function(bound_function_p), binder(binder_p) {
 	}
 
-	ClientContext &GetClientContext() const {
-		return context;
+	//! Construct without argument names - looking arguments up by name is not available in this case.
+	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
+	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
+	    : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p),
+	      binder(binder_p) {
 	}
+
 	BoundScalarFunction &GetBoundFunction() const {
 		return bound_function;
-	}
-	vector<unique_ptr<Expression>> &GetArguments() const {
-		return arguments;
 	}
 	bool HasBinder() const {
 		return binder != nullptr;
@@ -537,9 +540,7 @@ public:
 	}
 
 private:
-	ClientContext &context;
 	BoundScalarFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
 	optional_ptr<Binder> binder;
 };
 

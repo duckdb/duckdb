@@ -330,7 +330,8 @@ struct ICUStrptime : public ICUDateFunc {
 
 		// Fall back to faster, non-TZ parsing
 		bound_function.SetBindCallback(bind_strptime);
-		BindScalarFunctionInput new_input(context, bound_function, arguments,
+		auto argument_names = input.GetArgumentNames();
+		BindScalarFunctionInput new_input(context, bound_function, arguments, *argument_names,
 		                                  input.HasBinder() ? &input.GetBinder() : nullptr);
 		return bound_function.GetBindCallback()(new_input);
 	}

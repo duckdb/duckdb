@@ -43,4 +43,19 @@ bool BoundWindowFunction::operator!=(const BoundWindowFunction &rhs) const {
 	return !(*this == rhs);
 }
 
+BindWindowFunctionInput::BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
+                                                 vector<unique_ptr<Expression>> &arguments_p,
+                                                 const vector<Identifier> &argument_names_p, OptionalOrdering orders_p,
+                                                 OptionalOrdering arg_orders_p)
+    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p), bound_function(bound_function_p),
+      orders(orders_p), arg_orders(arg_orders_p) {
+}
+
+BindWindowFunctionInput::BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
+                                                 vector<unique_ptr<Expression>> &arguments_p, OptionalOrdering orders_p,
+                                                 OptionalOrdering arg_orders_p)
+    : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p),
+      orders(orders_p), arg_orders(arg_orders_p) {
+}
+
 } // namespace duckdb
