@@ -1115,7 +1115,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		continue_processing = false;
 		auto &process_result = ParseChunk();
 		if (IsSuspended()) {
-			// Suspended on a buffer load: yield with an empty chunk, the resume continues this chunk
+			// Suspended on a buffer load
 			return;
 		}
 		// First Get Parsed Chunk
@@ -2029,9 +2029,7 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 		}
 		if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 			// the last buffer has no next buffer to wait for
-			const auto eof_move = TryMoveToNextBuffer();
-			D_ASSERT(eof_move != MoveBufferResult::NOT_IN_MEMORY);
-			(void)eof_move;
+			TryMoveToNextBuffer();
 		}
 	}
 	const bool found_error =

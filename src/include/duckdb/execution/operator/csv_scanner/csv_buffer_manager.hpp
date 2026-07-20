@@ -18,9 +18,9 @@ class CSVStateMachine;
 
 //! Residency of a buffer
 enum class CSVBufferResidency : uint8_t {
-	IN_MEMORY,   //! The buffer is loaded
-	NEEDS_LOAD,  //! The buffer is not materialized or was evicted,
-	END_OF_FILE  //! The buffer position lies past the end of the file
+	IN_MEMORY,  //! The buffer is loaded
+	NEEDS_LOAD, //! The buffer is not materialized or was evicted
+	END_OF_FILE //! The buffer position lies past the end of the file
 };
 
 //! This class is used to manage the CSV buffers.  Buffers are cached when used for auto detection.
