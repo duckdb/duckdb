@@ -1,0 +1,5 @@
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=smoke
+QUERY=pagerank
+BENCHMARK_NAME=Recursive CTE PageRank
+DESCRIPTION=Run the small USING KEY PageRank research workload

@@ -1,0 +1,5 @@
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=smoke
+QUERY=dvr
+BENCHMARK_NAME=Recursive CTE distance vector routing
+DESCRIPTION=Run the small USING KEY distance-vector-routing research workload

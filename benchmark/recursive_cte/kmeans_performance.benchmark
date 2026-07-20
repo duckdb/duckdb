@@ -1,0 +1,5 @@
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=kmeans
+BENCHMARK_NAME=Recursive CTE k-means performance
+DESCRIPTION=Run the medium k-means workload
