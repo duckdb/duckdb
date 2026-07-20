@@ -592,6 +592,92 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 	                                              parquet_options);
 }
 
+namespace {
+
+optional_idx FindSchemaChild(const ParquetColumnSchema &schema, const string &name) {
+	for (idx_t child_idx = 0; child_idx < schema.children.size(); child_idx++) {
+		if (schema.children[child_idx].name == name) {
+			return child_idx;
+		}
+	}
+	return optional_idx();
+}
+
+bool TryResolveVariantProjection(const ParquetColumnSchema &typed_value_schema, const ColumnIndex &logical_index,
+                                 ColumnIndex &physical_index) {
+	if (logical_index.HasPrimaryIndex() || typed_value_schema.type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+
+	auto field_idx = FindSchemaChild(typed_value_schema, logical_index.GetFieldName());
+	if (!field_idx.IsValid()) {
+		return false;
+	}
+	auto &field_schema = typed_value_schema.children[field_idx.GetIndex()];
+	if (field_schema.type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+
+	auto value_idx = FindSchemaChild(field_schema, "value");
+	auto typed_value_idx = FindSchemaChild(field_schema, "typed_value");
+	if (!value_idx.IsValid() || !typed_value_idx.IsValid()) {
+		return false;
+	}
+
+	vector<ColumnIndex> field_indexes;
+	field_indexes.emplace_back(value_idx.GetIndex());
+	if (!logical_index.HasChildren()) {
+		field_indexes.emplace_back(typed_value_idx.GetIndex());
+	} else {
+		vector<ColumnIndex> typed_value_indexes;
+		auto &nested_schema = field_schema.children[typed_value_idx.GetIndex()];
+		for (auto &child : logical_index.GetChildIndexes()) {
+			ColumnIndex nested_index;
+			if (!TryResolveVariantProjection(nested_schema, child, nested_index)) {
+				return false;
+			}
+			typed_value_indexes.push_back(std::move(nested_index));
+		}
+		field_indexes.emplace_back(typed_value_idx.GetIndex(), std::move(typed_value_indexes));
+	}
+	physical_index = ColumnIndex(field_idx.GetIndex(), std::move(field_indexes));
+	return true;
+}
+
+struct VariantProjection {
+	idx_t metadata_idx;
+	idx_t typed_value_idx;
+	vector<ColumnIndex> typed_value_indexes;
+};
+
+bool TryCreateVariantProjection(const ParquetColumnSchema &schema, const vector<ColumnIndex> &logical_indexes,
+                                VariantProjection &projection) {
+	if (logical_indexes.empty() || schema.children.size() != 3 || schema.children[2].name != "typed_value") {
+		return false;
+	}
+	if (schema.children[0].name == "metadata" && schema.children[1].name == "value") {
+		projection.metadata_idx = 0;
+	} else if (schema.children[1].name == "metadata" && schema.children[0].name == "value") {
+		projection.metadata_idx = 1;
+	} else {
+		return false;
+	}
+
+	projection.typed_value_idx = 2;
+	projection.typed_value_indexes.clear();
+	auto &typed_value_schema = schema.children[projection.typed_value_idx];
+	for (auto &logical_index : logical_indexes) {
+		ColumnIndex physical_index;
+		if (!TryResolveVariantProjection(typed_value_schema, logical_index, physical_index)) {
+			return false;
+		}
+		projection.typed_value_indexes.push_back(std::move(physical_index));
+	}
+	return true;
+}
+
+} // namespace
+
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context, const ColumnIndex &column_id,
                                                               const ParquetColumnSchema &schema) const {
 	auto &indexes = column_id.GetChildIndexes();
@@ -662,6 +748,17 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
+
+		VariantProjection projection;
+		if (TryCreateVariantProjection(schema, indexes, projection)) {
+			children[projection.metadata_idx] = CreateReaderRecursive(context, ColumnIndex(projection.metadata_idx),
+			                                                          schema.children[projection.metadata_idx]);
+			children[projection.typed_value_idx] = CreateReaderRecursive(
+			    context, ColumnIndex(projection.typed_value_idx, std::move(projection.typed_value_indexes)),
+			    schema.children[projection.typed_value_idx]);
+			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
+		}
+
 		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 			children[child_index] =
 			    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);

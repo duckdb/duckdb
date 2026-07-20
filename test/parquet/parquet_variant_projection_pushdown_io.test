@@ -1,0 +1,83 @@
+# name: test/parquet/parquet_variant_projection_pushdown_io.test
+# description: Avoid reading unrelated Parquet leaves for projected VARIANT paths
+# group: [parquet]
+
+require parquet
+
+require json
+
+statement ok
+SET variant_minimum_shredding_size = 0
+
+statement ok
+COPY (
+	SELECT {
+		'nested': {'region': CASE WHEN i % 2 = 0 THEN 'us' ELSE 'eu' END, 'zone': i % 5},
+		'payload': repeat(md5((i * 99)::VARCHAR), 40)
+	}::VARIANT AS v
+	FROM range(300) t(i)
+) TO '{TEST_DIR}/variant_projection_io.parquet' (
+	FORMAT PARQUET,
+	COMPRESSION 'uncompressed',
+	SHREDDING {
+		v: 'STRUCT(
+			nested STRUCT(region VARCHAR, zone INTEGER),
+			payload VARCHAR
+		)'
+	}
+)
+
+statement ok
+SET disable_parquet_prefetching = true
+
+statement ok
+SET enable_external_file_cache = false
+
+# Read two paths with a shared prefix, but not the large payload sibling.
+statement ok
+CALL enable_profiling(
+	['io.total_bytes_read'],
+	format = 'json',
+	save_location = '{TEST_DIR}/variant_projection_selected.json'
+)
+
+statement ok
+SELECT sum(length(v.nested.region::VARCHAR)) + sum(v.nested.zone)
+FROM '{TEST_DIR}/variant_projection_io.parquet'
+
+statement ok
+CALL disable_profiling()
+
+# Use a full VARIANT scan as the control measurement.
+statement ok
+CALL enable_profiling(
+	['io.total_bytes_read'],
+	format = 'json',
+	save_location = '{TEST_DIR}/variant_projection_full.json'
+)
+
+statement ok
+SELECT sum(length(v::VARCHAR))
+FROM '{TEST_DIR}/variant_projection_io.parquet'
+
+statement ok
+CALL disable_profiling()
+
+query I
+SELECT
+	(SELECT io.total_bytes_read FROM '{TEST_DIR}/variant_projection_selected.json') * 50 <
+	(SELECT io.total_bytes_read FROM '{TEST_DIR}/variant_projection_full.json')
+----
+true
+
+statement ok
+RESET disable_parquet_prefetching
+
+statement ok
+RESET enable_external_file_cache
+
+statement ok
+RESET tracked_metrics
+
+statement ok
+RESET profiling_output

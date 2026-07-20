@@ -1,0 +1,94 @@
+# name: test/parquet/parquet_variant_projection_pushdown.test
+# description: Project paths from shredded Parquet VARIANT columns
+# group: [parquet]
+
+require parquet
+
+statement ok
+SET variant_minimum_shredding_size = 0
+
+statement ok
+COPY (
+	SELECT * FROM (VALUES
+		(0, {
+			'env': 'staging',
+			'nested': {'region': 'us', 'zone': 1, 'outside': 'inside'},
+			'items': [10, 11],
+			'outside': 'root'
+		}::VARIANT),
+		(1, {
+			'env': 42::VARIANT,
+			'nested': {'region': 'eu', 'zone': 2, 'outside': 99},
+			'items': [20],
+			'outside': 'tail'
+		}::VARIANT),
+		(2, 'scalar'::VARIANT),
+		(3, NULL::VARIANT)
+	) t(id, v)
+) TO '{TEST_DIR}/variant_projection.parquet' (
+	FORMAT PARQUET,
+	SHREDDING {
+		v: 'STRUCT(
+			env VARCHAR,
+			nested STRUCT(region VARCHAR, zone INTEGER),
+			items INTEGER[]
+		)'
+	}
+)
+
+# Project top-level and merged nested paths, including a value that does not match the shredding type.
+query IIII
+SELECT id, v.env::VARCHAR, v.nested.region::VARCHAR, v.nested.zone
+FROM '{TEST_DIR}/variant_projection.parquet'
+ORDER BY id
+----
+0	staging	us	1
+1	42	eu	2
+2	NULL	NULL	NULL
+3	NULL	NULL	NULL
+
+# A root path outside the shredding schema can live in the root binary value.
+query II
+SELECT id, v.outside::VARCHAR
+FROM '{TEST_DIR}/variant_projection.parquet'
+ORDER BY id
+----
+0	root
+1	tail
+2	NULL
+3	NULL
+
+# The same fallback is required below a shredded object.
+query II
+SELECT id, v.nested.outside::VARCHAR
+FROM '{TEST_DIR}/variant_projection.parquet'
+ORDER BY id
+----
+0	inside
+1	99
+2	NULL
+3	NULL
+
+# ARRAY traversal is not a supported physical projection path.
+query II
+SELECT id, v.items[1]
+FROM '{TEST_DIR}/variant_projection.parquet'
+ORDER BY id
+----
+0	10
+1	20
+2	NULL
+3	NULL
+
+# A full-column reference must preserve the complete VARIANT value.
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/variant_projection.parquet'
+WHERE v = {
+	'env': 'staging',
+	'nested': {'region': 'us', 'zone': 1, 'outside': 'inside'},
+	'items': [10, 11],
+	'outside': 'root'
+}::VARIANT
+----
+1
