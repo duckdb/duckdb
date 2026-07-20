@@ -40,6 +40,25 @@ public:
 	TupleDataScanState scan_states;
 };
 
+//! Task-local scratch state for read-only group lookups.
+struct AggregateHTLookupState {
+public:
+	AggregateHTLookupState();
+
+	Vector hashes;
+	Vector ht_offsets;
+	Vector hash_salts;
+	Vector addresses;
+	SelectionVector group_compare_vector;
+	SelectionVector no_match_vector;
+	SelectionVector missing_vector;
+	DataChunk group_chunk;
+	TupleDataChunkState chunk_state;
+	RowMatcher row_matcher;
+	vector<TupleDataGatherFunction> gather_functions;
+	bool initialized = false;
+};
+
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
@@ -96,6 +115,12 @@ public:
 	                         SelectionVector &new_groups_out);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
+	//! Finds existing groups without changing the hash table. Returns the number of matches and writes input-row
+	//! indexes to found_groups_out. Matching row addresses are stored at their input-row indexes in state.addresses.
+	idx_t LookupGroups(DataChunk &groups, AggregateHTLookupState &state, SelectionVector &found_groups_out) const;
+	//! Gathers matched group values from state.addresses in the order specified by found_groups.
+	void GatherGroups(AggregateHTLookupState &state, const SelectionVector &found_groups, idx_t found_count,
+	                  DataChunk &result) const;
 
 	const PartitionedTupleData &GetPartitionedData() const;
 	unique_ptr<PartitionedTupleData> AcquirePartitionedData();
