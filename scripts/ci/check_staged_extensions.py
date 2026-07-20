@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def cli_asset_url(asset_base_url: str, git_sha: str, version: str) -> str:
-    short_sha = git_sha[:7]
+    short_sha = git_sha[:10]
     base = asset_base_url.rstrip("/")
     if version:
         return f"{base}/{short_sha}/{version}/duckdb/duckdb/github_release/duckdb_cli-linux-amd64.gz"
