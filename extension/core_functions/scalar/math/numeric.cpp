@@ -1518,7 +1518,7 @@ struct ATanOperator {
 ScalarFunction AtanFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, ATanOperator>);
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1617,7 +1617,7 @@ struct SinhOperator {
 ScalarFunction SinhFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, SinhOperator>);
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1636,7 +1636,7 @@ struct AsinhOperator {
 ScalarFunction AsinhFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, AsinhOperator>);
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1655,7 +1655,7 @@ struct TanhOperator {
 ScalarFunction TanhFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, TanhOperator>);
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
