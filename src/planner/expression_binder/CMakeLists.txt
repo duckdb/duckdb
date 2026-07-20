@@ -12,7 +12,6 @@ add_library_unity(
   qualify_binder.cpp
   index_binder.cpp
   insert_binder.cpp
-  join_condition_binder.cpp
   order_binder.cpp
   projection_binder.cpp
   relation_binder.cpp

@@ -11,9 +11,9 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
-#include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 
 namespace duckdb {
@@ -361,10 +361,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
-	auto has_join_condition_subquery = ref.condition && ref.condition->HasSubquery();
 	auto old_is_outside_flattened = is_outside_flattened;
 	// Plan laterals from outermost to innermost
-	if (ref.lateral || ref.condition_lateral) {
+	if (ref.lateral) {
 		// Set the flag to ensure that children do not flatten before the root
 		is_outside_flattened = false;
 	}
@@ -379,29 +378,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		LateralBinder::ReduceExpressionDepth(*right, ref.correlated_columns);
 	}
 
-	if (ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
-	    !Optimizer::OptimizerDisabled(context, OptimizerType::BUILD_SIDE_PROBE_SIDE)) {
-		// we turn any right outer joins into left outer joins for optimization purposes
-		// they are the same but with sides flipped, so treating them the same simplifies life
-		ref.type = JoinType::LEFT;
-		std::swap(left, right);
-	}
-	if (ref.condition_lateral) {
-		PushFilterToChild(right, ref.condition);
-		if (ref.correlated_columns.empty()) {
-			if (!has_unplanned_dependent_joins) {
-				RecursiveDependentJoinPlanner::Plan(*this, right);
-			}
-			vector<JoinCondition> conditions;
-			return LogicalComparisonJoin::CreateJoin(ref.type, JoinRefType::REGULAR, std::move(left), std::move(right),
-			                                         std::move(conditions));
-		}
-		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type, nullptr);
-		if (!has_unplanned_dependent_joins) {
-			RecursiveDependentJoinPlanner::Plan(*this, new_plan);
-		}
-		return new_plan;
-	}
 	if (ref.lateral) {
 		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                                std::move(ref.condition));
@@ -414,6 +390,15 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		return LogicalPositionalJoin::Create(std::move(left), std::move(right));
 	default:
 		break;
+	}
+	auto has_dependent_condition = ref.ref_type == JoinRefType::REGULAR && ref.type != JoinType::INNER &&
+	                               (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition)) &&
+	                               ref.duplicate_eliminated_columns.empty();
+	if (!has_dependent_condition && ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
+	    !Optimizer::OptimizerDisabled(context, OptimizerType::BUILD_SIDE_PROBE_SIDE)) {
+		// Binding follows the syntactic order. Normalize finalized RIGHT joins only after both sides and ON are bound.
+		ref.type = JoinType::LEFT;
+		std::swap(left, right);
 	}
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition)) &&
 	    ref.ref_type == JoinRefType::REGULAR) {
@@ -429,6 +414,13 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		filter->AddChild(std::move(root));
 		return std::move(filter);
 	}
+	if (has_dependent_condition) {
+		auto pending = make_uniq<LogicalDependentJoin>(std::move(left), std::move(right), CorrelatedColumns(), ref.type,
+		                                               std::move(ref.condition));
+		pending->dependent_type = DependentJoinType::JOIN_CONDITION;
+		pending->mark_index = ref.mark_index;
+		return std::move(pending);
+	}
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(context, ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));
@@ -441,14 +433,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 
 	if (ref.type == JoinType::MARK) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
-	}
-	if (ref.type == JoinType::OUTER && has_join_condition_subquery && ref.duplicate_eliminated_columns.empty() &&
-	    RecursiveDependentJoinPlanner::CanRewritePairDependentJoinCondition(*join)) {
-		// The rewrite changes this join's public bindings. Delay it until the owning query-block plan exists so the
-		// recursive planner can propagate those replacements through every parent expression.
-		MarkUnplannedDependentJoins();
-	} else {
-		RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(*this, result);
 	}
 	if (!ref.duplicate_eliminated_columns.empty()) {
 		if (result->type == LogicalOperatorType::LOGICAL_FILTER) {

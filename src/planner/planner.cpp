@@ -17,6 +17,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator_extension.hpp"
@@ -64,6 +65,18 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 	for (auto &child : op.children) {
 		CheckTreeDepth(*child, max_depth, depth + 1);
 	}
+}
+
+static bool ContainsDependentJoin(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsDependentJoin(*child)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundStatement &statement) {
@@ -128,7 +141,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		CheckTreeDepth(*plan, max_tree_depth);
 
 		RewriteTriggersToDependent(*this->binder, *this->plan);
+		auto lowered = RecursiveDependentJoinPlanner::Plan(*this->binder, std::move(this->plan));
+		this->plan = std::move(lowered.plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
+		D_ASSERT(!ContainsDependentJoin(*this->plan));
 	}
 	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;

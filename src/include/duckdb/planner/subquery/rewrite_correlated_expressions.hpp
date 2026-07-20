@@ -28,7 +28,7 @@ private:
 	RewriteCorrelatedExpressions(column_binding_map_t<ColumnBinding> current_binding_map,
 	                             column_binding_map_t<ColumnBinding> &correlated_aliases);
 	void RegisterCorrelatedBinding(const ColumnBinding &source_binding, const ColumnBinding &target_binding);
-	bool RewriteOperator(LogicalOperator &op);
+	void RewriteOperator(LogicalOperator &op);
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 

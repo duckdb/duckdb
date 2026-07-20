@@ -14,8 +14,14 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
+
+struct NonInnerJoinCondition {
+	vector<JoinCondition> conditions;
+	bool consumed = false;
+};
 
 //! Filter info struct that is used by the cardinality estimator to set the initial cardinality
 //! but is also eventually transformed into a query edge.
@@ -38,7 +44,8 @@ public:
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
-	bool from_residual_predicate = false;
+	//! Shared semantic owner for a complete non-inner ON condition.
+	shared_ptr<NonInnerJoinCondition> non_inner_join;
 	//! Index of the equivalence group for INNER equality/IS NOT DISTINCT FROM join filters.
 	//! All filters transitively connected by equality (a=b, b=c -> a=c all share the same index).
 	//! Used by cardinality estimation to skip redundant transitive conditions.

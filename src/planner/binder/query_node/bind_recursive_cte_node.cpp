@@ -275,8 +275,6 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	auto right_node = std::move(right.plan);
 
 	// check if there are any unplanned subqueries left in either child
-	has_unplanned_dependent_joins = has_unplanned_dependent_joins || left_binder->has_unplanned_dependent_joins ||
-	                                right_binder->has_unplanned_dependent_joins;
 
 	// for both the left and right sides, cast them to the same types
 	left_node = CastLogicalOperatorToTypes(left.types, internal_types, std::move(left_node));

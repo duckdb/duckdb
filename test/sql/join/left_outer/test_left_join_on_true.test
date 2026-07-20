@@ -68,9 +68,8 @@ ORDER BY 1, 2
 2	4
 4	NULL
 
-# non-true constant expressions cause a binder error
-
-statement error
+# A false lateral condition preserves every left row with a NULL-extended right side.
+query II rowsort
 WITH t AS (
   SELECT 1 AS r, [{n:1}, {n:2}] AS s
   UNION
@@ -79,7 +78,8 @@ WITH t AS (
 SELECT r, s1.s.n FROM t
 LEFT JOIN UNNEST(s) AS s1(s) ON FALSE
 ----
-Binder Error: Join condition for non-inner LATERAL JOIN must be a comparison between the left and right side
+1	NULL
+2	NULL
 
 # test non-lateral left joins
 
@@ -120,5 +120,4 @@ SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE ORDER BY i
 2	3	2	20
 3	4	1	10
 3	4	2	20
-
 

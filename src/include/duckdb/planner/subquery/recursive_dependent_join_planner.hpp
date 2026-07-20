@@ -20,21 +20,30 @@ class Binder;
 class JoinSide;
 class LogicalJoin;
 
+struct LogicalRewriteResult {
+	unique_ptr<LogicalOperator> plan;
+	vector<ReplacementBinding> output_replacements;
+};
+
 /*
  * Recursively plan subqueries and flatten dependent joins from outermost to innermost (like peeling an onion).
  */
 class RecursiveDependentJoinPlanner : public LogicalOperatorVisitor {
 public:
-	static void Plan(Binder &binder, unique_ptr<LogicalOperator> &op);
-	static void PlanJoinConditionSubqueries(Binder &binder, unique_ptr<LogicalOperator> &op);
-	static bool CanRewritePairDependentJoinCondition(LogicalOperator &op);
+	static LogicalRewriteResult Plan(Binder &binder, unique_ptr<LogicalOperator> op);
 
 private:
 	explicit RecursiveDependentJoinPlanner(Binder &binder) : binder(binder) {
 	}
 	static bool TryRewritePairDependentJoinCondition(Binder &binder, unique_ptr<LogicalOperator> &op,
 	                                                 vector<ReplacementBinding> &replacements);
+	static bool CanRewritePairDependentJoinCondition(LogicalOperator &op);
+	static unique_ptr<LogicalOperator>
+	PlanPairDependentLateralJoin(Binder &binder, unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
+	                             unique_ptr<Expression> condition, const unordered_set<TableIndex> &left_bindings,
+	                             const unordered_set<TableIndex> &right_bindings, JoinType join_type);
 	vector<ReplacementBinding> PlanOperator(unique_ptr<LogicalOperator> &op);
+	vector<ReplacementBinding> PlanJoinCondition(unique_ptr<LogicalOperator> &op);
 	void PlanJoinChildFilters(LogicalOperator &op);
 	void PlanJoinExpressions(LogicalOperator &op);
 	void PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr, JoinSide uncorrelated_side);

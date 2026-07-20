@@ -100,9 +100,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		// push casts for the target types
 		child_node = CastLogicalOperatorToTypes(child.types, node.types, std::move(child_node));
 		// check if there are any unplanned subqueries left in any child
-		if (child_binder.has_unplanned_dependent_joins) {
-			has_unplanned_dependent_joins = true;
-		}
 		children.push_back(std::move(child_node));
 	}
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children), logical_type,

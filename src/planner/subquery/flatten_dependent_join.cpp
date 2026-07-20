@@ -13,6 +13,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -235,7 +236,7 @@ void FlattenDependentJoins::PatchAccessingOperators(LogicalOperator &subtree_roo
 	}
 }
 
-void FlattenDependentJoins::CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
+void FlattenDependentJoins::CreateDelimJoinConditions(vector<JoinCondition> &conditions,
                                                       const CorrelatedColumns &correlated_columns,
                                                       const vector<ColumnBinding> &state, bool perform_delim) {
 	D_ASSERT(state.size() == correlated_columns.size());
@@ -247,7 +248,64 @@ void FlattenDependentJoins::CreateDelimJoinConditions(LogicalComparisonJoin &del
 		JoinCondition cond(make_uniq<BoundColumnRefExpression>(col.name, col.type, col.binding),
 		                   make_uniq<BoundColumnRefExpression>(col.name, col.type, state[delim_index]),
 		                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-		delim_join.conditions.push_back(std::move(cond));
+		conditions.push_back(std::move(cond));
+	}
+}
+
+static bool JoinConditionsNeedFinalization(LogicalComparisonJoin &join) {
+	unordered_set<TableIndex> left_bindings;
+	unordered_set<TableIndex> right_bindings;
+	LogicalJoin::GetTableReferences(*join.children[0], left_bindings);
+	LogicalJoin::GetTableReferences(*join.children[1], right_bindings);
+	for (auto &condition : join.conditions) {
+		if (!condition.IsComparison()) {
+			continue;
+		}
+		auto left_side = JoinSide::GetCurrentJoinSide(condition.GetLHS(), left_bindings, right_bindings);
+		auto right_side = JoinSide::GetCurrentJoinSide(condition.GetRHS(), left_bindings, right_bindings);
+		if (left_side == JoinSide::BOTH || right_side == JoinSide::BOTH || left_side == JoinSide::RIGHT ||
+		    right_side == JoinSide::LEFT) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void FinalizeJoinConditions(ClientContext &context, unique_ptr<LogicalOperator> &plan) {
+	for (auto &child : plan->children) {
+		FinalizeJoinConditions(context, child);
+	}
+	if (plan->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return;
+	}
+
+	auto &join = plan->Cast<LogicalComparisonJoin>();
+	if (!JoinConditionsNeedFinalization(join)) {
+		return;
+	}
+	auto join_type = join.join_type;
+	auto mark_index = join.mark_index;
+	auto left_projection_map = std::move(join.left_projection_map);
+	auto right_projection_map = std::move(join.right_projection_map);
+	D_ASSERT(join.mark_types.empty());
+	D_ASSERT(join.duplicate_eliminated_columns.empty());
+	D_ASSERT(!join.delim_flipped);
+	D_ASSERT(!join.filter_pushdown);
+	auto condition = JoinCondition::CreateExpression(std::move(join.conditions));
+	auto left = std::move(join.children[0]);
+	auto right = std::move(join.children[1]);
+	auto result = LogicalComparisonJoin::CreateJoin(context, join_type, JoinRefType::REGULAR, std::move(left),
+	                                                std::move(right), std::move(condition));
+	auto &result_join = result->Cast<LogicalJoin>();
+	result_join.mark_index = mark_index;
+	result_join.left_projection_map = std::move(left_projection_map);
+	result_join.right_projection_map = std::move(right_projection_map);
+	if (plan->has_estimated_cardinality) {
+		result->SetEstimatedCardinality(plan->estimated_cardinality);
+	}
+	plan = std::move(result);
+	if (plan->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		D_ASSERT(!JoinConditionsNeedFinalization(plan->Cast<LogicalComparisonJoin>()));
 	}
 }
 
@@ -259,6 +317,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
 		DelimJoinCTERewriter::Rewrite(binder, plan);
 	}
+	FinalizeJoinConditions(binder.context, plan);
 	return plan;
 }
 
@@ -496,24 +555,6 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownChild(uniqu
 	return result;
 }
 
-void FlattenDependentJoins::AddAnyJoinConditions(LogicalDependentJoin &op,
-                                                 const vector<ColumnBinding> &plan_columns) const {
-	// add the actual condition based on the ANY/ALL predicate
-	for (idx_t child_idx = 0; child_idx < op.expression_children.size(); child_idx++) {
-		auto left_expr = std::move(op.expression_children[child_idx]);
-		auto &child_type = op.child_types[child_idx];
-		auto &compare_type = op.child_targets[child_idx];
-		auto right_expr = BoundCastExpression::AddDefaultCastToType(
-		    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), op.child_targets[child_idx]);
-		JoinCondition compare_cond(std::move(left_expr), std::move(right_expr), op.comparison_type);
-
-		// push collations
-		ExpressionBinder::PushCollation(binder.context, compare_cond.LeftReference(), compare_type);
-		ExpressionBinder::PushCollation(binder.context, compare_cond.RightReference(), compare_type);
-		op.conditions.push_back(std::move(compare_cond));
-	}
-}
-
 void FlattenDependentJoins::AddCTERefJoinConditions(LogicalComparisonJoin &join, const LogicalCTERef &cteref,
                                                     const vector<ColumnBinding> &state) const {
 	if (cteref.correlated_columns == 0) {
@@ -680,20 +721,13 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 	auto &op = plan->Cast<LogicalDependentJoin>();
 	RewriteCorrelatedBindings(op, outer_state.bindings);
 
-	op.duplicate_eliminated_columns.clear();
-	op.mark_types.clear();
+	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
+	vector<LogicalType> mark_types;
 	for (idx_t i = 0; i < op.correlated_columns.size(); i++) {
 		auto &col = op.correlated_columns[i];
-		op.duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
-		op.mark_types.push_back(col.type);
+		duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
+		mark_types.push_back(col.type);
 	}
-
-	// We are done using the operator as a DEPENDENT JOIN, it is now fully decorrelated,
-	// and we change the type to a DELIM JOIN.
-	plan->type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
-
-	auto plan_columns = plan->children[1]->GetColumnBindings();
-	CreateDelimJoinConditions(op, op.correlated_columns, right_state.bindings, op.perform_delim);
 	MergeBindingReplacements(outer_state, right_state);
 	for (auto &binding : output.left_payload) {
 		binding = ResolveBinding(binding, outer_state.binding_replacements);
@@ -745,22 +779,34 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::FinalizeDependentJo
 		                              : right_output.CreateProjectionMap(right_selected);
 	}
 
-	if (op.is_lateral_join && op.subquery_type == SubqueryType::INVALID) {
-		// check if there are any arbitrary expressions left
-		if (!op.arbitrary_expressions.empty()) {
-			// we can only evaluate scalar arbitrary expressions for inner joins
-			if (op.join_type != JoinType::INNER) {
-				throw BinderException("Join condition for non-inner LATERAL JOIN must be a comparison between the left "
-				                      "and right side");
-			}
-			auto filter = make_uniq<LogicalFilter>();
-			filter->expressions = std::move(op.arbitrary_expressions);
-			filter->AddChild(std::move(plan));
-			plan = std::move(filter);
+	vector<JoinCondition> conditions;
+	CreateDelimJoinConditions(conditions, op.correlated_columns, right_state.bindings, op.perform_delim);
+	if (op.condition) {
+		if (op.any_join) {
+			D_ASSERT(BoundComparisonExpression::IsComparison(*op.condition));
+			auto comparison_type = op.condition->GetExpressionType();
+			auto &comparison = op.condition->Cast<BoundFunctionExpression>();
+			conditions.emplace_back(std::move(BoundComparisonExpression::LeftMutable(comparison)),
+			                        std::move(BoundComparisonExpression::RightMutable(comparison)), comparison_type);
+		} else {
+			LogicalComparisonJoin::ExtractJoinConditions(binder.context, op.join_type, JoinRefType::REGULAR,
+			                                             op.children[0], op.children[1], std::move(op.condition),
+			                                             conditions);
 		}
-	} else if (op.subquery_type == SubqueryType::ANY) {
-		AddAnyJoinConditions(op, plan_columns);
 	}
+
+	auto finalized = make_uniq<LogicalComparisonJoin>(op.join_type, LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	finalized->mark_index = op.mark_index;
+	finalized->left_projection_map = std::move(op.left_projection_map);
+	finalized->right_projection_map = std::move(op.right_projection_map);
+	finalized->conditions = std::move(conditions);
+	finalized->mark_types = std::move(mark_types);
+	finalized->duplicate_eliminated_columns = std::move(duplicate_eliminated_columns);
+	finalized->children = std::move(op.children);
+	if (plan->has_estimated_cardinality) {
+		finalized->SetEstimatedCardinality(plan->estimated_cardinality);
+	}
+	plan = std::move(finalized);
 	return outer_state;
 }
 

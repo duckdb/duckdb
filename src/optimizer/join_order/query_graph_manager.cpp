@@ -321,6 +321,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 
 	// perform the final pushdown of remaining filters
 	for (auto &filter : filters_and_bindings) {
+		D_ASSERT(!filter->non_inner_join || filter->non_inner_join->consumed);
 		// check if the filter has already been extracted
 		if (filter->filter) {
 			// if not we need to push it
@@ -429,9 +430,12 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			for (auto predicate_ref : node->info->predicates) {
 				auto f = &predicate_ref.get().GetFilter();
 				// extract the filter from the operator it originally belonged to
-				D_ASSERT(filters_and_bindings[f->filter_index]->filter);
 				auto &filter_and_binding = filters_and_bindings.at(f->filter_index);
-				auto condition = std::move(filter_and_binding->filter);
+				if (f->non_inner_join && f->non_inner_join->consumed) {
+					D_ASSERT(!filter_and_binding->filter);
+					continue;
+				}
+				D_ASSERT(filter_and_binding->filter);
 				// now create the actual join condition
 				D_ASSERT((JoinRelationSet::IsSubset(*left.set, *f->left_set) &&
 				          JoinRelationSet::IsSubset(*right.set, *f->right_set)) ||
@@ -448,7 +452,21 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					std::swap(left, right);
 					invert_children = false;
 				}
+				if (f->non_inner_join) {
+					for (auto &owned_condition : f->non_inner_join->conditions) {
+						join->conditions.push_back(std::move(owned_condition));
+					}
+					f->non_inner_join->conditions.clear();
+					f->non_inner_join->consumed = true;
+					for (auto &candidate : filters_and_bindings) {
+						if (candidate->non_inner_join == f->non_inner_join) {
+							candidate->filter.reset();
+						}
+					}
+					continue;
+				}
 
+				auto condition = std::move(filter_and_binding->filter);
 				if (BoundComparisonExpression::IsComparison(*condition)) {
 					auto invert = ShouldInvertJoinCondition(set_manager, left, right, *f, invert_children);
 					auto cond = MaybeInvertConditions(std::move(condition), invert);
@@ -481,34 +499,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
 
-	// collect unused residual predicates that belong to THIS join
-	vector<unique_ptr<Expression>> unused_residual_predicates;
-	for (auto &filter_info : filters_and_bindings) {
-		if (filter_info->from_residual_predicate && filters_and_bindings[filter_info->filter_index]->filter) {
-			if (filter_info->set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, filter_info->set)) {
-				unused_residual_predicates.push_back(
-				    std::move(filters_and_bindings[filter_info->filter_index]->filter));
-			}
-		}
-	}
-
-	if (!unused_residual_predicates.empty()) {
-		unique_ptr<Expression> combined = std::move(unused_residual_predicates[0]);
-		for (idx_t i = 1; i < unused_residual_predicates.size(); i++) {
-			combined = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(combined),
-			                                                 std::move(unused_residual_predicates[i]));
-		}
-
-		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			// attach to join's predicate field
-			auto &comp_join = result_operator->Cast<LogicalComparisonJoin>();
-			comp_join.conditions.emplace_back(std::move(combined));
-		} else {
-			// push as filter
-			result_operator = PushFilter(std::move(result_operator), std::move(combined));
-		}
-	}
-
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
@@ -516,11 +506,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		// check if the filter has already been extracted
 		auto &info = *filter_info;
 		if (filters_and_bindings[info.filter_index]->filter) {
-			// skip filters from residual predicates
-			if (info.from_residual_predicate) {
-				continue;
-			}
-
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
 			if (info.join_type == JoinType::LEFT) {

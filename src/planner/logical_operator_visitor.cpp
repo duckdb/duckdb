@@ -163,18 +163,8 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	}
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
 		auto &join = op.Cast<LogicalDependentJoin>();
-		for (auto &expr : join.duplicate_eliminated_columns) {
-			callback(&expr);
-		}
-		for (auto &cond : join.conditions) {
-			callback(&cond.LeftReference());
-			callback(&cond.RightReference());
-		}
-		for (auto &expr : join.arbitrary_expressions) {
-			callback(&expr);
-		}
-		for (auto &expr : join.expression_children) {
-			callback(&expr);
+		if (join.condition) {
+			callback(&join.condition);
 		}
 		break;
 	}

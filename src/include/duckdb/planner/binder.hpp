@@ -379,8 +379,6 @@ private:
 	shared_ptr<GlobalBinderState> global_binder_state;
 	//! Active binders
 	vector<reference<ExpressionBinder>> active_binders;
-	//! Whether or not the binder has any unplanned dependent joins that still need to be planned/flattened
-	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
 	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
@@ -415,9 +413,6 @@ private:
 
 	//! Tries to bind the table name with replacement scans
 	BoundStatement BindWithReplacementScan(ClientContext &context, BaseTableRef &ref);
-	//! Mark this binder and its parents as owning dependent joins that require deferred planning
-	void MarkUnplannedDependentJoins();
-	BoundStatement FinalizeStatement(BoundStatement result);
 
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);

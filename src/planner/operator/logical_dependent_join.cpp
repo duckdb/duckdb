@@ -5,14 +5,14 @@ namespace duckdb {
 LogicalDependentJoin::LogicalDependentJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
                                            CorrelatedColumns correlated_columns, JoinType type,
                                            unique_ptr<Expression> condition)
-    : LogicalComparisonJoin(type, LogicalOperatorType::LOGICAL_DEPENDENT_JOIN), join_condition(std::move(condition)),
+    : LogicalJoin(type, LogicalOperatorType::LOGICAL_DEPENDENT_JOIN), condition(std::move(condition)),
       correlated_columns(std::move(correlated_columns)) {
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
 }
 
 LogicalDependentJoin::LogicalDependentJoin(JoinType join_type)
-    : LogicalComparisonJoin(join_type, LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+    : LogicalJoin(join_type, LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 }
 
 unique_ptr<LogicalOperator> LogicalDependentJoin::Create(unique_ptr<LogicalOperator> left,

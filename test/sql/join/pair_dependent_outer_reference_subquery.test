@@ -65,6 +65,39 @@ ORDER BY outer_l.x, q.a, q.b NULLS LAST;
 20	2	20
 30	3	NULL
 
+# Correlation rewriting turns the second conjunct into a residual predicate
+# while the first remains a comparison key. Join ordering must keep both
+# conjuncts attached to the same SEMI join.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1, 1)) l(k, a)
+	SEMI JOIN (VALUES (1, 1)) r(k, b)
+		ON l.k = r.k
+	   AND l.a = r.b + o.x
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	true
+1	false
+
+# The corresponding ANTI join exercises the same mixed comparison/residual
+# predicate ownership with inverted match semantics.
+query IT
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (1, 1)) l(k, a)
+	ANTI JOIN (VALUES (1, 1)) r(k, b)
+		ON l.k = r.k
+	   AND l.a = r.b + o.x
+) AS ex
+FROM (VALUES (0), (1)) o(x)
+ORDER BY o.x;
+----
+0	false
+1	true
+
 query III
 SELECT outer_l.x, q.a, q.x
 FROM pair_l outer_l
