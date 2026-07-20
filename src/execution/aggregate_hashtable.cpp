@@ -961,7 +961,7 @@ idx_t GroupedAggregateHashTable::LookupGroups(DataChunk &groups, AggregateHTLook
 		lookup_state.group_chunk.data[group_idx].Reference(groups.data[group_idx]);
 	}
 	lookup_state.group_chunk.data[groups.ColumnCount()].Reference(lookup_state.hashes);
-	lookup_state.group_chunk.SetCardinalityUnsafe(chunk_size);
+	lookup_state.group_chunk.CheckCardinality(chunk_size);
 	TupleDataCollection::ToUnifiedFormat(lookup_state.chunk_state, lookup_state.group_chunk);
 
 	const auto hashes = lookup_state.hashes.Values<hash_t>();
