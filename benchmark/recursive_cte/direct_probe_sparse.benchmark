@@ -1,0 +1,5 @@
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=direct_probe_sparse
+BENCHMARK_NAME=Recursive CTE sparse direct probes
+DESCRIPTION=Run sparse complete-key probes over a large recurring state

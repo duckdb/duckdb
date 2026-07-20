@@ -1,0 +1,13 @@
+benchmark/recursive_cte/bfs.benchmark
+benchmark/recursive_cte/bellman_ford.benchmark
+benchmark/recursive_cte/connected_components.benchmark
+benchmark/recursive_cte/dvr.benchmark
+benchmark/recursive_cte/game_of_life.benchmark
+benchmark/recursive_cte/kmeans.benchmark
+benchmark/recursive_cte/pagerank.benchmark
+benchmark/recursive_cte/kruskal.benchmark
+benchmark/recursive_cte/dvr_performance.benchmark
+benchmark/recursive_cte/pagerank_performance.benchmark
+benchmark/recursive_cte/kmeans_performance.benchmark
+benchmark/recursive_cte/direct_probe_sparse.benchmark
+benchmark/recursive_cte/direct_probe_dense.benchmark

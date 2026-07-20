@@ -1,0 +1,5 @@
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=smoke
+QUERY=connected_components
+BENCHMARK_NAME=Recursive CTE connected components
+DESCRIPTION=Run the USING KEY connected-components research workload
