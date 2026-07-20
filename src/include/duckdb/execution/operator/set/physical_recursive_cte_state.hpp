@@ -16,6 +16,8 @@ struct RecursiveExecutorPool {
 
 enum class RecursiveCTEInlineStageType : uint8_t { EXECUTE, PREPARE_FINISH, FINISH };
 
+enum class RecursiveCTEKeySourcePhase : uint8_t { RECURSING, DRAINING_FINAL_STATE, FINISHED };
+
 struct RecursiveCTEScheduleStage {
 	RecursiveCTEScheduleStage(RecursiveCTEInlineStageType type_p, Pipeline &pipeline_p)
 	    : type(type_p), pipeline(pipeline_p), dependency_count(0) {
@@ -69,6 +71,7 @@ public:
 	ColumnDataScanState scan_state;
 	bool initialized = false;
 	bool finished_scan = false;
+	RecursiveCTEKeySourcePhase key_source_phase = RecursiveCTEKeySourcePhase::RECURSING;
 	bool output_is_working = false;
 	//! Cached chunk for distinct key extraction in the using_key Sink path
 	DataChunk distinct_rows;
