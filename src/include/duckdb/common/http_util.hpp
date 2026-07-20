@@ -76,6 +76,8 @@ struct HTTPHeaders {
 public:
 	HTTPHeaders() = default;
 	explicit HTTPHeaders(DatabaseInstance &db);
+	// Out-of-line so the symbol is emitted/exported for loadable (WASM side-module) extensions.
+	DUCKDB_API ~HTTPHeaders();
 
 	void Insert(string key, string value);
 	bool HasHeader(const string &key) const;
@@ -109,6 +111,8 @@ private:
 
 struct HTTPResponse {
 	explicit HTTPResponse(HTTPStatusCode code);
+	// Out-of-line so the symbol is emitted/exported for loadable (WASM side-module) extensions.
+	DUCKDB_API ~HTTPResponse();
 
 	HTTPStatusCode status;
 	string url;
@@ -133,6 +137,10 @@ public:
 
 struct BaseRequest {
 	BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params);
+	// Out-of-line so the symbol is emitted/exported for loadable (WASM side-module) extensions.
+	// Non-virtual on purpose: these types carry no vtable and are only destroyed as their concrete
+	// stack type, so keeping the dtor non-virtual preserves object layout / ABI.
+	DUCKDB_API ~BaseRequest();
 
 	RequestType type;
 	string url;
@@ -176,6 +184,8 @@ struct GetRequestInfo : public BaseRequest {
 	      response_handler(std::move(response_handler_p)) {
 	}
 
+	DUCKDB_API ~GetRequestInfo();
+
 	std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler;
 	std::function<bool(const HTTPResponse &response)> response_handler;
 };
@@ -187,6 +197,7 @@ struct PutRequestInfo : public BaseRequest {
 	      buffer_in_len(buffer_in_len), content_type(content_type) {
 		request_body_length = buffer_in_len;
 	}
+	DUCKDB_API ~PutRequestInfo();
 
 	const_data_ptr_t buffer_in;
 	idx_t buffer_in_len;
@@ -197,12 +208,14 @@ struct HeadRequestInfo : public BaseRequest {
 	HeadRequestInfo(const string &path, const HTTPHeaders &headers, HTTPParams &params)
 	    : BaseRequest(RequestType::HEAD_REQUEST, path, headers, params) {
 	}
+	DUCKDB_API ~HeadRequestInfo();
 };
 
 struct DeleteRequestInfo : public BaseRequest {
 	DeleteRequestInfo(const string &path, const HTTPHeaders &headers, HTTPParams &params)
 	    : BaseRequest(RequestType::DELETE_REQUEST, path, headers, params) {
 	}
+	DUCKDB_API ~DeleteRequestInfo();
 };
 
 struct PostRequestInfo : public BaseRequest {
@@ -212,6 +225,8 @@ struct PostRequestInfo : public BaseRequest {
 	      buffer_in_len(buffer_in_len) {
 		request_body_length = buffer_in_len;
 	}
+
+	DUCKDB_API ~PostRequestInfo();
 
 	const_data_ptr_t buffer_in;
 	idx_t buffer_in_len;
