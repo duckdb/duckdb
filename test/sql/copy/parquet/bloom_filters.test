@@ -270,6 +270,37 @@ WHERE tm_tz = TIMETZ '12:16:41+02';
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
 
+# Infinite timestamp sentinels are preserved in Parquet regardless of the timestamp unit
+statement ok
+COPY (
+	SELECT CASE
+		WHEN i = 0 THEN 'infinity'::TIMESTAMP_MS
+		WHEN i = 1 THEN '-infinity'::TIMESTAMP_MS
+		ELSE (TIMESTAMP '2000-01-01' + i * INTERVAL 1 MILLISECOND)::TIMESTAMP_MS
+	END AS ts
+	FROM range(2048) range_table(i)
+)
+TO '{TEST_DIR}/timestamp_ms_infinity_bloom.parquet' (
+	FORMAT parquet,
+	ROW_GROUP_SIZE 2048,
+	DICTIONARY_SIZE_LIMIT 4096,
+	BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.0001
+)
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/timestamp_ms_infinity_bloom.parquet')
+WHERE ts = 'infinity'::TIMESTAMP
+----
+1
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/timestamp_ms_infinity_bloom.parquet')
+WHERE ts = '-infinity'::TIMESTAMP
+----
+1
+
 # Computed expressions do not operate in the raw column's bloom filter domain
 query I
 SELECT count(*) FROM '{TEST_DIR}/bloom_blob.parquet' WHERE to_hex(b) = 'FF';

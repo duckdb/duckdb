@@ -785,7 +785,10 @@ static optional<uint64_t> TryHashTimestampMillis(const Value &constant, const Pa
 		return nullopt;
 	}
 	// DuckDB stores timestamps in microseconds, while the Parquet bloom filter hashes the stored milliseconds.
-	auto value = constant.GetValue<int64_t>() / Interval::MICROS_PER_MSEC;
+	auto value = constant.GetValue<int64_t>();
+	if (timestamp_t(value).IsFinite()) {
+		value /= Interval::MICROS_PER_MSEC;
+	}
 	return duckdb_zstd::XXH64(&value, sizeof(value), 0);
 }
 
