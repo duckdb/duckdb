@@ -147,6 +147,7 @@
         "test/sql/storage/types/variant/variant_stats_merging.test_slow",
         "test/parquet/variant/variant_legacy_encoding.test",
         "test/sql/types/variant/tpch_test.test",
+        "test/sql/storage/compression/default_storage_dict_fsst.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test",
         "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",
@@ -199,6 +200,14 @@
       "reason": "Too many columns (20k) exceeds CSV field size limit in compatibility test script.",
       "paths": [
         "test/sql/join/test_hash_join_many_columns.test_slow"
+      ]
+    },
+    {
+      "reason": "Nested schemas require storage version v2.0.0.",
+      "paths": [
+        "test/sql/catalog/nested_schema/create_nested_schema.test",
+        "test/sql/catalog/nested_schema/drop_nested_schema.test",
+        "test/sql/catalog/nested_schema/nested_table.test"
       ]
     },
     {

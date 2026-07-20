@@ -618,12 +618,14 @@ void StringStats::MergeStats(BaseStatistics &stats, string_t &target, StringStat
 		return;
 	}
 	// both min/max stats are there - compare
-	bool new_is_more_extreme;
-	if (is_min) {
-		new_is_more_extreme = LessThan::Operation(source, target);
-	} else {
-		new_is_more_extreme = GreaterThan::Operation(source, target);
+	auto comparison = Comparator::Operation(source, target);
+	if (comparison == 0) {
+		if (target_type == StringStatsType::TRUNCATED_STATS || source_type == StringStatsType::TRUNCATED_STATS) {
+			target_type = StringStatsType::TRUNCATED_STATS;
+		}
+		return;
 	}
+	bool new_is_more_extreme = is_min ? comparison < 0 : comparison > 0;
 	if (!new_is_more_extreme) {
 		// old value is more extreme - bail
 		return;
@@ -705,8 +707,22 @@ FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, Exp
 		auto &constant = StringValue::Get(constant_value);
 		FilterPropagateResult prune_result;
 		if (HasMinMax(stats)) {
-			prune_result = CheckZonemap(string_data.min, string_data.min_type, string_data.max, string_data.max_type,
-			                            comparison_type, constant);
+			// Special handle cases where constant is equal to the truncated min bound, but we're able to prune a few
+			// row groups. For example, a truncated "bbbbbbbbbbbb" with minimum length 13 has the lower bound
+			// "bbbbbbbbbbbb\0" -- the min bound is obviously larger than the constant.
+			auto min = string_data.min;
+			auto min_type = string_data.min_type;
+			string min_bound;
+			auto min_string_length = MinStringLength(stats);
+			if (min_type == StringStatsType::TRUNCATED_STATS && constant.size() == min.GetSize() &&
+			    min_string_length.IsValid() && min_string_length.GetIndex() > constant.size() &&
+			    CompareStringStats(constant, min, min_type) == 0) {
+				min_bound = min.GetString() + '\0';
+				min = string_t(min_bound);
+				min_type = StringStatsType::EXACT_STATS;
+			}
+			prune_result =
+			    CheckZonemap(min, min_type, string_data.max, string_data.max_type, comparison_type, constant);
 		} else {
 			prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -745,21 +761,31 @@ FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType mi
 		if (min_comp < 0 || max_comp > 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN:
-		if (max_comp <= 0) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
+		if (min_comp == 0 && max_comp == 0 && min_type == StringStatsType::EXACT_STATS &&
+		    max_type == StringStatsType::EXACT_STATS) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_GREATERTHAN:
+		if (max_comp < 0 || (max_comp == 0 && max_type != StringStatsType::EXACT_STATS)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		if (max_comp <= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_LESSTHAN:
+		if (min_comp > 0 || (min_comp == 0 && min_type != StringStatsType::EXACT_STATS)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		if (min_comp >= 0) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	default:
 		throw InternalException("Expression type not implemented for string statistics zone map");
 	}

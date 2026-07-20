@@ -188,9 +188,6 @@ private:
 };
 
 template <>
-inline void BaseStatistics::UpdateNumericStats<interval_t>(interval_t new_value) {
-}
-template <>
 inline void BaseStatistics::UpdateNumericStats<list_entry_t>(list_entry_t new_value) {
 }
 

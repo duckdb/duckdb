@@ -82,3 +82,52 @@ query I
 SELECT count(*) FROM d WHERE year(dt) BETWEEN 1975 AND 1976;
 ----
 731
+
+# Test row group pruning for strictly increasing math functions
+
+statement ok
+CREATE TABLE monotone_math AS
+SELECT CASE
+           WHEN i < 122880 THEN 0.0
+           ELSE 10.0
+       END::DOUBLE AS x
+FROM range(245760) tbl(i);
+
+query II
+SELECT count(*), sum(x)
+FROM monotone_math
+WHERE atan(x) > 1;
+----
+122880	1228800.0
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(x)
+FROM monotone_math
+WHERE atan(x) > 1;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(x)
+FROM monotone_math
+WHERE sinh(x) > 1;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(x)
+FROM monotone_math
+WHERE asinh(x) > 1;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(x)
+FROM monotone_math
+WHERE tanh(x) > 0.5;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*

@@ -269,10 +269,12 @@ public:
 	                     vector<Identifier> &result_names);
 
 	void SearchSchema(CreateInfo &info);
-	//! Resolve the leading component of a (possibly qualified) name into a catalog: if it names an attached database
-	//! it becomes the catalog, otherwise the default catalog is prepended. The result has the catalog as the first
-	//! schema-path element.
-	QualifiedName ResolveCatalog(ClientContext &context, const QualifiedName &name);
+	//! Resolve the leading component of a (possibly qualified) name into a catalog: if it names an attached database it
+	//! becomes the catalog. The result has the catalog as the first path element. When default_catalog is true (the
+	//! default) the default catalog is filled in when the name does not specify one; when false the catalog element is
+	//! left empty (the caller applies its own default), which lets it distinguish "no catalog given" from an explicit
+	//! catalog.
+	QualifiedName ResolveCatalog(ClientContext &context, const QualifiedName &name, bool default_catalog = true);
 	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
 	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);

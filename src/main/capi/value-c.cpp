@@ -164,6 +164,9 @@ duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 		duckdb_blob result_blob;
 		result_blob.data = malloc(internal_result.size);
 		result_blob.size = internal_result.size;
+		if (!result_blob.data) {
+			return FetchDefaultValue::Operation<duckdb_blob>();
+		}
 		memcpy(result_blob.data, internal_result.data, internal_result.size);
 		return result_blob;
 	}

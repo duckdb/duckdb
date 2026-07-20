@@ -198,7 +198,6 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("FuncNameKeyword", &TransformIdentifierOrKeyword);
 	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
 	Register("SettingName", &TransformIdentifierOrKeyword);
-	Register("ExplainOptionName", &TransformIdentifierOrKeyword);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
