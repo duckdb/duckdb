@@ -1534,7 +1534,7 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	idx_t new_match_count = residual_executor->SelectExpression(residual_state->eval_chunk, selected_sel, remaining_sel,
 	                                                            nullptr, match_count);
 
-	std::vector<idx_t> original_indices(match_count);
+vector<idx_t> original_indices(match_count);
 	for (idx_t i = 0; i < match_count; i++) {
 		original_indices[i] = match_sel.get_index(i);
 	}
