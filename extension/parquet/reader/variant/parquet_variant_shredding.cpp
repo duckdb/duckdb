@@ -51,7 +51,8 @@ ShredPlan AnalyzeShred(const ShreddedGroupView &view, idx_t count, bool is_objec
 		//! A leaf is fully convertible if there is no binary leftover; an OBJECT field additionally must never
 		//! be missing (a NULL typed_value of a flat field would read as VARIANT_NULL, not "missing")
 		bool no_leftover = ValueAllNull(view, count);
-		bool no_missing = !is_object_field || view.leaf_format.validity.CheckAllValid(count);
+		bool no_missing =
+		    !is_object_field || view.leaf_format.validity.CheckAllValidSel(*view.leaf_format.sel, count);
 		plan.flat = no_leftover && no_missing;
 		break;
 	}

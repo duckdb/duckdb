@@ -383,6 +383,8 @@ public:
 	DUCKDB_API void Slice(const ValidityMask &other, idx_t source_offset, idx_t count);
 	DUCKDB_API void CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,
 	                        idx_t target_offset, idx_t count);
+	//! Like CheckAllValid(count), but sel maps each logical row to a physical validity index.
+	DUCKDB_API bool CheckAllValidSel(const SelectionVector &sel, idx_t count) const;
 	DUCKDB_API void CopyRange(const ValidityMask &other, idx_t count);
 	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
 	DUCKDB_API void Combine(const Vector &other, idx_t count);

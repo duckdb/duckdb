@@ -154,6 +154,18 @@ void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel
 	}
 }
 
+bool ValidityMask::CheckAllValidSel(const SelectionVector &sel, idx_t count) const {
+	if (CannotHaveNull()) {
+		return true;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		if (!RowIsValid(sel.get_index(i))) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
 	if (CannotHaveNull() && other.CannotHaveNull()) {
 		// Both validity masks are uninitialized, nothing to do
