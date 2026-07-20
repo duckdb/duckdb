@@ -35,11 +35,27 @@ SELECT s.min, s.max FROM (SELECT stats(power(x, 3)) s FROM power_stats LIMIT 1);
 ----
 -27.0	8.0
 
-# Any finite input raised to zero is one
+# Any non-NULL input raised to zero is one
 query II
 SELECT s.min, s.max FROM (SELECT stats(power(x, 0)) s FROM power_stats LIMIT 1);
 ----
 1.0	1.0
+
+statement ok
+CREATE TABLE power_zero AS
+SELECT CASE WHEN i < 122880 THEN 'inf'::DOUBLE ELSE 1.0 END AS x
+FROM range(245760) tbl(i);
+
+# Zero powers do not require finite base statistics
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM power_zero WHERE power(x, 0) > 1;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM power_zero WHERE power(x, 0) > 1;
+----
+0
 
 statement ok
 CREATE TABLE negative_power_stats(x INTEGER);

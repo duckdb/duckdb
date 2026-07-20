@@ -1044,26 +1044,31 @@ unique_ptr<BaseStatistics> PropagatePowStats(ClientContext &context, FunctionSta
 	D_ASSERT(input.child_stats.size() == 2);
 	auto &base_stats = input.child_stats[0];
 	auto &exponent_stats = input.child_stats[1];
-	if (!NumericStats::HasMinMax(base_stats) || !NumericStats::HasMinMax(exponent_stats)) {
+	if (!NumericStats::HasMinMax(exponent_stats)) {
 		return nullptr;
 	}
 
-	auto base_min = NumericStats::Min(base_stats).GetValue<double>();
-	auto base_max = NumericStats::Max(base_stats).GetValue<double>();
 	auto exponent_min = NumericStats::Min(exponent_stats).GetValue<double>();
 	auto exponent_max = NumericStats::Max(exponent_stats).GetValue<double>();
-	// Only constant non-negative integer exponents have safe bounds across the complete finite base domain
-	if (!Value::IsFinite(base_min) || !Value::IsFinite(base_max) || !Value::IsFinite(exponent_min) ||
-	    exponent_min != exponent_max || exponent_min < 0 || std::trunc(exponent_min) != exponent_min) {
-		return nullptr;
-	}
-
 	double result_min;
 	double result_max;
-	if (exponent_min == 0) {
+	if (exponent_min == 0 && exponent_max == 0) {
 		result_min = 1;
 		result_max = 1;
 	} else {
+		if (!Value::IsFinite(exponent_min) || exponent_min != exponent_max || exponent_min < 0 ||
+		    std::trunc(exponent_min) != exponent_min) {
+			return nullptr;
+		}
+		if (!NumericStats::HasMinMax(base_stats)) {
+			return nullptr;
+		}
+		auto base_min = NumericStats::Min(base_stats).GetValue<double>();
+		auto base_max = NumericStats::Max(base_stats).GetValue<double>();
+		// Positive integer exponents have safe bounds across the complete finite base domain
+		if (!Value::IsFinite(base_min) || !Value::IsFinite(base_max)) {
+			return nullptr;
+		}
 		auto power_min = std::pow(base_min, exponent_min);
 		auto power_max = std::pow(base_max, exponent_min);
 		if (!Value::IsFinite(power_min) || !Value::IsFinite(power_max)) {
