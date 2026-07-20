@@ -1,0 +1,251 @@
+# name: test/sql/function/variant/variant_extract_string.test
+# group: [variant]
+
+load {TEST_DIR}/variant_extract_string.db readwrite v1.5.0
+
+statement ok
+CREATE MACRO struct_cast_data() AS TABLE (
+	SELECT {'a': [
+		{
+			'b': 'hello',
+			'c': NULL,
+			'a': '1970/03/15'::DATE
+		},
+		{
+			'b': NULL,
+			'c': True,
+			'a': '2020/11/03'::DATE
+		}
+	]}::VARIANT AS a
+	UNION ALL
+	SELECT {'a': [
+		{
+			'b': 'this is a long string',
+			'c': False,
+			'a': '1953/9/16'::DATE
+		}
+	],
+	'b': 42,
+	'c': {
+	    'd': 'world'
+	}}::VARIANT
+);
+
+statement error
+select variant_extract_string('{"a": 1, "b": {"c": 12, "d": 10}}');
+----
+Binder Error: No function matches the given name and argument types 'variant_extract_string(STRING_LITERAL)'.
+
+# Empty path supplied
+
+query I
+select variant_extract_string(a, '') from struct_cast_data();
+----
+{"a":[{"b":"hello","c":null,"a":"1970-03-15"},{"b":null,"c":true,"a":"2020-11-03"}]}
+{"a":[{"b":"this is a long string","c":false,"a":"1953-09-16"}],"b":42,"c":{"d":"world"}}
+
+query I
+select variant_extract_string(a, []) from struct_cast_data();
+----
+[]
+[]
+
+query I
+select variant_extract_string(a, ['']) from struct_cast_data();
+----
+['{"a":[{"b":"hello","c":null,"a":"1970-03-15"},{"b":null,"c":true,"a":"2020-11-03"}]}']
+['{"a":[{"b":"this is a long string","c":false,"a":"1953-09-16"}],"b":42,"c":{"d":"world"}}']
+
+# Single path supplied
+
+query I
+select variant_extract_string(a, 'c') from struct_cast_data();
+----
+NULL
+{"d":"world"}
+
+query I
+select variant_extract_string(a, ['c']) from struct_cast_data();
+----
+[NULL]
+['{"d":"world"}']
+
+# Multiple paths supplied
+
+query I
+select variant_extract_string(a, ['b', 'c']) from struct_cast_data();
+----
+[NULL, NULL]
+[42, '{"d":"world"}']
+
+# Empty object
+
+query I
+select variant_extract_string('{}'::VARIANT, '');
+----
+{}
+
+# Arrays
+
+query I
+select variant_extract_string(['duck', 'goose']::VARIANT, '');
+----
+["duck","goose"]
+
+query I
+select variant_extract_string({'a': 1, 'b': ['duck', 'goose']}::VARIANT, 'b');
+----
+["duck","goose"]
+
+# FIXME: map type is currently casted into a shape inconsistent with respect to JSON
+
+query I
+select variant_extract_string(MAP {'a': 1, 'b': 2}::VARIANT, 'a');
+----
+NULL
+
+# Primitive values
+
+query I
+SELECT [*COLUMNS(*)] FROM (
+	SELECT variant_extract_string(
+		COLUMNS(lambda c: NOT regexp_matches(c, 'array|struct|map|union|tuple'))::VARIANT,
+		''
+	)
+	FROM test_all_types()
+	-- strip NULLs from output
+	WHERE bool IS NOT NULL
+);
+----
+[false, -128, -32768, -2147483648, -9223372036854775808, -170141183460469231731687303715884105728, 0, 0, 0, 0, 0, -179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368, '5877642-06-25 (BC)', '00:00:00', '290309-12-22 (BC) 00:00:00', '290309-12-22 (BC) 00:00:00', '290309-12-22 (BC) 00:00:00', '1677-09-22 00:00:00', '00:00:00+15:59:59', '290309-12-22 (BC) 00:00:00+00', '1677-09-22 00:00:00+00', -3.4028235e+38, -1.7976931348623157e+308, -999.9, -99999.9999, -999999999999.999999, -9999999999999999999999999999.9999999999, 00000000-0000-0000-0000-000000000000, '00:00:00', 🦆🦆🦆🦆🦆🦆, thisisalongblob\x00withnullbytes, 0010001001011100010101011010111, DUCK_DUCK_ENUM, enum_0, enum_0, '00:00:00', POINT EMPTY]
+[true, 127, 32767, 2147483647, 9223372036854775807, 170141183460469231731687303715884105727, 340282366920938463463374607431768211455, 255, 65535, 4294967295, 18446744073709551615, 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368, 5881580-07-10, '24:00:00', '294247-01-10 04:00:54.775806', '294247-01-10 04:00:54', '294247-01-10 04:00:54.775', '2262-04-11 23:47:16.854775806', '24:00:00-15:59:59', '294247-01-10 04:00:54.775806+00', '2262-04-11 23:47:16.854775806+00', 3.4028235e+38, 1.7976931348623157e+308, 999.9, 99999.9999, 999999999999.999999, 9999999999999999999999999999.9999999999, ffffffff-ffff-ffff-ffff-ffffffffffff, '83 years 3 months 999 days 00:16:39.999999', goo\0se, \x00\x00\x00a, 10101, GOOSE, enum_299, enum_69999, '24:00:00', 'GEOMETRYCOLLECTION (POINT (1 2), POINT EMPTY, LINESTRING (0 0, 1 1), LINESTRING EMPTY, POLYGON ((0 0, 0 1, 1 1, 1 0, 0 0)), POLYGON EMPTY, MULTIPOINT (5 6, EMPTY), MULTILINESTRING ((0 0, 1 1), EMPTY, (2 2, 3 3), EMPTY), MULTILINESTRING EMPTY, MULTIPOLYGON (((0 0, 0 1, 1 1, 1 0, 0 0)), EMPTY, ((0 0, 0 2, 2 2, 2 0, 0 0)), EMPTY), MULTIPOLYGON EMPTY, GEOMETRYCOLLECTION (POINT (5 6)), GEOMETRYCOLLECTION EMPTY)']
+
+# Nested values requiring quotes
+
+query I
+SELECT variant_extract_string({
+	'uuid': uuid,
+	'blob': blob,
+	'bit': bit,
+	'interval': interval,
+	'timestamp': timestamp,
+	'timestamp_tz': timestamp_tz,
+	'geometry': geometry
+}::VARIANT, '')
+FROM test_all_types()
+WHERE bool = false;
+----
+{"uuid":"00000000-0000-0000-0000-000000000000","blob":"thisisalongblob\\x00withnullbytes","bit":"0010001001011100010101011010111","interval":"00:00:00","timestamp":"290309-12-22 (BC) 00:00:00","timestamp_tz":"290309-12-22 (BC) 00:00:00+00","geometry":"POINT EMPTY"}
+
+# Escape Sequences
+
+foreach val 34 92 8 12 10 13 9 1
+
+query I
+SELECT variant_extract_string(chr({val})::VARIANT, '') == chr({val})
+----
+true
+
+endloop
+
+query I
+SELECT variant_extract_string(
+	[chr(34), chr(92), chr(8), chr(12), chr(10), chr(13), chr(9), chr(1), '🦆']::VARIANT,
+	''
+);
+----
+["\"","\\","\b","\f","\n","\r","\t","\u0001","🦆"]
+
+# NULL returns NULL
+
+query I
+select variant_extract_string(NULL::VARIANT, '');
+----
+NULL
+
+query I
+select variant_extract_string(NULL, '');
+----
+NULL
+
+query I
+select variant_extract_string(NULL::VARIANT, 'a');
+----
+NULL
+
+query I
+select variant_extract_string(j, 'a') from (values ({'a': {'x': 1}}::VARIANT), (NULL::VARIANT)) t(j);
+----
+{"x":1}
+NULL
+
+query I
+select variant_extract_string(j, ['a', 'b']) from (values ({'a': {'x': 1}}::VARIANT), (NULL::VARIANT)) t(j);
+----
+['{"x":1}', NULL]
+NULL
+
+# VARIANT_NULL
+
+query I
+select variant_extract_string({'a': 1, 'b': null}::VARIANT, 'b');
+----
+NULL
+
+# Supplied path does not exist in variant
+
+query I
+select variant_extract_string('{}'::VARIANT, 'a');
+----
+NULL
+
+query I
+select variant_extract_string({'a': 1, 'b': {'c': 12, 'd': 10}}::VARIANT, 'q');
+----
+NULL
+
+# NULL path returns NULL
+
+query I
+select variant_extract_string({'a': 1}::VARIANT, NULL);
+----
+NULL
+
+# FIXME: Support for JSONPath and JSONPointer
+
+query I
+select variant_extract_string({'a': 1, 'b': {'c': {'d': 12}}}::VARIANT, '$.b.c');
+----
+NULL
+
+# Incorrect parameters
+
+statement error
+select variant_extract_string({'a': 1}::VARIANT);
+----
+<REGEX>:.*No function matches the given name and argument types 'variant_extract_string\(VARIANT\)'.*
+
+statement error
+select variant_extract_string({'a': 1}::VARIANT, [1]);
+----
+<REGEX>:.*No function matches the given name and argument types 'variant_extract_string\(VARIANT, INTEGER\[\]\)'.*
+
+statement error
+select variant_extract_string({'a': 1}::VARIANT, [NULL]);
+----
+Binder Error: 'variant_extract_string' does not accept NULL paths
+
+statement error
+select variant_extract_string({'a': 1}::VARIANT, [NULL::VARCHAR]);
+----
+Binder Error: 'variant_extract_string' does not accept NULL paths
+
+statement error
+select variant_extract_string({'c': 1}::VARIANT, ['c', NULL]::VARCHAR[]);
+----
+Binder Error: 'variant_extract_string' does not accept NULL paths
+
+query I
+select variant_extract_string({'c': 1}::VARIANT, []::VARCHAR[]);
+----
+[]

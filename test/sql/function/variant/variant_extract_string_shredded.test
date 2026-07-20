@@ -1,0 +1,45 @@
+# name: test/sql/function/variant/variant_extract_string_shredded.test
+# description: Test variant_extract_string with shredded VARIANT values
+# group: [variant]
+
+load {TEST_DIR}/variant_extract_string_shredded.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a INTEGER, arr INTEGER[], obj STRUCT(x VARCHAR))';
+
+statement ok
+CREATE TABLE variants(id INTEGER, v VARIANT);
+
+statement ok
+INSERT INTO variants VALUES
+	-- partially shredded with an unshredded field at each object level
+	(1, {'z': 9, 'a': 1, 'arr': [10, NULL, 30], 'obj': {'x': 'duck', 'y': 2}}::VARIANT),
+	-- VARIANT_NULL
+	(2, {'a': 2, 'arr': [], 'obj': NULL}::VARIANT),
+	-- SQL-NULL
+	(3, NULL::VARIANT);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT DISTINCT vector_type(v) FROM variants;
+----
+SHREDDED_VECTOR
+
+query III
+SELECT
+	variant_extract_string(v, ''),
+	variant_extract_string(v, 'a'),
+	variant_extract_string(v, 'z')
+FROM variants
+ORDER BY id;
+----
+{"a":1,"arr":[10,null,30],"obj":{"x":"duck","y":2},"z":9}	1	9
+{"a":2,"arr":[],"obj":null}	2	NULL
+NULL	NULL	NULL
