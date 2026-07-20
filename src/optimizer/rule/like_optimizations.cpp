@@ -22,9 +22,9 @@ LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(
 	root = std::move(func);
 }
 
-static bool PatternIsConstant(const string &pattern, bool is_glob) {
+static bool PatternIsConstant(const string &pattern, PatternMatchType match_type) {
 	for (idx_t i = 0; i < pattern.size(); i++) {
-		if (is_glob) {
+		if (match_type == PatternMatchType::GLOB) {
 			if (pattern[i] == '*' || pattern[i] == '?' || pattern[i] == '[' || pattern[i] == '\\') {
 				return false;
 			}
@@ -37,8 +37,8 @@ static bool PatternIsConstant(const string &pattern, bool is_glob) {
 	return true;
 }
 
-static bool PatternIsPrefix(const string &pattern, bool is_glob) {
-	char wildcard_any = is_glob ? '*' : '%';
+static bool PatternIsPrefix(const string &pattern, PatternMatchType match_type) {
+	char wildcard_any = match_type == PatternMatchType::GLOB ? '*' : '%';
 	idx_t i;
 	for (i = pattern.size(); i > 0; i--) {
 		if (pattern[i - 1] != wildcard_any) {
@@ -53,7 +53,7 @@ static bool PatternIsPrefix(const string &pattern, bool is_glob) {
 	// continue to look in the string
 	// if there is a wildcard in the string (besides at the very end) this is not a prefix match
 	for (; i > 0; i--) {
-		if (is_glob) {
+		if (match_type == PatternMatchType::GLOB) {
 			if (pattern[i - 1] == '*' || pattern[i - 1] == '?' || pattern[i - 1] == '[' || pattern[i - 1] == '\\') {
 				return false;
 			}
@@ -66,8 +66,8 @@ static bool PatternIsPrefix(const string &pattern, bool is_glob) {
 	return true;
 }
 
-static bool PatternIsSuffix(const string &pattern, bool is_glob) {
-	char wildcard_any = is_glob ? '*' : '%';
+static bool PatternIsSuffix(const string &pattern, PatternMatchType match_type) {
+	char wildcard_any = match_type == PatternMatchType::GLOB ? '*' : '%';
 	idx_t i;
 	for (i = 0; i < pattern.size(); i++) {
 		if (pattern[i] != wildcard_any) {
@@ -82,7 +82,7 @@ static bool PatternIsSuffix(const string &pattern, bool is_glob) {
 	// continue to look in the string
 	// if there is a wildcard in the string (besides at the beginning) this is not a suffix match
 	for (; i < pattern.size(); i++) {
-		if (is_glob) {
+		if (match_type == PatternMatchType::GLOB) {
 			if (pattern[i] == '*' || pattern[i] == '?' || pattern[i] == '[' || pattern[i] == '\\') {
 				return false;
 			}
@@ -95,8 +95,8 @@ static bool PatternIsSuffix(const string &pattern, bool is_glob) {
 	return true;
 }
 
-static bool PatternIsContains(const string &pattern, bool is_glob) {
-	char wildcard_any = is_glob ? '*' : '%';
+static bool PatternIsContains(const string &pattern, PatternMatchType match_type) {
+	char wildcard_any = match_type == PatternMatchType::GLOB ? '*' : '%';
 	idx_t start;
 	idx_t end;
 	for (start = 0; start < pattern.size(); start++) {
@@ -115,7 +115,7 @@ static bool PatternIsContains(const string &pattern, bool is_glob) {
 	}
 	// check if there are any other special characters in the string
 	for (idx_t i = start; i < end; i++) {
-		if (is_glob) {
+		if (match_type == PatternMatchType::GLOB) {
 			if (pattern[i] == '*' || pattern[i] == '?' || pattern[i] == '[' || pattern[i] == '\\') {
 				return false;
 			}
@@ -148,32 +148,32 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	auto &patt_str = StringValue::Get(constant_value);
 
 	bool is_not_like = root.Function().GetName() == "!~~" || root.Function().GetName() == "!~~~";
-	bool is_glob = root.Function().GetName() == "~~~" || root.Function().GetName() == "!~~~";
-	if (PatternIsConstant(patt_str, is_glob)) {
+	PatternMatchType match_type = (root.Function().GetName() == "~~~" || root.Function().GetName() == "!~~~") ? PatternMatchType::GLOB : PatternMatchType::LIKE;
+	if (PatternIsConstant(patt_str, match_type)) {
 		// Pattern is constant
 		return BoundComparisonExpression::Create(
 		    is_not_like ? ExpressionType::COMPARE_NOTEQUAL : ExpressionType::COMPARE_EQUAL,
 		    std::move(root.GetChildrenMutable()[0]), std::move(root.GetChildrenMutable()[1]));
-	} else if (PatternIsPrefix(patt_str, is_glob)) {
+	} else if (PatternIsPrefix(patt_str, match_type)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
-		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like, is_glob);
-	} else if (PatternIsSuffix(patt_str, is_glob)) {
+		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like, match_type);
+	} else if (PatternIsSuffix(patt_str, match_type)) {
 		// Suffix LIKE pattern: [%]+[^%_]*, ignoring underscore
-		return ApplyRule(root, SuffixFun::GetFunction(), patt_str, is_not_like, is_glob);
-	} else if (PatternIsContains(patt_str, is_glob)) {
+		return ApplyRule(root, SuffixFun::GetFunction(), patt_str, is_not_like, match_type);
+	} else if (PatternIsContains(patt_str, match_type)) {
 		// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring underscore
-		return ApplyRule(root, GetStringContains(), patt_str, is_not_like, is_glob);
+		return ApplyRule(root, GetStringContains(), patt_str, is_not_like, match_type);
 	}
 	return nullptr;
 }
 
 unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function,
-                                                       string pattern, bool is_not_like, bool is_glob) const {
+                                                       string pattern, bool is_not_like, PatternMatchType match_type) const {
 	// replace LIKE by an optimized function
 	auto result = function.Bind(GetContext(), std::move(expr.GetChildrenMutable()));
 
 	// removing wildcard from the pattern
-	char wildcard_any = is_glob ? '*' : '%';
+	char wildcard_any = match_type == PatternMatchType::GLOB ? '*' : '%';
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), wildcard_any), pattern.end());
 
 	result->GetChildrenMutable()[1] = make_uniq<BoundConstantExpression>(Value(std::move(pattern)));
