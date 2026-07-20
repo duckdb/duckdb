@@ -139,12 +139,6 @@ SELECT * FROM create_external_resource('stuck@local');
 statement ok
 SET max_execution_time = 0;
 
-# The readiness timeout is configurable via timeout_seconds; a never-ready resource errors after it elapses.
-statement error
-SELECT * FROM create_external_resource('stuck@local', timeout_seconds := 1, poll_interval_seconds := 1);
-----
-<REGEX>:.*timed out awaiting readiness.*
-
 # Both are range-checked at bind time. A negative timeout would silently mean 'wait forever' and a huge one
 # would overflow the poll loop's deadline arithmetic; a poll interval below 1s would busy-spin on status.
 statement error

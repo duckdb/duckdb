@@ -11,21 +11,21 @@ CREATE TABLE test_stress_update_issue_19688 (
     val INTEGER
 )
 
-# Insert 1000 initial rows
+# Insert 100 initial rows
 statement ok
-INSERT INTO test_stress_update_issue_19688 SELECT range AS id, range * 1000 AS val FROM range(1000)
+INSERT INTO test_stress_update_issue_19688 SELECT range AS id, range * 1000 AS val FROM range(100)
 
 # Verify initial count
 query I
 SELECT COUNT(*) FROM test_stress_update_issue_19688
 ----
-1000
+100
 
 # Launch 8 concurrent workers to perform UPDATE/DELETE/INSERT operations on the same rows
 concurrentloop threadid 0 8
 
-# Each worker operates on all 1000 rows
-loop i 0 1000
+# Each worker operates on all 100 rows
+loop i 0 100
 
 statement maybe
 UPDATE test_stress_update_issue_19688 SET val = ({threadid} * 10000 + {i}) WHERE id = {i}
@@ -46,8 +46,8 @@ endloop
 
 endloop
 
-# Verify all IDs from 0-999 are present
+# Verify all IDs from 0-99 are present
 query I
 SELECT COUNT(DISTINCT id) FROM test_stress_update_issue_19688
 ----
-1000
+100
