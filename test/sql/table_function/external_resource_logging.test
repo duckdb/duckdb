@@ -112,3 +112,20 @@ SELECT count(*)
 FROM duckdb_logs_parsed('ExternalResource') WHERE resource_type = 'failed@local' AND operation = 'destroy';
 ----
 1
+
+# The log envelope: the type is registered under its own name and logs at INFO.
+query TTT
+SELECT DISTINCT type, log_level, scope FROM duckdb_logs_parsed('ExternalResource');
+----
+ExternalResource	INFO	CONNECTION
+
+# destroy_external_resource invokes a deleter binding directly, with no resource it can attribute the call
+# to: both identifying fields render as NULL rather than as empty strings.
+statement ok
+CALL destroy_external_resource('mock_destroy', MAP {'id': 'r1'});
+
+query TTT
+SELECT operation, outcome, resource_name IS NULL
+FROM duckdb_logs_parsed('ExternalResource') WHERE resource_type IS NULL;
+----
+destroy	ok	true
