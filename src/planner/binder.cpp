@@ -30,6 +30,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
+#include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -78,69 +79,77 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
-		return Bind(statement.Cast<SelectStatement>());
+		return FinalizeStatement(Bind(statement.Cast<SelectStatement>()));
 	case StatementType::COPY_STATEMENT:
-		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
+		return FinalizeStatement(Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE));
 	case StatementType::INSERT_STATEMENT:
-		return Bind(statement.Cast<InsertStatement>());
+		return FinalizeStatement(Bind(statement.Cast<InsertStatement>()));
 	case StatementType::DELETE_STATEMENT:
-		return Bind(statement.Cast<DeleteStatement>());
+		return FinalizeStatement(Bind(statement.Cast<DeleteStatement>()));
 	case StatementType::UPDATE_STATEMENT:
-		return Bind(statement.Cast<UpdateStatement>());
+		return FinalizeStatement(Bind(statement.Cast<UpdateStatement>()));
 	case StatementType::RELATION_STATEMENT:
-		return Bind(statement.Cast<RelationStatement>());
+		return FinalizeStatement(Bind(statement.Cast<RelationStatement>()));
 	case StatementType::CREATE_STATEMENT:
-		return Bind(statement.Cast<CreateStatement>());
+		return FinalizeStatement(Bind(statement.Cast<CreateStatement>()));
 	case StatementType::DROP_STATEMENT:
-		return Bind(statement.Cast<DropStatement>());
+		return FinalizeStatement(Bind(statement.Cast<DropStatement>()));
 	case StatementType::ALTER_STATEMENT:
-		return Bind(statement.Cast<AlterStatement>());
+		return FinalizeStatement(Bind(statement.Cast<AlterStatement>()));
 	case StatementType::TRANSACTION_STATEMENT:
-		return Bind(statement.Cast<TransactionStatement>());
+		return FinalizeStatement(Bind(statement.Cast<TransactionStatement>()));
 	case StatementType::PRAGMA_STATEMENT:
-		return Bind(statement.Cast<PragmaStatement>());
+		return FinalizeStatement(Bind(statement.Cast<PragmaStatement>()));
 	case StatementType::EXPLAIN_STATEMENT:
-		return Bind(statement.Cast<ExplainStatement>());
+		return FinalizeStatement(Bind(statement.Cast<ExplainStatement>()));
 	case StatementType::VACUUM_STATEMENT:
-		return Bind(statement.Cast<VacuumStatement>());
+		return FinalizeStatement(Bind(statement.Cast<VacuumStatement>()));
 	case StatementType::CALL_STATEMENT:
-		return Bind(statement.Cast<CallStatement>());
+		return FinalizeStatement(Bind(statement.Cast<CallStatement>()));
 	case StatementType::EXPORT_STATEMENT:
-		return Bind(statement.Cast<ExportStatement>());
+		return FinalizeStatement(Bind(statement.Cast<ExportStatement>()));
 	case StatementType::SET_STATEMENT:
-		return Bind(statement.Cast<SetStatement>());
+		return FinalizeStatement(Bind(statement.Cast<SetStatement>()));
 	case StatementType::LOAD_STATEMENT:
-		return Bind(statement.Cast<LoadStatement>());
+		return FinalizeStatement(Bind(statement.Cast<LoadStatement>()));
 	case StatementType::EXTENSION_STATEMENT:
-		return Bind(statement.Cast<ExtensionStatement>());
+		return FinalizeStatement(Bind(statement.Cast<ExtensionStatement>()));
 	case StatementType::PREPARE_STATEMENT:
-		return Bind(statement.Cast<PrepareStatement>());
+		return FinalizeStatement(Bind(statement.Cast<PrepareStatement>()));
 	case StatementType::EXECUTE_STATEMENT:
-		return Bind(statement.Cast<ExecuteStatement>());
+		return FinalizeStatement(Bind(statement.Cast<ExecuteStatement>()));
 	case StatementType::LOGICAL_PLAN_STATEMENT:
-		return Bind(statement.Cast<LogicalPlanStatement>());
+		return FinalizeStatement(Bind(statement.Cast<LogicalPlanStatement>()));
 	case StatementType::ATTACH_STATEMENT:
-		return Bind(statement.Cast<AttachStatement>());
+		return FinalizeStatement(Bind(statement.Cast<AttachStatement>()));
 	case StatementType::DETACH_STATEMENT:
-		return Bind(statement.Cast<DetachStatement>());
+		return FinalizeStatement(Bind(statement.Cast<DetachStatement>()));
 	case StatementType::COPY_DATABASE_STATEMENT:
-		return Bind(statement.Cast<CopyDatabaseStatement>());
+		return FinalizeStatement(Bind(statement.Cast<CopyDatabaseStatement>()));
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
-		return Bind(statement.Cast<UpdateExtensionsStatement>());
+		return FinalizeStatement(Bind(statement.Cast<UpdateExtensionsStatement>()));
 	case StatementType::MERGE_INTO_STATEMENT:
-		return Bind(statement.Cast<MergeIntoStatement>());
+		return FinalizeStatement(Bind(statement.Cast<MergeIntoStatement>()));
 	case StatementType::CONNECT_STATEMENT:
-		return Bind(statement.Cast<ConnectStatement>());
+		return FinalizeStatement(Bind(statement.Cast<ConnectStatement>()));
 	case StatementType::DISCONNECT_STATEMENT:
-		return Bind(statement.Cast<DisconnectStatement>());
+		return FinalizeStatement(Bind(statement.Cast<DisconnectStatement>()));
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
 	} // LCOV_EXCL_STOP
 }
 
+BoundStatement Binder::FinalizeStatement(BoundStatement result) {
+	if (result.plan && has_unplanned_dependent_joins) {
+		RecursiveDependentJoinPlanner::Plan(*this, result.plan);
+	}
+	has_unplanned_dependent_joins = false;
+	return result;
+}
+
 BoundStatement Binder::Bind(QueryNode &node) {
-	return BindNode(node);
+	return FinalizeStatement(BindNode(node));
 }
 
 BoundStatement Binder::Bind(TableRef &ref) {
@@ -308,6 +317,12 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	// we only add correlated columns to the list if they are not already there
 	if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
 		correlated_columns.AddColumn(info);
+	}
+}
+
+void Binder::MarkUnplannedDependentJoins() {
+	for (auto current = this; current; current = current->parent.get()) {
+		current->has_unplanned_dependent_joins = true;
 	}
 }
 

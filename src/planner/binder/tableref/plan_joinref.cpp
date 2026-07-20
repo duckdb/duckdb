@@ -446,7 +446,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	    RecursiveDependentJoinPlanner::CanRewritePairDependentJoinCondition(*join)) {
 		// The rewrite changes this join's public bindings. Delay it until the owning query-block plan exists so the
 		// recursive planner can propagate those replacements through every parent expression.
-		has_unplanned_dependent_joins = true;
+		MarkUnplannedDependentJoins();
 	} else {
 		RecursiveDependentJoinPlanner::PlanJoinConditionSubqueries(*this, result);
 	}

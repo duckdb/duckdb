@@ -12,6 +12,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_binder/join_condition_binder.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/joinside.hpp"
@@ -423,24 +424,41 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	auto normalize_condition =
 	    ref.condition && ref.condition->HasSubquery() && ref.ref_type == JoinRefType::REGULAR &&
 	    (result->type == JoinType::LEFT || result->type == JoinType::SEMI || result->type == JoinType::ANTI);
-	unique_ptr<ParsedExpression> ordinary_condition;
+	auto right_bindings = right_binder.bind_context.GetBindingAliases();
+	auto left_bindings = left_binder.bind_context.GetBindingAliases();
+	unordered_set<TableIndex> left_table_bindings;
+	unordered_set<TableIndex> right_table_bindings;
 	if (normalize_condition) {
-		ordinary_condition = ref.condition->Copy();
-		auto correlated_columns_before_condition = right_binder.correlated_columns;
-		LateralBinder lateral_binder(left_binder, context);
-		right_binder.BeginSubqueryBind(left_binder, lateral_binder);
-		WhereBinder condition_binder(right_binder, context);
-		result->condition = condition_binder.Bind(ref.condition);
-		right_binder.FinishSubqueryBind();
-
-		unordered_set<TableIndex> left_table_bindings;
-		unordered_set<TableIndex> right_table_bindings;
 		for (auto &binding : left_binder.bind_context.GetBindingsList()) {
 			left_table_bindings.insert(binding->GetIndex());
 		}
 		for (auto &binding : right_binder.bind_context.GetBindingsList()) {
 			right_table_bindings.insert(binding->GetIndex());
 		}
+	}
+
+	unique_ptr<ParsedExpression> ordinary_condition;
+	if (normalize_condition) {
+		// Name resolution uses the ordinary combined join scope. The normalized left bindings are marked as
+		// correlations by JoinConditionBinder after the canonical binder has selected them.
+		auto original_right_context = std::move(right_binder.bind_context);
+		if (result->inputs_flipped) {
+			right_binder.bind_context.AddContext(std::move(original_right_context));
+			right_binder.bind_context.AddContext(std::move(left_binder.bind_context));
+		} else {
+			right_binder.bind_context.AddContext(std::move(left_binder.bind_context));
+			right_binder.bind_context.AddContext(std::move(original_right_context));
+		}
+
+		ordinary_condition = ref.condition->Copy();
+		auto correlated_columns_before_condition = right_binder.correlated_columns;
+		// Preserve the lateral scope level so references beyond this join retain their normal correlation depth.
+		LateralBinder lateral_binder(left_binder, context);
+		right_binder.BeginSubqueryBind(left_binder, lateral_binder);
+		JoinConditionBinder condition_binder(right_binder, context, left_table_bindings);
+		result->condition = condition_binder.Bind(ref.condition);
+		right_binder.FinishSubqueryBind();
+
 		result->condition_lateral =
 		    HasPairDependentSubquery(*result->condition, left_table_bindings, right_table_bindings);
 		if (result->condition_lateral) {
@@ -451,9 +469,9 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		}
 	}
 
-	auto right_bindings = right_binder.bind_context.GetBindingAliases();
-	auto left_bindings = left_binder.bind_context.GetBindingAliases();
-	if (result->inputs_flipped) {
+	if (normalize_condition) {
+		bind_context.AddContext(std::move(right_binder.bind_context));
+	} else if (result->inputs_flipped) {
 		bind_context.AddContext(std::move(right_binder.bind_context));
 		bind_context.AddContext(std::move(left_binder.bind_context));
 	} else {

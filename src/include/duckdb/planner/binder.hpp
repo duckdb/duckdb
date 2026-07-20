@@ -415,6 +415,9 @@ private:
 
 	//! Tries to bind the table name with replacement scans
 	BoundStatement BindWithReplacementScan(ClientContext &context, BaseTableRef &ref);
+	//! Mark this binder and its parents as owning dependent joins that require deferred planning
+	void MarkUnplannedDependentJoins();
+	BoundStatement FinalizeStatement(BoundStatement result);
 
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
