@@ -64,8 +64,8 @@ enum class DataTableVersion {
 class DataTable : public enable_shared_from_this<DataTable> {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager, const string &schema,
-	          const string &table, vector<ColumnDefinition> column_definitions_p,
+	DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager, vector<Identifier> schema_path,
+	          Identifier table, vector<ColumnDefinition> column_definitions_p,
 	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value);

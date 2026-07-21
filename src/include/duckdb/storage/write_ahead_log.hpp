@@ -98,8 +98,9 @@ public:
 
 	void WriteCreateTrigger(const TriggerCatalogEntry &entry);
 	void WriteDropTrigger(const TriggerCatalogEntry &entry);
-	//! Sets the table used for subsequent insert/delete/update commands
-	void WriteSetTable(const Identifier &schema, const Identifier &table);
+	//! Sets the table used for subsequent insert/delete/update commands. The qualified name holds the (possibly
+	//! nested) schema path of the table followed by the table name.
+	void WriteSetTable(const QualifiedName &table);
 
 	void WriteAlter(CatalogEntry &entry, const AlterInfo &info);
 

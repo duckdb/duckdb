@@ -207,7 +207,8 @@
       "paths": [
         "test/sql/catalog/nested_schema/create_nested_schema.test",
         "test/sql/catalog/nested_schema/drop_nested_schema.test",
-        "test/sql/catalog/nested_schema/nested_table.test"
+        "test/sql/catalog/nested_schema/nested_table.test",
+        "test/sql/catalog/nested_schema/nested_table_dml.test"
       ]
     },
     {

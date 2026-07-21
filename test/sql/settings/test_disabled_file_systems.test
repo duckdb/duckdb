@@ -50,7 +50,7 @@ has been disabled previously
 statement error
 SELECT * FROM abc.main.t1;
 ----
-Catalog "abc" does not exist
+schema "abc.main" does not exist
 
 statement error
 SELECT * FROM abc.t1;
