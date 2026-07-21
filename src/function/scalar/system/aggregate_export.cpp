@@ -410,7 +410,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<FinalizeState>();
 	local_state.allocator.Reset();
 
-	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
+	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSize(bind_data.bind_data.get()));
 	D_ASSERT(input.data.size() == 1);
 
 	auto &layout = local_state.layout;
@@ -441,7 +441,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<CombineState>();
 	local_state.allocator.Reset();
 
-	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
+	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSize(bind_data.bind_data.get()));
 	D_ASSERT(input.data.size() == 2);
 	D_ASSERT(input.data[0].GetType() == result.GetType());
 
@@ -459,13 +459,14 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	auto validity1 = input.data[1].Validity();
 
 	// Initialize both state buffers and build address vectors for all rows
+	AggregateStateInput state_input(bind_data.aggr, bind_data.bind_data.get());
 	auto state0_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses0, count);
 	auto state1_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses1, count);
 	for (idx_t i = 0; i < count; i++) {
-		auto ptr0 = local_state.state_buffer0.get() + i * layout.total_state_size;
-		auto ptr1 = local_state.state_buffer1.get() + i * layout.total_state_size;
-		bind_data.aggr.GetStateInitCallback()(bind_data.aggr, ptr0);
-		bind_data.aggr.GetStateInitCallback()(bind_data.aggr, ptr1);
+		data_ptr_t ptr0 = local_state.state_buffer0.get() + i * layout.total_state_size;
+		data_ptr_t ptr1 = local_state.state_buffer1.get() + i * layout.total_state_size;
+		bind_data.aggr.GetStateInitCallback()(state_input, &ptr0, 1);
+		bind_data.aggr.GetStateInitCallback()(state_input, &ptr1, 1);
 		state0_writer.WriteValue(ptr0);
 		state1_writer.WriteValue(ptr1);
 	}
@@ -558,8 +559,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 		                        StringUtil::ToString(bound_args, ", "), StringUtil::ToString(argument_types, ", "));
 	}
 
-	return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info),
-	                                          bound_aggr.GetStateSizeCallback()(bound_aggr));
+	const auto state_size = bound_aggr.GetStateSize(bind_info.get());
+	return make_uniq<ExportAggregateBindData>(bound_aggr, std::move(bind_info), state_size);
 }
 
 // parses the "parameters" property of an AGGREGATE_STATE type
@@ -643,7 +644,7 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	auto reconstructed = FunctionBinder::BindSortedAggregateState(context, inner->aggr, std::move(inner->bind_data),
 	                                                              buffer_struct, orders, argument_count);
 	BoundAggregateFunction wrapper(reconstructed.first);
-	const auto state_size = wrapper.GetStateSizeCallback()(wrapper);
+	const auto state_size = wrapper.GetStateSize(reconstructed.second.get());
 	return make_uniq<ExportAggregateBindData>(std::move(wrapper), std::move(reconstructed.second), state_size);
 }
 
@@ -771,9 +772,10 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	Vector target_vec(LogicalType::POINTER);
 	auto target_data = FlatVector::Writer<data_ptr_t>(target_vec, count);
 
+	AggregateStateInput state_input(underlying_aggr, bind_data.bind_data.get());
 	for (idx_t i = 0; i < count; i++) {
-		auto temp_ptr = temp_state_buf.get() + i * aligned_size;
-		underlying_aggr.GetStateInitCallback()(underlying_aggr, temp_ptr);
+		data_ptr_t temp_ptr = temp_state_buf.get() + i * aligned_size;
+		underlying_aggr.GetStateInitCallback()(state_input, &temp_ptr, 1);
 		source_data.WriteValue(temp_ptr);
 		target_data.WriteValue(state_values[i].GetValue());
 	}
