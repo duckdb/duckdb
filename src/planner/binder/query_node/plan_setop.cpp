@@ -91,15 +91,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 
 	D_ASSERT(node.bound_children.size() >= 2);
 	vector<unique_ptr<LogicalOperator>> children;
-	for (idx_t child_idx = 0; child_idx < node.bound_children.size(); child_idx++) {
-		auto &child = node.bound_children[child_idx];
-		auto &child_binder = *node.child_binders[child_idx];
-
+	for (auto &child : node.bound_children) {
 		// construct the logical plan for the child node
 		auto child_node = std::move(child.plan);
 		// push casts for the target types
 		child_node = CastLogicalOperatorToTypes(child.types, node.types, std::move(child_node));
-		// check if there are any unplanned subqueries left in any child
 		children.push_back(std::move(child_node));
 	}
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(children), logical_type,
