@@ -21,8 +21,14 @@ public:
 public:
 	VariantColumnReader(ClientContext &context, const ParquetReader &reader, const ParquetColumnSchema &schema,
 	                    vector<unique_ptr<ColumnReader>> child_readers_p);
+	VariantColumnReader(ClientContext &context, const ParquetReader &reader, const ParquetColumnSchema &schema,
+	                    vector<unique_ptr<ColumnReader>> child_readers_p, const struct ColumnIndex &index);
 
 	ClientContext &context;
+	//! Optional: ColumnIndex used when pushing down extract to the scan
+	const struct ColumnIndex index;
+	//! Optional: Extract path distilled from 'index' (if set)
+	const vector<VariantPathComponent> extract_path;
 	vector<unique_ptr<ColumnReader>> child_readers;
 
 public:
@@ -31,6 +37,8 @@ public:
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
+
+	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) override;
 
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;
