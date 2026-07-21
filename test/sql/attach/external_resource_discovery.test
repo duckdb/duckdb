@@ -19,7 +19,7 @@ CREATE MACRO qk_list(p) AS TABLE
 
 statement ok
 CALL register_external_resource_type('quack@disco', kind := 'catalog', create_function := 'qk_create',
-    status_function := 'qk_status', list := 'qk_list');
+    status_function := 'qk_status', list_function := 'qk_list');
 
 # The `list` callback is exposed by duckdb_external_resource_types().
 query II
