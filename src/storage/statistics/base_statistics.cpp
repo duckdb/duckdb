@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
@@ -92,6 +93,7 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
 		return StatisticsType::NUMERIC_STATS;
 	case PhysicalType::VARCHAR:
 		return StatisticsType::STRING_STATS;
@@ -102,7 +104,6 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	case PhysicalType::ARRAY:
 		return StatisticsType::ARRAY_STATS;
 	case PhysicalType::BIT:
-	case PhysicalType::INTERVAL:
 	default:
 		return StatisticsType::BASE_STATS;
 	}
@@ -143,7 +144,7 @@ bool BaseStatistics::IsConstant() const {
 	}
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
-		return NumericStats::IsConstant(*this);
+		return ConstantFun::TypeIsSupported(type.InternalType()) && NumericStats::IsConstant(*this);
 	default:
 		break;
 	}

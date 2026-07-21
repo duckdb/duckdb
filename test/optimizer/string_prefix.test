@@ -1,0 +1,235 @@
+# name: test/optimizer/string_prefix.test
+# description: Test rewriting string prefix extractions into prefix comparisons
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t AS SELECT printf('%08d', i) AS s, i::BIGINT AS x FROM range(10000000) tbl(i);
+
+statement ok
+CREATE TABLE prefix_cases(s VARCHAR);
+
+statement ok
+INSERT INTO prefix_cases VALUES ('abc'), ('abcdef'), ('xabc'), ('🦆ab'), (NULL);
+
+# ---- left ----
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE left(s, 5) = '09999';
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+# reversed equality is rewritten
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE '09999' = left(s, 5);
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+# unicode handling
+query I
+SELECT count(*) FROM prefix_cases WHERE left(s, 2) = '🦆a';
+----
+1
+
+# shorter constant can only match the entire input string
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE left(s, 9) = '09999000';
+----
+analyzed_plan	<REGEX>:.*s = '09999000'.*Row Groups Scanned: 1 / 82.*
+
+query I
+SELECT count(*) FROM prefix_cases WHERE left(s, 5) = 'abc';
+----
+1
+
+# longer constant cannot match the extracted prefix
+query I
+SELECT count(*) FROM prefix_cases WHERE left(s, 2) = 'abc';
+----
+0
+
+# preserve NULL when replacing an impossible comparison
+query I
+SELECT (left(s, 2) = 'abc') FROM (VALUES (NULL)) t(s);
+----
+NULL
+
+# NULL constant comparison
+query I
+SELECT (left(s, 3) = NULL) FROM (VALUES ('abc')) t(s);
+----
+NULL
+
+# null propagation
+query I
+SELECT (left(s, NULL) = 'abc') FROM (VALUES ('abc')) t(s);
+----
+NULL
+
+# left rejects substring lengths above the supported range, so don't rewrite those
+statement error
+SELECT * FROM (VALUES ('a')) t(s) WHERE left(s, 4294967296) = 'a';
+----
+Out of Range Error: Substring length outside of supported range
+
+# ---- substring ----
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE substring(s, 1, 5) = '09999';
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+# entire string becomes equality operator
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE substring(s, 1) = '09999000';
+----
+analyzed_plan	<REGEX>:.*s = '09999000'.*Row Groups Scanned: 1 / 82.*
+
+# shorter constant can only match the entire input string
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE substring(s, 1, 9) = '09999000';
+----
+analyzed_plan	<REGEX>:.*s = '09999000'.*Row Groups Scanned: 1 / 82.*
+
+query I
+SELECT count(*) FROM prefix_cases WHERE substring(s, 1, 5) = 'abc';
+----
+1
+
+# longer constant cannot match the extracted prefix
+query I
+SELECT count(*) FROM prefix_cases WHERE substring(s, 1, 2) = 'abc';
+----
+0
+
+# substring starting after the first character is not a prefix
+query I
+SELECT s FROM prefix_cases WHERE substring(s, 2, 3) = 'abc';
+----
+xabc
+
+# null propagation
+query II
+SELECT (substring(s, NULL, 3) = 'abc'), (substring(s, 1, NULL) = 'abc') FROM (VALUES ('abc')) t(s);
+----
+NULL	NULL
+
+# dynamic length must retain the original substring expression
+query I
+SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE substring(s, 1, n) = 'abc';
+----
+1
+
+# preserve errors for unsupported substring lengths
+statement error
+SELECT * FROM (VALUES ('a')) t(s) WHERE substring(s, 1, 4294967296) = 'a';
+----
+Out of Range Error: Substring length outside of supported range
+
+# (alias) substr
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE substr(s, 1, 5) = '09999';
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+query I
+SELECT count(*) FROM prefix_cases WHERE substr(s, 1, 5) = 'abc';
+----
+1
+
+# ---- array_slice ----
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE array_slice(s, 1, 5) = '09999';
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+query I
+SELECT count(*) FROM prefix_cases WHERE array_slice(s, 1, 5) = 'abc';
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE array_slice(s, 1, 9) = '09999000';
+----
+analyzed_plan	<REGEX>:.*s = '09999000'.*Row Groups Scanned: 1 / 82.*
+
+query I
+SELECT count(*) FROM prefix_cases WHERE array_slice(s, 1, 2) = 'abc';
+----
+0
+
+# a slice starting after the first character is not a prefix
+query I
+SELECT s FROM prefix_cases WHERE array_slice(s, 2, 4) = 'abc';
+----
+xabc
+
+# null propagation
+query II
+SELECT (array_slice(s, NULL, 3) = 'abc'), (array_slice(s, 1, NULL) = 'abc') FROM (VALUES ('abc')) t(s);
+----
+NULL	NULL
+
+# dynamic length must retain the original expression
+query I
+SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE array_slice(s, 1, n) = 'abc';
+----
+1
+
+# (alias) list_slice
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE list_slice(s, 1, 5) = '09999';
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+query I
+SELECT count(*) FROM prefix_cases WHERE list_slice(s, 1, 5) = 'abc';
+----
+1
+
+# dynamic length must retain the original expression
+query I
+SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE list_slice(s, 1, n) = 'abc';
+----
+1
+
+# ---- s[:] ----
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s[1:5] = '09999';
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s[0:5] = '09999';
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s[:5] = '09999';
+----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s[:] = '09999000';
+----
+analyzed_plan	<REGEX>:.*s = '09999000'.*Row Groups Scanned: 1 / 82.*
+
+query I
+SELECT count(*) FROM prefix_cases WHERE s[1:] = 'abc';
+----
+1
+
+# a slice starting after the first character is not a prefix
+query I
+SELECT s FROM prefix_cases WHERE s[2:4] = 'abc';
+----
+xabc
+
+# dynamic end bound must retain the original slice expression
+query I
+SELECT count(*) FROM (VALUES ('abcx', 3), ('abcx', 2)) t(s, n) WHERE s[1:n] = 'abc';
+----
+1

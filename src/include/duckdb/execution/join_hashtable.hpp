@@ -263,7 +263,8 @@ public:
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
 	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel,
-	              optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state = nullptr);
+	              optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state = nullptr,
+	              bool prefix_range_parallel = false);
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
@@ -592,7 +593,9 @@ public:
 
 	void BuildPrefixRangeFilter();
 	unique_ptr<PrefixRangeFilter::BuildState> InitializePrefixRangeBuildState();
-	void InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count, PrefixRangeFilter::BuildState &state);
+	idx_t GetPrefixRangeBuildStateSize() const;
+	void InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count, PrefixRangeFilter::BuildState &state,
+	                            bool parallel = false);
 	void MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state);
 
 	//! Get total size of HT if all partitions would be built

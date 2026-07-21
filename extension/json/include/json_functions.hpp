@@ -115,6 +115,10 @@ private:
 	static ScalarFunctionSet GetPrettyPrintFunction();
 	static ScalarFunctionSet GetNormalizeFunction();
 	static ScalarFunctionSet GetStripNullsFunction();
+	static ScalarFunctionSet GetInsertFunction();
+	static ScalarFunctionSet GetRemoveFunction();
+	static ScalarFunctionSet GetReplaceFunction();
+	static ScalarFunctionSet GetSetFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 

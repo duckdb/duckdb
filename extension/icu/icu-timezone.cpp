@@ -218,6 +218,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		AddCast(casts, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ);
 		AddCast(casts, LogicalType::TIMESTAMP_MS, LogicalType::TIMESTAMP_TZ);
 		AddCast(casts, LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ);
+		AddCast(casts, LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ_NS);
 		AddCast(casts, LogicalType::TIMESTAMP_S, LogicalType::TIMESTAMP_TZ);
 		AddCast(casts, LogicalType::DATE, LogicalType::TIMESTAMP_TZ);
 	}
@@ -264,8 +265,8 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		}
 
 		auto nanos = instant.value % Interval::NANOS_PER_MICRO;
-		timestamp_t micros(instant.value / Interval::NANOS_PER_MICRO);
-		auto cast = Operation(calendar, instant);
+		timestamp_tz_t micros(instant.value / Interval::NANOS_PER_MICRO);
+		auto cast = Operation(calendar, micros);
 
 		return timestamp_ns_t(cast.value * Interval::NANOS_PER_MICRO + nanos);
 	}

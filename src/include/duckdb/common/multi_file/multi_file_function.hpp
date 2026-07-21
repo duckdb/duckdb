@@ -438,7 +438,7 @@ public:
 
 			auto primary_index = local_id.GetPrimaryIndex();
 			auto cast_entry = reader.cast_map.find(primary_index);
-			auto expr_entry = reader.expression_map.find(primary_index);
+			auto expr_entry = reader.expression_map.find(ProjectionIndex(i));
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
@@ -601,13 +601,13 @@ public:
 		    context, bind_data.file_options, bind_data.reader_bind, file_list, global_columns, input.column_indexes);
 
 		if (file_list.IsEmpty()) {
-			result->readers = {};
+			result->readers.clear();
 		} else if (!bind_data.union_readers.empty()) {
 			for (auto &reader : bind_data.union_readers) {
 				result->readers.push_back(make_uniq<MultiFileReaderData>(reader));
 			}
 			if (result->readers.size() != file_list.GetTotalFileCount()) {
-				result->readers = {};
+				result->readers.clear();
 			}
 		} else if (bind_data.initial_reader) {
 			// we can only use the initial reader if it was constructed from the first file

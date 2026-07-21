@@ -1,0 +1,64 @@
+# name: test/sql/optimizer/boolean_wrapper_pushdown.test
+# description: Simplify boolean wrappers around filter predicates
+# group: [optimizer]
+
+require skip_reload
+
+statement ok
+ATTACH '{TEST_DIR}/boolean_wrapper_pushdown.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE integers AS SELECT range::BIGINT AS x FROM range(4096);
+
+query II
+EXPLAIN ANALYZE SELECT sum(rowid) FROM integers WHERE (x > 3000) = true;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query II
+EXPLAIN ANALYZE SELECT sum(rowid) FROM integers WHERE (x > 3000) IS TRUE;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+statement ok
+CREATE TABLE booleans(p BOOLEAN);
+
+statement ok
+INSERT INTO booleans VALUES (true), (false), (NULL);
+
+# IS TRUE must retain its NULL semantics outside a root filter predicate
+query III
+SELECT p, p = true, p IS TRUE FROM booleans ORDER BY p NULLS LAST;
+----
+false	false	false
+true	true	true
+NULL	NULL	false
+
+# Rewriting a nested IS TRUE would incorrectly exclude the NULL row
+query I
+SELECT count(*) FROM booleans WHERE NOT (p IS TRUE);
+----
+2
+
+statement ok
+CREATE SEQUENCE s;
+
+# The rewrite must not duplicate volatile expressions
+query I
+SELECT count(*) FROM booleans WHERE (nextval('s') > 0) IS TRUE;
+----
+3
+
+query I
+SELECT currval('s');
+----
+3
+
+# The rewrite must preserve throwing expressions
+statement error
+SELECT count(*) FROM booleans WHERE (error('expected')::INTEGER > 0) IS TRUE;
+----
+expected

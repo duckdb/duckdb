@@ -1,0 +1,19 @@
+# name: test/sql/table_function/create_external_resource_timeout.test_slow
+# description: create_external_resource readiness timeout
+# group: [table_function]
+
+statement ok
+CREATE MACRO mock_create(p) AS TABLE SELECT MAP {'id': 'r1'} AS handle;
+
+statement ok
+CREATE MACRO stuck_status(h) AS TABLE SELECT 'pending' AS state, MAP {'uri':'u','attached_db_type':'quack'} AS result;
+
+statement ok
+CALL register_external_resource_type('stuck_timeout@local', kind := 'catalog', create_function := 'mock_create',
+    status_function := 'stuck_status');
+
+# The readiness timeout is configurable via timeout_seconds; a never-ready resource errors after it elapses.
+statement error
+SELECT * FROM create_external_resource('stuck_timeout@local', timeout_seconds := 1, poll_interval_seconds := 1);
+----
+<REGEX>:.*timed out awaiting readiness.*

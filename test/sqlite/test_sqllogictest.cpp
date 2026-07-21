@@ -12,6 +12,7 @@
 #include <string>
 #include <system_error>
 #include <vector>
+#include <duckdb/main/extension_helper.hpp>
 
 using namespace duckdb;
 

@@ -73,6 +73,11 @@ idx_t CSVFileHandle::FileSize() const {
 	return file_size;
 }
 
+bool CSVFileHandle::HasKnownBufferRanges() const {
+	return compression_type == FileCompressionType::UNCOMPRESSED && can_seek && !is_pipe &&
+	       encoder.encoding_name == "utf-8";
+}
+
 bool CSVFileHandle::FinishedReading() const {
 	return finished;
 }
@@ -99,6 +104,12 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	}
 	uncompressed_bytes_read += static_cast<idx_t>(bytes_read);
 	return UnsafeNumericCast<idx_t>(bytes_read);
+}
+
+void CSVFileHandle::ReadAt(void *buffer, idx_t nr_bytes, idx_t position) {
+	D_ASSERT(HasKnownBufferRanges());
+	D_ASSERT(position + nr_bytes <= file_size);
+	file_handle->Read(context, buffer, nr_bytes, position);
 }
 
 string CSVFileHandle::ReadLine() {

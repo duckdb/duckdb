@@ -360,4 +360,39 @@ string AsyncTaskScheduleLogType::ConstructLogMessage(const string &pool, idx_t t
 	return Value::STRUCT(std::move(child_list)).ToString();
 }
 
+//===--------------------------------------------------------------------===//
+// ExternalResourceLogType
+//===--------------------------------------------------------------------===//
+ExternalResourceLogType::ExternalResourceLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType ExternalResourceLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"resource_type", LogicalType::VARCHAR},
+	    {"resource_name", LogicalType::VARCHAR},
+	    {"operation", LogicalType::VARCHAR},
+	    {"outcome", LogicalType::VARCHAR},
+	    {"error", LogicalType::VARCHAR},
+	    {"extra_info", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string ExternalResourceLogType::ConstructLogMessage(const string &resource_type, const string &resource_name,
+                                                    const string &operation, const string &error,
+                                                    const Value &extra_info) {
+	auto nullable = [](const string &s) {
+		return s.empty() ? Value(LogicalType::VARCHAR) : Value(s);
+	};
+	child_list_t<Value> child_list = {
+	    {"resource_type", nullable(resource_type)},
+	    {"resource_name", nullable(resource_name)},
+	    {"operation", Value(operation)},
+	    {"outcome", Value(error.empty() ? "ok" : "error")},
+	    {"error", nullable(error)},
+	    {"extra_info", extra_info},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
 } // namespace duckdb
