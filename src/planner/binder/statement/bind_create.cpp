@@ -648,9 +648,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		if (create_trigger_info.event_type == TriggerEventType::INSERT_EVENT) {
 			throw BinderException("REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers");
 		}
-		if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT) {
-			throw NotImplementedException("REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers");
-		}
 	}
 	if (!create_trigger_info.referencing_new_table.empty() &&
 	    create_trigger_info.event_type == TriggerEventType::DELETE_EVENT) {
