@@ -104,8 +104,8 @@ void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(unique_ptr<Lo
 	RemapProjectionMap(projection_map, child_bindings_before, child_bindings_after);
 }
 
-template <class OPERATOR, class CALLBACK>
-static void EnumerateOperatorExpressions(OPERATOR &op, const CALLBACK &callback) {
+template <class OPERATOR, class FUNC>
+static void EnumerateOperatorExpressions(OPERATOR &op, const FUNC &callback) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		auto &get = op.template Cast<LogicalExpressionGet>();
