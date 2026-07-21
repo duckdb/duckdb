@@ -32,6 +32,17 @@ SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloo
 ----
 true
 
+# Idempotent least/greatest calls are reduced to the column, enabling Bloom filter pruning
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE greatest(r, r) = 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE least(r, r) = 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
 # this value is outside min/max
 query I
 SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloom1.parquet', 'r', '112121212');
