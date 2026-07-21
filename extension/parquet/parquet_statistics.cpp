@@ -677,7 +677,8 @@ static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const 
 		return nullptr;
 	}
 	auto &comp = expr.Cast<BoundFunctionExpression>();
-	if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+	if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+	    comp.GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		return nullptr;
 	}
 	auto &left = BoundComparisonExpression::Left(comp);
