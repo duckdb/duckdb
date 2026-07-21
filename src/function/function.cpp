@@ -260,42 +260,51 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 //----------------------------------------------------------------------------------------------------------------------
 Value BindFunctionInput::GetConstant(idx_t arg_idx, const string &error_message) const {
 	if (arg_idx >= arguments.size()) {
-		throw InternalException("%s: Argument index %llu is out of range", function.GetName().GetIdentifierName(),
-		                        arg_idx);
+		throw InternalException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
 	}
-	if (arguments[arg_idx]->HasParameter()) {
+	const auto &expr = *arguments[arg_idx];
+	if (expr.HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (auto constant = TryGetConstant(arg_idx)) {
-		return *constant;
+	if (!expr.IsFoldable()) {
+		if (!error_message.empty()) {
+			throw BinderException(expr, error_message);
+		}
+
+		// Use the argument name if available, otherwise use the argument index
+		string argument_name;
+		if (argument_names && arg_idx < argument_names->size() && !argument_names->at(arg_idx).empty()) {
+			argument_name = StringUtil::Format("The '%s' argument", argument_names->at(arg_idx));
+		} else {
+			argument_name = StringUtil::Format("Argument #%llu", arg_idx + 1);
+		}
+
+		throw BinderException(expr, "%s to function '%s' must be a constant expression, but got: '%s'", argument_name,
+		                      function.GetName(), expr.ToString());
 	}
-	if (!error_message.empty()) {
-		throw BinderException(error_message);
-	}
-	throw BinderException("%s: Argument at position %llu must be constant", function.GetName(), arg_idx);
+	return ExpressionExecutor::EvaluateScalar(context, expr);
 }
 
 Value BindFunctionInput::GetConstant(const Identifier &name, const string &error_message) const {
 	const auto arg_idx = GetArgumentIndex(name);
-	if (arg_idx.IsValid()) {
-		return GetConstant(arg_idx.GetIndex(), error_message);
+	if (!arg_idx.IsValid()) {
+		throw InternalException("Function '%s' does not have a parameter named '%s'", function.GetName(), name);
 	}
-	// no argument with that name was provided
-	if (!error_message.empty()) {
-		throw BinderException(error_message);
-	}
-	throw BinderException("%s: Argument '%s' must be constant", function.GetName(), name.GetIdentifierName());
+	return GetConstant(arg_idx.GetIndex(), error_message);
 }
 
 optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {
 	if (arg_idx >= arguments.size()) {
 		return {};
 	}
-	const auto &expr = arguments[arg_idx];
-	if (expr->HasParameter() || !expr->IsFoldable()) {
+	const auto &expr = *arguments[arg_idx];
+	if (expr.HasParameter()) {
 		return {};
 	}
-	return ExpressionExecutor::EvaluateScalar(context, *expr);
+	if (!expr.IsFoldable()) {
+		return {};
+	}
+	return ExpressionExecutor::EvaluateScalar(context, expr);
 }
 
 optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const {
@@ -309,7 +318,7 @@ optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const 
 optional_idx BindFunctionInput::GetArgumentIndex(const Identifier &name) const {
 	if (!argument_names) {
 		throw InternalException("Function '%s' was bound without argument names, cannot look up argument '%s' by name",
-		                        function.GetName().GetIdentifierName(), name.GetIdentifierName());
+		                        function.GetName(), name);
 	}
 	// The binder resolves every argument to a slot and reports its name: the signature parameter name for positional
 	// slots, or the name the caller used for named varargs.
