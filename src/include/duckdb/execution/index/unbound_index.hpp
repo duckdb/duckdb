@@ -69,10 +69,12 @@ private:
 	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
 	BufferedIndexReplays buffered_replays;
 
-	//! Maps the column IDs in the buffered replays to a physical table offset.
-	//! For example, column [i] in a buffered ColumnDataCollection is the data for an Indexed column with
-	//! physical table index mapped_column_ids[i].
-	//! This is in sorted order of physical column IDs.
+	//! Maps positions in the buffered chunks to physical column numbers of the table:
+	//! buffered column [i] holds the data of the table's physical column mapped_column_ids[i].
+	//! For example, for an index on column c of t(a, b, c), buffered chunks are [c, rowid] and
+	//! mapped_column_ids is [2].
+	//! Contains exactly this index's own columns, deduplicated and sorted. Fixed on construction;
+	//! BufferChunk projects every incoming chunk onto this layout.
 	vector<StorageIndex> mapped_column_ids;
 
 public:
@@ -107,11 +109,10 @@ public:
 		return GetCreateInfo().table;
 	}
 
-	//! Buffer Index delete or insert (replay_type) data chunk.
-	//! See note above on mapped_column_ids, this function assumes that index_column_chunk maps into
-	//! mapped_column_ids_p to get the physical column index for each Indexed column in the chunk.
-	void BufferChunk(DataChunk &index_column_chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p,
-	                 BufferedIndexReplay replay_type);
+	//! Buffers an insert or delete (replay_type) chunk, to be replayed once the index is bound.
+	//! table_chunk is in table layout (data[j] holds the table's physical column j) with this index's
+	//! columns populated; the same contract as BoundIndex::Append and BoundIndex::Delete.
+	void BufferChunk(DataChunk &table_chunk, Vector &row_ids, BufferedIndexReplay replay_type);
 	bool HasBufferedReplays() const {
 		return buffered_replays.HasBufferedReplays();
 	}

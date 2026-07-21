@@ -208,7 +208,8 @@ public:
 
 	//! Replay index insert and delete operations buffered during WAL replay.
 	//! table_types has the physical types of the table in the order they appear, not logical (no generated columns).
-	//! mapped_column_ids contains the sorted order of Indexed physical column ID's (see unbound_index.hpp comments).
+	//! mapped_column_ids describes the layout of the buffered chunks: buffered column [i] holds the data of the
+	//! physical table column mapped_column_ids[i] (see unbound_index.hpp comments).
 	void ApplyBufferedReplays(const vector<LogicalType> &table_types, BufferedIndexReplays &buffered_replays,
 	                          const vector<StorageIndex> &mapped_column_ids);
 

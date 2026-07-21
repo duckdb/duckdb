@@ -159,8 +159,7 @@ public:
 	void InitializeStorage(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
 
 	//! Append a chunk to the local storage
-	static void Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk,
-	                   DataTableInfo &data_table_info);
+	static void Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk);
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
