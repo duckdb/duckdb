@@ -295,11 +295,26 @@ template <typename Char> class basic_string_view {
       : data_(s.data()),
         size_(s.size()) {}
 
-  template <
-      typename S,
-      FMT_ENABLE_IF(std::is_same<S, internal::std_string_view<Char>>::value)>
-  FMT_CONSTEXPR basic_string_view(S s) FMT_NOEXCEPT : data_(s.data()),
-                                                      size_(s.size()) {}
+  /** Constructs a string reference from a ``std::basic_string_view`` object. */
+  // Traits is deduced rather than defaulted, so that declaring this constructor
+  // never names std::char_traits<Char>. libc++ deprecates char_traits<T> for T
+  // other than the standard character types, and that warning is not suppressed
+  // by SFINAE -- it fires whenever basic_string_view<Char> is instantiated with
+  // a non-character Char during overload resolution. This mirrors the
+  // std::basic_string constructor above.
+  // See duckdb-internal/9978
+#if defined(FMT_USE_STRING_VIEW)
+  template <typename Traits>
+  FMT_CONSTEXPR basic_string_view(
+      std::basic_string_view<Char, Traits> s) FMT_NOEXCEPT : data_(s.data()),
+                                                             size_(s.size()) {}
+#elif defined(FMT_USE_EXPERIMENTAL_STRING_VIEW)
+  template <typename Traits>
+  FMT_CONSTEXPR basic_string_view(
+      std::experimental::basic_string_view<Char, Traits> s) FMT_NOEXCEPT
+      : data_(s.data()),
+        size_(s.size()) {}
+#endif
 
   /** Returns a pointer to the string data. */
   FMT_CONSTEXPR const Char* data() const { return data_; }
@@ -394,12 +409,25 @@ inline basic_string_view<Char> to_string_view(basic_string_view<Char> s) {
   return s;
 }
 
-template <typename Char,
-          FMT_ENABLE_IF(!std::is_empty<internal::std_string_view<Char>>::value)>
+// Traits is deduced rather than defaulted so that forming the parameter type
+// never names std::char_traits<Char>. Deducing it lets substitution fail on the
+// shape of the argument instead, before char_traits<Char> is instantiated --
+// libc++ deprecates char_traits<T> for T other than the standard character
+// types, and that deprecation warning is not suppressed by SFINAE.
+// See duckdb-internal/9978
+#if defined(FMT_USE_STRING_VIEW)
+template <typename Char, typename Traits>
 inline basic_string_view<Char> to_string_view(
-    internal::std_string_view<Char> s) {
+    std::basic_string_view<Char, Traits> s) {
   return s;
 }
+#elif defined(FMT_USE_EXPERIMENTAL_STRING_VIEW)
+template <typename Char, typename Traits>
+inline basic_string_view<Char> to_string_view(
+    std::experimental::basic_string_view<Char, Traits> s) {
+  return s;
+}
+#endif
 
 // A base class for compile-time strings. It is defined in the fmt namespace to
 // make formatting functions visible via ADL, e.g. format(fmt("{}"), 42).
