@@ -190,16 +190,6 @@ static void PinFilterAfterLeftJoin(FilterInfo &filter, JoinRelationSet &nullable
 	}
 }
 
-static void PinSemanticJoinAfterLeftJoin(SemanticJoinEdge &join, JoinRelationSet &nullable_set,
-                                         JoinRelationSet &left_join_set, JoinRelationSetManager &set_manager) {
-	if (RelationSetsIntersect(join.left_set, nullable_set)) {
-		join.left_set = set_manager.Union(join.left_set, left_join_set);
-	}
-	if (RelationSetsIntersect(join.right_set, nullable_set)) {
-		join.right_set = set_manager.Union(join.right_set, left_join_set);
-	}
-}
-
 static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
@@ -683,6 +673,78 @@ bool RelationManager::ExtractBindings(const Expression &expression, unordered_se
 	return can_reorder;
 }
 
+static void ResolveSemanticJoinPrerequisites(vector<unique_ptr<SemanticJoinEdge>> &semantic_joins,
+                                             JoinRelationSetManager &set_manager) {
+	struct Prerequisite {
+		idx_t edge_index;
+		JoinSide consumer_side;
+	};
+	vector<vector<Prerequisite>> direct_prerequisites(semantic_joins.size());
+	for (idx_t consumer_idx = 0; consumer_idx < semantic_joins.size(); consumer_idx++) {
+		auto &consumer = *semantic_joins[consumer_idx];
+		if (consumer.predicate_left_set.get().Empty() || consumer.predicate_right_set.get().Empty()) {
+			throw InternalException("Semantic join %llu has an empty predicate endpoint", consumer.index);
+		}
+		if (RelationSetsIntersect(consumer.predicate_left_set, consumer.predicate_right_set)) {
+			throw InternalException("Semantic join %llu has overlapping predicate endpoints", consumer.index);
+		}
+		for (idx_t producer_idx = 0; producer_idx < semantic_joins.size(); producer_idx++) {
+			if (consumer_idx == producer_idx) {
+				continue;
+			}
+			auto &producer = *semantic_joins[producer_idx];
+			if (producer.join_type != JoinType::LEFT) {
+				continue;
+			}
+			auto depends_on_left = RelationSetsIntersect(consumer.predicate_left_set, producer.predicate_right_set);
+			auto depends_on_right = RelationSetsIntersect(consumer.predicate_right_set, producer.predicate_right_set);
+			if (depends_on_left && depends_on_right) {
+				throw InternalException("Semantic join %llu depends on both sides of semantic join %llu",
+				                        consumer.index, producer.index);
+			}
+			if (depends_on_left || depends_on_right) {
+				direct_prerequisites[consumer_idx].push_back(
+				    {producer_idx, depends_on_left ? JoinSide::LEFT : JoinSide::RIGHT});
+			}
+		}
+	}
+
+	vector<uint8_t> resolve_state(semantic_joins.size(), 0);
+	std::function<void(idx_t)> resolve_edge = [&](idx_t edge_idx) {
+		if (resolve_state[edge_idx] == 2) {
+			return;
+		}
+		if (resolve_state[edge_idx] == 1) {
+			throw InternalException("Semantic join prerequisite cycle involving edge %llu", edge_idx);
+		}
+		resolve_state[edge_idx] = 1;
+		auto &edge = *semantic_joins[edge_idx];
+		unordered_set<idx_t> prerequisite_ids;
+		for (auto &prerequisite : direct_prerequisites[edge_idx]) {
+			resolve_edge(prerequisite.edge_index);
+			auto &producer = *semantic_joins[prerequisite.edge_index];
+			auto &producer_input = set_manager.Union(producer.required_left_set, producer.required_right_set);
+			if (prerequisite.consumer_side == JoinSide::LEFT) {
+				edge.required_left_set = set_manager.Union(edge.required_left_set, producer_input);
+			} else {
+				D_ASSERT(prerequisite.consumer_side == JoinSide::RIGHT);
+				edge.required_right_set = set_manager.Union(edge.required_right_set, producer_input);
+			}
+			prerequisite_ids.insert(producer.index);
+			prerequisite_ids.insert(producer.prerequisite_edges.begin(), producer.prerequisite_edges.end());
+		}
+		edge.prerequisite_edges.insert(edge.prerequisite_edges.end(), prerequisite_ids.begin(), prerequisite_ids.end());
+		std::sort(edge.prerequisite_edges.begin(), edge.prerequisite_edges.end());
+		if (RelationSetsIntersect(edge.required_left_set, edge.required_right_set)) {
+			throw InternalException("Semantic join %llu has overlapping required input sets", edge.index);
+		}
+		resolve_state[edge_idx] = 2;
+	};
+	for (idx_t edge_idx = 0; edge_idx < semantic_joins.size(); edge_idx++) {
+		resolve_edge(edge_idx);
+	}
+}
+
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
                                                              vector<reference<LogicalOperator>> &filter_operators,
                                                              JoinRelationSetManager &set_manager,
@@ -842,9 +904,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						PinFilterAfterLeftJoin(*filters_and_bindings[filter_idx], *full_right_set, full_set,
 						                       set_manager);
 					}
-					for (auto &previous_semantic_join : semantic_joins) {
-						PinSemanticJoinAfterLeftJoin(*previous_semantic_join, *full_right_set, full_set, set_manager);
-					}
 				}
 				D_ASSERT(!semantic_edge->costing_predicate_indices.empty());
 				semantic_joins.push_back(std::move(semantic_edge));
@@ -903,6 +962,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			f_op.expressions = std::move(leftover_expressions);
 		}
 	}
+	ResolveSemanticJoinPrerequisites(semantic_joins, set_manager);
 
 	return filters_and_bindings;
 }

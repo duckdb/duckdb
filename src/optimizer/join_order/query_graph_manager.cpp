@@ -317,8 +317,10 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				throw InternalException("Semantic join %llu has a cost predicate without graph endpoints",
 				                        semantic_join.index);
 			}
-			query_graph.CreateEdge(semantic_join.left_set, semantic_join.right_set, *predicate, semantic_join);
-			query_graph.CreateEdge(semantic_join.right_set, semantic_join.left_set, *predicate, semantic_join);
+			query_graph.CreateEdge(semantic_join.required_left_set, semantic_join.required_right_set, *predicate,
+			                       semantic_join);
+			query_graph.CreateEdge(semantic_join.required_right_set, semantic_join.required_left_set, *predicate,
+			                       semantic_join);
 		}
 	}
 }
@@ -452,16 +454,22 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		auto right = GenerateJoins(extracted_relations, node->right_set);
 		auto semantic_join = dp_entry->second->info->semantic_join;
 		if (semantic_join) {
-			auto direct = JoinRelationSet::IsSubset(*left.set, semantic_join->left_set) &&
-			              JoinRelationSet::IsSubset(*right.set, semantic_join->right_set);
-			auto inverted = JoinRelationSet::IsSubset(*left.set, semantic_join->right_set) &&
-			                JoinRelationSet::IsSubset(*right.set, semantic_join->left_set);
+			auto direct = JoinRelationSet::IsSubset(*left.set, semantic_join->required_left_set) &&
+			              JoinRelationSet::IsSubset(*right.set, semantic_join->required_right_set);
+			auto inverted = JoinRelationSet::IsSubset(*left.set, semantic_join->required_right_set) &&
+			                JoinRelationSet::IsSubset(*right.set, semantic_join->required_left_set);
 			if (direct == inverted) {
 				throw InternalException("Could not orient semantic join %llu in reconstructed join tree",
 				                        semantic_join->index);
 			}
 			if (inverted) {
 				std::swap(left, right);
+			}
+			for (auto prerequisite : semantic_join->prerequisite_edges) {
+				if (!reconstructed_semantic_joins.count(prerequisite)) {
+					throw InternalException("Semantic join %llu was reconstructed before prerequisite %llu",
+					                        semantic_join->index, prerequisite);
+				}
 			}
 			if (!reconstructed_semantic_joins.insert(semantic_join->index).second) {
 				throw InternalException("Semantic join %llu was reconstructed more than once", semantic_join->index);

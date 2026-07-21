@@ -825,3 +825,84 @@ ORDER BY ALL;
 1	NULL
 2	2
 4	NULL
+
+# Volatile pair-dependent predicates must be evaluated for physical input pairs,
+# rather than once for each distinct pair of referenced values.
+statement ok
+CREATE SEQUENCE pair_volatile_left_seq START 1;
+
+statement ok
+CREATE TEMP TABLE pair_volatile_left_result AS
+SELECT l.lid, r.rid
+FROM (VALUES (1, 1), (2, 1)) l(lid, a)
+LEFT JOIN (VALUES (10, 1), (20, 1)) r(rid, b) ON EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+	  AND nextval('pair_volatile_left_seq') = 2
+);
+
+query III
+SELECT count(*), count(rid), currval('pair_volatile_left_seq')
+FROM pair_volatile_left_result;
+----
+2	1	4
+
+statement ok
+CREATE SEQUENCE pair_volatile_right_seq START 1;
+
+statement ok
+CREATE TEMP TABLE pair_volatile_right_result AS
+SELECT l.lid, r.rid
+FROM (VALUES (1, 1), (2, 1)) l(lid, a)
+RIGHT JOIN (VALUES (10, 1), (20, 1)) r(rid, b) ON EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+	  AND nextval('pair_volatile_right_seq') = 2
+);
+
+query III
+SELECT count(*), count(lid), currval('pair_volatile_right_seq')
+FROM pair_volatile_right_result;
+----
+2	1	4
+
+statement ok
+CREATE SEQUENCE pair_volatile_semi_seq START 1;
+
+query II
+SELECT count(*), currval('pair_volatile_semi_seq')
+FROM (VALUES (1, 1), (2, 1)) l(lid, a)
+SEMI JOIN (VALUES (10, 1), (20, 1)) r(rid, b) ON EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+	  AND nextval('pair_volatile_semi_seq') > 100
+);
+----
+0	4
+
+statement ok
+CREATE SEQUENCE pair_volatile_anti_seq START 1;
+
+query II
+SELECT count(*), currval('pair_volatile_anti_seq')
+FROM (VALUES (1, 1), (2, 1)) l(lid, a)
+ANTI JOIN (VALUES (10, 1), (20, 1)) r(rid, b) ON EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+	  AND nextval('pair_volatile_anti_seq') > 100
+);
+----
+2	4
+
+statement ok
+CREATE SEQUENCE pair_volatile_any_seq START 1;
+
+query II
+SELECT count(*), currval('pair_volatile_any_seq')
+FROM (VALUES (1, 1), (2, 1)) l(lid, a)
+LEFT JOIN (VALUES (10, 1), (20, 1)) r(rid, b) ON l.a = ANY (
+	SELECT r.b
+	WHERE nextval('pair_volatile_any_seq') > 100
+);
+----
+2	4

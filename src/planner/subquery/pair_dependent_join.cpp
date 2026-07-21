@@ -1,3 +1,5 @@
+#include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
+
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
@@ -10,7 +12,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include "duckdb/planner/subquery/pair_dependent_full_outer_join.hpp"
-#include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 
 namespace duckdb {
 

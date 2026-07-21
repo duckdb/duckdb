@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/subquery/pair_dependent_full_outer_join.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -13,6 +15,7 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 
@@ -29,6 +32,7 @@ static vector<Identifier> GenerateInternalColumnNames(idx_t column_count, const 
 
 // FULL OUTER pair-dependent predicates use the paper's D_R x D_S construction. Each side is projected to the
 // bindings referenced by the predicate and independently deduplicated before the domain product is formed.
+// Volatile predicates additionally use row identity so every physical input pair remains a distinct domain pair.
 
 struct PairDependentJoinSide {
 	TableIndex cte_index;
@@ -36,6 +40,7 @@ struct PairDependentJoinSide {
 	vector<LogicalType> types;
 	vector<Identifier> names;
 	vector<idx_t> domain_positions;
+	idx_t payload_count;
 	unique_ptr<LogicalOperator> source;
 };
 
@@ -87,23 +92,42 @@ static void CollectPairDependentBindings(Expression &expression, const unordered
 	});
 }
 
+static unique_ptr<LogicalOperator> AddRowIdentity(Binder &binder, unique_ptr<LogicalOperator> source) {
+	auto window = make_uniq<LogicalWindow>(binder.GenerateTableIndex());
+	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
+	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
+	row_number->SetAlias("__duckdb_pair_rowid");
+	window->expressions.push_back(std::move(row_number));
+	window->children.push_back(std::move(source));
+	return std::move(window);
+}
+
 static PairDependentJoinSide PreparePairDependentJoinSide(Binder &binder, unique_ptr<LogicalOperator> source,
                                                           const column_binding_set_t &domain_bindings,
-                                                          const string &name_prefix) {
+                                                          const string &name_prefix, bool preserve_row_identity) {
 	source->ResolveOperatorTypes();
 	PairDependentJoinSide result;
+	result.payload_count = source->GetColumnBindings().size();
+	if (preserve_row_identity) {
+		source = AddRowIdentity(binder, std::move(source));
+		source->ResolveOperatorTypes();
+	}
 	result.bindings = source->GetColumnBindings();
 	result.types = source->types;
 	result.names = GenerateInternalColumnNames(result.types.size(), name_prefix);
 	result.cte_index = binder.GenerateTableIndex();
 	result.source = std::move(source);
-	for (idx_t i = 0; i < result.bindings.size(); i++) {
+	for (idx_t i = 0; i < result.payload_count; i++) {
 		if (domain_bindings.count(result.bindings[i])) {
 			result.domain_positions.push_back(i);
 		}
 	}
 	if (result.domain_positions.empty()) {
 		throw InternalException("Pair-dependent FULL OUTER join side has no domain bindings");
+	}
+	if (preserve_row_identity) {
+		result.domain_positions.push_back(result.bindings.size() - 1);
 	}
 	return result;
 }
@@ -134,7 +158,9 @@ static PairDependentSideRef CreatePairDependentSideRef(Binder &binder, const Pai
 	auto cte_ref = make_uniq<LogicalCTERef>(binder.GenerateTableIndex(), side.cte_index, side.types, side.names);
 	auto bindings = cte_ref->GetColumnBindings();
 	PairDependentSideRef result;
-	result.payload_bindings = bindings;
+	result.payload_bindings.insert(result.payload_bindings.end(), bindings.begin(),
+	                               bindings.begin() +
+	                                   NumericCast<vector<ColumnBinding>::difference_type>(side.payload_count));
 	for (auto position : side.domain_positions) {
 		result.domain_bindings.push_back(bindings[position]);
 	}
@@ -201,9 +227,12 @@ LogicalRewriteResult PairDependentFullOuterJoinBuilder::Build() {
 	column_binding_set_t right_references;
 	CollectPairDependentBindings(*condition, left_table_bindings, right_table_bindings, left_references,
 	                             right_references);
+	auto preserve_row_identity = condition->IsVolatile();
 
-	auto left_side = PreparePairDependentJoinSide(binder, std::move(left), left_references, "__duckdb_full_l_");
-	auto right_side = PreparePairDependentJoinSide(binder, std::move(right), right_references, "__duckdb_full_r_");
+	auto left_side = PreparePairDependentJoinSide(binder, std::move(left), left_references, "__duckdb_full_l_",
+	                                              preserve_row_identity);
+	auto right_side = PreparePairDependentJoinSide(binder, std::move(right), right_references, "__duckdb_full_r_",
+	                                               preserve_row_identity);
 	auto left_domain = CreatePairDependentDomain(binder, left_side);
 	auto right_domain = CreatePairDependentDomain(binder, right_side);
 
@@ -279,11 +308,11 @@ LogicalRewriteResult PairDependentFullOuterJoinBuilder::Build() {
 
 	LogicalRewriteResult result;
 	result.output_replacements.reserve(output_bindings.size());
-	for (idx_t i = 0; i < left_side.bindings.size(); i++) {
+	for (idx_t i = 0; i < left_side.payload_count; i++) {
 		result.output_replacements.emplace_back(left_side.bindings[i], output_bindings[i]);
 	}
-	for (idx_t i = 0; i < right_side.bindings.size(); i++) {
-		result.output_replacements.emplace_back(right_side.bindings[i], output_bindings[left_side.bindings.size() + i]);
+	for (idx_t i = 0; i < right_side.payload_count; i++) {
+		result.output_replacements.emplace_back(right_side.bindings[i], output_bindings[left_side.payload_count + i]);
 	}
 
 	unique_ptr<LogicalOperator> plan = std::move(output);

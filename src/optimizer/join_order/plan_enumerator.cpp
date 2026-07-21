@@ -147,14 +147,17 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       DPJoinNode &left, DPJoinNode &right) {
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = possible_connections.back().get();
+	optional_ptr<SemanticJoinEdge> semantic_join;
 	for (auto &connection : possible_connections) {
 		if (!connection.get().semantic_join) {
 			continue;
 		}
-		if (!best_connection->semantic_join ||
-		    connection.get().semantic_join->index < best_connection->semantic_join->index) {
-			best_connection = connection.get();
+		if (semantic_join && semantic_join != connection.get().semantic_join) {
+			throw InternalException("Semantic joins %llu and %llu are both legal for one join-order partition",
+			                        semantic_join->index, connection.get().semantic_join->index);
 		}
+		semantic_join = connection.get().semantic_join;
+		best_connection = connection.get();
 	}
 	if (best_connection->semantic_join) {
 		auto cost = cost_model.ComputeCost(left, right, set, possible_connections);

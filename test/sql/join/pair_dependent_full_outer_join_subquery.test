@@ -147,6 +147,22 @@ ORDER BY ALL;
 3	NULL
 NULL	30
 
+# Volatile match predicates use physical row identity as part of each side's
+# match domain, while keeping those identities out of the SQL-visible output.
+statement ok
+CREATE SEQUENCE pair_full_volatile_seq START 1;
+
+query II
+SELECT count(*), currval('pair_full_volatile_seq')
+FROM (VALUES (1, 1), (2, 1)) l(lid, a)
+FULL OUTER JOIN (VALUES (10, 1), (20, 1)) r(rid, b) ON EXISTS (
+	SELECT 1
+	WHERE l.a = r.b
+	  AND nextval('pair_full_volatile_seq') > 100
+);
+----
+4	4
+
 query II
 SELECT l.a, r.b
 FROM pair_nested_l l

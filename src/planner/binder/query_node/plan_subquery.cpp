@@ -283,16 +283,19 @@ static bool PerformDelimOnType(const LogicalType &type) {
 	return true;
 }
 
-static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &correlated_columns) {
-	if (!Settings::Get<EnableOptimizerSetting>(binder.context)) {
+static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &correlated_columns,
+                                        optional_ptr<LogicalOperator> dependent_plan = nullptr) {
+	bool perform_delim = !dependent_plan || !dependent_plan->HasVolatileExpressions();
+	if (perform_delim && !Settings::Get<EnableOptimizerSetting>(binder.context)) {
 		// if optimizations are disabled we always do a delim join
 		return true;
 	}
-	bool perform_delim = true;
-	for (auto &col : correlated_columns) {
-		if (!PerformDelimOnType(col.type)) {
-			perform_delim = false;
-			break;
+	if (perform_delim) {
+		for (auto &col : correlated_columns) {
+			if (!PerformDelimOnType(col.type)) {
+				perform_delim = false;
+				break;
+			}
 		}
 	}
 	if (perform_delim) {
@@ -311,9 +314,12 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
                                                      unique_ptr<LogicalOperator> &root,
                                                      unique_ptr<LogicalOperator> plan) {
 	auto &correlated_columns = expr.GetBinder()->correlated_columns;
-	// FIXME: there should be a way of disabling decorrelation for ANY queries as well, but not for now...
-	bool perform_delim =
-	    expr.GetSubqueryType() == SubqueryType::ANY ? true : PerformDuplicateElimination(binder, correlated_columns);
+	// Preserve the existing duplicate-elimination path for deterministic ANY queries. Volatile ANY queries require
+	// row identity for the same reason as other correlated subqueries: sharing one result between equal outer values
+	// changes their evaluation cardinality.
+	bool perform_delim = expr.GetSubqueryType() == SubqueryType::ANY && !plan->HasVolatileExpressions()
+	                         ? true
+	                         : PerformDuplicateElimination(binder, correlated_columns, plan);
 	D_ASSERT(expr.IsCorrelated());
 	// correlated subquery
 	// for a more in-depth explanation of this code, read the paper "Unnesting Arbitrary Subqueries"
@@ -549,38 +555,40 @@ static void MergeBindingReplacements(vector<ReplacementBinding> &target,
 	}
 }
 
-static void RemapChangedChildProjectionMap(LogicalOperator &op, idx_t child_index,
+static bool RemapChangedChildProjectionMap(LogicalOperator &op, idx_t child_index,
                                            vector<ColumnBinding> old_child_bindings,
                                            const vector<ReplacementBinding> &replacements) {
-	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index);
-	if (!projection_map || projection_map->empty()) {
-		return;
-	}
 	for (auto &binding : old_child_bindings) {
 		binding = ResolveBindingReplacement(binding, replacements);
 	}
-	LogicalOperatorVisitor::RemapProjectionMap(*projection_map, old_child_bindings,
-	                                           op.children[child_index]->GetColumnBindings());
+	auto new_child_bindings = op.children[child_index]->GetColumnBindings();
+	auto layout_changed = old_child_bindings != new_child_bindings;
+	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index);
+	if (projection_map && !projection_map->empty()) {
+		LogicalOperatorVisitor::RemapProjectionMap(*projection_map, old_child_bindings, new_child_bindings);
+	}
+	return layout_changed;
 }
 
 static void ApplyBindingReplacements(ClientContext &context, unique_ptr<LogicalOperator> &op, idx_t child_index,
                                      vector<ColumnBinding> old_child_bindings,
                                      const vector<ReplacementBinding> &replacements) {
-	RemapChangedChildProjectionMap(*op, child_index, std::move(old_child_bindings), replacements);
-	if (replacements.empty()) {
-		LogicalComparisonJoin::ReclassifyJoinConditions(context, op);
+	auto layout_changed = RemapChangedChildProjectionMap(*op, child_index, std::move(old_child_bindings), replacements);
+	if (replacements.empty() && !layout_changed) {
 		return;
 	}
-	CorrelatedColumnBindingReplacer replacer;
-	for (auto &replacement : replacements) {
-		replacer.AddReplacement(replacement.old_binding,
-		                        ResolveBindingReplacement(replacement.old_binding, replacements));
-	}
-	if (op->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && child_index == 0) {
-		replacer.stop_operator = *op->children[child_index];
-		replacer.VisitOperator(*op);
-	} else {
-		replacer.VisitOperatorBindings(*op);
+	if (!replacements.empty()) {
+		CorrelatedColumnBindingReplacer replacer;
+		for (auto &replacement : replacements) {
+			replacer.AddReplacement(replacement.old_binding,
+			                        ResolveBindingReplacement(replacement.old_binding, replacements));
+		}
+		if (op->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && child_index == 0) {
+			replacer.stop_operator = *op->children[child_index];
+			replacer.VisitOperator(*op);
+		} else {
+			replacer.VisitOperatorBindings(*op);
+		}
 	}
 	LogicalComparisonJoin::ReclassifyJoinConditions(context, op);
 }
@@ -739,7 +747,7 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 		}
 	}
 
-	auto perform_delim = PerformDuplicateElimination(*this, correlated);
+	auto perform_delim = PerformDuplicateElimination(*this, correlated, right);
 	auto delim_join = CreateDuplicateEliminatedJoin(correlated, join_type, std::move(left), perform_delim);
 
 	// Store all information required to perform UNNESTING later.
