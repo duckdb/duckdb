@@ -271,11 +271,14 @@ static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr,
 	if (index >= sql_types.size()) {
 		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
 	}
-	auto result =
-	    make_uniq<BoundColumnRefExpression>(expr->GetAlias(), sql_types[index], ColumnBinding(table_index, index));
-	if (result->GetAlias().empty() && index < names.size()) {
-		result->SetAlias(names[index]);
+	Identifier alias;
+	if (index < names.size()) {
+		alias = names[index];
+	} else {
+		alias = expr->GetAlias();
 	}
+	auto result =
+	    make_uniq<BoundColumnRefExpression>(std::move(alias), sql_types[index], ColumnBinding(table_index, index));
 	return std::move(result);
 }
 

@@ -356,6 +356,12 @@ public:
 	shared_ptr<CSVBufferUsage> buffer_tracker;
 
 private:
+	//! Result of trying to move to the next buffer
+	enum class MoveBufferResult : uint8_t {
+		MOVED,    //! Advanced to the next buffer, stitching any value that straddled the edge
+		NOT_MOVED //! The buffer still has bytes left, or the file has ended
+	};
+
 	void Initialize() override;
 
 	void FinalizeChunkProcess() override;
@@ -365,7 +371,13 @@ private:
 
 	void ProcessExtraRow();
 	//! Function used to move from one buffer to the other, if necessary
-	bool MoveToNextBuffer();
+	MoveBufferResult TryMoveToNextBuffer();
+	//! Move to the next buffer and processes the value straddling the buffer edge
+	void FinishMoveToNextBuffer(shared_ptr<CSVBufferHandle> next_buffer);
+	//! Tail of the boundary chunk finalization, runs after the move past the boundary end
+	void FinishBoundaryScan(bool moved);
+	//! Processes buffers until the chunk is full or the file ends
+	void ProcessRemainingBuffers();
 
 	//! -------- Functions used to figure out where lines start ---------!//
 	//! Main function, sets the correct start
