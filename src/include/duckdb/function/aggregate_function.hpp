@@ -775,7 +775,7 @@ public:
 	}
 
 	//! Sizes an aggregate state by constructing an AggregateStateInput and invoking the state-size callback
-	idx_t GetStateSize(optional_ptr<FunctionData> bind_data) const {
+	idx_t GetStateSize(optional_ptr<const FunctionData> bind_data) const {
 		D_ASSERT(callbacks.state_size);
 		AggregateStateInput input(*this, bind_data);
 		return callbacks.state_size(input);
