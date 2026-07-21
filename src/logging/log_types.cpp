@@ -22,6 +22,7 @@ constexpr LogLevel CheckpointLogType::LEVEL;
 constexpr LogLevel AdaptiveFilterLogType::LEVEL;
 constexpr LogLevel ParquetPrefetchLogType::LEVEL;
 constexpr LogLevel AsyncTaskScheduleLogType::LEVEL;
+constexpr LogLevel ExtensionLoadInstallLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -378,6 +379,21 @@ LogicalType ExternalResourceLogType::GetLogType() {
 	return LogicalType::STRUCT(child_list);
 }
 
+//===--------------------------------------------------------------------===//
+// ExtensionLoadInstallLogType
+//===--------------------------------------------------------------------===//
+ExtensionLoadInstallLogType::ExtensionLoadInstallLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType ExtensionLoadInstallLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"event", LogicalType::VARCHAR},        {"extension", LogicalType::VARCHAR},
+	    {"version", LogicalType::VARCHAR},      {"install_mode", LogicalType::VARCHAR},
+	    {"source", LogicalType::VARCHAR},       {"reason", LogicalType::VARCHAR},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
 string ExternalResourceLogType::ConstructLogMessage(const string &resource_type, const string &resource_name,
                                                     const string &operation, const string &error,
                                                     const Value &extra_info) {
@@ -391,6 +407,21 @@ string ExternalResourceLogType::ConstructLogMessage(const string &resource_type,
 	    {"outcome", Value(error.empty() ? "ok" : "error")},
 	    {"error", nullable(error)},
 	    {"extra_info", extra_info},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+string ExtensionLoadInstallLogType::ConstructLogMessage(const char *event, const string &extension_name,
+                                                        const string &version, const string &install_mode,
+                                                        const string &source, const string &reason) {
+	auto or_null = [](const string &value) { return value.empty() ? Value() : Value(value); };
+	child_list_t<Value> child_list = {
+	    {"event", Value(event)},
+	    {"extension", or_null(extension_name)},
+	    {"version", or_null(version)},
+	    {"install_mode", or_null(install_mode)},
+	    {"source", or_null(source)},
+	    {"reason", or_null(reason)},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

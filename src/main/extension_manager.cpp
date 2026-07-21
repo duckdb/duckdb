@@ -3,6 +3,8 @@
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -27,6 +29,9 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	}
 
 	DUCKDB_LOG_INFO(db, extension_name.GetIdentifierName());
+
+	DUCKDB_LOG(db, ExtensionLoadInstallLogType, "load", final_extension_name, install_info.version,
+	           EnumUtil::ToString(install_info.mode), install_info.full_path, reason);
 }
 
 void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
@@ -148,7 +153,8 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 
 	// we have an extension and we want to try to load it - instantiate the load
 	// we instantiate the ExtensionActiveLoad which also grabs the lock for loading the specific extension
-	auto result = make_uniq<ExtensionActiveLoad>(db, *info, Identifier(original_extension_name), options.alias);
+	auto result =
+	    make_uniq<ExtensionActiveLoad>(db, *info, Identifier(original_extension_name), options.alias, options.reason);
 
 	// we now have a lock for loading the extension
 	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load

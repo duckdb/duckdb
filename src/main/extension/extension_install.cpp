@@ -13,6 +13,9 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/windows_undefs.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 
 #include <fstream>
 
@@ -21,6 +24,19 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Install Extension
 //===--------------------------------------------------------------------===//
+
+//! Emit a structured log event for a completed install (no-op when nothing was installed)
+static void LogInstall(DatabaseInstance &db, const string &extension, optional_ptr<ExtensionInstallInfo> info,
+                       const string &reason) {
+	if (!info) {
+		// install was a no-op (e.g. already installed) - nothing to report
+		return;
+	}
+	string source = info->full_path.empty() ? info->repository_url : info->full_path;
+	DUCKDB_LOG(db, ExtensionLoadInstallLogType, "install", extension, info->version,
+	           EnumUtil::ToString(info->mode), source, reason);
+}
+
 const string ExtensionHelper::NormalizeVersionTag(const string &version_tag) {
 	if (!version_tag.empty() && version_tag[0] != 'v') {
 		return "v" + version_tag;
@@ -196,7 +212,9 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DatabaseInsta
 	return nullptr;
 #endif
 	string local_path = ExtensionDirectory(db, fs);
-	return InstallExtensionInternal(db, fs, local_path, extension, options);
+	auto info = InstallExtensionInternal(db, fs, local_path, extension, options);
+	LogInstall(db, ExtensionHelper::GetExtensionName(extension), info, options.reason);
+	return info;
 }
 
 unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext &context, const string &extension,
@@ -208,7 +226,9 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
-	return InstallExtensionInternal(db, fs, local_path, extension, options, context);
+	auto info = InstallExtensionInternal(db, fs, local_path, extension, options, context);
+	LogInstall(db, ExtensionHelper::GetExtensionName(extension), info, options.reason);
+	return info;
 }
 
 static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {

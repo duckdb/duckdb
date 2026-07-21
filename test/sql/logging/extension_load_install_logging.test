@@ -1,0 +1,51 @@
+# name: test/sql/logging/extension_load_install_logging.test
+# description: LOAD/INSTALL events are surfaced through the ExtensionLoadInstall log type, including the reason
+# group: [logging]
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+statement ok
+CALL enable_logging('ExtensionLoadInstall', storage='memory');
+
+# An explicit INSTALL of an extension file surfaces as a structured log event with a reason
+statement ok
+SET extension_directory='{TEST_DIR}/extension_load_install_logging';
+
+statement ok
+INSTALL '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+query IIII
+SELECT event, extension, install_mode, reason FROM duckdb_logs_parsed('ExtensionLoadInstall') ORDER BY timestamp
+----
+install	loadable_extension_demo	CUSTOM_PATH	explicit SQL INSTALL statement
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# An explicit LOAD of an extension file surfaces as a structured log event with a reason
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+query IIII
+SELECT event, extension, install_mode, reason FROM duckdb_logs_parsed('ExtensionLoadInstall') ORDER BY timestamp
+----
+load	loadable_extension_demo	NOT_INSTALLED	explicit SQL LOAD statement
+
+# The full structured type is available (event/extension/version/install_mode/source/reason)
+query I
+SELECT source LIKE '%loadable_extension_demo.duckdb_extension' FROM duckdb_logs_parsed('ExtensionLoadInstall') ORDER BY timestamp
+----
+true
+
+# Reloading an already-loaded extension is a no-op and emits no new event
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('ExtensionLoadInstall')
+----
+1

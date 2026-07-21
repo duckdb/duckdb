@@ -211,4 +211,19 @@ public:
 	                                  const string &error, const Value &extra_info);
 };
 
+//! Logs extension LOAD and INSTALL events, including an optional reason describing why they were triggered
+class ExtensionLoadInstallLogType : public LogType {
+public:
+	static constexpr const char *NAME = "ExtensionLoadInstall";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	ExtensionLoadInstallLogType();
+
+	static LogicalType GetLogType();
+
+	//! event is either "load" or "install"
+	static string ConstructLogMessage(const char *event, const string &extension_name, const string &version,
+	                                   const string &install_mode, const string &source, const string &reason);
+};
+
 } // namespace duckdb
