@@ -1,5 +1,6 @@
 #include "duckdb/parser/statement/external_resource_statement.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
@@ -29,6 +30,13 @@ string ExternalResourceStatement::ToString() const {
 		result = "CREATE EXTERNAL RESOURCE " + SQLString(type);
 		if (!name.GetIdentifierName().empty()) {
 			result += " AS " + name.GetIdentifierName();
+		}
+		if (!options.empty()) {
+			vector<string> stringified;
+			for (auto &opt : options) {
+				stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second->ToString()));
+			}
+			result += " (" + StringUtil::Join(stringified, ", ") + ")";
 		}
 		break;
 	case ExternalResourceOperation::REGISTER:
