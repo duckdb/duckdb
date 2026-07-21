@@ -188,6 +188,18 @@ static void PinFilterAfterLeftJoin(FilterInfo &filter, JoinRelationSet &nullable
 	}
 }
 
+static bool ContainsRecurringCTERef(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().is_recurring) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsRecurringCTERef(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
@@ -195,6 +207,11 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
+		if ((join.join_type == JoinType::LEFT || join.join_type == JoinType::SEMI ||
+		     join.join_type == JoinType::ANTI) &&
+		    ContainsRecurringCTERef(*join.children[1])) {
+			return false;
+		}
 
 		switch (join.join_type) {
 		case JoinType::INNER:

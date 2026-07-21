@@ -110,6 +110,15 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 			scan.recursive_cte = cast_cte;
 			scan.distinct_idx = distinct_idx;
 			scan.payload_idx = payload_idx;
+			for (auto &spec : scan.partial_key_index_specs) {
+				bool found = false;
+				for (auto &existing : cast_cte.partial_key_index_specs) {
+					found = found || existing == spec;
+				}
+				if (!found) {
+					cast_cte.partial_key_index_specs.push_back(spec);
+				}
+			}
 		}
 	}
 	return cte;

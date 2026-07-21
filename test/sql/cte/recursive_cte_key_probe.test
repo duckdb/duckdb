@@ -225,7 +225,7 @@ SELECT k, v FROM t;
 statement ok
 SET debug_verify_serializer=false;
 
-# Partial composite keys retain the ordinary hash-join/full-state-scan fallback.
+# A proper subset of a composite key uses the epoch-stable partial-key index.
 query II
 EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
 	VALUES (1, 1, 0)
@@ -236,7 +236,240 @@ EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
 )
 SELECT * FROM t;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*
+physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
+
+# Partial probes preserve one-to-many matches and reordered key positions.
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, 10, 0), (2, 10, 0), (NULL, 10, 0), (1, NULL, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k2 = n.k2
+	WHERE n.v < 1
+)
+SELECT k1, k2, v FROM t;
+----
+1	10	1
+1	NULL	0
+2	10	1
+NULL	10	1
+
+# Multi-column subsets use normalized complete-key ordinals, including variable-width keys.
+query IIII rowsort
+WITH RECURSIVE t(k1, k2, k3, v) USING KEY (k1, k2, k3) AS (
+	VALUES (1, 10, 'a', 0), (1, 20, 'a', 0), (1, 30, 'b', 0)
+	UNION ALL
+	SELECT n.k1, n.k2, n.k3, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k3 = n.k3 AND r.k1 = n.k1
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+1	10	a	1
+1	20	a	1
+1	30	b	1
+
+# Duplicate probe rows are preserved by a partial-key fan-out.
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, sum(v) AS v) AS (
+	VALUES (1, 1, 0), (1, 2, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.v = 0
+)
+SELECT * FROM t;
+----
+1	1	2
+1	2	2
+
+# Stored key representations are gathered from state rather than copied from equal probes.
+query II
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, -0e0::DOUBLE, 0)
+	UNION ALL
+	SELECT n.k1, r.k2, r.v + 1
+	FROM (SELECT k1, 0e0::DOUBLE AS lookup_k, v FROM t) n
+	JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.v < 1
+)
+SELECT signbit(k2), v FROM t;
+----
+true	1
+
+# Fan-out larger than one vector is emitted over repeated Execute calls.
+query III
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, sum(v) AS v) AS (
+	SELECT 1, i::INTEGER, 0::BIGINT FROM range(3000) r(i)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.k2 = 0 AND n.v = 0
+)
+SELECT count(*), sum(v), max(v) FROM t;
+----
+3000	3000	3000
+
+# Task-local probe cursors read the frozen index concurrently.
+query III
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2, max(v) AS v) AS (
+	SELECT i % 1000, i, 0 FROM range(10000) r(i)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.v < 1
+)
+SELECT count(*), sum(v), max(v) FROM t;
+----
+10000	10000	1
+
+# Distinct partial-key signatures share the same complete-key state.
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, 10, 0), (1, 20, 0), (2, 10, 0), (2, 20, 0)
+	UNION ALL
+	(
+		SELECT n.k1, n.k2, r.v + 1
+		FROM t n JOIN recurring.t r ON r.k1 = n.k1
+		WHERE n.v < 1
+		UNION ALL
+		SELECT n.k1, n.k2, r.v + 1
+		FROM t n JOIN recurring.t r ON r.k2 = n.k2
+		WHERE n.v < 1
+	)
+)
+SELECT * FROM t;
+----
+1	10	1
+1	20	1
+2	10	1
+2	20	1
+
+# The specialized result agrees with a semantically equivalent forced state-scan fallback.
+query I
+WITH RECURSIVE
+fast(k1, k2, v) USING KEY (k1, k2) AS (
+	SELECT i % 10, i, 0 FROM range(100) r(i)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM fast n JOIN recurring.fast r ON r.k1 = n.k1
+	WHERE n.v < 2
+),
+fallback(k1, k2, v) USING KEY (k1, k2) AS (
+	SELECT i % 10, i, 0 FROM range(100) r(i)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM fallback n
+	JOIN (SELECT * FROM recurring.fallback WHERE v >= 0) r ON r.k1 = n.k1
+	WHERE n.v < 2
+)
+SELECT count(*) FROM (
+	(SELECT * FROM fast EXCEPT ALL SELECT * FROM fallback)
+	UNION ALL
+	(SELECT * FROM fallback EXCEPT ALL SELECT * FROM fast)
+);
+----
+0
+
+# Partial probes preserve output mappings when the state is on the left.
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, 1, 0), (1, 2, 0), (2, 1, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM recurring.t r JOIN t n ON r.k1 = n.k1
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+1	1	1
+1	2	1
+2	1	1
+
+statement ok
+RESET disabled_optimizers;
+
+# A partial index receives complete-key groups introduced after the anchor.
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, 0, 0)
+	UNION ALL
+	SELECT n.k1, r.k2 + 1, n.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.v < 2 AND r.k2 < 2
+)
+SELECT * FROM t;
+----
+1	0	0
+1	1	2
+1	2	2
+
+# Caching-operator reuse is not required by the partial probe state.
+statement ok
+SET enable_caching_operators=false;
+
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, 1, 0), (1, 2, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+1	1	1
+1	2	1
+
+statement ok
+RESET enable_caching_operators;
+
+# A key join's hidden recurring-state reference prevents its containing build from being retained across epochs.
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+query III
+WITH RECURSIVE t(k, v, i) USING KEY (k) AS (
+	VALUES (1, 0, 0)
+	UNION ALL
+	SELECT n.k, d.v + 1, n.i + 1
+	FROM t n
+	JOIN (
+		SELECT r.k, r.v
+		FROM (VALUES (1)) p(k)
+		JOIN recurring.t r USING (k)
+	) d USING (k)
+	WHERE n.i < 3
+)
+SELECT * FROM t;
+----
+1	3	3
+
+statement ok
+RESET disabled_optimizers;
+
+# Logical serialization verification remains independent of the physical partial index.
+statement ok
+SET debug_verify_serializer=true;
+
+query III rowsort
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, 1, 0), (1, 2, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+1	1	1
+1	2	1
+
+statement ok
+SET debug_verify_serializer=false;
 
 # Nested keys retain the fallback until read-only lookup supports their equality semantics.
 query II
@@ -245,6 +478,19 @@ EXPLAIN WITH RECURSIVE t(k, v) USING KEY (k) AS (
 	UNION ALL
 	SELECT n.k, r.v + 1
 	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.v < 1
+)
+SELECT * FROM t;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*
+
+# Casted partial keys retain the fallback because the index requires direct bound references.
+query II
+EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	VALUES (1, 1, 0)
+	UNION ALL
+	SELECT n.k1, n.k2, r.v + 1
+	FROM t n JOIN recurring.t r ON r.k1::BIGINT = n.k1::BIGINT
 	WHERE n.v < 1
 )
 SELECT * FROM t;
@@ -276,6 +522,43 @@ EXPLAIN WITH RECURSIVE t(k, v) USING KEY (k) AS (
 SELECT * FROM t;
 ----
 physical_plan	<REGEX>:.*HASH_JOIN.*
+
+# Candidate generation stays below the recurring-state ANTI join.
+query II
+EXPLAIN WITH RECURSIVE
+edges(src, dst) AS (
+	VALUES (0, 1), (1, 2), (2, 3)
+),
+bfs(node) USING KEY (node) AS (
+	VALUES (0)
+	UNION ALL
+	SELECT edge.dst
+	FROM bfs frontier
+	JOIN edges edge ON frontier.node = edge.src
+	LEFT JOIN recurring.bfs state ON edge.dst = state.node
+	WHERE state.node IS NULL
+)
+SELECT * FROM bfs;
+----
+physical_plan	<REGEX>:.*HASH_JOIN[\s\S]*ANTI[\s\S]*HASH_JOIN[\s\S]*REC_REC_CTE_SCAN[\s\S]*INNER.*
+
+# Candidate generation also stays below an explicit recurring-state SEMI join.
+query II
+EXPLAIN WITH RECURSIVE
+edges(src, dst) AS (
+	VALUES (0, 1), (1, 2), (2, 3)
+),
+bfs(node) USING KEY (node) AS (
+	VALUES (0)
+	UNION ALL
+	SELECT edge.dst
+	FROM bfs frontier
+	JOIN edges edge ON frontier.node = edge.src
+	SEMI JOIN recurring.bfs state ON edge.dst = state.node
+)
+SELECT * FROM bfs;
+----
+physical_plan	<REGEX>:.*HASH_JOIN[\s\S]*SEMI[\s\S]*HASH_JOIN[\s\S]*REC_REC_CTE_SCAN[\s\S]*INNER.*
 
 # Filters on the recurring state scan retain the fallback.
 query II

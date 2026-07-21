@@ -378,6 +378,36 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	return AddChunk(groups, payload, aggregate_filter);
 }
 
+idx_t GroupedAggregateHashTable::AddChunkAndGetNewGroups(DataChunk &groups, DataChunk &payload, AggregateType filter,
+                                                         Vector &new_group_addresses, SelectionVector &new_groups_out) {
+	unsafe_vector<idx_t> aggregate_filter;
+	auto &aggregates = layout_ptr->GetAggregates();
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		if (aggregates[i].aggr_type == filter) {
+			aggregate_filter.push_back(i);
+		}
+	}
+	if (groups.size() == 0) {
+		return 0;
+	}
+
+	sink_count += groups.size();
+	groups.Hash(state.hashes);
+	const auto new_group_count = FindOrCreateGroups(groups, state.hashes, state.addresses, state.new_groups);
+	auto source_addresses = FlatVector::GetData<data_ptr_t>(state.addresses);
+	auto target_addresses = FlatVector::GetDataMutable<data_ptr_t>(new_group_addresses);
+	for (idx_t new_group_idx = 0; new_group_idx < new_group_count; new_group_idx++) {
+		const auto input_idx = state.new_groups.get_index_unsafe(new_group_idx);
+		new_groups_out.set_index(new_group_idx, input_idx);
+		target_addresses[new_group_idx] = source_addresses[input_idx];
+	}
+	FlatVector::SetSize(new_group_addresses, new_group_count);
+
+	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()));
+	UpdateAggregates(payload, aggregate_filter, groups.size());
+	return new_group_count;
+}
+
 GroupedAggregateHashTable::AggregateDictionaryState::AggregateDictionaryState()
     : hashes(LogicalType::HASH), new_dictionary_pointers(LogicalType::POINTER), unique_entries(STANDARD_VECTOR_SIZE) {
 }
@@ -938,13 +968,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &a
 	return FindOrCreateGroups(groups, state.hashes, addresses_out, new_groups_out);
 }
 
-idx_t GroupedAggregateHashTable::LookupGroups(DataChunk &groups, AggregateHTLookupState &lookup_state,
-                                              SelectionVector &found_groups_out) const {
-	D_ASSERT(groups.ColumnCount() + 1 == layout_ptr->ColumnCount());
-	const auto chunk_size = groups.size();
-	if (chunk_size == 0) {
-		return 0;
-	}
+void GroupedAggregateHashTable::InitializeLookupState(AggregateHTLookupState &lookup_state) const {
 	if (!lookup_state.initialized) {
 		lookup_state.group_chunk.InitializeEmpty(layout_ptr->GetTypes());
 		TupleDataCollection::InitializeChunkState(lookup_state.chunk_state, layout_ptr->GetTypes());
@@ -955,6 +979,16 @@ idx_t GroupedAggregateHashTable::LookupGroups(DataChunk &groups, AggregateHTLook
 		}
 		lookup_state.initialized = true;
 	}
+}
+
+idx_t GroupedAggregateHashTable::LookupGroups(DataChunk &groups, AggregateHTLookupState &lookup_state,
+                                              SelectionVector &found_groups_out) const {
+	D_ASSERT(groups.ColumnCount() + 1 == layout_ptr->ColumnCount());
+	const auto chunk_size = groups.size();
+	if (chunk_size == 0) {
+		return 0;
+	}
+	InitializeLookupState(lookup_state);
 
 	groups.Hash(lookup_state.hashes);
 	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
@@ -1035,6 +1069,20 @@ void GroupedAggregateHashTable::GatherGroups(AggregateHTLookupState &state, cons
 		                                         nullptr);
 	}
 	result.SetChildCardinality(found_count);
+}
+
+void GroupedAggregateHashTable::GatherGroups(AggregateHTLookupState &state, Vector &addresses,
+                                             const SelectionVector &groups, idx_t group_count,
+                                             DataChunk &result) const {
+	InitializeLookupState(state);
+	D_ASSERT(result.ColumnCount() == layout_ptr->ColumnCount() - 1);
+	result.Reset();
+	for (idx_t group_idx = 0; group_idx < result.ColumnCount(); group_idx++) {
+		state.gather_functions[group_idx].Gather(*layout_ptr, addresses, group_idx, groups, group_count,
+		                                         result.data[group_idx], *FlatVector::IncrementalSelectionVector(),
+		                                         nullptr);
+	}
+	result.SetChildCardinality(group_count);
 }
 
 struct FlushMoveState {

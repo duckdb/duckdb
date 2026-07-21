@@ -98,6 +98,9 @@ public:
 	idx_t AddChunk(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter);
+	//! Adds a chunk and returns the stable row-start addresses and input indexes of newly created groups.
+	idx_t AddChunkAndGetNewGroups(DataChunk &groups, DataChunk &payload, AggregateType filter,
+	                              Vector &new_group_addresses, SelectionVector &new_groups_out);
 	optional_idx TryAddCompressedGroups(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	optional_idx TryAddDictionaryGroups(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	optional_idx TryAddConstantGroups(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
@@ -121,6 +124,9 @@ public:
 	//! Gathers matched group values from state.addresses in the order specified by found_groups.
 	void GatherGroups(AggregateHTLookupState &state, const SelectionVector &found_groups, idx_t found_count,
 	                  DataChunk &result) const;
+	//! Gathers group values from arbitrary row-start addresses.
+	void GatherGroups(AggregateHTLookupState &state, Vector &addresses, const SelectionVector &groups,
+	                  idx_t group_count, DataChunk &result) const;
 
 	const PartitionedTupleData &GetPartitionedData() const;
 	unique_ptr<PartitionedTupleData> AcquirePartitionedData();
@@ -268,6 +274,7 @@ private:
 	//! Does the actual group matching / creation
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
 	                                 SelectionVector &new_groups);
+	void InitializeLookupState(AggregateHTLookupState &lookup_state) const;
 
 	//! Verify the pointer table of the HT
 	void Verify();

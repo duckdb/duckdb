@@ -10,6 +10,74 @@
 
 namespace duckdb {
 
+RecursiveCTEPartialKeyIndex::RecursiveCTEPartialKeyIndex(Allocator &allocator,
+                                                         const vector<LogicalType> &full_key_types,
+                                                         vector<idx_t> key_indices_p)
+    : key_indices(std::move(key_indices_p)), hashes(LogicalType::HASH) {
+	vector<LogicalType> partial_key_types;
+	for (auto key_idx : key_indices) {
+		D_ASSERT(key_idx < full_key_types.size());
+		partial_key_types.push_back(full_key_types[key_idx]);
+	}
+	partial_keys.Initialize(allocator, partial_key_types);
+	selected_keys.Initialize(allocator, partial_key_types);
+	Resize(1024);
+}
+
+void RecursiveCTEPartialKeyIndex::Resize(idx_t capacity) {
+	D_ASSERT(capacity > 0 && (capacity & (capacity - 1)) == 0);
+	heads.assign(capacity, DConstants::INVALID_INDEX);
+	for (idx_t entry_idx = 0; entry_idx < entries.size(); entry_idx++) {
+		auto &entry = entries[entry_idx];
+		const auto bucket = entry.hash & (capacity - 1);
+		entry.next = heads[bucket];
+		heads[bucket] = entry_idx;
+	}
+}
+
+void RecursiveCTEPartialKeyIndex::AddGroups(DataChunk &full_keys, const SelectionVector &new_groups,
+                                            Vector &new_group_addresses, idx_t new_group_count) {
+	if (new_group_count == 0) {
+		return;
+	}
+	while (entries.size() + new_group_count > heads.size()) {
+		Resize(heads.size() * 2);
+	}
+	partial_keys.Reset();
+	for (idx_t partial_idx = 0; partial_idx < key_indices.size(); partial_idx++) {
+		partial_keys.data[partial_idx].Reference(full_keys.data[key_indices[partial_idx]]);
+	}
+	partial_keys.CheckCardinality(full_keys.size());
+	selected_keys.Reset();
+	selected_keys.Slice(partial_keys, new_groups, new_group_count);
+	selected_keys.Hash(hashes);
+
+	const auto hash_values = hashes.Values<hash_t>();
+	const auto addresses = FlatVector::GetData<data_ptr_t>(new_group_addresses);
+	for (idx_t new_group_idx = 0; new_group_idx < new_group_count; new_group_idx++) {
+		const auto hash = hash_values[new_group_idx].GetValue();
+		const auto bucket = hash & (heads.size() - 1);
+		entries.push_back({hash, addresses[new_group_idx], heads[bucket]});
+		heads[bucket] = entries.size() - 1;
+	}
+}
+
+idx_t RecursiveCTEPartialKeyIndex::GetHead(hash_t hash) const {
+	return heads[hash & (heads.size() - 1)];
+}
+
+const RecursiveCTEPartialKeyIndex::Entry &RecursiveCTEPartialKeyIndex::GetEntry(idx_t entry_idx) const {
+	return entries[entry_idx];
+}
+
+idx_t RecursiveCTEPartialKeyIndex::Count() const {
+	return entries.size();
+}
+
+idx_t RecursiveCTEPartialKeyIndex::SizeInBytes() const {
+	return heads.capacity() * sizeof(idx_t) + entries.capacity() * sizeof(Entry);
+}
+
 struct RecursiveCTEDistinctPartition {
 	RecursiveCTEDistinctPartition(ClientContext &context, const vector<LogicalType> &types)
 	    : ht(context, BufferAllocator::Get(context), types) {
@@ -36,8 +104,8 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 // Sink State
 //===--------------------------------------------------------------------===//
 RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-    : op(op), executor(context), allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)),
-      runtime_logger(context.logger),
+    : op(op), executor(context), new_group_addresses(LogicalType::POINTER), new_groups(STANDARD_VECTOR_SIZE),
+      allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)), runtime_logger(context.logger),
       collect_runtime_metrics(runtime_logger &&
                               runtime_logger->ShouldLog(PhysicalOperatorLogType::NAME, PhysicalOperatorLogType::LEVEL)),
       executor_pool(op.shared_executor_pool),
@@ -59,6 +127,10 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 	if (op.using_key) {
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
 		                                          op.payload_types, std::move(payload_aggregates));
+		for (auto &spec : op.partial_key_index_specs) {
+			partial_key_indexes.push_back(
+			    make_uniq<RecursiveCTEPartialKeyIndex>(Allocator::Get(context), op.distinct_types, spec));
+		}
 	} else if (!op.union_all) {
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types);
 	}
@@ -80,6 +152,12 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 
 RecursiveCTEState::~RecursiveCTEState() {
 	if (collect_runtime_metrics) {
+		idx_t partial_index_rows = 0;
+		idx_t partial_index_bytes = 0;
+		for (auto &index : partial_key_indexes) {
+			partial_index_rows += index->Count();
+			partial_index_bytes += index->SizeInBytes();
+		}
 		DUCKDB_LOG(runtime_logger, PhysicalOperatorLogType, op, "PhysicalRecursiveCTE", "RuntimeMetrics",
 		           {{"epochs", to_string(cumulative_epoch_count)},
 		            {"scheduled_workers", to_string(cumulative_worker_count)},
@@ -96,10 +174,23 @@ RecursiveCTEState::~RecursiveCTEState() {
 		            {"recurring_scan_rows", to_string(cumulative_recurring_scan_rows.load())},
 		            {"direct_probe_rows", to_string(cumulative_direct_probe_rows.load())},
 		            {"direct_probe_matches", to_string(cumulative_direct_probe_matches.load())},
+		            {"partial_probe_chain_visits", to_string(cumulative_partial_probe_chain_visits.load())},
+		            {"partial_index_build_us", to_string(cumulative_partial_index_build_us)},
+		            {"partial_index_rows", to_string(partial_index_rows)},
+		            {"partial_index_bytes", to_string(partial_index_bytes)},
 		            {"final_state_rows", to_string(cumulative_final_state_rows)},
 		            {"retained_build_executions", to_string(retained_build_executions)}});
 	}
 	ClearCachedExecutors();
+}
+
+RecursiveCTEPartialKeyIndex &RecursiveCTEState::GetPartialKeyIndex(const vector<idx_t> &key_indices) {
+	for (auto &index : partial_key_indexes) {
+		if (index->key_indices == key_indices) {
+			return *index;
+		}
+	}
+	throw InternalException("USING KEY partial-key index is missing");
 }
 
 void RecursiveCTEState::RecordSinkMetrics(idx_t wait_ns, idx_t work_ns, idx_t rows) {
@@ -479,7 +570,22 @@ void RecursiveCTEState::CommitUsingKeyUpdates() {
 			payload_rows.Reset();
 			executor.Execute(update_rows, payload_rows);
 		}
-		ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
+		if (partial_key_indexes.empty()) {
+			ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
+			continue;
+		}
+		const auto build_start =
+		    collect_runtime_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		const auto new_group_count = ht->AddChunkAndGetNewGroups(
+		    distinct_rows, payload_rows, AggregateType::NON_DISTINCT, new_group_addresses, new_groups);
+		for (auto &index : partial_key_indexes) {
+			index->AddGroups(distinct_rows, new_groups, new_group_addresses, new_group_count);
+		}
+		if (collect_runtime_metrics) {
+			const auto build_end = std::chrono::steady_clock::now();
+			cumulative_partial_index_build_us += NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::microseconds>(build_end - build_start).count());
+		}
 	}
 }
 

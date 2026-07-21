@@ -138,3 +138,35 @@ FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query III
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	SELECT k1, k2, CASE WHEN k1 = 0 THEN 0 ELSE 10 END
+	FROM range(100) keys(k1), range(10) items(k2)
+	UNION ALL
+	SELECT n.k1 + 1, r.k2, n.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.k2 = 0 AND n.v < 3
+)
+SELECT count(*), sum(v)::BIGINT, max(v) FROM t;
+----
+1000	9660	10
+
+statement ok
+CALL disable_logging();
+
+query IIII
+SELECT info.partial_index_rows::UBIGINT = 1000,
+       info.partial_index_bytes::UBIGINT > 0,
+       info.partial_probe_chain_visits::UBIGINT >= info.direct_probe_matches::UBIGINT,
+       info.recurring_scan_rows::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1	1	1

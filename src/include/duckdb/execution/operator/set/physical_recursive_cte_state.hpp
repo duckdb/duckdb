@@ -20,6 +20,37 @@ enum class RecursiveCTEInlineStageType : uint8_t { EXECUTE, PREPARE_FINISH, FINI
 
 enum class RecursiveCTEKeySourcePhase : uint8_t { RECURSING, DRAINING_FINAL_STATE, FINISHED };
 
+//! Epoch-stable secondary index over a proper subset of USING KEY columns.
+class RecursiveCTEPartialKeyIndex {
+public:
+	struct Entry {
+		hash_t hash;
+		data_ptr_t address;
+		idx_t next;
+	};
+
+	RecursiveCTEPartialKeyIndex(Allocator &allocator, const vector<LogicalType> &full_key_types,
+	                            vector<idx_t> key_indices);
+
+	void AddGroups(DataChunk &full_keys, const SelectionVector &new_groups, Vector &new_group_addresses,
+	               idx_t new_group_count);
+	idx_t GetHead(hash_t hash) const;
+	const Entry &GetEntry(idx_t entry_idx) const;
+	idx_t Count() const;
+	idx_t SizeInBytes() const;
+
+	vector<idx_t> key_indices;
+
+private:
+	void Resize(idx_t capacity);
+
+	DataChunk partial_keys;
+	DataChunk selected_keys;
+	Vector hashes;
+	vector<idx_t> heads;
+	vector<Entry> entries;
+};
+
 struct RecursiveCTEScheduleStage {
 	RecursiveCTEScheduleStage(RecursiveCTEInlineStageType type_p, Pipeline &pipeline_p)
 	    : type(type_p), pipeline(pipeline_p), dependency_count(0) {
@@ -59,12 +90,16 @@ public:
 	void PrepareCachedExecutors(Pipeline &pipeline, idx_t max_threads);
 	vector<unique_ptr<PipelineExecutor>> &GetCachedExecutors(Pipeline &pipeline);
 	void ClearCachedExecutors();
+	RecursiveCTEPartialKeyIndex &GetPartialKeyIndex(const vector<idx_t> &key_indices);
 
 	unique_ptr<GroupedAggregateHashTable> ht;
+	vector<unique_ptr<RecursiveCTEPartialKeyIndex>> partial_key_indexes;
 	vector<unique_ptr<RecursiveCTEDistinctPartition>> distinct_partitions;
 	const PhysicalRecursiveCTE &op;
 	ExpressionExecutor executor;
 	DataChunk payload_rows;
+	Vector new_group_addresses;
+	SelectionVector new_groups;
 	const bool allow_executor_reuse;
 	shared_ptr<Logger> runtime_logger;
 	const bool collect_runtime_metrics;
@@ -121,6 +156,8 @@ public:
 	atomic<idx_t> cumulative_recurring_scan_rows {0};
 	atomic<idx_t> cumulative_direct_probe_rows {0};
 	atomic<idx_t> cumulative_direct_probe_matches {0};
+	atomic<idx_t> cumulative_partial_probe_chain_visits {0};
+	idx_t cumulative_partial_index_build_us = 0;
 	idx_t cumulative_final_state_rows = 0;
 	idx_t retained_build_executions = 0;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
