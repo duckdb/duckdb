@@ -4,6 +4,7 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include <stdexcept>
 #include <cstring>
 
@@ -1790,9 +1791,100 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 // Shell Logging Storage
 //===--------------------------------------------------------------------===//
 
+namespace {
+
+//! Column the compact log line pads the left-aligned "LEVEL:type" prefix to, so the elapsed aligns
+constexpr duckdb::idx_t PRETTY_PREFIX_WIDTH = 20;
+
+//! Width of the right-aligned elapsed field (widest form is "59'59.99" / "01h02'12")
+constexpr duckdb::idx_t ELAPSED_WIDTH = 8;
+
+//! Formats an elapsed duration (micros since CLI launch) with scale-adaptive precision, right-aligned
+//! to ELAPSED_WIDTH so the message column lines up:
+//!   < 1 min:  "12.12"     (seconds, 2 decimals)
+//!   < 1 hour: "2'12.12"   (minutes'seconds, 2 decimals)
+//!   >= 1 hour:"01h02'12"  (hours h minutes' seconds)
+//! Rounds at the microsecond level BEFORE decomposing, so a carry rolls the unit over and we never
+//! render an impossible "60.00" / "1'60.00" at a unit boundary.
+string FormatElapsed(int64_t micros) {
+	if (micros < 0) {
+		micros = 0; // clock skew guard: never render a negative elapsed
+	}
+	static constexpr int64_t MICROS_PER_SEC = 1000000;
+	static constexpr int64_t MICROS_PER_MIN = 60 * MICROS_PER_SEC;
+	static constexpr int64_t MICROS_PER_HOUR = 60 * MICROS_PER_MIN;
+
+	// Round to the precision we will display (picked from the raw magnitude), then choose the branch
+	// from the ROUNDED value so a boundary carry promotes seconds->minutes / minutes->hours.
+	int64_t rounded;
+	if (micros < MICROS_PER_HOUR) {
+		rounded = (micros + 5000) / 10000 * 10000; // nearest 10 ms (2 decimals of a second)
+	} else {
+		rounded = (micros + MICROS_PER_SEC / 2) / MICROS_PER_SEC * MICROS_PER_SEC; // nearest second
+	}
+
+	string str;
+	if (rounded < MICROS_PER_MIN) {
+		str = duckdb::StringUtil::Format("%.2f", double(rounded) / double(MICROS_PER_SEC));
+	} else if (rounded < MICROS_PER_HOUR) {
+		auto minutes = static_cast<int32_t>(rounded / MICROS_PER_MIN);
+		auto seconds = double(rounded % MICROS_PER_MIN) / double(MICROS_PER_SEC);
+		str = duckdb::StringUtil::Format("%d'%05.2f", minutes, seconds);
+	} else {
+		auto total_seconds = rounded / MICROS_PER_SEC;
+		auto hours = static_cast<int32_t>(total_seconds / 3600);
+		auto minutes = static_cast<int32_t>((total_seconds % 3600) / 60);
+		auto seconds = static_cast<int32_t>(total_seconds % 60);
+		str = duckdb::StringUtil::Format("%02dh%02d'%02d", hours, minutes, seconds);
+	}
+	// Right-align within the fixed field so successive lines' elapsed values align on the right
+	if (str.size() < ELAPSED_WIDTH) {
+		str.insert(str.begin(), ELAPSED_WIDTH - str.size(), ' ');
+	}
+	return str;
+}
+
+//! Renders a log message on a single line: collapses every run of whitespace (newlines, tabs,
+//! spaces) to one space and drops other control chars. Keeps one entry on one line (QueryLog
+//! messages are raw, often multi-line SQL) and prevents a payload from injecting escape sequences.
+string SanitizeLogMessage(const string &message) {
+	string result;
+	result.reserve(message.size());
+	bool prev_space = false;
+	for (char c : message) {
+		auto uc = static_cast<unsigned char>(c);
+		const bool is_whitespace = uc < 0x20 || uc == 0x7f || c == ' ';
+		if (is_whitespace) {
+			if (!prev_space && !result.empty()) {
+				result += ' ';
+			}
+			prev_space = true;
+			continue;
+		}
+		result += c;
+		prev_space = false;
+	}
+	if (!result.empty() && result.back() == ' ') {
+		result.pop_back();
+	}
+	return result;
+}
+
+} // namespace
+
+ShellLogStorage::ShellLogStorage(ShellState &state)
+    : shell_highlight(state), start_micros(duckdb::Timestamp::GetCurrentTimestamp().value) {
+	// Elapsed time on compact log lines is measured from here (CLI launch / db open)
+}
+
 void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
                                     const string &log_message, const duckdb::RegisteredLoggingContext &context) {
 	duckdb::lock_guard<duckdb::mutex> l(lock);
+
+	// Warnings/errors keep the original loud, multi-line representation; lower-severity logs
+	// (INFO/DEBUG/TRACE) get a compact single-line form.
+	const bool loud = level == duckdb::LogLevel::LOG_WARNING || level == duckdb::LogLevel::LOG_ERROR ||
+	                  level == duckdb::LogLevel::LOG_FATAL;
 
 	HighlightElementType element_type;
 	switch (level) {
@@ -1816,16 +1908,40 @@ void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLe
 		throw std::runtime_error("Unsupported log level for WriteLogEntry");
 	}
 
-	// check if the log has already been printed
-	auto log_id = duckdb::StringUtil::CIHash(log_message);
-	if (printed_logs.find(log_id) != printed_logs.end()) {
+	const auto log_level = duckdb::EnumUtil::ToString(level);
+
+	if (loud) {
+		// De-duplicate repeated WARNINGS so they don't spam the shell; errors/fatals are always shown
+		if (level == duckdb::LogLevel::LOG_WARNING) {
+			auto log_id = duckdb::StringUtil::CIHash(log_message);
+			if (printed_logs.find(log_id) != printed_logs.end()) {
+				return;
+			}
+			printed_logs.emplace(log_id);
+		}
+
+		shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);
+		shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, element_type);
 		return;
 	}
-	printed_logs.emplace(log_id);
 
-	const auto log_level = duckdb::EnumUtil::ToString(level);
-	shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);
-	shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, element_type);
+	// Compact single-line form: "LEVEL:type   <elapsed>  <message>". Elapsed is measured from CLI
+	// launch (start_micros). No de-duplication - every logged statement is shown.
+	// Colored prefix (the configurable LOG_* palette), then the rest plain
+	const string prefix = log_level + ":" + log_type;
+	shell_highlight.PrintText(prefix, PrintOutput::STDOUT, element_type);
+
+	string rest;
+	if (prefix.size() < PRETTY_PREFIX_WIDTH) {
+		rest.append(PRETTY_PREFIX_WIDTH - prefix.size(), ' ');
+	} else {
+		rest += "  ";
+	}
+	rest += FormatElapsed(timestamp.value - start_micros);
+	rest += "  ";
+	rest += SanitizeLogMessage(log_message);
+	rest += "\n";
+	shell_highlight.PrintText(rest, PrintOutput::STDOUT, PrintColor::STANDARD, PrintIntensity::STANDARD);
 }
 
 } // namespace duckdb_shell
