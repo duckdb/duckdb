@@ -1,0 +1,66 @@
+# name: test/sql/trigger/trigger_after_update_old_new_wal.test
+# description: AFTER UPDATE OLD+NEW transition-table trigger survives WAL replay and still fires correctly
+# group: [trigger]
+
+require noforcestorage
+
+statement ok
+SET checkpoint_threshold = '10.0 GB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+ATTACH '{TEST_DIR}/trigger_upd_old_new_wal.db' AS triggerdb (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+USE triggerdb;
+
+statement ok
+CREATE TABLE target (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE audit (id INTEGER, old_val INTEGER, new_val INTEGER);
+
+statement ok
+INSERT INTO target VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TRIGGER trg AFTER UPDATE ON target
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO audit SELECT n.id, o.val, n.val FROM o JOIN n ON o.id = n.id;
+
+# Detach without checkpoint - the trigger must survive WAL replay
+statement ok
+USE memory;
+
+statement ok
+DETACH triggerdb;
+
+# Re-attach simulates a database restart replaying the WAL
+statement ok
+ATTACH '{TEST_DIR}/trigger_upd_old_new_wal.db' AS triggerdb;
+
+statement ok
+USE triggerdb;
+
+query TTTT
+SELECT trigger_name, table_name, action_timing, event_manipulation FROM duckdb_triggers() WHERE database_name = 'triggerdb';
+----
+trg	target	AFTER	UPDATE
+
+# The replayed trigger still exposes both transition tables and fires correctly
+statement ok
+UPDATE target SET val = val + 100 WHERE id = 1;
+
+query III rowsort
+SELECT id, old_val, new_val FROM audit;
+----
+1	10	110
+
+statement ok
+USE memory;
+
+statement ok
+DETACH triggerdb;
