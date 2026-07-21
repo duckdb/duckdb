@@ -9,8 +9,6 @@ on:
       runner_provider:
         default: ''
         type: string
-  repository_dispatch:
-
 concurrency:
   group: swift-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true

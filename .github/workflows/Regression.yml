@@ -24,8 +24,6 @@ on:
       save_cache:
         default: false
         type: boolean
-  repository_dispatch:
-
 concurrency:
   group: regression-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
