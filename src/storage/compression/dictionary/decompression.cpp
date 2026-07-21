@@ -7,12 +7,11 @@ namespace duckdb {
 void CompressedStringScanState::ValidateDictionaryIndex(sel_t index) {
 	if (index >= index_buffer_count) {
 		throw IOException("Failed to scan dictionary string - dictionary index was out of range. Database file appears "
-						  "to be corrupted.");
+		                  "to be corrupted.");
 	}
 }
 
 void CompressedStringScanState::ValidateDictionary(const SelectionVector &sel, const idx_t scan_count) const {
-
 	size_t error_count = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
 		const idx_t sel_idx = sel.get_index(i);
