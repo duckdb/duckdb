@@ -1850,9 +1850,8 @@ static DateCastResult TryConvertDateCast(string_t input, date_t &result, bool st
 	if (timestamp_result == TimestampCastResult::ERROR_RANGE) {
 		string timestamp_input = "2000-01-01"; // placeholder
 		timestamp_input.append(input.GetData() + timestamp_suffix_pos, input.GetSize() - timestamp_suffix_pos);
-		timestamp_result =
-		    Timestamp::TryConvertTimestamp(timestamp_input.c_str(), timestamp_input.size(), timestamp,
-		                                   /*use_offset=*/false, /*tz_offset=*/nullptr, /*strict=*/false);
+		timestamp_result = Timestamp::TryConvertTimestamp(timestamp_input.c_str(), timestamp_input.size(), timestamp,
+		                                                  /*use_offset=*/false, /*nanos=*/nullptr, /*strict=*/false);
 		if (timestamp_result == TimestampCastResult::SUCCESS) {
 			return DateCastResult::SUCCESS;
 		}
