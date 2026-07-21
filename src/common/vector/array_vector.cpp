@@ -180,7 +180,16 @@ void VectorArrayBuffer::CopyInternal(const Vector &source, const SelectionVector
                                      idx_t source_offset, idx_t target_offset, idx_t copy_count) {
 	D_ASSERT(ArrayType::GetSize(source.GetType()) == array_size);
 
-	auto &source_child = ArrayVector::GetChild(source);
+	auto &raw_source_child = ArrayVector::GetChild(source);
+	// A sequence/FSST/dictionary child vector makes the copies below flatten past child_sel. Normalize it to a
+	// flat owned copy first so both the wholesale copy and the child-checkable scan see a flat vector.
+	unique_ptr<Vector> flat_child;
+	if (raw_source_child.GetVectorType() != VectorType::FLAT_VECTOR &&
+	    raw_source_child.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		flat_child = make_uniq<Vector>(Vector::Ref(raw_source_child));
+		flat_child->Flatten();
+	}
+	auto &source_child = flat_child ? *flat_child : raw_source_child;
 
 	// Copy only non-NULL rows to avoid copying garbage if the child entry for some reason wasn't NULLed
 	SelectionVector child_sel(copy_count * array_size);

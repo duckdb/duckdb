@@ -255,7 +255,7 @@ namespace {
 
 // The nested-NULL invariant for struct children: "a child of a NULL parent must itself be NULL".
 // A NULL parent row is reflected when all its child slots are NULL, so a wholesale Copy carries the
-// NULLs and never reads child payload; it is unreflected when a child holds a value under it, which
+// NULLs and never reads child payload. It is unreflected when a child holds a value under it, which
 // only external (non-DuckDB) data produces.
 
 // True iff some physical source row has a NULL parent but a child holding a value (an unreflected row).
@@ -293,7 +293,7 @@ struct ChildNullReflection {
 	}
 
 private:
-	//! per-child validity, fetched once; an empty entry is a child that never holds a value (constant-NULL)
+	//! per-child validity, fetched once. An empty entry is a child that never holds a value (constant-NULL)
 	vector<optional_ptr<const ValidityMask>> child_masks;
 	//! false when the masks can't decide reflection: a child's validity isn't readable per row
 	//! (dictionary/sequence), or a child holds a value under every row (constant non-NULL)
@@ -312,7 +312,7 @@ ChildNullReflection ChildNullReflection::Check(const Vector &source, const vecto
 			continue;
 		}
 		if (child_vector_type == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(children[i])) {
-			// constant-NULL child never holds a value; its empty mask is already correct
+			// constant-NULL child never holds a value. Its empty mask is already correct
 			continue;
 		}
 		// constant non-NULL (a value under every row) or dictionary/sequence (validity unreadable):
@@ -336,13 +336,40 @@ void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVecto
 	auto &source_children = StructVector::GetEntries(source);
 	D_ASSERT(source_children.size() == children.size());
 
-	// Helper to copy slice of source_children into this.children
+	// The per-row split copy below reads children at source_offset + start. On a sequence/FSST/dictionary child
+	// vector VectorBuffer::Copy would then flatten past the source selection. Normalize such children to owned flat
+	// copies once (flat/constant ones are referenced as-is). This also lets the reflection check read their
+	// validity instead of falling back to isolating every NULL row.
+	auto is_flat_or_constant = [](const Vector &child) {
+		auto type = child.GetVectorType();
+		return type == VectorType::FLAT_VECTOR || type == VectorType::CONSTANT_VECTOR;
+	};
+	bool needs_normalization = false;
+	for (auto &child : source_children) {
+		if (!is_flat_or_constant(child)) {
+			needs_normalization = true;
+			break;
+		}
+	}
+	vector<Vector> normalized_children;
+	if (needs_normalization) {
+		normalized_children.reserve(source_children.size());
+		for (auto &child : source_children) {
+			normalized_children.emplace_back(Vector::Ref(child));
+			if (!is_flat_or_constant(child)) {
+				normalized_children.back().Flatten();
+			}
+		}
+	}
+	auto &copy_children = needs_normalization ? normalized_children : source_children;
+
+	// Helper to copy slice of copy_children into this.children
 	auto copy_children_slice = [&](idx_t start, idx_t end) {
 		if (end == start) {
 			return;
 		}
-		for (idx_t i = 0; i < source_children.size(); i++) {
-			children[i].Copy(source_children[i], source_sel, source_count, source_offset + start, target_offset + start,
+		for (idx_t i = 0; i < copy_children.size(); i++) {
+			children[i].Copy(copy_children[i], source_sel, source_count, source_offset + start, target_offset + start,
 			                 end - start);
 		}
 	};
@@ -355,7 +382,7 @@ void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVecto
 
 	// A NULL parent row is safe to copy wholesale when the children reflect it (all child slots NULL).
 	// Only unreflected rows must be isolated and NULLed.
-	auto reflection = ChildNullReflection::Check(source, source_children);
+	auto reflection = ChildNullReflection::Check(source, copy_children);
 	if (reflection.AllReflected()) {
 		copy_children_slice(0, copy_count);
 		return;

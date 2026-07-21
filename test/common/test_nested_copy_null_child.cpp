@@ -6,6 +6,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -102,7 +103,7 @@ Vector &NestedChild(Shape shape, Vector &parent) {
 	}
 }
 
-// claims 16 MiB over a 16-byte buffer; any payload read faults under ASAN
+// claims 16 MiB over a 16-byte buffer. Any payload read faults under ASAN
 string_t MakeUndefinedPayload(unsafe_unique_array<char> &backing) {
 	backing = make_unsafe_uniq_array<char>(16);
 	memset(backing.get(), 'x', 16);
@@ -289,7 +290,7 @@ void RunCorpus(Shape shape) {
 	for (auto &pattern : patterns) {
 		RunCase(shape, pattern);
 	}
-	// reorder/append add no run-boundary logic of their own; the interleaved pattern covers them
+	// reorder/append add no run-boundary logic of their own. The interleaved pattern covers them
 	RunReorderCase(shape, patterns.back());
 	RunAppendCase(shape, patterns.back());
 }
@@ -330,6 +331,202 @@ struct VerifyVectorsGuard {
 };
 
 } // namespace
+
+namespace {
+
+void ScanSingleChunk(ColumnDataCollection &collection, DataChunk &result); // defined below
+
+// The child vector representations a STRUCT/ARRAY child can take. The nested-NULL copy paths must handle each.
+// The engine keeps children in any of these, but only FLAT/CONSTANT were originally covered.
+enum class ChildRep { FLAT, CONSTANT, DICTIONARY, SEQUENCE };
+
+const char *RepName(ChildRep rep) {
+	switch (rep) {
+	case ChildRep::FLAT:
+		return "FLAT";
+	case ChildRep::CONSTANT:
+		return "CONSTANT";
+	case ChildRep::DICTIONARY:
+		return "DICTIONARY";
+	default:
+		return "SEQUENCE";
+	}
+}
+
+// Fill a freshly-allocated BIGINT leaf `child` (count logical rows) in representation `rep`. Logical row i holds
+// base+i, except CONSTANT which holds base everywhere. The child is left fully valid on purpose: under a NULL
+// parent it is then unreflected, which is exactly what the copy paths must isolate and NULL.
+void FillBigintChild(Vector &child, ChildRep rep, idx_t count, int64_t base = 100) {
+	switch (rep) {
+	case ChildRep::SEQUENCE:
+		child.Sequence(base, 1, count);
+		return;
+	case ChildRep::CONSTANT:
+		child.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::GetData<int64_t>(child)[0] = base;
+		return;
+	default: {
+		auto data = FlatVector::GetDataMutable<int64_t>(child);
+		for (idx_t i = 0; i < count; i++) {
+			data[i] = base + int64_t(i);
+		}
+		if (rep == ChildRep::DICTIONARY) {
+			SelectionVector dict_sel(count);
+			for (idx_t i = 0; i < count; i++) {
+				dict_sel.set_index(i, i);
+			}
+			child.Slice(dict_sel, count);
+		}
+	}
+	}
+}
+
+// Copy a STRUCT(i BIGINT) / ARRAY(BIGINT) whose child is in representation `rep` through a (possibly reversed)
+// selection, starting at source_offset, then assert the target passes Verify (children under NULL rows were
+// nulled) and every copied row matches. source_offset > 0 exercises the sequence/FSST/dictionary child vector
+// flatten range that was the root cause of the sequence-child bug.
+void RunRepCopy(const LogicalType &type, bool is_array, ChildRep rep, bool reverse, idx_t source_offset) {
+	const idx_t row_count = 5;
+	const idx_t copy_count = row_count - source_offset;
+	const idx_t null_row = 1;
+	Vector source(type);
+	auto &child = is_array ? ArrayVector::GetChildMutable(source) : StructVector::GetEntries(source)[0];
+	FillBigintChild(child, rep, is_array ? row_count * ARRAY_SIZE : row_count);
+	FlatVector::SetSize(source, row_count);
+	FlatVector::ValidityMutable(source).SetInvalid(null_row);
+
+	SelectionVector sel(row_count);
+	for (idx_t r = 0; r < row_count; r++) {
+		sel.set_index(r, reverse ? row_count - r - 1 : r);
+	}
+
+	Vector target(type);
+	target.Copy(source, sel, row_count, source_offset, 0, copy_count);
+	FlatVector::SetSize(target, copy_count);
+
+	VerifyVectorsGuard guard;
+	target.Verify();
+	for (idx_t r = 0; r < copy_count; r++) {
+		auto src = sel.get_index(source_offset + r);
+		INFO("stream rep=" << RepName(rep) << " reverse=" << reverse << " offset=" << source_offset << " row=" << r);
+		if (src == null_row) {
+			REQUIRE(target.GetValue(r).IsNull());
+		} else {
+			REQUIRE(target.GetValue(r) == source.GetValue(src));
+		}
+	}
+}
+
+// Same source shapes, but through the buffered ColumnDataCollection append + scan-back path.
+void RunRepAppend(const LogicalType &type, bool is_array, ChildRep rep) {
+	const idx_t row_count = 5;
+	const idx_t null_row = 1;
+	Allocator allocator;
+	DataChunk chunk;
+	chunk.Initialize(allocator, {type});
+	chunk.SetChildCardinality(row_count);
+	auto &source = chunk.data[0];
+	auto &child = is_array ? ArrayVector::GetChildMutable(source) : StructVector::GetEntries(source)[0];
+	FillBigintChild(child, rep, is_array ? row_count * ARRAY_SIZE : row_count);
+	FlatVector::ValidityMutable(source).SetInvalid(null_row);
+	duckdb::vector<Value> expected(row_count);
+	for (idx_t r = 0; r < row_count; r++) {
+		expected[r] = source.GetValue(r);
+	}
+
+	ColumnDataCollection collection(allocator, {type});
+	collection.Append(chunk);
+	DataChunk result;
+	ScanSingleChunk(collection, result);
+	for (idx_t r = 0; r < row_count; r++) {
+		INFO("append rep=" << RepName(rep) << " row=" << r);
+		if (r == null_row) {
+			REQUIRE(result.data[0].GetValue(r).IsNull());
+		} else {
+			REQUIRE(result.data[0].GetValue(r) == expected[r]);
+		}
+	}
+}
+
+} // namespace
+
+TEST_CASE("copy preserves NULLs across child vector representations", "[copy]") {
+	if (STANDARD_VECTOR_SIZE < 8) {
+		return;
+	}
+	auto struct_type = LogicalType::STRUCT({{"i", LogicalType::BIGINT}});
+	auto array_type = LogicalType::ARRAY(LogicalType::BIGINT, ARRAY_SIZE);
+	for (auto rep : {ChildRep::FLAT, ChildRep::CONSTANT, ChildRep::DICTIONARY, ChildRep::SEQUENCE}) {
+		for (bool reverse : {false, true}) {
+			for (idx_t source_offset : {idx_t(0), idx_t(1)}) {
+				RunRepCopy(struct_type, false, rep, reverse, source_offset);
+				RunRepCopy(array_type, true, rep, reverse, source_offset);
+			}
+		}
+		RunRepAppend(struct_type, false, rep);
+		RunRepAppend(array_type, true, rep);
+	}
+}
+
+TEST_CASE("copy preserves NULLs for UNION and VARIANT (physical STRUCT)", "[copy]") {
+	if (STANDARD_VECTOR_SIZE < 8) {
+		return;
+	}
+	const idx_t row_count = 4;
+	const idx_t null_row = 1;
+	child_list_t<LogicalType> members;
+	members.emplace_back("name", LogicalType::VARCHAR);
+	members.emplace_back("age", LogicalType::SMALLINT);
+
+	duckdb::vector<std::pair<LogicalType, duckdb::vector<Value>>> cases;
+	{
+		duckdb::vector<Value> vals;
+		for (idx_t r = 0; r < row_count; r++) {
+			vals.push_back(Value::UNION(members, 0, Value(LeafString(r, 0))));
+		}
+		cases.emplace_back(LogicalType::UNION(members), std::move(vals));
+	}
+	{
+		auto variant_type = LogicalType::VARIANT();
+		duckdb::vector<Value> vals;
+		for (idx_t r = 0; r < row_count; r++) {
+			vals.push_back(Value(LeafString(r, 0)).DefaultCastAs(variant_type));
+		}
+		cases.emplace_back(variant_type, std::move(vals));
+	}
+
+	for (auto &test_case : cases) {
+		auto &type = test_case.first;
+		auto &vals = test_case.second;
+		// valid values, then raw-NULL the parent while its (physical STRUCT) children stay valid -> unreflected
+		Vector source(type);
+		for (idx_t r = 0; r < row_count; r++) {
+			source.SetValue(r, vals[r]);
+		}
+		FlatVector::SetSize(source, row_count);
+		FlatVector::ValidityMutable(source).SetInvalid(null_row);
+
+		SelectionVector rev(row_count);
+		for (idx_t r = 0; r < row_count; r++) {
+			rev.set_index(r, row_count - r - 1);
+		}
+		Vector target(type);
+		target.Copy(source, rev, row_count, 0, 0, row_count);
+		FlatVector::SetSize(target, row_count);
+
+		VerifyVectorsGuard guard;
+		target.Verify();
+		for (idx_t r = 0; r < row_count; r++) {
+			auto src = rev.get_index(r);
+			INFO("type=" << type.ToString() << " row=" << r);
+			if (src == null_row) {
+				REQUIRE(target.GetValue(r).IsNull());
+			} else {
+				REQUIRE(target.GetValue(r) == vals[src]);
+			}
+		}
+	}
+}
 
 TEST_CASE("Verify rejects non-NULL children under a NULL ARRAY row", "[copy]") {
 #ifdef DUCKDB_CRASH_ON_ASSERT
@@ -482,7 +679,7 @@ TEST_CASE("Verify rejects non-NULL children under a NULL ARRAY row", "[copy]") {
 		FlatVector::SetSize(v, row_count);
 		auto &mid_child = ArrayVector::GetChildMutable(v);
 		auto &inner_child = ArrayVector::GetChildMutable(mid_child);
-		// outer row NULL; middle and inner slots beneath it correctly NULL (reflected), but the deepest
+		// outer row NULL. Middle and inner slots beneath it correctly NULL (reflected), but the deepest
 		// VARCHAR left valid -> the only violation is two levels down, reachable only via the recursion
 		FlatVector::ValidityMutable(v).SetInvalid(null_row);
 		for (idx_t e = 0; e < ARRAY_SIZE; e++) {

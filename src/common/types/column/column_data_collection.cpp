@@ -952,7 +952,7 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 						child_data.validity.SetInvalidUnsafe(offset + i);
 					}
 				}
-				// only a flat LIST child reads validity off the Vector (GetConsecutiveChildListInfo); patch a copy
+				// only a flat LIST child reads validity off the Vector (GetConsecutiveChildListInfo). Patch a copy
 				if (child_vectors[child_idx].GetType().InternalType() == PhysicalType::LIST &&
 				    child_vectors[child_idx].GetVectorType() == VectorType::FLAT_VECTOR) {
 					patched_child = PatchedListChildCopy(child_vectors[child_idx], child_data.validity);
@@ -1016,7 +1016,7 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 				}
 			}
 		}
-		// only a flat LIST child reads validity off the Vector (GetConsecutiveChildListInfo); patch a copy
+		// only a flat LIST child reads validity off the Vector (GetConsecutiveChildListInfo). Patch a copy
 		if (has_unreflected_child && child_vector.GetType().InternalType() == PhysicalType::LIST &&
 		    child_vector.GetVectorType() == VectorType::FLAT_VECTOR) {
 			patched_child = PatchedListChildCopy(child_vector, child_vector_data.validity);
