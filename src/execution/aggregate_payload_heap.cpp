@@ -44,9 +44,13 @@ AggregatePayloadHandle AggregatePayloadHeap::Append(const char *data, uint32_t l
 	return handle;
 }
 
-const char *AggregatePayloadHeap::Read(const AggregatePayloadHandle &handle, BufferHandle &pin) {
-	pin = registry.PinBlock(handle.block_idx);
-	return const_char_ptr_cast(pin.Ptr()) + handle.offset;
+const char *AggregatePayloadHeap::Read(const AggregatePayloadHandle &handle) {
+	if (!read_pin_valid || read_block_idx != handle.block_idx) {
+		read_pin = registry.PinBlock(handle.block_idx);
+		read_block_idx = handle.block_idx;
+		read_pin_valid = true;
+	}
+	return const_char_ptr_cast(read_pin.Ptr()) + handle.offset;
 }
 
 } // namespace duckdb

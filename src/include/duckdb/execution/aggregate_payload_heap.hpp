@@ -47,8 +47,9 @@ public:
 
 	//! Append a payload, the returned handle stays valid for the registry's lifetime
 	AggregatePayloadHandle Append(const char *data, uint32_t length);
-	//! Pin the block of a handle and return a pointer to the payload (valid while the pin is held)
-	const char *Read(const AggregatePayloadHandle &handle, BufferHandle &pin);
+	//! Read a payload (valid until the next Read or Append on this heap).
+	//! Subsequent reads mostly hit the same block, so the pin of the last read block is cached.
+	const char *Read(const AggregatePayloadHandle &handle);
 
 public:
 	AggregatePayloadRegistry &registry;
@@ -58,6 +59,10 @@ private:
 	uint32_t current_block_idx = 0;
 	idx_t current_offset = 0;
 	idx_t current_capacity = 0;
+	//! Cached pin of the block last read from
+	BufferHandle read_pin;
+	uint32_t read_block_idx = 0;
+	bool read_pin_valid = false;
 };
 
 } // namespace duckdb
