@@ -646,21 +646,10 @@ void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vect
 
 template <typename NEGOP, typename POSOP>
 unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto &decimal_type = arguments[0]->GetReturnType();
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	auto fname = StringUtil::Upper(bound_function.GetName().GetIdentifierName());
-	if (!arguments[1]->IsFoldable()) {
-		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
-	}
-	Value val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]).DefaultCastAs(LogicalType::INTEGER);
-	if (val.IsNull()) {
-		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
-	}
+	auto val = input.GetNonNullConstant(1).DefaultCastAs(LogicalType::INTEGER);
 	// our new precision becomes the round value
 	// e.g. ROUND(DECIMAL(18,3), 1) -> DECIMAL(18,1)
 	// but ONLY if the round value is positive
@@ -1072,8 +1061,9 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			}
 			throw InternalException("Unimplemented numeric type for function \"round\"");
 		}
-		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));
-		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, bind_prec_func));
+		round.AddFunction(ScalarFunction({{"x", type}}, type, round_func, bind_func));
+		round.AddFunction(
+		    ScalarFunction({{"x", type}, {"precision", LogicalType::INTEGER}}, type, round_prec_func, bind_prec_func));
 	}
 	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;

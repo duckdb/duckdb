@@ -353,7 +353,6 @@ private:
 };
 
 unique_ptr<FunctionData> LikeBindFunction(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
@@ -363,9 +362,9 @@ unique_ptr<FunctionData> LikeBindFunction(BindScalarFunctionInput &input) {
 			return nullptr;
 		}
 	}
-	if (arguments[1]->IsFoldable()) {
-		Value pattern_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		return LikeMatcher::CreateLikeMatcher(pattern_str.ToString());
+	auto pattern_str = input.TryGetConstant(1);
+	if (pattern_str) {
+		return LikeMatcher::CreateLikeMatcher(pattern_str->ToString());
 	}
 	return nullptr;
 }
