@@ -125,6 +125,11 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		//! invertible in practice.
 		auto &cast_expression = column_ref_expr.Cast<BoundCastExpression>();
 		auto target_type = cast_expression.source_type();
+		if (cast_expression.IsTryCast() && target_type.IsIntegral() && cast_expression.GetReturnType().IsIntegral() &&
+		    LogicalType::DefaultForceMaxLogicalType(target_type, cast_expression.GetReturnType()) !=
+		        cast_expression.GetReturnType()) {
+			return nullptr;
+		}
 		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType())) {
 			return nullptr;
 		}
