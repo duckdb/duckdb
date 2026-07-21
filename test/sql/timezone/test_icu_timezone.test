@@ -1151,3 +1151,13 @@ query I
 select '2026-11-10'::timestamptz
 ----
 2026-11-10 00:00:00-07
+
+# 2026c
+# Alberta moved to permanent -07 on 2026-03-09.
+statement ok
+set TimeZone = 'America/Edmonton';
+
+query I
+select '2026-12-01'::TIMESTAMPTZ;
+----
+2026-12-01 00:00:00-06

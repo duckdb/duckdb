@@ -844,6 +844,17 @@
         "id": 206,
         "name": "update_is_del_and_insert",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "capture_old_rows",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 208,
+        "name": "old_row_columns",
+        "type": "vector<idx_t>"
       }
     ],
     "constructor": [
@@ -1057,27 +1068,130 @@
     ]
   },
   {
-    "class": "LogicalSimple",
+    "class": "LogicalAlter",
     "base": "LogicalOperator",
-    "enum": [
-      "LOGICAL_ALTER",
-      "LOGICAL_LOAD",
-      "LOGICAL_ATTACH",
-      "LOGICAL_TRANSACTION",
-      "LOGICAL_DROP",
-      "LOGICAL_DETACH",
-      "LOGICAL_CONNECT",
-      "LOGICAL_DISCONNECT"
-    ],
+    "enum": "LOGICAL_ALTER",
     "members": [
       {
         "id": 200,
         "name": "info",
-        "type": "ParseInfo*"
+        "type": "AlterInfo*",
+        "base": "ParseInfo"
       }
     ],
     "constructor": [
-      "type",
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalLoad",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_LOAD",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "LoadInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalAttach",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_ATTACH",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "AttachInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalTransaction",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_TRANSACTION",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "TransactionInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalDrop",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DROP",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "DropInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalDetach",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DETACH",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "DetachInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalConnect",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CONNECT",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "ConnectInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
+  },
+  {
+    "class": "LogicalDisconnect",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DISCONNECT",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "DisconnectInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
       "info"
     ]
   },

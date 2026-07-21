@@ -49,8 +49,6 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 
 		this->entry = dependency_entry.EntryInfo();
 	} else {
-		// use the same schema path as the dependency manager (the containing schema chain) so subjects and dependents
-		// resolve to the same mangled name
 		this->entry.schema_path = DependencyManager::GetSchemaPath(entry);
 		this->entry.name = entry.name;
 		this->entry.type = entry.type;

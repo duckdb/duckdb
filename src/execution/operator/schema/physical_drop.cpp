@@ -80,7 +80,12 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		break;
 	}
 	default: {
-		auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
+		// for a nested target the path is [catalog, schema_path..., name] and .Catalog() is empty, so read the catalog
+		// from the leading component; otherwise use .Catalog() (which may be empty -> the default catalog, e.g. for an
+		// unresolved DROP ... IF EXISTS of a missing entry)
+		auto &qname = info->GetQualifiedName();
+		auto &catalog_name = qname.Path().size() > 3 ? qname.Path().front() : qname.Catalog();
+		auto &catalog = Catalog::GetCatalog(context.client, catalog_name);
 		catalog.DropEntry(context.client, *info);
 		break;
 	}

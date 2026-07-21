@@ -537,6 +537,8 @@ AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 		return OP::template GetFunction<dtime_t, dtime_t>(type, type);
+	case LogicalTypeId::INTERVAL:
+		return OP::template GetFunction<interval_t, interval_t>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented continuous quantile aggregate");
 	}
@@ -669,6 +671,7 @@ static bool CanInterpolate(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::INTERVAL:
 		return true;
 	default:
 		return false;

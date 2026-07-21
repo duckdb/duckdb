@@ -35,6 +35,25 @@
     "pointer_type": "none"
   },
   {
+    "class": "ParquetReaderProjectionExpression",
+    "includes": [
+      "parquet_reader.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "ParquetReaderProjectionExpressionType"
+      },
+      {
+        "id": 101,
+        "name": "return_type",
+        "type": "LogicalType"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "ParquetEncryptionConfig",
     "includes": [
       "parquet_crypto.hpp"
@@ -193,7 +212,7 @@
       {
         "id": 100,
         "name": "types",
-        "type": "identifier_map_t<ShreddingType>",
+        "type": "unordered_map<string, ShreddingType>",
         "serialize_property": "types.operator*()",
         "deserialize_property": "types.operator*()"
       }
