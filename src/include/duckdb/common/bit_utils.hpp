@@ -32,19 +32,18 @@ struct CountZeros<uint64_t> {
 			return 64;
 		}
 #if defined(__GNUC__) || defined(__clang__)
+		// gcc runs the de Bruijn fallback literally (no bit-scan); the builtin is a single instruction
 		return static_cast<idx_t>(__builtin_clzll(value_in));
-#elif defined(_MSC_VER) && defined(_WIN64)
-		unsigned long result;
-		_BitScanReverse64(&result, value_in);
-		return 63 - result;
 #else
-		// portable de Bruijn fallback for compilers without a bit-scan builtin (32-bit MSVC, exotic compilers)
 		uint64_t value = value_in;
+
 		constexpr uint64_t index64msb[] = {0,  47, 1,  56, 48, 27, 2,  60, 57, 49, 41, 37, 28, 16, 3,  61,
 		                                   54, 58, 35, 52, 50, 42, 21, 44, 38, 32, 29, 23, 17, 11, 4,  62,
 		                                   46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45,
 		                                   25, 39, 14, 33, 19, 30, 9,  24, 13, 18, 8,  12, 7,  6,  5,  63};
+
 		constexpr uint64_t debruijn64msb = 0X03F79D71B4CB0A89;
+
 		value |= value >> 1;
 		value |= value >> 2;
 		value |= value >> 4;
@@ -59,14 +58,11 @@ struct CountZeros<uint64_t> {
 			return 64;
 		}
 #if defined(__GNUC__) || defined(__clang__)
+		// gcc runs the de Bruijn fallback literally (no bit-scan); the builtin is a single instruction
 		return static_cast<idx_t>(__builtin_ctzll(value_in));
-#elif defined(_MSC_VER) && defined(_WIN64)
-		unsigned long result;
-		_BitScanForward64(&result, value_in);
-		return result;
 #else
-		// portable de Bruijn fallback for compilers without a bit-scan builtin (32-bit MSVC, exotic compilers)
 		uint64_t value = value_in;
+
 		constexpr uint64_t index64lsb[] = {63, 0,  58, 1,  59, 47, 53, 2,  60, 39, 48, 27, 54, 33, 42, 3,
 		                                   61, 51, 37, 40, 49, 18, 28, 20, 55, 30, 34, 11, 43, 14, 22, 4,
 		                                   62, 57, 46, 52, 38, 26, 32, 41, 50, 36, 17, 19, 29, 10, 13, 21,

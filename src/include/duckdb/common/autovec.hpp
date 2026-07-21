@@ -11,7 +11,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <type_traits>
 #include <utility>
 
 // Autovec fastpath (bitunpack-shuffle, comparison-to-bitmap, +,-,*): compiled on autovec-capable toolchains/targets.
@@ -58,40 +57,6 @@ inline bool BitmapSelectionEnabled() {
 #endif
 }
 
-#if DUCKDB_AUTOVEC
-// Dense +,-,* loops over all rows including NULL slots, for CANNOT_ERROR callers that post-process validity.
-// Integers compute in the unsigned domain: NULL slots hold garbage and signed overflow would be UB.
-template <class T, bool INTEGRAL = std::is_integral<T>::value>
-struct AutoVecComputeType {
-	using type = typename std::make_unsigned<T>::type;
-};
-template <class T>
-struct AutoVecComputeType<T, false> {
-	using type = T;
-};
-
-// OPC selects the operator; a stride of 0 broadcasts a constant operand (LS = 0 with OPC '-' is unary negate-ish,
-// but exact IEEE negation is AutoVecNegateLoop).
-template <class T, char OPC, int LS, int RS>
-DUCKDB_AUTOVEC_TARGET static void AutoVecArithLoop(const T *DUCKDB_BITPACKING_RESTRICT a,
-                                                   const T *DUCKDB_BITPACKING_RESTRICT b,
-                                                   T *DUCKDB_BITPACKING_RESTRICT r, std::size_t n) {
-	using U = typename AutoVecComputeType<T>::type;
-	for (std::size_t i = 0; i < n; i++) {
-		const U x = static_cast<U>(a[i * LS]), y = static_cast<U>(b[i * RS]);
-		r[i] = static_cast<T>(OPC == '+' ? x + y : OPC == '-' ? x - y : x * y);
-	}
-}
-
-template <class T>
-DUCKDB_AUTOVEC_TARGET static void AutoVecNegateLoop(const T *DUCKDB_BITPACKING_RESTRICT a,
-                                                    T *DUCKDB_BITPACKING_RESTRICT r, std::size_t n) {
-	using U = typename AutoVecComputeType<T>::type;
-	for (std::size_t i = 0; i < n; i++) {
-		r[i] = static_cast<T>(-static_cast<U>(a[i]));
-	}
-}
-#endif
 } // namespace duckdb
 
 #if DUCKDB_AUTOVEC

@@ -1,7 +1,4 @@
 #include "duckdb/common/enums/debug_verification_mode.hpp"
-#include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/expression_executor/bitmap_comparison.hpp"
@@ -30,90 +27,6 @@ bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 		}
 	}
 	return true;
-}
-
-#if DUCKDB_AUTOVEC
-//! Run one +,-,* (or unary minus) with the autovec loops over flat/constant inputs; false = shape not handled.
-template <class T, char OPC>
-bool AutoVecArith(DataChunk &input, Vector &result) {
-	const idx_t count = input.size();
-	const T *data[2];
-	int stride[2];
-	const bool unary = input.ColumnCount() == 1;
-	for (idx_t c = 0; c < input.ColumnCount(); c++) {
-		auto &v = input.data[c];
-		if (v.GetVectorType() == VectorType::FLAT_VECTOR) {
-			data[c] = FlatVector::GetData<T>(v);
-			stride[c] = 1;
-		} else if (v.GetVectorType() == VectorType::CONSTANT_VECTOR && !ConstantVector::IsNull(v)) {
-			data[c] = ConstantVector::GetData<T>(v);
-			stride[c] = 0;
-		} else {
-			return false; // sliced/sequence input or a NULL constant: the bound callback handles these
-		}
-	}
-	if (!stride[0] && (unary || !stride[1])) {
-		return false; // all-constant input: leave constant folding to the normal path
-	}
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto res = FlatVector::GetDataMutable<T>(result);
-	if (unary) {
-		AutoVecNegateLoop<T>(data[0], res, count);
-		FlatVector::SetValidity(result, FlatVector::Validity(input.data[0]));
-	} else if (stride[0] && stride[1]) {
-		AutoVecArithLoop<T, OPC, 1, 1>(data[0], data[1], res, count);
-		FlatVector::SetValidity(result, FlatVector::Validity(input.data[0]));
-		FlatVector::ValidityMutable(result).Combine(FlatVector::Validity(input.data[1]), count);
-	} else {
-		if (stride[0]) {
-			AutoVecArithLoop<T, OPC, 1, 0>(data[0], data[1], res, count);
-		} else {
-			AutoVecArithLoop<T, OPC, 0, 1>(data[0], data[1], res, count);
-		}
-		FlatVector::SetValidity(result, FlatVector::Validity(input.data[stride[0] ? 0 : 1]));
-	}
-	return true;
-}
-
-template <class T>
-bool (*PickAutoVecArith(char opc))(DataChunk &, Vector &) {
-	return opc == '+' ? AutoVecArith<T, '+'> : opc == '-' ? AutoVecArith<T, '-'> : AutoVecArith<T, '*'>;
-}
-#endif
-
-//! Autovec twin of the bound +,-,* callback, resolved once (nullptr when the types do not allow one).
-bool (*ResolveAutoVecArith(const BoundFunctionExpression &expr))(DataChunk &, Vector &) {
-#if DUCKDB_AUTOVEC
-	const auto pt = expr.GetReturnType().InternalType();
-	for (auto &child : expr.GetChildren()) {
-		if (child->GetReturnType().InternalType() != pt) {
-			return nullptr;
-		}
-	}
-	const auto name = expr.Function().GetName();
-	if (expr.GetChildren().size() == 1 && name != "-") {
-		return nullptr;
-	}
-	const char opc = name == "+" ? '+' : name == "-" ? '-' : '*';
-	switch (pt) {
-	case PhysicalType::INT8:
-		return PickAutoVecArith<int8_t>(opc);
-	case PhysicalType::INT16:
-		return PickAutoVecArith<int16_t>(opc);
-	case PhysicalType::INT32:
-		return PickAutoVecArith<int32_t>(opc);
-	case PhysicalType::INT64:
-		return PickAutoVecArith<int64_t>(opc);
-	case PhysicalType::FLOAT:
-		return PickAutoVecArith<float>(opc);
-	case PhysicalType::DOUBLE:
-		return PickAutoVecArith<double>(opc);
-	default:
-		return nullptr;
-	}
-#else
-	return nullptr;
-#endif
 }
 
 } // namespace
@@ -149,12 +62,8 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 			}
 			dictionary_input_indices.push_back(child_idx);
 		}
-		const bool autovec_arith = IsSafeAutoVecArithmetic(bound_function);
-		if (!eligible || (dictionary_input_indices.size() > 1 && !autovec_arith)) {
+		if (!eligible || (dictionary_input_indices.size() > 1 && !IsSafeAutoVecArithmetic(bound_function))) {
 			dictionary_input_indices.clear();
-		}
-		if (autovec_arith) {
-			autovec_function = ResolveAutoVecArith(bound_function);
 		}
 		break;
 	}
@@ -219,9 +128,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 			dictionary_input_chunk.data[idx].Reference(DictionaryVector::Child(args.data[idx]));
 		}
 		dictionary_input_chunk.SetChildCardinality(input_dictionary_size);
-		if (!autovec_function || !autovec_function(dictionary_input_chunk, output_dictionary->data)) {
-			expr.Function().GetFunctionCallback()(dictionary_input_chunk, state, output_dictionary->data);
-		}
+		expr.Function().GetFunctionCallback()(dictionary_input_chunk, state, output_dictionary->data);
 		result.Dictionary(output_dictionary, input_sel, args.size());
 		return true;
 	}
@@ -378,10 +285,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
 	if (!dictionary_executed) {
 		if (expr.Function().HasFunctionCallback()) {
-			auto autovec_function = execute_function_state.autovec_function;
-			if (all_constant || !autovec_function || !autovec_function(arguments, result)) {
-				expr.Function().GetFunctionCallback()(arguments, *state, result);
-			}
+			expr.Function().GetFunctionCallback()(arguments, *state, result);
 		} else if (all_constant && expr.Function().HasSelectCallback()) {
 			ExecuteConstantSelectFunction(expr, arguments, *state, result);
 		} else {
