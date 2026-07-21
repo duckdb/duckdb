@@ -37,6 +37,6 @@ public:
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 	static unique_ptr<Expression> DeserializeLegacyExpression(ClientContext &context, unique_ptr<Expression> child,
-	                                                          LogicalType target_type, bool try_cast);
+	                                                          const LogicalType &target_type, bool try_cast);
 };
 } // namespace duckdb

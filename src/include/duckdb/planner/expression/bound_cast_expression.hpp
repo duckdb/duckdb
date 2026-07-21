@@ -20,7 +20,7 @@ struct BoundCastExpression {
 	static bool IsCast(const Expression &expr);
 
 	//! Create a bound cast function expression around the given child using the provided bound cast
-	static unique_ptr<Expression> Create(unique_ptr<Expression> child, LogicalType target_type,
+	static unique_ptr<Expression> Create(unique_ptr<Expression> child, const LogicalType &target_type,
 	                                     BoundCastInfo bound_cast, bool try_cast = false);
 
 	//! The expression that is being cast
@@ -50,6 +50,6 @@ struct BoundCastExpression {
 	static bool CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type);
 
 	//! Returns true if a cast from source_type to target_type can throw a runtime error
-	static bool CastCanThrow(const LogicalType &source_type, const LogicalType &target_type);
+	static bool CastCanThrow(const LogicalType &source_type, const LogicalType &target_type, bool try_cast);
 };
 } // namespace duckdb

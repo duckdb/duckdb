@@ -112,7 +112,7 @@ static unique_ptr<FunctionData> CastFunctionDeserialize(Deserializer &deserializ
 	auto target_type = deserializer.Get<const LogicalType &>();
 	auto source_type = function.GetArguments()[0];
 	auto bound_cast = BindCastScalarFunction(context, source_type, target_type);
-	if (BoundCastExpression::CastCanThrow(source_type, target_type)) {
+	if (BoundCastExpression::CastCanThrow(source_type, target_type, try_cast)) {
 		function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	}
 	SetCastNullHandling(function, target_type);
@@ -133,7 +133,7 @@ ScalarFunction CastFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // BoundCastExpression
 //===--------------------------------------------------------------------===//
-unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child, LogicalType target_type,
+unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child, const LogicalType &target_type,
                                                    BoundCastInfo bound_cast, bool try_cast) {
 	auto source_type = child->GetReturnType();
 	auto query_location = child->GetQueryLocation();
@@ -145,12 +145,12 @@ unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child,
 
 	auto scalar_function = CastFun::GetFunction();
 	scalar_function.SetReturnType(target_type);
-	if (BoundCastExpression::CastCanThrow(source_type, target_type)) {
+	if (BoundCastExpression::CastCanThrow(source_type, target_type, try_cast)) {
 		scalar_function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	}
 	SetCastNullHandling(scalar_function, target_type);
 
-	BoundScalarFunction bound_function(std::move(scalar_function));
+	BoundScalarFunction bound_function(scalar_function);
 	bound_function.GetArguments() = {source_type};
 
 	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children),

@@ -1,4 +1,5 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -193,16 +194,27 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	return true;
 }
 
-bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const LogicalType &target_type) {
-	if (target_type.id() != source_type.id() &&
-	    LogicalType::DefaultForceMaxLogicalType(target_type, source_type) == source_type.id()) {
-		return true;
+bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const LogicalType &target_type, bool try_cast) {
+	if (try_cast) {
+		// try_cast turns conversion errors into NULL values instead of throwing
+		return false;
+	}
+	if (source_type == target_type) {
+		return false;
 	}
 	// Casting VARCHAR to JSON involves parsing and validation that can throw on malformed input
 	if (target_type.IsJSONType() && !source_type.IsJSONType()) {
 		return true;
 	}
-	return false;
+	// Casting into a fixed-size ARRAY throws whenever the source length differs. ARRAY is nevertheless the
+	// maximum of LIST and ARRAY, so the check below would consider such a cast safe.
+	if (TypeVisitor::Contains(target_type, LogicalTypeId::ARRAY)) {
+		return true;
+	}
+	// A cast only succeeds for every input if the target type can represent every value of the source type,
+	// i.e. if the target is the maximum of the two types. Narrowing casts can overflow, and casts between types
+	// that have no ordering (e.g. ENUM -> BIGINT, whose maximum is VARCHAR) can fail to convert.
+	return LogicalType::DefaultForceMaxLogicalType(source_type, target_type) != target_type;
 }
 
 } // namespace duckdb

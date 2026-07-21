@@ -269,7 +269,7 @@ unique_ptr<Expression> LegacyBoundCastExpression::Deserialize(Deserializer &dese
 	auto child = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "child");
 	auto return_type = deserializer.ReadProperty<LogicalType>(201, "return_type");
 	auto try_cast = deserializer.ReadPropertyWithDefault<bool>(202, "try_cast");
-	auto result = LegacyBoundCastExpression::DeserializeLegacyExpression(deserializer.Get<ClientContext &>(), std::move(child), std::move(return_type), try_cast);
+	auto result = LegacyBoundCastExpression::DeserializeLegacyExpression(deserializer.Get<ClientContext &>(), std::move(child), return_type, try_cast);
 	return result;
 }
 

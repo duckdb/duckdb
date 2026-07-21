@@ -115,7 +115,7 @@
         "type": "bool"
       }
     ],
-    "constructor": ["$ClientContext", "child", "return_type", "try_cast"],
+    "constructor": ["$ClientContext", "child", "return_type&", "try_cast"],
     "constructor_method": "LegacyBoundCastExpression::DeserializeLegacyExpression"
   },
   {

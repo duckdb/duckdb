@@ -23,7 +23,8 @@ unique_ptr<Expression> LegacyBoundCastExpression::Copy() const {
 
 unique_ptr<Expression> LegacyBoundCastExpression::DeserializeLegacyExpression(ClientContext &context,
                                                                               unique_ptr<Expression> child,
-                                                                              LogicalType target_type, bool try_cast) {
+                                                                              const LogicalType &target_type,
+                                                                              bool try_cast) {
 	return BoundCastExpression::AddCastToType(context, std::move(child), target_type, try_cast);
 }
 
