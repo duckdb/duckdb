@@ -308,7 +308,11 @@ public:
 		return data_collection ? data_collection->Count() : 0;
 	}
 	idx_t SizeInBytes() const {
-		return data_collection ? data_collection->SizeInBytes() : 0;
+		idx_t size = data_collection ? data_collection->SizeInBytes() : 0;
+		if (mark_join_info.uncorrelated_condition_rows) {
+			size += mark_join_info.uncorrelated_condition_rows->SizeInBytes();
+		}
+		return size;
 	}
 
 	PartitionedTupleData &GetSinkCollection() {
@@ -435,7 +439,7 @@ public:
 		DataChunk correlated_payload;
 		//! Result chunk used for aggregating into correlated_counts
 		DataChunk result_chunk;
-		//! All RHS condition rows, used only for uncorrelated multi-column NULL refinement
+		//! All RHS condition rows, used only for uncorrelated row equality NULL refinement
 		unique_ptr<ColumnDataCollection> uncorrelated_condition_rows;
 	} mark_join_info;
 

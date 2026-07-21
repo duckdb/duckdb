@@ -707,7 +707,10 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			info.result_chunk.Initialize(allocator, delim_payload_types);
 		}
 	}
-	if (delim_types.empty() && join_type == JoinType::MARK && conditions.size() > 1) {
+	const bool has_row_equality =
+	    conditions.size() > 1 ||
+	    (conditions.size() == 1 && conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE);
+	if (delim_types.empty() && join_type == JoinType::MARK && has_row_equality) {
 		bool all_equal = true;
 		for (auto &condition : conditions) {
 			all_equal = all_equal && condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;

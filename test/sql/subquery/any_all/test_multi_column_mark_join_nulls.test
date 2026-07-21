@@ -101,6 +101,108 @@ SELECT row(NULL::INT, 4001) IN (SELECT a, b FROM mark_join_rhs),
 ----
 false	true
 
+# Nested equality must preserve UNKNOWN instead of treating nested NULLs as values.
+query I
+SELECT row([1, NULL::INT], 0) IN (
+	SELECT * FROM (VALUES ([1, 2], 0)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT row([1, NULL::INT], 0) IN (
+	SELECT * FROM (VALUES ([1, NULL::INT], 0)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT row(array_value(1, NULL::INT), 0) IN (
+	SELECT * FROM (VALUES (array_value(1, 2), 0)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT row(map([1, 2], [1, NULL::INT]), 0) IN (
+	SELECT * FROM (VALUES (map([1, 2], [1, 2]), 0)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT row({'a': 1, 'b': NULL::INT}, 0) IN (
+	SELECT * FROM (VALUES ({'a': 1, 'b': 2}, 0)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT row(union_value(num := NULL::INT)::UNION(num INT, str VARCHAR), 0) IN (
+	SELECT * FROM (VALUES (union_value(num := 1)::UNION(num INT, str VARCHAR), 0)) rhs(a, b)
+)
+----
+NULL
+
+# A decisive nested mismatch still produces FALSE.
+query I
+SELECT row([9, NULL::INT], 0) IN (
+	SELECT * FROM (VALUES ([1, 2], 0)) rhs(a, b)
+)
+----
+false
+
+# A subquery can expose the complete row as one tuple-valued column.
+query I
+SELECT row(1, 2) = ANY (
+	SELECT s FROM (VALUES (row(1, NULL::INT))) rhs(s)
+)
+----
+NULL
+
+# Exercise the specialized external empty-hash and nested refinement paths.
+statement ok
+SET debug_force_external=true;
+
+query II
+SELECT *
+FROM (VALUES (0, 0), (1, 0)) outer_tab(f1, f2)
+WHERE (f1, f2) NOT IN (
+	SELECT * FROM (VALUES (0, NULL::INT)) inner_tab(c1, c2)
+)
+ORDER BY ALL
+----
+1	0
+
+query I
+SELECT row([1, NULL::INT], 0) IN (
+	SELECT * FROM (VALUES ([1, 2], 0)) rhs(a, b)
+)
+----
+NULL
+
+statement ok
+SET debug_force_external=false;
+
+# Rebuild the MARK state across recursive CTE iterations.
+query II
+WITH RECURSIVE r(i, j) AS (
+	VALUES (0, 0)
+	UNION ALL
+	SELECT outer_r.i + 1, 0
+	FROM r outer_r
+	WHERE outer_r.i < 3
+	  AND row(outer_r.i + 1, 0) NOT IN (
+		  SELECT inner_r.i, NULL::INT FROM r inner_r
+	  )
+)
+SELECT * FROM r ORDER BY i
+----
+0	0
+1	0
+2	0
+3	0
+
 # Multi-column correlated MARK joins remain deliberately unsupported.
 statement error
 SELECT a, row(a, b) IN (

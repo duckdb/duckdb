@@ -5,7 +5,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/logging/log_manager.hpp"
@@ -604,6 +603,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
 	}
 	if (mark_join_info.uncorrelated_condition_rows) {
+		// Keep all rows: probe-side NULLs can be UNKNOWN against non-NULL rows in other external hash partitions.
 		mark_join_info.uncorrelated_condition_rows->Append(keys);
 	}
 
@@ -1919,42 +1919,37 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 	finished = true;
 }
 
-enum class MarkEqualityResult : uint8_t { FALSE_VALUE, TRUE_VALUE, NULL_VALUE };
-
-static MarkEqualityResult CompareMarkValues(const Value &left, const Value &right) {
-	if (left.IsNull() || right.IsNull()) {
-		return MarkEqualityResult::NULL_VALUE;
-	}
-	if (left.type().InternalType() == PhysicalType::STRUCT && right.type().InternalType() == PhysicalType::STRUCT) {
-		auto &left_children = StructValue::GetChildren(left);
-		auto &right_children = StructValue::GetChildren(right);
-		D_ASSERT(left_children.size() == right_children.size());
-		bool has_null = false;
-		for (idx_t child_idx = 0; child_idx < left_children.size(); child_idx++) {
-			auto child_result = CompareMarkValues(left_children[child_idx], right_children[child_idx]);
-			if (child_result == MarkEqualityResult::FALSE_VALUE) {
-				return child_result;
-			}
-			has_null = has_null || child_result == MarkEqualityResult::NULL_VALUE;
-		}
-		return has_null ? MarkEqualityResult::NULL_VALUE : MarkEqualityResult::TRUE_VALUE;
-	}
-	return ValueOperations::NotDistinctFrom(left, right) ? MarkEqualityResult::TRUE_VALUE
-	                                                     : MarkEqualityResult::FALSE_VALUE;
-}
-
-static MarkEqualityResult CompareMarkRows(DataChunk &left, idx_t left_row, DataChunk &right, idx_t right_row) {
+static bool MarkJoinChunkHasUnknown(DataChunk &left, idx_t left_row, DataChunk &right) {
 	D_ASSERT(left.ColumnCount() == right.ColumnCount());
-	bool has_null = false;
+	bool row_is_false[STANDARD_VECTOR_SIZE] = {false};
+	bool row_is_unknown[STANDARD_VECTOR_SIZE] = {false};
 	for (idx_t col_idx = 0; col_idx < left.ColumnCount(); col_idx++) {
-		auto comparison =
-		    CompareMarkValues(left.data[col_idx].GetValue(left_row), right.data[col_idx].GetValue(right_row));
-		if (comparison == MarkEqualityResult::FALSE_VALUE) {
-			return comparison;
+		Vector left_reference(left.data[col_idx].GetType());
+		ConstantVector::Reference(left_reference, count_t(right.size()), left.data[col_idx], left_row, left.size());
+		Vector comparison(LogicalType::BOOLEAN, right.size());
+		VectorOperations::Equals(left_reference, right.data[col_idx], comparison);
+
+		UnifiedVectorFormat comparison_format;
+		comparison.ToUnifiedFormat(comparison_format);
+		auto comparison_data = comparison_format.GetData<bool>();
+		for (idx_t right_row = 0; right_row < right.size(); right_row++) {
+			if (row_is_false[right_row]) {
+				continue;
+			}
+			auto comparison_idx = comparison_format.sel->get_index(right_row);
+			if (!comparison_format.validity.RowIsValid(comparison_idx)) {
+				row_is_unknown[right_row] = true;
+			} else if (!comparison_data[comparison_idx]) {
+				row_is_false[right_row] = true;
+			}
 		}
-		has_null = has_null || comparison == MarkEqualityResult::NULL_VALUE;
 	}
-	return has_null ? MarkEqualityResult::NULL_VALUE : MarkEqualityResult::TRUE_VALUE;
+	for (idx_t right_row = 0; right_row < right.size(); right_row++) {
+		if (!row_is_false[right_row] && row_is_unknown[right_row]) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void JoinHashTable::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
@@ -2048,11 +2043,8 @@ void JoinHashTable::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 			if (!requires_refinement[probe_idx] || bool_result[probe_idx] || !mask.RowIsValid(probe_idx)) {
 				continue;
 			}
-			for (idx_t build_idx = 0; build_idx < rhs_chunk.size(); build_idx++) {
-				if (CompareMarkRows(join_keys, probe_idx, rhs_chunk, build_idx) == MarkEqualityResult::NULL_VALUE) {
-					mask.SetInvalid(probe_idx);
-					break;
-				}
+			if (MarkJoinChunkHasUnknown(join_keys, probe_idx, rhs_chunk)) {
+				mask.SetInvalid(probe_idx);
 			}
 		}
 	}
@@ -2385,6 +2377,8 @@ idx_t JoinHashTable::ScanKeyColumn(Vector &addresses, Vector &result, idx_t colu
 idx_t JoinHashTable::GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,
                                   idx_t &max_partition_size, idx_t &max_partition_count) const {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	const auto mark_join_size =
+	    mark_join_info.uncorrelated_condition_rows ? mark_join_info.uncorrelated_condition_rows->SizeInBytes() : 0;
 
 	idx_t total_size = 0;
 	idx_t total_count = 0;
@@ -2404,10 +2398,10 @@ idx_t JoinHashTable::GetTotalSize(const vector<idx_t> &partition_sizes, const ve
 	}
 
 	if (total_count == 0) {
-		return 0;
+		return mark_join_size;
 	}
 
-	return total_size + PointerTableSize(total_count);
+	return total_size + PointerTableSize(total_count) + mark_join_size;
 }
 
 idx_t JoinHashTable::GetTotalSize(const vector<reference<JoinHashTable>> &local_hts, idx_t &max_partition_size,
@@ -2419,7 +2413,14 @@ idx_t JoinHashTable::GetTotalSize(const vector<reference<JoinHashTable>> &local_
 		ht.get().GetSinkCollection().GetSizesAndCounts(partition_sizes, partition_counts);
 	}
 
-	return GetTotalSize(partition_sizes, partition_counts, max_partition_size, max_partition_count);
+	auto total_size = GetTotalSize(partition_sizes, partition_counts, max_partition_size, max_partition_count);
+	for (auto &ht : local_hts) {
+		auto &condition_rows = ht.get().mark_join_info.uncorrelated_condition_rows;
+		if (condition_rows) {
+			total_size += condition_rows->SizeInBytes();
+		}
+	}
+	return total_size;
 }
 
 idx_t JoinHashTable::GetRemainingSize() const {
