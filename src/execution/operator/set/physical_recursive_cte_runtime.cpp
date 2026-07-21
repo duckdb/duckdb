@@ -870,7 +870,9 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 
 		for (auto dependent_stage : stage.dependents) {
 			auto &remaining = remaining_dependencies[dependent_stage];
-			D_ASSERT(remaining > 0);
+			if (remaining == 0) {
+				throw InternalException("Recursive inline schedule dependency underflow");
+			}
 			remaining--;
 			if (remaining == 0) {
 				ready_stages.push_back(dependent_stage);

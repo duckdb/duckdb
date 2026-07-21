@@ -21,6 +21,7 @@
 namespace duckdb {
 
 class BlockHandle;
+class GroupedAggregateHashTable;
 
 struct FlushMoveState;
 
@@ -56,6 +57,7 @@ public:
 	TupleDataChunkState chunk_state;
 	RowMatcher row_matcher;
 	vector<TupleDataGatherFunction> gather_functions;
+	optional_ptr<const GroupedAggregateHashTable> owner;
 	bool initialized = false;
 };
 

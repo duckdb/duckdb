@@ -204,12 +204,6 @@ void RecursiveCTEState::InitializeIntermediateAppend() {
 	intermediate_table.InitializeAppend(intermediate_append_state);
 }
 
-void RecursiveCTEState::ResetRecurringTable() {
-	D_ASSERT(op.recurring_table);
-	op.recurring_table->Reset();
-	op.recurring_table->InitializeAppend(recurring_append_state);
-}
-
 ColumnDataCollection &RecursiveCTEState::CurrentOutputTable() {
 	if (op.using_key || !output_is_working) {
 		return intermediate_table;
@@ -291,7 +285,9 @@ void RecursiveCTEState::PrepareCachedExecutors(Pipeline &pipeline, idx_t max_thr
 	// for cheap per-iteration reuse, and spill back into a shared pool so later states can recycle the
 	// already-initialized executors instead of reconstructing them from scratch.
 	auto entry = cached_executors.find(pipeline);
-	D_ASSERT(entry != cached_executors.end());
+	if (entry == cached_executors.end()) {
+		throw InternalException("Missing recursive pipeline executor cache entry");
+	}
 	auto &executors = entry->second;
 	if (executors.size() >= max_threads) {
 		return;
@@ -323,7 +319,9 @@ void RecursiveCTEState::PrepareCachedExecutors(Pipeline &pipeline, idx_t max_thr
 
 vector<unique_ptr<PipelineExecutor>> &RecursiveCTEState::GetCachedExecutors(Pipeline &pipeline) {
 	auto entry = cached_executors.find(pipeline);
-	D_ASSERT(entry != cached_executors.end());
+	if (entry == cached_executors.end()) {
+		throw InternalException("Missing recursive pipeline executor cache entry");
+	}
 	return entry->second;
 }
 
