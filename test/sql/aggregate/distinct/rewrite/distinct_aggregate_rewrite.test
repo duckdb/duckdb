@@ -32,6 +32,14 @@ FROM distinct_rewrite;
 ----
 7	11	21	495
 
+# optimizer-generated CTEs use direct streaming fan-out
+query II
+EXPLAIN ANALYZE
+SELECT count(DISTINCT x), count(DISTINCT y)
+FROM distinct_rewrite;
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 2.*Buffered Consumers: 0.*
+
 # grouped mixed distinct/non-distinct aggregates
 query III
 SELECT g, count(DISTINCT x), sum(y)
