@@ -32,11 +32,61 @@ SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloo
 ----
 true
 
+# Equal inclusive bounds are reduced to equality, enabling Bloom filter pruning
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r BETWEEN 201 AND 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r >= 201 AND r <= 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
 # this value is outside min/max
 query I
 SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloom1.parquet', 'r', '112121212');
 ----
 true
+
+statement ok
+COPY (
+    SELECT
+        printf('00000000-0000-0000-0000-%012d', (i % 100) * 2)::UUID AS u,
+        i::BIGINT AS payload
+    FROM range(20480) t(i)
+) TO '{TEST_DIR}/bloom_uuid.parquet' (
+    FORMAT PARQUET,
+    ROW_GROUP_SIZE 2048,
+    DICTIONARY_SIZE_LIMIT 1000,
+    WRITE_BLOOM_FILTER TRUE
+);
+
+# The UUID is absent from every row group but falls within every min/max range
+query I
+SELECT BOOL_AND(bloom_filter_excludes)
+FROM parquet_bloom_probe(
+    '{TEST_DIR}/bloom_uuid.parquet',
+    'u',
+    '00000000-0000-0000-0000-000000000101'
+);
+----
+true
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_uuid.parquet')
+WHERE u = '00000000-0000-0000-0000-000000000101'::UUID;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_uuid.parquet')
+WHERE u = '00000000-0000-0000-0000-000000000101'::UUID;
+----
+0
 
 statement ok
 CREATE MACRO assert_bloom_filter_hit(file, col, val) AS TABLE

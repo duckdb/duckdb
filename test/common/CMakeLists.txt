@@ -28,6 +28,7 @@ add_library_unity(
   test_substring_oob.cpp
   test_utf8_codepoint_oob.cpp
   test_temporary_memory_manager.cpp
+  test_versioning_utils.cpp
   test_value_to_sql_string.cpp)
 
 set(UNITTEST_OBJECT_FILES

@@ -16,6 +16,13 @@ namespace duckdb {
 class CSVBuffer;
 class CSVStateMachine;
 
+//! Residency of a buffer
+enum class CSVBufferResidency : uint8_t {
+	IN_MEMORY,  //! The buffer is loaded
+	NEEDS_LOAD, //! The buffer is not materialized or was evicted
+	END_OF_FILE //! The buffer position lies past the end of the file
+};
+
 //! This class is used to manage the CSV buffers.  Buffers are cached when used for auto detection.
 //! When parsing, buffer are not cached and just returned.
 //! A CSV Buffer Manager is created for each separate CSV File.
@@ -33,6 +40,8 @@ public:
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
 	virtual shared_ptr<CSVBufferHandle> GetBuffer(const idx_t buffer_idx) = 0;
+	//! Pins and returns the buffer if that requires no I/O, otherwise only reports the buffer's residency
+	virtual CSVBufferResidency GetBufferResidency(const idx_t buffer_idx, shared_ptr<CSVBufferHandle> &handle) = 0;
 	virtual void ResetBuffer(const idx_t buffer_idx) = 0;
 	//! If this buffer manager is done. In the context of a buffer manager it means that it read all buffers at least
 	//! once.

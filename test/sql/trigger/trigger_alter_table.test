@@ -1,0 +1,59 @@
+# name: test/sql/trigger/trigger_alter_table.test
+# description: Test that table rebuilds preserve triggers
+# group: [trigger]
+
+require noforcestorage
+
+statement ok
+CREATE TABLE t(i INTEGER);
+
+statement ok
+CREATE TABLE audit(x INTEGER);
+
+statement ok
+CREATE TRIGGER tr AFTER INSERT ON t INSERT INTO audit VALUES (1);
+
+# ADD COLUMN rebuilds the table storage
+statement ok
+ALTER TABLE t ADD COLUMN j INTEGER;
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers();
+----
+1
+
+# DROP COLUMN takes the physical-column rebuild path
+statement ok
+ALTER TABLE t DROP COLUMN j;
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers();
+----
+1
+
+# SET NOT NULL creates new storage when the constraint is new
+statement ok
+ALTER TABLE t ALTER COLUMN i SET NOT NULL;
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers();
+----
+1
+
+# ALTER TYPE rewrites the physical column
+statement ok
+ALTER TABLE t ALTER COLUMN i TYPE BIGINT;
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers();
+----
+1
+
+# ADD PRIMARY KEY uses the unique-constraint rebuild path
+statement ok
+ALTER TABLE t ADD PRIMARY KEY(i);
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers();
+----
+1
