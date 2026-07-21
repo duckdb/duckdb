@@ -1,5 +1,6 @@
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/execution/aggregate_payload_heap.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -36,15 +37,26 @@ struct FirstStringStateBase {
 	bool is_set;
 	//! The size of the arena allocation for a non-inlined string value - not part of the exported state
 	uint32_t alloc_size;
+	//! When non-zero, the value lives on spillable payload heap block (heap_block - 1) instead
+	uint32_t heap_block;
+	uint32_t heap_offset;
 
 	void Assign(string_t input, AggregateInputData &input_data) {
 		if (input.IsInlined()) {
 			value = input;
 			alloc_size = 0;
+			heap_block = 0;
+		} else if (input_data.payload_heap) {
+			// Store the payload on a spillable heap block, the state keeps a handle instead of a pointer
+			auto len = UnsafeNumericCast<uint32_t>(input.GetSize());
+			auto handle = input_data.payload_heap->Append(input.GetData(), len);
+			heap_block = handle.block_idx + 1;
+			heap_offset = handle.offset;
+			alloc_size = len;
 		} else {
 			auto len = UnsafeNumericCast<uint32_t>(input.GetSize());
 			char *ptr;
-			if (alloc_size >= len) {
+			if (heap_block == 0 && alloc_size >= len) {
 				ptr = value.GetDataWriteable();
 			} else {
 				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
@@ -52,7 +64,18 @@ struct FirstStringStateBase {
 			}
 			memcpy(ptr, input.GetData(), len);
 			value = string_t(ptr, len);
+			heap_block = 0;
 		}
+	}
+
+	//! Materialize a heap-backed value (the pin must stay alive while the result is in use)
+	string_t Materialize(optional_ptr<AggregatePayloadHeap> heap, BufferHandle &pin) const {
+		D_ASSERT(heap_block != 0 && heap);
+		AggregatePayloadHandle handle;
+		handle.block_idx = heap_block - 1;
+		handle.offset = heap_offset;
+		handle.length = alloc_size;
+		return string_t(heap->Read(handle, pin), alloc_size);
 	}
 };
 
@@ -187,7 +210,16 @@ struct FirstFunctionStringBase : public FirstFunctionBase {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
 		if (source.is_set && (LAST || !target.is_set)) {
-			SetValue<STATE>(target, input_data, source.value, !source.value_is_valid);
+			if (source.value_is_valid && source.heap_block != 0) {
+				// Heap handles stay valid within the operator, copy the handle instead of the bytes
+				target.is_set = true;
+				target.value_is_valid = true;
+				target.heap_block = source.heap_block;
+				target.heap_offset = source.heap_offset;
+				target.alloc_size = source.alloc_size;
+			} else {
+				SetValue<STATE>(target, input_data, source.value, !source.value_is_valid);
+			}
 		}
 	}
 };
@@ -238,6 +270,10 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
+		} else if (state.heap_block != 0) {
+			BufferHandle pin;
+			target = StringVector::AddStringOrBlob(finalize_data.result,
+			                                       state.Materialize(finalize_data.input.payload_heap, pin));
 		} else {
 			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
 		}
@@ -308,6 +344,11 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set || !state.value_is_valid) {
 			finalize_data.ReturnNull();
+		} else if (state.heap_block != 0) {
+			BufferHandle pin;
+			CreateSortKeyHelpers::DecodeSortKey(state.Materialize(finalize_data.input.payload_heap, pin),
+			                                    finalize_data.result, finalize_data.result_idx,
+			                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));
 		} else {
 			CreateSortKeyHelpers::DecodeSortKey(state.value, finalize_data.result, finalize_data.result_idx,
 			                                    OrderModifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST));

@@ -41,6 +41,8 @@ struct AggregateObject { // NOLINT: work-around bug in clang-tidy
 	AggregateType aggr_type;
 	PhysicalType return_type;
 	optional_ptr<const Expression> filter = nullptr;
+	//! Exported states are read as raw bytes, so their payloads cannot live on a payload heap
+	AggregateStateExportMode state_export_mode = AggregateStateExportMode::NONE;
 
 public:
 	bool IsDistinct() const {
