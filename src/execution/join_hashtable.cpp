@@ -945,6 +945,11 @@ unique_ptr<PrefixRangeFilter::BuildState> JoinHashTable::InitializePrefixRangeBu
 	return prefix_range_filter->InitializeBuildState(context);
 }
 
+idx_t JoinHashTable::GetPrefixRangeBuildStateSize() const {
+	D_ASSERT(prefix_range_filter);
+	return prefix_range_filter->GetBuildStateSize();
+}
+
 void JoinHashTable::BuildPrefixRangeFilter() {
 	if (!ShouldBuildPrefixRangeFilter()) {
 		return;
@@ -964,13 +969,17 @@ void JoinHashTable::BuildPrefixRangeFilter() {
 }
 
 void JoinHashTable::InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count,
-                                           PrefixRangeFilter::BuildState &state) {
+                                           PrefixRangeFilter::BuildState &state, bool parallel) {
 	D_ASSERT(prefix_range_filter);
 	Vector build_keys(layout_ptr->GetTypes()[0], count);
 	auto &sel = *FlatVector::IncrementalSelectionVector();
 	data_collection->Gather(chunk_state.row_locations, sel, count, 0, build_keys, sel, nullptr);
 	FlatVector::SetSize(build_keys, count_t(count));
-	prefix_range_filter->InsertKeys(build_keys, state);
+	if (parallel) {
+		prefix_range_filter->InsertKeysParallel(build_keys, state);
+	} else {
+		prefix_range_filter->InsertKeys(build_keys, state);
+	}
 }
 
 void JoinHashTable::MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state) {
@@ -1044,7 +1053,8 @@ void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx
 }
 
 void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel,
-                             optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state) {
+                             optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state,
+                             bool prefix_range_parallel) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
@@ -1065,7 +1075,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 
 		InsertHashes(hashes, chunk_state, insert_state, parallel);
 		if (prefix_range_state) {
-			InsertPrefixRangeChunk(chunk_state, count, *prefix_range_state);
+			InsertPrefixRangeChunk(chunk_state, count, *prefix_range_state, prefix_range_parallel);
 		}
 	} while (iterator.Next());
 }
@@ -1534,17 +1544,17 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	idx_t new_match_count = residual_executor->SelectExpression(residual_state->eval_chunk, selected_sel, remaining_sel,
 	                                                            nullptr, match_count);
 
-	for (idx_t i = 0; i < new_match_count; i++) {
-		idx_t dense_idx = selected_sel.get_index(i);
-		match_sel.set_index(i, match_sel.get_index(dense_idx));
-	}
-
 	if (no_match_sel) {
 		idx_t residual_no_match_count = match_count - new_match_count;
 		for (idx_t i = 0; i < residual_no_match_count; i++) {
 			idx_t dense_idx = remaining_sel.get_index(i);
 			no_match_sel->set_index(no_match_offset + i, match_sel.get_index(dense_idx));
 		}
+	}
+
+	for (idx_t i = 0; i < new_match_count; i++) {
+		idx_t dense_idx = selected_sel.get_index(i);
+		match_sel.set_index(i, match_sel.get_index(dense_idx));
 	}
 
 	return new_match_count;

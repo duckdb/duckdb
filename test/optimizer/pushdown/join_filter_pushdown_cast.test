@@ -246,3 +246,56 @@ SELECT COUNT(*) FROM (
 ) sub JOIN build_union ON sub.a = build_union.b;
 ----
 3
+
+# Nested casts must be reconstructed in order, even when the final type matches storage.
+statement ok
+CREATE TABLE probe_nested_cast (k BIGINT);
+
+statement ok
+INSERT INTO probe_nested_cast VALUES (1), (3), (3000000000);
+
+statement ok
+CREATE TABLE build_nested_cast (k BIGINT);
+
+statement ok
+INSERT INTO build_nested_cast VALUES (1), (3);
+
+statement error
+SELECT count(*)
+FROM probe_nested_cast p
+JOIN build_nested_cast b
+  ON CAST(CAST(p.k AS INTEGER) AS BIGINT) = b.k
+----
+<REGEX>:Conversion Error:.*out of range.*
+
+# TRY_CAST failures are NULL and may be removed by the runtime filter.
+query I
+SELECT count(*)
+FROM probe_nested_cast p
+JOIN build_nested_cast b
+  ON CAST(TRY_CAST(p.k AS INTEGER) AS BIGINT) = b.k
+----
+2
+
+# Cast paths discovered in separate projections must compose from storage to the join key.
+statement error
+SELECT count(*)
+FROM (
+  SELECT CAST(k AS BIGINT) AS k
+  FROM (SELECT CAST(k AS INTEGER) AS k FROM probe_nested_cast)
+) p
+JOIN build_nested_cast b USING (k)
+----
+<REGEX>:Conversion Error:.*out of range.*
+
+# The same composition applies to aggregate group expressions.
+statement error
+SELECT count(*)
+FROM (
+  SELECT CAST(CAST(k AS INTEGER) AS BIGINT) AS k
+  FROM probe_nested_cast
+  GROUP BY ALL
+) p
+JOIN build_nested_cast b USING (k)
+----
+<REGEX>:Conversion Error:.*out of range.*

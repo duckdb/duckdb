@@ -130,6 +130,9 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
+	}
 
 	bool SinkOrderDependent() const override {
 		return false;
