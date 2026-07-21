@@ -15,29 +15,6 @@ on:
       runner_provider:
         type: string
         default: ''
-  workflow_dispatch:
-    inputs:
-      override_git_describe:
-        type: string
-      git_ref:
-        type: string
-      skip_tests:
-        type: boolean
-        default: false
-      run_all:
-        type: boolean
-        default: true
-      runners:
-        description: 'JSON object with runner labels, e.g. {"windows_2022_x64":"windows-2022","linux_slim":"ubuntu-latest"}'
-        type: string
-        required: false
-        default: '{}'
-      runner_provider:
-        description: 'Runner provider for duckdb-ci checkout when using Namespace runners'
-        type: string
-        required: false
-        default: ''
-
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true

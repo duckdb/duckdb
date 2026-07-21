@@ -9,14 +9,6 @@ on:
       runner_provider:
         default: ''
         type: string
-  workflow_dispatch:
-    inputs:
-      git_ref:
-        type: string
-      runner_provider:
-        description: 'Runner provider for duckdb-ci checkout when using Namespace runners'
-        default: ''
-        type: string
   repository_dispatch:
 
 concurrency:
