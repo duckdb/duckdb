@@ -147,19 +147,18 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       DPJoinNode &left, DPJoinNode &right) {
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = possible_connections.back().get();
-	optional_ptr<SemanticJoinEdge> semantic_join;
+	optional_ptr<NonInnerJoinEdge> non_inner_join;
 	for (auto &connection : possible_connections) {
-		if (!connection.get().semantic_join) {
+		if (!connection.get().non_inner_join) {
 			continue;
 		}
-		if (semantic_join && semantic_join != connection.get().semantic_join) {
-			throw InternalException("Semantic joins %llu and %llu are both legal for one join-order partition",
-			                        semantic_join->index, connection.get().semantic_join->index);
+		if (non_inner_join && non_inner_join != connection.get().non_inner_join) {
+			return nullptr;
 		}
-		semantic_join = connection.get().semantic_join;
+		non_inner_join = connection.get().non_inner_join;
 		best_connection = connection.get();
 	}
-	if (best_connection->semantic_join) {
+	if (best_connection->non_inner_join) {
 		auto cost = cost_model.ComputeCost(left, right, set, possible_connections);
 		auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
 		result->cardinality = cost_model.GetCardinalityEstimator().EstimateCardinalityWithSet<idx_t>(set);
@@ -200,8 +199,8 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	return result;
 }
 
-DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
-                                     const vector<reference<NeighborInfo>> &info) {
+optional_ptr<DPJoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
+                                                  const vector<reference<NeighborInfo>> &info) {
 	// get the left and right join plans
 	auto left_plan = plans.find(left);
 	auto right_plan = plans.find(right);
@@ -211,6 +210,9 @@ DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &rig
 	auto &new_set = query_graph_manager.set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
 	auto new_plan = CreateJoinTree(new_set, info, *left_plan->second, *right_plan->second);
+	if (!new_plan) {
+		return nullptr;
+	}
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
 	auto new_cost = new_plan->cost;
@@ -221,7 +223,7 @@ DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &rig
 	if (entry == plans.end() || new_cost < old_cost) {
 		// the new plan costs less than the old plan. Update our DP table.
 		plans[new_set] = std::move(new_plan);
-		return *plans[new_set];
+		return plans[new_set].get();
 	}
 	// Tiebreaker for equal-cost plans: needed for LEFT JOINs,
 	// because all orderings preserve the LHS cardinality and always tie.
@@ -234,12 +236,12 @@ DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &rig
 			auto old_right_cardinality = existing_right->second->cardinality;
 			if (new_right_cardinality > old_right_cardinality) {
 				plans[new_set] = std::move(new_plan);
-				return *plans[new_set];
+				return plans[new_set].get();
 			}
 		}
 	}
 	// Create join node from the plan currently in the DP table.
-	return *entry->second;
+	return entry->second.get();
 }
 
 bool PlanEnumerator::TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
@@ -438,17 +440,20 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 				auto &connection = GetConnections(left, right);
 				if (!connection.empty()) {
 					// we can check the cost of this connection
-					auto &node = EmitPair(left, right, connection);
+					auto node = EmitPair(left, right, connection);
+					if (!node) {
+						continue;
+					}
 
 					// update the DP tree in case a plan created by the DP algorithm uses the node
 					// that was potentially just updated by EmitPair. You will get a use-after-free
 					// error if future plans rely on the old node that was just replaced.
 					// if node in FullPath, then updateDP tree.
 
-					if (!found_connection || node.cost < best_cost) {
+					if (!found_connection || node->cost < best_cost) {
 						// best pair found so far
 						found_connection = true;
-						best_cost = node.cost;
+						best_cost = node->cost;
 						best_left = i;
 						best_right = j;
 					}
@@ -498,7 +503,10 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			auto &connections = GetConnections(left, right);
 			D_ASSERT(!connections.empty());
 
-			EmitPair(left, right, connections);
+			auto cross_product = EmitPair(left, right, connections);
+			if (!cross_product) {
+				throw InternalException("Could not create a valid cross-product join-order partition");
+			}
 			best_left = smallest_index[0];
 			best_right = smallest_index[1];
 

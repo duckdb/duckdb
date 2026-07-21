@@ -12,7 +12,6 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/optimizer/join_order/semantic_join_edge.hpp"
 
 namespace duckdb {
 
@@ -197,6 +196,9 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.HasProjectionMap()) {
+			return false;
+		}
 		switch (join.join_type) {
 		case JoinType::INNER:
 		case JoinType::SEMI:
@@ -673,87 +675,17 @@ bool RelationManager::ExtractBindings(const Expression &expression, unordered_se
 	return can_reorder;
 }
 
-static void ResolveSemanticJoinPrerequisites(vector<unique_ptr<SemanticJoinEdge>> &semantic_joins,
-                                             JoinRelationSetManager &set_manager) {
-	struct Prerequisite {
-		idx_t edge_index;
-		JoinSide consumer_side;
-	};
-	vector<vector<Prerequisite>> direct_prerequisites(semantic_joins.size());
-	for (idx_t consumer_idx = 0; consumer_idx < semantic_joins.size(); consumer_idx++) {
-		auto &consumer = *semantic_joins[consumer_idx];
-		if (consumer.predicate_left_set.get().Empty() || consumer.predicate_right_set.get().Empty()) {
-			throw InternalException("Semantic join %llu has an empty predicate endpoint", consumer.index);
-		}
-		if (RelationSetsIntersect(consumer.predicate_left_set, consumer.predicate_right_set)) {
-			throw InternalException("Semantic join %llu has overlapping predicate endpoints", consumer.index);
-		}
-		for (idx_t producer_idx = 0; producer_idx < semantic_joins.size(); producer_idx++) {
-			if (consumer_idx == producer_idx) {
-				continue;
-			}
-			auto &producer = *semantic_joins[producer_idx];
-			if (producer.join_type != JoinType::LEFT) {
-				continue;
-			}
-			auto depends_on_left = RelationSetsIntersect(consumer.predicate_left_set, producer.predicate_right_set);
-			auto depends_on_right = RelationSetsIntersect(consumer.predicate_right_set, producer.predicate_right_set);
-			if (depends_on_left && depends_on_right) {
-				throw InternalException("Semantic join %llu depends on both sides of semantic join %llu",
-				                        consumer.index, producer.index);
-			}
-			if (depends_on_left || depends_on_right) {
-				direct_prerequisites[consumer_idx].push_back(
-				    {producer_idx, depends_on_left ? JoinSide::LEFT : JoinSide::RIGHT});
-			}
-		}
-	}
-
-	vector<uint8_t> resolve_state(semantic_joins.size(), 0);
-	std::function<void(idx_t)> resolve_edge = [&](idx_t edge_idx) {
-		if (resolve_state[edge_idx] == 2) {
-			return;
-		}
-		if (resolve_state[edge_idx] == 1) {
-			throw InternalException("Semantic join prerequisite cycle involving edge %llu", edge_idx);
-		}
-		resolve_state[edge_idx] = 1;
-		auto &edge = *semantic_joins[edge_idx];
-		unordered_set<idx_t> prerequisite_ids;
-		for (auto &prerequisite : direct_prerequisites[edge_idx]) {
-			resolve_edge(prerequisite.edge_index);
-			auto &producer = *semantic_joins[prerequisite.edge_index];
-			auto &producer_input = set_manager.Union(producer.required_left_set, producer.required_right_set);
-			if (prerequisite.consumer_side == JoinSide::LEFT) {
-				edge.required_left_set = set_manager.Union(edge.required_left_set, producer_input);
-			} else {
-				D_ASSERT(prerequisite.consumer_side == JoinSide::RIGHT);
-				edge.required_right_set = set_manager.Union(edge.required_right_set, producer_input);
-			}
-			prerequisite_ids.insert(producer.index);
-			prerequisite_ids.insert(producer.prerequisite_edges.begin(), producer.prerequisite_edges.end());
-		}
-		edge.prerequisite_edges.insert(edge.prerequisite_edges.end(), prerequisite_ids.begin(), prerequisite_ids.end());
-		std::sort(edge.prerequisite_edges.begin(), edge.prerequisite_edges.end());
-		if (RelationSetsIntersect(edge.required_left_set, edge.required_right_set)) {
-			throw InternalException("Semantic join %llu has overlapping required input sets", edge.index);
-		}
-		resolve_state[edge_idx] = 2;
-	};
-	for (idx_t edge_idx = 0; edge_idx < semantic_joins.size(); edge_idx++) {
-		resolve_edge(edge_idx);
-	}
-}
-
-vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
-                                                             vector<reference<LogicalOperator>> &filter_operators,
-                                                             JoinRelationSetManager &set_manager,
-                                                             vector<unique_ptr<SemanticJoinEdge>> &semantic_joins) {
+JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
+                                                  vector<reference<LogicalOperator>> &filter_operators,
+                                                  JoinRelationSetManager &set_manager) {
 	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
 	// filters in the process
-	vector<unique_ptr<FilterInfo>> filters_and_bindings;
+	JoinOrderExtraction result;
+	auto &filters_and_bindings = result.filters;
+	auto &non_inner_edges = result.non_inner_edges;
 	expression_set_t filter_set;
-	auto normalize_conditions = [&](LogicalComparisonJoin &join, const column_binding_set_t &semantic_right_bindings) {
+	auto normalize_conditions = [&](LogicalComparisonJoin &join, const column_binding_set_t &semantic_left_bindings,
+	                                const column_binding_set_t &semantic_right_bindings) {
 		vector<JoinCondition> result;
 		for (auto &condition : join.conditions) {
 			if (!condition.IsComparison()) {
@@ -764,14 +696,16 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			column_binding_set_t right_bindings;
 			GetColumnBindingsFromExpression(condition.GetLHS(), left_bindings);
 			GetColumnBindingsFromExpression(condition.GetRHS(), right_bindings);
-			auto left_is_nullable = BindingsAreSubset(left_bindings, semantic_right_bindings);
-			auto right_is_nullable = BindingsAreSubset(right_bindings, semantic_right_bindings);
-			if (left_is_nullable == right_is_nullable) {
+			auto lhs_is_left = BindingsAreSubset(left_bindings, semantic_left_bindings);
+			auto lhs_is_right = BindingsAreSubset(left_bindings, semantic_right_bindings);
+			auto rhs_is_left = BindingsAreSubset(right_bindings, semantic_left_bindings);
+			auto rhs_is_right = BindingsAreSubset(right_bindings, semantic_right_bindings);
+			if ((!lhs_is_left || !rhs_is_right) && (!lhs_is_right || !rhs_is_left)) {
 				result.emplace_back(JoinCondition::CreateExpression(condition.Copy()));
 				continue;
 			}
 			auto copy = condition.Copy();
-			if (left_is_nullable) {
+			if (lhs_is_right) {
 				copy.Swap();
 			}
 			result.push_back(std::move(copy));
@@ -779,6 +713,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 		return result;
 	};
 	auto get_semantic_sets = [&](const vector<JoinCondition> &conditions,
+	                             const column_binding_set_t &semantic_left_bindings,
 	                             const column_binding_set_t &semantic_right_bindings) {
 		column_binding_set_t left_bindings;
 		column_binding_set_t right_bindings;
@@ -793,8 +728,10 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			for (auto &binding : condition_bindings) {
 				if (semantic_right_bindings.count(binding)) {
 					right_bindings.insert(binding);
-				} else {
+				} else if (semantic_left_bindings.count(binding)) {
 					left_bindings.insert(binding);
+				} else {
+					throw InternalException("Non-inner join condition references a binding outside both inputs");
 				}
 			}
 		}
@@ -809,16 +746,18 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			switch (join.join_type) {
 			case JoinType::SEMI:
 			case JoinType::ANTI: {
+				column_binding_set_t semantic_left_bindings;
 				column_binding_set_t semantic_right_bindings;
+				GetColumnBindingsFromOperator(*join.children[0], semantic_left_bindings);
 				GetColumnBindingsFromOperator(*join.children[1], semantic_right_bindings);
-				auto conditions = normalize_conditions(join, semantic_right_bindings);
-				auto semantic_sets = get_semantic_sets(conditions, semantic_right_bindings);
+				auto conditions = normalize_conditions(join, semantic_left_bindings, semantic_right_bindings);
+				auto semantic_sets = get_semantic_sets(conditions, semantic_left_bindings, semantic_right_bindings);
 				auto left_set = semantic_sets.first;
 				auto right_set = semantic_sets.second;
 				D_ASSERT(left_set && left_set->count > 0);
 				D_ASSERT(right_set && right_set->count == 1);
-				auto semantic_edge = make_uniq<SemanticJoinEdge>(semantic_joins.size(), join.join_type, *left_set,
-				                                                 *right_set, std::move(conditions));
+				auto non_inner_edge = make_uniq<NonInnerJoinEdge>(non_inner_edges.size(), join.join_type, *left_set,
+				                                                  *right_set, std::move(conditions));
 				auto conjunction_expression = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 				// create a conjunction expression for the semi/anti join.
 				// It's possible multiple LHS relations have a condition in
@@ -829,8 +768,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// if we make a conjunction expression and populate the left set and right set with all
 				// the relations from the conditions in the conjunction expression, we can prevent invalid reordering.
 
-				// Only comparison copies participate in costing. The semantic edge owns the complete condition.
-				for (auto &cond : semantic_edge->conditions) {
+				// Only comparison copies participate in costing. The non-inner edge owns the complete condition.
+				for (auto &cond : non_inner_edge->conditions) {
 					if (cond.IsComparison()) {
 						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
 						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
@@ -848,10 +787,10 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					filter_info->SetLeftSet(left_set);
 					filter_info->SetRightSet(right_set);
 					filters_and_bindings.push_back(std::move(filter_info));
-					semantic_edge->costing_predicate_indices.push_back(filter_index);
+					non_inner_edge->costing_predicate_indices.push_back(filter_index);
 				}
-				D_ASSERT(!semantic_edge->costing_predicate_indices.empty());
-				semantic_joins.push_back(std::move(semantic_edge));
+				D_ASSERT(!non_inner_edge->costing_predicate_indices.empty());
+				non_inner_edges.push_back(std::move(non_inner_edge));
 				break;
 			}
 			case JoinType::LEFT: {
@@ -866,21 +805,23 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// Predicate expression sides are not reliable here: SQL can write a LEFT join condition as
 				// rhs_col = lhs_col. Normalize comparison sides so left_set is the preserved side and right_set
 				// is the nullable RHS side, without expanding left_set to every relation in the actual left child.
+				column_binding_set_t semantic_left_bindings;
 				column_binding_set_t semantic_right_bindings;
+				GetColumnBindingsFromOperator(*join.children[0], semantic_left_bindings);
 				GetColumnBindingsFromOperator(*join.children[1], semantic_right_bindings);
-				auto conditions = normalize_conditions(join, semantic_right_bindings);
-				auto semantic_sets = get_semantic_sets(conditions, semantic_right_bindings);
+				auto conditions = normalize_conditions(join, semantic_left_bindings, semantic_right_bindings);
+				auto semantic_sets = get_semantic_sets(conditions, semantic_left_bindings, semantic_right_bindings);
 				auto full_left_set = semantic_sets.first;
 				auto full_right_set = semantic_sets.second;
 				D_ASSERT(full_left_set && full_left_set->count > 0);
 				D_ASSERT(full_right_set && full_right_set->count == 1);
-				auto semantic_edge = make_uniq<SemanticJoinEdge>(semantic_joins.size(), join.join_type, *full_left_set,
-				                                                 *full_right_set, std::move(conditions));
+				auto non_inner_edge = make_uniq<NonInnerJoinEdge>(
+				    non_inner_edges.size(), join.join_type, *full_left_set, *full_right_set, std::move(conditions));
 
 				if (!full_left_set->Empty() || !full_right_set->Empty()) {
 					auto &full_set = set_manager.Union(*full_left_set, *full_right_set);
 
-					for (auto &cond : semantic_edge->conditions) {
+					for (auto &cond : non_inner_edge->conditions) {
 						if (!cond.IsComparison()) {
 							continue;
 						}
@@ -893,7 +834,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						filter_info->SetLeftSet(full_left_set);
 						filter_info->SetRightSet(full_right_set);
 						filters_and_bindings.push_back(std::move(filter_info));
-						semantic_edge->costing_predicate_indices.push_back(filter_index);
+						non_inner_edge->costing_predicate_indices.push_back(filter_index);
 					}
 
 					// Filters above a LEFT join that reference nullable-side bindings must be evaluated
@@ -905,8 +846,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						                       set_manager);
 					}
 				}
-				D_ASSERT(!semantic_edge->costing_predicate_indices.empty());
-				semantic_joins.push_back(std::move(semantic_edge));
+				D_ASSERT(!non_inner_edge->costing_predicate_indices.empty());
+				non_inner_edges.push_back(std::move(non_inner_edge));
 				break;
 			}
 			default: {
@@ -962,9 +903,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			f_op.expressions = std::move(leftover_expressions);
 		}
 	}
-	ResolveSemanticJoinPrerequisites(semantic_joins, set_manager);
-
-	return filters_and_bindings;
+	return result;
 }
 
 // LCOV_EXCL_START

@@ -3,19 +3,43 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<TableIndex> &table_bindings) {
+static bool ExpressionsBecomeFilters(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+		return true;
+	}
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		return op.Cast<LogicalJoin>().join_type == JoinType::INNER;
+	default:
+		return false;
+	}
+}
+
+void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, const unordered_set<TableIndex> &table_bindings) {
+	auto referenced_bindings = table_bindings;
+	if (!ExpressionsBecomeFilters(op)) {
+		LogicalOperatorVisitor::EnumerateExpressions(
+		    static_cast<const LogicalOperator &>(op), [&](const unique_ptr<Expression> *expression) {
+			    ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+			        **expression, [&](const BoundColumnRefExpression &column_ref) {
+				        referenced_bindings.insert(column_ref.Binding().table_index);
+			        });
+		    });
+	}
+
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
@@ -33,59 +57,8 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<TableInd
 		}
 		// if an operator above the mark join includes the mark join index,
 		// then the mark join cannot be converted to a semi join
-		if (table_bindings.find(join.mark_index) != table_bindings.end()) {
+		if (referenced_bindings.find(join.mark_index) != referenced_bindings.end()) {
 			join.convert_mark_to_semi = false;
-		}
-		break;
-	}
-	// you need to store table.column index.
-	// if you get to a projection, you need to change the table_bindings passed so they reflect the
-	// table index of the original expression they originated from.
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		// when we encounter a projection, replace the table_bindings with
-		// the tables in the projection
-		auto &proj = op.Cast<LogicalProjection>();
-		auto proj_bindings = proj.GetColumnBindings();
-		unordered_set<TableIndex> new_table_bindings;
-		for (auto &binding : proj_bindings) {
-			auto col_index = binding.column_index;
-			auto &expr = proj.expressions.at(col_index);
-			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
-				if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &col_ref = child.Cast<BoundColumnRefExpression>();
-					new_table_bindings.insert(col_ref.Binding().table_index);
-				}
-			});
-			table_bindings = new_table_bindings;
-		}
-		break;
-	}
-	// It's possible a mark join index makes its way into a group by as the grouping index
-	// when that happens we need to keep track of it to make sure we do not convert a mark join to semi.
-	// see filter_pushdown_into_subquery.
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggr = op.Cast<LogicalAggregate>();
-		auto aggr_bindings = aggr.GetColumnBindings();
-		vector<ColumnBinding> bindings_to_keep;
-		for (auto &expr : aggr.groups) {
-			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
-				if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &col_ref = child.Cast<BoundColumnRefExpression>();
-					bindings_to_keep.push_back(col_ref.Binding());
-				}
-			});
-		}
-		for (auto &expr : aggr.expressions) {
-			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
-				if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &col_ref = child.Cast<BoundColumnRefExpression>();
-					bindings_to_keep.push_back(col_ref.Binding());
-				}
-			});
-		}
-		table_bindings = unordered_set<TableIndex>();
-		for (auto &expr_binding : bindings_to_keep) {
-			table_bindings.insert(expr_binding.table_index);
 		}
 		break;
 	}
@@ -93,11 +66,9 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<TableInd
 		break;
 	}
 
-	// recurse into the children to find mark joins and project their indexes.
+	// Recurse into each child with the bindings referenced on this path.
 	for (auto &child : op.children) {
-		// Projections rewrite the binding set for their own subtree. Do not expose that state to siblings.
-		auto child_bindings = table_bindings;
-		CheckMarkToSemi(*child, child_bindings);
+		CheckMarkToSemi(*child, referenced_bindings);
 	}
 }
 

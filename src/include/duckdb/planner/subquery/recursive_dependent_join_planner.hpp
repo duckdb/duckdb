@@ -44,7 +44,7 @@ private:
 	                                                                const unordered_set<TableIndex> &left_bindings,
 	                                                                JoinType join_type);
 	BindingReplacementMap PlanOperator(unique_ptr<LogicalOperator> &op);
-	BindingReplacementMap PlanJoinCondition(unique_ptr<LogicalOperator> &op);
+	BindingReplacementMap PlanAnyJoinCondition(unique_ptr<LogicalOperator> &op);
 	void PlanJoinChildFilters(LogicalOperator &op);
 	void PlanJoinExpressions(LogicalOperator &op);
 	void PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr, JoinSide uncorrelated_side);

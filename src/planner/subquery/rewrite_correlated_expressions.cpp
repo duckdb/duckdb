@@ -12,29 +12,27 @@
 
 namespace duckdb {
 
-RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(ClientContext &context,
-                                                           column_binding_map_t<ColumnBinding> current_binding_map,
+RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(column_binding_map_t<ColumnBinding> current_binding_map,
                                                            column_binding_map_t<ColumnBinding> &correlated_aliases)
-    : current_binding_map(std::move(current_binding_map)), correlated_aliases(correlated_aliases), context(context) {
+    : current_binding_map(std::move(current_binding_map)), correlated_aliases(correlated_aliases) {
 }
 
-void RewriteCorrelatedExpressions::Rewrite(ClientContext &context, unique_ptr<LogicalOperator> &op,
+void RewriteCorrelatedExpressions::Rewrite(unique_ptr<LogicalOperator> &op,
                                            column_binding_map_t<ColumnBinding> current_binding_map,
                                            column_binding_map_t<ColumnBinding> &correlated_aliases) {
-	RewriteCorrelatedExpressions rewriter(context, std::move(current_binding_map), correlated_aliases);
-	rewriter.VisitOperator(op);
+	RewriteCorrelatedExpressions rewriter(std::move(current_binding_map), correlated_aliases);
+	rewriter.VisitOperator(*op);
 }
 
-void RewriteCorrelatedExpressions::Rewrite(ClientContext &context, LogicalDependentJoin &op,
+void RewriteCorrelatedExpressions::Rewrite(LogicalDependentJoin &op,
                                            column_binding_map_t<ColumnBinding> current_binding_map,
                                            column_binding_map_t<ColumnBinding> &correlated_aliases) {
-	RewriteCorrelatedExpressions rewriter(context, std::move(current_binding_map), correlated_aliases);
+	RewriteCorrelatedExpressions rewriter(std::move(current_binding_map), correlated_aliases);
 	rewriter.RewriteOperator(op);
 }
 
-void RewriteCorrelatedExpressions::VisitOperator(unique_ptr<LogicalOperator> &op) {
-	RewriteOperator(*op);
-	ColumnBindingRewrite::FinalizeOperator(context, op);
+void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
+	RewriteOperator(op);
 }
 
 void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding &source_binding,

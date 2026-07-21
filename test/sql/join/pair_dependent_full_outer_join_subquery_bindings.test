@@ -62,6 +62,31 @@ ORDER BY ALL;
 2	5	20
 NULL	NULL	30
 
+# Internal domain and marker columns are removed by the final output projection,
+# independently of projection pull-up.
+statement ok
+SET disabled_optimizers='projection_pullup';
+
+query III
+SELECT *
+FROM pair_multi_l l
+JOIN pair_multi_l2 l2 ON true
+FULL OUTER JOIN pair_multi_r r ON EXISTS (
+	SELECT 1
+	FROM pair_multi_s s
+	WHERE s.a = l.a
+	  AND s.b = r.b
+	  AND s.c = l2.c
+)
+ORDER BY ALL;
+----
+1	5	10
+2	5	20
+NULL	NULL	30
+
+statement ok
+SET disabled_optimizers='';
+
 query III
 SELECT l.a, r.b, r2.c
 FROM pair_multi_l l

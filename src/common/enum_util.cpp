@@ -1806,24 +1806,6 @@ DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value)
 	return static_cast<DependencyEntryType>(StringUtil::StringToEnum(GetDependencyEntryTypeValues(), 2, "DependencyEntryType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetDependentJoinTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(DependentJoinType::DUPLICATE_ELIMINATION), "DUPLICATE_ELIMINATION" },
-		{ static_cast<uint32_t>(DependentJoinType::JOIN_CONDITION), "JOIN_CONDITION" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<DependentJoinType>(DependentJoinType value) {
-	return StringUtil::EnumToString(GetDependentJoinTypeValues(), 2, "DependentJoinType", static_cast<uint32_t>(value));
-}
-
-template<>
-DependentJoinType EnumUtil::FromString<DependentJoinType>(const char *value) {
-	return static_cast<DependentJoinType>(StringUtil::StringToEnum(GetDependentJoinTypeValues(), 2, "DependentJoinType", value));
-}
-
 const StringUtil::EnumStringLiteral *GetDeprecatedIndexTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DeprecatedIndexType::INVALID), "INVALID" },
@@ -6532,4 +6514,3 @@ WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *valu
 }
 
 }
-

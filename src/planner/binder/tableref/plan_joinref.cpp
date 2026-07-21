@@ -415,11 +415,12 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		return std::move(filter);
 	}
 	if (has_dependent_condition) {
-		auto pending = make_uniq<LogicalDependentJoin>(std::move(left), std::move(right), CorrelatedColumns(), ref.type,
-		                                               std::move(ref.condition));
-		pending->dependent_type = DependentJoinType::JOIN_CONDITION;
-		pending->mark_index = ref.mark_index;
-		return std::move(pending);
+		auto join = make_uniq<LogicalAnyJoin>(ref.type);
+		join->children.push_back(std::move(left));
+		join->children.push_back(std::move(right));
+		join->condition = std::move(ref.condition);
+		join->mark_index = ref.mark_index;
+		return std::move(join);
 	}
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(context, ref.type, ref.ref_type, std::move(left), std::move(right),

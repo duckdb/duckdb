@@ -12,11 +12,9 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
-#include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
-#include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 
 namespace duckdb {
@@ -55,7 +53,6 @@ struct PairDependentSideRef {
 	unique_ptr<LogicalOperator> plan;
 	vector<ColumnBinding> payload_bindings;
 	vector<ColumnBinding> domain_bindings;
-	ColumnBindingLayout output;
 };
 
 static void AddCurrentJoinBinding(const ColumnBinding &binding, const unordered_set<TableIndex> &left_bindings,
@@ -165,7 +162,6 @@ static PairDependentSideRef CreatePairDependentSideRef(Binder &binder, const Pai
 		result.domain_bindings.push_back(bindings[position]);
 	}
 	result.plan = std::move(cte_ref);
-	result.output = ColumnBindingLayout(result.payload_bindings, "pair-dependent FULL OUTER join side");
 	return result;
 }
 
@@ -186,19 +182,6 @@ static void AddMarkerCondition(vector<JoinCondition> &conditions, ColumnBinding 
 	auto marker_true = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 	conditions.emplace_back(BoundComparisonExpression::Create(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
 	                                                          std::move(marker), std::move(marker_true)));
-}
-
-static void SetJoinProjectionMaps(LogicalOperator &join, const ColumnBindingLayout &left_output,
-                                  const vector<ColumnBinding> &selected_left_bindings,
-                                  const ColumnBindingLayout &right_output,
-                                  const vector<ColumnBinding> &selected_right_bindings) {
-	auto &logical_join = join.Cast<LogicalJoin>();
-	logical_join.left_projection_map = left_output.HasSameLayout(selected_left_bindings)
-	                                       ? vector<ProjectionIndex>()
-	                                       : left_output.CreateProjectionMap(selected_left_bindings);
-	logical_join.right_projection_map = right_output.HasSameLayout(selected_right_bindings)
-	                                        ? vector<ProjectionIndex>()
-	                                        : right_output.CreateProjectionMap(selected_right_bindings);
 }
 
 class PairDependentFullOuterJoinBuilder {
@@ -275,13 +258,6 @@ LogicalRewriteResult PairDependentFullOuterJoinBuilder::Build() {
 	auto right_with_match =
 	    LogicalComparisonJoin::CreateJoin(JoinType::LEFT, JoinRefType::REGULAR, std::move(right_ref.plan),
 	                                      std::move(match_projection), std::move(right_match_conditions));
-	auto match_output = ColumnBindingLayout(match_bindings, "pair-dependent FULL OUTER join match");
-	auto selected_match_bindings = left_match_bindings;
-	selected_match_bindings.push_back(marker_binding);
-	SetJoinProjectionMaps(*right_with_match, right_ref.output, right_ref.payload_bindings, match_output,
-	                      selected_match_bindings);
-	auto right_with_match_output =
-	    ColumnBindingLayout(right_with_match->GetColumnBindings(), "pair-dependent FULL OUTER join match");
 
 	// R FULL JOIN the matching domain restores matching pairs and the unmatched R rows.
 	auto left_ref = CreatePairDependentSideRef(binder, left_side);
@@ -290,8 +266,6 @@ LogicalRewriteResult PairDependentFullOuterJoinBuilder::Build() {
 	AddMarkerCondition(final_conditions, marker_binding);
 	auto final_join = LogicalComparisonJoin::CreateJoin(JoinType::OUTER, JoinRefType::REGULAR, std::move(left_ref.plan),
 	                                                    std::move(right_with_match), std::move(final_conditions));
-	SetJoinProjectionMaps(*final_join, left_ref.output, left_ref.payload_bindings, right_with_match_output,
-	                      right_ref.payload_bindings);
 
 	vector<unique_ptr<Expression>> output_expressions;
 	for (idx_t i = 0; i < left_ref.payload_bindings.size(); i++) {

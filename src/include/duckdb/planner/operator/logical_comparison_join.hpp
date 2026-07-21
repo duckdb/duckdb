@@ -17,8 +17,6 @@
 
 namespace duckdb {
 
-class ColumnBindingRewrite;
-
 //! LogicalComparisonJoin represents a join that involves comparisons between the LHS and RHS
 class LogicalComparisonJoin : public LogicalJoin {
 public:
@@ -56,8 +54,6 @@ public:
 	                                              unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              vector<JoinCondition> conditions);
-	//! Returns whether every comparison condition agrees with the current child binding ownership
-	static bool ConditionsAreCanonical(LogicalComparisonJoin &join);
 	static void ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
 	                                  unique_ptr<LogicalOperator> &left_child, unique_ptr<LogicalOperator> &right_child,
 	                                  const unordered_set<TableIndex> &left_bindings,
@@ -72,11 +68,6 @@ public:
 
 	bool HasEquality(idx_t &range_count) const;
 	bool HasArbitraryConditions() const;
-
-private:
-	friend class ColumnBindingRewrite;
-	//! Rebuilds an ordinary comparison join as the final step of an atomic binding rewrite.
-	static void FinalizeBindingRewrite(ClientContext &context, unique_ptr<LogicalOperator> &plan);
 };
 
 } // namespace duckdb

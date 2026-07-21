@@ -106,20 +106,6 @@ static idx_t RewriteDelimScanReferences(unique_ptr<LogicalOperator> &op, TableIn
 	return rewritten_count;
 }
 
-static bool JoinConditionsAreCanonical(LogicalOperator &op) {
-	if ((op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	     op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) &&
-	    !LogicalComparisonJoin::ConditionsAreCanonical(op.Cast<LogicalComparisonJoin>())) {
-		return false;
-	}
-	for (auto &child : op.children) {
-		if (!JoinConditionsAreCanonical(*child)) {
-			return false;
-		}
-	}
-	return true;
-}
-
 static optional_idx FindBindingIndex(const vector<ColumnBinding> &bindings, const ColumnBinding &binding) {
 	auto entry = std::find(bindings.begin(), bindings.end(), binding);
 	if (entry == bindings.end()) {
@@ -957,8 +943,7 @@ bool GeneratedDedupRefEliminator::RewriteSubtree(unique_ptr<LogicalOperator> &op
 		BindingReplacementMap child_replacements;
 		if (RewriteSubtree(op->children[child_idx], preserve_selected_domain, child_replacements, child_under_aggregate,
 		                   under_evidence_side)) {
-			ColumnBindingRewrite::ApplyToChild(context, op, child_idx, std::move(old_child_bindings),
-			                                   child_replacements);
+			ColumnBindingRewrite::ApplyToChild(op, child_idx, std::move(old_child_bindings), child_replacements);
 			replacements.Merge(child_replacements);
 			rewritten = true;
 		}
@@ -1618,8 +1603,7 @@ idx_t GeneratedDedupRefEliminator::Remove() {
 	BindingReplacementMap right_replacements;
 	if (RewriteSubtree(delim_join.children[1], preserve_selected_domain, right_replacements, false,
 	                   selected_evidence_side)) {
-		ColumnBindingRewrite::ApplyToChild(context, delim_join_op, 1, std::move(old_right_bindings),
-		                                   right_replacements);
+		ColumnBindingRewrite::ApplyToChild(delim_join_op, 1, std::move(old_right_bindings), right_replacements);
 	}
 	dedup_ref_count = CountGeneratedDedupRefs(*delim_join_op->children[1]);
 	return dedup_ref_count;
@@ -2225,8 +2209,7 @@ bool GeneratedDomainJoinEliminator::TryRewriteOnce(unique_ptr<LogicalOperator> &
 		BindingReplacementMap child_replacements;
 		if (TryRewriteOnce(child, child_replacements, child_under_aggregate, child_under_evidence_side,
 		                   child_negated_marker_filter_above)) {
-			ColumnBindingRewrite::ApplyToChild(context, op, child_idx, std::move(old_child_bindings),
-			                                   child_replacements);
+			ColumnBindingRewrite::ApplyToChild(op, child_idx, std::move(old_child_bindings), child_replacements);
 			replacements.Merge(child_replacements);
 			return true;
 		}
@@ -2494,8 +2477,7 @@ BindingReplacementMap DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr<L
 		}
 		auto child_replacements = RewriteDelimJoinsToCTEs(child, rewrite_root, child_null_rejecting_filter_above,
 		                                                  child_preserve_evidence_side);
-		ColumnBindingRewrite::ApplyToChild(binder.context, plan, child_idx, std::move(old_child_bindings),
-		                                   child_replacements);
+		ColumnBindingRewrite::ApplyToChild(plan, child_idx, std::move(old_child_bindings), child_replacements);
 		output_replacements.Merge(child_replacements);
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
@@ -2512,7 +2494,6 @@ void DelimJoinCTERewriter::Rewrite(Binder &binder, unique_ptr<LogicalOperator> &
 }
 
 void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
-	D_ASSERT(JoinConditionsAreCanonical(*plan));
 	bool filters_pushed;
 	do {
 		filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);

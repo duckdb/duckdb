@@ -6,7 +6,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/joinside.hpp"
-#include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -57,12 +57,11 @@ static bool SupportsPairDependentRewrite(JoinType join_type) {
 }
 
 bool RecursiveDependentJoinPlanner::CanRewritePairDependentJoinCondition(LogicalOperator &op) {
-	if (op.type != LogicalOperatorType::LOGICAL_DEPENDENT_JOIN || op.children.size() != 2) {
+	if (op.type != LogicalOperatorType::LOGICAL_ANY_JOIN || op.children.size() != 2) {
 		return false;
 	}
-	auto &join = op.Cast<LogicalDependentJoin>();
-	if (join.dependent_type != DependentJoinType::JOIN_CONDITION || !join.condition ||
-	    !SupportsPairDependentRewrite(join.join_type)) {
+	auto &join = op.Cast<LogicalAnyJoin>();
+	if (!join.condition || !SupportsPairDependentRewrite(join.join_type)) {
 		return false;
 	}
 	unordered_set<TableIndex> left_bindings;
@@ -102,7 +101,7 @@ bool RecursiveDependentJoinPlanner::TryRewritePairDependentJoinCondition(Binder 
 		return false;
 	}
 
-	auto &join = op->Cast<LogicalDependentJoin>();
+	auto &join = op->Cast<LogicalAnyJoin>();
 	auto join_type = join.join_type;
 	auto expected_bindings = op->GetColumnBindings();
 	unordered_set<TableIndex> left_bindings;

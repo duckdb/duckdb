@@ -407,7 +407,7 @@ ORDER BY ALL;
 3	30	false	NULL	NULL
 3	30	true	NULL	NULL
 
-# Distinct LEFT, SEMI, and ANTI semantic edges can have overlapping endpoint
+# Distinct LEFT, SEMI, and ANTI non-inner edges can have overlapping endpoint
 # sets. Join ordering must retain each edge identity and reconstruct it once.
 query IIII
 WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
@@ -422,6 +422,28 @@ ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
 ORDER BY ALL;
 ----
 1	10	1	10
+
+# Exact and greedy enumeration must select the same owned non-inner edges.
+foreach threshold 0 30
+
+statement ok
+SET approximate_join_order_threshold={threshold};
+
+query IIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99))
+SELECT a.k, a.v, b.k, b.v
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+ORDER BY ALL;
+----
+1	10	1	10
+
+endloop
 
 statement ok
 SET disabled_optimizers='join_order';

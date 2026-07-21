@@ -22,6 +22,90 @@ GenerateJoinRelation::GenerateJoinRelation(optional_ptr<JoinRelationSet> set, un
 QueryGraphManager::QueryGraphManager(ClientContext &context) : context(context), relation_manager(context) {
 }
 
+static bool NonInnerRelationSetsIntersect(const JoinRelationSet &left, const JoinRelationSet &right) {
+	for (idx_t left_idx = 0; left_idx < left.count; left_idx++) {
+		for (idx_t right_idx = 0; right_idx < right.count; right_idx++) {
+			if (left.relations[left_idx] == right.relations[right_idx]) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+void QueryGraphManager::ResolveNonInnerJoinPrerequisites() {
+	struct Prerequisite {
+		idx_t edge_index;
+		JoinSide consumer_side;
+	};
+	vector<vector<Prerequisite>> direct_prerequisites(non_inner_joins.size());
+	for (idx_t consumer_idx = 0; consumer_idx < non_inner_joins.size(); consumer_idx++) {
+		auto &consumer = *non_inner_joins[consumer_idx];
+		if (consumer.predicate_left_set.get().Empty() || consumer.predicate_right_set.get().Empty()) {
+			throw InternalException("Non-inner join %llu has an empty predicate endpoint", consumer.index);
+		}
+		if (NonInnerRelationSetsIntersect(consumer.predicate_left_set, consumer.predicate_right_set)) {
+			throw InternalException("Non-inner join %llu has overlapping predicate endpoints", consumer.index);
+		}
+		for (idx_t producer_idx = 0; producer_idx < non_inner_joins.size(); producer_idx++) {
+			if (consumer_idx == producer_idx) {
+				continue;
+			}
+			auto &producer = *non_inner_joins[producer_idx];
+			if (producer.join_type != JoinType::LEFT) {
+				continue;
+			}
+			auto depends_on_left =
+			    NonInnerRelationSetsIntersect(consumer.predicate_left_set, producer.predicate_right_set);
+			auto depends_on_right =
+			    NonInnerRelationSetsIntersect(consumer.predicate_right_set, producer.predicate_right_set);
+			if (depends_on_left && depends_on_right) {
+				throw InternalException("Non-inner join %llu depends on both sides of non-inner join %llu",
+				                        consumer.index, producer.index);
+			}
+			if (depends_on_left || depends_on_right) {
+				direct_prerequisites[consumer_idx].push_back(
+				    {producer_idx, depends_on_left ? JoinSide::LEFT : JoinSide::RIGHT});
+			}
+		}
+	}
+
+	vector<uint8_t> resolve_state(non_inner_joins.size(), 0);
+	std::function<void(idx_t)> resolve_edge = [&](idx_t edge_idx) {
+		if (resolve_state[edge_idx] == 2) {
+			return;
+		}
+		if (resolve_state[edge_idx] == 1) {
+			throw InternalException("Non-inner join prerequisite cycle involving edge %llu", edge_idx);
+		}
+		resolve_state[edge_idx] = 1;
+		auto &edge = *non_inner_joins[edge_idx];
+		unordered_set<idx_t> prerequisite_ids;
+		for (auto &prerequisite : direct_prerequisites[edge_idx]) {
+			resolve_edge(prerequisite.edge_index);
+			auto &producer = *non_inner_joins[prerequisite.edge_index];
+			auto &producer_input = set_manager.Union(producer.required_left_set, producer.required_right_set);
+			if (prerequisite.consumer_side == JoinSide::LEFT) {
+				edge.required_left_set = set_manager.Union(edge.required_left_set, producer_input);
+			} else {
+				D_ASSERT(prerequisite.consumer_side == JoinSide::RIGHT);
+				edge.required_right_set = set_manager.Union(edge.required_right_set, producer_input);
+			}
+			prerequisite_ids.insert(producer.index);
+			prerequisite_ids.insert(producer.prerequisite_edges.begin(), producer.prerequisite_edges.end());
+		}
+		edge.prerequisite_edges.insert(edge.prerequisite_edges.end(), prerequisite_ids.begin(), prerequisite_ids.end());
+		std::sort(edge.prerequisite_edges.begin(), edge.prerequisite_edges.end());
+		if (NonInnerRelationSetsIntersect(edge.required_left_set, edge.required_right_set)) {
+			throw InternalException("Non-inner join %llu has overlapping required input sets", edge.index);
+		}
+		resolve_state[edge_idx] = 2;
+	};
+	for (idx_t edge_idx = 0; edge_idx < non_inner_joins.size(); edge_idx++) {
+		resolve_edge(edge_idx);
+	}
+}
+
 void QueryGraphManager::BuildPredicateModel() {
 	predicate_model.Clear();
 
@@ -136,12 +220,15 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 		return false;
 	}
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
-	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager, semantic_joins);
-	for (auto &semantic_join : semantic_joins) {
-		for (auto predicate_index : semantic_join->costing_predicate_indices) {
-			auto inserted = semantic_costing_predicates.insert(predicate_index);
+	auto extraction = relation_manager.ExtractEdges(op, filter_operators, set_manager);
+	filters_and_bindings = std::move(extraction.filters);
+	non_inner_joins = std::move(extraction.non_inner_edges);
+	ResolveNonInnerJoinPrerequisites();
+	for (auto &non_inner_join : non_inner_joins) {
+		for (auto predicate_index : non_inner_join->costing_predicate_indices) {
+			auto inserted = non_inner_costing_predicates.insert(predicate_index);
 			if (!inserted.second) {
-				throw InternalException("Join-order predicate %llu belongs to multiple semantic joins",
+				throw InternalException("Join-order predicate %llu belongs to multiple non-inner joins",
 				                        predicate_index);
 			}
 		}
@@ -296,7 +383,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 	for (auto predicate_ref : predicate_model.GetGraphPredicates()) {
 		auto &predicate = predicate_ref.get();
 		D_ASSERT(predicate.GetLeftSetOptional() && predicate.GetRightSetOptional());
-		if (semantic_costing_predicates.count(predicate.GetIndex())) {
+		if (non_inner_costing_predicates.count(predicate.GetIndex())) {
 			continue;
 		}
 		query_graph.CreateEdge(predicate.GetLeftSet(), predicate.GetRightSet(), predicate);
@@ -309,18 +396,18 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 		D_ASSERT(predicate.GetIndex() < predicates_by_index.size());
 		predicates_by_index[predicate.GetIndex()] = predicate;
 	}
-	for (auto &semantic_join_ptr : semantic_joins) {
-		auto &semantic_join = *semantic_join_ptr;
-		for (auto predicate_index : semantic_join.costing_predicate_indices) {
+	for (auto &non_inner_join_ptr : non_inner_joins) {
+		auto &non_inner_join = *non_inner_join_ptr;
+		for (auto predicate_index : non_inner_join.costing_predicate_indices) {
 			auto predicate = predicates_by_index[predicate_index];
 			if (!predicate || !predicate->GetLeftSetOptional() || !predicate->GetRightSetOptional()) {
-				throw InternalException("Semantic join %llu has a cost predicate without graph endpoints",
-				                        semantic_join.index);
+				throw InternalException("Non-inner join %llu has a cost predicate without graph endpoints",
+				                        non_inner_join.index);
 			}
-			query_graph.CreateEdge(semantic_join.required_left_set, semantic_join.required_right_set, *predicate,
-			                       semantic_join);
-			query_graph.CreateEdge(semantic_join.required_right_set, semantic_join.required_left_set, *predicate,
-			                       semantic_join);
+			query_graph.CreateEdge(non_inner_join.required_left_set, non_inner_join.required_right_set, *predicate,
+			                       non_inner_join);
+			query_graph.CreateEdge(non_inner_join.required_right_set, non_inner_join.required_left_set, *predicate,
+			                       non_inner_join);
 		}
 	}
 }
@@ -357,18 +444,18 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, total_relation);
-	for (auto &semantic_join : semantic_joins) {
-		if (!reconstructed_semantic_joins.count(semantic_join->index)) {
-			throw InternalException("Join-order optimizer did not reconstruct semantic join %llu",
-			                        semantic_join->index);
+	for (auto &non_inner_join : non_inner_joins) {
+		if (!reconstructed_non_inner_joins.count(non_inner_join->index)) {
+			throw InternalException("Join-order optimizer did not reconstruct non-inner join %llu",
+			                        non_inner_join->index);
 		}
 	}
 
 	// perform the final pushdown of remaining filters
 	for (auto &filter : filters_and_bindings) {
-		if (semantic_costing_predicates.count(filter->filter_index)) {
+		if (non_inner_costing_predicates.count(filter->filter_index)) {
 			if (filter->filter) {
-				throw InternalException("Cost predicate %llu escaped semantic join reconstruction",
+				throw InternalException("Cost predicate %llu escaped non-inner join reconstruction",
 				                        filter->filter_index);
 			}
 			continue;
@@ -442,6 +529,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	optional_ptr<JoinRelationSet> right_node;
 	optional_ptr<JoinRelationSet> result_relation;
 	unique_ptr<LogicalOperator> result_operator;
+	unordered_set<idx_t> subtree_edges;
 
 	auto dp_entry = plans->find(set);
 	if (dp_entry == plans->end()) {
@@ -452,41 +540,44 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		// generate the left and right children
 		auto left = GenerateJoins(extracted_relations, node->left_set);
 		auto right = GenerateJoins(extracted_relations, node->right_set);
-		auto semantic_join = dp_entry->second->info->semantic_join;
-		if (semantic_join) {
-			auto direct = JoinRelationSet::IsSubset(*left.set, semantic_join->required_left_set) &&
-			              JoinRelationSet::IsSubset(*right.set, semantic_join->required_right_set);
-			auto inverted = JoinRelationSet::IsSubset(*left.set, semantic_join->required_right_set) &&
-			                JoinRelationSet::IsSubset(*right.set, semantic_join->required_left_set);
+		subtree_edges = left.non_inner_edges;
+		subtree_edges.insert(right.non_inner_edges.begin(), right.non_inner_edges.end());
+		auto non_inner_join = dp_entry->second->info->non_inner_join;
+		if (non_inner_join) {
+			auto direct = JoinRelationSet::IsSubset(*left.set, non_inner_join->required_left_set) &&
+			              JoinRelationSet::IsSubset(*right.set, non_inner_join->required_right_set);
+			auto inverted = JoinRelationSet::IsSubset(*left.set, non_inner_join->required_right_set) &&
+			                JoinRelationSet::IsSubset(*right.set, non_inner_join->required_left_set);
 			if (direct == inverted) {
-				throw InternalException("Could not orient semantic join %llu in reconstructed join tree",
-				                        semantic_join->index);
+				throw InternalException("Could not orient non-inner join %llu in reconstructed join tree",
+				                        non_inner_join->index);
 			}
 			if (inverted) {
 				std::swap(left, right);
 			}
-			for (auto prerequisite : semantic_join->prerequisite_edges) {
-				if (!reconstructed_semantic_joins.count(prerequisite)) {
-					throw InternalException("Semantic join %llu was reconstructed before prerequisite %llu",
-					                        semantic_join->index, prerequisite);
+			for (auto prerequisite : non_inner_join->prerequisite_edges) {
+				if (!subtree_edges.count(prerequisite)) {
+					throw InternalException("Non-inner join %llu is missing prerequisite %llu from its input subtrees",
+					                        non_inner_join->index, prerequisite);
 				}
 			}
-			if (!reconstructed_semantic_joins.insert(semantic_join->index).second) {
-				throw InternalException("Semantic join %llu was reconstructed more than once", semantic_join->index);
+			if (!reconstructed_non_inner_joins.insert(non_inner_join->index).second ||
+			    !subtree_edges.insert(non_inner_join->index).second) {
+				throw InternalException("Non-inner join %llu was reconstructed more than once", non_inner_join->index);
 			}
 
-			auto join = make_uniq<LogicalComparisonJoin>(semantic_join->join_type);
+			auto join = make_uniq<LogicalComparisonJoin>(non_inner_join->join_type);
 			join->children.push_back(std::move(left.op));
 			join->children.push_back(std::move(right.op));
-			join->conditions = std::move(semantic_join->conditions);
+			join->conditions = std::move(non_inner_join->conditions);
 			if (join->conditions.empty()) {
-				throw InternalException("Semantic join %llu has no conditions", semantic_join->index);
+				throw InternalException("Non-inner join %llu has no conditions", non_inner_join->index);
 			}
-			for (auto predicate_index : semantic_join->costing_predicate_indices) {
+			for (auto predicate_index : non_inner_join->costing_predicate_indices) {
 				auto &filter = filters_and_bindings.at(predicate_index);
 				if (!filter->filter) {
-					throw InternalException("Cost predicate %llu was consumed before semantic join %llu",
-					                        predicate_index, semantic_join->index);
+					throw InternalException("Cost predicate %llu was consumed before non-inner join %llu",
+					                        predicate_index, non_inner_join->index);
 				}
 				filter->filter.reset();
 			}
@@ -498,19 +589,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			result_operator->SetEstimatedCardinality(cardinality);
 		} else {
 			// we have filters, create a join node
-			// Prefer non-INNER join types (LEFT/SEMI/ANTI) since WHERE clause filters default
-			// to INNER but should not override the actual join semantics of the edge.
-			auto &chosen_predicates = node->info->predicates;
-			auto chosen_filter = &chosen_predicates.at(0).get().GetFilter();
-			for (idx_t i = 0; i < chosen_predicates.size(); i++) {
-				auto &predicate = chosen_predicates.at(i).get();
-				auto filter_join_type = predicate.GetJoinType();
-				if (filter_join_type != JoinType::INNER) {
-					chosen_filter = &predicate.GetFilter();
-					break;
-				}
-			}
-			auto join = make_uniq<LogicalComparisonJoin>(chosen_filter->join_type);
+			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			// Here we optimize build side probe side. Our build side is the right side
 			// So the right plans should have lower cardinalities.
 			join->children.push_back(std::move(left.op));
@@ -685,6 +764,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		}
 	}
 	auto result = GenerateJoinRelation(result_relation, std::move(result_operator));
+	if (!node->is_leaf) {
+		result.non_inner_edges = std::move(subtree_edges);
+	}
 	return result;
 }
 

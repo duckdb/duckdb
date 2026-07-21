@@ -43,6 +43,15 @@ private:
 		vector<ColumnBinding> left_payload;
 		vector<ColumnBinding> right_payload;
 	};
+	struct SubtreeAccess {
+		bool correlated = false;
+		bool volatile_expression = false;
+
+		void Merge(const SubtreeAccess &other) {
+			correlated = correlated || other.correlated;
+			volatile_expression = volatile_expression || other.volatile_expression;
+		}
+	};
 
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
@@ -59,13 +68,15 @@ private:
 	column_binding_map_t<ColumnBinding> GetCurrentBindings(const vector<ColumnBinding> &state) const;
 	void RewriteCorrelatedBindings(unique_ptr<LogicalOperator> &op, const vector<ColumnBinding> &state);
 	void RewriteCorrelatedBindings(LogicalDependentJoin &op, const vector<ColumnBinding> &state);
-	//! Checks whether a subtree contains any correlated expressions that reference this flattener's correlated columns.
-	bool DependsOnCorrelated(LogicalOperator &op) const;
+	//! Checks whether a subtree must be evaluated in this flattener's active domain.
+	bool RequiresDomain(LogicalOperator &op) const;
+	SubtreeAccess GetSubtreeAccess(LogicalOperator &op) const;
 	idx_t GetDelimKeyIndex(idx_t index) const;
 
 	UnnestingState PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan, bool propagate_null_values = true);
 	UnnestingState PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                      vector<ColumnBinding> state);
+	UnnestingState AttachDomainToIndependentSubtree(unique_ptr<LogicalOperator> &plan, bool propagate_null_values);
 	UnnestingState PushDownCorrelatedNodeInternal(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                              vector<ColumnBinding> state);
 	bool VerifyUnnestingState(LogicalOperator &plan, const UnnestingState &state) const;
@@ -82,7 +93,7 @@ private:
 	bool perform_delim;
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
-	mutable reference_map_t<LogicalOperator, bool> dependency_cache;
+	mutable reference_map_t<LogicalOperator, SubtreeAccess> access_cache;
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
 	                             bool include_names) const;
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;

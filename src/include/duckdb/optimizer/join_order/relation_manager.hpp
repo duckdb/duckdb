@@ -12,6 +12,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
+#include "duckdb/optimizer/join_order/non_inner_join_edge.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -22,7 +23,11 @@ namespace duckdb {
 
 class JoinOrderOptimizer;
 class FilterInfo;
-struct SemanticJoinEdge;
+
+struct JoinOrderExtraction {
+	vector<unique_ptr<FilterInfo>> filters;
+	vector<unique_ptr<NonInnerJoinEdge>> non_inner_edges;
+};
 
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {
@@ -49,10 +54,8 @@ public:
 
 	//! for each join filter in the logical plan op, extract the relations that are referred to on
 	//! both sides of the join filter, along with the tables & indexes.
-	vector<unique_ptr<FilterInfo>> ExtractEdges(LogicalOperator &op,
-	                                            vector<reference<LogicalOperator>> &filter_operators,
-	                                            JoinRelationSetManager &set_manager,
-	                                            vector<unique_ptr<SemanticJoinEdge>> &semantic_joins);
+	JoinOrderExtraction ExtractEdges(LogicalOperator &op, vector<reference<LogicalOperator>> &filter_operators,
+	                                 JoinRelationSetManager &set_manager);
 
 	//! Extract the set of relations referred to inside an expression
 	bool ExtractBindings(const Expression &expression, unordered_set<RelationIndex> &bindings);

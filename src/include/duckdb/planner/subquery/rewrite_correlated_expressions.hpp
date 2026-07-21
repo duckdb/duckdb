@@ -19,24 +19,21 @@ class LogicalDependentJoin;
 //! Rewrites correlated expressions through converted algebra, stopping at unconverted dependent-join children.
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
-	static void Rewrite(ClientContext &context, unique_ptr<LogicalOperator> &op,
-	                    column_binding_map_t<ColumnBinding> current_binding_map,
+	static void Rewrite(unique_ptr<LogicalOperator> &op, column_binding_map_t<ColumnBinding> current_binding_map,
 	                    column_binding_map_t<ColumnBinding> &correlated_aliases);
-	static void Rewrite(ClientContext &context, LogicalDependentJoin &op,
-	                    column_binding_map_t<ColumnBinding> current_binding_map,
+	static void Rewrite(LogicalDependentJoin &op, column_binding_map_t<ColumnBinding> current_binding_map,
 	                    column_binding_map_t<ColumnBinding> &correlated_aliases);
 
 private:
-	RewriteCorrelatedExpressions(ClientContext &context, column_binding_map_t<ColumnBinding> current_binding_map,
+	RewriteCorrelatedExpressions(column_binding_map_t<ColumnBinding> current_binding_map,
 	                             column_binding_map_t<ColumnBinding> &correlated_aliases);
 	void RegisterCorrelatedBinding(const ColumnBinding &source_binding, const ColumnBinding &target_binding);
 	void RewriteOperator(LogicalOperator &op);
-	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
+	void VisitOperator(LogicalOperator &op) override;
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 	column_binding_map_t<ColumnBinding> current_binding_map;
 	column_binding_map_t<ColumnBinding> &correlated_aliases;
-	ClientContext &context;
 };
 
 //! Helper class that rewrites COUNT aggregates into a CASE expression turning NULL into 0 after a LEFT OUTER JOIN

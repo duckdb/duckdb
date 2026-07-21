@@ -529,9 +529,9 @@ static BindingReplacementMap PropagateOutputBindingReplacements(const vector<Col
 
 BindingReplacementMap RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<LogicalOperator> &op_ptr) {
 	PlanJoinChildFilters(*op_ptr);
-	if (op_ptr->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN &&
-	    op_ptr->Cast<LogicalDependentJoin>().dependent_type == DependentJoinType::JOIN_CONDITION) {
-		return PlanJoinCondition(op_ptr);
+	if (op_ptr->type == LogicalOperatorType::LOGICAL_ANY_JOIN &&
+	    op_ptr->Cast<LogicalAnyJoin>().condition->HasSubquery()) {
+		return PlanAnyJoinCondition(op_ptr);
 	}
 	auto old_output = op_ptr->GetColumnBindings();
 	BindingReplacementMap operator_replacements;
@@ -557,23 +557,21 @@ BindingReplacementMap RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<Log
 			D_ASSERT(op_ptr->children[i]);
 			auto old_child_bindings = op_ptr->children[i]->GetColumnBindings();
 			auto child_replacements = PlanOperator(op_ptr->children[i]);
-			ColumnBindingRewrite::ApplyToChild(binder.context, op_ptr, i, std::move(old_child_bindings),
-			                                   child_replacements);
+			ColumnBindingRewrite::ApplyToChild(op_ptr, i, std::move(old_child_bindings), child_replacements);
 			operator_replacements.Merge(child_replacements);
 		}
 	}
 	return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 }
 
-BindingReplacementMap RecursiveDependentJoinPlanner::PlanJoinCondition(unique_ptr<LogicalOperator> &op_ptr) {
+BindingReplacementMap RecursiveDependentJoinPlanner::PlanAnyJoinCondition(unique_ptr<LogicalOperator> &op_ptr) {
 	auto old_output = op_ptr->GetColumnBindings();
 	BindingReplacementMap operator_replacements;
 
 	for (idx_t child_index = 0; child_index < op_ptr->children.size(); child_index++) {
 		auto old_child_bindings = op_ptr->children[child_index]->GetColumnBindings();
 		auto child_replacements = PlanOperator(op_ptr->children[child_index]);
-		ColumnBindingRewrite::ApplyToChild(binder.context, op_ptr, child_index, std::move(old_child_bindings),
-		                                   child_replacements);
+		ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
 		operator_replacements.Merge(child_replacements);
 	}
 
@@ -585,25 +583,15 @@ BindingReplacementMap RecursiveDependentJoinPlanner::PlanJoinCondition(unique_pt
 		return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 	}
 
-	auto &pending = op_ptr->Cast<LogicalDependentJoin>();
-	D_ASSERT(pending.condition);
-	PlanJoinSubqueries(pending, pending.condition, JoinSide::LEFT);
-	for (idx_t child_index = 0; child_index < pending.children.size(); child_index++) {
-		auto old_child_bindings = pending.children[child_index]->GetColumnBindings();
-		auto child_replacements = PlanOperator(pending.children[child_index]);
-		ColumnBindingRewrite::ApplyToChild(binder.context, op_ptr, child_index, std::move(old_child_bindings),
-		                                   child_replacements);
+	auto &join = op_ptr->Cast<LogicalAnyJoin>();
+	D_ASSERT(join.condition);
+	PlanJoinSubqueries(join, join.condition, JoinSide::LEFT);
+	for (idx_t child_index = 0; child_index < join.children.size(); child_index++) {
+		auto old_child_bindings = join.children[child_index]->GetColumnBindings();
+		auto child_replacements = PlanOperator(join.children[child_index]);
+		ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
 		operator_replacements.Merge(child_replacements);
 	}
-
-	auto join_type = pending.join_type;
-	auto condition = std::move(pending.condition);
-	auto left = std::move(pending.children[0]);
-	auto right = std::move(pending.children[1]);
-	auto finalized = LogicalComparisonJoin::CreateJoin(binder.context, join_type, JoinRefType::REGULAR, std::move(left),
-	                                                   std::move(right), std::move(condition));
-	LogicalJoin::MoveJoinProperties(pending, finalized->Cast<LogicalJoin>());
-	op_ptr = std::move(finalized);
 	return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 }
 

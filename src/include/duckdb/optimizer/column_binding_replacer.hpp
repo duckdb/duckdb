@@ -14,7 +14,6 @@ namespace duckdb {
 
 class BoundColumnRefExpression;
 class BoundSubqueryExpression;
-class ClientContext;
 class ColumnBindingReplacer;
 
 struct ReplacementBinding {
@@ -98,13 +97,12 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };
 
-//! Applies binding replacements together with their projection-layout and join-condition invariants.
+//! Applies binding replacements together with their projection-layout invariants.
 class ColumnBindingRewrite {
 public:
-	static bool ApplyToChild(ClientContext &context, unique_ptr<LogicalOperator> &op, idx_t child_index,
+	static bool ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
 	                         vector<ColumnBinding> old_child_bindings, const BindingReplacementMap &replacements);
 	static void ApplyToOperatorBindings(LogicalOperator &op, const BindingReplacementMap &replacements);
-	static void FinalizeOperator(ClientContext &context, unique_ptr<LogicalOperator> &op);
 	static void RemapProjectionMapStrict(vector<ProjectionIndex> &projection_map,
 	                                     const vector<ColumnBinding> &child_bindings_before,
 	                                     const vector<ColumnBinding> &child_bindings_after);

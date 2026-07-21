@@ -17,7 +17,7 @@
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
-#include "duckdb/optimizer/join_order/semantic_join_edge.hpp"
+#include "duckdb/optimizer/join_order/non_inner_join_edge.hpp"
 
 namespace duckdb {
 
@@ -30,6 +30,7 @@ public:
 public:
 	optional_ptr<JoinRelationSet> set;
 	unique_ptr<LogicalOperator> op;
+	unordered_set<idx_t> non_inner_edges;
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
@@ -60,6 +61,7 @@ private:
 
 	//! Build the normalized predicate model after filter endpoints and stats bindings are populated.
 	void BuildPredicateModel();
+	void ResolveNonInnerJoinPrerequisites();
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
 
@@ -79,9 +81,9 @@ private:
 	//! used by the cardinality estimator to estimate distinct counts
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
 	//! Non-inner joins whose semantics must be enumerated and reconstructed atomically.
-	vector<unique_ptr<SemanticJoinEdge>> semantic_joins;
-	unordered_set<idx_t> semantic_costing_predicates;
-	unordered_set<idx_t> reconstructed_semantic_joins;
+	vector<unique_ptr<NonInnerJoinEdge>> non_inner_joins;
+	unordered_set<idx_t> non_inner_costing_predicates;
+	unordered_set<idx_t> reconstructed_non_inner_joins;
 
 	QueryGraphEdges query_graph;
 	JoinPredicateModel predicate_model;

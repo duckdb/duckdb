@@ -20,33 +20,20 @@
 
 namespace duckdb {
 
-enum class DependentJoinType : uint8_t { DUPLICATE_ELIMINATION, JOIN_CONDITION };
-
 class LogicalDependentJoin : public LogicalJoin {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
 
 public:
-	explicit LogicalDependentJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-	                              CorrelatedColumns correlated_columns, JoinType type,
-	                              unique_ptr<Expression> condition);
-
 	explicit LogicalDependentJoin(JoinType type);
 
-	//! The complete condition, kept unclassified until both child binding layouts are final
+	//! The condition of the dependent join, if any
 	unique_ptr<Expression> condition;
 	//! The list of columns that have correlations with the right
 	CorrelatedColumns correlated_columns;
-	//! The kind of pending planning work represented by this operator
-	DependentJoinType dependent_type = DependentJoinType::DUPLICATE_ELIMINATION;
 
 	bool perform_delim = true;
 	bool any_join = false;
 	bool propagate_null_values = true;
-
-public:
-	static unique_ptr<LogicalOperator> Create(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-	                                          CorrelatedColumns correlated_columns, JoinType type,
-	                                          unique_ptr<Expression> condition);
 };
 } // namespace duckdb

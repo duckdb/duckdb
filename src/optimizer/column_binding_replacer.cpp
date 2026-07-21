@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
@@ -243,20 +242,28 @@ void ColumnBindingRewrite::ApplyToOperatorBindings(LogicalOperator &op, const Bi
 	replacer.VisitOperatorBindings(op);
 }
 
-void ColumnBindingRewrite::FinalizeOperator(ClientContext &context, unique_ptr<LogicalOperator> &op) {
-	LogicalComparisonJoin::FinalizeBindingRewrite(context, op);
-}
-
-bool ColumnBindingRewrite::ApplyToChild(ClientContext &context, unique_ptr<LogicalOperator> &op, idx_t child_index,
+bool ColumnBindingRewrite::ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
                                         vector<ColumnBinding> old_child_bindings,
                                         const BindingReplacementMap &replacements) {
 	if (child_index >= op->children.size()) {
 		throw InternalException("Binding rewrite child index %llu out of range", child_index);
 	}
+	auto new_child_bindings = op->children[child_index]->GetColumnBindings();
+	for (auto &replacement : replacements) {
+		if (std::find(old_child_bindings.begin(), old_child_bindings.end(), replacement.old_binding) ==
+		    old_child_bindings.end()) {
+			continue;
+		}
+		auto resolved = replacements.Resolve(replacement.old_binding);
+		if (std::find(new_child_bindings.begin(), new_child_bindings.end(), resolved) == new_child_bindings.end()) {
+			throw InternalException("Binding rewrite moved child binding %s outside rewritten child output %s",
+			                        replacement.old_binding.ToString(),
+			                        LogicalOperator::ColumnBindingsToString(new_child_bindings));
+		}
+	}
 	for (auto &binding : old_child_bindings) {
 		binding = replacements.Resolve(binding);
 	}
-	auto new_child_bindings = op->children[child_index]->GetColumnBindings();
 	auto layout_changed = old_child_bindings != new_child_bindings;
 	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(*op, child_index);
 	if (projection_map) {
@@ -275,7 +282,6 @@ bool ColumnBindingRewrite::ApplyToChild(ClientContext &context, unique_ptr<Logic
 			replacer.VisitOperatorBindings(*op);
 		}
 	}
-	FinalizeOperator(context, op);
 	return true;
 }
 
