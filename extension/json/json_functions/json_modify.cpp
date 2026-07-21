@@ -38,8 +38,13 @@ public:
 	JSONModifyFunctionData(bool constant_p, string path_p) : constant(constant_p), path(std::move(path_p)) {
 		if (constant && (path.empty() || path[0] != '/')) {
 			// JSONPath, bare key, or empty path: parse it once so execution can skip tokenizing it per row
-			elements = ParseModifyPath(path.c_str(), path.size(), true);
-			use_elements = true;
+			try {
+				elements = ParseModifyPath(path.c_str(), path.size(), true);
+				use_elements = true;
+			} catch (const std::exception &) {
+				// Invalid path: parse per row instead, so the error surfaces only if a row is actually
+				// evaluated, keeping it catchable by TRY and silent in unreachable branches
+			}
 		}
 	}
 	unique_ptr<FunctionData> Copy() const override {
@@ -282,9 +287,10 @@ static bool ModifyDocument(yyjson_mut_doc *doc, const JSONModifyFunctionData &in
                            yyjson_mut_val *new_val, JSONModifyType type) {
 	if (info.use_elements) {
 		ModifyDocumentElements(doc, info.elements, new_val, type);
-	} else if (info.constant) {
+	} else if (info.constant && !info.path.empty() && info.path[0] == '/') {
 		ModifyAtPointer(doc, string_t(info.path.c_str(), UnsafeNumericCast<uint32_t>(info.path.size())), new_val, type);
 	} else {
+		// Non constant path, or a constant path that did not parse at bind time (the error surfaces here)
 		auto ptr = path_str.GetData();
 		auto len = path_str.GetSize();
 		if (len != 0 && *ptr == '/') {
