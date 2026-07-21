@@ -270,6 +270,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(VariantExtractFun),
 	DUCKDB_SCALAR_FUNCTION_SET(VariantKeysFun),
 	DUCKDB_SCALAR_FUNCTION(VariantNormalizeFun),
+	DUCKDB_SCALAR_FUNCTION_SET(VariantTypeFun),
 	DUCKDB_SCALAR_FUNCTION(VariantTypeofFun),
 	DUCKDB_SCALAR_FUNCTION(VertexExtractFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WriteLogFun),

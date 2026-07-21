@@ -28,6 +28,7 @@ blacklist = [
     "PartitionKeyTrackerState",
     "ClaimState",
     "MoveBufferResult",
+    "CSVBufferResidency",
     "AppendAdmission",
     "AppendReservationState",
     "BufferedPushState",

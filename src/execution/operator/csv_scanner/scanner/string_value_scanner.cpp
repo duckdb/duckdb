@@ -1036,13 +1036,13 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        const shared_ptr<CSVErrorHandler> &error_handler,
                                        const shared_ptr<CSVFileScan> &csv_file_scan, bool sniffing,
-                                       const CSVIterator &boundary, idx_t result_size)
+                                       const CSVIterator &boundary, idx_t result_size, bool can_suspend_p)
     : BaseScanner(buffer_manager, state_machine, error_handler, sniffing, csv_file_scan, boundary),
       scanner_idx(scanner_idx_p),
       result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath(), scanner_idx_p, used_unstrictness),
-      start_pos(0) {
+      start_pos(0), can_suspend(can_suspend_p) {
 	if (scanner_idx == 0 && csv_file_scan) {
 		lines_read += csv_file_scan->skipped_rows;
 	}
@@ -1058,7 +1058,7 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
       result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath(), 0, used_unstrictness),
-      start_pos(0) {
+      start_pos(0), can_suspend(false) {
 	if (scanner_idx == 0 && csv_file_scan) {
 		lines_read += csv_file_scan->skipped_rows;
 	}
@@ -1089,9 +1089,24 @@ bool StringValueScanner::FinishedIterator() const {
 }
 
 StringValueResult &StringValueScanner::ParseChunk() {
+	if (suspended) {
+		// Resuming a chunk that suspended on a buffer load, we keep the parsed rows until here
+		ResumeParse();
+		return result;
+	}
 	result.Reset();
 	ParseChunkInternal(result);
 	return result;
+}
+
+void StringValueScanner::ResumeParse() {
+	suspended = false;
+	if (iterator.IsBoundarySet()) {
+		// This got blocked at TryMoveToNextBuffer(); so we gotta finish the boundary scan
+		FinishBoundaryScan(TryMoveToNextBuffer() == MoveBufferResult::MOVED);
+	} else {
+		ProcessRemainingBuffers();
+	}
 }
 
 void StringValueScanner::Flush(DataChunk &insert_chunk) {
@@ -1099,6 +1114,10 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	do {
 		continue_processing = false;
 		auto &process_result = ParseChunk();
+		if (IsSuspended()) {
+			// Suspended on a buffer load
+			return;
+		}
 		// First Get Parsed Chunk
 		auto &parse_chunk = process_result.ToChunk();
 		insert_chunk.Reset();
@@ -1634,10 +1653,17 @@ StringValueScanner::MoveBufferResult StringValueScanner::TryMoveToNextBuffer() {
 		return MoveBufferResult::NOT_MOVED;
 	}
 	// a value spans at most two buffers, so the buffer before the previous one is never needed again:
-	// release it before fetching, keeping the peak at two pinned buffers per scanner
+	// release it before pinning the next one, keeping the peak at two pinned buffers per scanner
 	previous_buffer_handle.reset();
 	const idx_t next_buffer_idx = iterator.pos.buffer_idx + 1;
-	auto next_buffer = buffer_manager->GetBuffer(next_buffer_idx);
+	shared_ptr<CSVBufferHandle> next_buffer;
+	if (buffer_manager->GetBufferResidency(next_buffer_idx, next_buffer) == CSVBufferResidency::NEEDS_LOAD) {
+		if (can_suspend && pending_buffer_idx != next_buffer_idx) {
+			pending_buffer_idx = next_buffer_idx;
+			return MoveBufferResult::NOT_IN_MEMORY;
+		}
+		next_buffer = buffer_manager->GetBuffer(next_buffer_idx);
+	}
 	if (next_buffer) {
 		FinishMoveToNextBuffer(std::move(next_buffer));
 		return MoveBufferResult::MOVED;
@@ -1982,6 +2008,10 @@ void StringValueScanner::FinalizeChunkProcess() {
 			return;
 		}
 		const auto move_result = TryMoveToNextBuffer();
+		if (move_result == MoveBufferResult::NOT_IN_MEMORY) {
+			suspended = true;
+			return;
+		}
 		FinishBoundaryScan(move_result == MoveBufferResult::MOVED);
 	} else {
 		// 2) If a boundary is not set
@@ -1998,6 +2028,7 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 			ProcessExtraRow();
 		}
 		if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
+			// the last buffer has no next buffer to wait for
 			TryMoveToNextBuffer();
 		}
 	}
@@ -2029,7 +2060,10 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 
 void StringValueScanner::ProcessRemainingBuffers() {
 	while (!FinishedFile() && static_cast<idx_t>(result.number_of_rows) < result.result_size) {
-		TryMoveToNextBuffer();
+		if (TryMoveToNextBuffer() == MoveBufferResult::NOT_IN_MEMORY) {
+			suspended = true;
+			return;
+		}
 		if (static_cast<idx_t>(result.number_of_rows) >= result.result_size) {
 			return;
 		}

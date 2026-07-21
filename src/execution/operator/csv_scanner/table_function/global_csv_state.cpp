@@ -55,8 +55,9 @@ CSVLocalState::~CSVLocalState() {
 
 void CSVLocalState::Materialize() {
 	D_ASSERT(claim_state == ClaimState::PENDING && !csv_reader);
-	csv_reader = make_uniq<StringValueScanner>(scanner_idx, file_scan->buffer_manager, file_scan->state_machine,
-	                                           file_scan->error_handler, file_scan, false, iterator);
+	csv_reader =
+	    make_uniq<StringValueScanner>(scanner_idx, file_scan->buffer_manager, file_scan->state_machine,
+	                                  file_scan->error_handler, file_scan, false, iterator, STANDARD_VECTOR_SIZE, true);
 	csv_reader->buffer_tracker = std::move(buffer_tracker);
 	file_scan.reset();
 	claim_state = ClaimState::MATERIALIZED;

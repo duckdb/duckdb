@@ -72,7 +72,7 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	                                                           MultiFileGlobalState &global_state) override;
 	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) override;
 
-	bool SupportsReadAhead() const override {
+	bool SupportsReadAhead(const MultiFileBindData &bind_data) const override {
 		return true;
 	}
 	shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,

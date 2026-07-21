@@ -1,0 +1,78 @@
+# name: test/parquet/variant/pushdown/variant_extract_nulls.test
+# group: [pushdown]
+
+require parquet
+
+foreach disabled true false
+
+onlyif disabled=true
+statement ok
+COPY (
+	FROM (VALUES
+		(NULL::VARIANT),
+		({'y': 10}::VARIANT),
+		({'x': NULL}::VARIANT),
+		({'x': 5::UTINYINT}::VARIANT),
+		({'x': '5'}::VARIANT),
+		({'x': 7::UTINYINT}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_nulls.parquet' (SHREDDING {'v': 'NULL'});
+
+onlyif disabled=false
+statement ok
+COPY (
+	FROM (VALUES
+		(NULL::VARIANT),
+		({'y': 10}::VARIANT),
+		({'x': NULL}::VARIANT),
+		({'x': 5::UTINYINT}::VARIANT),
+		({'x': '5'}::VARIANT),
+		({'x': 7::UTINYINT}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_nulls.parquet';
+
+query IIIII
+SELECT
+	count(*) FILTER (WHERE v.x IS NULL),
+	count(*) FILTER (WHERE v.x IS NOT NULL),
+	count(*) FILTER (WHERE v.x = 5),
+	count(*) FILTER (WHERE TRY(v.x::INTEGER) = 5),
+	count(*) FILTER (WHERE v.x::INTEGER = 5)
+FROM '{TEST_DIR}/variant_pushdown_nulls.parquet'
+----
+3	3	1	2	2
+
+query ITT nosort
+SELECT row_number() OVER () rn, variant_typeof(v.x), v.x::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nulls.parquet'
+ORDER BY rn
+----
+1	VARIANT_NULL	NULL
+2	VARIANT_NULL	NULL
+3	VARIANT_NULL	NULL
+4	INT16	5
+5	VARCHAR	5
+6	INT16	7
+
+endloop
+
+statement ok
+COPY (
+	FROM (VALUES
+		(NULL::VARIANT),
+		({'y': 10}::VARIANT),
+		({'x': NULL}::VARIANT),
+		({'x': 5::INTEGER}::VARIANT),
+		({'x': 7::INTEGER}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_nulls_fully.parquet';
+
+query IIII
+SELECT
+	count(*) FILTER (WHERE v.x IS NULL),
+	count(*) FILTER (WHERE v.x IS NOT NULL),
+	count(*) FILTER (WHERE v.x = 5),
+	count(*) FILTER (WHERE v.x::INTEGER = 5)
+FROM '{TEST_DIR}/variant_pushdown_nulls_fully.parquet'
+----
+3	2	1	1
