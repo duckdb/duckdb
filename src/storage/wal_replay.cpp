@@ -727,7 +727,11 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 	}
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto &schema = catalog.GetSchema(context, info->GetQualifiedName().Schema());
+	// the qualified name is [catalog, schema_path..., name] - navigate the (possibly nested) schema path
+	auto &path = info->GetQualifiedName().Path();
+	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	auto &schema =
+	    *catalog.GetSchema(catalog.GetCatalogTransaction(context), schema_path, OnEntryNotFound::THROW_EXCEPTION);
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);
@@ -738,7 +742,16 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
+	// build the DropInfo path [catalog, schema_path..., name]; the qualified name's path is [schema_path..., name]
+	// (older WALs that only stored the immediate schema + table name are folded into it during deserialization)
+	vector<Identifier> path;
+	path.push_back(catalog.GetName());
+	for (auto &component : entry.qualified_name.Path()) {
+		path.push_back(component);
+	}
+	Identifier table_name = std::move(path.back());
+	path.pop_back();
+	info.SetQualifiedName(QualifiedName(std::move(path), std::move(table_name)));
 	if (DeserializeOnly()) {
 		return;
 	}

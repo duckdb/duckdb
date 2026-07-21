@@ -155,14 +155,21 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_VACUUM:
 		return CreatePlan(op.Cast<LogicalVacuum>());
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
+		return CreatePlan(op.Cast<LogicalTransaction>());
 	case LogicalOperatorType::LOGICAL_ALTER:
+		return CreatePlan(op.Cast<LogicalAlter>());
 	case LogicalOperatorType::LOGICAL_DROP:
+		return CreatePlan(op.Cast<LogicalDrop>());
 	case LogicalOperatorType::LOGICAL_LOAD:
+		return CreatePlan(op.Cast<LogicalLoad>());
 	case LogicalOperatorType::LOGICAL_ATTACH:
+		return CreatePlan(op.Cast<LogicalAttach>());
 	case LogicalOperatorType::LOGICAL_DETACH:
+		return CreatePlan(op.Cast<LogicalDetach>());
 	case LogicalOperatorType::LOGICAL_CONNECT:
+		return CreatePlan(op.Cast<LogicalConnect>());
 	case LogicalOperatorType::LOGICAL_DISCONNECT:
-		return CreatePlan(op.Cast<LogicalSimple>());
+		return CreatePlan(op.Cast<LogicalDisconnect>());
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return CreatePlan(op.Cast<LogicalRecursiveCTE>());
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
@@ -180,7 +187,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		return CreatePlan(op.Cast<LogicalCopyDatabase>());
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
-		return CreatePlan(op.Cast<LogicalSimple>());
+		return CreatePlan(op.Cast<LogicalUpdateExtensions>());
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &extension_op = op.Cast<LogicalExtensionOperator>();
 		return extension_op.CreatePlan(context, *this);

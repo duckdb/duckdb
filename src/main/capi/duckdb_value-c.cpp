@@ -136,6 +136,9 @@ duckdb_bignum duckdb_get_bignum(duckdb_value val) {
 	duckdb::Bignum::GetByteArray(byte_array, is_negative, duckdb::string_t(str));
 	auto size = byte_array.size();
 	auto data = reinterpret_cast<uint8_t *>(malloc(size));
+	if (!data) {
+		return {nullptr, 0, is_negative};
+	}
 	memcpy(data, byte_array.data(), size);
 	return {data, size, is_negative};
 }
@@ -288,6 +291,9 @@ duckdb_blob duckdb_get_blob(duckdb_value val) {
 	auto &str = duckdb::StringValue::Get(res);
 
 	auto result = reinterpret_cast<void *>(malloc(sizeof(char) * str.size()));
+	if (!result) {
+		return {nullptr, 0};
+	}
 	memcpy(result, str.c_str(), str.size());
 	return {result, str.size()};
 }
@@ -299,6 +305,9 @@ duckdb_bit duckdb_get_bit(duckdb_value val) {
 	auto &str = duckdb::StringValue::Get(v);
 	auto size = str.size();
 	auto data = reinterpret_cast<uint8_t *>(malloc(size));
+	if (!data) {
+		return {nullptr, 0};
+	}
 	memcpy(data, str.c_str(), size);
 	return {data, size};
 }
@@ -324,6 +333,9 @@ char *duckdb_get_varchar(duckdb_value value) {
 	auto &str = duckdb::StringValue::Get(str_val);
 
 	auto result = reinterpret_cast<char *>(malloc(sizeof(char) * (str.size() + 1)));
+	if (!result) {
+		return nullptr;
+	}
 	memcpy(result, str.c_str(), str.size());
 	result[str.size()] = '\0';
 	return result;
@@ -639,6 +651,9 @@ char *duckdb_value_to_string(duckdb_value val) {
 	auto str = v.ToSQLString();
 
 	auto result = reinterpret_cast<char *>(malloc(sizeof(char) * (str.size() + 1)));
+	if (!result) {
+		return nullptr;
+	}
 	memcpy(result, str.c_str(), str.size());
 	result[str.size()] = '\0';
 	return result;

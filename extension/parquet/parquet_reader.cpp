@@ -10,6 +10,7 @@
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
 #include "column_reader.hpp"
+#include "reader/byte_array_length_column_reader.hpp"
 #include "reader/expression_column_reader.hpp"
 #include "parquet_geometry.hpp"
 #include "reader/list_column_reader.hpp"
@@ -1061,9 +1062,11 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
-                             shared_ptr<ParquetFileMetadataCache> metadata_p)
+                             shared_ptr<ParquetFileMetadataCache> metadata_p,
+                             unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions_p)
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
-      allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
+      allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)),
+      projection_expressions(std::move(projection_expressions_p)) {
 	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
@@ -1107,6 +1110,15 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 	}
 	InitializeSchema(context_p);
+	// Length-pushdown rewrites these columns to BIGINT, update the local schema
+	for (const auto &[idx, expr] : projection_expressions) {
+		if (idx < columns.size()) {
+			columns[idx].type = expr.return_type;
+		}
+		if (idx < root_schema->children.size()) {
+			root_schema->children[idx].type = expr.return_type;
+		}
+	}
 }
 
 bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
@@ -1406,9 +1418,10 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 			}
 			// check the bloom filter if present
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
-			    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
+			    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Schema()) &&
 			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[schema_column_index].meta_data,
-			                                                *state.thrift_file_proto, allocator)) {
+			                                                *state.thrift_file_proto, allocator,
+			                                                column_reader.Schema())) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			}
 
@@ -1508,6 +1521,13 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	for (idx_t i = 0; i < column_indexes.size(); i++) {
 		auto &index = column_indexes[i];
 		auto column_id = index.GetPrimaryIndex();
+		if (auto it = projection_expressions.find(column_id);
+		    it != projection_expressions.end() &&
+		    it->second.type == ParquetReaderProjectionExpressionType::BYTE_LENGTH) {
+			auto &schema = root_schema->children[column_id];
+			state.column_readers[i] = make_uniq<ByteArrayLengthColumnReader>(*this, schema);
+			continue;
+		}
 		auto it = expression_map.find(column_id);
 		if (it != expression_map.end()) {
 			auto &expression_data = it->second;

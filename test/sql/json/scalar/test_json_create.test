@@ -37,6 +37,11 @@ select json_object('x', 42::VARIANT)
 ----
 {"x":42}
 
+query T
+select [{'a': 1, 'b': [1]}::VARIANT]::JSON
+----
+[{"a":1,"b":[1]}]
+
 statement error
 select to_json({n: 42}, {extra: 'argument'})
 ----

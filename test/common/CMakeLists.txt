@@ -18,6 +18,7 @@ add_library_unity(
   test_parse_expression.cpp
   test_parse_load_statement.cpp
   test_parse_logical_type.cpp
+  test_logical_type_is_complete.cpp
   test_utf.cpp
   test_allocator_debug_info.cpp
   test_buffer_pool_reservation.cpp

@@ -35,6 +35,10 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 	return result;
 }
 
+//! This parses a superset of the strings that the actual SQL parser accepts: it allows whitespace, most special
+//! characters like ()'- and keywords without requiring double quotes. It only requires double quotes around .
+//! characters and doubled double quotes (which collapse into a single double quote). It's only possible to fully
+//! double quote a component or not quote it at all.
 vector<Identifier> QualifiedName::ParseComponents(const string &input) {
 	vector<Identifier> result;
 	idx_t idx = 0;
@@ -44,6 +48,11 @@ normal:
 	//! quote
 	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
+			if (!entry.empty()) {
+				//! a quote may only open a component, e.g. abc"xyz" is not a valid identifier
+				throw ParserException("Unexpected quote in the middle of a qualified name component! (input: %s)",
+				                      input);
+			}
 			idx++;
 			goto quoted;
 		} else if (input[idx] == '.') {
@@ -61,8 +70,22 @@ quoted:
 	//! look for another quote
 	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
-			//! unquote
+			if (idx + 1 < input.size() && input[idx + 1] == '"') {
+				//! escaped quote ("" inside a quoted identifier is a literal ")
+				entry += '"';
+				idx++;
+				continue;
+			}
+			if (entry.empty()) {
+				//! the SQL parser also rejects "" as a zero-length delimited identifier
+				throw ParserException("Zero-length delimited identifier in qualified name! (input: %s)", input);
+			}
+			//! unquote; a closing quote must end the component, e.g. "abc"xyz is not a valid identifier
 			idx++;
+			if (idx < input.size() && input[idx] != '.') {
+				throw ParserException("Unexpected character after a quoted identifier in a qualified name! (input: %s)",
+				                      input);
+			}
 			goto normal;
 		}
 		entry += input[idx];

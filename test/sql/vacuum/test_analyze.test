@@ -14,7 +14,13 @@ statement ok
 ANALYZE;
 
 statement ok
+ANALYSE;
+
+statement ok
 VACUUM;
+
+statement ok
+VACUUM ANALYSE;
 
 statement error
 VACUUM test;
@@ -31,6 +37,9 @@ CREATE TABLE test (i INT, j INT);
 
 statement ok
 ANALYZE test;
+
+statement ok
+ANALYSE test;
 
 statement ok
 CREATE VIEW testview AS SELECT * FROM test;

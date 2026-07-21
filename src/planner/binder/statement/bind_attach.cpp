@@ -1,7 +1,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/attach_statement.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/planner/operator/logical_attach.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -37,7 +37,7 @@ BoundStatement Binder::Bind(AttachStatement &stmt) {
 	}
 	stmt.info->parsed_options.clear();
 
-	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ATTACH, std::move(stmt.info));
+	result.plan = make_uniq<LogicalAttach>(std::move(stmt.info));
 
 	auto &properties = GetStatementProperties();
 	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;

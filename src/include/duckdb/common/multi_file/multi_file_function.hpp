@@ -601,13 +601,13 @@ public:
 		    context, bind_data.file_options, bind_data.reader_bind, file_list, global_columns, input.column_indexes);
 
 		if (file_list.IsEmpty()) {
-			result->readers = {};
+			result->readers.clear();
 		} else if (!bind_data.union_readers.empty()) {
 			for (auto &reader : bind_data.union_readers) {
 				result->readers.push_back(make_uniq<MultiFileReaderData>(reader));
 			}
 			if (result->readers.size() != file_list.GetTotalFileCount()) {
-				result->readers = {};
+				result->readers.clear();
 			}
 		} else if (bind_data.initial_reader) {
 			// we can only use the initial reader if it was constructed from the first file
@@ -1112,17 +1112,6 @@ public:
 			auto list_of_types = StringUtil::Join(file_path_names, ", ");
 			input.operator_metrics.AddExtraInfo("Filename(s)", list_of_types);
 		}
-	}
-
-	static bool PushdownProjectionExpression(ClientContext &context, TableFunctionProjectionExpressionInput &input) {
-		if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
-			return false;
-		}
-		auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
-		const auto &cast = input.expr.Cast<BoundCastExpression>();
-		bind_data.types[input.proj_index] = cast.GetReturnType();
-		bind_data.columns[input.proj_index].type = cast.GetReturnType();
-		return true;
 	}
 
 private:

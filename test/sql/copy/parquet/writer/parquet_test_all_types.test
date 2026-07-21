@@ -17,12 +17,12 @@ COPY all_types TO "{TEST_DIR}/all_types.parquet" (FORMAT PARQUET);
 
 # we have to make some replacements to get result equivalence
 # hugeint/uhugeint is stored as double -> we have to cast
-# TIME WITH TIME ZONE loses the offset
+# TIME WITH TIME ZONE is stored as a UTC-adjusted Parquet TIME
 query I nosort alltypes
 SELECT * REPLACE (
 	hugeint::DOUBLE AS hugeint,
 	uhugeint::DOUBLE AS uhugeint,
-	time_tz::TIME::TIMETZ AS time_tz
+	timezone(interval '0 seconds', time_tz) AS time_tz
 )
 FROM all_types
 ----
