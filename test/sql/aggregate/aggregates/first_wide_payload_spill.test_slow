@@ -1,0 +1,43 @@
+# name: test/sql/aggregate/aggregates/first_wide_payload_spill.test_slow
+# description: Wide VARCHAR payloads retained per group must spill instead of failing under a memory limit
+# group: [aggregates]
+
+require skip_reload
+
+statement ok
+SET memory_limit='256MB';
+
+statement ok
+SET temp_directory='__TEST_DIR__/first_wide_payload_spill';
+
+statement ok
+SET preserve_insertion_order=false;
+
+# 1M groups x 800 byte payloads is roughly 800MB of state payloads, far above the limit
+query I
+SELECT count(wide) FROM (
+    SELECT DISTINCT ON (k) k, wide
+    FROM (SELECT i AS k, repeat(md5(i::VARCHAR), 25) AS wide FROM range(1000000) t(i)) s1
+) s2;
+----
+1000000
+
+# The payloads must round-trip through the spill intact
+query III
+SELECT count(*), min(strlen(wide)), max(strlen(wide)) FROM (
+    SELECT DISTINCT ON (k) k, wide
+    FROM (SELECT i AS k, repeat(md5(i::VARCHAR), 25) AS wide FROM range(1000000) t(i)) s1
+) s2;
+----
+1000000	800	800
+
+# Spot check exact values survive
+query I
+SELECT count(*) FROM (
+    SELECT k, first(wide) AS w
+    FROM (SELECT i % 100000 AS k, repeat(md5((i % 100000)::VARCHAR), 25) AS wide FROM range(1000000) t(i)) s1
+    GROUP BY k
+) s2
+WHERE w != repeat(md5(k::VARCHAR), 25);
+----
+0
