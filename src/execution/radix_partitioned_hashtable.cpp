@@ -7,6 +7,7 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/aggregate_payload_heap.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
@@ -170,6 +171,8 @@ public:
 	//! Temporary memory state for managing this hash table's memory usage
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 	atomic<idx_t> minimum_reservation;
+	//! Registry of spillable blocks holding string payloads owned by aggregate states
+	shared_ptr<AggregatePayloadRegistry> payload_registry;
 
 	//! Whether we've called Finalize
 	bool finalized;
@@ -214,6 +217,7 @@ public:
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht_p)
     : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
+      payload_registry(make_shared_ptr<AggregatePayloadRegistry>(BufferManager::GetBufferManager(context_p))),
       finalized(false), external(false), active_threads(0),
       number_of_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
       memory_limit(BufferManager::GetBufferManager(context).GetOperatorMemoryLimit()),
@@ -600,6 +604,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	if (!lstate.ht) {
 		lstate.local_sink_capacity = gstate.config.sink_capacity;
 		lstate.ht = CreateHT(context.client, lstate.local_sink_capacity, gstate.config.GetRadixBits());
+		lstate.ht->InitializePayloadHeap(*gstate.payload_registry);
 		if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD) {
 			// Not using grow strategy, so we enable the HLL to potentially adapt later
 			lstate.ht->EnableHLL(true);
@@ -822,6 +827,8 @@ private:
 	TupleDataLayout layout;
 	ArenaAllocator aggregate_allocator;
 	RowOperationsState row_state;
+	//! Heap view over the sink's payload registry for materializing heap-backed state values
+	unique_ptr<AggregatePayloadHeap> payload_heap;
 
 	//! State and chunk for scanning
 	TupleDataScanState scan_state;
@@ -944,6 +951,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		    MaxValue(NextPowerOfTwo(thread_limit / size_per_entry), GroupedAggregateHashTable::InitialCapacity());
 
 		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity_limit), 0);
+		ht->InitializePayloadHeap(*sink.payload_registry);
 	} else {
 		ht->Abandon();
 	}
@@ -1006,6 +1014,11 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		return;
 	}
 
+	if (!payload_heap) {
+		// The payload heap is only used for reading here, finalizing materializes heap-backed values
+		payload_heap = make_uniq<AggregatePayloadHeap>(*sink.payload_registry);
+		row_state.payload_heap = payload_heap.get();
+	}
 	const auto group_cols = layout.ColumnCount() - 1;
 	RowOperations::FinalizeStates(row_state, layout, scan_state.chunk_state.row_locations, scan_chunk, group_cols);
 

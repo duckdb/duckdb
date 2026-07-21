@@ -20,6 +20,8 @@
 
 namespace duckdb {
 
+class AggregatePayloadHeap;
+class AggregatePayloadRegistry;
 class BlockHandle;
 
 struct FlushMoveState;
@@ -58,6 +60,8 @@ public:
 	//! The hash table load factor, when a resize is triggered
 	constexpr static double LOAD_FACTOR = 1.5;
 
+	//! Initialize the spillable heap for state-owned string payloads
+	void InitializePayloadHeap(AggregatePayloadRegistry &registry);
 	//! Get the layout of this HT
 	shared_ptr<TupleDataLayout> GetLayoutPtr();
 	const TupleDataLayout &GetLayout() const;
@@ -196,6 +200,8 @@ private:
 	shared_ptr<ArenaAllocator> aggregate_allocator;
 	//! Owning arena allocators that this HT has data from
 	vector<shared_ptr<ArenaAllocator>> stored_allocators;
+	//! Spillable heap for state-owned string payloads (initialized by the radix partitioned hash table)
+	unique_ptr<AggregatePayloadHeap> payload_heap;
 
 	//! Append state
 	struct AggregateHTAppendState {

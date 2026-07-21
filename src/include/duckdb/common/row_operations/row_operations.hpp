@@ -24,6 +24,7 @@ struct AggregateFilterDataSet;
 class DataChunk;
 class TupleDataLayout;
 struct SelectionVector;
+class AggregatePayloadHeap;
 class StringHeap;
 struct UnifiedVectorFormat;
 
@@ -35,6 +36,8 @@ struct RowOperationsState {
 	unique_ptr<Vector> addresses; // Re-usable vector for row_aggregate.cpp
 	//! Per-aggregate slots in which the aggregates can cache state across finalize calls
 	vector<unique_ptr<FunctionLocalState>> local_states;
+	//! Spillable heap for state-owned string payloads (set by the hash aggregate)
+	optional_ptr<AggregatePayloadHeap> payload_heap;
 };
 
 // RowOperations contains a set of operations that operate on data using a TupleDataLayout

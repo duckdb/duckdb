@@ -11,6 +11,7 @@
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/aggregate_payload_heap.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/atomic.hpp"
@@ -165,6 +166,11 @@ void GroupedAggregateHashTable::Repartition() {
 
 shared_ptr<ArenaAllocator> GroupedAggregateHashTable::GetAggregateAllocator() {
 	return aggregate_allocator;
+}
+
+void GroupedAggregateHashTable::InitializePayloadHeap(AggregatePayloadRegistry &registry) {
+	payload_heap = make_uniq<AggregatePayloadHeap>(registry);
+	state.row_state.payload_heap = payload_heap.get();
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
