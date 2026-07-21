@@ -360,7 +360,7 @@ unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInpu
 		return nullptr;
 	}
 
-	auto result = StringStats::CreateEmpty(expr.GetReturnType());
+	auto result = StringStats::CreateUnknown(expr.GetReturnType());
 	auto result_min = min.substr(prefix_size);
 	auto result_max = max.substr(prefix_size);
 	StringStats::SetMin(result, string_t(result_min), StringStats::GetMinType(string_stats));
@@ -380,6 +380,15 @@ unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, Funct
 	return SubstringStatsFromSharedPrefix(input);
 }
 
+unique_ptr<BaseStatistics> SubstringGraphemePropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	if (!StringStats::CanContainUnicode(child_stats[0])) {
+		expr.FunctionMutable().SetFunctionCallback(SubstringFunctionASCII);
+	}
+	return nullptr;
+}
+
 } // namespace
 
 ScalarFunctionSet SubstringFun::GetFunctions() {
@@ -396,10 +405,10 @@ ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	ScalarFunctionSet substr_grapheme("substring_grapheme");
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, nullptr,
-	                                           SubstringPropagateStats));
+	                                           SubstringGraphemePropagateStats));
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                           SubstringFunction<SubstringGraphemeOp>, nullptr,
-	                                           SubstringPropagateStats));
+	                                           SubstringGraphemePropagateStats));
 	return (substr_grapheme);
 }
 
