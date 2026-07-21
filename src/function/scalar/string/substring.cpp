@@ -1,14 +1,14 @@
-#include "duckdb/function/scalar/string_common.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
-
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-
+#include "duckdb/function/scalar/string_common.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc.hpp"
-#include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
 
@@ -302,6 +302,73 @@ void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
+bool GetPrefixByteLength(const string &value, idx_t character_count, idx_t &byte_count) {
+	byte_count = 0;
+	for (idx_t character_idx = 0; character_idx < character_count; character_idx++) {
+		if (byte_count >= value.size()) {
+			return false;
+		}
+		auto first_byte = static_cast<uint8_t>(value[byte_count]);
+		idx_t codepoint_size = 0;
+		if (first_byte <= 0x7F) {
+			codepoint_size = 1;
+		} else if ((first_byte & 0xE0) == 0xC0) {
+			codepoint_size = 2;
+		} else if ((first_byte & 0xF0) == 0xE0) {
+			codepoint_size = 3;
+		} else if ((first_byte & 0xF8) == 0xF0) {
+			codepoint_size = 4;
+		} else {
+			// The current byte cannot start a UTF-8 character.
+			return false;
+		}
+		// The statistics end in the middle of a UTF-8 character.
+		if (codepoint_size > value.size() - byte_count) {
+			return false;
+		}
+		byte_count += codepoint_size;
+	}
+	return true;
+}
+
+unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInput &input) {
+	auto &expr = input.expr;
+	auto &children = expr.GetChildren();
+	if (children.size() != 2 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return nullptr;
+	}
+	auto &offset_value = children[1]->Cast<BoundConstantExpression>().GetValue();
+	if (offset_value.IsNull()) {
+		return nullptr;
+	}
+	auto offset = offset_value.GetValue<int64_t>();
+	if (offset <= 1) {
+		return nullptr;
+	}
+
+	auto &string_stats = input.child_stats[0];
+	if (!StringStats::HasMinMax(string_stats)) {
+		return nullptr;
+	}
+
+	auto min = StringStats::Min(string_stats);
+	auto max = StringStats::Max(string_stats);
+	auto prefix_character_count = NumericCast<idx_t>(offset - 1);
+	idx_t prefix_size = 0;
+	if (!GetPrefixByteLength(min, prefix_character_count, prefix_size) ||
+	    prefix_size > StringUtil::GetCommonPrefixSize(min, max)) {
+		return nullptr;
+	}
+
+	auto result = StringStats::CreateEmpty(expr.GetReturnType());
+	auto result_min = min.substr(prefix_size);
+	auto result_max = max.substr(prefix_size);
+	StringStats::SetMin(result, string_t(result_min), StringStats::GetMinType(string_stats));
+	StringStats::SetMax(result, string_t(result_max), StringStats::GetMaxType(string_stats));
+	result.CopyValidity(string_stats);
+	return result.ToUnique();
+}
+
 unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
@@ -310,7 +377,7 @@ unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, Funct
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.FunctionMutable().SetFunctionCallback(SubstringFunctionASCII);
 	}
-	return nullptr;
+	return SubstringStatsFromSharedPrefix(input);
 }
 
 } // namespace

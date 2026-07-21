@@ -1,0 +1,87 @@
+# name: test/sql/optimizer/substring_zonemap_pruning.test
+# description: Prune row groups for substring with a shared removed prefix
+# group: [optimizer]
+
+# 500k rows -> 5 row groups. Every row has the same one-character prefix and the suffix increases with the row id.
+statement ok
+CREATE TABLE substring_pruning AS
+SELECT i::INTEGER AS i, 'p' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 2) = '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE substr(s, 2) = '495000';
+----
+1
+
+# Shared UTF-8 prefixes use character offsets rather than byte offsets.
+statement ok
+CREATE TABLE substring_pruning_utf8 AS
+SELECT i::INTEGER AS i, '🦆' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning_utf8 WHERE substr(s, 2) = '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning_utf8 WHERE substr(s, 2) = '495000';
+----
+1
+
+# A shared prefix is required. Alternating prefixes make every row group's min
+# and max disagree in the character removed by substr, so no bounds are derived.
+statement ok
+CREATE TABLE substring_no_shared_prefix AS
+SELECT i::INTEGER AS i, CASE WHEN i % 2 = 0 THEN 'a' ELSE 'b' END || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_no_shared_prefix WHERE substr(s, 2) = '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM substring_no_shared_prefix WHERE substr(s, 2) = '495000';
+----
+1
+
+# Truncated bounds can be transformed as long as the removed prefix is present
+# in the stored bounds. The derived bounds remain marked as truncated.
+statement ok
+CREATE TABLE substring_truncated_pruning AS
+SELECT i::INTEGER AS i, 'p' || lpad(i::VARCHAR, 6, '0') || repeat('x', 20) AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_truncated_pruning
+WHERE substr(s, 2) = '495000' || repeat('x', 20);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_truncated_pruning WHERE substr(s, 2) = '495000' || repeat('x', 20);
+----
+1
+
+# Truncated min/max values cannot prove a removed prefix that extends beyond
+# the bytes retained in the statistics.
+statement ok
+CREATE TABLE substring_truncated_stats AS
+SELECT i::INTEGER AS i, repeat('p', 13) || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_truncated_stats WHERE substr(s, 14) = '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM substring_truncated_stats WHERE substr(s, 14) = '495000';
+----
+1
