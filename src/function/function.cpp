@@ -258,35 +258,55 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 //----------------------------------------------------------------------------------------------------------------------
 // Bind Function Input
 //----------------------------------------------------------------------------------------------------------------------
-Value BindFunctionInput::GetConstant(idx_t arg_idx) const {
+Value BindFunctionInput::GetConstant(idx_t arg_idx, const string &error_message) const {
+	if (arg_idx >= arguments.size()) {
+		throw InternalException("%s: Argument index %llu is out of range", function.GetName().GetIdentifierName(),
+		                        arg_idx);
+	}
+	if (arguments[arg_idx]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (auto constant = TryGetConstant(arg_idx)) {
 		return *constant;
+	}
+	if (!error_message.empty()) {
+		throw BinderException(error_message);
 	}
 	throw BinderException("%s: Argument at position %llu must be constant", function.GetName(), arg_idx);
 }
 
-Value BindFunctionInput::GetConstant(const Identifier &name) const {
-	if (auto constant = TryGetConstant(name)) {
-		return *constant;
+Value BindFunctionInput::GetConstant(const Identifier &name, const string &error_message) const {
+	const auto arg_idx = GetArgumentIndex(name);
+	if (arg_idx.IsValid()) {
+		return GetConstant(arg_idx.GetIndex(), error_message);
+	}
+	// no argument with that name was provided
+	if (!error_message.empty()) {
+		throw BinderException(error_message);
 	}
 	throw BinderException("%s: Argument '%s' must be constant", function.GetName(), name.GetIdentifierName());
 }
 
 optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {
 	if (arg_idx >= arguments.size()) {
-		throw BinderException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
+		return {};
 	}
 	const auto &expr = arguments[arg_idx];
-	if (expr->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!expr->IsFoldable()) {
+	if (expr->HasParameter() || !expr->IsFoldable()) {
 		return {};
 	}
 	return ExpressionExecutor::EvaluateScalar(context, *expr);
 }
 
 optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const {
+	const auto arg_idx = GetArgumentIndex(name);
+	if (arg_idx.IsValid()) {
+		return TryGetConstant(arg_idx.GetIndex());
+	}
+	return {};
+}
+
+optional_idx BindFunctionInput::GetArgumentIndex(const Identifier &name) const {
 	if (!argument_names) {
 		throw InternalException("Function '%s' was bound without argument names, cannot look up argument '%s' by name",
 		                        function.GetName().GetIdentifierName(), name.GetIdentifierName());
@@ -295,10 +315,10 @@ optional<Value> BindFunctionInput::TryGetConstant(const Identifier &name) const 
 	// slots, or the name the caller used for named varargs.
 	for (idx_t arg_idx = 0; arg_idx < argument_names->size(); arg_idx++) {
 		if ((*argument_names)[arg_idx] == name) {
-			return TryGetConstant(arg_idx);
+			return optional_idx(arg_idx);
 		}
 	}
-	return {};
+	return optional_idx();
 }
 
 } // namespace duckdb

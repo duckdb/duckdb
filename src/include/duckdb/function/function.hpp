@@ -575,13 +575,20 @@ public:
 		return argument_names;
 	}
 
-	//! Get the constant value of an argument, throwing if it is not constant.
-	DUCKDB_API Value GetConstant(idx_t arg_idx) const;
-	DUCKDB_API Value GetConstant(const Identifier &name) const;
-	//! Get the constant value of an argument, returning nullopt if it is not constant (or, when looking up by name,
-	//! if no argument with that name was provided).
+	//! Get the constant value of an argument. Throws ParameterNotResolvedException for an unresolved parameter, and a
+	//! BinderException if the argument is not constant. When set, error_message overrides the default "must be
+	//! constant" message; pre-format it if it needs runtime values.
+	DUCKDB_API Value GetConstant(idx_t arg_idx, const string &error_message = string()) const;
+	DUCKDB_API Value GetConstant(const Identifier &name, const string &error_message = string()) const;
+	//! Try to get the constant value of an argument. Never throws: returns nullopt if the argument is not constant (an
+	//! unresolved parameter or a non-foldable expression), is out of range, or - when looking up by name - was not
+	//! provided. Use this when a non-constant argument should fall back to the runtime value instead of being an error.
 	DUCKDB_API optional<Value> TryGetConstant(idx_t arg_idx) const;
 	DUCKDB_API optional<Value> TryGetConstant(const Identifier &name) const;
+
+private:
+	//! Resolve a named argument to its position, or an empty optional_idx if no argument with that name was provided.
+	optional_idx GetArgumentIndex(const Identifier &name) const;
 
 private:
 	ClientContext &context;

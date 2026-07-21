@@ -564,14 +564,9 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 		                      from_type.ToString(), to_type.ToString());
 	}
 
-	auto remap_constant = input.TryGetConstant(2);
-	if (!remap_constant) {
-		throw BinderException("Remap keys for remap_struct needs to be a constant value");
-	}
+	Value remap_val = input.GetConstant(2, "Remap keys for remap_struct needs to be a constant value");
 	auto source_map = RemapIndex::GetMap(from_type);
 	auto target_map = RemapIndex::GetMap(to_type);
-
-	Value remap_val = std::move(*remap_constant);
 
 	// (recursively) generate the remap entries
 	identifier_map_t<RemapEntry> remap_map;

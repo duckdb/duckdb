@@ -74,13 +74,10 @@ unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto &function = input.GetBoundFunction();
 
-	auto value = input.TryGetConstant(0);
-	if (!value) {
-		throw BinderException("ConstantOrNull requires a constant input");
-	}
+	auto value = input.GetConstant(0, "ConstantOrNull requires a constant input");
 	D_ASSERT(arguments.size() >= 2);
 	function.SetReturnType(arguments[0]->GetReturnType());
-	return make_uniq<ConstantOrNullBindData>(std::move(*value));
+	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 
 } // namespace

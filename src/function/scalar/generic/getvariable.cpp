@@ -32,13 +32,10 @@ unique_ptr<FunctionData> GetVariableBind(BindScalarFunctionInput &input) {
 	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	auto variable_name = input.TryGetConstant(0);
-	if (!variable_name) {
-		throw NotImplementedException("getvariable requires a constant input");
-	}
+	auto variable_name = input.GetConstant(0, "getvariable requires a constant input");
 	Value value;
-	if (!variable_name->IsNull()) {
-		ClientConfig::GetConfig(context).GetUserVariable(variable_name->ToString(), value);
+	if (!variable_name.IsNull()) {
+		ClientConfig::GetConfig(context).GetUserVariable(variable_name.ToString(), value);
 	}
 	function.SetReturnType(value.type());
 	return make_uniq<GetVariableBindData>(std::move(value));

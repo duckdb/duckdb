@@ -35,17 +35,8 @@ void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &res
 unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	auto &key_child = arguments[0];
-	if (key_child->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
-		throw ParameterNotResolvedException();
-	}
-	auto key_constant = input.TryGetConstant(0);
-	if (!key_constant || key_child->GetReturnType().id() != LogicalTypeId::VARCHAR) {
-		throw ParserException("Key name for current_setting needs to be a constant string");
-	}
-	Value key_val = std::move(*key_constant);
-	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
+
+	Value key_val = input.GetConstant(0, "Key name for current_setting needs to be a constant string");
 	if (key_val.IsNull() || StringValue::Get(key_val).empty()) {
 		throw ParserException("Key name for current_setting needs to be neither NULL nor empty");
 	}

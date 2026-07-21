@@ -265,13 +265,9 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &bound_function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
 
-		auto format_constant = input.TryGetConstant(1);
-		if (!format_constant) {
-			throw InvalidInputException("strptime format must be a constant");
-		}
 		const bool is_try = (bound_function.GetName() == "try_strptime");
 		scalar_function_t function = is_try ? TryParse<timestamp_tz_t> : Parse<timestamp_tz_t>;
-		Value format_value = std::move(*format_constant);
+		Value format_value = input.GetConstant(1, "strptime format must be a constant");
 		string format_string;
 		StrpTimeFormat format;
 		bool has_tz = false;

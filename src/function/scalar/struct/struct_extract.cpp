@@ -45,12 +45,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	}
 	bound_function.GetArguments()[0] = child_type;
 
-	auto &key_child = arguments[1];
-	auto key_constant = input.TryGetConstant(1);
-	if (!key_constant || key_child->GetReturnType().id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("Key name for struct_extract needs to be a constant string");
-	}
-	Value key_val = std::move(*key_constant);
+	Value key_val = input.GetConstant(1, "Key name for struct_extract needs to be a constant string");
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
 	if (key_val.IsNull() || key_str.empty()) {
@@ -106,11 +101,7 @@ static unique_ptr<FunctionData> StructExtractBindInternal(BindScalarFunctionInpu
 	}
 	bound_function.GetArguments()[0] = child_type;
 
-	auto key_constant = input.TryGetConstant(1);
-	if (!key_constant) {
-		throw BinderException("Key index for struct_extract needs to be a constant value");
-	}
-	Value key_val = std::move(*key_constant);
+	Value key_val = input.GetConstant(1, "Key index for struct_extract needs to be a constant value");
 	auto index = key_val.GetValue<int64_t>();
 	if (index <= 0 || idx_t(index) > struct_children.size()) {
 		throw BinderException("Key index %lld for struct_extract out of range - expected an index between 1 and %llu",

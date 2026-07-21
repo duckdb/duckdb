@@ -650,11 +650,11 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	auto &arguments = input.GetArguments();
 	auto &decimal_type = arguments[0]->GetReturnType();
 	auto fname = StringUtil::Upper(bound_function.GetName().GetIdentifierName());
-	auto precision_constant = input.TryGetConstant(1);
-	if (!precision_constant) {
-		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
-	}
-	Value val = precision_constant->DefaultCastAs(LogicalType::INTEGER);
+	Value val =
+	    input
+	        .GetConstant(1,
+	                     StringUtil::Format("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname))
+	        .DefaultCastAs(LogicalType::INTEGER);
 	if (val.IsNull()) {
 		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
 	}

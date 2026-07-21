@@ -44,14 +44,12 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	}
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
-		auto sort_specifier = input.TryGetConstant(i);
-		if (!sort_specifier) {
-			throw BinderException("sort_specifier must be a constant value - but got %s", arguments[i]->ToString());
-		}
-		if (sort_specifier->IsNull()) {
+		auto sort_specifier = input.GetConstant(
+		    i, StringUtil::Format("sort_specifier must be a constant value - but got %s", arguments[i]->ToString()));
+		if (sort_specifier.IsNull()) {
 			throw BinderException("sort_specifier cannot be NULL");
 		}
-		auto sort_specifier_str = sort_specifier->ToString();
+		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
 	// check if all types are constant
@@ -1046,11 +1044,8 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		// Parse column definition
-		auto col_constant = input.TryGetConstant(i);
-		if (!col_constant) {
-			throw BinderException("col must be a constant value - but got %s", arguments[i]->ToString());
-		}
-		Value col = std::move(*col_constant);
+		Value col = input.GetConstant(
+		    i, StringUtil::Format("col must be a constant value - but got %s", arguments[i]->ToString()));
 		const auto col_list = Parser::ParseColumnList(col.ToString());
 		if (col_list.LogicalColumnCount() != 1) {
 			throw BinderException("decode_sort_key col must contain exactly one column");
@@ -1072,11 +1067,9 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 		children.emplace_back(col_name, col_type);
 
 		// Parse sort specifier
-		auto specifier_constant = input.TryGetConstant(i + 1);
-		if (!specifier_constant) {
-			throw BinderException("sort_specifier must be a constant value - but got %s", arguments[i + 1]->ToString());
-		}
-		Value sort_specifier = std::move(*specifier_constant);
+		Value sort_specifier =
+		    input.GetConstant(i + 1, StringUtil::Format("sort_specifier must be a constant value - but got %s",
+		                                                arguments[i + 1]->ToString()));
 		if (sort_specifier.IsNull()) {
 			throw BinderException("sort_specifier cannot be NULL");
 		}

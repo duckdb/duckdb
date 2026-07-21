@@ -436,11 +436,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 
 	string function_name = "histogram";
 	if (IS_AGGR) { // get the name of the aggregate function
-		auto function_constant = input.TryGetConstant(1);
-		if (!function_constant) {
-			throw InvalidInputException("Aggregate function name must be a constant");
-		}
-		function_name = function_constant->ToString();
+		function_name = input.GetConstant(1, "Aggregate function name must be a constant").ToString();
 	}
 
 	// look up the aggregate function in the catalog

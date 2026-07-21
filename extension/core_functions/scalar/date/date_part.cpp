@@ -1787,17 +1787,15 @@ void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 }
 
 unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	//	If we are only looking for Julian Days for timestamps,
 	//	then return doubles.
-	if (arguments[0]->HasParameter() || !arguments[0]->IsFoldable()) {
+	auto part_constant = input.TryGetConstant(0);
+	if (!part_constant) {
 		return nullptr;
 	}
-
-	Value part_value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	const auto part_name = part_value.ToString();
+	const auto part_name = part_constant->ToString();
 	switch (GetDatePartSpecifier(part_name)) {
 	case DatePartSpecifier::JULIAN_DAY:
 		arguments.erase(arguments.begin());
@@ -1972,16 +1970,12 @@ struct StructDatePart {
 		auto &bound_function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
 		// collect names and deconflict, construct return type
-		auto parts_constant = input.TryGetConstant(0);
-		if (!parts_constant) {
-			throw BinderException("%s can only take constant lists of part names", bound_function.GetName());
-		}
+		auto parts_list = input.GetConstant(
+		    0, StringUtil::Format("%s can only take constant lists of part names", bound_function.GetName()));
 
 		case_insensitive_set_t name_collision_set;
 		child_list_t<LogicalType> struct_children;
 		part_codes_t part_codes;
-
-		Value parts_list = std::move(*parts_constant);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
 			auto &list_children = ListValue::GetChildren(parts_list);
 			if (list_children.empty()) {

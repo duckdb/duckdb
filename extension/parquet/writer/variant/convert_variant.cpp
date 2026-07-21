@@ -1023,11 +1023,7 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 			                      "'STRUCT(my_field BOOLEAN)', found type: '%s' instead",
 			                      expr_return_type);
 		}
-		auto shredding_constant = input.TryGetConstant(1);
-		if (!shredding_constant) {
-			throw BinderException("Optional second argument 'shredding' has to be a constant expression");
-		}
-		Value type_str = std::move(*shredding_constant);
+		Value type_str = input.GetConstant(1, "Optional second argument 'shredding' has to be a constant expression");
 		if (type_str.IsNull()) {
 			throw BinderException("Optional second argument 'shredding' can not be NULL");
 		}

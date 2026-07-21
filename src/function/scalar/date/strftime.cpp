@@ -47,11 +47,7 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(BindScalarFunctionInput &in
 	auto &arguments = input.GetArguments();
 	auto format_idx = REVERSED ? 0U : 1U;
 	auto &format_arg = arguments[format_idx];
-	auto format_constant = input.TryGetConstant(format_idx);
-	if (!format_constant) {
-		throw InvalidInputException(*format_arg, "strftime format must be a constant");
-	}
-	Value options_str = std::move(*format_constant);
+	Value options_str = input.GetConstant(format_idx, "strftime format must be a constant");
 	auto format_string = options_str.GetValue<string>();
 	StrfTimeFormat format;
 	bool is_null = options_str.IsNull();
@@ -194,11 +190,7 @@ struct StrpTimeFunction {
 	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
 		auto &bound_function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		auto format_constant = input.TryGetConstant(1);
-		if (!format_constant) {
-			throw InvalidInputException(*arguments[0], "strptime format must be a constant");
-		}
-		Value format_value = std::move(*format_constant);
+		Value format_value = input.GetConstant(1, "strptime format must be a constant");
 		string format_string;
 		StrpTimeFormat format;
 		if (format_value.IsNull()) {

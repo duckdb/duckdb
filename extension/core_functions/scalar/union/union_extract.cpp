@@ -58,12 +58,7 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 	}
 	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 
-	auto &key_child = arguments[1];
-	auto key_constant = input.TryGetConstant(1);
-	if (!key_constant || key_child->GetReturnType().id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("Key name for union_extract needs to be a constant string");
-	}
-	Value key_val = std::move(*key_constant);
+	Value key_val = input.GetConstant(1, "Key name for union_extract needs to be a constant string");
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
 	if (key_val.IsNull() || key_str.empty()) {

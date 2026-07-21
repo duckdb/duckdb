@@ -378,11 +378,7 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 
 	int8_t group_index = 0;
 	if (arguments.size() >= 3) {
-		auto group_constant = input.TryGetConstant(2);
-		if (!group_constant) {
-			throw InvalidInputException("Group specification field must be a constant!");
-		}
-		Value group = std::move(*group_constant);
+		Value group = input.GetConstant(2, "Group specification field must be a constant!");
 		if (group.IsNull()) {
 			// NULL group → never returns a capture; runtime treats out-of-range index as no match.
 			group_index = -1;
