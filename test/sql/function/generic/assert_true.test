@@ -2,14 +2,17 @@
 # description: Test assert_true function
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # like Spark's assert_true, returns NULL when the assertion holds
 query I
 SELECT assert_true(true)
 ----
 NULL
+
+# the message must be castable to VARCHAR, even when the assertion passes
+statement error
+SELECT assert_true(true, ['a','b'])
+----
+Cannot concatenate types VARCHAR and VARCHAR[]
 
 query I
 SELECT assert_true(1 = 1, 'never shown')
