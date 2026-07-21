@@ -6297,6 +6297,25 @@ VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value)
 	return static_cast<VerifyExistenceType>(StringUtil::StringToEnum(GetVerifyExistenceTypeValues(), 3, "VerifyExistenceType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetVersionCompressionResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VersionCompressionResult::FULLY_COMPRESSED), "FULLY_COMPRESSED" },
+		{ static_cast<uint32_t>(VersionCompressionResult::PENDING), "PENDING" },
+		{ static_cast<uint32_t>(VersionCompressionResult::SETTLED), "SETTLED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VersionCompressionResult>(VersionCompressionResult value) {
+	return StringUtil::EnumToString(GetVersionCompressionResultValues(), 3, "VersionCompressionResult", static_cast<uint32_t>(value));
+}
+
+template<>
+VersionCompressionResult EnumUtil::FromString<VersionCompressionResult>(const char *value) {
+	return static_cast<VersionCompressionResult>(StringUtil::StringToEnum(GetVersionCompressionResultValues(), 3, "VersionCompressionResult", value));
+}
+
 const StringUtil::EnumStringLiteral *GetVertexTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(VertexType::XY), "XY" },
