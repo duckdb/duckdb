@@ -196,4 +196,19 @@ public:
 	static string ConstructLogMessage(const string &pool, idx_t task_count);
 };
 
+class ExternalResourceLogType : public LogType {
+public:
+	static constexpr const char *NAME = "ExternalResource";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	ExternalResourceLogType();
+
+	static LogicalType GetLogType();
+
+	//! One recipe callback invocation (create/status/destroy), logged on response. `error` is empty on
+	//! success (rendered NULL); `resource_name` is empty for an anonymous resource (rendered NULL).
+	static string ConstructLogMessage(const string &resource_type, const string &resource_name, const string &operation,
+	                                  const string &error, const Value &extra_info);
+};
+
 } // namespace duckdb
