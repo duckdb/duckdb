@@ -2,6 +2,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "fsst.h"
 #include "duckdb/common/fsst.hpp"
+#include "duckdb/main/config.hpp"
 
 #if defined(__MVS__) && !defined(alloca)
 #define alloca __builtin_alloca
@@ -18,7 +19,8 @@ DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &che
           MinValue(analyze_p.get()->total_count, info.GetBlockSize()) / 2, // maximum_size_p (amount of elements)
           1                                                                // maximum_target_capacity_p (byte capacity)
           ),
-      analyze(std::move(analyze_p)) {
+      analyze(std::move(analyze_p)),
+      verify_compression(DBConfigOptions::global_verification_mode == DebugVerificationMode::VERIFY_COMPRESSION) {
 	CreateEmptySegment();
 }
 
@@ -469,6 +471,22 @@ static DictFSSTCompressResult GetCompressResult(bool success, bool new_string) {
 	return new_string ? DictFSSTCompressResult::NEW_STRING : DictFSSTCompressResult::REPEATED_STRING;
 }
 
+static void VerifyFSSTCompressedString(void *decoder, const string_t &compressed_string,
+                                       const string_t &uncompressed_string, vector<unsigned char> &decompress_buffer) {
+	decompress_buffer.resize(uncompressed_string.GetSize() + 1 + 100);
+	auto decoded_std_string = FSSTPrimitives::DecompressValue(decoder, compressed_string.GetData(),
+	                                                          compressed_string.GetSize(), decompress_buffer);
+
+	if (decoded_std_string.size() != uncompressed_string.GetSize()) {
+		throw InternalException("FSST compression verification failed: decompressed string length mismatch");
+	}
+	string_t decompressed_string(reinterpret_cast<const char *>(decompress_buffer.data()),
+	                             UnsafeNumericCast<uint32_t>(uncompressed_string.GetSize()));
+	if (decompressed_string != uncompressed_string) {
+		throw InternalException("FSST compression verification failed: decompressed string mismatch");
+	}
+}
+
 DictFSSTCompressResult DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_format,
                                                                   const string_t &str, bool is_null,
                                                                   EncodedInput &encoded_input, const idx_t i,
@@ -558,11 +576,13 @@ DictFSSTCompressResult DictFSSTCompressionState::CompressInternal(UnifiedVectorF
 		// Encode the input upfront, the 'current_string_map' is also encoded.
 		// no lookups are performed, everything is added.
 
-#ifdef DEBUG
-		auto temp_decoder = alloca(sizeof(duckdb_fsst_decoder_t));
-		duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(temp_decoder), fsst_serialized_symbol_table.get());
+		duckdb_fsst_decoder_t temp_decoder_storage;
+		void *temp_decoder = nullptr;
 		vector<unsigned char> decompress_buffer;
-#endif
+		if (verify_compression) {
+			temp_decoder = &temp_decoder_storage;
+			duckdb_fsst_import(&temp_decoder_storage, fsst_serialized_symbol_table.get());
+		}
 
 		if (encoded_input.data.empty()) {
 			encoded_input.offset = i;
@@ -609,42 +629,21 @@ DictFSSTCompressResult DictFSSTCompressionState::CompressInternal(UnifiedVectorF
 				uint32_t size = UnsafeNumericCast<uint32_t>(compressed_sizes[j]);
 				string_t encoded_string((const char *)compressed_ptrs[j], size); // NOLINT;
 
-#ifdef DEBUG
-				//! Verify that we can decompress the string
-				auto &uncompressed_str = strings[encoded_input.offset + j];
-				decompress_buffer.resize(uncompressed_str.GetSize() + 1 + 100);
-				auto decoded_std_string = FSSTPrimitives::DecompressValue(
-				    (void *)temp_decoder, reinterpret_cast<const char *>(compressed_ptrs[j]),
-				    (idx_t)compressed_sizes[j], decompress_buffer);
-
-				D_ASSERT(decoded_std_string.size() == uncompressed_str.GetSize());
-				string_t decompressed_string(reinterpret_cast<const char *>(decompress_buffer.data()),
-				                             UnsafeNumericCast<uint32_t>(uncompressed_str.GetSize()));
-				D_ASSERT(decompressed_string == uncompressed_str);
-#endif
+				if (verify_compression) {
+					VerifyFSSTCompressedString(temp_decoder, encoded_string, strings[encoded_input.offset + j],
+					                           decompress_buffer);
+				}
 
 				encoded_input.data.push_back(encoded_string);
 			}
 		}
 
-#ifdef DEBUG
-		//! Verify that we can decompress the strings (nothing weird happened to them)
-		for (idx_t j = encoded_input.offset; j < count; j++) {
-			auto &uncompressed_string = strings[j];
-			auto &compressed_string = encoded_input.data[j - encoded_input.offset];
-
-			decompress_buffer.resize(uncompressed_string.GetSize() + 1 + 100);
-			auto decoded_std_string =
-			    FSSTPrimitives::DecompressValue((void *)temp_decoder, (const char *)compressed_string.GetData(),
-			                                    compressed_string.GetSize(), decompress_buffer);
-
-			D_ASSERT(decoded_std_string.size() == uncompressed_string.GetSize());
-			string_t decompressed_string(reinterpret_cast<const char *>(decompress_buffer.data()),
-			                             UnsafeNumericCast<uint32_t>(uncompressed_string.GetSize()));
-			D_ASSERT(decompressed_string == uncompressed_string);
+		if (verify_compression) {
+			for (idx_t j = encoded_input.offset; j < count; j++) {
+				VerifyFSSTCompressedString(temp_decoder, encoded_input.data[j - encoded_input.offset], strings[j],
+				                           decompress_buffer);
+			}
 		}
-
-#endif
 		auto &string = encoded_input.data[i - encoded_input.offset];
 		return GetCompressResult(AddToDictionary<DictionaryAppendState::ENCODED_ALL_UNIQUE>(
 		                             *this, string, recalculate_indices_space, fail_on_no_space),

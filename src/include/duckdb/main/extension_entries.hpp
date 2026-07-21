@@ -483,6 +483,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"log2", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"lpad", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ltrim", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"lttb", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"mad", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"make_date", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_time", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},

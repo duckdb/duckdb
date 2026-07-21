@@ -709,7 +709,10 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {
 	// deserialize the table meta data
 	auto info = ReadCreateInfo(deserializer, CatalogType::TABLE_ENTRY, "table");
-	auto &schema = catalog.GetSchema(transaction, info->GetQualifiedName().Schema());
+	// the qualified name is [catalog, schema_path..., name] - navigate the (possibly nested) schema path
+	auto &path = info->GetQualifiedName().Path();
+	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	auto &schema = *catalog.GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	for (auto &dep : bound_info->Base().dependencies.Set()) {

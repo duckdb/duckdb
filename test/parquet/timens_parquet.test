@@ -49,6 +49,36 @@ from times
 statement ok
 copy times to '{TEST_DIR}/time_ns.parquet' (PARQUET_VERSION V2);
 
+query TT
+SELECT duckdb_type, logical_type LIKE 'TimeType%NANOS%'
+FROM parquet_schema('{TEST_DIR}/time_ns.parquet')
+WHERE name = 'tns';
+----
+TIME_NS	true
+
+query TT
+SELECT typeof(tns), tns::VARCHAR
+FROM '{TEST_DIR}/time_ns.parquet'
+WHERE tns = '23:59:59.123456789';
+----
+TIME_NS	23:59:59.123456789
+
 query I nosort t0
 from '{TEST_DIR}/time_ns.parquet';
 ----
+
+# Combine TIME(MICROS) and TIME(NANOS) files without losing precision
+statement ok
+COPY (SELECT '12:34:56.123456'::TIME AS t)
+TO '{TEST_DIR}/time_micro.parquet' (FORMAT PARQUET);
+
+statement ok
+COPY (SELECT '12:34:56.123456789'::TIME_NS AS t)
+TO '{TEST_DIR}/time_nano.parquet' (FORMAT PARQUET);
+
+query TT rowsort
+SELECT typeof(t), t::VARCHAR
+FROM read_parquet(['{TEST_DIR}/time_micro.parquet', '{TEST_DIR}/time_nano.parquet'], union_by_name = true);
+----
+TIME_NS	12:34:56.123456
+TIME_NS	12:34:56.123456789

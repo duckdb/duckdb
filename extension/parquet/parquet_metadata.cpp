@@ -872,7 +872,9 @@ void ParquetBloomProbeProcessor::ReadRow(vector<reference<Vector>> &output, idx_
 
 	D_ASSERT(!probe_constant.IsNull());
 
-	auto bloom_excludes = ParquetStatisticsUtils::BloomFilterExcludes(*filter, column.meta_data, *protocol, *allocator);
+	auto &column_schema = reader.root_schema->children[probe_column_idx.GetIndex()];
+	auto bloom_excludes =
+	    ParquetStatisticsUtils::BloomFilterExcludes(*filter, column.meta_data, *protocol, *allocator, column_schema);
 
 	output[0].get().Append(Value(reader.file.path));
 	output[1].get().Append(Value::BIGINT(NumericCast<int64_t>(row_idx)));

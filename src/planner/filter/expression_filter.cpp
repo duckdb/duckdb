@@ -189,6 +189,7 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
 		return NumericStats::CheckZonemap(stats, comparison_type, values);
 	case PhysicalType::VARCHAR:
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {

@@ -193,15 +193,21 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 				}
 			}
 			if (lower_index.IsValid() && upper_index.IsValid()) {
-				// found both lower and upper index, create a BETWEEN expression
-				auto lower_constant =
-				    make_uniq<BoundConstantExpression>(constant_list[lower_index.GetIndex()].constant);
-				auto upper_constant =
-				    make_uniq<BoundConstantExpression>(constant_list[upper_index.GetIndex()].constant);
-				auto between =
-				    BoundBetweenExpression::Create(entries[i].get().Copy(), std::move(lower_constant),
-				                                   std::move(upper_constant), lower_inclusive, upper_inclusive);
-				callback(std::move(between));
+				auto &lower_value = constant_list[lower_index.GetIndex()].constant;
+				auto &upper_value = constant_list[upper_index.GetIndex()].constant;
+				if (lower_inclusive && upper_inclusive && lower_value == upper_value) {
+					auto constant = make_uniq<BoundConstantExpression>(lower_value);
+					auto comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+					                                                    entries[i].get().Copy(), std::move(constant));
+					callback(std::move(comparison));
+				} else {
+					auto lower_constant = make_uniq<BoundConstantExpression>(lower_value);
+					auto upper_constant = make_uniq<BoundConstantExpression>(upper_value);
+					auto between =
+					    BoundBetweenExpression::Create(entries[i].get().Copy(), std::move(lower_constant),
+					                                   std::move(upper_constant), lower_inclusive, upper_inclusive);
+					callback(std::move(between));
+				}
 			} else if (lower_index.IsValid()) {
 				// only lower index found, create simple comparison expression
 				auto constant = make_uniq<BoundConstantExpression>(constant_list[lower_index.GetIndex()].constant);

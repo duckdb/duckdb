@@ -203,6 +203,14 @@
       ]
     },
     {
+      "reason": "Nested schemas require storage version v2.0.0.",
+      "paths": [
+        "test/sql/catalog/nested_schema/create_nested_schema.test",
+        "test/sql/catalog/nested_schema/drop_nested_schema.test",
+        "test/sql/catalog/nested_schema/nested_table.test"
+      ]
+    },
+    {
       "reason": "Triggers are a new catalog type not present in old storage files.",
       "paths": [
         "test/sql/trigger/create_trigger_catalog.test",

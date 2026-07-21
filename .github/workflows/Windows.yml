@@ -179,10 +179,12 @@ jobs:
 
     - name: Test
       shell: bash
+      if: ${{ !inputs.skip_tests }}
       run: python test/run.py
 
     - name: Tools Test
       shell: bash
+      if: ${{ !inputs.skip_tests }}
       run: |
         python scripts/ci/retry.py -- python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary duckdb.exe

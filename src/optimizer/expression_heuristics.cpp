@@ -229,8 +229,20 @@ idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExpressionHeuristics::Cost");
 	auto &expr = *expr_filter.expr;
-	if (ExpressionFilter::ContainsInternalFunction(expr, DynamicFilterScalarFun::NAME) ||
-	    ExpressionFilter::IsOptionalExpression(expr)) {
+	if (ExpressionFilter::ContainsInternalFunction(expr, DynamicFilterScalarFun::NAME)) {
+		return 0;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+			return 0;
+		}
+		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
+			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
+			return data.child_filter_expr ? Cost(*data.child_filter_expr) : 0;
+		}
+	}
+	if (ExpressionFilter::IsOptionalExpression(expr)) {
 		return 0;
 	}
 	return Cost(expr);

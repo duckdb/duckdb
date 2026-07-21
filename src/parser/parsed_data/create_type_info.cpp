@@ -36,7 +36,7 @@ string CreateTypeInfo::ToString() const {
 				result += ", ";
 			}
 		}
-		result += " );";
+		result += " )";
 	} else if (type.id() == LogicalTypeId::INVALID) {
 		// CREATE TYPE mood AS ENUM (SELECT 'happy')
 		D_ASSERT(query);

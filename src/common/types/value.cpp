@@ -280,6 +280,12 @@ Value Value::MinimumValue(const LogicalType &type) {
 		min_ns *= Interval::NANOS_PER_DAY;
 		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(min_ns));
 	}
+	case LogicalTypeId::INTERVAL: {
+		const auto min_months = NumericLimits<int32_t>::Minimum();
+		const auto min_days = NumericLimits<int32_t>::Minimum();
+		const auto min_micros = NumericLimits<int64_t>::Minimum();
+		return Value::INTERVAL(min_months, min_days, min_micros);
+	}
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
 	case LogicalTypeId::DOUBLE:
@@ -372,6 +378,12 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIME_TZ:
 		// "24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59".
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
+	case LogicalTypeId::INTERVAL: {
+		const auto max_months = NumericLimits<int32_t>::Maximum();
+		const auto max_days = NumericLimits<int32_t>::Maximum();
+		const auto max_micros = NumericLimits<int64_t>::Maximum();
+		return Value::INTERVAL(max_months, max_days, max_micros);
+	}
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
 	case LogicalTypeId::DOUBLE:
