@@ -796,7 +796,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
 		         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
-		if (scan_state.current_group.mode == BitpackingMode::FOR && offset_in_compression_group == 0) {
+		if (offset_in_compression_group == 0) {
 			auto remaining =
 			    MinValue<idx_t>(scan_count - scanned, BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
 			auto batch_count = remaining - (remaining % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
@@ -807,6 +807,11 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 				BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(current_result_ptr), current_position_ptr,
 				                                      batch_count, scan_state.current_width, skip_sign_extend,
 				                                      scan_state.current_frame_of_reference);
+				if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
+					DeltaDecode<T_S>(reinterpret_cast<T_S *>(current_result_ptr),
+					                 static_cast<T_S>(scan_state.current_delta_offset), batch_count);
+					scan_state.current_delta_offset = current_result_ptr[batch_count - 1];
+				}
 				scanned += batch_count;
 				scan_state.current_group_offset += batch_count;
 				continue;

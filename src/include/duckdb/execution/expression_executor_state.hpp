@@ -89,6 +89,8 @@ public:
 	unique_ptr<FunctionLocalState> local_state;
 	//! Set once: this expression is a `ref <op> const` comparison the bitmap select fast path can handle
 	bool select_bitmap_capable = false;
+	//! Autovec twin of the bound +,-,* callback (nullptr when unavailable)
+	bool (*autovec_function)(DataChunk &, Vector &) = nullptr;
 	//! Cached comparison decomposition (valid when select_bitmap_capable), so Select does not walk the expression
 	BitmapComparisonInfo cmp_info;
 	//! Scratch bitmaps, their buffers are allocated lazily by PrepareBitmap only when actually used.

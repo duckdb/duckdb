@@ -468,7 +468,8 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		} else if (left_type.IsFloating()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
 			                        GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
-			function.SetFallible();
+			// plain IEEE add (inf/nan on overflow, no throw): CANNOT_ERROR enables the autovec fastpaths
+			function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 			function.SetArgProperties({inc, inc});
 			function.SetStatisticsCallback(PropagateFloatingStats<AddPropagateStatistics, AddOperator>);
 			return function;
@@ -766,7 +767,11 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 		D_ASSERT(type.IsNumeric());
 		ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type),
 		                    IntegerNegateBind);
-		func.SetFallible();
+		if (type.IsFloating()) {
+			func.SetErrorMode(FunctionErrors::CANNOT_ERROR); // float negate never throws
+		} else {
+			func.SetFallible();
+		}
 		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	}
@@ -795,7 +800,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 		} else if (left_type.IsFloating()) {
 			ScalarFunction function("-", {left_type, right_type}, left_type,
 			                        GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
-			function.SetFallible();
+			function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			function.SetStatisticsCallback(PropagateFloatingStats<SubtractPropagateStatistics, SubtractOperator>);
 			return function;
@@ -1076,7 +1081,12 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	for (auto &func : multiply.functions) {
-		func.SetFallible();
+		// float multiply is plain IEEE (no throw) and stays CANNOT_ERROR, enabling the autovec fastpaths
+		const auto &sig = func.GetSignature();
+		if (!(sig.GetReturnType().IsFloating() && sig.GetParameterCount() == 2 &&
+		      sig.GetParameter(0).GetType().IsFloating())) {
+			func.SetFallible();
+		}
 	}
 
 	return multiply;
