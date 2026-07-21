@@ -71,6 +71,17 @@ SELECT row(1, 2) IN (SELECT * FROM (VALUES (NULL::INT, NULL::INT)) rhs(x, y)),
 ----
 NULL	NULL
 
+# The NULL refinement must run when every build row is filtered from the hash table.
+query II
+SELECT *
+FROM (VALUES (0, 0), (1, 0)) outer_tab(f1, f2)
+WHERE (f1, f2) NOT IN (
+	SELECT * FROM (VALUES (0, NULL::INT)) inner_tab(c1, c2)
+)
+ORDER BY ALL
+----
+1	0
+
 # Keep a relevant NULL row beyond a vector boundary.
 statement ok
 CREATE TABLE mark_join_rhs AS SELECT i::INT AS a, i::INT AS b FROM range(3000) t(i);

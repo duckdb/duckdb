@@ -176,12 +176,21 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// this means we kept the struct intact for ordered comparison (e.g., (a,b) < ANY(...))
 		if (child_expressions.size() == 1 && bound_node.types.size() > 1 &&
 		    TypeIsTuple(child_expressions[0]->GetReturnType())) {
-			// Keep the struct as-is for proper lexicographic row comparison
-			result->GetChildrenMutable().push_back(std::move(child_expressions[0]));
-			// Store all the subquery types - they will be used to construct the RHS struct during planning
-			for (auto &subquery_type : bound_node.types) {
-				result->ChildTypesMutable().push_back(subquery_type);
-				result->ChildTargetsMutable().push_back(subquery_type);
+			auto &child = child_expressions[0];
+			auto child_type = ExpressionBinder::GetExpressionReturnType(*child);
+			auto subquery_type = LogicalType::TUPLE(bound_node.types);
+			LogicalType compare_type;
+			if (!LogicalType::TryGetMaxLogicalType(context, child_type, subquery_type, compare_type)) {
+				throw BinderException(
+				    expr, "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
+				    child_type.ToString(), subquery_type);
+			}
+			child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
+			result->GetChildrenMutable().push_back(std::move(child));
+			for (idx_t child_idx = 0; child_idx < bound_node.types.size(); child_idx++) {
+				auto &subquery_child_type = bound_node.types[child_idx];
+				result->ChildTypesMutable().push_back(subquery_child_type);
+				result->ChildTargetsMutable().push_back(StructType::GetChildType(compare_type, child_idx));
 			}
 		} else {
 			// Standard case: either no struct or struct was extracted into separate expressions
