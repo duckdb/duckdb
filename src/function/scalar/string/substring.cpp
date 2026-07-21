@@ -303,30 +303,19 @@ void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 bool GetPrefixByteLength(const string &value, idx_t character_count, idx_t &byte_count) {
+	auto data = reinterpret_cast<const utf8proc_uint8_t *>(value.c_str());
 	byte_count = 0;
 	for (idx_t character_idx = 0; character_idx < character_count; character_idx++) {
 		if (byte_count >= value.size()) {
 			return false;
 		}
-		auto first_byte = static_cast<uint8_t>(value[byte_count]);
-		idx_t codepoint_size = 0;
-		if (first_byte <= 0x7F) {
-			codepoint_size = 1;
-		} else if ((first_byte & 0xE0) == 0xC0) {
-			codepoint_size = 2;
-		} else if ((first_byte & 0xF0) == 0xE0) {
-			codepoint_size = 3;
-		} else if ((first_byte & 0xF8) == 0xF0) {
-			codepoint_size = 4;
-		} else {
-			// The current byte cannot start a UTF-8 character.
+		utf8proc_int32_t codepoint;
+		auto codepoint_size =
+		    utf8proc_iterate(data + byte_count, NumericCast<utf8proc_ssize_t>(value.size() - byte_count), &codepoint);
+		if (codepoint_size <= 0) {
 			return false;
 		}
-		// The statistics end in the middle of a UTF-8 character.
-		if (codepoint_size > value.size() - byte_count) {
-			return false;
-		}
-		byte_count += codepoint_size;
+		byte_count += NumericCast<idx_t>(codepoint_size);
 	}
 	return true;
 }
