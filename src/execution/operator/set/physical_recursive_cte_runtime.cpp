@@ -5,6 +5,7 @@
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
+#include "duckdb/execution/operator/join/physical_recursive_cte_key_join.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
@@ -555,14 +556,39 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 	return plan;
 }
 
+static void CountDirectRecursiveReferences(const PhysicalOperator &op, TableIndex cte_index,
+                                           idx_t &recursive_reference_count, idx_t &recurring_reference_count) {
+	if (op.type == PhysicalOperatorType::RECURSIVE_KEY_JOIN) {
+		auto &key_join = op.Cast<PhysicalRecursiveCTEKeyJoin>();
+		if (key_join.state_scan.cte_index == cte_index) {
+			recurring_reference_count++;
+		}
+		return;
+	}
+	if (op.type != PhysicalOperatorType::RECURSIVE_CTE_SCAN &&
+	    op.type != PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN) {
+		return;
+	}
+	auto &scan = op.Cast<PhysicalColumnDataScan>();
+	if (scan.cte_index != cte_index) {
+		return;
+	}
+	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN) {
+		recursive_reference_count++;
+	} else {
+		recurring_reference_count++;
+	}
+}
+
 static bool OperatorDirectlyDependsOnRecursiveInput(const PhysicalOperator &op, TableIndex cte_index) {
 	if (op.type == PhysicalOperatorType::DELIM_SCAN) {
 		return true;
 	}
-	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN ||
-	    op.type == PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN) {
-		auto &scan = op.Cast<PhysicalColumnDataScan>();
-		return scan.cte_index == cte_index;
+	idx_t recursive_reference_count = 0;
+	idx_t recurring_reference_count = 0;
+	CountDirectRecursiveReferences(op, cte_index, recursive_reference_count, recurring_reference_count);
+	if (recursive_reference_count > 0 || recurring_reference_count > 0) {
+		return true;
 	}
 	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
 		auto &delim_join = op.Cast<PhysicalDelimJoin>();
@@ -1069,17 +1095,7 @@ static void CountRecursiveReferencesInternal(const PhysicalOperator &op, TableIn
 	if (!visited.insert(op).second) {
 		return;
 	}
-	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN ||
-	    op.type == PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN) {
-		auto &scan = op.Cast<PhysicalColumnDataScan>();
-		if (scan.cte_index == cte_index) {
-			if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN) {
-				recursive_reference_count++;
-			} else {
-				recurring_reference_count++;
-			}
-		}
-	}
+	CountDirectRecursiveReferences(op, cte_index, recursive_reference_count, recurring_reference_count);
 	for (auto child : op.GetChildren()) {
 		CountRecursiveReferencesInternal(child.get(), cte_index, recursive_reference_count, recurring_reference_count,
 		                                 visited);

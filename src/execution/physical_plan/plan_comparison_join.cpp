@@ -42,7 +42,8 @@ static optional_ptr<PhysicalRecursiveCTEStateScan> FindDirectRecursiveStateScan(
 static bool TryGetRecursiveKeyProbe(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
                                     optional_ptr<PhysicalRecursiveCTEStateScan> left_state,
                                     optional_ptr<PhysicalRecursiveCTEStateScan> right_state,
-                                    vector<idx_t> &probe_key_indices, bool &state_on_left) {
+                                    vector<idx_t> &state_key_indices, vector<idx_t> &probe_key_indices,
+                                    bool &state_on_left) {
 	if (op.join_type != JoinType::INNER || (left_state && right_state)) {
 		return false;
 	}
@@ -52,7 +53,7 @@ static bool TryGetRecursiveKeyProbe(LogicalComparisonJoin &op, PhysicalOperator 
 	}
 	state_on_left = left_state != nullptr;
 	auto &probe = state_on_left ? right : left;
-	if (op.conditions.size() != state_scan->distinct_idx.size()) {
+	if (op.conditions.empty() || op.conditions.size() > state_scan->distinct_idx.size()) {
 		return false;
 	}
 
@@ -60,7 +61,7 @@ static bool TryGetRecursiveKeyProbe(LogicalComparisonJoin &op, PhysicalOperator 
 	for (idx_t key_idx = 0; key_idx < state_scan->distinct_idx.size(); key_idx++) {
 		state_key_map[state_scan->distinct_idx[key_idx]] = key_idx;
 	}
-	probe_key_indices.resize(state_scan->distinct_idx.size(), DConstants::INVALID_INDEX);
+	vector<pair<idx_t, idx_t>> key_pairs;
 	for (auto &condition : op.conditions) {
 		if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
 			return false;
@@ -77,15 +78,25 @@ static bool TryGetRecursiveKeyProbe(LogicalComparisonJoin &op, PhysicalOperator 
 			return false;
 		}
 		const auto key_idx = state_key_map[state_ref.Index()];
-		if (key_idx == DConstants::INVALID_INDEX || probe_key_indices[key_idx] != DConstants::INVALID_INDEX) {
+		if (key_idx == DConstants::INVALID_INDEX) {
 			return false;
+		}
+		for (auto &key_pair : key_pairs) {
+			if (key_pair.first == key_idx) {
+				return false;
+			}
 		}
 		const auto &key_type = state_scan->GetTypes()[state_ref.Index()];
 		if (key_type.IsNested() || key_type != probe.GetTypes()[probe_ref.Index()] ||
 		    key_type != state_ref.GetReturnType() || key_type != probe_ref.GetReturnType()) {
 			return false;
 		}
-		probe_key_indices[key_idx] = probe_ref.Index();
+		key_pairs.emplace_back(key_idx, probe_ref.Index());
+	}
+	std::sort(key_pairs.begin(), key_pairs.end());
+	for (auto &key_pair : key_pairs) {
+		state_key_indices.push_back(key_pair.first);
+		probe_key_indices.push_back(key_pair.second);
 	}
 	return true;
 }
@@ -101,16 +112,27 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	right.estimated_cardinality = rhs_cardinality;
 	auto left_state = FindDirectRecursiveStateScan(left, recursive_state_scans);
 	auto right_state = FindDirectRecursiveStateScan(right, recursive_state_scans);
+	vector<idx_t> state_key_indices;
 	vector<idx_t> probe_key_indices;
 	bool state_on_left;
-	if (TryGetRecursiveKeyProbe(op, left, right, left_state, right_state, probe_key_indices, state_on_left)) {
+	if (TryGetRecursiveKeyProbe(op, left, right, left_state, right_state, state_key_indices, probe_key_indices,
+	                            state_on_left)) {
 		auto &state_scan = state_on_left ? *left_state : *right_state;
 		auto &probe = state_on_left ? right : left;
 		auto left_projection_map = PhysicalJoin::FillProjectionMap(left, op.left_projection_map);
 		auto right_projection_map = PhysicalJoin::FillProjectionMap(right, op.right_projection_map);
-		return Make<PhysicalRecursiveCTEKeyJoin>(op, probe, state_scan, state_on_left, std::move(probe_key_indices),
-		                                         std::move(left_projection_map), std::move(right_projection_map),
-		                                         op.estimated_cardinality);
+		if (state_key_indices.size() < state_scan.distinct_idx.size()) {
+			bool found = false;
+			for (auto &spec : state_scan.partial_key_index_specs) {
+				found = found || spec == state_key_indices;
+			}
+			if (!found) {
+				state_scan.partial_key_index_specs.push_back(state_key_indices);
+			}
+		}
+		return Make<PhysicalRecursiveCTEKeyJoin>(op, probe, state_scan, state_on_left, std::move(state_key_indices),
+		                                         std::move(probe_key_indices), std::move(left_projection_map),
+		                                         std::move(right_projection_map), op.estimated_cardinality);
 	}
 
 	if (op.conditions.empty()) {
