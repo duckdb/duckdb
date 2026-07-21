@@ -193,10 +193,13 @@ struct GlobalBinderState {
 	optional_ptr<BoundParameterMap> parameters;
 	//! Tables whose triggers have already been expanded in this query (recursion detection)
 	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
-	//! Generated base-UPDATE nodes that must also capture the pre-update (OLD) row image, mapped to the reserved
-	//! column names under which the captured OLD columns are exposed (physical table order). Internal
-	//! trigger-expansion state, keyed by node identity; never set by SQL parsing and never serialized.
-	reference_map_t<QueryNode, vector<Identifier>> trigger_old_capture_columns;
+	//! Generated base-UPDATE nodes that must capture the pre-update (OLD) row image (the capture request),
+	//! keyed by node identity. Internal trigger-expansion state; never set by SQL parsing and never serialized.
+	reference_set_t<QueryNode> trigger_old_capture;
+	//! Optional presentation detail for the statement-trigger CTE consumer: the reserved column names, in physical
+	//! table order, under which the captured OLD image is exposed via SQL aliases. Only populated for capture
+	//! requests presented through a CTE; a consumer that reads the OLD image directly leaves it absent.
+	reference_map_t<QueryNode, vector<Identifier>> trigger_old_capture_cte_names;
 	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)

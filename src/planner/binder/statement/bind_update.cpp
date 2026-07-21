@@ -199,7 +199,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 
 	// Trigger expansion flags its generated base UPDATE for OLD capture via scoped binder state (keyed by node
 	// identity), so the parsed AST carries no trigger-internal state.
-	bool capture_old_rows = global_binder_state->trigger_old_capture_columns.count(node) > 0;
+	bool capture_old_rows = global_binder_state->trigger_old_capture.count(node) > 0;
 
 	// set return_chunk boolean early because it needs uses update_is_del_and_insert logic
 	if (!node.returning_list.empty() || capture_old_rows) {
@@ -259,7 +259,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 			// names computed once by trigger expansion (threaded via binder state), so the trigger's OLD transition
 			// alias can rename them. Public RETURNING (bound above) references only the NEW image, so its semantics
 			// are unchanged.
-			auto &old_capture_names = global_binder_state->trigger_old_capture_columns.at(node);
+			auto &old_capture_names = global_binder_state->trigger_old_capture_cte_names.at(node);
 			auto &proj = returning_result.plan->Cast<LogicalProjection>();
 			auto new_column_count = table.GetTypes().size();
 			idx_t physical_index = 0;

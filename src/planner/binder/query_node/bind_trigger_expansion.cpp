@@ -445,14 +445,17 @@ BoundStatement Binder::ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	optional_ptr<QueryNode> capture_base;
 	auto outer = BuildTriggerChain(node, table, before_triggers, after_triggers, uuid_suffix, base_cte_name,
 	                               has_returning, injected_virtuals, old_capture_names, capture_base);
-	// Flag the generated base UPDATE for OLD capture in scoped binder state, active only while binding this chain.
-	// BindNode(UpdateQueryNode) reads the names by node identity, so it never touches the parsed AST.
+	// Request OLD capture on the generated base UPDATE in scoped binder state, active only while binding this
+	// chain. BindNode(UpdateQueryNode) reads the request by node identity, so it never touches the parsed AST.
+	// The reserved CTE presentation names are separate, optional state for the statement-trigger CTE consumer.
 	if (capture_base) {
-		global_binder_state->trigger_old_capture_columns[*capture_base] = old_capture_names;
+		global_binder_state->trigger_old_capture.insert(*capture_base);
+		global_binder_state->trigger_old_capture_cte_names[*capture_base] = old_capture_names;
 	}
 	auto chain = Bind(*outer);
 	if (capture_base) {
-		global_binder_state->trigger_old_capture_columns.erase(*capture_base);
+		global_binder_state->trigger_old_capture.erase(*capture_base);
+		global_binder_state->trigger_old_capture_cte_names.erase(*capture_base);
 	}
 
 	if (!has_returning) {
