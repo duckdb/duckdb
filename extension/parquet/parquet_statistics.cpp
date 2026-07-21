@@ -13,6 +13,7 @@
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -804,8 +805,13 @@ static optional<uint64_t> TryHashTimestamp(const Value &constant, const ParquetC
 // TODO TEST THIS!
 // TODO perhaps we can re-use some writer infra here
 static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnSchema &schema) {
-	// Handle time-related types.
+	// Handle logical types whose Parquet representation needs special hashing.
 	switch (constant.type().id()) {
+	case LogicalTypeId::UUID: {
+		data_t bytes[16];
+		BaseUUID::ToBlob(constant.GetValue<hugeint_t>(), bytes);
+		return duckdb_zstd::XXH64(bytes, sizeof(bytes), 0);
+	}
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
@@ -900,6 +906,8 @@ bool ParquetStatisticsUtils::BloomFilterSupported(const ParquetColumnSchema &sch
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::DATE:
 		return true;
+	case LogicalTypeId::UUID:
+		return schema.parquet_type == duckdb_parquet::Type::FIXED_LEN_BYTE_ARRAY && schema.type_length == 16;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		// When type info is UNIT_NS, DuckDB type TIMESTAMP_NS/TIMESTAMP_TZ_NS is used.
