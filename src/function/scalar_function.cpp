@@ -57,8 +57,7 @@ ScalarFunction::ScalarFunction(Identifier name, std::initializer_list<FunctionPa
                                function_statistics_t statistics, init_local_state_t init_local_state,
                                LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
                                bind_lambda_function_t bind_lambda)
-    : SimpleFunction(std::move(name),
-                     FunctionSignature(std::move(params), std::move(varargs), std::move(return_type))) {
+    : SimpleFunction(std::move(name), FunctionSignature(params, std::move(varargs), std::move(return_type))) {
 	properties.stability = side_effects;
 	properties.null_handling = null_handling;
 
