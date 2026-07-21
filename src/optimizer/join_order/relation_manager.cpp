@@ -190,6 +190,16 @@ static void PinFilterAfterLeftJoin(FilterInfo &filter, JoinRelationSet &nullable
 	}
 }
 
+static void PinSemanticJoinAfterLeftJoin(SemanticJoinEdge &join, JoinRelationSet &nullable_set,
+                                         JoinRelationSet &left_join_set, JoinRelationSetManager &set_manager) {
+	if (RelationSetsIntersect(join.left_set, nullable_set)) {
+		join.left_set = set_manager.Union(join.left_set, left_join_set);
+	}
+	if (RelationSetsIntersect(join.right_set, nullable_set)) {
+		join.right_set = set_manager.Union(join.right_set, left_join_set);
+	}
+}
+
 static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
@@ -831,6 +841,9 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					for (idx_t filter_idx = 0; filter_idx < filter_count_before_left_join; filter_idx++) {
 						PinFilterAfterLeftJoin(*filters_and_bindings[filter_idx], *full_right_set, full_set,
 						                       set_manager);
+					}
+					for (auto &previous_semantic_join : semantic_joins) {
+						PinSemanticJoinAfterLeftJoin(*previous_semantic_join, *full_right_set, full_set, set_manager);
 					}
 				}
 				D_ASSERT(!semantic_edge->costing_predicate_indices.empty());
