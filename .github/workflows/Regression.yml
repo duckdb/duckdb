@@ -18,6 +18,9 @@ on:
       runner_linux_small:
         default: ubuntu-latest
         type: string
+      runner_provider:
+        default: ''
+        type: string
       save_cache:
         default: false
         type: boolean
@@ -45,6 +48,10 @@ on:
         description: 'Optional small runner label override'
         default: ubuntu-latest
         type: string
+      runner_provider:
+        description: 'Runner provider for duckdb-ci checkout when using Namespace runners'
+        default: ''
+        type: string
       save_cache:
         default: false
         type: boolean
@@ -68,9 +75,11 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          fetch-depth: 0
+          runner_provider: ${{ inputs.runner_provider || (startsWith(inputs.runner_linux_x64, 'namespace-profile-') && 'namespace' || 'github') }}
+          fetch_depth: 0
           ref: ${{ env.GIT_REF }}
 
       - name: Install tools
@@ -237,8 +246,10 @@ jobs:
             benchmarks: .github/regression/tpcds_sf3.csv
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: namespace
           ref: ${{ env.GIT_REF }}
 
       - name: Install
@@ -380,8 +391,10 @@ jobs:
       EXTENSION_STATIC_BUILD: 1
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: ${{ inputs.runner_provider || (startsWith(inputs.runner_linux_small, 'namespace-profile-') && 'namespace' || 'github') }}
           ref: ${{ env.GIT_REF }}
 
       - name: Install

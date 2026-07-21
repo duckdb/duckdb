@@ -6,9 +6,16 @@ on:
         type: string
       runner_macos_arm64:
         type: string
+      runner_provider:
+        default: ''
+        type: string
   workflow_dispatch:
     inputs:
       git_ref:
+        type: string
+      runner_provider:
+        description: 'Runner provider for duckdb-ci checkout when using Namespace runners'
+        default: ''
         type: string
   repository_dispatch:
 
@@ -38,10 +45,11 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: ${{ inputs.runner_provider || (startsWith(inputs.runner_macos_arm64 || 'macos-14', 'namespace-profile-') && 'namespace' || 'github') }}
           # we need tags for the ubiquity build script to run without errors
-          fetch-depth: '0'
+          fetch_depth: '0'
           ref: ${{ inputs.git_ref != '' && inputs.git_ref || github.sha }}
 
       - name: Configure Xcode Caching

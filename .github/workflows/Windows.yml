@@ -12,6 +12,9 @@ on:
         type: boolean
       runners:
         type: string
+      runner_provider:
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -29,6 +32,11 @@ on:
         type: string
         required: false
         default: '{}'
+      runner_provider:
+        description: 'Runner provider for duckdb-ci checkout when using Namespace runners'
+        type: string
+        required: false
+        default: ''
 
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
@@ -49,9 +57,11 @@ jobs:
     env:
       GEN: ninja
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        fetch-depth: 0
+        runner_provider: ${{ inputs.runner_provider || (startsWith(fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022', 'namespace-profile-') && 'namespace' || 'github') }}
+        fetch_depth: 0
         ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v6
@@ -156,9 +166,11 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        fetch-depth: 0
+        runner_provider: ${{ inputs.runner_provider || (startsWith(fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022', 'namespace-profile-') && 'namespace' || 'github') }}
+        fetch_depth: 0
         ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v6
@@ -270,8 +282,10 @@ jobs:
        ENABLE_EXTENSION_AUTOLOADING: 1
        ENABLE_EXTENSION_AUTOINSTALL: 1
      steps:
-       - uses: actions/checkout@v6
+       - name: "Checkout"
+         uses: duckdb/duckdb-ci/.github/actions/checkout@main
          with:
+           runner_provider: ${{ inputs.runner_provider || (startsWith(fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022', 'namespace-profile-') && 'namespace' || 'github') }}
            ref: ${{ inputs.git_ref }}
 
        - uses: actions/setup-python@v6

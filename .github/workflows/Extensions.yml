@@ -30,6 +30,10 @@ on:
       runners:
         type: string
         required: true
+      runner_provider:
+        type: string
+        required: false
+        default: ''
       save_cache:
         type: boolean
         required: false
@@ -73,6 +77,11 @@ on:
         type: string
         required: false
         default: '{}'
+      runner_provider:
+        description: 'Runner provider for duckdb-ci checkout when using Namespace runners'
+        type: string
+        required: false
+        default: ''
       save_cache:
         description: 'Override whether extension build caches should be saved'
         type: boolean
@@ -219,9 +228,11 @@ jobs:
     needs:
       - extensions-build
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          fetch-depth: 0
+          runner_provider: ${{ inputs.runner_provider || (startsWith(fromJSON(inputs.runners).linux_x64 || 'ubuntu-latest', 'namespace-profile-') && 'namespace' || 'github') }}
+          fetch_depth: 0
           ref: ${{ inputs.git_ref }}
 
       - uses: ./.github/actions/ccache-action
