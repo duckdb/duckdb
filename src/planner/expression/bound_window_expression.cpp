@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_serialization.hpp"
@@ -321,7 +322,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 
 		auto &context = deserializer.Get<ClientContext &>();
 		auto binder = Binder::CreateBinder(context);
-		EntryLookupInfo lookup(CatalogType::SCALAR_FUNCTION_ENTRY, Identifier(name));
+		EntryLookupInfo lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(Identifier(name)));
 		auto entry = binder->GetCatalogEntry(Identifier::SystemCatalog(), Identifier::DefaultSchema(), lookup,
 		                                     OnEntryNotFound::THROW_EXCEPTION);
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();

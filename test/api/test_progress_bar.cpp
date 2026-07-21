@@ -1,6 +1,7 @@
 #ifndef DUCKDB_NO_THREADS
 
 #include "catch.hpp"
+#include "duckdb/common/progress_bar/display/terminal_progress_bar_display.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "test_helpers.hpp"
@@ -10,6 +11,16 @@
 #include <thread>
 
 using namespace duckdb;
+
+TEST_CASE("Test terminal progress ETA estimate", "[progress-bar]") {
+	REQUIRE(TerminalProgressBarDisplay::EstimateRemainingSeconds(0, 10) == Approx(2147483647.0));
+	REQUIRE(TerminalProgressBarDisplay::EstimateRemainingSeconds(25, 10) == Approx(30));
+	REQUIRE(TerminalProgressBarDisplay::EstimateRemainingSeconds(50, 100) == Approx(100));
+	REQUIRE(TerminalProgressBarDisplay::EstimateRemainingSeconds(100, 10) == Approx(0));
+	REQUIRE(TerminalProgressBarDisplay::EstimateRemainingSeconds(50, 100, 1) == Approx(50));
+	REQUIRE(TerminalProgressBarDisplay::EstimateRemainingSeconds(50, 100, 4) == Approx(50));
+	REQUIRE(TerminalProgressBarDisplay::EstimateRemainingSeconds(50, 100, 0.1) == Approx(200));
+}
 
 class TestProgressBar {
 	class TestFailure {

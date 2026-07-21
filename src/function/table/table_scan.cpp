@@ -36,6 +36,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
 
 namespace duckdb {
 
@@ -914,8 +915,9 @@ void TableScanGetMetrics(TableFunctionGetMetricsInput &input) {
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
 	InsertionOrderPreservingMap<string> result;
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	result["Table"] = ParseInfo::QualifierToString(bind_data.table.schema.catalog.GetName(),
-	                                               bind_data.table.schema.name, bind_data.table.name);
+	result["Table"] =
+	    QualifiedName(bind_data.table.schema.catalog.GetName(), bind_data.table.schema.name, bind_data.table.name)
+	        .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result["Type"] = bind_data.is_index_scan ? "Index Scan" : "Sequential Scan";
 	return result;
 }
@@ -935,8 +937,8 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	auto catalog = deserializer.ReadProperty<Identifier>(100, "catalog");
 	auto schema = deserializer.ReadProperty<Identifier>(101, "schema");
 	auto table = deserializer.ReadProperty<Identifier>(102, "table");
-	auto &catalog_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
+	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(),
+	                                                           QualifiedName(catalog, schema, table));
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}
@@ -954,10 +956,7 @@ static bool TableSupportsPushdownExtract(const FunctionData &bind_data_ref, cons
 		return false;
 	}
 	auto column_type = column.GetType();
-	if (column_type.id() != LogicalTypeId::STRUCT && column_type.id() != LogicalTypeId::VARIANT) {
-		return false;
-	}
-	return true;
+	return column_type.id() == LogicalTypeId::STRUCT || column_type.id() == LogicalTypeId::VARIANT;
 }
 
 bool TableScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {

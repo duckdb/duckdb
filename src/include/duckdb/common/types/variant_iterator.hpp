@@ -155,15 +155,25 @@ public:
 	//! The logical type of the value the cursor points at
 	VariantLogicalType GetTypeId() const;
 
-	//! Returns the fixed-width primitive payload loaded as T (e.g. GetData<int32_t>())
+	//! Returns the fixed-width primitive payload loaded as T (e.g. GetData<int32_t>()). For a DECIMAL the
+	//! payload follows the (width, scale) prefix, so T must match the physical type implied by the width.
 	template <class T>
 	T GetData() const {
+		if (GetTypeId() == VariantLogicalType::DECIMAL) {
+			return Load<T>(GetDecimal().value_ptr);
+		}
 		return Load<T>(GetDataPointer());
 	}
-	//! Returns a pointer to the raw payload of a fixed-width primitive value
-	const_data_ptr_t GetDataPointer() const;
 	//! Returns the (variable-length) string payload of a VARCHAR/BLOB/BIGNUM/GEOMETRY/BITSTRING value
 	string_t GetString() const;
+	//! Returns the (width, scale) of a DECIMAL value
+	VariantDecimalProperties GetDecimalProperties() const {
+		auto decimal = GetDecimal();
+		return VariantDecimalProperties(decimal.width, decimal.scale);
+	}
+
+	//! Returns a pointer to the raw payload of a fixed-width primitive value
+	const_data_ptr_t GetDataPointer() const;
 	//! Returns the decimal payload of a DECIMAL value
 	VariantDecimalData GetDecimal() const;
 

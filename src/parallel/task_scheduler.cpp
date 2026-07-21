@@ -67,8 +67,13 @@ void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Tas
 }
 
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
+	const annotated_lock_guard<annotated_mutex> lock(token.producer_lock);
+	return GetTaskFromProducerLocked(token, task);
+}
+
+bool TaskScheduler::GetTaskFromProducerLocked(ProducerToken &token, shared_ptr<Task> &task) {
 	for (auto &queue : queues) {
-		if (queue->DequeueFromProducer(token, task)) {
+		if (queue->DequeueFromProducerLocked(token, task)) {
 			return true;
 		}
 	}
@@ -170,7 +175,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 			block_allocator.ThreadFlush(
 			    Settings::Get<AllocatorBackgroundThreadsSetting>(db),
 			    StringUtil::ParseFormattedBytes(Settings::Get<AllocatorFlushThresholdSetting>(db)),
-			    NumericCast<idx_t>(GetPool(TaskSchedulerType::REGULAR).NumberOfThreads()));
+			    GetPool(TaskSchedulerType::REGULAR).NumberOfThreads());
 			auto decay_delay = Allocator::DecayDelay();
 			if (!decay_delay.IsValid()) {
 				// no decay delay specified - just wait
@@ -199,7 +204,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 	// this thread will exit, flush all of its outstanding allocations
 	if (block_allocator.SupportsFlush()) {
 		block_allocator.ThreadFlush(Settings::Get<AllocatorBackgroundThreadsSetting>(db), 0,
-		                            NumericCast<idx_t>(GetPool(TaskSchedulerType::REGULAR).NumberOfThreads()));
+		                            GetPool(TaskSchedulerType::REGULAR).NumberOfThreads());
 		Allocator::ThreadIdle();
 	}
 #else
@@ -269,11 +274,11 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 #endif
 }
 
-int32_t TaskScheduler::NumberOfThreads() {
+idx_t TaskScheduler::NumberOfThreads() {
 	return GetPool(TaskSchedulerType::REGULAR).NumberOfThreads();
 }
 
-int32_t TaskScheduler::NumberOfAsyncThreads() {
+idx_t TaskScheduler::NumberOfAsyncThreads() {
 	return GetPool(TaskSchedulerType::ASYNC).NumberOfThreads();
 }
 

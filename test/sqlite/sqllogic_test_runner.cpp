@@ -3,12 +3,14 @@
 
 #include "catch.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/settings.hpp"
+#include "debug_fs_extension.hpp"
 #include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
@@ -17,6 +19,16 @@
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
 #endif
+
+// PROTOTYPE: shadow Catch's SKIP_TEST so every skip also emits a stable, parseable
+// marker (consumed by the pytest collector) before recording the skip with Catch.
+// `file_name` is the runner's member, in scope at all skip sites in this TU.
+#undef SKIP_TEST
+#define SKIP_TEST(reason)                                                                                              \
+	do {                                                                                                               \
+		duckdb::SQLLogicTestLogger::PrintSkip(file_name, (reason));                                                    \
+		Catch::getResultCapture().skipTestDuringRun(reason);                                                           \
+	} while (0)
 
 namespace duckdb {
 
@@ -75,15 +87,20 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 	config.reset();
 	con.reset();
 	db.reset();
-	for (auto &loaded_path : loaded_databases) {
-		if (loaded_path.empty()) {
-			continue;
+	// Post-test DB cleanup, gated by --database-destroy (on-success aware). Skipping here on
+	// retain/failure keeps loaded DBs inside a retained temp dir (e.g. test_zero_initialize.py,
+	// which diffs the generated DB files after the process exits).
+	if (DatabaseDestroyFires(test_succeeded)) {
+		for (auto &loaded_path : loaded_databases) {
+			if (loaded_path.empty()) {
+				continue;
+			}
+			// only delete database files that were created during the tests
+			if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
+				continue;
+			}
+			DeleteDatabase(loaded_path);
 		}
-		// only delete database files that were created during the tests
-		if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
-			continue;
-		}
-		DeleteDatabase(loaded_path);
 	}
 }
 
@@ -94,6 +111,10 @@ void SQLLogicTestRunner::AddSkipReason(const string &reason) {
 
 void SQLLogicTestRunner::SkipTest(const string &reason) {
 	AddSkipReason(reason);
+	// A whole-test skip is a terminal disposition, not a mid-stream event: record it and let the
+	// Catch wrapper emit the single end {status:"skip-requirement"} terminal.
+	test_skipped_requirement = true;
+	test_skip_reason = reason;
 	SKIP_TEST(reason);
 }
 
@@ -107,6 +128,57 @@ string SQLLogicTestRunner::GetSkipReasonSummary() {
 		oss << entry.first << ": " << entry.second << "\n";
 	}
 	return oss.str();
+}
+
+void SQLLogicTestRunner::CountStatement(bool passed) {
+	if (!EmitTestEventsEnabled()) {
+		return; // feature off: no counting on the normal path
+	}
+	if (passed) {
+		test_stat_passes++;
+	} else {
+		test_stat_fails++;
+	}
+}
+
+void SQLLogicTestRunner::CountSkipMode() {
+	if (!EmitTestEventsEnabled()) {
+		return;
+	}
+	test_stat_skip_mode++;
+}
+
+void SQLLogicTestRunner::EmitBegin(const string &test_name) {
+	if (!EmitTestEventsEnabled()) {
+		return;
+	}
+	JSONWriter writer;
+	auto obj = writer.CreateObject();
+	obj.AddString("event", "begin");
+	obj.AddString("name", test_name);
+	writer.SetRoot(obj);
+	SQLLogicTestLogger::EmitTestEvent(writer.ToString());
+}
+
+void SQLLogicTestRunner::EmitEnd(const string &test_name, const string &status, const string &data) {
+	if (!EmitTestEventsEnabled()) {
+		return;
+	}
+	// One terminal per test: status in {ok, error, skip-requirement}, the statement tallies, and
+	// optional free-form data (skip reason / error text — multi-line safe via JSON escaping).
+	JSONWriter writer;
+	auto obj = writer.CreateObject();
+	obj.AddString("event", "end");
+	obj.AddString("name", test_name);
+	obj.AddString("status", status);
+	obj.Add("passes", writer.CreateUnsignedInteger(test_stat_passes.load()));
+	obj.Add("fails", writer.CreateUnsignedInteger(test_stat_fails.load()));
+	obj.Add("skip-mode", writer.CreateUnsignedInteger(test_stat_skip_mode.load()));
+	if (!data.empty()) {
+		obj.AddString("data", data);
+	}
+	writer.SetRoot(obj);
+	SQLLogicTestLogger::EmitTestEvent(writer.ToString());
 }
 
 void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
@@ -179,6 +251,7 @@ NewDatabaseConnection SQLLogicTestRunner::CreateDatabase(const string &db_path, 
 	NewDatabaseConnection result;
 	try {
 		result.db = make_uniq<DuckDB>(db_path, config.get());
+		result.db->LoadStaticExtension<DebugFsExtension>();
 
 		// always load core functions
 		auto &test_config = TestConfiguration::Get();
@@ -706,17 +779,12 @@ void SQLLogicTestRunner::ExecuteStream(std::istream &input, const string &source
 }
 
 void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &script) {
+	file_name = script;
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
 		SkipTest("config skip_tests");
 		return;
 	}
-
-	file_name = script;
-	idx_t skip_level = 0;
-	bool test_expr_executed = false;
-	bool file_tags_expr_seen = false;
-	vector<string> file_tags; // gets both implicit and file-spec'd
 
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
@@ -743,6 +811,34 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
+
+	auto init_sqllogic = test_config.GetInitSqllogic();
+	if (!init_sqllogic.empty()) {
+		SQLLogicParser init_parser;
+		if (!init_parser.OpenFile(init_sqllogic)) {
+			FAIL("Could not find init_sqllogic '" + init_sqllogic + "'");
+		}
+		ExecuteScript(init_parser, script);
+	}
+
+	ExecuteScript(parser, script);
+
+	auto cleanup_sqllogic = test_config.GetCleanupSqllogic();
+	if (!cleanup_sqllogic.empty()) {
+		SQLLogicParser cleanup_parser;
+		if (!cleanup_parser.OpenFile(cleanup_sqllogic)) {
+			FAIL("Could not find cleanup_sqllogic '" + cleanup_sqllogic + "'");
+		}
+		ExecuteScript(cleanup_parser, script);
+	}
+}
+
+void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &script) {
+	auto &test_config = TestConfiguration::Get();
+	idx_t skip_level = 0;
+	bool test_expr_executed = false;
+	bool file_tags_expr_seen = false;
+	vector<string> file_tags; // gets both implicit and file-spec'd
 
 	if (StringUtil::EndsWith(script, ".test_slow")) {
 		file_tags.emplace_back("slow");
@@ -813,6 +909,10 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 			continue;
 		}
 		if (skip_level > 0 && token.type != SQLLogicTokenType::SQLLOGIC_MODE) {
+			if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT ||
+			    token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
+				CountSkipMode();
+			}
 			continue;
 		}
 		if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT) {
@@ -1101,10 +1201,12 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 
 			auto &test_config = TestConfiguration::Get();
 			auto env_var = token.parameters[0];
-			auto test_env_result = test_config.GetTestEnv(env_var, "");
+			auto test_env_defined = test_config.HasTestEnv(env_var);
+			string env_actual_value;
 			const char *env_actual = nullptr;
-			if (!test_env_result.empty()) {
-				env_actual = test_env_result.c_str();
+			if (test_env_defined) {
+				env_actual_value = test_config.GetTestEnv(env_var, "");
+				env_actual = env_actual_value.c_str();
 			} else {
 				env_actual = std::getenv(env_var.c_str());
 			}
@@ -1134,7 +1236,7 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
 			}
 
-			if (environment_variables.count(env_var)) {
+			if (!test_env_defined && environment_variables.count(env_var)) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;

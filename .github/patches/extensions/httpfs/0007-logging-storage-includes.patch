@@ -1,0 +1,25 @@
+--- a/src/httpfs.cpp
++++ b/src/httpfs.cpp
+@@ -1,4 +1,6 @@
+ #include "httpfs.hpp"
++#include "duckdb/logging/logger.hpp"
++#include "duckdb/logging/log_manager.hpp"
+ 
+ #include "duckdb/common/atomic.hpp"
+ #include "duckdb/common/exception/http_exception.hpp"
+--- a/src/s3fs.cpp
++++ b/src/s3fs.cpp
+@@ -1,4 +1,5 @@
+ #include "s3fs.hpp"
++#include "duckdb/logging/logger.hpp"
+ #include "hash_functions.hpp"
+ #include "duckdb.hpp"
+ #include "duckdb/common/exception/http_exception.hpp"
+--- a/src/crypto.cpp
++++ b/src/crypto.cpp
+@@ -1,4 +1,5 @@
+ #include "crypto.hpp"
++#include "duckdb/storage/storage_info.hpp"
+ 
+ #include "duckdb/common/common.hpp"
+ #include "duckdb/common/exception.hpp"

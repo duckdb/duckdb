@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -50,6 +51,32 @@ ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return
                      init_local_state, std::move(varargs), side_effects, null_handling, bind_lambda) {
 }
 
+// (we take an initializer list to ensure that the function is not ambiguous with the other constructor)
+ScalarFunction::ScalarFunction(Identifier name, std::initializer_list<FunctionParameter> params,
+                               LogicalType return_type, scalar_function_t function, bind_scalar_function_t bind,
+                               function_statistics_t statistics, init_local_state_t init_local_state,
+                               LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
+                               bind_lambda_function_t bind_lambda)
+    : SimpleFunction(std::move(name), FunctionSignature(params, std::move(varargs), std::move(return_type))) {
+	properties.stability = side_effects;
+	properties.null_handling = null_handling;
+
+	callbacks.function = std::move(function);
+	callbacks.bind = bind;
+	callbacks.init_local_state = init_local_state;
+	callbacks.statistics = statistics;
+	callbacks.bind_lambda = bind_lambda;
+}
+
+ScalarFunction::ScalarFunction(std::initializer_list<FunctionParameter> params, LogicalType return_type,
+                               scalar_function_t function, bind_scalar_function_t bind,
+                               function_statistics_t statistics, init_local_state_t init_local_state,
+                               LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
+                               bind_lambda_function_t bind_lambda)
+    : ScalarFunction(Identifier(), params, std::move(return_type), std::move(function), bind, statistics,
+                     init_local_state, std::move(varargs), side_effects, null_handling, bind_lambda) {
+}
+
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
 	return name == rhs.name && signature == rhs.signature && callbacks == rhs.callbacks && properties == rhs.properties;
 }
@@ -82,8 +109,8 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
 
 BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
 	name = function.name;
-	schema_name = function.schema_name;
-	catalog_name = function.catalog_name;
+	schema_name = function.GetSchemaName();
+	catalog_name = function.GetCatalogName();
 	extra_info = function.extra_info;
 	return_type = function.GetReturnType();
 	callbacks = function.GetCallbacks();

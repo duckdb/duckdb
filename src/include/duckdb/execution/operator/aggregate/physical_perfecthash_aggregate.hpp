@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -63,6 +64,9 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
+	}
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
 	}
 
 	bool SinkOrderDependent() const override {

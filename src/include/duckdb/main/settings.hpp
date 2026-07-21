@@ -258,6 +258,17 @@ struct AllowedPathsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ApproximateJoinOrderThresholdSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "approximate_join_order_threshold";
+	static constexpr const char *Description =
+	    "The minimum number of tables in a join to determine the optimal join order approximately instead of exactly.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "12";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ArrowLargeBufferSizeSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_large_buffer_size";
@@ -585,17 +596,6 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct DebugLocalFileSystemDelayMsSetting {
-	using RETURN_TYPE = idx_t;
-	static constexpr const char *Name = "debug_local_file_system_delay_ms";
-	static constexpr const char *Description =
-	    "DEBUG SETTING: time to sleep before local file system open/read/write operations";
-	static constexpr const char *InputType = "UBIGINT";
-	static constexpr const char *DefaultValue = "0";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
 struct DebugOrderVerificationSetting {
 	using RETURN_TYPE = DebugOrderVerification;
 	static constexpr const char *Name = "debug_order_verification";
@@ -626,6 +626,16 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugTransformerTrampolineStyleSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_transformer_trampoline_style";
+	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -1779,6 +1789,30 @@ struct ProgressBarTimeSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct ReadAheadDepthSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "read_ahead_depth";
+	static constexpr const char *Description = "Number of scan jobs the multi-file reader prefetches ahead of "
+	                                           "decoding. -1 = automatic (based on thread count), 0 = disabled.";
+	static constexpr const char *InputType = "BIGINT";
+	static constexpr const char *DefaultValue = "-1";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct RegexMatchOperatorSemanticsSetting {
+	using RETURN_TYPE = RegexMatchOperatorSemantics;
+	static constexpr const char *Name = "regex_match_operator_semantics";
+	static constexpr const char *Description =
+	    "Configures whether regex match operators use partial or full string matching";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "partial";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ScalarSubqueryErrorOnMultipleRowsSetting {

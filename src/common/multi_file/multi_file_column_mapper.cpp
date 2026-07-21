@@ -296,10 +296,10 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
-			child_list_t<Value> child_list;
-			child_list.emplace_back(string(), Value(local_column.name));
-			child_list.emplace_back(string(), std::move(result.column_map));
-			result.column_map = Value::STRUCT(std::move(child_list));
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
 		}
 	}
 	if (is_selected && child_map.default_value) {
@@ -344,6 +344,18 @@ MapColumnMapComponent(ClientContext &context,
 	return child_map;
 }
 
+static bool IsInvalidMapKeyDefault(const ColumnMapResult &mapping) {
+	if (!mapping.default_value) {
+		return false;
+	}
+	auto &expr = *mapping.default_value;
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return false;
+	}
+	auto &constant_expr = expr.Cast<BoundConstantExpression>();
+	return constant_expr.GetValue().IsNull();
+}
+
 static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefinition &global_column,
                                     const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
                                     const MultiFileLocalIndex &local_id, const ColumnMapper &mapper,
@@ -384,6 +396,11 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 
 		auto map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, i,
 		                                        global_component, local_key_value);
+		if (name == "key" && IsInvalidMapKeyDefault(map_result)) {
+			throw InvalidInputException(
+			    "'key' of MAP did not map to a value and the registered DEFAULT is NULL, which is not allowed");
+		}
+
 		if (map_result.column_index) {
 			child_indexes.push_back(std::move(*map_result.column_index));
 			mapping->child_mapping.insert(make_pair(i, std::move(map_result.mapping)));
@@ -405,10 +422,10 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
-			child_list_t<Value> child_list;
-			child_list.emplace_back(string(), Value(local_column.name));
-			child_list.emplace_back(string(), std::move(result.column_map));
-			result.column_map = Value::STRUCT(std::move(child_list));
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
 		}
 	}
 	if (!default_expressions.empty()) {
@@ -510,10 +527,10 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
-			child_list_t<Value> child_list;
-			child_list.emplace_back(string(), Value(local_column.name));
-			child_list.emplace_back(string(), std::move(result.column_map));
-			result.column_map = Value::STRUCT(std::move(child_list));
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
 		}
 	}
 
@@ -1090,7 +1107,6 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 	auto result = make_uniq<TableFilterSet>();
 	map<idx_t, MultiFileGlobalIndex> local_to_global;
 
-	idx_t local_offset = 0;
 	for (auto &it : filters) {
 		auto &global_index = it.first;
 		auto &global_filter = it.second.get().Cast<ExpressionFilter>();
@@ -1101,10 +1117,8 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			    "Error in 'EvaluateConstantFilters', this filter should not end up in CreateFilters!");
 		}
 		auto &map_entry = local_it->second;
-		auto local_id = MultiFileLocalIndex(map_entry.mapping.index.GetIndex() - local_offset);
-		auto filter_idx = reader.column_indexes[local_id].GetPrimaryIndex();
+		auto local_id = MultiFileLocalIndex(map_entry.mapping.index.GetIndex());
 		auto &local_type = map_entry.local_type;
-		auto &global_type = map_entry.global_type;
 
 		unique_ptr<TableFilter> local_filter;
 		switch (map_entry.filter_conversion) {
@@ -1131,17 +1145,18 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			// we need to set the index of the references inside the expression to 0
 			auto &expr = reader_data.expressions[global_index.GetIndex()];
 			auto unique_ref_count = StartIndexAtZero(expr);
+			auto expression_type = expr->GetReturnType();
 
 			vector<ColumnIndex> expression_column_indexes;
 			for (idx_t i = 0; i < unique_ref_count; i++) {
 				auto index = local_id + i;
 				expression_column_indexes.push_back(reader.column_indexes[index]);
 			}
-			reader.expression_map.emplace(filter_idx,
+			reader.expression_map.emplace(ProjectionIndex(local_id.GetIndex()),
 			                              BaseFileReaderExpression(std::move(expr), expression_column_indexes));
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
-			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);
+			expr = make_uniq<BoundReferenceExpression>(std::move(expression_type), local_id);
 		}
 		local_to_global.emplace(local_id, global_index);
 	}

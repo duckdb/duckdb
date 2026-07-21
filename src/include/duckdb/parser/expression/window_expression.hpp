@@ -67,23 +67,20 @@ public:
 	static ExpressionType WindowToExpressionType(const string &fun_name);
 
 public:
-	const Identifier &Catalog() const {
-		return catalog;
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
 	}
-	Identifier &CatalogMutable() {
-		return catalog;
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
 	}
-	const Identifier &Schema() const {
-		return schema;
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
 	}
-	Identifier &SchemaMutable() {
-		return schema;
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
 	}
 	const Identifier &FunctionName() const {
-		return function_name;
-	}
-	Identifier &FunctionNameMutable() {
-		return function_name;
+		return qualified_name.Name();
 	}
 	const vector<unique_ptr<ParsedExpression>> &Partitions() const {
 		return partitions;
@@ -374,12 +371,8 @@ public:
 	}
 
 private:
-	//! Catalog of the aggregate function
-	Identifier catalog;
-	//! Schema of the aggregate function
-	Identifier schema;
-	//! Name of the aggregate function
-	Identifier function_name;
+	//! Qualified name of the aggregate function (catalog.schema.name)
+	QualifiedName qualified_name;
 	//! The child expression of the main window function
 	vector<FunctionArgument> arguments;
 	//! The set of expressions to partition by

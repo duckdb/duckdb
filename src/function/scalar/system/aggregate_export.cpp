@@ -1,8 +1,8 @@
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/list_segment.hpp"
-#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -512,7 +512,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
                                                           const vector<LogicalType> &argument_types,
                                                           const map<idx_t, Value> &constant_parameters) {
 	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-	    context, Identifier::DefaultSchema(), Identifier(function_name));
+	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), Identifier::DefaultSchema(),
+	                           Identifier(function_name)));
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		throw InternalException("Could not find aggregate %s", function_name);
 	}
@@ -728,11 +729,11 @@ void CombineAggrStateDestroy(Vector &state, AggregateInputData &aggr_input_data,
 }
 
 unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	auto bind_data = BindAggregateStateInternal(context, function, arguments);
+	D_ASSERT(arguments.size() == 1 || arguments.size() == 2);
+	auto bind_data = BindAggregateStateInternal(input.GetClientContext(), function, arguments);
 
 	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
 	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());
@@ -749,7 +750,7 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 
 void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
                        idx_t count) {
-	D_ASSERT(input_count == 1);
+	D_ASSERT(input_count == 1 || input_count == 2);
 
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
@@ -777,12 +778,18 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		target_data.WriteValue(state_values[i].GetValue());
 	}
 
-	DeserializeState(underlying_aggr, layout, inputs[0], count, temp_state_buf.get(), aggr_input_data.allocator);
-
-	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
-	                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
-	underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
-	// the target states are the real combine_aggr states (kept); the source states are scratch - destroy them
+	try {
+		DeserializeState(underlying_aggr, layout, inputs[0], count, temp_state_buf.get(), aggr_input_data.allocator);
+		AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
+		                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
+		if (input_count == 2) {
+			combine_input.combine_multiplicities = inputs[1];
+		}
+		underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
+	} catch (...) {
+		DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, aggr_input_data.allocator);
+		throw;
+	}
 	DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, aggr_input_data.allocator);
 }
 
@@ -982,16 +989,10 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 			                      "constant");
 		}
 	}
-	auto function_name_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	if (function_name_val.IsNull()) {
-		throw BinderException("to_aggregate_state: the aggregate name cannot be NULL");
-	}
+	auto function_name_val = input.GetNonNullConstant(1);
 	auto function_name = StringValue::Get(function_name_val);
 
-	auto signature_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
-	if (signature_val.IsNull()) {
-		throw BinderException("to_aggregate_state: the signature must be a list of types");
-	}
+	auto signature_val = input.GetNonNullConstant(2);
 	// the signature lists all of the argument types in order
 	vector<LogicalType> argument_types;
 	for (auto &arg : ListValue::GetChildren(signature_val)) {
@@ -1002,7 +1003,7 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 	// NULL value of the argument type (e.g. string_agg's separator), keyed by the argument's index
 	map<idx_t, Value> constant_parameters;
 	if (arguments.size() > 3) {
-		auto constants_val = ExpressionExecutor::EvaluateScalar(context, *arguments[3]);
+		auto constants_val = input.GetConstant(3);
 		ParseConstantParameters(constants_val, argument_types.size(), constant_parameters);
 	}
 	for (auto &entry : constant_parameters) {
@@ -1029,7 +1030,7 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 		const auto buffer_struct = ListType::GetChildType(state_type);
 		const idx_t column_count = StructType::GetChildTypes(buffer_struct).size();
 		vector<SortedAggregateStateOrder> orders;
-		auto order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[4]);
+		auto order_value = input.GetConstant(4);
 		ParseOrderBys(order_value, column_count, orders);
 		if (orders.empty()) {
 			throw BinderException("to_aggregate_state: an ordered aggregate state must have at least one ORDER BY key");
@@ -1146,6 +1147,16 @@ ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 		}
 		ScalarFunction function("to_aggregate_state", arguments, LogicalTypeId::ANY, ToAggregateStateFunction,
 		                        ToAggregateStateBind);
+		auto &sig = function.GetSignature();
+		sig.GetParameter(0).SetName("data");
+		sig.GetParameter(1).SetName("name");
+		sig.GetParameter(2).SetName("signature");
+		if (sig.GetParameterCount() > 3) {
+			sig.GetParameter(3).SetName("constant_parameters");
+		}
+		if (sig.GetParameterCount() > 4) {
+			sig.GetParameter(4).SetName("order_by");
+		}
 		function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 		set.AddFunction(std::move(function));
 	}
@@ -1159,6 +1170,18 @@ AggregateFunction CombineAggrFun::GetFunction() {
 	                      CombineAggrBind, nullptr, nullptr, nullptr);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
+}
+
+AggregateFunctionSet CombineAggrFun::GetFunctions() {
+	AggregateFunctionSet set("combine_aggr");
+	set.AddFunction(GetFunction());
+	auto repeated =
+	    AggregateFunction("combine_aggr", {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalTypeId::ANY, nullptr,
+	                      nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
+	                      FunctionNullHandling::SPECIAL_HANDLING, nullptr, CombineAggrBind, nullptr, nullptr, nullptr);
+	repeated.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	set.AddFunction(std::move(repeated));
+	return set;
 }
 
 } // namespace duckdb

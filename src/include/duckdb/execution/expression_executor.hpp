@@ -12,11 +12,11 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 
 namespace duckdb {
 class Allocator;
+class ClientContext;
 class ExecutionContext;
 
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
@@ -58,6 +58,8 @@ public:
 	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
 	//! executors with a single expression
 	DUCKDB_API void ExecuteExpression(DataChunk &input, Vector &result);
+	//! Execute the expression only on rows described by the 'sel', write to those same row indices in 'result'
+	DUCKDB_API void ExecuteExpression(DataChunk &input, Vector &result, const SelectionVector &sel, idx_t count);
 	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
 	//! executors with a single expression
 	DUCKDB_API void ExecuteExpression(Vector &result);

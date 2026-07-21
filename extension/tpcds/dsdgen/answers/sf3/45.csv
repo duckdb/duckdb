@@ -1,0 +1,48 @@
+ca_zip|ca_city|sum(ws_sales_price)
+19003|Riverview|5.75
+19231|Riverside|64.44
+26060|Spring Valley|130.52
+27057|Georgetown|65.22
+29003|Riverview|77.09
+29532|Lakeside|185.42
+30587|Hopewell|26.58
+33951|Glendale|43.82
+35464|Gilmore|20.97
+38014|Clifton|81.25
+38048|Salem|89.14
+38371|Oak Ridge|116.02
+39237|Forest Hills|45.40
+39303|Springfield|58.99
+40534|Crossroads|8.16
+41087|Macedonia|73.05
+43394|Florence|44.56
+44466|Mountain View|93.99
+45985|Blanchard|127.42
+46192|Fairfield|40.41
+48721|Union|83.64
+50059|Centerville|18.50
+50411|Cedar Grove|38.96
+51289|Lincoln|150.46
+51904|Midway|138.32
+54244|Ashland|54.42
+54466|Mountain View|73.18
+56871|Wildwood|3.00
+57746|Union Hill|5.42
+60150|Bunker Hill|58.00
+60899|Webb|30.09
+61757|Enterprise|28.68
+64338|Red Hill|33.29
+66060|Spring Valley|103.98
+70411|NULL|17.14
+74338|Red Hill|21.91
+75709|Fairview|123.60
+76534|Highland Park|8.91
+85709|Fairview|11.78
+91521|Newport|26.29
+91711|Unionville|57.84
+93604|Pleasant Hill|0.00
+95281|Bethel|2.12
+96192|Fairfield|24.77
+98014|Clifton|113.09
+99310|Brownsville|1.86
+NULL|Unionville|1.75

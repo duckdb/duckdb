@@ -788,6 +788,7 @@ public:
 	void ConvertSubplansToCTEs(Optimizer &optimizer, unique_ptr<LogicalOperator> &op) {
 		const auto sorted_subplans = GetSortedSubplans();
 		idx_t index = 1;
+		bool converted_subplans = false;
 		for (auto &entry : sorted_subplans) {
 			auto &subplan_info = entry.get().second;
 			if (!ShouldMaterialize(subplan_info)) {
@@ -905,8 +906,11 @@ public:
 					new_bindings = cte_refs.back()->GetColumnBindings();
 				}
 				D_ASSERT(old_bindings[subplan_idx].size() == new_bindings.size());
+				D_ASSERT(subplan.canonical_bindings.size() == new_bindings.size());
 				for (idx_t i = 0; i < old_bindings[subplan_idx].size(); i++) {
 					replacer.replacement_bindings.emplace_back(old_bindings[subplan_idx][i], new_bindings[i]);
+					const auto inserted = generated_binding_map.emplace(new_bindings[i], subplan.canonical_bindings[i]);
+					D_ASSERT(inserted.second);
 				}
 			}
 
@@ -956,6 +960,12 @@ public:
 				}
 				break;
 			}
+			converted_subplans = true;
+		}
+		if (converted_subplans) {
+			// Subplan replacement changes child output bindings under existing positional projection maps.
+			// Invalidate them here; column lifetime runs again later and rebuilds the maps.
+			ClearProjectionMaps(*op);
 		}
 	}
 
@@ -1049,6 +1059,11 @@ private:
 		const auto &table_index_map = state.table_index_map.GetMap();
 		arena_vector<ColumnBinding> canonical_bindings(state.allocator);
 		for (auto &cb : original_bindings) {
+			auto generated_entry = generated_binding_map.find(cb);
+			if (generated_entry != generated_binding_map.end()) {
+				canonical_bindings.push_back(generated_entry->second);
+				continue;
+			}
 			const auto canonical_table_index = to_canonical_table_index.at(cb.table_index);
 			auto &table_map = table_index_map.at(cb.table_index);
 			if (table_map.Empty<ConversionType::TO_CANONICAL>()) {
@@ -1154,6 +1169,8 @@ private:
 	subplan_map_t subplans;
 	//! Mapping from original table index to canonical table index
 	unordered_map<TableIndex, TableIndex> to_canonical_table_index;
+	//! Mapping from generated CTE bindings to canonical bindings
+	column_binding_map_t<ColumnBinding> generated_binding_map;
 	//! Minimum CTE index created by this optimizer
 	TableIndex min_cte_idx;
 };

@@ -1,8 +1,12 @@
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
+
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -45,6 +49,9 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context) const {
+	if (!collection) {
+		return make_uniq<GlobalSourceState>();
+	}
 	return make_uniq<PhysicalColumnDataGlobalScanState>(*collection);
 }
 
@@ -59,6 +66,21 @@ SourceResultType PhysicalColumnDataScan::GetDataInternal(ExecutionContext &conte
 	auto &lstate = input.local_state.Cast<PhysicalColumnDataLocalScanState>();
 	collection->Scan(gstate.global_scan_state, lstate.local_scan_state, chunk);
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+ProgressData PhysicalColumnDataScan::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	if (!collection) {
+		ProgressData progress;
+		progress.SetInvalid();
+		return progress;
+	}
+	auto &state = gstate.Cast<PhysicalColumnDataGlobalScanState>();
+	lock_guard<mutex> guard(state.global_scan_state.lock);
+	auto total = MaxValue<idx_t>(collection->Count(), 1);
+	ProgressData progress;
+	progress.done = double(MinValue<idx_t>(state.global_scan_state.scan_state.next_row_index, total));
+	progress.total = double(total);
+	return progress;
 }
 
 //===--------------------------------------------------------------------===//
@@ -84,6 +106,43 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		return;
 	}
 	case PhysicalOperatorType::CTE_SCAN: {
+		if (cte_source) {
+			auto entry = state.cte_dependencies.find(*this);
+			D_ASSERT(entry != state.cte_dependencies.end());
+			auto cte_dependency = entry->second.get().shared_from_this();
+			auto cte_sink = state.GetPipelineSink(*cte_dependency);
+			D_ASSERT(cte_sink);
+			D_ASSERT(cte_sink->type == PhysicalOperatorType::CTE);
+			auto &cte = cte_sink->Cast<PhysicalCTE>();
+			auto &source = cte_source->Cast<PhysicalCTEConsumerSource>();
+			// Prefer direct fanout. Buffered exchange is only used when it can avoid full materialization or
+			// when the consumer can stop early; otherwise this scan reads the materialized working table.
+			if (cte.TryRegisterDirectConsumer(current, source.consumer_idx)) {
+				auto current_pipeline = current.shared_from_this();
+				current.SetExternalInput();
+				current.AddExternalFinishDependency(cte_dependency);
+				cte_dependency->AddDataflowDependency(current_pipeline);
+				DUCKDB_LOG(current.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",
+				           {{"consumer", to_string(source.consumer_idx)}, {"mode", "DIRECT"}});
+				state.SetPipelineSource(current, *cte_source);
+				return;
+			}
+			if (cte.ShouldUseBufferedConsumer(current)) {
+				cte.RegisterBufferedConsumer(source.consumer_idx);
+				current.AddDataflowDependency(cte_dependency);
+				DUCKDB_LOG(current.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",
+				           {{"consumer", to_string(source.consumer_idx)}, {"mode", "BUFFERED"}});
+				state.SetPipelineSource(current, *cte_source);
+				return;
+			}
+			D_ASSERT(collection);
+			cte.RegisterMaterializedConsumer(source.consumer_idx);
+			current.AddDependency(cte_dependency);
+			DUCKDB_LOG(current.GetClientContext(), PhysicalOperatorLogType, cte, "PhysicalCTE", "SelectConsumer",
+			           {{"consumer", to_string(source.consumer_idx)}, {"mode", "MATERIALIZED"}});
+			state.SetPipelineSource(current, *this);
+			return;
+		}
 		auto entry = state.cte_dependencies.find(*this);
 		D_ASSERT(entry != state.cte_dependencies.end());
 		// this chunk scan introduces a dependency to the current pipeline

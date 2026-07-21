@@ -13,6 +13,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -132,8 +134,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
 				                      info.name, existing_mode_str, attached_mode);
 			}
-			if (!options.default_table.name.empty()) {
-				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+			if (!options.default_table.Name().empty()) {
+				existing_db->GetCatalog().SetDefaultTable(options.default_table.Schema(), options.default_table.Name());
 			}
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 				// we require the vacuuming threshold for indexed tables to be the same as the already attached db
@@ -214,8 +216,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		attached_db->Initialize(context);
 	} else {
 		attached_db->Initialize(context);
-		if (!options.default_table.name.empty()) {
-			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+		if (!options.default_table.Name().empty()) {
+			attached_db->GetCatalog().SetDefaultTable(options.default_table.Schema(), options.default_table.Name());
 		}
 		attached_db->FinalizeLoad(context);
 	}
@@ -289,7 +291,7 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	switch (db_info.alter_database_type) {
 	case AlterDatabaseType::RENAME_DATABASE: {
 		auto &rename_info = db_info.Cast<RenameDatabaseInfo>();
-		RenameDatabase(context, db_info.catalog, rename_info.new_name, db_info.if_not_found);
+		RenameDatabase(context, db_info.GetQualifiedName().Catalog(), rename_info.new_name, db_info.if_not_found);
 		break;
 	}
 	default:
@@ -387,7 +389,8 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		DBPathAndType::CheckMagicBytes(context, fs, info.path, options.db_type);
+		// Prefetch the header for a DuckDB file, reused when opening it (see AttachOptions::prefetched).
+		DBPathAndType::CheckMagicBytes(context, fs, info.path, options.db_type, &options.prefetched);
 	}
 
 	if (options.db_type.empty()) {
@@ -412,14 +415,14 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
-	if (IsInvalidCatalog(default_entry.catalog)) {
+	if (IsInvalidCatalog(default_entry.GetCatalog())) {
 		auto &result = DatabaseManager::Get(context).default_database;
 		if (result.empty()) {
 			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
 		}
 		return result;
 	}
-	return default_entry.catalog;
+	return default_entry.GetCatalog();
 }
 
 // LCOV_EXCL_START

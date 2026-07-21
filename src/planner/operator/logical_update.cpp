@@ -15,8 +15,9 @@ LogicalUpdate::LogicalUpdate(TableCatalogEntry &table)
 
 LogicalUpdate::LogicalUpdate(ClientContext &context, const unique_ptr<CreateInfo> &table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE),
-      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
-                                                 table_info->Cast<CreateTableInfo>().table)) {
+      table(Catalog::GetEntry<TableCatalogEntry>(
+          context, QualifiedName(table_info->GetQualifiedName().Catalog(), table_info->GetQualifiedName().Schema(),
+                                 table_info->Cast<CreateTableInfo>().GetTableName()))) {
 	auto binder = Binder::CreateBinder(context);
 	bound_constraints = binder->BindConstraints(table);
 }
@@ -27,7 +28,12 @@ idx_t LogicalUpdate::EstimateCardinality(ClientContext &context) {
 
 vector<ColumnBinding> LogicalUpdate::GetColumnBindings() {
 	if (return_chunk) {
-		return GenerateColumnBindings(table_index, table.GetTypes().size());
+		auto column_count = table.GetTypes().size();
+		if (capture_old_rows) {
+			// NEW image followed by OLD image, both in table order.
+			column_count *= 2;
+		}
+		return GenerateColumnBindings(table_index, column_count);
 	}
 	return {ColumnBinding(table_index, ProjectionIndex(0))};
 }
@@ -35,6 +41,11 @@ vector<ColumnBinding> LogicalUpdate::GetColumnBindings() {
 void LogicalUpdate::ResolveTypes() {
 	if (return_chunk) {
 		types = table.GetTypes();
+		if (capture_old_rows) {
+			// Append the OLD image types (identical to the NEW image).
+			auto old_types = table.GetTypes();
+			types.insert(types.end(), old_types.begin(), old_types.end());
+		}
 	} else {
 		types.emplace_back(LogicalType::BIGINT);
 	}

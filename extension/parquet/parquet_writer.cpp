@@ -141,6 +141,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		parquet_type = Type::BYTE_ARRAY;
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 		parquet_type = Type::INT64;
 		break;
@@ -269,6 +270,12 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.__isset.TIME = true;
 		schema_ele.logicalType.TIME.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIME_TZ);
 		schema_ele.logicalType.TIME.unit.__isset.MICROS = true;
+		break;
+	case LogicalTypeId::TIME_NS:
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIME = true;
+		schema_ele.logicalType.TIME.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIME.unit.__isset.NANOS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
@@ -471,9 +478,13 @@ public:
 
 ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
                                                      vector<unique_ptr<Expression>> expressions_p)
-    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), expressions(std::move(expressions_p)),
-      executor(context, expressions) {
-	chunk.Initialize(buffer.GetAllocator(), types);
+    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), types(std::move(types)),
+      expressions(std::move(expressions_p)), executor(context, expressions) {
+	chunk.Initialize(buffer.GetAllocator(), this->types);
+}
+
+bool ParquetWriteTransformData::MatchesTypes(const vector<LogicalType> &other_types) const {
+	return types == other_types;
 }
 
 //! TODO: this doesnt work.. the ParquetWriteTransformData is shared with all threads, the method is stateful, but has
@@ -640,22 +651,28 @@ void ParquetWriter::VerifyPreparedRowGroup(const PreparedRowGroup &prepared) con
 }
 
 void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data) {
-	if (transform_data) {
-		return;
-	}
-
 	vector<LogicalType> transformed_types;
-	vector<unique_ptr<Expression>> transform_expressions;
 	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
 		auto &column_writer = *column_writers[col_idx];
 		auto &original_type = options.sql_types[col_idx];
-		auto expr = make_uniq<BoundReferenceExpression>(original_type, col_idx);
 		if (!column_writer.HasTransform()) {
 			transformed_types.push_back(original_type);
-			transform_expressions.push_back(std::move(expr));
 			continue;
 		}
 		transformed_types.push_back(column_writer.TransformedType());
+	}
+	if (transform_data && transform_data->MatchesTypes(transformed_types)) {
+		return;
+	}
+
+	vector<unique_ptr<Expression>> transform_expressions;
+	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
+		auto &column_writer = *column_writers[col_idx];
+		auto expr = make_uniq<BoundReferenceExpression>(options.sql_types[col_idx], col_idx);
+		if (!column_writer.HasTransform()) {
+			transform_expressions.push_back(std::move(expr));
+			continue;
+		}
 		transform_expressions.push_back(column_writer.TransformExpression(std::move(expr)));
 	}
 	transform_data = make_uniq<ParquetWriteTransformData>(context, transformed_types, std::move(transform_expressions));

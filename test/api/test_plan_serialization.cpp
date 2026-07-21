@@ -129,15 +129,15 @@ TEST_CASE("Test logical_update", "[serialization]") {
 //	test_helper("PREPARE v1 AS SELECT 42");
 //}
 
-TEST_CASE("Test logical_simple with DROP", "[serialization]") {
+TEST_CASE("Test logical_drop", "[serialization]") {
 	test_helper("DROP TABLE tbl", {"CREATE TABLE tbl (foo INTEGER)"});
 }
 
-TEST_CASE("Test logical_simple with ALTER", "[serialization]") {
+TEST_CASE("Test logical_alter", "[serialization]") {
 	test_helper("ALTER TABLE tbl ADD COLUMN bar INTEGER", {"CREATE TABLE tbl (foo INTEGER)"});
 }
 
-TEST_CASE("Test logical_simple with LOAD", "[serialization]") {
+TEST_CASE("Test logical_load", "[serialization]") {
 	test_helper("LOAD foo");
 }
 

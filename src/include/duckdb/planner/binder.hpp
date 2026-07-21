@@ -51,6 +51,8 @@ class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
+class LogicalGet;
+class LogicalUpdate;
 class LogicalVacuum;
 
 class ColumnList;
@@ -62,7 +64,9 @@ class AtClause;
 class BoundAtClause;
 
 struct CreateInfo;
+struct CreateSchemaInfo;
 struct CreateTriggerInfo;
+struct QualifiedName;
 struct BoundCreateTableInfo;
 struct BoundOnConflictInfo;
 struct CommonTableExpressionInfo;
@@ -189,6 +193,13 @@ struct GlobalBinderState {
 	optional_ptr<BoundParameterMap> parameters;
 	//! Tables whose triggers have already been expanded in this query (recursion detection)
 	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
+	//! Generated base-UPDATE nodes that must capture the pre-update (OLD) row image (the capture request),
+	//! keyed by node identity. Internal trigger-expansion state; never set by SQL parsing and never serialized.
+	reference_set_t<QueryNode> trigger_old_capture;
+	//! Optional presentation detail for the statement-trigger CTE consumer: the reserved column names, in physical
+	//! table order, under which the captured OLD image is exposed via SQL aliases. Only populated for capture
+	//! requests presented through a CTE; a consumer that reads the OLD image directly leaves it absent.
+	reference_map_t<QueryNode, vector<Identifier>> trigger_old_capture_cte_names;
 	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
@@ -239,6 +250,10 @@ public:
 	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
 	                                                                  SchemaCatalogEntry &schema);
 
+	//! The lone LOGICAL_GET reached through identity projections, or nullptr if `op` is not a bare
+	//! table-function passthrough.
+	static optional_ptr<LogicalGet> GetPassthroughTableFunctionGet(LogicalOperator &op);
+
 	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
 	                                                           const vector<unique_ptr<Constraint>> &constraints,
 	                                                           const Identifier &table_name, const ColumnList &columns);
@@ -262,6 +277,14 @@ public:
 	                     vector<Identifier> &result_names);
 
 	void SearchSchema(CreateInfo &info);
+	//! Resolve the leading component of a (possibly qualified) name into a catalog: if it names an attached database it
+	//! becomes the catalog. The result has the catalog as the first path element. When default_catalog is true (the
+	//! default) the default catalog is filled in when the name does not specify one; when false the catalog element is
+	//! left empty (the caller applies its own default), which lets it distinguish "no catalog given" from an explicit
+	//! catalog.
+	QualifiedName ResolveCatalog(ClientContext &context, const QualifiedName &name, bool default_catalog = true);
+	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
+	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
@@ -311,6 +334,7 @@ public:
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema);
+	static void BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualified_name);
 
 	void BindLogicalType(LogicalType &type);
 
@@ -437,6 +461,9 @@ private:
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
 	void BindDropTrigger(DropStatement &stmt, StatementProperties &properties);
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
+	//! Append references to the scanned pre-update (OLD) value of every physical column, in table order, to the
+	//! UPDATE child projection (before rowid). Records the input-chunk offset of the OLD block on the update.
+	void BindOldRowCapture(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update);
 	//! Build a mapping from storage column index to scan chunk index for RETURNING.
 	//! Ensures all physical columns are present in the scan.
 	//! return_columns[storage_idx] = scan_chunk_idx
@@ -478,11 +505,15 @@ private:
 	                                                TableCatalogEntry &table, TriggerEventType event_type);
 	BoundStatement ExpandRowTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
 	                                 const TableCatalogEntry &table,
-	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers);
-	//! Registers NEW as a generic binding so child binders resolve NEW.col at depth=1. The returned binder is
-	//! pushed onto GetActiveBinders(). the caller must keep it alive until the matching pop_back().
-	unique_ptr<ExpressionBinder> SetupNewRowScope(TableIndex table_index, const vector<Identifier> &col_names,
-	                                              const vector<LogicalType> &col_types);
+	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers,
+	                                 TriggerEventType event_type);
+	//! Registers a row scope binding (named "new" for INSERT, "old" for DELETE) so child binders resolve
+	//! NEW.col / OLD.col at depth=1. The returned binder is pushed onto GetActiveBinders().
+	//! The caller must keep it alive until the matching pop_back().
+	unique_ptr<ExpressionBinder> SetupRowScope(TableIndex table_index, const vector<Identifier> &col_names,
+	                                           const vector<LogicalType> &col_types, const string &scope_name);
+	//! Returns the correlated-column scope name for a given event type ("new" for INSERT, "old" for DELETE).
+	static string RowScopeName(TriggerEventType event_type);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);
@@ -576,6 +607,9 @@ private:
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);
 	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema);
+	//! Resolve the (optional) schema/catalog of a qualified name in-place, overwriting it with the resolved name
+	void BindSchemaOrCatalog(QualifiedName &qualified_name);
+	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name);
 	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 

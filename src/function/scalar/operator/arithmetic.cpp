@@ -1,5 +1,4 @@
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/checked_integer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -19,14 +18,12 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include <cmath>
@@ -96,11 +93,11 @@ static Value NumericStatsValue(const LogicalType &type, T value) {
 	D_ASSERT(type.IsNumeric());
 	switch (type.InternalType()) {
 	case PhysicalType::FLOAT:
-		return Value::FLOAT(value);
+		return Value::FLOAT(static_cast<float>(value));
 	case PhysicalType::DOUBLE:
-		return Value::DOUBLE(value);
+		return Value::DOUBLE(static_cast<double>(value));
 	default:
-		return Value::Numeric(type, value);
+		return Value::Numeric(type, static_cast<int64_t>(value));
 	}
 }
 
@@ -711,19 +708,15 @@ static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input
 
 static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
+	D_ASSERT(input.GetArguments().size() == 1);
 
-	D_ASSERT(arguments.size() == 1);
-	if (arguments[0]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
-		return nullptr;
-	}
-	auto &const_expr = arguments[0]->Cast<BoundConstantExpression>();
-	if (const_expr.GetValue().IsNull()) {
+	// only need to promote if the argument is a constant that exactly equals the type's minimum value
+	auto constant = input.TryGetConstant(0);
+	if (!constant || constant->IsNull()) {
 		return nullptr;
 	}
 	auto &type = bound_function.GetArguments()[0];
-	// only need to promote if the constant exactly equals the type's minimum value
-	if (const_expr.GetValue() != Value::MinimumValue(type)) {
+	if (*constant != Value::MinimumValue(type)) {
 		return nullptr;
 	}
 	LogicalType promoted_type;
@@ -1323,7 +1316,7 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(static_cast<double>(lo.micros) * (1.0 - d) + static_cast<double>(hi.micros) * d));
+	return dtime_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
 }
 
 template <>

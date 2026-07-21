@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/column_definition.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
@@ -84,6 +85,34 @@ struct DuckDBDependenciesFun {
 };
 
 struct DuckDBExtensionsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RegisterExternalResourceTypeFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct CreateExternalResourceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DestroyExternalResourceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RegisterExternalResourceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DeregisterExternalResourceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBExternalResourceTypesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBExternalResourcesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/types/validity_mask.hpp"

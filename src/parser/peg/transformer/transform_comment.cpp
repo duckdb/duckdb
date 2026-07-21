@@ -21,7 +21,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 			throw ParserException("Invalid column reference: '%s'", column_name.GetIdentifierName());
 		}
 		auto qualified_name = StringToQualifiedName(identifier);
-		info = make_uniq<SetColumnCommentInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name,
+		info = make_uniq<SetColumnCommentInfo>(qualified_name.Catalog(), qualified_name.Schema(), qualified_name.Name(),
 		                                       column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	} else if (comment_on_type == CatalogType::DATABASE_ENTRY) {
 		throw NotImplementedException("Adding comments to databases is not implemented");
@@ -29,8 +29,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 		throw NotImplementedException("Adding comments to schemas is not implemented");
 	} else {
 		auto qualified_name = StringToQualifiedName(dotted_identifier);
-		info = make_uniq<SetCommentInfo>(comment_on_type, qualified_name.catalog, qualified_name.schema,
-		                                 qualified_name.name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
+		info = make_uniq<SetCommentInfo>(comment_on_type, qualified_name.Catalog(), qualified_name.Schema(),
+		                                 qualified_name.Name(), comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	if (!info) {
 		throw NotImplementedException("Cannot comment on this type");
@@ -83,14 +83,8 @@ CatalogType PEGTransformerFactory::TransformCommentColumn(PEGTransformer &transf
 	return CatalogType::INVALID;
 }
 
-Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, ParseResult &choice_result) {
-	// CommentValue <- NullLiteral / StringLiteral
-	auto &list_pr = choice_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.GetResult().type == ParseResultType::STRING) {
-		return Value(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);
-	}
-	return transformer.Transform<Value>(choice_pr.GetResult());
+Value PEGTransformerFactory::TransformStringLiteralValue(PEGTransformer &transformer, const string &string_literal) {
+	return Value(string_literal);
 }
 
 } // namespace duckdb

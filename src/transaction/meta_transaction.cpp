@@ -5,6 +5,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/secret/secret_storage.hpp"
 
 namespace duckdb {
 
@@ -14,6 +16,8 @@ MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_tim
       transaction_validity(*context_p.db), active_query(MAXIMUM_QUERY_ID), modified_database(nullptr),
       is_read_only(false) {
 }
+
+MetaTransaction::~MetaTransaction() = default;
 
 MetaTransaction &MetaTransaction::Get(ClientContext &context) {
 	return context.transaction.ActiveTransaction();
@@ -54,6 +58,9 @@ optional_ptr<Transaction> MetaTransaction::TryGetTransaction(AttachedDatabase &d
 }
 
 Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
+	if (ValidChecker::IsInvalidated(db)) {
+		throw IOException("%s", ValidChecker::InvalidatedMessage(db));
+	}
 	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
@@ -127,6 +134,10 @@ ErrorData MetaTransaction::Commit() {
 
 		auto &transaction_manager = db.GetTransactionManager();
 		auto &transaction_ref = entry->second;
+		if (ValidChecker::IsInvalidated(db)) {
+			error.Merge(ErrorData(IOException("%s", ValidChecker::InvalidatedMessage(db))));
+			continue;
+		}
 		if (transaction_ref.state != TransactionState::UNCOMMITTED) {
 			continue;
 		}
@@ -158,6 +169,10 @@ void MetaTransaction::Rollback() {
 		auto entry = transactions.find(db);
 		D_ASSERT(entry != transactions.end());
 		auto &transaction_ref = entry->second;
+		if (ValidChecker::IsInvalidated(db)) {
+			error.Merge(ErrorData(IOException("%s", ValidChecker::InvalidatedMessage(db))));
+			continue;
+		}
 		if (transaction_ref.state != TransactionState::UNCOMMITTED) {
 			continue;
 		}

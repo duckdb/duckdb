@@ -13,6 +13,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/serializer/async_memory_governor.hpp"
 
 #include <functional>
 
@@ -20,7 +21,6 @@ namespace duckdb {
 
 class ClientContext;
 class TaskExecutor;
-class TemporaryMemoryState;
 
 //! Compile-time policy used by the async write layers.
 struct AsyncWriteConfig {
@@ -32,10 +32,6 @@ struct AsyncWriteConfig {
 	static constexpr idx_t LOCAL_COALESCE_THRESHOLD = 4096;
 	//! Remote file systems benefit from fewer round trips, so coalesce contiguous small buffers more aggressively.
 	static constexpr idx_t REMOTE_COALESCE_THRESHOLD = 8ULL * 1024ULL * 1024ULL;
-	//! Maximum queued async bytes retained per regular execution thread.
-	static constexpr idx_t MAX_PENDING_BYTES_PER_THREAD = 64ULL * 1024ULL * 1024ULL;
-	//! Minimum async write reservation requested per regular execution thread.
-	static constexpr idx_t MIN_PENDING_BYTES_PER_THREAD = 8ULL * 1024ULL * 1024ULL;
 	//! Maximum bytes a single managed stream request should submit before yielding scheduler capacity.
 	static constexpr idx_t DRAIN_TASK_BYTE_BUDGET = 16ULL * 1024ULL * 1024ULL;
 };
@@ -299,16 +295,10 @@ private:
 
 	//! Low-level positional request scheduler.
 	unique_ptr<AsyncWriteQueue> write_queue;
-	//! Temporary memory reservation state used to limit queued async write data.
-	unique_ptr<TemporaryMemoryState> memory_state;
-	//! Last remaining-size request sent to TemporaryMemoryManager. Grows monotonically until close.
-	idx_t memory_request_bytes = 0;
+	//! Shared TemporaryMemoryManager reservation governor bounding queued async write data.
+	ManagedAsyncMemoryGovernor memory_governor;
 	//! Maximum number of submitted/running drain requests for this queue.
 	idx_t max_active_drain_tasks = 1;
-	//! Minimum TemporaryMemoryManager reservation while writes are outstanding.
-	idx_t min_pending_bytes = 0;
-	//! Hard cap over the TemporaryMemoryState reservation.
-	idx_t max_pending_bytes = 0;
 	//! Maximum bytes one managed async request should submit before yielding scheduler capacity.
 	idx_t drain_task_byte_budget = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET;
 
@@ -337,7 +327,7 @@ public:
 	enum class ScheduleMode : uint8_t { ALLOW, DEFER };
 	//! Whether to schedule only enough request capacity for normal overlap, or force all pending bytes to drain.
 	enum class SchedulePolicy : uint8_t { THRESHOLD, FORCE };
-	//! Whether async requests can write independent target ranges concurrently.
+	//! Whether async requests can write independent target ranges or must use the target's current stream position.
 	enum class DrainMode : uint8_t { SEQUENTIAL, POSITIONAL };
 	//! Whether waiting for scheduled writes should preserve an open registration batch.
 	enum class BatchDrainMode : uint8_t { PRESERVE_BATCH, FORCE_CLOSE_BATCH };
@@ -425,14 +415,14 @@ private:
 	//! Discard queued writes after an async write failure once all submitted writes have stopped.
 	void CancelPendingWritesAfterFailure() noexcept;
 
-	//! Write bytes to the managed target at the assigned logical offset.
+	//! Write bytes to the managed target. SEQUENTIAL mode preserves queue order and ignores the logical offset here.
 	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override;
 
 private:
 	ClientContext &client_context;
 	ManagedAsyncWriteStreamTarget &target;
 
-	//! Positional managed queue that owns TMM reservation, backpressure, and task scheduling.
+	//! Managed queue that owns TMM reservation, backpressure, and task scheduling for physical write requests.
 	unique_ptr<ManagedAsyncWriteQueue> write_queue;
 	//! Whether async requests may drain independent ranges concurrently using positional writes.
 	DrainMode drain_mode = DrainMode::SEQUENTIAL;

@@ -19,11 +19,16 @@ class SchemaCatalogEntry;
 
 struct CreateTableInfo : public CreateInfo {
 	DUCKDB_API CreateTableInfo();
-	DUCKDB_API CreateTableInfo(Identifier catalog, Identifier schema, Identifier name);
+	DUCKDB_API explicit CreateTableInfo(QualifiedName qualified_name);
 	DUCKDB_API CreateTableInfo(SchemaCatalogEntry &schema, Identifier name);
 
 	//! Table name to insert to
-	Identifier table;
+	const Identifier &GetTableName() const {
+		return qualified_name.Name();
+	}
+	void SetTableName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
+	}
 	//! List of columns of the table
 	ColumnList columns;
 	//! List of constraints on the table

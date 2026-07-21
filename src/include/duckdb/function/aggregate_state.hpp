@@ -48,6 +48,7 @@ struct AggregateInputData {
 	ArenaAllocator &allocator;
 	AggregateCombineType combine_type;
 	optional_ptr<const ClusteredAggr> clustered;
+	optional_ptr<const Vector> combine_multiplicities;
 };
 
 //! Input to the get_state_type callback - bundles the bound aggregate function with its bind data so that the

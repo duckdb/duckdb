@@ -1,4 +1,6 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
@@ -11,6 +13,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/common/atomic.hpp"
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
@@ -70,8 +73,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	Resize(initial_capacity);
 
 	// Predicates
-	const auto expr_type =
-	    layout_ptr->CannotHaveNull() ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+	const auto expr_type = (layout_ptr->CannotHaveNull() && !layout_ptr->HasNestedTypes())
+	                           ? ExpressionType::COMPARE_EQUAL
+	                           : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	predicates.resize(layout_ptr->ColumnCount() - 1, expr_type);
 	row_matcher.Initialize(true, *layout_ptr, predicates);
 
@@ -84,7 +88,7 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	    RadixPartitioning::RadixBitsOfPowerOfTwo(partitioned_data->PartitionCount()) != radix_bits) {
 		D_ASSERT(!partitioned_data || partitioned_data->Count() == 0);
 		partitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-		                                                        radix_bits, layout_ptr->ColumnCount() - 1);
+		                                                        radix_bits, layout_ptr->ColumnCount() - 1, context);
 	} else {
 		partitioned_data->Reset();
 	}
@@ -101,7 +105,7 @@ void GroupedAggregateHashTable::InitializeUnpartitionedData() {
 	D_ASSERT(radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD);
 	if (!unpartitioned_data) {
 		unpartitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-		                                                          0ULL, layout_ptr->ColumnCount() - 1);
+		                                                          0ULL, layout_ptr->ColumnCount() - 1, context);
 	} else {
 		unpartitioned_data->Reset();
 	}

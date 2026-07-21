@@ -57,43 +57,22 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 		throw BinderException("index_key: path must contain a 'table' field");
 	}
 
-	return TableDescription(Identifier(fields["catalog"]), Identifier(fields["schema"]), Identifier(fields["table"]));
+	return TableDescription(
+	    QualifiedName(Identifier(fields["catalog"]), Identifier(fields["schema"]), Identifier(fields["table"])));
 }
 
-static TableDescription EvaluateTableDescription(ClientContext &context, const Expression &expr) {
-	if (expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!expr.IsFoldable()) {
-		throw BinderException("index_key: path parameter must be a constant");
-	}
-
-	auto input_struct = ExpressionExecutor::EvaluateScalar(context, expr);
+static TableDescription EvaluateTableDescription(const Value &input_struct) {
 	if (input_struct.IsNull()) {
 		throw BinderException("index_key: path parameter cannot be NULL");
 	}
 
-	if (input_struct.type().id() != LogicalTypeId::STRUCT) {
-		throw BinderException("index_key: path parameter must evaluate to a STRUCT");
-	}
-
-	return ExtractTableDescription(StructType::GetChildTypes(expr.GetReturnType()),
+	return ExtractTableDescription(StructType::GetChildTypes(input_struct.type()),
 	                               StructValue::GetChildren(input_struct));
 }
 
-static string GetStringArgument(ClientContext &context, const Expression &expr, const string &param_name) {
-	if (expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!expr.IsFoldable()) {
-		throw BinderException("index_key: parameter '%s' must be a constant", param_name);
-	}
-	auto value = ExpressionExecutor::EvaluateScalar(context, expr);
+static string GetStringArgument(const Value &value, const string &param_name) {
 	if (value.IsNull()) {
 		throw BinderException("index_key: parameter '%s' cannot be NULL", param_name);
-	}
-	if (value.type().id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("index_key: parameter '%s' must be VARCHAR", param_name);
 	}
 	return StringValue::Get(value);
 }
@@ -105,7 +84,7 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &
 		return *found;
 	}
 
-	auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
+	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	vector<Identifier> available;
 	for (auto &idx : index_list.Indexes()) {
 		available.push_back(idx.GetIndexName());
@@ -145,10 +124,12 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
 	}
 
-	auto path = EvaluateTableDescription(context, *arguments[0]);
-	auto index_name = GetStringArgument(context, *arguments[1], "index_name");
+	auto path = EvaluateTableDescription(input.GetConstant(0));
+	auto index_name = GetStringArgument(input.GetConstant(1), "index_name");
 
-	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, path.database, path.schema, path.table)
+	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY,
+	                                      QualifiedName(path.qualified_name.Catalog(), path.qualified_name.Schema(),
+	                                                    path.qualified_name.Name()))
 	                        .Cast<TableCatalogEntry>();
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
@@ -228,8 +209,8 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 } // namespace
 
 ScalarFunction IndexKeyFun::GetFunction() {
-	ScalarFunction fun("index_key", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::BLOB, IndexKeyFunction,
-	                   IndexKeyBind);
+	ScalarFunction fun("index_key", {{"path", LogicalTypeId::STRUCT}, {"name", LogicalType::VARCHAR}},
+	                   LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
 	fun.SetVarArgs(LogicalTypeId::ANY);
 	return fun;
 }

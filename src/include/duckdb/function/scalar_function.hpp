@@ -9,17 +9,18 @@
 #pragma once
 
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
+class BaseStatistics;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -59,12 +60,22 @@ class ScalarFunctionCatalogEntry;
 struct StatementProperties;
 
 struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, const BaseStatistics &stats_p)
-	    : bind_data(bind_data_p), stats(stats_p) {
+	FunctionStatisticsPruneInput(const BoundFunctionExpression &function_p, optional_ptr<FunctionData> bind_data_p,
+	                             const vector<optional_ptr<const BaseStatistics>> &child_stats_p)
+	    : function(function_p), bind_data(bind_data_p), child_stats(child_stats_p) {
 	}
 
+	//! The bound function expression being checked (gives access to the argument expressions)
+	const BoundFunctionExpression &function;
 	optional_ptr<FunctionData> bind_data;
-	const BaseStatistics &stats;
+
+	//! Statistics for each function argument (an entry is null if it could not be derived for that argument)
+	const vector<optional_ptr<const BaseStatistics>> &child_stats;
+
+	//! Convenience accessor: statistics of the i-th argument, or null if absent / not derivable
+	optional_ptr<const BaseStatistics> ChildStats(idx_t i) const {
+		return i < child_stats.size() ? child_stats[i] : optional_ptr<const BaseStatistics>();
+	}
 };
 
 struct FunctionStatisticsInput {
@@ -367,6 +378,22 @@ public:
 	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                          bind_lambda_function_t bind_lambda = nullptr);
 
+	DUCKDB_API ScalarFunction(Identifier name, std::initializer_list<FunctionParameter> params, LogicalType return_type,
+	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
+	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
+	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                          FunctionStability stability = FunctionStability::CONSISTENT,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                          bind_lambda_function_t bind_lambda = nullptr);
+
+	DUCKDB_API ScalarFunction(std::initializer_list<FunctionParameter> params, LogicalType return_type,
+	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
+	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
+	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                          FunctionStability stability = FunctionStability::CONSISTENT,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                          bind_lambda_function_t bind_lambda = nullptr);
+
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
 
@@ -499,21 +526,24 @@ public:
 	bool operator!=(const BoundScalarFunction &rhs) const;
 };
 
-class BindScalarFunctionInput {
+class BindScalarFunctionInput : public BindFunctionInput {
 public:
 	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
-	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p), binder(binder_p) {
+	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
+	                        optional_ptr<Binder> binder_p = nullptr)
+	    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p),
+	      bound_function(bound_function_p), binder(binder_p) {
 	}
 
-	ClientContext &GetClientContext() const {
-		return context;
+	//! Construct without argument names - looking arguments up by name is not available in this case.
+	BindScalarFunctionInput(ClientContext &context_p, BoundScalarFunction &bound_function_p,
+	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
+	    : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p),
+	      binder(binder_p) {
 	}
+
 	BoundScalarFunction &GetBoundFunction() const {
 		return bound_function;
-	}
-	vector<unique_ptr<Expression>> &GetArguments() const {
-		return arguments;
 	}
 	bool HasBinder() const {
 		return binder != nullptr;
@@ -526,9 +556,7 @@ public:
 	}
 
 private:
-	ClientContext &context;
 	BoundScalarFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
 	optional_ptr<Binder> binder;
 };
 

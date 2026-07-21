@@ -2,6 +2,9 @@
 # description: Test As-Of join NLJ rewrite for non-comparison predicates
 # group: [asof]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # Issue 18309
 statement ok
 CREATE TABLE tt1 (i INTEGER, j VARCHAR);

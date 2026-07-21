@@ -50,6 +50,14 @@ public:
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
 
+	//! The parent schema if this is a nested schema, or nullptr for a top-level schema
+	virtual optional_ptr<SchemaCatalogEntry> GetParentSchema() const {
+		return nullptr;
+	}
+
+	//! The full path of this schema (its parent chain outermost first, ending with this schema's own name)
+	vector<Identifier> GetSchemaPath() const;
+
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	virtual void Scan(ClientContext &context, CatalogType type,
 	                  const std::function<void(CatalogEntry &)> &callback) = 0;

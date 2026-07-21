@@ -83,8 +83,8 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 
 BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function) {
 	name = function.name;
-	schema_name = function.schema_name;
-	catalog_name = function.catalog_name;
+	schema_name = function.GetSchemaName();
+	catalog_name = function.GetCatalogName();
 	extra_info = function.extra_info;
 	return_type = function.GetReturnType();
 	properties = function.GetProperties();
@@ -108,8 +108,8 @@ bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const
 
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {
 	this->name = function.name;
-	this->schema_name = function.schema_name;
-	this->catalog_name = function.catalog_name;
+	this->schema_name = function.GetSchemaName();
+	this->catalog_name = function.GetCatalogName();
 	this->return_type = function.GetReturnType();
 	this->properties = function.GetProperties();
 	this->callbacks = function.GetCallbacks();
@@ -121,6 +121,19 @@ void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &func
 	for (auto &param : function.GetSignature().GetParameters()) {
 		arguments.push_back(param.GetType());
 	}
+}
+
+BindAggregateFunctionInput::BindAggregateFunctionInput(ClientContext &context_p,
+                                                       BoundAggregateFunction &bound_function_p,
+                                                       vector<unique_ptr<Expression>> &arguments_p,
+                                                       const vector<Identifier> &argument_names_p)
+    : BindFunctionInput(context_p, bound_function_p, arguments_p, &argument_names_p), bound_function(bound_function_p) {
+}
+
+BindAggregateFunctionInput::BindAggregateFunctionInput(ClientContext &context_p,
+                                                       BoundAggregateFunction &bound_function_p,
+                                                       vector<unique_ptr<Expression>> &arguments_p)
+    : BindFunctionInput(context_p, bound_function_p, arguments_p, nullptr), bound_function(bound_function_p) {
 }
 
 } // namespace duckdb

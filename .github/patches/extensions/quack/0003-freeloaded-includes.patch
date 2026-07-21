@@ -1,0 +1,52 @@
+--- a/src/include/quack_message.hpp
++++ b/src/include/quack_message.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include "duckdb/common/serializer/binary_serializer.hpp"
++#include "duckdb/common/error_data.hpp"
+ #include "duckdb/common/serializer/memory_stream.hpp"
+ #include "duckdb/parser/parsed_data/drop_info.hpp"
+ #include "duckdb/common/types/uuid.hpp"
+--- a/src/include/storage/quack_transaction_manager.hpp
++++ b/src/include/storage/quack_transaction_manager.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "storage/quack_transaction.hpp"
++#include "duckdb/common/error_data.hpp"
+ #include "duckdb/transaction/transaction_manager.hpp"
+ 
+ namespace duckdb {
+--- a/src/quack_client.cpp
++++ b/src/quack_client.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/main/database.hpp"
++#include "duckdb/common/error_data.hpp"
+ #include "duckdb/main/extension_helper.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+ 
+--- a/src/quack_scan.cpp
++++ b/src/quack_scan.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/function/table_function.hpp"
++#include "duckdb/main/database_manager.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/main/extension_helper.hpp"
+ #include "duckdb/main/secret/secret.hpp"
+--- a/src/quack_server.cpp
++++ b/src/quack_server.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/common/encryption_state.hpp"
++#include "duckdb/common/error_data.hpp"
+ #include "duckdb/common/render_tree.hpp"
+ #include "duckdb/common/types/blob.hpp"
+ #include "duckdb/logging/logger.hpp"
+--- a/src/storage/quack_transaction_manager.cpp
++++ b/src/storage/quack_transaction_manager.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/quack_transaction_manager.hpp"
++#include "duckdb/common/error_data.hpp"
+ 
+ namespace duckdb {
+ 

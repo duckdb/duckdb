@@ -954,3 +954,16 @@ query I
 select epoch_ns(make_timestamp_ns(1732118940123456789))
 ----
 1732118940123456789
+
+foreach type TIMESTAMP_NS TIMESTAMPTZ_NS
+
+foreach value infinity -infinity
+
+query I
+select epoch_ns('{value}'::{type})
+----
+NULL
+
+endloop
+
+endloop

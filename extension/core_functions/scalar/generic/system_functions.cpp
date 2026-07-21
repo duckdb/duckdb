@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -21,7 +22,7 @@ void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vector &resu
 
 // current_schema
 void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().schema);
+	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().GetSchema());
 	result.Reference(val, count_t(input.size()));
 }
 
@@ -53,10 +54,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 	if (arguments[0]->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 		throw BinderException("current_schemas requires a boolean input");
 	}
-	if (!arguments[0]->IsFoldable()) {
-		throw NotImplementedException("current_schemas requires a constant input");
-	}
-	Value schema_value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
+	Value schema_value = input.GetConstant(0);
 	Value result_val;
 	if (schema_value.IsNull()) {
 		// null
@@ -67,7 +65,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 		auto &catalog_search_path = ClientData::Get(context).catalog_search_path;
 		auto &search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
 		std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
-		               [](const CatalogSearchEntry &s) -> Value { return Value(s.schema); });
+		               [](const CatalogSearchEntry &s) -> Value { return Value(s.GetSchema()); });
 		result_val = Value::LIST(LogicalType::VARCHAR, schema_list);
 	}
 	return make_uniq<CurrentSchemasBindData>(std::move(result_val));
@@ -128,8 +126,8 @@ ScalarFunction CurrentDatabaseFun::GetFunction() {
 
 ScalarFunction CurrentSchemasFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
-	ScalarFunction current_schemas({LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction,
-	                               CurrentSchemasBind);
+	ScalarFunction current_schemas({{"include_implicit", LogicalType::BOOLEAN}}, varchar_list_type,
+	                               CurrentSchemasFunction, CurrentSchemasBind);
 	current_schemas.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 	return current_schemas;
 }

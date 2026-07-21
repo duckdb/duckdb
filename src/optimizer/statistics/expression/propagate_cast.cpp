@@ -228,6 +228,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStat
 		// the cast shreds every value into a single bucket - mirror the (possibly nested) source as typed stats
 		return VariantStats::StatisticsPropagateToVariant(source, stats);
 	}
+	if (source.id() == LogicalTypeId::GEOMETRY && target.id() == LogicalTypeId::GEOMETRY) {
+		// A geometry -> geometry cast only changes CRS metadata, not coordinates, so the bounding box,
+		// type set and null-ness are unchanged: propagate the statistics as-is.
+		return stats.Copy().ToUnique();
+	}
 	if (!CanPropagateCast(source, target)) {
 		return nullptr;
 	}

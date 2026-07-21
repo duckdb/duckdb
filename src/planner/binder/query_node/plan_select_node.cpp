@@ -81,8 +81,8 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		// create the "finalize" expression
 		vector<unique_ptr<Expression>> finalize_children;
 		finalize_children.push_back(std::move(aggr_state_ref));
-		auto &finalize_function =
-		    system_catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "finalize");
+		auto &finalize_function = system_catalog.GetEntry<ScalarFunctionCatalogEntry>(
+		    context, QualifiedName(system_catalog.GetName(), DEFAULT_SCHEMA, "finalize"));
 		auto result =
 		    function_binder.BindScalarFunction(finalize_function, std::move(finalize_children), error, false, *this);
 		if (!result) {
@@ -90,7 +90,8 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		}
 
 		// create the "first" expression
-		auto &first_function = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "first");
+		auto &first_function = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(
+		    context, QualifiedName(system_catalog.GetName(), DEFAULT_SCHEMA, "first"));
 		auto finalize_ref = make_uniq<BoundColumnRefExpression>(
 		    result->GetReturnType(),
 		    ColumnBinding(intermediate_proj_index, ProjectionIndex(finalize_expressions.size())));
@@ -128,6 +129,29 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	D_ASSERT(statement.from_table.plan);
 	auto root = std::move(statement.from_table.plan);
+
+	auto plan_unnests = [&](BoundUnnestMap &unnests) {
+		for (idx_t i = unnests.size(); i > 0; i--) {
+			auto unnest_depth = i - 1;
+			auto entry = unnests.find(unnest_depth);
+			if (entry == unnests.end()) {
+				throw InternalException("unnests specified at level %d but none were found", unnest_depth);
+			}
+			auto &unnest_node = entry->second;
+			auto unnest = make_uniq<LogicalUnnest>(unnest_node.index);
+			unnest->expressions = std::move(unnest_node.expressions);
+			// visit the unnest expressions
+			for (auto &expr : unnest->expressions) {
+				PlanSubqueries(expr, root);
+			}
+			D_ASSERT(!unnest->expressions.empty());
+			unnest->AddChild(std::move(root));
+			root = std::move(unnest);
+		}
+	};
+
+	// GROUP BY expressions containing UNNEST must expand rows before aggregation.
+	plan_unnests(statement.unnests.GroupBy());
 
 	if (!statement.aggregates.empty() || !statement.groups.group_expressions.empty() || statement.having) {
 		if (!statement.groups.group_expressions.empty()) {
@@ -187,23 +211,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = std::move(qualify);
 	}
 
-	for (idx_t i = statement.unnests.size(); i > 0; i--) {
-		auto unnest_level = i - 1;
-		auto entry = statement.unnests.find(unnest_level);
-		if (entry == statement.unnests.end()) {
-			throw InternalException("unnests specified at level %d but none were found", unnest_level);
-		}
-		auto &unnest_node = entry->second;
-		auto unnest = make_uniq<LogicalUnnest>(unnest_node.index);
-		unnest->expressions = std::move(unnest_node.expressions);
-		// visit the unnest expressions
-		for (auto &expr : unnest->expressions) {
-			PlanSubqueries(expr, root);
-		}
-		D_ASSERT(!unnest->expressions.empty());
-		unnest->AddChild(std::move(root));
-		root = std::move(unnest);
-	}
+	plan_unnests(statement.unnests.SelectList());
 
 	for (auto &expr : statement.select_list) {
 		PlanSubqueries(expr, root);

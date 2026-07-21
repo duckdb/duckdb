@@ -3,6 +3,9 @@
 # group: [joins]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE jf_probe AS SELECT range::INTEGER AS id FROM range(1000000);
 
 statement ok

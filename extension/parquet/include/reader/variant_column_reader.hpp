@@ -10,6 +10,7 @@
 
 #include "column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
 
@@ -20,8 +21,14 @@ public:
 public:
 	VariantColumnReader(ClientContext &context, const ParquetReader &reader, const ParquetColumnSchema &schema,
 	                    vector<unique_ptr<ColumnReader>> child_readers_p);
+	VariantColumnReader(ClientContext &context, const ParquetReader &reader, const ParquetColumnSchema &schema,
+	                    vector<unique_ptr<ColumnReader>> child_readers_p, const struct ColumnIndex &index);
 
 	ClientContext &context;
+	//! Optional: ColumnIndex used when pushing down extract to the scan
+	const struct ColumnIndex index;
+	//! Optional: Extract path distilled from 'index' (if set)
+	const vector<VariantPathComponent> extract_path;
 	vector<unique_ptr<ColumnReader>> child_readers;
 
 public:
@@ -31,8 +38,12 @@ public:
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
 
+	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) override;
+
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;
+	void Convert(Vector &metadata, Vector &group, Vector &result, idx_t count);
+	void PrepareChunk(DataChunk &chunk, idx_t &capacity, const vector<LogicalType> &types, idx_t count);
 	uint64_t TotalCompressedSize() override;
 	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) override;
 	static bool TypedValueLayoutToType(const LogicalType &typed_value, LogicalType &logical_type);
@@ -40,6 +51,12 @@ public:
 protected:
 	idx_t metadata_reader_idx;
 	idx_t value_reader_idx;
+
+	DataChunk intermediate_chunk;
+	idx_t intermediate_capacity = 0;
+
+	DataChunk shredded_chunk;
+	idx_t shredded_capacity = 0;
 };
 
 } // namespace duckdb

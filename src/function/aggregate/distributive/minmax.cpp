@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
@@ -137,6 +138,14 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 			target.value = REDUCE_OP::template Operation<value_type>(target.value, source.value);
 		}
 	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		if (count == 0) {
+			return;
+		}
+		Combine<STATE, OP>(source, target, input);
+	}
 };
 
 using MinOperation = NumericMinMaxBase<Min>;
@@ -202,6 +211,14 @@ struct StringMinMaxBase : public MinMaxBase {
 			OP::template Execute<string_t, STATE>(target, source.value, input_data);
 		}
 	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		if (count == 0) {
+			return;
+		}
+		Combine<STATE, OP>(source, target, input);
+	}
 };
 
 template <class COMPARE>
@@ -249,6 +266,14 @@ struct VectorMinMaxBase {
 			return;
 		}
 		OP::template Execute<string_t, STATE, OP>(target, source.value, input_data);
+	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		if (count == 0) {
+			return;
+		}
+		Combine<STATE, OP>(source, target, input);
 	}
 
 	template <class STATE>
@@ -325,9 +350,9 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		// to make sure the result's correctness.
 		string function_name = function.GetName() == "min" ? "arg_min" : "arg_max";
 		QueryErrorContext error_context;
-		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, Identifier(), Identifier(),
-		                                                             Identifier(function_name),
-		                                                             OnEntryNotFound::RETURN_NULL, error_context);
+		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+		    context, QualifiedName(Identifier(), Identifier(), Identifier(function_name)), OnEntryNotFound::RETURN_NULL,
+		    error_context);
 		if (!func) {
 			throw NotImplementedException(
 			    "Failure while binding function \"%s\" using collations - arg_min/arg_max do not exist in the "

@@ -21,10 +21,20 @@ class ClientContext;
 struct CatalogSearchEntry {
 	CatalogSearchEntry(Identifier catalog, Identifier schema);
 
-	Identifier catalog;
-	Identifier schema;
-
 public:
+	const Identifier &GetCatalog() const {
+		return catalog;
+	}
+	void SetCatalog(Identifier new_catalog) {
+		catalog = std::move(new_catalog);
+	}
+	const Identifier &GetSchema() const {
+		return schema;
+	}
+	void SetSchema(Identifier new_schema) {
+		schema = std::move(new_schema);
+	}
+
 	string ToString() const;
 	static string ListToString(const vector<CatalogSearchEntry> &input);
 	static CatalogSearchEntry Parse(const string &input);
@@ -33,6 +43,10 @@ public:
 private:
 	static CatalogSearchEntry ParseInternal(const string &input, idx_t &pos);
 	static string WriteOptionallyQuoted(const Identifier &input);
+
+private:
+	Identifier catalog;
+	Identifier schema;
 };
 
 enum class CatalogSetPathType { SET_SCHEMA, SET_SCHEMAS, SET_DIRECTLY };

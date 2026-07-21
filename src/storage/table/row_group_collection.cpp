@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -26,6 +27,8 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
 
@@ -2121,11 +2124,11 @@ void RowGroupCollection::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
+vector<PartitionStatistics> RowGroupCollection::GetPartitionStats(TransactionData transaction) const {
 	vector<PartitionStatistics> result;
 	auto row_groups = GetRowGroups();
 	for (auto &entry : row_groups->SegmentNodes()) {
-		result.push_back(RowGroup::GetPartitionStats(entry));
+		result.push_back(RowGroup::GetPartitionStats(entry, transaction));
 	}
 	return result;
 }
@@ -2234,8 +2237,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 
 shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &context, idx_t changed_idx,
                                                              const LogicalType &target_type,
-                                                             vector<StorageIndex> bound_columns,
-                                                             Expression &cast_expr) {
+                                                             vector<StorageIndex> bound_columns, Expression &cast_expr,
+                                                             TransactionData transaction) {
 	D_ASSERT(changed_idx < types.size());
 	auto new_types = types;
 	auto row_groups = GetRowGroups();
@@ -2273,7 +2276,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	for (auto &node : row_groups->SegmentNodes()) {
 		auto &current_row_group = node.GetNode();
 		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
-		                                                 scan_state.table_state, node, scan_chunk);
+		                                                 scan_state.table_state, node, scan_chunk, transaction);
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result_row_groups->AppendSegment(std::move(new_row_group), node.GetRowStart());
 	}

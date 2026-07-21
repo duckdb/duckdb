@@ -436,17 +436,13 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 
 	string function_name = "histogram";
 	if (IS_AGGR) { // get the name of the aggregate function
-		if (!arguments[1]->IsFoldable()) {
-			throw InvalidInputException("Aggregate function name must be a constant");
-		}
-		// get the function name
-		Value function_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		function_name = function_value.ToString();
+		function_name = input.GetConstant(1).ToString();
 	}
 
 	// look up the aggregate function in the catalog
 	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-	    context, Identifier::DefaultSchema(), Identifier(function_name));
+	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), Identifier::DefaultSchema(),
+	                           Identifier(function_name)));
 	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	if (is_parameter) {

@@ -146,6 +146,7 @@ private:
 	unique_ptr<CompressExpression> GetCompressExpression(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<CompressExpression> GetIntegralCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<CompressExpression> GetStringCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
+	unique_ptr<CompressExpression> GetGeometryCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<CompressExpression> GetVariantCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 	bool TryGetVariantJoinKeyInfo(const Expression &expr, VariantJoinKeyInfo &result);
 	static unique_ptr<BaseStatistics> CastVariantJoinKeyStats(const VariantJoinKeyInfo &key_info,
@@ -161,6 +162,8 @@ private:
 	                                             const BaseStatistics &stats);
 	unique_ptr<Expression> GetStringDecompress(unique_ptr<Expression> input, const LogicalType &result_type,
 	                                           const BaseStatistics &stats);
+	unique_ptr<Expression> GetGeometryDecompress(unique_ptr<Expression> input, const LogicalType &result_type,
+	                                             const BaseStatistics &stats);
 	unique_ptr<Expression> GetVariantDecompress(unique_ptr<Expression> input, const LogicalType &result_type,
 	                                            const BaseStatistics &stats);
 

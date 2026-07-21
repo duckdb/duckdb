@@ -163,7 +163,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		CalendarPtr calendar(info.calendar->clone());
 
 		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) {
-			using NAIVE = timebase_t<DST::PRECISION, false>;
+			using NAIVE = timestamp_base_t<DST::PRECISION, false>;
 			return Operation(calendar.get(), Cast::Operation<SRC, NAIVE>(input));
 		});
 		return true;
@@ -218,6 +218,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		AddCast(casts, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ);
 		AddCast(casts, LogicalType::TIMESTAMP_MS, LogicalType::TIMESTAMP_TZ);
 		AddCast(casts, LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ);
+		AddCast(casts, LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ_NS);
 		AddCast(casts, LogicalType::TIMESTAMP_S, LogicalType::TIMESTAMP_TZ);
 		AddCast(casts, LogicalType::DATE, LogicalType::TIMESTAMP_TZ);
 	}
@@ -264,8 +265,8 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		}
 
 		auto nanos = instant.value % Interval::NANOS_PER_MICRO;
-		timestamp_t micros(instant.value / Interval::NANOS_PER_MICRO);
-		auto cast = Operation(calendar, instant);
+		timestamp_tz_t micros(instant.value / Interval::NANOS_PER_MICRO);
+		auto cast = Operation(calendar, micros);
 
 		return timestamp_ns_t(cast.value * Interval::NANOS_PER_MICRO + nanos);
 	}
@@ -277,7 +278,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		CalendarPtr calendar(info.calendar->clone());
 
 		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) {
-			using NAIVE = timebase_t<SRC::PRECISION, false>;
+			using NAIVE = timestamp_base_t<SRC::PRECISION, false>;
 			return Cast::Operation<NAIVE, DST>(Operation(calendar.get(), input));
 		});
 		return true;

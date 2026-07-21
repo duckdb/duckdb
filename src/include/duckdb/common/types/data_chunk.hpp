@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
@@ -56,17 +55,7 @@ public:
 		if (count.IsValid()) {
 			return count.GetIndex();
 		}
-		for (const auto &v : data) {
-			if (v.GetBufferRef()) {
-				return v.size();
-			}
-		}
-		if (data.empty()) {
-			// a column-less chunk has nothing to derive a cardinality from; without an explicit count it is empty
-			return 0;
-		}
-		throw InternalException(
-		    "DataChunk::size() called but neither count was set, nor any vectors with valid counts were set");
+		return DeriveSize();
 	}
 	inline idx_t ColumnCount() const {
 		return data.size();
@@ -75,13 +64,17 @@ public:
 	void CheckCardinality(idx_t count_p);
 	//! Sets the cardinality of all child vectors of this chunk
 	void SetChildCardinality(idx_t count_p);
+	//! Sets only the logical cardinality; child vector sizes must be synchronized separately.
+	void SetCardinalityUnsafe(idx_t count_p) {
+		this->count = count_p;
+	}
 	//! Deprecated: use SetChildCardinality instead.
 	//! NOTE: this only sets the chunk's cardinality, it does NOT resize the child vectors (matching the historical
 	//! behavior on main). Callers that mutate the child vectors directly (e.g. Vector::Append/SetValue) and then call
 	//! SetCardinality rely on this - forwarding to SetChildCardinality would resize/overwrite their data.
 	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void
 	SetCardinality(idx_t count_p) {
-		this->count = count_p;
+		SetCardinalityUnsafe(count_p);
 	}
 	//! Deprecated: use SetChildCardinality instead
 	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void
@@ -201,5 +194,8 @@ private:
 
 private:
 	void VerifyInternal(DebugVerificationMode mode, optional_ptr<DatabaseInstance> db);
+	//! Derives the cardinality from the child vectors when no explicit count is set.
+	//! Kept out-of-line so that ::size() inlines down to a load and a branch.
+	DUCKDB_API idx_t DeriveSize() const;
 };
 } // namespace duckdb

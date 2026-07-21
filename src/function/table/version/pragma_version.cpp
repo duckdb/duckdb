@@ -63,7 +63,7 @@ const char *DuckDB::LibraryVersion() {
 
 const char *DuckDB::ReleaseCodename() {
 	// dev releases have no name
-	if (StringUtil::Contains(DUCKDB_VERSION, "-dev")) {
+	if (!VersioningUtils::IsReleaseVersion(DUCKDB_VERSION)) {
 		return "Development Version";
 	}
 	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.2.")) {
@@ -77,6 +77,9 @@ const char *DuckDB::ReleaseCodename() {
 	}
 	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.5.")) {
 		return "Variegata";
+	}
+	if (StringUtil::StartsWith(DUCKDB_VERSION, "v2.0.")) {
+		return "Cyanoptera";
 	}
 	// add new version names here
 

@@ -80,7 +80,7 @@ void BaseAppender::EndRow() {
 		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
-	chunk.SetChildCardinality(chunk.size() + 1);
+	chunk.SetCardinalityUnsafe(chunk.size() + 1);
 	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
@@ -395,6 +395,7 @@ void BaseAppender::FlushChunk() {
 	if (chunk.size() == 0) {
 		return;
 	}
+	chunk.SetChildCardinality(chunk.size());
 	collection->Append(chunk);
 	chunk.Reset();
 	if (ShouldFlush()) {
@@ -589,13 +590,13 @@ vector<Identifier> Appender::GetExpectedNames() {
 string Appender::ConstructQuery(TableDescription &description_p, const Identifier &table_name,
                                 const vector<Identifier> &expected_names) {
 	string query = "INSERT INTO ";
-	if (!description_p.database.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description_p.database));
+	if (!description_p.qualified_name.Catalog().empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description_p.qualified_name.Catalog()));
 	}
-	if (!description_p.schema.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description_p.schema));
+	if (!description_p.qualified_name.Schema().empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description_p.qualified_name.Schema()));
 	}
-	query += StringUtil::Format("%s", SQLIdentifier(description_p.table));
+	query += StringUtil::Format("%s", SQLIdentifier(description_p.qualified_name.Name()));
 	if (!expected_names.empty()) {
 		query += "(";
 		for (idx_t i = 0; i < expected_names.size(); i++) {

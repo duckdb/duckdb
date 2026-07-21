@@ -14,6 +14,9 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include <utility>
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -934,7 +937,7 @@ IEJoinGlobalSourceState::IEJoinGlobalSourceState(const PhysicalIEJoin &op, Clien
 
 	//	Schedule the largest group on as many threads as possible
 	auto &ts = TaskScheduler::GetScheduler(client);
-	const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
+	const auto threads = ts.NumberOfThreads();
 	per_thread = BinValue<idx_t>(l2_blocks, threads);
 
 	Initialize();

@@ -1,4 +1,5 @@
 #include "duckdb/common/helper.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
@@ -160,7 +161,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	bind_data.union_readers.resize(files.empty() ? 0 : files.size());
 
 	AutoDetectState auto_detect_state(context, bind_data, files, date_format_map);
-	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	const auto files_per_task = (file_count + num_threads - 1) / num_threads;
 	const auto num_tasks = (file_count + files_per_task - 1) / files_per_task;
 	vector<JSONStructureNode> task_nodes(num_tasks);

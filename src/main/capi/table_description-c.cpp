@@ -118,6 +118,9 @@ char *duckdb_table_description_get_column_name(duckdb_table_description table_de
 
 	auto name = column.GetName();
 	auto result = reinterpret_cast<char *>(malloc(sizeof(char) * (name.size() + 1)));
+	if (result == nullptr) {
+		return nullptr;
+	}
 	memcpy(result, name.c_str(), name.size());
 	result[name.size()] = '\0';
 

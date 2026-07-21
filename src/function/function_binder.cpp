@@ -256,11 +256,11 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const Identifier &name,
 		Identifier catalog_name;
 		Identifier schema_name;
 		for (auto &f : functions.functions) {
-			if (catalog_name.empty() && !f.catalog_name.empty()) {
-				catalog_name = f.catalog_name;
+			if (catalog_name.empty() && !f.GetCatalogName().empty()) {
+				catalog_name = f.GetCatalogName();
 			}
-			if (schema_name.empty() && !f.schema_name.empty()) {
-				schema_name = f.schema_name;
+			if (schema_name.empty() && !f.GetSchemaName().empty()) {
+				schema_name = f.GetSchemaName();
 			}
 			candidates.push_back(f.ToString());
 		}
@@ -549,7 +549,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &sche
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
-	auto &function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, schema, name);
+	auto &function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
+	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), schema, name));
 	D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	return BindScalarFunction(function, std::move(children), error, is_operator, binder);
 }
@@ -628,6 +629,35 @@ static bool RequiresCollationPropagation(const LogicalType &type) {
 	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias();
 }
 
+//! Recursively extracts the collation of a (possibly nested) type, e.g. the element collation of a LIST(VARCHAR).
+static string ExtractCollationFromType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::VARCHAR:
+		return RequiresCollationPropagation(type) ? StringType::GetCollation(type) : string();
+	case LogicalTypeId::LIST:
+		return ExtractCollationFromType(ListType::GetChildType(type));
+	case LogicalTypeId::ARRAY:
+		return ExtractCollationFromType(ArrayType::GetChildType(type));
+	default:
+		return string();
+	}
+}
+
+//! Returns a copy of the type with the collation applied to every (nested) VARCHAR leaf.
+static LogicalType ApplyCollationToType(const LogicalType &type, const LogicalType &collation_type) {
+	switch (type.id()) {
+	case LogicalTypeId::VARCHAR:
+		return RequiresCollationPropagation(type) ? collation_type : type;
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ApplyCollationToType(ListType::GetChildType(type), collation_type));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(ApplyCollationToType(ArrayType::GetChildType(type), collation_type),
+		                          ArrayType::GetSize(type));
+	default:
+		return type;
+	}
+}
+
 static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 	string collation;
 	for (auto &arg : children) {
@@ -636,6 +666,20 @@ static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 			continue;
 		}
 		auto child_collation = StringType::GetCollation(arg->GetReturnType());
+		if (collation.empty()) {
+			collation = child_collation;
+		} else if (!child_collation.empty() && collation != child_collation) {
+			throw BinderException("Cannot combine types with different collation!");
+		}
+	}
+	return collation;
+}
+
+//! Like ExtractCollation, but also considers the collation of nested (LIST/ARRAY) VARCHAR elements.
+static string ExtractNestedCollation(const vector<unique_ptr<Expression>> &children) {
+	string collation;
+	for (auto &arg : children) {
+		auto child_collation = ExtractCollationFromType(arg->GetReturnType());
 		if (collation.empty()) {
 			collation = child_collation;
 		} else if (!child_collation.empty() && collation != child_collation) {
@@ -663,7 +707,7 @@ static void PropagateCollations(ClientContext &, BoundSimpleFunction &bound_func
 
 static void PushCollations(ClientContext &context, BoundSimpleFunction &bound_function,
                            vector<unique_ptr<Expression>> &children, CollationType type) {
-	auto collation = ExtractCollation(children);
+	auto collation = ExtractNestedCollation(children);
 	if (collation.empty()) {
 		// no collation to push
 		return;
@@ -675,12 +719,14 @@ static void PushCollations(ClientContext &context, BoundSimpleFunction &bound_fu
 	}
 	// push collations to the children
 	for (auto &arg : children) {
+		// apply the collation to the (possibly nested) varchar leaves of the argument type
+		auto collated_type = ApplyCollationToType(arg->GetReturnType(), collation_type);
 		if (RequiresCollationPropagation(arg->GetReturnType())) {
 			// if this is a varchar type - propagate the collation
 			arg->SetReturnType(collation_type);
 		}
 		// now push the actual collation handling
-		ExpressionBinder::PushCollation(context, arg, arg->GetReturnType(), type);
+		ExpressionBinder::PushCollation(context, arg, collated_type, type);
 	}
 }
 
@@ -808,9 +854,10 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		// TODO: Support union types with template member types.
 		throw NotImplementedException("Union types cannot infer templated member types yet!");
 	} break;
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		// Structs are only implicitly castable to structs, so we only need to handle this case here.
-		if (target.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(source)) {
+		if (StructType::IsStruct(target) && StructType::IsUnnamed(source)) {
 			const auto &source_children = StructType::GetChildTypes(source);
 			const auto &target_children = StructType::GetChildTypes(target);
 
@@ -901,8 +948,10 @@ void FunctionBinder::CheckTemplateTypesResolved(const BoundSimpleFunction &bound
 
 // Drain all named argument and insert them in the correct position according to the function signature.
 // Also insert default arguments where needed.
-static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<Expression>> &arguments,
-                             vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+// Returns the resolved name of every argument slot: the signature parameter name for positional slots, the
+// caller-provided name for named varargs, and an empty identifier for unnamed varargs.
+static vector<Identifier> ResolveArguments(const SimpleFunction &function, vector<unique_ptr<Expression>> &arguments,
+                                           vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	const auto &sig = function.GetSignature();
 
 	const auto kwargs_offset = arguments.size();
@@ -914,7 +963,7 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 
 	identifier_set_t seen_names;
 
-	vector<unique_ptr<Expression>> trailing_kwargs;
+	vector<pair<Identifier, unique_ptr<Expression>>> trailing_kwargs;
 
 	// We now need to reorder them to match the function signature, before appending them to the argument list.
 	for (idx_t kwarg_idx = 0; kwarg_idx < named_arguments.size(); kwarg_idx++) {
@@ -944,7 +993,7 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 			}
 
 			// This is a named vararg argument, come back for it later
-			trailing_kwargs.push_back(std::move(arg));
+			trailing_kwargs.emplace_back(name, std::move(arg));
 			continue;
 		}
 
@@ -979,27 +1028,39 @@ static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<E
 		}
 	}
 
+	// Every slot covered by the signature is now filled, and sits at the position of its parameter.
+	vector<Identifier> argument_names(arguments.size());
+	for (idx_t i = 0; i < MinValue<idx_t>(arguments.size(), sig.GetParameterCount()); i++) {
+		argument_names[i] = sig.GetParameter(i).GetName();
+	}
+
 	// Now spread out any trailing named vararg arguments into the remaining argument slots, wherever they may be
 	idx_t kwarg_idx = 0;
 	for (idx_t slot_idx = kwargs_offset; slot_idx < arguments.size(); slot_idx++) {
 		if (!arguments[slot_idx]) {
-			arguments[slot_idx] = std::move(trailing_kwargs[kwarg_idx++]);
+			argument_names[slot_idx] = trailing_kwargs[kwarg_idx].first;
+			arguments[slot_idx] = std::move(trailing_kwargs[kwarg_idx].second);
+			kwarg_idx++;
 		}
 	}
 
 	// And if there are still some left, just append them to the end
 	idx_t kwargs_remaining = trailing_kwargs.size() - kwarg_idx;
 	while (kwargs_remaining) {
-		arguments.push_back(std::move(trailing_kwargs[kwarg_idx++]));
+		argument_names.push_back(trailing_kwargs[kwarg_idx].first);
+		arguments.push_back(std::move(trailing_kwargs[kwarg_idx].second));
+		kwarg_idx++;
 		kwargs_remaining--;
 	}
+
+	return argument_names;
 }
 
 pair<BoundScalarFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_ptr<Expression>> &arguments,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	// Reorder named args
-	ResolveArguments(function, arguments, named_arguments);
+	auto argument_names = ResolveArguments(function, arguments, named_arguments);
 
 	// Make a BoundScalarFunction out of the ScalarFunction, so we can store bind info and other properties in it.
 	BoundScalarFunction bound_function(function);
@@ -1018,7 +1079,7 @@ FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_pt
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.HasBindCallback()) {
-		BindScalarFunctionInput input(context, bound_function, arguments, binder);
+		BindScalarFunctionInput input(context, bound_function, arguments, argument_names, binder);
 		bind_info = bound_function.GetBindCallback()(input);
 	}
 
@@ -1074,7 +1135,7 @@ pair<BoundAggregateFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children,
                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	// Reorder named args
-	ResolveArguments(function, children, named_arguments);
+	auto argument_names = ResolveArguments(function, children, named_arguments);
 
 	// Make a BoundFunction out of the func
 	BoundAggregateFunction bound_function(function);
@@ -1092,7 +1153,7 @@ FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.GetCallbacks().HasBindCallback()) {
-		BindAggregateFunctionInput input(context, bound_function, children);
+		BindAggregateFunctionInput input(context, bound_function, children, argument_names);
 		bind_info = bound_function.GetCallbacks().GetBindCallback()(input);
 
 		// we may have lost some arguments in the bind
@@ -1151,7 +1212,7 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
                                 optional_ptr<vector<OrderByNode>> orders,
                                 optional_ptr<vector<OrderByNode>> arg_orders) {
 	// Reorder named args
-	ResolveArguments(function, children, named_arguments);
+	auto argument_names = ResolveArguments(function, children, named_arguments);
 
 	BoundWindowFunction bound_function(function);
 
@@ -1168,7 +1229,7 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.HasBindCallback()) {
-		BindWindowFunctionInput input(context, bound_function, children, orders, arg_orders);
+		BindWindowFunctionInput input(context, bound_function, children, argument_names, orders, arg_orders);
 		bind_info = bound_function.GetBindCallback()(input);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));

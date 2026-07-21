@@ -17,6 +17,16 @@
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
+#include "reader/variant_column_reader.hpp"
+
+#include <fstream>
+#include <iostream>
+#include <numeric>
+#include <string>
+#include <vector>
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
@@ -26,7 +36,6 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
-#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -60,7 +69,6 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -70,6 +78,7 @@
 #include "duckdb/storage/storage_info.hpp"
 #include "parquet_field_id.hpp"
 #include "parquet_types.h"
+#include "reader/variant/parquet_variant_iterator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -582,6 +591,24 @@ ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption
 }
 
 template <>
+const char *EnumUtil::ToChars<ParquetReaderProjectionExpressionType>(ParquetReaderProjectionExpressionType value) {
+	switch (value) {
+	case ParquetReaderProjectionExpressionType::BYTE_LENGTH:
+		return "BYTE_LENGTH";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+ParquetReaderProjectionExpressionType EnumUtil::FromString<ParquetReaderProjectionExpressionType>(const char *value) {
+	if (StringUtil::Equals(value, "BYTE_LENGTH")) {
+		return ParquetReaderProjectionExpressionType::BYTE_LENGTH;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
 const char *EnumUtil::ToChars<GeoParquetVersion>(GeoParquetVersion value) {
 	switch (value) {
 	case GeoParquetVersion::NONE:
@@ -960,6 +987,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	// variant_to_parquet_variant
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
+
+	// bytes_to_variant
+	loader.RegisterFunction(ParquetVariantConversion::GetBytesToVariantFunction());
 
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;

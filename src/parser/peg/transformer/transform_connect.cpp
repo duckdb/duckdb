@@ -1,3 +1,4 @@
+#include "duckdb/parser/peg/ast/generic_copy_option.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/connect_statement.hpp"
 #include "duckdb/parser/statement/disconnect_statement.hpp"
@@ -10,11 +11,16 @@ unique_ptr<ConnectInfo> PEGTransformerFactory::TransformLocalSessionTarget(PEGTr
 	return result;
 }
 
-unique_ptr<ConnectInfo> PEGTransformerFactory::TransformStringSessionTarget(PEGTransformer &transformer,
-                                                                            const string &string_literal) {
+unique_ptr<ConnectInfo> PEGTransformerFactory::TransformStringSessionTarget(
+    PEGTransformer &transformer, const string &string_literal,
+    const optional<vector<GenericCopyOption>> &generic_copy_option_list) {
 	auto result = make_uniq<ConnectInfo>();
 	result->name = Identifier(string_literal);
 	result->name_is_string_literal = true;
+	if (!generic_copy_option_list) {
+		return result;
+	}
+	SplitGenericOptions(*generic_copy_option_list, result->parsed_options, result->options, "CONNECT");
 	return result;
 }
 

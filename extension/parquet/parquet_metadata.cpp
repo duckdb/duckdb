@@ -850,7 +850,7 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 		throw InvalidInputException("Column %s not found in %s", probe_column_name, reader.file.path);
 	}
 
-	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader.GetHandle(), false);
+	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(context, reader.GetHandle(), false);
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
 	auto column_type = reader.GetColumns()[probe_column_idx.GetIndex()].type;
@@ -872,7 +872,9 @@ void ParquetBloomProbeProcessor::ReadRow(vector<reference<Vector>> &output, idx_
 
 	D_ASSERT(!probe_constant.IsNull());
 
-	auto bloom_excludes = ParquetStatisticsUtils::BloomFilterExcludes(*filter, column.meta_data, *protocol, *allocator);
+	auto &column_schema = reader.root_schema->children[probe_column_idx.GetIndex()];
+	auto bloom_excludes =
+	    ParquetStatisticsUtils::BloomFilterExcludes(*filter, column.meta_data, *protocol, *allocator, column_schema);
 
 	output[0].get().Append(Value(reader.file.path));
 	output[1].get().Append(Value::BIGINT(NumericCast<int64_t>(row_idx)));

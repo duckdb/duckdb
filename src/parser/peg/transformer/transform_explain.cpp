@@ -9,15 +9,14 @@ ProfilerPrintFormat ParseProfilerPrintFormat(const Value &val) {
 	if (val.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Expected a string as argument to FORMAT");
 	}
-	// resolve the format name through the shared explain format registry (see main/profiler/profiler_print_format.hpp)
-	return ProfilerPrintFormat::FromString(val.GetValue<string>());
+	// the format name is validated when the renderer is created (needs a ClientContext); only normalize it here
+	return ProfilerPrintFormat(StringUtil::Lower(val.GetValue<string>()));
 }
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, const optional<bool> &explain_analyze,
-                                                 const optional<vector<GenericCopyOption>> &explain_option_list,
-                                                 unique_ptr<SQLStatement> explainable_statements) {
-	auto explain_type = explain_analyze ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(
+    PEGTransformer &transformer, const optional<Identifier> &analyze_keyword,
+    const optional<vector<GenericCopyOption>> &explain_option_list, unique_ptr<SQLStatement> explainable_statements) {
+	auto explain_type = analyze_keyword ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
 	auto format = ProfilerPrintFormat::Default();
 	if (explain_option_list) {
@@ -40,8 +39,8 @@ PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, co
 	return make_uniq<ExplainStatement>(std::move(statement), explain_type, format);
 }
 
-bool PEGTransformerFactory::TransformExplainAnalyze(PEGTransformer &transformer) {
-	return true;
+Identifier PEGTransformerFactory::TransformExplainOptionName(PEGTransformer &transformer, ParseResult &choice_result) {
+	return transformer.Transform<Identifier>(choice_result);
 }
 
 unique_ptr<SQLStatement>

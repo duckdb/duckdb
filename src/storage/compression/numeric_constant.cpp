@@ -164,7 +164,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		if (!data.filter || !data.filter->IsInitialized()) {
 			return true;
 		}
-		filters_nulls = true;
+		filters_nulls = data.filters_null_values;
 		return true;
 	}
 	if (function_name == DynamicFilterScalarFun::NAME) {

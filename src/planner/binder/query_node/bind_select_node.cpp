@@ -271,11 +271,14 @@ static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr,
 	if (index >= sql_types.size()) {
 		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
 	}
-	auto result =
-	    make_uniq<BoundColumnRefExpression>(expr->GetAlias(), sql_types[index], ColumnBinding(table_index, index));
-	if (result->GetAlias().empty() && index < names.size()) {
-		result->SetAlias(names[index]);
+	Identifier alias;
+	if (index < names.size()) {
+		alias = names[index];
+	} else {
+		alias = expr->GetAlias();
 	}
+	auto result =
+	    make_uniq<BoundColumnRefExpression>(std::move(alias), sql_types[index], ColumnBinding(table_index, index));
 	return std::move(result);
 }
 
@@ -548,7 +551,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
-		GroupBinder group_binder(*this, context, result.group_index, bind_state);
+		GroupBinder group_binder(*this, context, result, bind_state);
 		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
 		auto prev_can_contain_nulls = CanContainNulls();
 		SetCanContainNulls(true);
@@ -556,6 +559,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			// bind the groups
 			LogicalType group_type;
 			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
+			if (bound_expr->GetExpressionType() == ExpressionType::BOUND_EXPANDED) {
+				throw BinderException("UNNEST of struct cannot be used in GROUP BY clause");
+			}
 			D_ASSERT(bound_expr->GetReturnType().id() != LogicalTypeId::INVALID);
 
 			// find out whether the expression contains a subquery, it can't be copied if so
@@ -620,7 +626,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		bool is_window = statement.select_list[i]->IsWindow();
-		idx_t unnest_count = result.unnests.size();
+		idx_t unnest_count = result.unnests.SelectList().size();
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type, true);
 		bool is_original_column = i < result.column_count;
@@ -660,15 +666,15 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		}
 		bind_state.AddRegularColumn();
 
+		if (can_group_by_all && is_window) {
+			throw BinderException("Cannot group on a window clause");
+		}
+		if (can_group_by_all && result.unnests.SelectList().size() > unnest_count) {
+			throw BinderException("Cannot group on an UNNEST or UNLIST clause");
+		}
 		if (can_group_by_all && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
-			}
-			if (is_window) {
-				throw BinderException("Cannot group on a window clause");
-			}
-			if (result.unnests.size() > unnest_count) {
-				throw BinderException("Cannot group on an UNNEST or UNLIST clause");
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group

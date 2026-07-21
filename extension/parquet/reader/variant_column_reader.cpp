@@ -6,7 +6,7 @@
 
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant_column_reader.hpp"
-#include "reader/variant/variant_shredded_conversion.hpp"
+#include "reader/variant/parquet_variant_iterator.hpp"
 #include "column_reader.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
@@ -15,10 +15,10 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "parquet_column_schema.hpp"
 
 namespace duckdb_apache {
@@ -37,14 +37,41 @@ class ClientContext;
 class ParquetReader;
 class ThriftFileTransport;
 
+static vector<VariantPathComponent> GetVariantExtractPath(const ColumnIndex &index) {
+	vector<VariantPathComponent> result;
+	if (!index.IsPushdownExtract()) {
+		return result;
+	}
+	reference<const ColumnIndex> current(index.GetChildIndex(0));
+	while (true) {
+		if (current.get().HasPrimaryIndex()) {
+			throw InternalException("VARIANT pushdown extract expected a field name path");
+		}
+		result.emplace_back(current.get().GetFieldName());
+		if (!current.get().HasChildren()) {
+			break;
+		}
+		current = current.get().GetChildIndex(0);
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Variant Column Reader
 //===--------------------------------------------------------------------===//
 VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
                                          const ParquetColumnSchema &schema,
-                                         vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
+                                         vector<unique_ptr<ColumnReader>> child_readers_p,
+                                         const struct ColumnIndex &index)
+    : ColumnReader(reader, schema), context(context), index(index), extract_path(GetVariantExtractPath(index)),
+      child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
+
+	for (auto &child : child_readers) {
+		if (child) {
+			child->SetParent(*this);
+		}
+	}
 
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
 		metadata_reader_idx = 0;
@@ -55,6 +82,12 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
 	} else {
 		throw InternalException("The Variant column must have 'metadata' and 'value' as the first two columns");
 	}
+}
+
+VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
+                                         const ParquetColumnSchema &schema,
+                                         vector<unique_ptr<ColumnReader>> child_readers_p)
+    : VariantColumnReader(context, reader, schema, std::move(child_readers_p), {}) {
 }
 
 ColumnReader &VariantColumnReader::GetChildReader(idx_t child_idx) {
@@ -75,6 +108,15 @@ void VariantColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Col
 	}
 }
 
+unique_ptr<BaseStatistics> VariantColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+	auto result = ColumnReader::Stats(row_group_idx_p, columns);
+	if (result && index.IsPushdownExtract()) {
+		auto storage_index = StorageIndex::FromColumnIndex(index);
+		return result->PushdownExtract(storage_index.GetChildIndexes()[0]);
+	}
+	return result;
+}
+
 static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_value) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("value", LogicalType::BLOB);
@@ -82,6 +124,21 @@ static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_val
 		children.emplace_back("typed_value", typed_value->Type());
 	}
 	return LogicalType::STRUCT(std::move(children));
+}
+
+void VariantColumnReader::PrepareChunk(DataChunk &chunk, idx_t &capacity, const vector<LogicalType> &types,
+                                       idx_t count) {
+	bool needs_init = chunk.ColumnCount() != types.size() || count > capacity;
+	for (idx_t i = 0; !needs_init && i < types.size(); i++) {
+		needs_init = chunk.data[i].GetType() != types[i];
+	}
+	if (needs_init) {
+		chunk.Destroy();
+		chunk.Initialize(context, types, count);
+		capacity = count;
+	} else {
+		chunk.Reset();
+	}
 }
 
 idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
@@ -98,10 +155,10 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	// So, we just initialize them to all be valid beforehand
 	std::fill_n(define_out, num_values, MaxDefine());
 
-	optional_idx read_count;
-
-	Vector metadata_intermediate(LogicalType::BLOB, num_values);
-	Vector intermediate_group(GetIntermediateGroupType(typed_value_reader), num_values);
+	auto group_type = GetIntermediateGroupType(typed_value_reader);
+	PrepareChunk(intermediate_chunk, intermediate_capacity, {LogicalType::BLOB, group_type}, num_values);
+	auto &metadata_intermediate = intermediate_chunk.data[0];
+	auto &intermediate_group = intermediate_chunk.data[1];
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
 	auto &value_intermediate = group_entries[0];
 
@@ -119,7 +176,6 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 		    "The Variant column did not contain the same amount of values for 'metadata' and 'value'");
 	}
 
-	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
 		ColumnReaderInput child_input(num_values, define_out, repeat_out);
 		auto typed_values = typed_value_reader->Read(child_input, group_entries[1]);
@@ -128,12 +184,16 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
 		}
 	}
-	intermediate =
-	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
-	VariantValue::ToVARIANT(intermediate, result);
+	// convert the actual columns
+	Convert(metadata_intermediate, intermediate_group, result, num_values);
+	if (index.IsPushdownExtract()) {
+		D_ASSERT(!extract_path.empty());
+		Vector extract_result(LogicalType::VARIANT(), num_values);
+		VariantUtils::VariantExtract(result, extract_path, extract_result, num_values);
+		result.Reference(extract_result);
+	}
 
-	read_count = value_values;
-	return read_count.GetIndex();
+	return value_values;
 }
 
 void VariantColumnReader::Skip(idx_t num_values) {

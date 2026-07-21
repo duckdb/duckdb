@@ -11,6 +11,10 @@
 
 namespace duckdb {
 
+Identifier PEGTransformerFactory::TransformAnalyzeKeyword(PEGTransformer &transformer) {
+	return Identifier("analyze");
+}
+
 string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
 	if (parse_result.type == ParseResultType::IDENTIFIER) {
 		return parse_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
@@ -20,7 +24,7 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 	}
 	if (parse_result.type == ParseResultType::CHOICE) {
 		auto &choice_pr = parse_result.Cast<ChoiceParseResult>();
-		return transformer.Transform<string>(choice_pr.GetResult());
+		return TransformIdentifierOrKeyword(transformer, choice_pr.GetResult());
 	}
 	if (parse_result.type == ParseResultType::LIST) {
 		auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -31,16 +35,16 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 			}
 			if (child.get().type == ParseResultType::CHOICE) {
 				auto &choice_result = child.get().Cast<ChoiceParseResult>().GetResult();
-				if (choice_result.type == ParseResultType::IDENTIFIER) {
-					return choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
-				}
-				if (choice_result.type == ParseResultType::KEYWORD) {
-					return choice_result.Cast<KeywordParseResult>().keyword;
-				}
-				return transformer.Transform<string>(choice_result);
+				return TransformIdentifierOrKeyword(transformer, choice_result);
+			}
+			if (child.get().type == ParseResultType::LIST) {
+				return TransformIdentifierOrKeyword(transformer, child.get());
 			}
 			if (child.get().type == ParseResultType::IDENTIFIER) {
 				return child.get().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+			}
+			if (child.get().type == ParseResultType::KEYWORD) {
+				return child.get().Cast<KeywordParseResult>().keyword;
 			}
 			throw InternalException("Unexpected IdentifierOrKeyword type encountered %s.",
 			                        ParseResultToString(child.get().type));
@@ -265,44 +269,30 @@ unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformQualifiedSimpleType(PEGTransformer &transformer,
                                                     const QualifiedName &qualified_type_name,
                                                     optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
-	auto result = qualified_type_name;
-	if (result.schema.empty()) {
-		result.schema = result.catalog;
-		result.catalog = INVALID_CATALOG;
-	}
 	vector<unique_ptr<ParsedExpression>> modifiers;
 	if (type_modifiers) {
 		modifiers = std::move(*type_modifiers);
 	}
-	return make_uniq<TypeExpression>(result.catalog, result.schema, result.name, std::move(modifiers));
+	return make_uniq<TypeExpression>(qualified_type_name, std::move(modifiers));
 }
 
 QualifiedName PEGTransformerFactory::TransformTypeNameAsQualifiedName(PEGTransformer &transformer,
                                                                       const Identifier &type_name) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = INVALID_SCHEMA;
-	result.name = type_name;
+	QualifiedName result(type_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedTypeName(PEGTransformer &transformer,
                                                                      const Identifier &schema_qualification,
                                                                      const Identifier &reserved_type_name) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = schema_qualification;
-	result.name = reserved_type_name;
+	QualifiedName result({schema_qualification}, reserved_type_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_type_name) {
-	QualifiedName result;
-	result.catalog = catalog_qualification;
-	result.schema = reserved_schema_qualification;
-	result.name = reserved_type_name;
+	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_type_name);
 	return result;
 }
 
@@ -317,15 +307,26 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransfor
 	return make_uniq<TypeExpression>(Identifier("MAP"), std::move(map_children));
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTupleType(PEGTransformer &transformer,
+                                                                       const vector<LogicalType> &type) {
+	vector<unique_ptr<ParsedExpression>> tuple_children;
+	for (auto &child : type) {
+		tuple_children.push_back(UnboundType::GetTypeExpression(child)->Copy());
+	}
+	return make_uniq<TypeExpression>(Identifier("TUPLE"), std::move(tuple_children));
+}
+
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformRowType(PEGTransformer &transformer,
-                                        const child_list_t<LogicalType> &col_id_type_list) {
+                                        const optional<child_list_t<LogicalType>> &col_id_type_list) {
 	vector<unique_ptr<ParsedExpression>> struct_children;
-	for (auto &child : col_id_type_list) {
-		auto &type_expr = UnboundType::GetTypeExpression(child.second);
-		auto new_type_expr = type_expr->Copy();
-		new_type_expr->SetAlias(child.first);
-		struct_children.push_back(std::move(new_type_expr));
+	if (col_id_type_list) {
+		for (auto &child : *col_id_type_list) {
+			auto &type_expr = UnboundType::GetTypeExpression(child.second);
+			auto new_type_expr = type_expr->Copy();
+			new_type_expr->SetAlias(child.first);
+			struct_children.push_back(std::move(new_type_expr));
+		}
 	}
 	return make_uniq<TypeExpression>(Identifier("STRUCT"), std::move(struct_children));
 }

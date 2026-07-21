@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
@@ -12,7 +13,8 @@
 
 namespace duckdb {
 
-BaseStatistics::BaseStatistics() : type(LogicalType::INVALID) {
+BaseStatistics::BaseStatistics() : type(LogicalType::INVALID), has_null(false), has_no_null(false), distinct_count(0) {
+	memset(&stats_union, 0, sizeof(stats_union));
 }
 
 BaseStatistics::BaseStatistics(LogicalType type) {
@@ -20,7 +22,10 @@ BaseStatistics::BaseStatistics(LogicalType type) {
 }
 
 void BaseStatistics::Construct(BaseStatistics &stats, LogicalType type) {
+	stats.has_null = false;
+	stats.has_no_null = false;
 	stats.distinct_count = 0;
+	memset(&stats.stats_union, 0, sizeof(stats.stats_union));
 	stats.type = std::move(type);
 	switch (GetStatsType(stats.type)) {
 	case StatisticsType::LIST_STATS:
@@ -88,6 +93,7 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
 		return StatisticsType::NUMERIC_STATS;
 	case PhysicalType::VARCHAR:
 		return StatisticsType::STRING_STATS;
@@ -98,7 +104,6 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	case PhysicalType::ARRAY:
 		return StatisticsType::ARRAY_STATS;
 	case PhysicalType::BIT:
-	case PhysicalType::INTERVAL:
 	default:
 		return StatisticsType::BASE_STATS;
 	}
@@ -139,7 +144,7 @@ bool BaseStatistics::IsConstant() const {
 	}
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
-		return NumericStats::IsConstant(*this);
+		return ConstantFun::TypeIsSupported(type.InternalType()) && NumericStats::IsConstant(*this);
 	default:
 		break;
 	}

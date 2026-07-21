@@ -9,13 +9,14 @@
 #pragma once
 
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/execution/index/index_type.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/array.hpp"
 
 namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
-enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
+enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1 };
 enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
 
 class ConflictManager;

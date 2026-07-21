@@ -145,7 +145,7 @@ unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserialize
 //===--------------------------------------------------------------------===//
 template <>
 interval_t QuantileCast::Operation(const dtime_t &src, Vector &result) {
-	return {0, 0, src.micros};
+	return {0, 0, src.value};
 }
 
 template <>
@@ -537,6 +537,8 @@ AggregateFunction GetContinuousQuantileTemplated(const LogicalType &type) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 		return OP::template GetFunction<dtime_t, dtime_t>(type, type);
+	case LogicalTypeId::INTERVAL:
+		return OP::template GetFunction<interval_t, interval_t>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented continuous quantile aggregate");
 	}
@@ -601,22 +603,12 @@ static Value CheckQuantile(const Value &quantile_val) {
 }
 
 unique_ptr<FunctionData> BindQuantile(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() < 2) {
 		throw BinderException("QUANTILE requires a range argument between [0, 1]");
 	}
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("QUANTILE can only take constant parameters");
-	}
-	Value quantile_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	if (quantile_val.IsNull()) {
-		throw BinderException("QUANTILE argument must not be NULL");
-	}
+	auto quantile_val = input.GetNonNullConstant(1);
 	vector<Value> quantiles;
 	switch (quantile_val.type().id()) {
 	case LogicalTypeId::LIST:
@@ -669,6 +661,7 @@ static bool CanInterpolate(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::INTERVAL:
 		return true;
 	default:
 		return false;
@@ -832,8 +825,9 @@ template <class OP>
 static AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalType &result,
                                                const LogicalType &extra_arg) {
 	AggregateFunction fun({std::move(input)}, result, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, OP::Bind);
+	fun.GetSignature().GetParameter(0).SetName("x");
 	if (extra_arg.id() != LogicalTypeId::INVALID) {
-		fun.GetSignature().AddParameter(extra_arg);
+		fun.GetSignature().AddParameter("quantile", extra_arg);
 	}
 	fun.SetSerializeCallback(QuantileBindData::Serialize);
 	fun.SetDeserializeCallback(OP::Deserialize);

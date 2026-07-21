@@ -71,5 +71,5 @@ insert into t3 values ('EPSG:4326', 'POINT(0 1)');
 statement error
 select st_setcrs(g, srid) from t3;
 ----
-Binder Error: ST_SetCRS: CRS argument must be constant!
+<REGEX>:.*Binder Error.*st_setcrs.*must be a constant expression.*
 

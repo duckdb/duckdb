@@ -1,7 +1,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -15,6 +14,83 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 
 namespace duckdb {
+
+TransactionSecretStorage::TransactionSecretStorage(const string &name_p)
+    : SecretStorage(name_p, TRANSACTION_STORAGE_OFFSET) {
+}
+
+TransactionSecretStorage::~TransactionSecretStorage() = default;
+
+unique_ptr<SecretEntry> TransactionSecretStorage::StoreSecret(unique_ptr<const BaseSecret> secret,
+                                                              OnCreateConflict on_conflict,
+                                                              optional_ptr<CatalogTransaction> transaction) {
+	lock_guard<mutex> guard(lock);
+	auto entry = secrets.find(secret->GetName());
+	if (entry != secrets.end()) {
+		switch (on_conflict) {
+		case OnCreateConflict::ERROR_ON_CONFLICT:
+			throw InvalidInputException("Transaction secret with name '%s' already exists!", secret->GetName());
+		case OnCreateConflict::IGNORE_ON_CONFLICT:
+			return nullptr;
+		case OnCreateConflict::REPLACE_ON_CONFLICT:
+			secrets.erase(entry);
+			break;
+		default:
+			throw InternalException("Unsupported conflict mode for transaction secret");
+		}
+	}
+
+	auto result = make_uniq<SecretEntry>(std::move(secret));
+	result->persist_type = SecretPersistType::TRANSACTION;
+	result->storage_mode = storage_name;
+	auto secret_name = result->secret->GetName();
+	secrets.emplace(secret_name, make_uniq<SecretEntry>(*result));
+	return result;
+}
+
+vector<SecretEntry> TransactionSecretStorage::AllSecrets(optional_ptr<CatalogTransaction> transaction) {
+	lock_guard<mutex> guard(lock);
+	vector<SecretEntry> result;
+	for (auto &entry : secrets) {
+		result.emplace_back(*entry.second);
+	}
+	return result;
+}
+
+void TransactionSecretStorage::DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
+                                                optional_ptr<CatalogTransaction> transaction) {
+	lock_guard<mutex> guard(lock);
+	auto entry = secrets.find(name);
+	if (entry == secrets.end()) {
+		if (on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			throw InvalidInputException("Failed to remove non-existent transaction secret '%s'", name);
+		}
+		return;
+	}
+	secrets.erase(entry);
+}
+
+SecretMatch TransactionSecretStorage::LookupSecret(const string &path, const string &type,
+                                                   optional_ptr<CatalogTransaction> transaction) {
+	lock_guard<mutex> guard(lock);
+	auto best_match = SecretMatch();
+	for (auto &entry : secrets) {
+		if (entry.second->secret->GetType() == type) {
+			best_match = SelectBestMatch(*entry.second, path, tie_break_offset, best_match);
+		}
+	}
+	return best_match;
+}
+
+unique_ptr<SecretEntry> TransactionSecretStorage::GetSecretByName(const string &name,
+                                                                  optional_ptr<CatalogTransaction> transaction) {
+	lock_guard<mutex> guard(lock);
+	auto entry = secrets.find(Identifier(name));
+	if (entry == secrets.end()) {
+		return nullptr;
+	}
+	return make_uniq<SecretEntry>(*entry->second);
+}
 
 SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const string &path, int64_t offset,
                                            SecretMatch &current_best) {
@@ -156,8 +232,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 		}
 	} catch (PermissionException &ex) {
 		// If LocalFileSystem is specifically disabled (not all external access), skip loading persistent secrets
-		auto &vfs = static_cast<VirtualFileSystem &>(*DBConfig::GetConfig(db).file_system);
-		if (!vfs.SubSystemIsDisabled("LocalFileSystem")) {
+		if (!DBConfig::GetConfig(db).file_system->SubSystemIsDisabled("LocalFileSystem")) {
 			throw;
 		}
 	}
