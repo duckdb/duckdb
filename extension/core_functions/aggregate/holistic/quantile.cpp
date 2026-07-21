@@ -608,10 +608,7 @@ unique_ptr<FunctionData> BindQuantile(BindAggregateFunctionInput &input) {
 	if (arguments.size() < 2) {
 		throw BinderException("QUANTILE requires a range argument between [0, 1]");
 	}
-	Value quantile_val = input.GetConstant(1);
-	if (quantile_val.IsNull()) {
-		throw BinderException("QUANTILE argument must not be NULL");
-	}
+	auto quantile_val = input.GetNonNullConstant(1);
 	vector<Value> quantiles;
 	switch (quantile_val.type().id()) {
 	case LogicalTypeId::LIST:

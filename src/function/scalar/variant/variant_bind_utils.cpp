@@ -87,10 +87,7 @@ unique_ptr<FunctionData> VariantBindUtils::VariantPathBind(BindScalarFunctionInp
 		}
 	}
 
-	auto constant_arg = input.GetConstant(1);
-	if (constant_arg.IsNull()) {
-		throw BinderException("'%s' expects the second argument to be a constant expression", function_name);
-	}
+	auto constant_arg = input.GetNonNullConstant(1);
 
 	const auto path_type_id = constant_arg.type().id();
 	if (path_type_id == LogicalTypeId::VARCHAR) {

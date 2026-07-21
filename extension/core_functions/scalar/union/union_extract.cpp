@@ -58,11 +58,11 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 	}
 	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 
-	Value key_val = input.GetConstant(1);
+	auto key_val = input.GetNonNullConstant(1);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
-	if (key_val.IsNull() || key_str.empty()) {
-		throw BinderException("Key name for union_extract needs to be neither NULL nor empty");
+	if (key_str.empty()) {
+		throw BinderException("Key name for union_extract must not be empty");
 	}
 	auto key = Identifier(key_str);
 

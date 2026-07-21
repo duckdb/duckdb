@@ -989,16 +989,10 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 			                      "constant");
 		}
 	}
-	auto function_name_val = input.GetConstant(1);
-	if (function_name_val.IsNull()) {
-		throw BinderException("to_aggregate_state: the aggregate name cannot be NULL");
-	}
+	auto function_name_val = input.GetNonNullConstant(1);
 	auto function_name = StringValue::Get(function_name_val);
 
-	auto signature_val = input.GetConstant(2);
-	if (signature_val.IsNull()) {
-		throw BinderException("to_aggregate_state: the signature must be a list of types");
-	}
+	auto signature_val = input.GetNonNullConstant(2);
 	// the signature lists all of the argument types in order
 	vector<LogicalType> argument_types;
 	for (auto &arg : ListValue::GetChildren(signature_val)) {

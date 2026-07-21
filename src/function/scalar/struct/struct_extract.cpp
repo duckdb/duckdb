@@ -45,11 +45,11 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	}
 	bound_function.GetArguments()[0] = child_type;
 
-	Value key_val = input.GetConstant(1);
+	auto key_val = input.GetNonNullConstant(1);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
-	if (key_val.IsNull() || key_str.empty()) {
-		throw BinderException("Key name for struct_extract needs to be neither NULL nor empty");
+	if (key_str.empty()) {
+		throw BinderException("Key name for struct_extract must not be empty");
 	}
 	auto key = Identifier(key_str);
 

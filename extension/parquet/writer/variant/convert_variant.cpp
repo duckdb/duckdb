@@ -1023,10 +1023,7 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 			                      "'STRUCT(my_field BOOLEAN)', found type: '%s' instead",
 			                      expr_return_type);
 		}
-		Value type_str = input.GetConstant(1);
-		if (type_str.IsNull()) {
-			throw BinderException("Optional second argument 'shredding' can not be NULL");
-		}
+		auto type_str = input.GetNonNullConstant(1);
 		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>(), context);
 		bound_function.SetReturnType(GetParquetVariantType(shredded_type));
 	} else {

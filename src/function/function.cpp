@@ -258,7 +258,7 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 //----------------------------------------------------------------------------------------------------------------------
 // Bind Function Input
 //----------------------------------------------------------------------------------------------------------------------
-Value BindFunctionInput::GetConstant(idx_t arg_idx, const string &error_message) const {
+Value BindFunctionInput::GetConstant(idx_t arg_idx, bool accept_null) const {
 	if (arg_idx >= arguments.size()) {
 		throw InternalException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
 	}
@@ -267,31 +267,30 @@ Value BindFunctionInput::GetConstant(idx_t arg_idx, const string &error_message)
 	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
+	// Use the argument name if available, otherwise use the argument index
+	string argument_name;
+	if (argument_names && arg_idx < argument_names->size() && !argument_names->at(arg_idx).empty()) {
+		argument_name = StringUtil::Format("The '%s' argument", argument_names->at(arg_idx));
+	} else {
+		argument_name = StringUtil::Format("Argument #%llu", arg_idx + 1);
+	}
 	if (!expr.IsFoldable()) {
-		if (!error_message.empty()) {
-			throw BinderException(expr, error_message);
-		}
-
-		// Use the argument name if available, otherwise use the argument index
-		string argument_name;
-		if (argument_names && arg_idx < argument_names->size() && !argument_names->at(arg_idx).empty()) {
-			argument_name = StringUtil::Format("The '%s' argument", argument_names->at(arg_idx));
-		} else {
-			argument_name = StringUtil::Format("Argument #%llu", arg_idx + 1);
-		}
-
 		throw BinderException(expr, "%s in function '%s' must be a constant expression", argument_name,
 		                      function.GetName());
 	}
-	return ExpressionExecutor::EvaluateScalar(context, expr);
+	auto value = ExpressionExecutor::EvaluateScalar(context, expr);
+	if (!accept_null && value.IsNull()) {
+		throw BinderException(expr, "%s in function '%s' must not be NULL", argument_name, function.GetName());
+	}
+	return value;
 }
 
-Value BindFunctionInput::GetConstant(const Identifier &name, const string &error_message) const {
+Value BindFunctionInput::GetConstant(const Identifier &name, bool accept_null) const {
 	const auto arg_idx = GetArgumentIndex(name);
 	if (!arg_idx.IsValid()) {
 		throw InternalException("Function '%s' does not have a parameter named '%s'", function.GetName(), name);
 	}
-	return GetConstant(arg_idx.GetIndex(), error_message);
+	return GetConstant(arg_idx.GetIndex(), accept_null);
 }
 
 optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {

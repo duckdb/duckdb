@@ -352,10 +352,7 @@ float CheckApproxQuantile(const Value &quantile_val) {
 unique_ptr<FunctionData> BindApproxQuantile(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	Value quantile_val = input.GetConstant(1);
-	if (quantile_val.IsNull()) {
-		throw BinderException("APPROXIMATE QUANTILE parameter list cannot be NULL");
-	}
+	auto quantile_val = input.GetNonNullConstant(1);
 
 	vector<float> quantiles;
 	switch (quantile_val.type().id()) {

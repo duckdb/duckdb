@@ -176,10 +176,7 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 
-	Value val = input.GetConstant(1).CastAs(context, LogicalType::VARCHAR);
-	if (val.IsNull()) {
-		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) expected a non-null collation");
-	}
+	auto val = input.GetNonNullConstant(1).CastAs(context, LogicalType::VARCHAR);
 	//! Verify tagged collation
 	if (!bound_function.GetExtraInfo().empty()) {
 		return make_uniq<IcuBindData>(bound_function.GetExtraInfo());

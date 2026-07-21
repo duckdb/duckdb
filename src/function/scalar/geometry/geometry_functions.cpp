@@ -294,11 +294,7 @@ struct VertexExtractBindData final : public FunctionData {
 } // namespace
 
 static auto VertexExtractBind(BindScalarFunctionInput &input) -> unique_ptr<FunctionData> {
-	const auto vertex_val = input.GetConstant(1);
-
-	if (vertex_val.IsNull()) {
-		throw BinderException("vertex_extract: vertex argument cannot be NULL!");
-	}
+	const auto vertex_val = input.GetNonNullConstant(1);
 	const auto vertex_str = StringUtil::Lower(StringValue::Get(vertex_val));
 	if (vertex_str == "x") {
 		return make_uniq<VertexExtractBindData>(static_cast<idx_t>(0));

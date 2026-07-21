@@ -581,14 +581,26 @@ public:
 		return argument_names;
 	}
 
-	//! Get the constant value of an argument. Throws ParameterNotResolvedException for an unresolved parameter, and a
-	//! BinderException if the argument is not constant. When set, error_message overrides the default "must be
-	//! constant" message; pre-format it if it needs runtime values.
-	DUCKDB_API Value GetConstant(idx_t arg_idx, const string &error_message = string()) const;
-	DUCKDB_API Value GetConstant(const Identifier &name, const string &error_message = string()) const;
-	//! Try to get the constant value of an argument. Never throws: returns nullopt if the argument is not constant (an
-	//! unresolved parameter or a non-foldable expression), is out of range, or - when looking up by name - was not
-	//! provided. Use this when a non-constant argument should fall back to the runtime value instead of being an error.
+	//! Get the constant value of an argument.
+	//! Throws ParameterNotResolvedException if unresolved, and BinderException for non-constant arguments.
+	//! When 'accept_null' is false, also throws if the (constant) value is NULL.
+	DUCKDB_API Value GetConstant(idx_t arg_idx, bool accept_null = true) const;
+	DUCKDB_API Value GetConstant(const Identifier &name, bool accept_null = true) const;
+
+	//! Shorthand for GetConstant(<arg>, false)
+	DUCKDB_API Value GetNonNullConstant(idx_t index) const {
+		return GetConstant(index, false);
+	}
+	DUCKDB_API Value GetNonNullConstant(const Identifier &name) const {
+		return GetConstant(name, false);
+	}
+
+	//! Try to get the constant value of an argument.
+	//! Never throws: returns none if the argument...
+	//! - is not constant (unresolved parameter or a non-foldable expression)
+	//! - index is out of range
+	//! - was not found when looking up by name
+	//! Use this when a non-constant argument should fall back to the runtime value instead of being an error.
 	DUCKDB_API optional<Value> TryGetConstant(idx_t arg_idx) const;
 	DUCKDB_API optional<Value> TryGetConstant(const Identifier &name) const;
 

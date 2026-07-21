@@ -65,10 +65,7 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 		                      path.GetReturnType().ToString());
 	}
 
-	auto constant_arg = input.GetConstant(1);
-	if (constant_arg.IsNull()) {
-		throw BinderException("'variant_extract' expects the second argument to be a constant expression");
-	}
+	auto constant_arg = input.GetNonNullConstant(1);
 
 	if (constant_arg.type().id() == LogicalTypeId::VARCHAR) {
 		return make_uniq<VariantExtractBindData>(constant_arg.GetValue<string>());

@@ -44,10 +44,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	}
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
-		auto sort_specifier = input.GetConstant(i);
-		if (sort_specifier.IsNull()) {
-			throw BinderException("sort_specifier cannot be NULL");
-		}
+		auto sort_specifier = input.GetNonNullConstant(i);
 		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
@@ -1065,10 +1062,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 		children.emplace_back(col_name, col_type);
 
 		// Parse sort specifier
-		Value sort_specifier = input.GetConstant(i + 1);
-		if (sort_specifier.IsNull()) {
-			throw BinderException("sort_specifier cannot be NULL");
-		}
+		auto sort_specifier = input.GetNonNullConstant(i + 1);
 		const auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}

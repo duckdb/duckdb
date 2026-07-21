@@ -149,11 +149,8 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 
 	uint8_t result_scale;
 	if (arguments.size() == 3) {
-		Value scale_val = input.GetConstant(2);
-		if (scale_val.IsNull()) {
-			throw InvalidInputException("decimal_division: scale argument must not be NULL");
-		}
-		int32_t scale_i = scale_val.GetValue<int32_t>();
+		auto scale_val = input.GetNonNullConstant(2);
+		auto scale_i = scale_val.GetValue<int32_t>();
 		if (scale_i < 0 || scale_i > Decimal::MAX_WIDTH_DECIMAL) {
 			throw InvalidInputException("decimal_division: scale must be between 0 and %d, got %d",
 			                            Decimal::MAX_WIDTH_DECIMAL, scale_i);

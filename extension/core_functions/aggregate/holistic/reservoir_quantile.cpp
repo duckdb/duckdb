@@ -324,10 +324,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 		}
 		return make_uniq<ReservoirQuantileBindData>(quantiles, 8192ULL);
 	}
-	Value sample_size_val = input.GetConstant(2);
-	if (sample_size_val.IsNull()) {
-		throw BinderException("Size of the RESERVOIR_QUANTILE sample cannot be NULL");
-	}
+	auto sample_size_val = input.GetNonNullConstant(2);
 	auto sample_size = sample_size_val.GetValue<int32_t>();
 
 	if (sample_size_val.IsNull() || sample_size <= 0) {

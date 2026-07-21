@@ -36,9 +36,9 @@ unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 
-	Value key_val = input.GetConstant(0);
-	if (key_val.IsNull() || StringValue::Get(key_val).empty()) {
-		throw ParserException("Key name for current_setting needs to be neither NULL nor empty");
+	auto key_val = input.GetNonNullConstant(0);
+	if (StringValue::Get(key_val).empty()) {
+		throw ParserException("Key name for current_setting must not be empty");
 	}
 
 	auto key = StringUtil::Lower(StringValue::Get(key_val));
