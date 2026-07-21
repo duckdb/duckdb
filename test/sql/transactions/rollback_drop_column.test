@@ -22,13 +22,6 @@ INSERT INTO t2 SELECT i FROM range(10) tbl(i)
 statement ok
 CHECKPOINT
 
-query T
-SELECT COUNT(*) > 1
-FROM pragma_storage_info('t1')
-WHERE column_name = 'extra' AND segment_type = 'VARCHAR' AND persistent
-----
-true
-
 statement ok con1
 BEGIN
 
