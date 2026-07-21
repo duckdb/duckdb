@@ -7,7 +7,7 @@ on:
       runner_macos_arm64:
         type: string
       runner_provider:
-        default: ''
+        required: true
         type: string
 concurrency:
   group: swift-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -37,13 +37,13 @@ jobs:
       - name: Checkout
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          runner_provider: ${{ inputs.runner_provider || (startsWith(inputs.runner_macos_arm64 || 'macos-14', 'namespace-profile-') && 'namespace' || 'github') }}
+          runner_provider: ${{ inputs.runner_provider }}
           # we need tags for the ubiquity build script to run without errors
           fetch_depth: '0'
           ref: ${{ inputs.git_ref != '' && inputs.git_ref || github.sha }}
 
       - name: Configure Xcode Caching
-        if: ${{ startsWith(inputs.runner_macos_arm64 || 'macos-14', 'namespace-profile-') }}
+        if: ${{ inputs.runner_provider == 'namespace' }}
         uses: namespacelabs/nscloud-cache-action@v1
         with:
           cache: |

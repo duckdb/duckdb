@@ -14,7 +14,7 @@ on:
         type: string
       runner_provider:
         type: string
-        default: ''
+        required: true
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
@@ -37,7 +37,7 @@ jobs:
     - name: "Checkout"
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        runner_provider: ${{ inputs.runner_provider || (startsWith(fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022', 'namespace-profile-') && 'namespace' || 'github') }}
+        runner_provider: ${{ inputs.runner_provider }}
         fetch_depth: 0
         ref: ${{ inputs.git_ref }}
 
@@ -146,7 +146,7 @@ jobs:
     - name: "Checkout"
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        runner_provider: ${{ inputs.runner_provider || (startsWith(fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022', 'namespace-profile-') && 'namespace' || 'github') }}
+        runner_provider: ${{ inputs.runner_provider }}
         fetch_depth: 0
         ref: ${{ inputs.git_ref }}
 
@@ -262,7 +262,7 @@ jobs:
        - name: "Checkout"
          uses: duckdb/duckdb-ci/.github/actions/checkout@main
          with:
-           runner_provider: ${{ inputs.runner_provider || (startsWith(fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022', 'namespace-profile-') && 'namespace' || 'github') }}
+           runner_provider: ${{ inputs.runner_provider }}
            ref: ${{ inputs.git_ref }}
 
        - uses: actions/setup-python@v6

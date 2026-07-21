@@ -32,8 +32,7 @@ on:
         required: true
       runner_provider:
         type: string
-        required: false
-        default: ''
+        required: true
       save_cache:
         type: boolean
         required: false
@@ -181,7 +180,7 @@ jobs:
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          runner_provider: ${{ inputs.runner_provider || (startsWith(fromJSON(inputs.runners).linux_x64 || 'ubuntu-latest', 'namespace-profile-') && 'namespace' || 'github') }}
+          runner_provider: ${{ inputs.runner_provider }}
           fetch_depth: 0
           ref: ${{ inputs.git_ref }}
 
