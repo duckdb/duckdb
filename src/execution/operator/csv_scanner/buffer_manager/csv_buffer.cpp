@@ -79,7 +79,7 @@ void CSVBuffer::LoadRandomAccess(CSVFileHandle &file_handle) {
 }
 
 shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has_seeked) {
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	lock_guard<mutex> guard(load_lock);
 	if (!IsInMemory()) {
 		// We have to reload it from disk
 		block = nullptr;
@@ -90,6 +90,20 @@ shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has
 			has_seeked = true;
 		}
 	}
+	return CreatePin();
+}
+
+bool CSVBuffer::TryPin(shared_ptr<CSVBufferHandle> &pinned) {
+	unique_lock<mutex> guard(load_lock);
+	if (!guard.owns_lock() || !IsInMemory()) {
+		return false;
+	}
+	pinned = CreatePin();
+	return true;
+}
+
+shared_ptr<CSVBufferHandle> CSVBuffer::CreatePin() {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto pinned = make_shared_ptr<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, requested_size,
 	                                               last_buffer, buffer_idx);
 	if (random_access) {
