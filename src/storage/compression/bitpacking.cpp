@@ -805,8 +805,8 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 				    scan_state.current_group_ptr + scan_state.current_group_offset * scan_state.current_width / 8;
 				auto current_result_ptr = result_data + result_offset + scanned;
 				BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(current_result_ptr), current_position_ptr,
-				                                      batch_count, scan_state.current_width, skip_sign_extend);
-				ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference, batch_count);
+				                                      batch_count, scan_state.current_width, skip_sign_extend,
+				                                      scan_state.current_frame_of_reference);
 				scanned += batch_count;
 				scan_state.current_group_offset += batch_count;
 				continue;

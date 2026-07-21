@@ -11,6 +11,10 @@ namespace duckdb {
 namespace {
 
 bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
+	// Only on autovec-capable toolchains/CPUs; otherwise fall back to the normal execution path
+	if (!DUCKDB_AUTOVEC || !CpuBenefitsFromAutoVec()) {
+		return false;
+	}
 	auto name = expr.Function().GetName();
 	if (name != "+" && name != "-" && name != "*") {
 		return false;
@@ -31,7 +35,8 @@ bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
 	// a `ref <op> const` comparison can be selected straight into a bitmap (autovec) in the fast path below
-	select_bitmap_capable = IsBitmapComparisonCandidate(expr);
+	select_bitmap_capable =
+	    BitmapSelectionEnabled() && IsBitmapComparisonCandidate(expr) && TryGetBitmapComparisonInfo(expr, cmp_info);
 	// Check if the expression is eligible for dictionary optimization
 	if (!expr.IsConsistent() || expr.IsVolatile() || expr.CanThrow()) {
 		return; // Needs to be consistent, non-volatile, and non-throwing
@@ -309,7 +314,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	if (!expr.Function().HasSelectCallback()) {
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
-#ifndef DUCKDB_SMALLER_BINARY
+#if DUCKDB_AUTOVEC
 	// Fast path: a `flat_ref <cmp> const` comparison is evaluated densely into a bitmap straight from the input
 	// chunk, skipping the per-node intermediate-vector machinery below. Any input selection is AND-ed in, and the
 	// result is emitted to whatever the caller wants (bitmap, true and/or false selection). All select callers
@@ -318,8 +323,8 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		auto &fstate = state->Cast<ExecuteFunctionState>();
 		if (fstate.select_bitmap_capable) {
 			idx_t result;
-			if (SelectComparisonFromChunk(expr, *chunk, sel, count, bitmap_sel, true_sel, false_sel, fstate.tmp_sel1,
-			                              fstate.tmp_sel2, fstate.tmp_sel3, result)) {
+			if (SelectComparisonFromChunk(fstate.cmp_info, *chunk, sel, count, bitmap_sel, true_sel, false_sel,
+			                              fstate.tmp_sel1, fstate.tmp_sel2, fstate.tmp_sel3, result)) {
 				return result;
 			}
 		}

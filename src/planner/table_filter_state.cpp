@@ -22,7 +22,7 @@ static void InitializeExecutor(ClientContext &context, const Expression &express
 }
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression)
-    : bitmap_capable(IsBitmapSelectCandidate(expression)) {
+    : bitmap_capable(BitmapSelectionEnabled() && IsBitmapSelectCandidate(expression)) {
 	fast_executor = TryCreateFastExecutor(expression, false);
 	InitializeExecutor(context, expression, *this);
 }

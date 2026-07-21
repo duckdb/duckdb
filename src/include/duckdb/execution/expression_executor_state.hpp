@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/function/function.hpp"
@@ -17,9 +18,20 @@ namespace duckdb {
 
 class Expression;
 class BoundFunctionExpression;
+class BoundReferenceExpression;
+class BoundConstantExpression;
 class ExpressionExecutor;
 struct ExpressionExecutorState;
 struct FunctionLocalState;
+
+//! Decomposed `ref <op> const` or `ref <op> ref` comparison for the bitmap select fast path.
+struct BitmapComparisonInfo {
+	optional_ptr<const BoundReferenceExpression> ref;
+	//! exactly one of `constant` (ref <op> const) or `ref2` (ref <op> ref) is set
+	optional_ptr<const BoundConstantExpression> constant;
+	optional_ptr<const BoundReferenceExpression> ref2;
+	ExpressionType op;
+};
 
 struct ExpressionState {
 	ExpressionState(const Expression &expr, ExpressionExecutorState &root);
@@ -77,6 +89,8 @@ public:
 	unique_ptr<FunctionLocalState> local_state;
 	//! Set once: this expression is a `ref <op> const` comparison the bitmap select fast path can handle
 	bool select_bitmap_capable = false;
+	//! Cached comparison decomposition (valid when select_bitmap_capable), so Select does not walk the expression
+	BitmapComparisonInfo cmp_info;
 	//! Scratch bitmaps, their buffers are allocated lazily by PrepareBitmap only when actually used.
 	SelectionResult tmp_sel1, tmp_sel2, tmp_sel3;
 

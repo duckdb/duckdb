@@ -12,8 +12,12 @@ namespace duckdb {
 
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root)
-	    : ExpressionState(expr, root), intersect_tmp(STANDARD_VECTOR_SIZE),
-	      bitmap_capable(HasBitmapComparisonChild(expr.Cast<BoundConjunctionExpression>())) {
+	    : ExpressionState(expr, root), intersect_tmp(STANDARD_VECTOR_SIZE) {
+		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
+			dense_child.push_back(IsBitmapComparisonCandidate(*child));
+			bitmap_capable = bitmap_capable || dense_child.back();
+		}
+		bitmap_capable = bitmap_capable && BitmapSelectionEnabled();
 		adaptive_filter = make_uniq<AdaptiveFilter>(expr);
 		if (HasContext()) {
 			adaptive_filter->SetLogger(GetContext().logger);
@@ -24,7 +28,9 @@ struct ConjunctionState : public ExpressionState {
 	SelectionResult intersect_acc;
 	SelectionResult intersect_tmp;
 	//! Only enabled when the conjunction has at least one child that can be evaluated densely into a bitmap
-	bool bitmap_capable;
+	bool bitmap_capable = false;
+	//! Per-child IsBitmapComparisonCandidate, cached so the per-vector loop does not walk the expression
+	vector<bool> dense_child;
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConjunctionExpression &expr,
@@ -86,7 +92,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 				auto child_state = state.child_states[child_idx].get();
 				// dense candidates evaluate over the full input and are AND-ed into the accumulator; other
 				// children narrow on the (materialized) accumulator and their result replaces it
-				const bool dense = IsBitmapComparisonCandidate(child);
+				const bool dense = state.dense_child[child_idx];
 				const SelectionVector *current_sel = nullptr;
 				idx_t current_count = count;
 				if (!dense && have_accumulator) {
