@@ -130,7 +130,8 @@ static const DefaultMacro internal_macros[] = {
     {DEFAULT_SCHEMA, "nullif", "(a, b) AS CASE WHEN a=b THEN NULL ELSE a END"},
     {DEFAULT_SCHEMA, "assert_true",
      "(condition) AS CASE WHEN condition THEN NULL ELSE error('Assertion failed') END, "
-     "(condition, message) AS CASE WHEN condition THEN NULL ELSE error('Assertion: ' || message) END"},
+     "(condition, message) AS CASE WHEN condition THEN NULL ELSE "
+     "error(COALESCE('Assertion: ' || message, 'Assertion failed')) END"},
     {DEFAULT_SCHEMA, "list_append", "(l, e) AS list_concat(l, list_value(e))"},
     {DEFAULT_SCHEMA, "array_append", "(arr, el) AS list_append(arr, el)"},
     {DEFAULT_SCHEMA, "list_prepend", "(e, l) AS list_concat(list_value(e), l)"},

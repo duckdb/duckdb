@@ -31,6 +31,17 @@ SELECT assert_true(false, 'my custom message')
 ----
 Assertion: my custom message
 
+# a NULL message still fires, falling back to the default assertion error
+statement error
+SELECT assert_true(false, NULL)
+----
+Assertion failed
+
+statement error
+SELECT assert_true(NULL, NULL)
+----
+Assertion failed
+
 statement error
 SELECT assert_true(i < 3, 'row ' || i || ' is too large') FROM range(5) t(i)
 ----
