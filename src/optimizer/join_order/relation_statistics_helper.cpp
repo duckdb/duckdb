@@ -411,6 +411,21 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 		ret.cardinality = child_cardinalities[0];
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+		D_ASSERT(child_stats.size() == 2);
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		switch (join.join_type) {
+		case JoinType::RIGHT:
+		case JoinType::OUTER:
+			ret.cardinality = child_cardinalities[1];
+			break;
+		default:
+			//	ASOF Joins are usually a table lookup that produce single matches for the LHS
+			ret.cardinality = child_cardinalities[0];
+			break;
+		}
+		break;
+	}
 	default:
 		break;
 	}
