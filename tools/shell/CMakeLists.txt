@@ -75,9 +75,9 @@ if(WIN32 AND NOT MINGW)
   set(CMAKE_RC_FLAGS
       "${CMAKE_RC_FLAGS} -D DUCKDB_COPYRIGHT_YEAR=\"${DUCKDB_COPYRIGHT_YEAR}\"")
   target_sources(shell PRIVATE rc/duckdb.rc)
-  # Opt into the Windows Segment Heap: the default NT heap serializes
-  # multi-threaded allocation, making parallel workloads ~2x slower (#24027).
-  # CMake merges .manifest sources into the linker manifest via mt.exe.
+  # Opt into the Windows Segment Heap to avoid the default NT heap's lock
+  # contention under multi-threaded allocation (see #24027). CMake merges
+  # .manifest sources into the linker manifest via mt.exe.
   target_sources(shell PRIVATE rc/duckdb.manifest)
 endif()
 
