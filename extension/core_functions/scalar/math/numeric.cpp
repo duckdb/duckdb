@@ -650,11 +650,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	auto &arguments = input.GetArguments();
 	auto &decimal_type = arguments[0]->GetReturnType();
 	auto fname = StringUtil::Upper(bound_function.GetName().GetIdentifierName());
-	Value val =
-	    input
-	        .GetConstant(1,
-	                     StringUtil::Format("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname))
-	        .DefaultCastAs(LogicalType::INTEGER);
+	Value val = input.GetConstant(1).DefaultCastAs(LogicalType::INTEGER);
 	if (val.IsNull()) {
 		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
 	}
@@ -1069,8 +1065,9 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			}
 			throw InternalException("Unimplemented numeric type for function \"round\"");
 		}
-		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));
-		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, bind_prec_func));
+		round.AddFunction(ScalarFunction({{"x", type}}, type, round_func, bind_func));
+		round.AddFunction(
+		    ScalarFunction({{"x", type}, {"precision", LogicalType::INTEGER}}, type, round_prec_func, bind_prec_func));
 	}
 	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;

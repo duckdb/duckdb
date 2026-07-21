@@ -36,7 +36,7 @@ unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 
-	Value key_val = input.GetConstant(0, "Key name for current_setting needs to be a constant string");
+	Value key_val = input.GetConstant(0);
 	if (key_val.IsNull() || StringValue::Get(key_val).empty()) {
 		throw ParserException("Key name for current_setting needs to be neither NULL nor empty");
 	}
@@ -56,7 +56,8 @@ unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 } // namespace
 
 ScalarFunction CurrentSettingFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction, CurrentSettingBind);
+	auto fun = ScalarFunction({{"setting_name", LogicalType::VARCHAR}}, LogicalType::ANY, CurrentSettingFunction,
+	                          CurrentSettingBind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

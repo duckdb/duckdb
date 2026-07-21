@@ -149,10 +149,7 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 
 	uint8_t result_scale;
 	if (arguments.size() == 3) {
-		if (!arguments[2]->IsFoldable()) {
-			throw NotImplementedException("decimal_division: scale argument must be a constant integer");
-		}
-		Value scale_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[2]);
+		Value scale_val = input.GetConstant(2);
 		if (scale_val.IsNull()) {
 			throw InvalidInputException("decimal_division: scale argument must not be NULL");
 		}
@@ -273,13 +270,14 @@ ScalarFunctionSet DecimalDivisionFun::GetFunctions() {
 	auto decimal_type = LogicalType(LogicalTypeId::DECIMAL);
 	ScalarFunctionSet set("decimal_division");
 
-	ScalarFunction two_arg({decimal_type, decimal_type}, decimal_type,
+	ScalarFunction two_arg({{"numerator", decimal_type}, {"denominator", decimal_type}}, decimal_type,
 	                       DecimalDivExecute<hugeint_t, hugeint_t, hugeint_t>, DecimalDivisionBind);
 	two_arg.SetFallible();
 	set.AddFunction(two_arg);
 
-	ScalarFunction three_arg({decimal_type, decimal_type, LogicalType::INTEGER}, decimal_type,
-	                         DecimalDivExecute<hugeint_t, hugeint_t, hugeint_t>, DecimalDivisionBind);
+	ScalarFunction three_arg(
+	    {{"numerator", decimal_type}, {"denominator", decimal_type}, {"scale", LogicalType::INTEGER}}, decimal_type,
+	    DecimalDivExecute<hugeint_t, hugeint_t, hugeint_t>, DecimalDivisionBind);
 	three_arg.SetFallible();
 	set.AddFunction(three_arg);
 

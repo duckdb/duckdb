@@ -175,12 +175,8 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(BindScalarFunctionInput &
 static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 
-	if (!arguments[1]->IsFoldable()) {
-		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
-	}
-	Value val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]).CastAs(context, LogicalType::VARCHAR);
+	Value val = input.GetConstant(1).CastAs(context, LogicalType::VARCHAR);
 	if (val.IsNull()) {
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) expected a non-null collation");
 	}
@@ -489,8 +485,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                         false);
 	loader.RegisterCollation(info);
 
-	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                        ICUCollateFunction, ICUSortKeyBind);
+	ScalarFunction sort_key("icu_sort_key", {{"str", LogicalType::VARCHAR}, {"collator", LogicalType::VARCHAR}},
+	                        LogicalType::VARCHAR, ICUCollateFunction, ICUSortKeyBind);
 	loader.RegisterFunction(sort_key);
 
 	// Time Zones

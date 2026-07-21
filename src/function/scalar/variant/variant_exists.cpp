@@ -35,9 +35,9 @@ static void VariantExistsFunction(DataChunk &input, ExpressionState &state, Vect
 ScalarFunctionSet VariantExistsFun::GetFunctions() {
 	ScalarFunctionSet fun_set;
 
-	ScalarFunction variant_exists("variant_exists", {LogicalType::VARIANT(), LogicalType::VARCHAR},
-	                              LogicalType::BOOLEAN, VariantExistsFunction, VariantBindUtils::VariantPathBind,
-	                              nullptr);
+	ScalarFunction variant_exists(
+	    "variant_exists", {{"input_variant", LogicalType::VARIANT()}, {"path", LogicalType::VARCHAR}},
+	    LogicalType::BOOLEAN, VariantExistsFunction, VariantBindUtils::VariantPathBind, nullptr);
 	fun_set.AddFunction(variant_exists);
 
 	variant_exists.GetSignature().GetParameter(1).SetType(LogicalType::LIST(LogicalType::VARCHAR));

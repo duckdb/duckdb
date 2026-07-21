@@ -1023,7 +1023,7 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 			                      "'STRUCT(my_field BOOLEAN)', found type: '%s' instead",
 			                      expr_return_type);
 		}
-		Value type_str = input.GetConstant(1, "Optional second argument 'shredding' has to be a constant expression");
+		Value type_str = input.GetConstant(1);
 		if (type_str.IsNull()) {
 			throw BinderException("Optional second argument 'shredding' can not be NULL");
 		}
@@ -1037,8 +1037,8 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 }
 
 ScalarFunction VariantColumnWriter::GetTransformFunction() {
-	ScalarFunction transform("variant_to_parquet_variant", {LogicalType::VARIANT()}, LogicalType::ANY, ToParquetVariant,
-	                         BindTransform);
+	ScalarFunction transform("variant_to_parquet_variant", {{"variant", LogicalType::VARIANT()}}, LogicalType::ANY,
+	                         ToParquetVariant, BindTransform);
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return transform;
 }

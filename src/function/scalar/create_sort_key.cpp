@@ -44,8 +44,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	}
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
-		auto sort_specifier = input.GetConstant(
-		    i, StringUtil::Format("sort_specifier must be a constant value - but got %s", arguments[i]->ToString()));
+		auto sort_specifier = input.GetConstant(i);
 		if (sort_specifier.IsNull()) {
 			throw BinderException("sort_specifier cannot be NULL");
 		}
@@ -1044,8 +1043,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		// Parse column definition
-		Value col = input.GetConstant(
-		    i, StringUtil::Format("col must be a constant value - but got %s", arguments[i]->ToString()));
+		Value col = input.GetConstant(i);
 		const auto col_list = Parser::ParseColumnList(col.ToString());
 		if (col_list.LogicalColumnCount() != 1) {
 			throw BinderException("decode_sort_key col must contain exactly one column");
@@ -1067,9 +1065,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 		children.emplace_back(col_name, col_type);
 
 		// Parse sort specifier
-		Value sort_specifier =
-		    input.GetConstant(i + 1, StringUtil::Format("sort_specifier must be a constant value - but got %s",
-		                                                arguments[i + 1]->ToString()));
+		Value sort_specifier = input.GetConstant(i + 1);
 		if (sort_specifier.IsNull()) {
 			throw BinderException("sort_specifier cannot be NULL");
 		}
@@ -1505,9 +1501,10 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 }
 
 ScalarFunction DecodeSortKeyFun::GetFunction() {
-	ScalarFunction sort_key_function("decode_sort_key", {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                 LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction,
-	                                 DecodeSortKeyBind);
+	ScalarFunction sort_key_function(
+	    "decode_sort_key",
+	    {{"sort_key", LogicalType::ANY}, {"col", LogicalType::VARCHAR}, {"sort_specifier", LogicalType::VARCHAR}},
+	    LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction, DecodeSortKeyBind);
 	sort_key_function.SetVarArgs(LogicalType::VARCHAR);
 	return sort_key_function;
 }

@@ -350,16 +350,9 @@ float CheckApproxQuantile(const Value &quantile_val) {
 }
 
 unique_ptr<FunctionData> BindApproxQuantile(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("APPROXIMATE QUANTILE can only take constant quantile parameters");
-	}
-	Value quantile_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	Value quantile_val = input.GetConstant(1);
 	if (quantile_val.IsNull()) {
 		throw BinderException("APPROXIMATE QUANTILE parameter list cannot be NULL");
 	}
@@ -413,7 +406,8 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
-	fun.GetSignature().AddParameter(LogicalType::FLOAT);
+	fun.GetSignature().GetParameter(0).SetName("x");
+	fun.GetSignature().AddParameter("quantile", LogicalType::FLOAT);
 	return fun;
 }
 

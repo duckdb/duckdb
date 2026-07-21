@@ -58,19 +58,7 @@ static vector<string> CollectPaths(const Value &constant_arg, const string &func
 	return paths;
 }
 
-bool VariantBindUtils::GetConstantArgument(ClientContext &context, const Expression &expr, Value &constant_arg) {
-	if (!expr.IsFoldable()) {
-		return false;
-	}
-	constant_arg = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!constant_arg.IsNull()) {
-		return true;
-	}
-	return false;
-}
-
 unique_ptr<FunctionData> VariantBindUtils::VariantPathBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
 	const auto &function_name = input.GetBoundFunction().GetName();
 
@@ -99,8 +87,8 @@ unique_ptr<FunctionData> VariantBindUtils::VariantPathBind(BindScalarFunctionInp
 		}
 	}
 
-	Value constant_arg;
-	if (!GetConstantArgument(context, path_expr, constant_arg)) {
+	auto constant_arg = input.GetConstant(1);
+	if (constant_arg.IsNull()) {
 		throw BinderException("'%s' expects the second argument to be a constant expression", function_name);
 	}
 

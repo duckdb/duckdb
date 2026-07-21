@@ -1970,8 +1970,7 @@ struct StructDatePart {
 		auto &bound_function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
 		// collect names and deconflict, construct return type
-		auto parts_list = input.GetConstant(
-		    0, StringUtil::Format("%s can only take constant lists of part names", bound_function.GetName()));
+		auto parts_list = input.GetConstant(0);
 
 		case_insensitive_set_t name_collision_set;
 		child_list_t<LogicalType> struct_children;
@@ -2113,7 +2112,8 @@ struct StructDatePart {
 	static ScalarFunction GetFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		ScalarFunction result({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, Bind);
+		ScalarFunction result({{"part_list", part_type}, {"ts", temporal_type}}, result_type, Function<INPUT_TYPE>,
+		                      Bind);
 		result.SetSerializeCallback(SerializeFunction);
 		result.SetDeserializeCallback(DeserializeFunction);
 		return result;

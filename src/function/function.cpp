@@ -263,7 +263,8 @@ Value BindFunctionInput::GetConstant(idx_t arg_idx, const string &error_message)
 		throw InternalException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
 	}
 	const auto &expr = *arguments[arg_idx];
-	if (expr.HasParameter()) {
+	// an unresolved parameter or an as-yet-unknown type (e.g. a macro/prepared argument) - defer binding
+	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 	if (!expr.IsFoldable()) {
@@ -279,8 +280,8 @@ Value BindFunctionInput::GetConstant(idx_t arg_idx, const string &error_message)
 			argument_name = StringUtil::Format("Argument #%llu", arg_idx + 1);
 		}
 
-		throw BinderException(expr, "%s to function '%s' must be a constant expression, but got: '%s'", argument_name,
-		                      function.GetName(), expr.ToString());
+		throw BinderException(expr, "%s in function '%s' must be a constant expression", argument_name,
+		                      function.GetName());
 	}
 	return ExpressionExecutor::EvaluateScalar(context, expr);
 }
@@ -298,7 +299,7 @@ optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {
 		return {};
 	}
 	const auto &expr = *arguments[arg_idx];
-	if (expr.HasParameter()) {
+	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		return {};
 	}
 	if (!expr.IsFoldable()) {

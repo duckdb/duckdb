@@ -54,7 +54,6 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 }
 
 static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
 
 	if (arguments.size() != 2) {
@@ -66,8 +65,8 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 		                      path.GetReturnType().ToString());
 	}
 
-	Value constant_arg;
-	if (!VariantBindUtils::GetConstantArgument(context, path, constant_arg)) {
+	auto constant_arg = input.GetConstant(1);
+	if (constant_arg.IsNull()) {
 		throw BinderException("'variant_extract' expects the second argument to be a constant expression");
 	}
 
@@ -293,8 +292,8 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
 	                               VariantExtractPropagateStats);
 
-	variant_extract.GetSignature().AddParameter(variant_type);
-	variant_extract.GetSignature().AddParameter(LogicalType::VARCHAR);
+	variant_extract.GetSignature().AddParameter("input_variant", variant_type);
+	variant_extract.GetSignature().AddParameter("path", LogicalType::VARCHAR);
 	fun_set.AddFunction(variant_extract);
 
 	variant_extract.GetSignature().GetParameter(1).SetType(LogicalType::UINTEGER);

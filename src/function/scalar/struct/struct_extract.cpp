@@ -45,7 +45,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	}
 	bound_function.GetArguments()[0] = child_type;
 
-	Value key_val = input.GetConstant(1, "Key name for struct_extract needs to be a constant string");
+	Value key_val = input.GetConstant(1);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
 	if (key_val.IsNull() || key_str.empty()) {
@@ -101,7 +101,7 @@ static unique_ptr<FunctionData> StructExtractBindInternal(BindScalarFunctionInpu
 	}
 	bound_function.GetArguments()[0] = child_type;
 
-	Value key_val = input.GetConstant(1, "Key index for struct_extract needs to be a constant value");
+	Value key_val = input.GetConstant(1);
 	auto index = key_val.GetValue<int64_t>();
 	if (index <= 0 || idx_t(index) > struct_children.size()) {
 		throw BinderException("Key index %lld for struct_extract out of range - expected an index between 1 and %llu",
@@ -133,18 +133,18 @@ unique_ptr<FunctionData> StructExtractAtFun::GetBindData(idx_t index) {
 }
 
 ScalarFunction GetKeyExtractFunction() {
-	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractBind, PropagateStructExtractStats);
+	return ScalarFunction("struct_extract", {{"struct", LogicalTypeId::STRUCT}, {"key", LogicalType::VARCHAR}},
+	                      LogicalType::ANY, StructExtractFunction, StructExtractBind, PropagateStructExtractStats);
 }
 
 ScalarFunction GetIndexExtractFunction() {
-	return ScalarFunction("struct_extract", {LogicalTypeId::TUPLE, LogicalType::BIGINT}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractBindIndex, PropagateStructExtractStats);
+	return ScalarFunction("struct_extract", {{"tuple", LogicalTypeId::TUPLE}, {"index", LogicalType::BIGINT}},
+	                      LogicalType::ANY, StructExtractFunction, StructExtractBindIndex, PropagateStructExtractStats);
 }
 
 ScalarFunction GetExtractAtFunction() {
-	return ScalarFunction("struct_extract_at", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractAtBind, PropagateStructExtractStats);
+	return ScalarFunction("struct_extract_at", {{"struct", LogicalTypeId::STRUCT}, {"index", LogicalType::BIGINT}},
+	                      LogicalType::ANY, StructExtractFunction, StructExtractAtBind, PropagateStructExtractStats);
 }
 
 ScalarFunctionSet StructExtractFun::GetFunctions() {

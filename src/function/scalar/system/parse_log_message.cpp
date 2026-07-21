@@ -38,8 +38,7 @@ unique_ptr<FunctionData> ParseLogMessageBind(BindScalarFunctionInput &input) {
 		throw BinderException("structured_log_schema: expects 1 argument", arguments[0]->GetAlias());
 	}
 
-	auto type_val = input.GetConstant(
-	    0, StringUtil::Format("structured_log_schema: argument '%s' must be constant", arguments[0]->GetAlias()));
+	auto type_val = input.GetConstant(0);
 
 	if (arguments[0]->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("structured_log_schema: 'log_type' argument must be a string");
@@ -81,8 +80,9 @@ void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &re
 } // namespace
 
 ScalarFunction ParseLogMessage::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::ANY, ParseLogMessageFunction,
-	                          ParseLogMessageBind, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
+	auto fun = ScalarFunction({{"type", LogicalType::VARCHAR}, {"message", LogicalType::VARCHAR}}, LogicalType::ANY,
+	                          ParseLogMessageFunction, ParseLogMessageBind, nullptr, nullptr,
+	                          LogicalType(LogicalTypeId::INVALID));
 	fun.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	return fun;
 }

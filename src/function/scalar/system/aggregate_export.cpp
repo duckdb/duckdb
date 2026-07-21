@@ -1153,6 +1153,16 @@ ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 		}
 		ScalarFunction function("to_aggregate_state", arguments, LogicalTypeId::ANY, ToAggregateStateFunction,
 		                        ToAggregateStateBind);
+		auto &sig = function.GetSignature();
+		sig.GetParameter(0).SetName("data");
+		sig.GetParameter(1).SetName("name");
+		sig.GetParameter(2).SetName("signature");
+		if (sig.GetParameterCount() > 3) {
+			sig.GetParameter(3).SetName("constant_parameters");
+		}
+		if (sig.GetParameterCount() > 4) {
+			sig.GetParameter(4).SetName("order_by");
+		}
 		function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 		set.AddFunction(std::move(function));
 	}

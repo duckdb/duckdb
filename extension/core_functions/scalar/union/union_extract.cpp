@@ -58,7 +58,7 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 	}
 	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 
-	Value key_val = input.GetConstant(1, "Key name for union_extract needs to be a constant string");
+	Value key_val = input.GetConstant(1);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
 	if (key_val.IsNull() || key_str.empty()) {
@@ -99,8 +99,8 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 
 ScalarFunction UnionExtractFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	return ScalarFunction({LogicalTypeId::UNION, LogicalType::VARCHAR}, LogicalType::ANY, UnionExtractFunction,
-	                      UnionExtractBind, nullptr, nullptr);
+	return ScalarFunction({{"union", LogicalTypeId::UNION}, {"tag", LogicalType::VARCHAR}}, LogicalType::ANY,
+	                      UnionExtractFunction, UnionExtractBind, nullptr, nullptr);
 }
 
 } // namespace duckdb

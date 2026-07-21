@@ -378,6 +378,22 @@ public:
 	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                          bind_lambda_function_t bind_lambda = nullptr);
 
+	DUCKDB_API ScalarFunction(Identifier name, std::initializer_list<FunctionParameter> params, LogicalType return_type,
+	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
+	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
+	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                          FunctionStability stability = FunctionStability::CONSISTENT,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                          bind_lambda_function_t bind_lambda = nullptr);
+
+	DUCKDB_API ScalarFunction(std::initializer_list<FunctionParameter> params, LogicalType return_type,
+	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
+	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
+	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                          FunctionStability stability = FunctionStability::CONSISTENT,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                          bind_lambda_function_t bind_lambda = nullptr);
+
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
 

@@ -172,6 +172,12 @@ public:
 			AddParameter(std::move(arg));
 		}
 	}
+	FunctionSignature(vector<FunctionParameter> parameters, LogicalType return_type)
+	    : parameters(std::move(parameters)), varargs(LogicalTypeId::INVALID), return_type(std::move(return_type)) {
+	}
+	FunctionSignature(vector<FunctionParameter> parameters, LogicalType varargs, LogicalType return_type)
+	    : parameters(std::move(parameters)), varargs(std::move(varargs)), return_type(std::move(return_type)) {
+	}
 	FunctionSignature(vector<LogicalType> arguments, LogicalType return_type)
 	    : FunctionSignature(std::move(arguments), LogicalType(LogicalTypeId::INVALID), std::move(return_type)) {
 	}

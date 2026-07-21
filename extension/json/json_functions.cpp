@@ -59,7 +59,6 @@ bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
@@ -67,12 +66,10 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &inp
 	string path;
 	idx_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
-	if (arguments[1]->IsFoldable()) {
-		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		if (!path_val.IsNull()) {
-			constant = true;
-			path_type = CheckPath(path_val, path, len);
-		}
+	auto path_val = input.TryGetConstant(1);
+	if (path_val && !path_val->IsNull()) {
+		constant = true;
+		path_type = CheckPath(*path_val, path, len);
 	}
 	if (arguments[1]->GetReturnType().IsIntegral()) {
 		bound_function.GetArguments()[1] = LogicalType::BIGINT;
@@ -102,19 +99,11 @@ bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &arguments = input.GetArguments();
 	D_ASSERT(input.GetBoundFunction().GetArguments().size() == 2);
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("List of paths must be constant");
-	}
 
 	vector<string> paths;
 	vector<idx_t> lens;
-	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	auto paths_val = input.GetConstant(1);
 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");

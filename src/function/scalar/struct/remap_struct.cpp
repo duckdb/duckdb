@@ -564,7 +564,7 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 		                      from_type.ToString(), to_type.ToString());
 	}
 
-	Value remap_val = input.GetConstant(2, "Remap keys for remap_struct needs to be a constant value");
+	Value remap_val = input.GetConstant(2);
 	auto source_map = RemapIndex::GetMap(from_type);
 	auto target_map = RemapIndex::GetMap(to_type);
 
@@ -613,7 +613,10 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 
 ScalarFunction RemapStructFun::GetFunction() {
 	ScalarFunction remap("remap_struct",
-	                     {LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalTypeId::ANY},
+	                     {{"input", LogicalTypeId::ANY},
+	                      {"target_type", LogicalTypeId::ANY},
+	                      {"mapping", LogicalTypeId::ANY},
+	                      {"defaults", LogicalTypeId::ANY}},
 	                     LogicalTypeId::ANY, RemapStructFunction, RemapStructBind);
 	remap.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return remap;

@@ -243,30 +243,23 @@ ScalarFunction StCrsFun::GetFunction() {
 static unique_ptr<FunctionData> SetCRSBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 
 	// Check if the CRS is set in the second argument
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("ST_SetCRS: CRS argument must be constant!");
-	}
-	const auto crs_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	if (!crs_val.IsNull()) {
-		const auto &crs_str = StringValue::Get(crs_val);
-
-		// Try to convert to identify
-		const auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs_str);
-		if (lookup) {
-			bound_function.SetReturnType(LogicalType::GEOMETRY(lookup->GetDefinition()));
-		} else {
-			// Pass on the raw string (better than nothing)
-			bound_function.SetReturnType(LogicalType::GEOMETRY(crs_str));
-		}
+	const auto crs_val = input.GetConstant(1);
+	if (crs_val.IsNull()) {
+		return nullptr;
 	}
 
-	// Erase the CRS argument expression
+	const auto &crs_str = StringValue::Get(crs_val);
+
+	// Try to convert to identify
+	const auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs_str);
+	if (lookup) {
+		bound_function.SetReturnType(LogicalType::GEOMETRY(lookup->GetDefinition()));
+	} else {
+		// Pass on the raw string (better than nothing)
+		bound_function.SetReturnType(LogicalType::GEOMETRY(crs_str));
+	}
 	return nullptr;
 }
 
@@ -275,8 +268,8 @@ static void SetCRSFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 ScalarFunction StSetcrsFun::GetFunction() {
-	ScalarFunction geom_func({LogicalType::GEOMETRY(), LogicalType::VARCHAR}, LogicalType::GEOMETRY(), SetCRSFunction,
-	                         SetCRSBind);
+	ScalarFunction geom_func({{"geom", LogicalType::GEOMETRY()}, {"crs", LogicalType::VARCHAR}},
+	                         LogicalType::GEOMETRY(), SetCRSFunction, SetCRSBind);
 	return geom_func;
 }
 

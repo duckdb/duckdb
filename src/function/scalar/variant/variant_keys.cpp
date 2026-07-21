@@ -97,10 +97,10 @@ static void AddFunctionsWithParameterType(ScalarFunctionSet &fun_set, const Logi
 	ScalarFunction variant_keys("variant_keys", {}, LogicalType::LIST(LogicalType::VARCHAR), VariantKeysFunction,
 	                            VariantBindUtils::VariantPathBind, nullptr);
 
-	variant_keys.GetSignature().AddParameter(input_type);
+	variant_keys.GetSignature().AddParameter("input_variant", input_type);
 	fun_set.AddFunction(variant_keys);
 
-	variant_keys.GetSignature().AddParameter(LogicalType::VARCHAR);
+	variant_keys.GetSignature().AddParameter("path", LogicalType::VARCHAR);
 	fun_set.AddFunction(variant_keys);
 
 	variant_keys.GetSignature().GetParameter(1).SetType(LogicalType::LIST(LogicalType::VARCHAR));
