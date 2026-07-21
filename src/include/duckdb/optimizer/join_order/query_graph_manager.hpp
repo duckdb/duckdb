@@ -17,6 +17,7 @@
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
+#include "duckdb/optimizer/join_order/semantic_join_edge.hpp"
 
 namespace duckdb {
 
@@ -77,6 +78,10 @@ private:
 	//! Filter information including the column_bindings that join filters
 	//! used by the cardinality estimator to estimate distinct counts
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
+	//! Non-inner joins whose semantics must be enumerated and reconstructed atomically.
+	vector<unique_ptr<SemanticJoinEdge>> semantic_joins;
+	unordered_set<idx_t> semantic_costing_predicates;
+	unordered_set<idx_t> reconstructed_semantic_joins;
 
 	QueryGraphEdges query_graph;
 	JoinPredicateModel predicate_model;

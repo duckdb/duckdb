@@ -387,6 +387,63 @@ ORDER BY o.x;
 statement ok
 SET delim_join_as_cte=false;
 
+# A semantic LEFT edge keeps two comparison keys and its residual predicate
+# together. The nullable-side operands are written first, and the preserved
+# side spans two relations.
+query IITII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     p(flag) AS (VALUES (true), (false)),
+     b(k, v) AS (VALUES (1, 10), (2, 99), (4, 40))
+SELECT a.k, a.v, p.flag, b.k, b.v
+FROM a
+CROSS JOIN p
+LEFT JOIN b ON b.k = a.k AND b.v = a.v AND p.flag
+ORDER BY ALL;
+----
+1	10	false	NULL	NULL
+1	10	true	1	10
+2	20	false	NULL	NULL
+2	20	true	NULL	NULL
+3	30	false	NULL	NULL
+3	30	true	NULL	NULL
+
+# Distinct LEFT, SEMI, and ANTI semantic edges can have overlapping endpoint
+# sets. Join ordering must retain each edge identity and reconstruct it once.
+query IIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99))
+SELECT a.k, a.v, b.k, b.v
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+ORDER BY ALL;
+----
+1	10	1	10
+
+statement ok
+SET disabled_optimizers='join_order';
+
+# The unreordered plan is the semantic baseline for the overlapping-edge case.
+query IIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99))
+SELECT a.k, a.v, b.k, b.v
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+ORDER BY ALL;
+----
+1	10	1	10
+
+statement ok
+SET disabled_optimizers='';
+
 # Reclassified predicates remain valid without optimizer plan repair.
 statement ok
 PRAGMA disable_optimizer;

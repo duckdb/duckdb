@@ -183,6 +183,23 @@ static void RewriteChangedChildBindings(LogicalOperator &op, idx_t child_index,
 	} else {
 		replacer.VisitOperatorBindings(op);
 	}
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		D_ASSERT(LogicalComparisonJoin::ConditionsAreCanonical(op.Cast<LogicalComparisonJoin>()));
+	}
+}
+
+static bool JoinConditionsAreCanonical(LogicalOperator &op) {
+	if ((op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	     op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) &&
+	    !LogicalComparisonJoin::ConditionsAreCanonical(op.Cast<LogicalComparisonJoin>())) {
+		return false;
+	}
+	for (auto &child : op.children) {
+		if (!JoinConditionsAreCanonical(*child)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 static optional_idx FindBindingIndex(const vector<ColumnBinding> &bindings, const ColumnBinding &binding) {
@@ -2559,6 +2576,7 @@ void DelimJoinCTERewriter::Rewrite(Binder &binder, unique_ptr<LogicalOperator> &
 }
 
 void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
+	D_ASSERT(JoinConditionsAreCanonical(*plan));
 	bool filters_pushed;
 	do {
 		filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);

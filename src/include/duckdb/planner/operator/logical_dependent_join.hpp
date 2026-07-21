@@ -17,11 +17,10 @@
 
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
-#include "duckdb/planner/expression/bound_subquery_expression.hpp"
 
 namespace duckdb {
 
-enum class DependentJoinType : uint8_t { DELIM, JOIN_CONDITION };
+enum class DependentJoinType : uint8_t { DUPLICATE_ELIMINATION, JOIN_CONDITION };
 
 class LogicalDependentJoin : public LogicalJoin {
 public:
@@ -34,12 +33,12 @@ public:
 
 	explicit LogicalDependentJoin(JoinType type);
 
-	//! The complete condition, kept unclassified until decorrelation is complete
+	//! The complete condition, kept unclassified until both child binding layouts are final
 	unique_ptr<Expression> condition;
 	//! The list of columns that have correlations with the right
 	CorrelatedColumns correlated_columns;
 	//! The kind of pending planning work represented by this operator
-	DependentJoinType dependent_type = DependentJoinType::DELIM;
+	DependentJoinType dependent_type = DependentJoinType::DUPLICATE_ELIMINATION;
 
 	bool perform_delim = true;
 	bool any_join = false;

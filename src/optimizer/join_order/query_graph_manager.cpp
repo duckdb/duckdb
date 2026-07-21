@@ -136,7 +136,16 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 		return false;
 	}
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
-	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager);
+	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager, semantic_joins);
+	for (auto &semantic_join : semantic_joins) {
+		for (auto predicate_index : semantic_join->costing_predicate_indices) {
+			auto inserted = semantic_costing_predicates.insert(predicate_index);
+			if (!inserted.second) {
+				throw InternalException("Join-order predicate %llu belongs to multiple semantic joins",
+				                        predicate_index);
+			}
+		}
+	}
 	// Populate left/right endpoints and stats bindings before building the predicate model.
 	BindFilterEndpoints();
 	// Build the predicate model after BindFilterEndpoints so that left_binding/right_binding are populated.
@@ -281,8 +290,30 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 	for (auto predicate_ref : predicate_model.GetGraphPredicates()) {
 		auto &predicate = predicate_ref.get();
 		D_ASSERT(predicate.GetLeftSetOptional() && predicate.GetRightSetOptional());
+		if (semantic_costing_predicates.count(predicate.GetIndex())) {
+			continue;
+		}
 		query_graph.CreateEdge(predicate.GetLeftSet(), predicate.GetRightSet(), predicate);
 		query_graph.CreateEdge(predicate.GetRightSet(), predicate.GetLeftSet(), predicate);
+	}
+
+	vector<optional_ptr<JoinPredicate>> predicates_by_index(filters_and_bindings.size(), nullptr);
+	for (auto predicate_ref : predicate_model.GetPredicates()) {
+		auto &predicate = predicate_ref.get();
+		D_ASSERT(predicate.GetIndex() < predicates_by_index.size());
+		predicates_by_index[predicate.GetIndex()] = predicate;
+	}
+	for (auto &semantic_join_ptr : semantic_joins) {
+		auto &semantic_join = *semantic_join_ptr;
+		for (auto predicate_index : semantic_join.costing_predicate_indices) {
+			auto predicate = predicates_by_index[predicate_index];
+			if (!predicate || !predicate->GetLeftSetOptional() || !predicate->GetRightSetOptional()) {
+				throw InternalException("Semantic join %llu has a cost predicate without graph endpoints",
+				                        semantic_join.index);
+			}
+			query_graph.CreateEdge(semantic_join.left_set, semantic_join.right_set, *predicate, semantic_join);
+			query_graph.CreateEdge(semantic_join.right_set, semantic_join.left_set, *predicate, semantic_join);
+		}
 	}
 }
 
@@ -318,10 +349,22 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, total_relation);
+	for (auto &semantic_join : semantic_joins) {
+		if (!reconstructed_semantic_joins.count(semantic_join->index)) {
+			throw InternalException("Join-order optimizer did not reconstruct semantic join %llu",
+			                        semantic_join->index);
+		}
+	}
 
 	// perform the final pushdown of remaining filters
 	for (auto &filter : filters_and_bindings) {
-		D_ASSERT(!filter->non_inner_join || filter->non_inner_join->consumed);
+		if (semantic_costing_predicates.count(filter->filter_index)) {
+			if (filter->filter) {
+				throw InternalException("Cost predicate %llu escaped semantic join reconstruction",
+				                        filter->filter_index);
+			}
+			continue;
+		}
 		// check if the filter has already been extracted
 		if (filter->filter) {
 			// if not we need to push it
@@ -401,7 +444,40 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		// generate the left and right children
 		auto left = GenerateJoins(extracted_relations, node->left_set);
 		auto right = GenerateJoins(extracted_relations, node->right_set);
-		if (dp_entry->second->info->predicates.empty()) {
+		auto semantic_join = dp_entry->second->info->semantic_join;
+		if (semantic_join) {
+			auto direct = JoinRelationSet::IsSubset(*left.set, semantic_join->left_set) &&
+			              JoinRelationSet::IsSubset(*right.set, semantic_join->right_set);
+			auto inverted = JoinRelationSet::IsSubset(*left.set, semantic_join->right_set) &&
+			                JoinRelationSet::IsSubset(*right.set, semantic_join->left_set);
+			if (direct == inverted) {
+				throw InternalException("Could not orient semantic join %llu in reconstructed join tree",
+				                        semantic_join->index);
+			}
+			if (inverted) {
+				std::swap(left, right);
+			}
+			if (!reconstructed_semantic_joins.insert(semantic_join->index).second) {
+				throw InternalException("Semantic join %llu was reconstructed more than once", semantic_join->index);
+			}
+
+			auto join = make_uniq<LogicalComparisonJoin>(semantic_join->join_type);
+			join->children.push_back(std::move(left.op));
+			join->children.push_back(std::move(right.op));
+			join->conditions = std::move(semantic_join->conditions);
+			if (join->conditions.empty()) {
+				throw InternalException("Semantic join %llu has no conditions", semantic_join->index);
+			}
+			for (auto predicate_index : semantic_join->costing_predicate_indices) {
+				auto &filter = filters_and_bindings.at(predicate_index);
+				if (!filter->filter) {
+					throw InternalException("Cost predicate %llu was consumed before semantic join %llu",
+					                        predicate_index, semantic_join->index);
+				}
+				filter->filter.reset();
+			}
+			result_operator = std::move(join);
+		} else if (dp_entry->second->info->predicates.empty()) {
 			// no filters, create a cross product
 			auto cardinality = left.op->estimated_cardinality * right.op->estimated_cardinality;
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
@@ -431,10 +507,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				auto f = &predicate_ref.get().GetFilter();
 				// extract the filter from the operator it originally belonged to
 				auto &filter_and_binding = filters_and_bindings.at(f->filter_index);
-				if (f->non_inner_join && f->non_inner_join->consumed) {
-					D_ASSERT(!filter_and_binding->filter);
-					continue;
-				}
 				D_ASSERT(filter_and_binding->filter);
 				// now create the actual join condition
 				D_ASSERT((JoinRelationSet::IsSubset(*left.set, *f->left_set) &&
@@ -452,20 +524,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					std::swap(left, right);
 					invert_children = false;
 				}
-				if (f->non_inner_join) {
-					for (auto &owned_condition : f->non_inner_join->conditions) {
-						join->conditions.push_back(std::move(owned_condition));
-					}
-					f->non_inner_join->conditions.clear();
-					f->non_inner_join->consumed = true;
-					for (auto &candidate : filters_and_bindings) {
-						if (candidate->non_inner_join == f->non_inner_join) {
-							candidate->filter.reset();
-						}
-					}
-					continue;
-				}
-
 				auto condition = std::move(filter_and_binding->filter);
 				if (BoundComparisonExpression::IsComparison(*condition)) {
 					auto invert = ShouldInvertJoinCondition(set_manager, left, right, *f, invert_children);
@@ -499,6 +557,28 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
 
+	// Collect unused residual predicates that belong to this join. Semantic non-inner joins own their complete
+	// condition directly, so only ordinary (notably INNER) residual predicates reach this path.
+	vector<unique_ptr<Expression>> unused_residual_predicates;
+	for (auto &filter_info : filters_and_bindings) {
+		if (filter_info->from_residual_predicate && filters_and_bindings[filter_info->filter_index]->filter &&
+		    filter_info->set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, filter_info->set)) {
+			unused_residual_predicates.push_back(std::move(filters_and_bindings[filter_info->filter_index]->filter));
+		}
+	}
+	if (!unused_residual_predicates.empty()) {
+		unique_ptr<Expression> combined = std::move(unused_residual_predicates[0]);
+		for (idx_t i = 1; i < unused_residual_predicates.size(); i++) {
+			combined = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(combined),
+			                                                 std::move(unused_residual_predicates[i]));
+		}
+		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			result_operator->Cast<LogicalComparisonJoin>().conditions.emplace_back(std::move(combined));
+		} else {
+			result_operator = PushFilter(std::move(result_operator), std::move(combined));
+		}
+	}
+
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
@@ -506,6 +586,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		// check if the filter has already been extracted
 		auto &info = *filter_info;
 		if (filters_and_bindings[info.filter_index]->filter) {
+			if (info.from_residual_predicate) {
+				continue;
+			}
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
 			if (info.join_type == JoinType::LEFT) {

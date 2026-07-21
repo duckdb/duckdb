@@ -147,6 +147,21 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       DPJoinNode &left, DPJoinNode &right) {
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = possible_connections.back().get();
+	for (auto &connection : possible_connections) {
+		if (!connection.get().semantic_join) {
+			continue;
+		}
+		if (!best_connection->semantic_join ||
+		    connection.get().semantic_join->index < best_connection->semantic_join->index) {
+			best_connection = connection.get();
+		}
+	}
+	if (best_connection->semantic_join) {
+		auto cost = cost_model.ComputeCost(left, right, set, possible_connections);
+		auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
+		result->cardinality = cost_model.GetCardinalityEstimator().EstimateCardinalityWithSet<idx_t>(set);
+		return result;
+	}
 	// cross products are technically still connections, but they have no predicates
 	bool found_non_cross_product_connection = false;
 	for (auto &connection : possible_connections) {

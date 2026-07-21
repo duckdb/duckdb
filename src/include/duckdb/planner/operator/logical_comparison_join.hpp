@@ -54,6 +54,10 @@ public:
 	                                              unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              vector<JoinCondition> conditions);
+	//! Returns whether every comparison condition agrees with the current child binding ownership
+	static bool ConditionsAreCanonical(LogicalComparisonJoin &join);
+	//! Rebuilds an ordinary comparison join if a binding rewrite changed condition ownership
+	static void ReclassifyJoinConditions(ClientContext &context, unique_ptr<LogicalOperator> &plan);
 
 	static void ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
 	                                  unique_ptr<LogicalOperator> &left_child, unique_ptr<LogicalOperator> &right_child,

@@ -563,10 +563,12 @@ static void RemapChangedChildProjectionMap(LogicalOperator &op, idx_t child_inde
 	                                           op.children[child_index]->GetColumnBindings());
 }
 
-static void ApplyBindingReplacements(LogicalOperator &op, idx_t child_index, vector<ColumnBinding> old_child_bindings,
+static void ApplyBindingReplacements(ClientContext &context, unique_ptr<LogicalOperator> &op, idx_t child_index,
+                                     vector<ColumnBinding> old_child_bindings,
                                      const vector<ReplacementBinding> &replacements) {
-	RemapChangedChildProjectionMap(op, child_index, std::move(old_child_bindings), replacements);
+	RemapChangedChildProjectionMap(*op, child_index, std::move(old_child_bindings), replacements);
 	if (replacements.empty()) {
+		LogicalComparisonJoin::ReclassifyJoinConditions(context, op);
 		return;
 	}
 	CorrelatedColumnBindingReplacer replacer;
@@ -574,12 +576,13 @@ static void ApplyBindingReplacements(LogicalOperator &op, idx_t child_index, vec
 		replacer.AddReplacement(replacement.old_binding,
 		                        ResolveBindingReplacement(replacement.old_binding, replacements));
 	}
-	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && child_index == 0) {
-		replacer.stop_operator = *op.children[child_index];
-		replacer.VisitOperator(op);
+	if (op->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && child_index == 0) {
+		replacer.stop_operator = *op->children[child_index];
+		replacer.VisitOperator(*op);
 	} else {
-		replacer.VisitOperatorBindings(op);
+		replacer.VisitOperatorBindings(*op);
 	}
+	LogicalComparisonJoin::ReclassifyJoinConditions(context, op);
 }
 
 static vector<ReplacementBinding>
@@ -607,31 +610,30 @@ vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanOperator(unique_pt
 		return PlanJoinCondition(op_ptr);
 	}
 	auto old_output = op_ptr->GetColumnBindings();
-	auto &op = *op_ptr;
 	vector<ReplacementBinding> operator_replacements;
-	if (!op.children.empty()) {
+	if (!op_ptr->children.empty()) {
 		// Collect all recursive CTEs during recursive descend
-		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
-		    op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-			auto &rec_cte = op.Cast<LogicalCTE>();
-			binder.recursive_ctes[rec_cte.table_index] = &op;
+		if (op_ptr->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
+		    op_ptr->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			auto &rec_cte = op_ptr->Cast<LogicalCTE>();
+			binder.recursive_ctes[rec_cte.table_index] = op_ptr.get();
 		}
-		if (HasJoinConditionExpressions(op.type)) {
-			PlanJoinExpressions(op);
+		if (HasJoinConditionExpressions(op_ptr->type)) {
+			PlanJoinExpressions(*op_ptr);
 		} else {
-			for (idx_t i = 0; i < op.children.size(); i++) {
-				root = std::move(op.children[i]);
+			for (idx_t i = 0; i < op_ptr->children.size(); i++) {
+				root = std::move(op_ptr->children[i]);
 				D_ASSERT(root);
-				VisitOperatorExpressions(op);
-				op.children[i] = std::move(root);
+				VisitOperatorExpressions(*op_ptr);
+				op_ptr->children[i] = std::move(root);
 			}
 		}
 
-		for (idx_t i = 0; i < op.children.size(); i++) {
-			D_ASSERT(op.children[i]);
-			auto old_child_bindings = op.children[i]->GetColumnBindings();
-			auto child_replacements = PlanOperator(op.children[i]);
-			ApplyBindingReplacements(op, i, std::move(old_child_bindings), child_replacements);
+		for (idx_t i = 0; i < op_ptr->children.size(); i++) {
+			D_ASSERT(op_ptr->children[i]);
+			auto old_child_bindings = op_ptr->children[i]->GetColumnBindings();
+			auto child_replacements = PlanOperator(op_ptr->children[i]);
+			ApplyBindingReplacements(binder.context, op_ptr, i, std::move(old_child_bindings), child_replacements);
 			MergeBindingReplacements(operator_replacements, child_replacements);
 		}
 	}
@@ -645,7 +647,8 @@ vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanJoinCondition(uniq
 	for (idx_t child_index = 0; child_index < op_ptr->children.size(); child_index++) {
 		auto old_child_bindings = op_ptr->children[child_index]->GetColumnBindings();
 		auto child_replacements = PlanOperator(op_ptr->children[child_index]);
-		ApplyBindingReplacements(*op_ptr, child_index, std::move(old_child_bindings), child_replacements);
+		ApplyBindingReplacements(binder.context, op_ptr, child_index, std::move(old_child_bindings),
+		                         child_replacements);
 		MergeBindingReplacements(operator_replacements, child_replacements);
 	}
 
@@ -663,23 +666,18 @@ vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanJoinCondition(uniq
 	for (idx_t child_index = 0; child_index < pending.children.size(); child_index++) {
 		auto old_child_bindings = pending.children[child_index]->GetColumnBindings();
 		auto child_replacements = PlanOperator(pending.children[child_index]);
-		ApplyBindingReplacements(pending, child_index, std::move(old_child_bindings), child_replacements);
+		ApplyBindingReplacements(binder.context, op_ptr, child_index, std::move(old_child_bindings),
+		                         child_replacements);
 		MergeBindingReplacements(operator_replacements, child_replacements);
 	}
 
 	auto join_type = pending.join_type;
-	auto mark_index = pending.mark_index;
-	auto left_projection_map = std::move(pending.left_projection_map);
-	auto right_projection_map = std::move(pending.right_projection_map);
 	auto condition = std::move(pending.condition);
 	auto left = std::move(pending.children[0]);
 	auto right = std::move(pending.children[1]);
 	auto finalized = LogicalComparisonJoin::CreateJoin(binder.context, join_type, JoinRefType::REGULAR, std::move(left),
 	                                                   std::move(right), std::move(condition));
-	auto &finalized_join = finalized->Cast<LogicalJoin>();
-	finalized_join.mark_index = mark_index;
-	finalized_join.left_projection_map = std::move(left_projection_map);
-	finalized_join.right_projection_map = std::move(right_projection_map);
+	LogicalJoin::MoveJoinProperties(pending, finalized->Cast<LogicalJoin>());
 	op_ptr = std::move(finalized);
 	return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 }

@@ -31,7 +31,8 @@ void LogicalOperatorVisitor::VisitOperatorWithProjectionMapChildren(LogicalOpera
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
 		auto &join = op.Cast<LogicalJoin>();
 		VisitChildOfOperatorWithProjectionMap(op.children[0], join.left_projection_map);
 		VisitChildOfOperatorWithProjectionMap(op.children[1], join.right_projection_map);
@@ -60,7 +61,8 @@ optional_ptr<vector<ProjectionIndex>> LogicalOperatorVisitor::GetProjectionMap(L
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
 		auto &join = op.Cast<LogicalJoin>();
 		return child_index == 0 ? optional_ptr<vector<ProjectionIndex>>(join.left_projection_map)
 		                        : optional_ptr<vector<ProjectionIndex>>(join.right_projection_map);

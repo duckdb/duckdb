@@ -8,7 +8,8 @@ namespace duckdb {
 
 using QueryEdge = QueryGraphEdges::QueryEdge;
 
-NeighborInfo::NeighborInfo(optional_ptr<JoinRelationSet> neighbor) : neighbor(neighbor) {
+NeighborInfo::NeighborInfo(optional_ptr<JoinRelationSet> neighbor, optional_ptr<SemanticJoinEdge> semantic_join)
+    : neighbor(neighbor), semantic_join(semantic_join) {
 }
 
 // LCOV_EXCL_START
@@ -56,13 +57,14 @@ optional_ptr<QueryEdge> QueryGraphEdges::GetQueryEdge(JoinRelationSet &left) {
 	return info;
 }
 
-void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<JoinPredicate> predicate) {
+void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<JoinPredicate> predicate,
+                                 optional_ptr<SemanticJoinEdge> semantic_join) {
 	D_ASSERT(left.count > 0 && right.count > 0);
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
 	for (idx_t i = 0; i < info->neighbors.size(); i++) {
-		if (info->neighbors[i]->neighbor == &right) {
+		if (info->neighbors[i]->neighbor == &right && info->neighbors[i]->semantic_join == semantic_join) {
 			if (predicate) {
 				// neighbor already exists, just add the predicate if we have one
 				info->neighbors[i]->predicates.push_back(*predicate);
@@ -71,7 +73,7 @@ void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, 
 		}
 	}
 	// neighbor does not exist, create it
-	auto n = make_uniq<NeighborInfo>(&right);
+	auto n = make_uniq<NeighborInfo>(&right, semantic_join);
 	// if the edge represents a cross product, predicate is null. The easiest way then to determine
 	// if an edge is for a cross product is if the predicates are empty
 	if (info && predicate) {

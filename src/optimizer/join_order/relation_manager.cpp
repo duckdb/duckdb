@@ -12,6 +12,7 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/optimizer/join_order/semantic_join_edge.hpp"
 
 namespace duckdb {
 
@@ -673,17 +674,17 @@ bool RelationManager::ExtractBindings(const Expression &expression, unordered_se
 
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
                                                              vector<reference<LogicalOperator>> &filter_operators,
-                                                             JoinRelationSetManager &set_manager) {
+                                                             JoinRelationSetManager &set_manager,
+                                                             vector<unique_ptr<SemanticJoinEdge>> &semantic_joins) {
 	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
 	// filters in the process
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
 	expression_set_t filter_set;
-	auto create_condition_owner = [&](LogicalComparisonJoin &join,
-	                                  const column_binding_set_t &semantic_right_bindings) {
-		auto result = make_shared_ptr<NonInnerJoinCondition>();
+	auto normalize_conditions = [&](LogicalComparisonJoin &join, const column_binding_set_t &semantic_right_bindings) {
+		vector<JoinCondition> result;
 		for (auto &condition : join.conditions) {
 			if (!condition.IsComparison()) {
-				result->conditions.push_back(condition.Copy());
+				result.push_back(condition.Copy());
 				continue;
 			}
 			column_binding_set_t left_bindings;
@@ -693,16 +694,38 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			auto left_is_nullable = BindingsAreSubset(left_bindings, semantic_right_bindings);
 			auto right_is_nullable = BindingsAreSubset(right_bindings, semantic_right_bindings);
 			if (left_is_nullable == right_is_nullable) {
-				result->conditions.emplace_back(JoinCondition::CreateExpression(condition.Copy()));
+				result.emplace_back(JoinCondition::CreateExpression(condition.Copy()));
 				continue;
 			}
 			auto copy = condition.Copy();
 			if (left_is_nullable) {
 				copy.Swap();
 			}
-			result->conditions.push_back(std::move(copy));
+			result.push_back(std::move(copy));
 		}
 		return result;
+	};
+	auto get_semantic_sets = [&](const vector<JoinCondition> &conditions,
+	                             const column_binding_set_t &semantic_right_bindings) {
+		column_binding_set_t left_bindings;
+		column_binding_set_t right_bindings;
+		for (auto &condition : conditions) {
+			column_binding_set_t condition_bindings;
+			if (condition.IsComparison()) {
+				GetColumnBindingsFromExpression(condition.GetLHS(), condition_bindings);
+				GetColumnBindingsFromExpression(condition.GetRHS(), condition_bindings);
+			} else {
+				GetColumnBindingsFromExpression(condition.GetJoinExpression(), condition_bindings);
+			}
+			for (auto &binding : condition_bindings) {
+				if (semantic_right_bindings.count(binding)) {
+					right_bindings.insert(binding);
+				} else {
+					left_bindings.insert(binding);
+				}
+			}
+		}
+		return make_pair(GetJoinRelations(left_bindings, set_manager), GetJoinRelations(right_bindings, set_manager));
 	};
 	for (auto &filter_op : filter_operators) {
 		auto &f_op = filter_op.get();
@@ -715,7 +738,14 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			case JoinType::ANTI: {
 				column_binding_set_t semantic_right_bindings;
 				GetColumnBindingsFromOperator(*join.children[1], semantic_right_bindings);
-				auto condition_owner = create_condition_owner(join, semantic_right_bindings);
+				auto conditions = normalize_conditions(join, semantic_right_bindings);
+				auto semantic_sets = get_semantic_sets(conditions, semantic_right_bindings);
+				auto left_set = semantic_sets.first;
+				auto right_set = semantic_sets.second;
+				D_ASSERT(left_set && left_set->count > 0);
+				D_ASSERT(right_set && right_set->count == 1);
+				auto semantic_edge = make_uniq<SemanticJoinEdge>(semantic_joins.size(), join.join_type, *left_set,
+				                                                 *right_set, std::move(conditions));
 				auto conjunction_expression = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 				// create a conjunction expression for the semi/anti join.
 				// It's possible multiple LHS relations have a condition in
@@ -726,8 +756,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// if we make a conjunction expression and populate the left set and right set with all
 				// the relations from the conditions in the conjunction expression, we can prevent invalid reordering.
 
-				// Only split comparisons participate in costing. The shared owner retains the complete condition.
-				for (auto &cond : condition_owner->conditions) {
+				// Only comparison copies participate in costing. The semantic edge owns the complete condition.
+				for (auto &cond : semantic_edge->conditions) {
 					if (cond.IsComparison()) {
 						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
 						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
@@ -736,66 +766,19 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				}
 
 				if (!conjunction_expression->GetChildrenMutable().empty()) {
-					// create the filter info so all required LHS relations are present when reconstructing the join
-					optional_ptr<JoinRelationSet> left_set;
-					optional_ptr<JoinRelationSet> right_set;
-					for (auto &bound_expr : conjunction_expression->GetChildrenMutable()) {
-						unordered_set<RelationIndex> right_bindings, left_bindings;
-						auto &comp = bound_expr->Cast<BoundFunctionExpression>();
-						auto &left = BoundComparisonExpression::Left(comp);
-						auto &right = BoundComparisonExpression::Right(comp);
-						ExtractBindings(right, right_bindings);
-						ExtractBindings(left, left_bindings);
-
-						if (!left_set) {
-							left_set = set_manager.GetJoinRelation(left_bindings);
-						} else {
-							left_set = set_manager.Union(set_manager.GetJoinRelation(left_bindings), *left_set);
-						}
-						if (!right_set) {
-							right_set = set_manager.GetJoinRelation(right_bindings);
-						} else {
-							right_set = set_manager.Union(set_manager.GetJoinRelation(right_bindings), *right_set);
-						}
-					}
-					column_binding_set_t condition_bindings;
-					for (auto &condition : condition_owner->conditions) {
-						if (condition.IsComparison()) {
-							GetColumnBindingsFromExpression(condition.GetLHS(), condition_bindings);
-							GetColumnBindingsFromExpression(condition.GetRHS(), condition_bindings);
-						} else {
-							GetColumnBindingsFromExpression(condition.GetJoinExpression(), condition_bindings);
-						}
-					}
-					column_binding_set_t condition_left_bindings;
-					column_binding_set_t condition_right_bindings;
-					for (auto &binding : condition_bindings) {
-						if (semantic_right_bindings.count(binding)) {
-							condition_right_bindings.insert(binding);
-						} else {
-							condition_left_bindings.insert(binding);
-						}
-					}
-					if (!condition_left_bindings.empty()) {
-						left_set =
-						    set_manager.Union(*left_set, *GetJoinRelations(condition_left_bindings, set_manager));
-					}
-					if (!condition_right_bindings.empty()) {
-						right_set =
-						    set_manager.Union(*right_set, *GetJoinRelations(condition_right_bindings, set_manager));
-					}
 					auto &full_set = set_manager.Union(*left_set, *right_set);
-					D_ASSERT(left_set && left_set->count > 0);
-					D_ASSERT(right_set && right_set->count == 1);
 					D_ASSERT(full_set.count > 0);
 
-					auto filter_info = make_uniq<FilterInfo>(std::move(conjunction_expression), full_set,
-					                                         filters_and_bindings.size(), join.join_type);
+					auto filter_index = filters_and_bindings.size();
+					auto filter_info = make_uniq<FilterInfo>(std::move(conjunction_expression), full_set, filter_index,
+					                                         join.join_type);
 					filter_info->SetLeftSet(left_set);
 					filter_info->SetRightSet(right_set);
-					filter_info->non_inner_join = std::move(condition_owner);
 					filters_and_bindings.push_back(std::move(filter_info));
+					semantic_edge->costing_predicate_indices.push_back(filter_index);
 				}
+				D_ASSERT(!semantic_edge->costing_predicate_indices.empty());
+				semantic_joins.push_back(std::move(semantic_edge));
 				break;
 			}
 			case JoinType::LEFT: {
@@ -811,62 +794,32 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// is the nullable RHS side, without expanding left_set to every relation in the actual left child.
 				column_binding_set_t semantic_right_bindings;
 				GetColumnBindingsFromOperator(*join.children[1], semantic_right_bindings);
-				auto condition_owner = create_condition_owner(join, semantic_right_bindings);
+				auto conditions = normalize_conditions(join, semantic_right_bindings);
+				auto semantic_sets = get_semantic_sets(conditions, semantic_right_bindings);
+				auto full_left_set = semantic_sets.first;
+				auto full_right_set = semantic_sets.second;
+				D_ASSERT(full_left_set && full_left_set->count > 0);
+				D_ASSERT(full_right_set && full_right_set->count == 1);
+				auto semantic_edge = make_uniq<SemanticJoinEdge>(semantic_joins.size(), join.join_type, *full_left_set,
+				                                                 *full_right_set, std::move(conditions));
 
-				column_binding_set_t full_left_bindings, full_right_bindings;
-				for (auto &cond : condition_owner->conditions) {
-					column_binding_set_t condition_bindings;
-					if (cond.IsComparison()) {
-						GetColumnBindingsFromExpression(cond.GetLHS(), condition_bindings);
-						GetColumnBindingsFromExpression(cond.GetRHS(), condition_bindings);
-					} else {
-						GetColumnBindingsFromExpression(cond.GetJoinExpression(), condition_bindings);
-					}
-					for (auto &binding : condition_bindings) {
-						if (semantic_right_bindings.count(binding)) {
-							full_right_bindings.insert(binding);
-						} else {
-							full_left_bindings.insert(binding);
-						}
-					}
-				}
-
-				if (!full_left_bindings.empty() || !full_right_bindings.empty()) {
-					auto full_left_set = GetJoinRelations(full_left_bindings, set_manager);
-					auto full_right_set = GetJoinRelations(full_right_bindings, set_manager);
+				if (!full_left_set->Empty() || !full_right_set->Empty()) {
 					auto &full_set = set_manager.Union(*full_left_set, *full_right_set);
 
-					for (auto &cond : condition_owner->conditions) {
+					for (auto &cond : semantic_edge->conditions) {
 						if (!cond.IsComparison()) {
 							continue;
 						}
-						column_binding_set_t cond_left_bindings, cond_right_bindings;
-						GetColumnBindingsFromExpression(cond.GetLHS(), cond_left_bindings);
-						GetColumnBindingsFromExpression(cond.GetRHS(), cond_right_bindings);
+						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
+						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
 
-						auto comparison_type = cond.GetComparisonType();
-						bool lhs_is_nullable = BindingsAreSubset(cond_left_bindings, semantic_right_bindings);
-						bool rhs_is_nullable = BindingsAreSubset(cond_right_bindings, semantic_right_bindings);
-						unique_ptr<Expression> left_expr;
-						unique_ptr<Expression> right_expr;
-						if (lhs_is_nullable && !rhs_is_nullable) {
-							left_expr = cond.GetRHS().Copy();
-							right_expr = cond.GetLHS().Copy();
-							comparison_type = FlipComparisonExpression(comparison_type);
-						} else {
-							left_expr = cond.GetLHS().Copy();
-							right_expr = cond.GetRHS().Copy();
-						}
-
-						auto comparison = BoundComparisonExpression::Create(comparison_type, std::move(left_expr),
-						                                                    std::move(right_expr));
-
-						auto filter_info = make_uniq<FilterInfo>(std::move(comparison), full_set,
-						                                         filters_and_bindings.size(), join.join_type);
+						auto filter_index = filters_and_bindings.size();
+						auto filter_info =
+						    make_uniq<FilterInfo>(std::move(comparison), full_set, filter_index, join.join_type);
 						filter_info->SetLeftSet(full_left_set);
 						filter_info->SetRightSet(full_right_set);
-						filter_info->non_inner_join = condition_owner;
 						filters_and_bindings.push_back(std::move(filter_info));
+						semantic_edge->costing_predicate_indices.push_back(filter_index);
 					}
 
 					// Filters above a LEFT join that reference nullable-side bindings must be evaluated
@@ -880,18 +833,22 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						PinFilterAfterLeftJoin(*filter, *full_right_set, full_set, set_manager);
 					}
 				}
+				D_ASSERT(!semantic_edge->costing_predicate_indices.empty());
+				semantic_joins.push_back(std::move(semantic_edge));
 				break;
 			}
 			default: {
 				// can extract every inner join condition individually.
 				for (auto &cond : join.conditions) {
 					unique_ptr<Expression> expr;
+					bool is_residual = false;
 
 					if (cond.IsComparison()) {
 						auto comp_type = cond.GetComparisonType();
 						expr = BoundComparisonExpression::Create(comp_type, cond.GetLHS().Copy(), cond.GetRHS().Copy());
 					} else {
 						expr = cond.GetJoinExpression().Copy();
+						is_residual = true;
 					}
 
 					if (filter_set.find(*expr) == filter_set.end()) {
@@ -901,6 +858,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						auto &set = set_manager.GetJoinRelation(bindings);
 						auto filter_info =
 						    make_uniq<FilterInfo>(std::move(expr), set, filters_and_bindings.size(), join.join_type);
+						filter_info->from_residual_predicate = is_residual;
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 				}

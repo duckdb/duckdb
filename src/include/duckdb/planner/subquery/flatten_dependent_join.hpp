@@ -87,6 +87,7 @@ private:
 	static void AddBindingReplacement(UnnestingState &state, ColumnBinding old_binding, ColumnBinding new_binding);
 	static void MergeBindingReplacements(UnnestingState &target, const UnnestingState &source);
 	static void RewriteOperatorBindings(LogicalOperator &op, const UnnestingState &state);
+	void RewriteOperatorBindings(unique_ptr<LogicalOperator> &op, const UnnestingState &state);
 	static void RewriteChildProjectionMap(LogicalOperator &op, idx_t child_index,
 	                                      vector<ColumnBinding> projected_bindings, const UnnestingState &state);
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
@@ -108,7 +109,7 @@ private:
 	                             vector<ColumnBinding> state, bool rewrite_parent = true, idx_t child_idx = 0);
 	UnnestingState FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan, UnnestingState outer_state,
 	                                     const UnnestingState &right_state, DependentJoinOutput output);
-	UnnestingState AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &left, LogicalJoin &join);
+	UnnestingState AttachDelimToIndependentJoinLeft(unique_ptr<LogicalOperator> &plan);
 	UnnestingState PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                             vector<ColumnBinding> state, bool correlated_left);
 	UnnestingState PushDownProjection(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,

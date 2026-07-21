@@ -38,10 +38,11 @@ private:
 	static bool TryRewritePairDependentJoinCondition(Binder &binder, unique_ptr<LogicalOperator> &op,
 	                                                 vector<ReplacementBinding> &replacements);
 	static bool CanRewritePairDependentJoinCondition(LogicalOperator &op);
-	static unique_ptr<LogicalOperator>
-	PlanPairDependentLateralJoin(Binder &binder, unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-	                             unique_ptr<Expression> condition, const unordered_set<TableIndex> &left_bindings,
-	                             const unordered_set<TableIndex> &right_bindings, JoinType join_type);
+	static unique_ptr<LogicalOperator> PlanPairDependentLateralJoin(Binder &binder, unique_ptr<LogicalOperator> left,
+	                                                                unique_ptr<LogicalOperator> right,
+	                                                                unique_ptr<Expression> condition,
+	                                                                const unordered_set<TableIndex> &left_bindings,
+	                                                                JoinType join_type);
 	vector<ReplacementBinding> PlanOperator(unique_ptr<LogicalOperator> &op);
 	vector<ReplacementBinding> PlanJoinCondition(unique_ptr<LogicalOperator> &op);
 	void PlanJoinChildFilters(LogicalOperator &op);

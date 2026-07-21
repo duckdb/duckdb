@@ -22,6 +22,7 @@ namespace duckdb {
 
 class JoinOrderOptimizer;
 class FilterInfo;
+struct SemanticJoinEdge;
 
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {
@@ -50,7 +51,8 @@ public:
 	//! both sides of the join filter, along with the tables & indexes.
 	vector<unique_ptr<FilterInfo>> ExtractEdges(LogicalOperator &op,
 	                                            vector<reference<LogicalOperator>> &filter_operators,
-	                                            JoinRelationSetManager &set_manager);
+	                                            JoinRelationSetManager &set_manager,
+	                                            vector<unique_ptr<SemanticJoinEdge>> &semantic_joins);
 
 	//! Extract the set of relations referred to inside an expression
 	bool ExtractBindings(const Expression &expression, unordered_set<RelationIndex> &bindings);
