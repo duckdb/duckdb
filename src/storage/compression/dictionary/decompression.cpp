@@ -7,6 +7,20 @@ namespace duckdb {
 void CompressedStringScanState::ValidateDictionaryIndex(sel_t index) {
 	if (index >= index_buffer_count) {
 		throw IOException("Failed to scan dictionary string - dictionary index was out of range. Database file appears "
+						  "to be corrupted.");
+	}
+}
+
+void CompressedStringScanState::ValidateDictionary(const SelectionVector &sel, const idx_t scan_count) const {
+
+	size_t error_count = 0;
+	for (idx_t i = 0; i < scan_count; i++) {
+		const idx_t sel_idx = sel.get_index(i);
+		error_count += sel_idx >= index_buffer_count;
+	}
+
+	if (error_count > 0) {
+		throw IOException("Failed to scan dictionary string - dictionary index was out of range. Database file appears "
 		                  "to be corrupted.");
 	}
 }
@@ -172,10 +186,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, decompress_count, current_width);
 
 	sel_vec->ShiftLeft(start_offset, scan_count);
-
-	for (idx_t i = 0; i < scan_count; i++) {
-		ValidateDictionaryIndex(sel_vec->get_index(i));
-	}
+	ValidateDictionary(*sel_vec, scan_count);
 
 	result.Dictionary(dictionary, *sel_vec, scan_count);
 }
