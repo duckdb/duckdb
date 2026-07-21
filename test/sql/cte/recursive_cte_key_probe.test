@@ -407,6 +407,42 @@ SELECT * FROM t;
 1	1	2
 1	2	2
 
+# Partial-index row addresses remain valid when later epochs grow the aggregate hash table.
+query IIII
+WITH RECURSIVE
+fast(bucket, item, level) USING KEY (bucket, item) AS (
+	VALUES (0::BIGINT, 0::BIGINT, 0)
+	UNION ALL
+	SELECT frontier.bucket + 1,
+	       CASE WHEN frontier.level = 0 THEN generated.i ELSE state.item END,
+	       frontier.level + 1
+	FROM fast frontier
+	JOIN recurring.fast state ON state.bucket = frontier.bucket
+	CROSS JOIN LATERAL range(CASE WHEN frontier.level = 0 THEN 10000 ELSE 1 END) generated(i)
+	WHERE frontier.level < 2 AND frontier.item = 0
+),
+fallback(bucket, item, level) USING KEY (bucket, item) AS (
+	VALUES (0::BIGINT, 0::BIGINT, 0)
+	UNION ALL
+	SELECT frontier.bucket + 1,
+	       CASE WHEN frontier.level = 0 THEN generated.i ELSE state.item END,
+	       frontier.level + 1
+	FROM fallback frontier
+	JOIN recurring.fallback state ON state.bucket::HUGEINT = frontier.bucket::HUGEINT
+	CROSS JOIN LATERAL range(CASE WHEN frontier.level = 0 THEN 10000 ELSE 1 END) generated(i)
+	WHERE frontier.level < 2 AND frontier.item = 0
+)
+SELECT (SELECT count(*) FROM fast),
+       (SELECT max(level) FROM fast),
+       (SELECT sum(item) FROM fast),
+       (SELECT count(*) FROM (
+	       (SELECT * FROM fast EXCEPT ALL SELECT * FROM fallback)
+	       UNION ALL
+	       (SELECT * FROM fallback EXCEPT ALL SELECT * FROM fast)
+       ));
+----
+20001	2	99990000	0
+
 # Caching-operator reuse is not required by the partial probe state.
 statement ok
 SET enable_caching_operators=false;

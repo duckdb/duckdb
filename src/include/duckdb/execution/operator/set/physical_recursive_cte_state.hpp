@@ -73,7 +73,6 @@ public:
 	~RecursiveCTEState() override;
 
 	void InitializeIntermediateAppend();
-	void ResetRecurringTable();
 	ColumnDataCollection &CurrentOutputTable();
 	ColumnDataCollection &CurrentInputTable();
 	const ColumnDataCollection &CurrentInputTable() const;

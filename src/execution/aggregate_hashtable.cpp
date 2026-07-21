@@ -969,16 +969,21 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &a
 }
 
 void GroupedAggregateHashTable::InitializeLookupState(AggregateHTLookupState &lookup_state) const {
-	if (!lookup_state.initialized) {
-		lookup_state.group_chunk.InitializeEmpty(layout_ptr->GetTypes());
-		TupleDataCollection::InitializeChunkState(lookup_state.chunk_state, layout_ptr->GetTypes());
-		lookup_state.row_matcher.Initialize(true, *layout_ptr, predicates);
-		for (idx_t group_idx = 0; group_idx + 1 < layout_ptr->ColumnCount(); group_idx++) {
-			lookup_state.gather_functions.push_back(
-			    TupleDataCollection::GetGatherFunction(layout_ptr->GetTypes()[group_idx]));
+	if (lookup_state.initialized) {
+		if (lookup_state.owner.get() != this) {
+			throw InternalException("Aggregate hash-table lookup state cannot be reused across hash tables");
 		}
-		lookup_state.initialized = true;
+		return;
 	}
+	lookup_state.group_chunk.InitializeEmpty(layout_ptr->GetTypes());
+	TupleDataCollection::InitializeChunkState(lookup_state.chunk_state, layout_ptr->GetTypes());
+	lookup_state.row_matcher.Initialize(true, *layout_ptr, predicates);
+	for (idx_t group_idx = 0; group_idx + 1 < layout_ptr->ColumnCount(); group_idx++) {
+		lookup_state.gather_functions.push_back(
+		    TupleDataCollection::GetGatherFunction(layout_ptr->GetTypes()[group_idx]));
+	}
+	lookup_state.owner = this;
+	lookup_state.initialized = true;
 }
 
 idx_t GroupedAggregateHashTable::LookupGroups(DataChunk &groups, AggregateHTLookupState &lookup_state,
