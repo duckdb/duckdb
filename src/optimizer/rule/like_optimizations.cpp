@@ -148,7 +148,9 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	auto &patt_str = StringValue::Get(constant_value);
 
 	bool is_not_like = root.Function().GetName() == "!~~" || root.Function().GetName() == "!~~~";
-	PatternMatchType match_type = (root.Function().GetName() == "~~~" || root.Function().GetName() == "!~~~") ? PatternMatchType::GLOB : PatternMatchType::LIKE;
+	PatternMatchType match_type = (root.Function().GetName() == "~~~" || root.Function().GetName() == "!~~~")
+	                                  ? PatternMatchType::GLOB
+	                                  : PatternMatchType::LIKE;
 	if (PatternIsConstant(patt_str, match_type)) {
 		// Pattern is constant
 		return BoundComparisonExpression::Create(
@@ -168,7 +170,8 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 }
 
 unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function,
-                                                       string pattern, bool is_not_like, PatternMatchType match_type) const {
+                                                       string pattern, bool is_not_like,
+                                                       PatternMatchType match_type) const {
 	// replace LIKE by an optimized function
 	auto result = function.Bind(GetContext(), std::move(expr.GetChildrenMutable()));
 
