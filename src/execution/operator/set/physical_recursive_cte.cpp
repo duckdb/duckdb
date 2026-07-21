@@ -200,19 +200,6 @@ void RecursiveCTEState::RecordSinkMetrics(idx_t wait_ns, idx_t work_ns, idx_t ro
 	cumulative_sink_calls.fetch_add(1);
 }
 
-void RecursiveCTEState::LogThreadLimitChanged(idx_t previous_limit, idx_t new_limit, idx_t elapsed_us, idx_t work_units,
-                                              idx_t frontier_rows) {
-	if (!collect_runtime_metrics) {
-		return;
-	}
-	DUCKDB_LOG(runtime_logger, PhysicalOperatorLogType, op, "PhysicalRecursiveCTE", "ThreadLimitChanged",
-	           {{"previous_limit", to_string(previous_limit)},
-	            {"new_limit", to_string(new_limit)},
-	            {"elapsed_us", to_string(elapsed_us)},
-	            {"work_units", to_string(work_units)},
-	            {"frontier_rows", to_string(frontier_rows)}});
-}
-
 void RecursiveCTEState::InitializeIntermediateAppend() {
 	intermediate_table.InitializeAppend(intermediate_append_state);
 }
@@ -664,6 +651,26 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 	auto &gstate = input.global_state.Cast<RecursiveCTEState>();
 
 	if (!using_key && union_all) {
+		if (!gstate.use_local_union_all_output) {
+			const auto before_lock = gstate.collect_runtime_metrics ? std::chrono::steady_clock::now()
+			                                                        : std::chrono::steady_clock::time_point();
+			{
+				lock_guard<mutex> guard(gstate.intermediate_table_lock);
+				const auto after_lock = gstate.collect_runtime_metrics ? std::chrono::steady_clock::now()
+				                                                       : std::chrono::steady_clock::time_point();
+				gstate.CurrentOutputTable().Append(gstate.CurrentOutputAppendState(), chunk);
+				if (gstate.collect_runtime_metrics) {
+					const auto after_work = std::chrono::steady_clock::now();
+					gstate.RecordSinkMetrics(
+					    NumericCast<idx_t>(
+					        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
+					    NumericCast<idx_t>(
+					        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
+					    chunk.size());
+				}
+			}
+			return SinkResultType::NEED_MORE_INPUT;
+		}
 		auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
 		D_ASSERT(lstate.output);
 		lstate.output->Append(lstate.append_state, chunk);
@@ -711,6 +718,9 @@ void PhysicalRecursiveCTE::PrepareFinalize(ClientContext &context, GlobalSinkSta
 SinkCombineResultType PhysicalRecursiveCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	if (!using_key) {
 		auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+		if (union_all && !gstate.use_local_union_all_output) {
+			return SinkCombineResultType::FINISHED;
+		}
 		auto &lstate = input.local_state.Cast<RecursiveCTELocalState>();
 		D_ASSERT(lstate.output);
 		const auto before_lock =
