@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Opt the shell into the Windows Segment Heap. The default (legacy) NT heap
+     serializes multi-threaded allocation; on parallel workloads dominated by
+     materialization this makes the CLI ~2x slower (see duckdb/duckdb#24027).
+     Ignored by Windows versions without Segment Heap support (pre-10 2004). -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <heapType xmlns="http://schemas.microsoft.com/SMI/2020/WindowsSettings">SegmentHeap</heapType>
+    </windowsSettings>
+  </application>
+</assembly>
