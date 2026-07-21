@@ -16,9 +16,8 @@ namespace duckdb {
 //
 // Lists the external resources this instance knows about. `discover := false` (the default) returns just
 // the locally registered resources (managed = true) and stays local. `discover := true` also calls each
-// resource type's `list`
-// callback to discover resources that exist externally, unioning in the ones not locally registered
-// (managed = false) — the reconciliation view that feeds REGISTER.
+// resource type's `list` callback to discover resources that exist externally, unioning in the ones not
+// locally registered (managed = false) — the reconciliation view that feeds REGISTER.
 //===--------------------------------------------------------------------===//
 
 struct ExternalResourceRow {
@@ -33,7 +32,7 @@ struct ExternalResourceRow {
 };
 
 struct ExternalResourcesBindData : public TableFunctionData {
-	bool all = false;
+	bool discover = false;
 };
 
 struct ExternalResourcesGlobalState : public GlobalTableFunctionState {
@@ -48,7 +47,7 @@ static unique_ptr<FunctionData> ExternalResourcesBind(ClientContext &context, Ta
 	auto result = make_uniq<ExternalResourcesBindData>();
 	for (auto &np : input.named_parameters) {
 		if (StringUtil::Lower(np.first.GetIdentifierName()) == "discover" && !np.second.IsNull()) {
-			result->all = BooleanValue::Get(np.second);
+			result->discover = BooleanValue::Get(np.second);
 		}
 	}
 
@@ -77,7 +76,8 @@ static string HandleKey(const Value &handle) {
 }
 
 //! Call a type's `list` callback and append the resources it discovers that are not already locally
-//! managed (keyed by handle). Best-effort: a type whose list fails is skipped, not fatal.
+//! managed (keyed by handle). A misconfigured type is a hard error: a callback that fails or returns the
+//! wrong schema must surface, not be silently dropped as "nothing exists externally".
 static void DiscoverExternalResources(ClientContext &context, const ExternalResourceType &type,
                                       const set<string> &managed_handles, vector<ExternalResourceRow> &rows) {
 	// Separate internal connection (the current connection's context lock is held here), resolving the
@@ -86,14 +86,17 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 	if (!type.search_path.empty()) {
 		auto set_res = con.Query("SET search_path = " + Value(type.search_path).ToSQLString());
 		if (set_res->HasError()) {
-			return;
+			throw InvalidInputException("external resource discovery for type \"%s\": failed to set the type's "
+			                            "registration search path: %s",
+			                            type.name, set_res->GetError());
 		}
 	}
 	auto sql =
 	    "SELECT * FROM " + QualifiedName::Parse(type.list_function).ToString() + "(MAP {}::MAP(VARCHAR, VARCHAR))";
 	auto res = con.Query(sql);
 	if (res->HasError()) {
-		return;
+		throw InvalidInputException("external resource discovery for type \"%s\": the list callback \"%s\" failed: %s",
+		                            type.name, type.list_function, res->GetError());
 	}
 	// Resolve the columns we consume by name; only `handle` is required.
 	idx_t handle_idx = DConstants::INVALID_INDEX, reference_idx = DConstants::INVALID_INDEX,
@@ -109,10 +112,14 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 		}
 	}
 	if (handle_idx == DConstants::INVALID_INDEX) {
-		return;
+		throw InvalidInputException(
+		    "external resource discovery for type \"%s\": the list callback \"%s\" did not return a \"handle\" column",
+		    type.name, type.list_function);
 	}
 	for (idx_t r = 0; r < res->RowCount(); r++) {
-		auto handle = res->GetValue(handle_idx, r);
+		// The handle is a MAP (opaque to us), the same contract create/status enforce - reject anything else
+		// with a clear message rather than a cast failure deep in the output append.
+		auto handle = RequireResourceMap(res->GetValue(handle_idx, r), type.list_function, "handle");
 		if (managed_handles.count(HandleKey(handle)) > 0) {
 			continue; // already shown as a locally managed resource
 		}
@@ -153,7 +160,7 @@ static unique_ptr<GlobalTableFunctionState> ExternalResourcesInit(ClientContext 
 
 	// Discovery union: for each type with a `list` callback, add the externally-existing resources that
 	// are not locally managed.
-	if (bind_data.all) {
+	if (bind_data.discover) {
 		for (auto &type : ExternalResourceTypeRegistry::Get(context).List()) {
 			if (type.list_function.empty()) {
 				continue;

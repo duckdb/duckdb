@@ -1,0 +1,63 @@
+# name: test/sql/table_function/external_resource_discovery.test
+# description: duckdb_external_resources(discover := true) — union in resources reported by a type's list callback
+# group: [table_function]
+
+# A list callback enumerates the resources of a type that exist externally, one row per resource. `handle`
+# (a MAP(VARCHAR,VARCHAR)) is required; `reference` and `state` are picked up by name when present. It takes
+# the options map discovery passes it (empty here) and ignores it.
+statement ok
+CREATE MACRO mock_list(opts) AS TABLE
+    SELECT * FROM (VALUES
+        (MAP {'id': 'd1'}, 'ext-1', 'running'),
+        (MAP {'id': 'd2'}, 'ext-2', 'stopped')
+    ) t(handle, reference, state);
+
+statement ok
+CALL register_external_resource_type('mock@disc', kind := 'catalog', create_function := 'noop_create', list_function := 'mock_list');
+
+# The list callback is surfaced in the type registry.
+query T
+SELECT list_function FROM duckdb_external_resource_types() WHERE name = 'mock@disc';
+----
+mock_list
+
+# discover defaults to false: stays local, shows only the (currently empty) set of registered resources.
+query I
+SELECT count(*) FROM duckdb_external_resources();
+----
+0
+
+# discover := true unions in the list callback's rows as unmanaged (managed = false, name NULL), carrying
+# their state/reference through.
+query TTTTT
+SELECT name, type, managed, state, reference FROM duckdb_external_resources(discover := true) ORDER BY reference;
+----
+NULL	mock@disc	false	running	ext-1
+NULL	mock@disc	false	stopped	ext-2
+
+# Register one of the discovered resources locally (same handle).
+statement ok
+CALL register_external_resource('mock@disc', 'local_d1', MAP {'id': 'd1'});
+
+# Without discovery, only the locally registered one shows.
+query TTT
+SELECT name, type, managed FROM duckdb_external_resources();
+----
+local_d1	mock@disc	true
+
+# With discovery, the locally registered handle is shown once (as managed) and the discovered duplicate is
+# suppressed — dedup is by handle. state/reference are empty (NULL) for the managed row.
+query TTTTT
+SELECT name, type, managed, state, reference FROM duckdb_external_resources(discover := true) ORDER BY managed DESC;
+----
+local_d1	mock@disc	true	NULL	NULL
+NULL	mock@disc	false	stopped	ext-2
+
+# A type without a list callback contributes nothing to discovery (no error).
+statement ok
+CALL register_external_resource_type('nolist@disc', kind := 'catalog', create_function := 'noop_create');
+
+query I
+SELECT count(*) FROM duckdb_external_resources(discover := true);
+----
+2

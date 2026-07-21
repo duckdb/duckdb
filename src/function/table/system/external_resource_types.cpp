@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> RegisterExternalResourceTypeBind(ClientContext &
 			type.destroy_function = value;
 		} else if (key == "resolve_function") {
 			type.resolve_function = value;
-		} else if (key == "list") {
+		} else if (key == "list_function") {
 			type.list_function = value;
 		}
 	}
@@ -159,7 +159,7 @@ void RegisterExternalResourceTypeFun::RegisterFunction(BuiltinFunctions &set) {
 	fn.named_parameters["status_function"] = LogicalType::VARCHAR;
 	fn.named_parameters["destroy_function"] = LogicalType::VARCHAR;
 	fn.named_parameters["resolve_function"] = LogicalType::VARCHAR;
-	fn.named_parameters["list"] = LogicalType::VARCHAR;
+	fn.named_parameters["list_function"] = LogicalType::VARCHAR;
 	set.AddFunction(fn);
 }
 
