@@ -203,6 +203,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
@@ -1803,6 +1804,24 @@ const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value) {
 template<>
 DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value) {
 	return static_cast<DependencyEntryType>(StringUtil::StringToEnum(GetDependencyEntryTypeValues(), 2, "DependencyEntryType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDependentJoinTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DependentJoinType::DUPLICATE_ELIMINATION), "DUPLICATE_ELIMINATION" },
+		{ static_cast<uint32_t>(DependentJoinType::JOIN_CONDITION), "JOIN_CONDITION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DependentJoinType>(DependentJoinType value) {
+	return StringUtil::EnumToString(GetDependentJoinTypeValues(), 2, "DependentJoinType", static_cast<uint32_t>(value));
+}
+
+template<>
+DependentJoinType EnumUtil::FromString<DependentJoinType>(const char *value) {
+	return static_cast<DependentJoinType>(StringUtil::StringToEnum(GetDependentJoinTypeValues(), 2, "DependentJoinType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDeprecatedIndexTypeValues() {

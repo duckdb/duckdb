@@ -186,6 +186,8 @@ enum class DeferredRuntimeFilterType : uint8_t;
 
 enum class DependencyEntryType : uint8_t;
 
+enum class DependentJoinType : uint8_t;
+
 enum class DeprecatedIndexType : uint8_t;
 
 enum class DeprecatedUsingKeySyntax : uint8_t;
@@ -813,6 +815,9 @@ const char* EnumUtil::ToChars<DeferredRuntimeFilterType>(DeferredRuntimeFilterTy
 
 template<>
 const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
+
+template<>
+const char* EnumUtil::ToChars<DependentJoinType>(DependentJoinType value);
 
 template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
@@ -1639,6 +1644,9 @@ DeferredRuntimeFilterType EnumUtil::FromString<DeferredRuntimeFilterType>(const 
 
 template<>
 DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
+
+template<>
+DependentJoinType EnumUtil::FromString<DependentJoinType>(const char *value);
 
 template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
