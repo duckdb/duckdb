@@ -32,6 +32,20 @@ shared_ptr<CSVBufferHandle> CSVRandomAccessBufferManager::GetBuffer(const idx_t 
 	return cached_buffers[pos]->Pin(*file_handle, has_seeked);
 }
 
+CSVBufferResidency CSVRandomAccessBufferManager::GetBufferResidency(const idx_t pos,
+                                                                    shared_ptr<CSVBufferHandle> &handle) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (pos >= cached_buffers.size()) {
+		return CSVBufferResidency::END_OF_FILE;
+	}
+	if (!cached_buffers[pos] || !cached_buffers[pos]->IsInMemory()) {
+		return CSVBufferResidency::NEEDS_LOAD;
+	}
+	bool has_seeked = false;
+	handle = cached_buffers[pos]->Pin(*file_handle, has_seeked);
+	return CSVBufferResidency::IN_MEMORY;
+}
+
 void CSVRandomAccessBufferManager::ResetBuffer(const idx_t buffer_idx) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (buffer_idx >= cached_buffers.size()) {

@@ -1,0 +1,88 @@
+# name: test/parquet/variant/pushdown/variant_extract_casts.test
+# group: [pushdown]
+
+require parquet
+
+statement ok
+COPY (
+	FROM (
+		VALUES
+			({'x': 5::SMALLINT}::VARIANT),
+			({'x': 6::SMALLINT}::VARIANT),
+			({'x': '5'}::VARIANT),
+			({'x': NULL}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_casts.parquet' (
+	SHREDDING {'v': 'STRUCT(x SMALLINT)'}
+);
+
+statement ok
+COPY (
+	FROM (
+		VALUES
+			({'x': 4::UTINYINT}::VARIANT),
+			({'x': 5::UTINYINT}::VARIANT),
+			({'x': 6::UTINYINT}::VARIANT),
+			({'x': '5'}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_casts_unsigned.parquet';
+
+statement ok
+COPY (
+	FROM (
+		VALUES
+			({'x': 5::SMALLINT}::VARIANT),
+			({'x': 6::SMALLINT}::VARIANT),
+			({'x': NULL}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_casts_fully.parquet' (
+	SHREDDING {'v': 'STRUCT(x SMALLINT)'}
+);
+
+query IIII
+SELECT
+	count(*) FILTER (WHERE v.x = 5::INTEGER),
+	count(*) FILTER (WHERE v.x::SMALLINT = 5),
+	count(*) FILTER (WHERE v.x::BIGINT = 5),
+	count(*) FILTER (WHERE TRY(v.x::INTEGER) = 5)
+FROM '{TEST_DIR}/variant_pushdown_casts.parquet'
+----
+1	2	2	2
+
+query ITT
+SELECT v.x::SMALLINT, v.x::BIGINT::VARCHAR, v.x::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_casts.parquet'
+WHERE v.x = 5::INTEGER
+----
+5	5	5
+
+query II
+SELECT
+	count(*) FILTER (WHERE v.x::VARCHAR = '5'),
+	count(*) FILTER (WHERE TRY(v.x::INTEGER) IS NULL)
+FROM '{TEST_DIR}/variant_pushdown_casts.parquet'
+----
+2	1
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/variant_pushdown_casts.parquet'
+WHERE v.x = '5'::VARIANT
+----
+1
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/variant_pushdown_casts_unsigned.parquet'
+WHERE v.x = 5::INTEGER
+----
+1
+
+query III
+SELECT
+	count(*) FILTER (WHERE v.x = 5::INTEGER),
+	count(*) FILTER (WHERE v.x::SMALLINT = 5),
+	count(*) FILTER (WHERE v.x::BIGINT = 5)
+FROM '{TEST_DIR}/variant_pushdown_casts_fully.parquet'
+----
+1	1	1

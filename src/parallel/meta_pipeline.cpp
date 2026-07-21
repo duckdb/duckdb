@@ -97,13 +97,16 @@ void MetaPipeline::Ready() const {
 	}
 }
 
-MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type) {
+MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type,
+                                                    MetaPipelineDependencyMode dependency_mode) {
 	children.push_back(make_shared_ptr<MetaPipeline>(executor, state, &op, type));
 	auto &child_meta_pipeline = *children.back().get();
 	// store the parent
 	child_meta_pipeline.parent = &current;
-	// child MetaPipeline must finish completely before this MetaPipeline can start
-	current.AddDependency(child_meta_pipeline.GetBasePipeline());
+	if (dependency_mode == MetaPipelineDependencyMode::ADD_DEPENDENCY) {
+		// child MetaPipeline must finish completely before this MetaPipeline can start
+		current.AddDependency(child_meta_pipeline.GetBasePipeline());
+	}
 	// child meta pipeline is part of the recursive CTE too
 	child_meta_pipeline.recursive_cte = recursive_cte;
 	return child_meta_pipeline;
@@ -155,7 +158,8 @@ static bool PipelineExceedsThreadCount(Pipeline &pipeline, const idx_t thread_co
 }
 
 void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies,
-                                            const MetaPipeline &last_child, bool force) {
+                                            const MetaPipeline &last_child, RecursiveDependencyMode dependency_mode,
+                                            DataflowDependencyMode dataflow_mode) {
 	if (recursive_cte) {
 		return; // let's not burn our fingers on this for now
 	}
@@ -174,17 +178,22 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 
 	// we try to limit the performance impact of these dependencies on smaller workloads,
 	// by only adding the dependencies if the source operator can likely keep all threads busy.
-	// when 'force' is true (e.g. for DML CTEs), we always add the dependencies regardless,
+	// when dependencies are forced (e.g. for DML CTEs), we always add them regardless,
 	// because the ordering is required for correctness, not just performance.
 	const auto thread_count = TaskScheduler::GetScheduler(executor.context).NumberOfThreads();
 	for (; it != child_meta_pipelines.end(); it++) {
 		for (auto &pipeline : it->get()->pipelines) {
-			if (!force && !PipelineExceedsThreadCount(*pipeline, thread_count)) {
+			if (dataflow_mode == DataflowDependencyMode::SKIP && pipeline->HasDataflowDependencies()) {
+				continue;
+			}
+			if (dependency_mode == RecursiveDependencyMode::RESPECT_PARALLELISM &&
+			    !PipelineExceedsThreadCount(*pipeline, thread_count)) {
 				continue;
 			}
 			auto &pipeline_deps = pipeline_dependencies[*pipeline];
 			for (auto &new_dependency : new_dependencies) {
-				if (!force && !PipelineExceedsThreadCount(*new_dependency, thread_count)) {
+				if (dependency_mode == RecursiveDependencyMode::RESPECT_PARALLELISM &&
+				    !PipelineExceedsThreadCount(*new_dependency, thread_count)) {
 					continue;
 				}
 				pipeline_deps.push_back(*new_dependency);
@@ -228,6 +237,8 @@ Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 
 	// 'union_pipeline' inherits ALL dependencies of 'current' (within this MetaPipeline, and across MetaPipelines)
 	union_pipeline.dependencies = current.dependencies;
+	union_pipeline.dataflow_dependencies = current.dataflow_dependencies;
+	union_pipeline.external_finish_dependencies = current.external_finish_dependencies;
 	auto it = pipeline_dependencies.find(current);
 	if (it != pipeline_dependencies.end()) {
 		pipeline_dependencies[union_pipeline] = it->second;
