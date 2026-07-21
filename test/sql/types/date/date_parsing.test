@@ -109,6 +109,12 @@ SELECT CAST('2020-01-01          ' AS DATE)
 ----
 2020-01-01
 
+query TT
+SELECT CAST(CAST('2020-01-01 24:00:00' AS DATE) AS VARCHAR),
+	COALESCE(CAST(TRY_CAST('294247-01-11 00:00:00' AS DATE) AS VARCHAR), 'NULL');
+----
+2020-01-01	294247-01-11
+
 # verify bounds of each month
 # January - 31 days
 # February - 28 days in non-leap year, 29 days in leap year

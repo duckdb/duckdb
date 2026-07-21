@@ -1827,6 +1827,7 @@ static DateCastResult TryConvertDateCast(string_t input, date_t &result, bool st
 	idx_t pos = 0;
 	bool special = false;
 	auto date_result = Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, strict);
+	auto timestamp_suffix_pos = pos;
 	if (date_result == DateCastResult::SUCCESS) {
 		while (pos < input.GetSize() && StringUtil::CharacterIsSpace(input.GetData()[pos])) {
 			pos++;
@@ -1835,7 +1836,7 @@ static DateCastResult TryConvertDateCast(string_t input, date_t &result, bool st
 			return date_result;
 		}
 	}
-	if (strict || date_result == DateCastResult::ERROR_RANGE) {
+	if (strict || date_result != DateCastResult::SUCCESS) {
 		return date_result;
 	}
 
@@ -1844,8 +1845,17 @@ static DateCastResult TryConvertDateCast(string_t input, date_t &result, bool st
 	    Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), timestamp, /*use_offset=*/false, nullptr,
 	                                   /*strict=*/false);
 	if (timestamp_result == TimestampCastResult::SUCCESS) {
-		result = Timestamp::GetDate(timestamp);
 		return DateCastResult::SUCCESS;
+	}
+	if (timestamp_result == TimestampCastResult::ERROR_RANGE) {
+		string timestamp_input = "2000-01-01"; // placeholder
+		timestamp_input.append(input.GetData() + timestamp_suffix_pos, input.GetSize() - timestamp_suffix_pos);
+		timestamp_result =
+		    Timestamp::TryConvertTimestamp(timestamp_input.c_str(), timestamp_input.size(), timestamp,
+		                                   /*use_offset=*/false, /*tz_offset=*/nullptr, /*strict=*/false);
+		if (timestamp_result == TimestampCastResult::SUCCESS) {
+			return DateCastResult::SUCCESS;
+		}
 	}
 	return timestamp_result == TimestampCastResult::ERROR_RANGE ? DateCastResult::ERROR_RANGE
 	                                                            : DateCastResult::ERROR_INCORRECT_FORMAT;
