@@ -673,7 +673,47 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			// we need these to correctly deal with the cases of either:
 			// - (1) the group being empty [in which case the result is always false, even if the comparison is NULL]
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
-			result->InitializeCorrelatedMarkJoin(delim_types);
+			auto &info = result->mark_join_info;
+
+			vector<LogicalType> delim_payload_types;
+			vector<AggregateObject> correlated_aggregates;
+			unique_ptr<BoundAggregateExpression> aggr;
+
+			// jury-rigging the GroupedAggregateHashTable
+			// we need a count_star and a count to get counts with and without NULLs
+
+			FunctionBinder function_binder(context);
+			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
+			                                             AggregateType::NON_DISTINCT);
+			correlated_aggregates.emplace_back(*aggr);
+			delim_payload_types.push_back(aggr->GetReturnType());
+			info.correlated_aggregates.push_back(std::move(aggr));
+
+			auto count_fun = CountFunctionBase::GetFunction();
+			vector<unique_ptr<Expression>> children;
+			// this is a dummy but we need it to make the hash table understand whats going on
+			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
+			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
+			                                             AggregateType::NON_DISTINCT);
+			correlated_aggregates.emplace_back(*aggr);
+			delim_payload_types.push_back(aggr->GetReturnType());
+			info.correlated_aggregates.push_back(std::move(aggr));
+
+			auto &allocator = BufferAllocator::Get(context);
+			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(
+			    context, allocator, delim_types, delim_payload_types, std::move(correlated_aggregates));
+			info.correlated_types = delim_types;
+			info.group_chunk.Initialize(allocator, delim_types);
+			info.result_chunk.Initialize(allocator, delim_payload_types);
+		}
+	}
+	if (delim_types.empty() && join_type == JoinType::MARK && conditions.size() > 1) {
+		bool all_equal = true;
+		for (auto &condition : conditions) {
+			all_equal = all_equal && condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
+		}
+		if (all_equal) {
+			result->InitializeUncorrelatedMarkJoin();
 		}
 	}
 	return result;
@@ -2099,6 +2139,13 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	D_ASSERT(!sink.scanned_data);
 
 	if (sink.hash_table->Count() == 0) {
+		if (sink.hash_table->HasUncorrelatedMarkJoin()) {
+			state.lhs_join_keys.Reset();
+			state.probe_executor.Execute(input, state.lhs_join_keys);
+			state.lhs_probe_data.ReferenceColumns(input, lhs_probe_columns.col_idxs);
+			sink.hash_table->ConstructMarkJoinResult(state.lhs_join_keys, state.lhs_probe_data, chunk);
+			return OperatorResultType::NEED_MORE_INPUT;
+		}
 		if (EmptyResultIfRHSIsEmpty()) {
 			return OperatorResultType::FINISHED;
 		}
@@ -2588,6 +2635,11 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	// reference ALL probe columns
 	lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_probe_columns.col_idxs);
 
+	if (sink.hash_table->Count() == 0 && sink.hash_table->HasUncorrelatedMarkJoin()) {
+		sink.hash_table->ConstructMarkJoinResult(lhs_join_keys, lhs_probe_data, chunk);
+		empty_ht_probe_in_progress = true;
+		return;
+	}
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
 		// for empty result, only need output columns (no predicate evaluation)
 		lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_output_columns.col_idxs);

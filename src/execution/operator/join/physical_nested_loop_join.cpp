@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
-#include "duckdb/execution/mark_join_post_processor.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
@@ -8,24 +7,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
-
-static bool ValueContainsNestedNull(const Value &value) {
-	if (value.IsNull()) {
-		return true;
-	}
-	if (value.type().id() == LogicalTypeId::UNION) {
-		return ValueContainsNestedNull(UnionValue::GetValue(value));
-	}
-	if (value.type().InternalType() != PhysicalType::STRUCT) {
-		return false;
-	}
-	for (auto &child : StructValue::GetChildren(value)) {
-		if (ValueContainsNestedNull(child)) {
-			return true;
-		}
-	}
-	return false;
-}
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
                                                PhysicalOperator &left, PhysicalOperator &right,
@@ -62,35 +43,6 @@ bool PhysicalJoin::HasNullValues(DataChunk &chunk) {
 	return false;
 }
 
-static bool HasNestedStructNullValues(DataChunk &chunk) {
-	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-		if (chunk.data[col_idx].GetType().id() != LogicalTypeId::STRUCT ||
-		    chunk.data[col_idx].GetType().InternalType() != PhysicalType::STRUCT ||
-		    !StructType::IsUnnamed(chunk.data[col_idx].GetType())) {
-			continue;
-		}
-		for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
-			if (ValueContainsNestedNull(chunk.data[col_idx].GetValue(row_idx))) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-static bool NeedsNestedMarkNullCheck(const vector<JoinCondition> &conditions) {
-	for (auto &cond : conditions) {
-		if (cond.GetLHS().GetReturnType().id() == LogicalTypeId::STRUCT &&
-		    cond.GetLHS().GetReturnType().InternalType() == PhysicalType::STRUCT &&
-		    StructType::IsUnnamed(cond.GetLHS().GetReturnType()) &&
-		    (cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
-		     cond.GetComparisonType() == ExpressionType::COMPARE_NOTEQUAL)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	D_ASSERT(left.ColumnCount() == result.ColumnCount());
@@ -120,7 +72,7 @@ void PhysicalJoin::ConstructAntiJoinResult(DataChunk &left, DataChunk &result, b
 }
 
 void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
-                                           bool has_null) {
+                                           bool has_null, optional_ptr<const bool> found_unknown) {
 	// for the initial set of columns we just reference the left side
 	result.SetChildCardinality(left.size());
 	for (idx_t i = 0; i < left.ColumnCount(); i++) {
@@ -132,7 +84,8 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
 	auto &mask = FlatVector::ValidityMutable(mark_vector);
-	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
+	mask.SetAllValid(left.size());
+	for (idx_t col_idx = 0; !found_unknown && col_idx < join_keys.ColumnCount(); col_idx++) {
 		auto entries = join_keys.data[col_idx].Validity();
 		if (!entries.CanHaveNull()) {
 			continue;
@@ -150,7 +103,13 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 		memset(bool_result, 0, sizeof(bool) * left.size());
 	}
 	// if the right side contains NULL values, the result of any FALSE becomes NULL
-	if (has_null) {
+	if (found_unknown) {
+		for (idx_t i = 0; i < left.size(); i++) {
+			if (!bool_result[i] && found_unknown.get()[i]) {
+				mask.SetInvalid(i);
+			}
+		}
+	} else if (has_null) {
 		for (idx_t i = 0; i < left.size(); i++) {
 			if (!bool_result[i]) {
 				mask.SetInvalid(i);
@@ -310,8 +269,7 @@ SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, DataChunk
 	// if we have not seen any NULL values yet, and we are performing a MARK join, check if there are NULL values in
 	// this chunk
 	if (join_type == JoinType::MARK && !gstate.has_null) {
-		if (HasNullValues(lstate.right_condition) ||
-		    (NeedsNestedMarkNullCheck(conditions) && HasNestedStructNullValues(lstate.right_condition))) {
+		if (HasNullValues(lstate.right_condition)) {
 			gstate.has_null = true;
 		}
 	}
@@ -369,31 +327,20 @@ public:
 	                            const vector<JoinCondition> &conditions)
 	    : lhs_executor(context), left_outer(IsLeftOuterJoin(op.join_type)), pred_executor(context) {
 		vector<LogicalType> condition_types;
-		vector<ExpressionType> comparison_types;
-		mark_null_values_are_equal.reserve(conditions.size());
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(cond.GetLHS());
 			condition_types.push_back(cond.GetLHS().GetReturnType());
-			comparison_types.push_back(cond.GetComparisonType());
-			mark_null_values_are_equal.push_back(cond.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
-			                                     cond.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		}
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);
 		right_condition.Initialize(allocator, condition_types);
 		right_payload.Initialize(allocator, op.children[1].get().GetTypes());
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
-		lhs_output_columns.reserve(op.children[0].get().GetTypes().size());
-		for (idx_t i = 0; i < op.children[0].get().GetTypes().size(); i++) {
-			lhs_output_columns.push_back(i);
-		}
 
 		if (op.predicate) {
 			pred_executor.AddExpression(*op.predicate);
 			pred_matches.Initialize();
 		}
-		mark_join_post_processor.Initialize(context, BufferManager::GetBufferManager(context), op.join_type,
-		                                    conditions.size(), comparison_types, condition_types);
 		ResetState();
 	}
 
@@ -402,9 +349,6 @@ public:
 	DataChunk left_condition;
 	//! The executor of the LHS condition
 	ExpressionExecutor lhs_executor;
-	MarkJoinPostProcessor mark_join_post_processor;
-	vector<bool> mark_null_values_are_equal;
-	vector<idx_t> lhs_output_columns;
 
 	ColumnDataScanState condition_scan_state;
 	ColumnDataScanState payload_scan_state;
@@ -495,19 +439,16 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	state.lhs_executor.Execute(input, state.left_condition);
 
 	bool found_match[STANDARD_VECTOR_SIZE] = {false};
-	NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions);
+	bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
+	const bool track_unknown = join_type == JoinType::MARK && conditions.size() == 1 &&
+	                           conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE;
+	NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions,
+	                            track_unknown ? optional_ptr<bool>(found_unknown) : nullptr);
 	switch (join_type) {
 	case JoinType::MARK:
 		// now construct the mark join result from the found matches
-		if (state.mark_join_post_processor.UsesConditionScan()) {
-			state.mark_join_post_processor.ConstructResult(state.left_condition, input, chunk,
-			                                               state.mark_null_values_are_equal, found_match,
-			                                               gstate.right_condition_data, conditions, gstate.has_null);
-		} else {
-			state.mark_join_post_processor.ConstructResult(state.left_condition, input, chunk, state.lhs_output_columns,
-			                                               state.mark_null_values_are_equal, found_match,
-			                                               gstate.has_null);
-		}
+		PhysicalJoin::ConstructMarkJoinResult(state.left_condition, input, chunk, found_match, gstate.has_null,
+		                                      track_unknown ? optional_ptr<const bool>(found_unknown) : nullptr);
 		break;
 	case JoinType::SEMI:
 		// construct the semi join result from the found matches

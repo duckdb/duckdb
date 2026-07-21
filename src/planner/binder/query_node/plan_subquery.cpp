@@ -383,7 +383,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->any_join = true;
 		auto &dependent_join = plan;
 
-		if (expr.GetChildren().size() > 1) {
+		if (expr.GetChildren().size() > 1 || expr.GetChildTypes().size() > 1) {
 			// FIXME: the code to generate the plan here is actually correct
 			// the problem is in the hash join - specifically PhysicalHashJoin::InitializeHashTable
 			// this contains code that is hard-coded for a single comparison
