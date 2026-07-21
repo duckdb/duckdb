@@ -97,6 +97,7 @@ void RowVersionManager::FillVectorInfo(idx_t vector_idx) {
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,
                                           idx_t row_group_end) {
 	lock_guard<mutex> lock(version_lock);
+	needs_compression_check = true;
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 
@@ -191,11 +192,13 @@ ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 
 idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
 	lock_guard<mutex> lock(version_lock);
+	needs_compression_check = true;
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
+	needs_compression_check = true;
 	if (!uncheckpointed_delete_commit.IsValid() || commit_id > uncheckpointed_delete_commit.GetIndex()) {
 		uncheckpointed_delete_commit = commit_id;
 	}
@@ -204,11 +207,29 @@ void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, 
 
 void RowVersionManager::CompressVersionIds(transaction_t lowest_active_start) {
 	lock_guard<mutex> lock(version_lock);
+	if (!needs_compression_check) {
+		// no version ids were modified since the last pass, and the last pass left nothing
+		// that could still become compressible - nothing to do
+#ifdef DEBUG
+		// a cleared manager-level check implies every vector's check is disarmed - verify the
+		// per-vector claims that the skipped pass relies on
+		for (auto &info : vector_info) {
+			if (info) {
+				D_ASSERT(!info->RecheckCompression());
+				info->VerifyCachedCompressionState();
+			}
+		}
+#endif
+		return;
+	}
+	bool pending = false;
 	for (auto &info : vector_info) {
-		if (info) {
-			info->CompressVersionIds(lowest_active_start);
+		if (info && info->CompressVersionIds(lowest_active_start) == VersionCompressionResult::PENDING) {
+			// some ids can still compress once the lowest active start advances - check again next pass
+			pending = true;
 		}
 	}
+	needs_compression_check = pending;
 	// compression frees the per-row id segments - release any buffers that are now empty
 	// (Free keeps the last buffer with free space alive to prevent buffer creation fluctuation)
 	allocator.RemoveEmptyBuffers();
@@ -279,7 +300,13 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 		}
 
 		version_info->FillVectorInfo(vector_index);
-		version_info->vector_info[vector_index] = ChunkVectorInfo::Read(version_info->GetAllocator(), source);
+		auto info = ChunkVectorInfo::Read(version_info->GetAllocator(), source);
+		if (info && info->RecheckCompression()) {
+			// with the current storage format deserialized ids are always settled, but Read
+			// derives this from the deserialized content - follow its verdict
+			version_info->needs_compression_check = true;
+		}
+		version_info->vector_info[vector_index] = std::move(info);
 	}
 	version_info->uncheckpointed_delete_commit = optional_idx();
 	return version_info;

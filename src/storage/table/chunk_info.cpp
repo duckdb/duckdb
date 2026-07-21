@@ -273,6 +273,8 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 		constant_delete_id = transaction_id;
 		return count;
 	}
+	// we are materializing / modifying per-row delete ids - re-arm the compression check
+	recheck_compression = true;
 	auto segment = allocator.GetHandle(GetInitializedDeletedPointer());
 	auto deleted = segment.GetPtr<transaction_t>();
 
@@ -310,6 +312,8 @@ void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &in
 		// all rows already share this exact deleted id - nothing to do
 		return;
 	}
+	// we are materializing / modifying per-row delete ids - re-arm the compression check
+	recheck_compression = true;
 	bool all_equal = true;
 	{
 		auto segment = allocator.GetHandle(GetInitializedDeletedPointer());
@@ -340,27 +344,70 @@ void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &in
 	}
 }
 
-void ChunkVectorInfo::CompressVersionIds(transaction_t lowest_active_start) {
+void ChunkVectorInfo::VerifyCachedCompressionState() const {
+#ifdef DEBUG
+	if (recheck_compression) {
+		// armed - the next pass re-derives everything from the ids, there is no cached claim to verify
+		return;
+	}
+	// a disarmed check claims that nothing can compress, now or as older transactions finish, until a
+	// modification re-arms it. Both conditions below are independent of the lowest active start:
+	// per-row insert ids all become visible (or are reverted) eventually, so they must already be compressed
+	D_ASSERT(HasConstantInsertionId());
+	if (!HasConstantDeleteId()) {
+		// per-row delete ids may only remain because a live row blocks the collapse
+		auto segment = allocator.GetHandle(GetDeletedPointer());
+		auto deleted = segment.GetPtr<transaction_t>();
+		bool rows_alive = false;
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			if (deleted[i] == NOT_DELETED_ID) {
+				rows_alive = true;
+				break;
+			}
+		}
+		D_ASSERT(rows_alive);
+	}
+#endif
+}
+
+VersionCompressionResult ChunkVectorInfo::CompressVersionIds(transaction_t lowest_active_start) {
+	if (!recheck_compression) {
+		// no ids were modified since this vector last settled - only a further modification
+		// (which re-arms the check) can make it compressible, so skip re-scanning the ids
+#ifdef DEBUG
+		VerifyCachedCompressionState();
+#endif
+		return HasConstantDeleteId() && HasConstantInsertionId() ? VersionCompressionResult::FULLY_COMPRESSED
+		                                                         : VersionCompressionResult::SETTLED;
+	}
+	bool pending = false;
 	if (!HasConstantDeleteId()) {
 		// check if all rows are deleted, with all deletes visible to all active and future transactions
 		// if so, the per-row delete ids are equivalent to a single constant delete id
-		bool can_compress = true;
+		bool rows_alive = false;
+		bool deletes_pending = false;
 		transaction_t max_delete_id = 0;
 		{
 			auto segment = allocator.GetHandle(GetDeletedPointer());
 			auto deleted = segment.GetPtr<transaction_t>();
 			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-				if (deleted[i] >= lowest_active_start) {
-					// the row is not deleted, or the delete is not yet visible to all transactions
-					can_compress = false;
-					break;
+				if (deleted[i] == NOT_DELETED_ID) {
+					// the row is not deleted - the ids cannot compress until it is
+					rows_alive = true;
+				} else if (deleted[i] >= lowest_active_start) {
+					// deleted, but the delete is not yet visible to all transactions - the ids can
+					// compress once the lowest active start advances past the delete id
+					deletes_pending = true;
+				} else {
+					max_delete_id = MaxValue(max_delete_id, deleted[i]);
 				}
-				max_delete_id = MaxValue(max_delete_id, deleted[i]);
 			}
 		}
-		if (can_compress) {
+		if (!rows_alive && !deletes_pending) {
 			FreeDeleteData();
 			constant_delete_id = max_delete_id;
+		} else if (!rows_alive) {
+			pending = true;
 		}
 	}
 	if (!HasConstantInsertionId()) {
@@ -382,8 +429,16 @@ void ChunkVectorInfo::CompressVersionIds(transaction_t lowest_active_start) {
 			allocator.Free(inserted_data);
 			inserted_data = IndexPointer();
 			constant_insert_id = 0;
+		} else {
+			// insert ids become visible to all transactions (or are reverted) eventually
+			pending = true;
 		}
 	}
+	recheck_compression = pending;
+	if (HasConstantDeleteId() && HasConstantInsertionId()) {
+		return VersionCompressionResult::FULLY_COMPRESSED;
+	}
+	return pending ? VersionCompressionResult::PENDING : VersionCompressionResult::SETTLED;
 }
 
 void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
@@ -397,6 +452,8 @@ void ChunkVectorInfo::Append(idx_t start, idx_t end, transaction_t commit_id) {
 		return;
 	}
 
+	// we are materializing / modifying per-row insert ids - re-arm the compression check
+	recheck_compression = true;
 	auto segment = allocator.GetHandle(GetInitializedInsertedPointer());
 	auto inserted = segment.GetPtr<transaction_t>();
 	for (idx_t i = start; i < end; i++) {
@@ -409,6 +466,8 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 		constant_insert_id = commit_id;
 		return;
 	}
+	// we are modifying per-row insert ids - re-arm the compression check
+	recheck_compression = true;
 	auto segment = allocator.GetHandle(GetInsertedPointer());
 	auto inserted = segment.GetPtr<transaction_t>();
 
@@ -600,7 +659,10 @@ unique_ptr<ChunkVectorInfo> ChunkVectorInfo::Read(FixedSizeAllocator &allocator,
 	case ChunkInfoType::CONSTANT_INFO: {
 		// a fully deleted vector - the constant insert and delete ids of 0 are visible to all transactions
 		auto start = reader.Read<idx_t>();
-		return make_uniq<ChunkVectorInfo>(allocator, start, 0, 0);
+		auto result = make_uniq<ChunkVectorInfo>(allocator, start, 0, 0);
+		// both ids are constant - there is nothing left to compress
+		result->recheck_compression = false;
+		return result;
 	}
 	case ChunkInfoType::VECTOR_INFO: {
 		// a partially deleted vector - the deleted rows are stored as a boolean mask
@@ -609,13 +671,20 @@ unique_ptr<ChunkVectorInfo> ChunkVectorInfo::Read(FixedSizeAllocator &allocator,
 		ValidityMask mask;
 		mask.Read(reader, STANDARD_VECTOR_SIZE);
 
+		bool rows_alive = false;
 		auto segment = allocator.GetHandle(result->GetInitializedDeletedPointer());
 		auto deleted = segment.GetPtr<transaction_t>();
 		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 			if (mask.RowIsValid(i)) {
 				deleted[i] = 0;
+			} else {
+				rows_alive = true;
 			}
 		}
+		// the reconstructed ids are all visible to all transactions, so the vector can only be
+		// compressible if every row is deleted (in which case Write emits CONSTANT_INFO instead,
+		// so with the current format the ids are always settled here)
+		result->recheck_compression = !rows_alive;
 		return result;
 	}
 	default:

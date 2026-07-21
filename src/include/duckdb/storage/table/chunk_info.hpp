@@ -29,6 +29,19 @@ enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 //! ChunkVectorInfo holds the version information (the insert and delete ids) of the rows of a single vector within
 //! a row group. The insert and delete ids are stored as constants when all rows share the same id, and as per-row
 //! id arrays otherwise.
+
+//! The result of a CompressVersionIds pass over a vector
+enum class VersionCompressionResult : uint8_t {
+	//! No per-row id arrays remain - there is nothing left to compress
+	FULLY_COMPRESSED,
+	//! Some ids are not yet visible to all transactions - compression can succeed once the
+	//! lowest active start advances past them, without any further modifications
+	PENDING,
+	//! Per-row arrays remain that cannot compress without further modifications
+	//! (some rows are not deleted)
+	SETTLED
+};
+
 class ChunkVectorInfo {
 public:
 	explicit ChunkVectorInfo(FixedSizeAllocator &allocator, idx_t start, transaction_t insert_id = 0);
@@ -62,7 +75,14 @@ public:
 	//! Attempts to compress the per-row insert/delete ids into constants
 	//! This is possible when the ids behave identically for all transactions with a start time of at least
 	//! lowest_active_start (i.e. all active and future transactions)
-	void CompressVersionIds(transaction_t lowest_active_start);
+	VersionCompressionResult CompressVersionIds(transaction_t lowest_active_start);
+	//! Whether a compression pass could achieve anything for this vector (see recheck_compression)
+	bool RecheckCompression() const {
+		return recheck_compression;
+	}
+	//! Verifies (in DEBUG) that a disarmed recheck_compression matches the actual ids: nothing may be
+	//! compressible now or in the future without a modification that re-arms the check
+	void VerifyCachedCompressionState() const;
 
 	bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const;
 	bool HasUncommittedChanges() const;
@@ -98,6 +118,11 @@ private:
 	IndexPointer deleted_data;
 	//! The constant delete id (if there is only one, e.g. because the entire vector was deleted in one transaction)
 	transaction_t constant_delete_id;
+	//! Whether a compression pass could achieve anything for this vector: armed by any id modification,
+	//! disarmed when a pass compresses the vector fully or finds it settled (live rows block the collapse
+	//! until a further delete re-arms it). CompressVersionIds returns the cached SETTLED without
+	//! re-scanning the ids while this is false.
+	bool recheck_compression = true;
 };
 
 } // namespace duckdb
