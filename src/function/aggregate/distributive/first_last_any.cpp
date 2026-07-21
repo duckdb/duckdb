@@ -41,12 +41,16 @@ struct FirstStringStateBase {
 	uint32_t heap_block;
 	uint32_t heap_offset;
 
+	//! Payloads below this size stay on the arena: they pin little memory per group,
+	//! and the indirection costs more than it saves
+	static constexpr idx_t MINIMUM_HEAP_PAYLOAD_SIZE = 32;
+
 	void Assign(string_t input, AggregateInputData &input_data, bool allow_heap) {
 		if (input.IsInlined()) {
 			value = input;
 			alloc_size = 0;
 			heap_block = 0;
-		} else if (allow_heap && input_data.payload_heap) {
+		} else if (allow_heap && input.GetSize() >= MINIMUM_HEAP_PAYLOAD_SIZE && input_data.payload_heap) {
 			// Store the payload on a spillable heap block, the state keeps a handle instead of a pointer
 			auto len = UnsafeNumericCast<uint32_t>(input.GetSize());
 			auto handle = input_data.payload_heap->Append(input.GetData(), len);
