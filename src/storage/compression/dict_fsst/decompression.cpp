@@ -8,17 +8,30 @@
 namespace duckdb {
 namespace dict_fsst {
 
+static void ThrowInvalidDictFSSTSegment(const char *reason) {
+	throw IOException("Failed to scan DICT_FSST string segment: %s. Database file appears to be corrupted.", reason);
+}
+
 CompressedStringScanState::~CompressedStringScanState() {
 	delete reinterpret_cast<duckdb_fsst_decoder_t *>(decoder);
 }
 
+void CompressedStringScanState::ValidateDictionaryIndex(idx_t index) {
+	if (index >= dict_count) {
+		ThrowInvalidDictFSSTSegment("dictionary index was out of range");
+	}
+}
+
 string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx) {
-	D_ASSERT(dict_offset <= NumericCast<uint32_t>(segment.GetBlockSize()));
+	ValidateDictionaryIndex(dict_idx);
 
 	if (dict_idx == 0) {
 		return string_t(nullptr, 0);
 	}
 	uint32_t string_len = string_lengths[dict_idx];
+	if (dict_offset > dictionary_size || string_len > dictionary_size - dict_offset) {
+		ThrowInvalidDictFSSTSegment("dictionary was out of range");
+	}
 
 	// normal string: read string from this block
 	auto dict_pos = dict_ptr + dict_offset;
@@ -44,24 +57,44 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 }
 
 void CompressedStringScanState::Initialize(bool initialize_dictionary) {
-	baseptr = handle->GetDataMutable() + segment.GetBlockOffset();
+	auto block_offset = segment.GetBlockOffset();
+	auto block_size = segment.GetBlockSize();
+	if (block_offset > block_size || DictFSSTCompression::DICTIONARY_HEADER_SIZE > block_size - block_offset) {
+		ThrowInvalidDictFSSTSegment("dictionary was out of range");
+	}
+	auto segment_capacity = block_size - block_offset;
+	baseptr = handle->GetDataMutable() + block_offset;
 
 	// Load header values
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
 	mode = header_ptr->mode;
 	if (mode >= DictFSSTMode::COUNT) {
-		throw FatalException("This block was written with a mode that is not recognized by this version, highest "
-		                     "available mode %d, found mode: %d",
-		                     static_cast<uint8_t>(DictFSSTMode::COUNT), static_cast<uint8_t>(mode));
+		ThrowInvalidDictFSSTSegment("invalid compression mode");
 	}
 
 	dict_count = header_ptr->dict_count;
 	auto symbol_table_size = header_ptr->symbol_table_size;
 	dictionary_size = header_ptr->dict_size;
+	if (dict_count == 0) {
+		ThrowInvalidDictFSSTSegment("dictionary count was invalid");
+	}
 
 	dictionary_indices_width =
 	    (bitpacking_width_t)(Load<uint8_t>(data_ptr_cast(&header_ptr->dictionary_indices_width)));
 	string_lengths_width = (bitpacking_width_t)(Load<uint8_t>(data_ptr_cast(&header_ptr->string_lengths_width)));
+	if (mode == DictFSSTMode::FSST_ONLY) {
+		if (dictionary_indices_width != 0) {
+			ThrowInvalidDictFSSTSegment("dictionary indices width was invalid");
+		}
+		if (dict_count != segment.count.load() + 1) {
+			ThrowInvalidDictFSSTSegment("dictionary count was invalid");
+		}
+	} else {
+		auto expected_width = BitpackingPrimitives::MinimumBitWidth(dict_count - 1);
+		if (dictionary_indices_width != expected_width) {
+			ThrowInvalidDictFSSTSegment("dictionary indices width was invalid");
+		}
+	}
 
 	auto string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
 	auto dictionary_indices_space =
@@ -72,10 +105,9 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	auto string_lengths_dest = AlignValue<idx_t>(symbol_table_dest + symbol_table_size);
 	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
 
-	const auto total_space = segment.GetBlockOffset() + dictionary_indices_dest + dictionary_indices_space;
-	if (total_space > segment.GetBlockSize()) {
-		throw IOException(
-		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
+	if (dictionary_indices_dest > segment_capacity ||
+	    dictionary_indices_space > segment_capacity - dictionary_indices_dest) {
+		ThrowInvalidDictFSSTSegment("index was out of range");
 	}
 	dict_ptr = data_ptr_cast(baseptr + dictionary_dest);
 	dictionary_indices_ptr = data_ptr_cast(baseptr + dictionary_indices_dest);
@@ -87,8 +119,7 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		decoder = new duckdb_fsst_decoder_t;
 		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), baseptr + symbol_table_dest);
 		if (ret == 0) {
-			throw IOException("Failed to scan DICT_FSST string segment: invalid FSST symbol table. Database file "
-			                  "appears to be corrupted.");
+			ThrowInvalidDictFSSTSegment("invalid FSST symbol table");
 		}
 		break;
 	}
@@ -99,6 +130,17 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
 	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
 	                                             data_ptr_cast(string_lengths_ptr), dict_count, string_lengths_width);
+	idx_t dictionary_offset = 0;
+	for (uint32_t i = 0; i < dict_count; i++) {
+		auto string_len = string_lengths[i];
+		if (string_len > dictionary_size || dictionary_offset > dictionary_size - string_len) {
+			ThrowInvalidDictFSSTSegment("dictionary was out of range");
+		}
+		dictionary_offset += string_len;
+	}
+	if (dictionary_offset != dictionary_size) {
+		ThrowInvalidDictFSSTSegment("string lengths were invalid");
+	}
 	if (!initialize_dictionary || mode == DictFSSTMode::FSST_ONLY) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
 		return;
@@ -108,7 +150,6 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	auto &dict_data = dictionary->data;
 	auto dict_child_data = FlatVector::GetDataMutable<string_t>(dict_data);
 	auto &validity = FlatVector::ValidityMutable(dict_data);
-	D_ASSERT(dict_count >= 1);
 	validity.SetInvalid(0);
 
 	uint32_t offset = 0;
@@ -167,6 +208,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
 			auto string_number = selvec.get_index(i + start_offset);
+			ValidateDictionaryIndex(string_number);
 			if (string_number == 0) {
 				result_data.WriteNull();
 				continue;
@@ -177,6 +219,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
 			auto string_number = selvec.get_index(start_offset + i);
+			ValidateDictionaryIndex(string_number);
 			if (string_number == 0) {
 				result_data.WriteNull();
 				continue;
@@ -230,6 +273,9 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	D_ASSERT(result_offset == 0);
 
 	auto &selvec = GetSelVec(start, scan_count);
+	for (idx_t i = 0; i < scan_count; i++) {
+		ValidateDictionaryIndex(selvec.get_index(i));
+	}
 	result.Dictionary(dictionary, selvec, scan_count);
 	result.Verify();
 }
