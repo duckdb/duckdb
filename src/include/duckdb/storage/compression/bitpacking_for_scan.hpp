@@ -42,8 +42,8 @@ static void DecodeFORBlocksBatchFlat(BitpackingScanState<T> &scan_state, idx_t g
 	D_ASSERT(group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
 	auto width = scan_state.current_width;
 	data_ptr_t src = scan_state.current_group_ptr + group_offset * width / 8;
-	BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(result_ptr), src, count, width, true);
-	ApplyFrameOfReference<T>(result_ptr, scan_state.current_frame_of_reference, count);
+	BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(result_ptr), src, count, width, true,
+	                                      scan_state.current_frame_of_reference);
 }
 
 template <class T>
@@ -120,9 +120,8 @@ static void DecodeFORGroupsBatch(BitpackingScanState<T> &scan_state, idx_t group
 	data_ptr_t src = scan_state.current_group_ptr + group_offset * width / 8;
 	data_ptr_t dst = result_buf + narrow_offset * GetTypeIdSize(stored_type);
 	FOR_SWITCH_STORED(stored_type, ST, {
-		BitpackingPrimitives::UnPackBuffer<ST>(dst, src, count, width, true);
-		ApplyFrameOfReference<ST>(reinterpret_cast<ST *>(dst),
-		                          UnsafeNumericCast<ST>(scan_state.current_frame_of_reference), count);
+		BitpackingPrimitives::UnPackBuffer<ST>(dst, src, count, width, true,
+		                                       UnsafeNumericCast<ST>(scan_state.current_frame_of_reference));
 	});
 }
 

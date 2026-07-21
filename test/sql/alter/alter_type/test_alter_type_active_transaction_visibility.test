@@ -1,0 +1,36 @@
+# name: test/sql/alter/alter_type/test_alter_type_active_transaction_visibility.test
+# description: ALTER TYPE reads values visible to the altering transaction
+# group: [alter_type]
+
+statement ok con1
+CREATE TABLE test(i INTEGER)
+
+statement ok con1
+INSERT INTO test VALUES (1)
+
+statement ok con2
+BEGIN TRANSACTION
+
+query I con2
+SELECT i FROM test
+----
+1
+
+statement ok con1
+UPDATE test SET i = 2
+
+statement ok con1
+ALTER TABLE test ALTER COLUMN i SET DATA TYPE BIGINT
+
+query I con1
+SELECT i FROM test
+----
+2
+
+query I con2
+SELECT i FROM test
+----
+1
+
+statement ok con2
+COMMIT

@@ -31,7 +31,10 @@ struct CountZeros<uint64_t> {
 		if (!value_in) {
 			return 64;
 		}
-
+#if defined(__GNUC__) || defined(__clang__)
+		// gcc runs the de Bruijn fallback literally (no bit-scan); the builtin is a single instruction
+		return static_cast<idx_t>(__builtin_clzll(value_in));
+#else
 		uint64_t value = value_in;
 
 		constexpr uint64_t index64msb[] = {0,  47, 1,  56, 48, 27, 2,  60, 57, 49, 41, 37, 28, 16, 3,  61,
@@ -47,16 +50,17 @@ struct CountZeros<uint64_t> {
 		value |= value >> 8;
 		value |= value >> 16;
 		value |= value >> 32;
-		auto result = 63 - index64msb[(value * debruijn64msb) >> 58];
-#ifdef __clang__
-		D_ASSERT(result == static_cast<uint64_t>(__builtin_clzl(value_in)));
+		return 63 - index64msb[(value * debruijn64msb) >> 58];
 #endif
-		return result;
 	}
 	inline static idx_t Trailing(uint64_t value_in) {
 		if (!value_in) {
 			return 64;
 		}
+#if defined(__GNUC__) || defined(__clang__)
+		// gcc runs the de Bruijn fallback literally (no bit-scan); the builtin is a single instruction
+		return static_cast<idx_t>(__builtin_ctzll(value_in));
+#else
 		uint64_t value = value_in;
 
 		constexpr uint64_t index64lsb[] = {63, 0,  58, 1,  59, 47, 53, 2,  60, 39, 48, 27, 54, 33, 42, 3,
@@ -64,11 +68,8 @@ struct CountZeros<uint64_t> {
 		                                   62, 57, 46, 52, 38, 26, 32, 41, 50, 36, 17, 19, 29, 10, 13, 21,
 		                                   56, 45, 25, 31, 35, 16, 9,  12, 44, 24, 15, 8,  23, 7,  6,  5};
 		constexpr uint64_t debruijn64lsb = 0x07EDD5E59A4E28C2ULL;
-		auto result = index64lsb[((value & -value) * debruijn64lsb) >> 58];
-#ifdef __clang__
-		D_ASSERT(result == static_cast<uint64_t>(__builtin_ctzl(value_in)));
+		return index64lsb[((value & -value) * debruijn64lsb) >> 58];
 #endif
-		return result;
 	}
 };
 

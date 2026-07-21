@@ -75,7 +75,7 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	idx_t current_file = 0;
 	options.file_path = file_paths[current_file].path;
 
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, false);
+	buffer_manager = CSVBufferManager::Open(context, options, options.file_path, false);
 	idx_t only_header_or_empty_files = 0;
 
 	{
@@ -101,8 +101,7 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	while (total_number_of_rows < required_number_of_lines && current_file < files_to_sniff) {
 		auto option_copy = option_og;
 		option_copy.file_path = file_paths[current_file].path;
-		auto file_buffer_manager =
-		    make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, false);
+		auto file_buffer_manager = CSVBufferManager::Open(context, option_copy, option_copy.file_path, false);
 		// TODO: We could cache the sniffer to be reused during scanning. Currently that's an exercise left to the
 		// reader
 		CSVSniffer sniffer(option_copy, file_options, file_buffer_manager, CSVStateMachineCache::Get(context));
@@ -277,12 +276,6 @@ unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(Cli
 	return make_uniq<CSVGlobalState>(context, csv_data.options, bind_data.file_list->GetTotalFileCount(), bind_data);
 }
 
-struct CSVLocalState : public LocalTableFunctionState {
-public:
-	unique_ptr<StringValueScanner> csv_reader;
-	bool done = false;
-};
-
 unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState(ClientContext &,
                                                                            GlobalTableFunctionState &) {
 	return make_uniq<CSVLocalState>();
@@ -360,17 +353,17 @@ bool CSVFileScan::TryInitializeScan(ClientContext &context, GlobalTableFunctionS
 	auto &lstate = lstate_p.Cast<CSVLocalState>();
 	auto csv_reader_ptr = shared_ptr_cast<BaseFileReader, CSVFileScan>(shared_from_this());
 	gstate.FinishScan(std::move(lstate.csv_reader));
-	lstate.csv_reader = gstate.Next(csv_reader_ptr);
-	if (!lstate.csv_reader) {
-		// exhausted the scan
-		return false;
-	}
-	return true;
+	lstate.claim_state = CSVLocalState::ClaimState::IDLE;
+	return gstate.Next(csv_reader_ptr, lstate);
 }
 
 AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                               LocalTableFunctionState &local_state, DataChunk &chunk) {
 	auto &lstate = local_state.Cast<CSVLocalState>();
+	if (lstate.claim_state == CSVLocalState::ClaimState::PENDING) {
+		// the claim was taken under the global lock, the scanner is constructed here on the decoding thread
+		lstate.Materialize();
+	}
 	if (lstate.csv_reader->FinishedIterator()) {
 		return AsyncResult(SourceResultType::FINISHED);
 	}

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/autovec.hpp"
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
@@ -27,7 +28,7 @@ struct SelectionResult : private SelectionVector {
 	using SelectionVector::RowSpan;
 	using SelectionVector::SelectionVector;
 
-	//! Materialize a bitmap (no-op if flat) and view as a plain, index-only SelectionVector.
+	//! Materialize a bitmap (no-op if already flat) and view as a plain, index-only SelectionVector.
 	SelectionVector &Flattened() {
 		Flatten();
 		return *this;
@@ -139,7 +140,7 @@ private:
 		return IntersectBitmap(b);
 	}
 
-	idx_t IntersectBitmap(const validity_t *other_bitmap) {
+	DUCKDB_AUTOVEC_TARGET idx_t IntersectBitmap(const validity_t *other_bitmap) {
 		D_ASSERT(IsBitmap());
 		selection_data->indices_cached = false;
 		auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());

@@ -79,6 +79,18 @@ string ConvertToString::Operation(timestamp_t input) {
 	return StandardStringCast(input);
 }
 template <>
+string ConvertToString::Operation(timestamp_ns_t input) {
+	return StandardStringCast(input);
+}
+template <>
+string ConvertToString::Operation(timestamp_tz_t input) {
+	return StandardStringCast(input);
+}
+template <>
+string ConvertToString::Operation(timestamp_tz_ns_t input) {
+	return StandardStringCast(input);
+}
+template <>
 string ConvertToString::Operation(string_t input) {
 	return input.GetString();
 }

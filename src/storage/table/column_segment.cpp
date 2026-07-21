@@ -470,11 +470,8 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	const bool nested = vector.GetType().IsNested();
 	const bool identity_all = !sel.IsSet() && approved_tuple_count == scan_count;
 
-	// Bitmap fast path: evaluate the whole flat vector with no selection so the comparison Select can emit a
-	// bitmap, then AND it into the running selection (an index selection on either side is promoted first).
-	// A non-bitmap result is still used - never re-evaluated - but clears bitmap_capable for later vectors.
-	if (!nested && (identity_all || (state.bitmap_capable && sel.IsSet()))) {
-		// results land in the state-owned scratch; `sel` shares it, so its buffers are reused across vectors
+	// Bitmap fast path (bitmap_capable is false without the autovec path, so it falls through below)
+	if (!nested && state.bitmap_capable && (identity_all || sel.IsSet())) {
 		auto &new_sel = state.scratch;
 		idx_t matched = state.executor->SelectExpression(chunk, new_sel, nullptr, scan_count);
 		if (!new_sel.IsBitmap()) {

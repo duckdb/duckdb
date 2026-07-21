@@ -890,11 +890,26 @@ void BitpackingScanPartialInternal(ColumnSegment &segment, ColumnScanState &stat
 			AbortFOR<T>(result_buf, scanned, for_st, try_for);
 			T *current_result_ptr = result_data + result_offset + scanned;
 			if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
-				DecodeFORBlock(scan_state, scan_state.current_group_offset, offset_in_compression_group, to_scan,
-				               current_result_ptr, true);
+				idx_t remaining = MinValue<idx_t>(scan_count - scanned,
+				                                  BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+				idx_t batch_count = offset_in_compression_group == 0
+				                        ? remaining & ~(BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1)
+				                        : 0;
+				idx_t delta_count = to_scan;
+				if (batch_count > 0) {
+					DecodeFORBlocksBatchFlat(scan_state, scan_state.current_group_offset, batch_count,
+					                         current_result_ptr);
+					delta_count = batch_count;
+				} else {
+					DecodeFORBlock(scan_state, scan_state.current_group_offset, offset_in_compression_group, to_scan,
+					               current_result_ptr, true);
+				}
 				DeltaDecode<T_S>(reinterpret_cast<T_S *>(current_result_ptr),
-				                 static_cast<T_S>(scan_state.current_delta_offset), to_scan);
-				scan_state.current_delta_offset = current_result_ptr[to_scan - 1];
+				                 static_cast<T_S>(scan_state.current_delta_offset), delta_count);
+				scan_state.current_delta_offset = current_result_ptr[delta_count - 1];
+				scanned += delta_count;
+				scan_state.current_group_offset += delta_count;
+				continue;
 			} else {
 				idx_t remaining = MinValue<idx_t>(scan_count - scanned,
 				                                  BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);

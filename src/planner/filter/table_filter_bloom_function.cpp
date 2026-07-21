@@ -274,6 +274,9 @@ FilterPropagateResult BloomFilterScalarFun::FilterPrune(const FunctionStatistics
 	if (!data.filter || !data.filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	if (!data.filters_null_values) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 	auto column_stats = input.ChildStats(0);
 	if (!column_stats) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
