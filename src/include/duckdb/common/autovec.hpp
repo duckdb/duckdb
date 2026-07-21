@@ -198,8 +198,9 @@ template <uint32_t WIDTH, class OUT_T>
 DUCKDB_AUTOVEC_TARGET static inline std::size_t ShuffleUnpack(const uint32_t *DUCKDB_BITPACKING_RESTRICT in,
                                                               OUT_T *DUCKDB_BITPACKING_RESTRICT out, std::size_t groups,
                                                               OUT_T frame = 0) {
-	constexpr std::size_t window = (sizeof(OUT_T) == 8 && WIDTH > 26) ? (6 * WIDTH) / 8 : (4 * WIDTH) / 8;
-	constexpr std::size_t reserve = (window + 16 + 4 * WIDTH - 1) / (4 * WIDTH);
+	constexpr std::size_t width = WIDTH;
+	constexpr std::size_t window = (sizeof(OUT_T) == 8 && WIDTH > 26) ? (6 * width) / 8 : (4 * width) / 8;
+	constexpr std::size_t reserve = (window + 16 + 4 * width - 1) / (4 * width);
 	const std::size_t shuffle_groups = groups > reserve ? groups - reserve : 0;
 	const uint8_t *DUCKDB_BITPACKING_RESTRICT base = reinterpret_cast<const uint8_t *>(in);
 	for (std::size_t s = 0; s < shuffle_groups * 4; s++) { // 8 values/iteration, 4 iterations/group

@@ -100,7 +100,7 @@ DUCKDB_AUTOVEC_TARGET inline uint32_t CmpMaskBytes(duckdb_cmp_u8x32 p) {
 template <class T, class OP, bool COL>
 DUCKDB_AUTOVEC_TARGET static inline uint32_t CmpMask32(const T *a, const T *b, T constant) {
 	typedef T V __attribute__((vector_size(32)));
-	constexpr unsigned LANES = 32 / sizeof(T);
+	constexpr std::size_t LANES = 32 / sizeof(T);
 	V y {};
 	if constexpr (!COL) {
 		y = V {} + constant;
@@ -126,7 +126,7 @@ DUCKDB_AUTOVEC_TARGET static inline uint32_t CmpMask32(const T *a, const T *b, T
 		                                            32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62));
 	} else if constexpr (sizeof(T) == 4) {
 		duckdb_cmp_u32x8 acc {};
-		for (unsigned k = 0; k < 4; k++) {
+		for (std::size_t k = 0; k < 4; k++) {
 			V x, yk = y;
 			std::memcpy(&x, a + k * LANES, 32);
 			if constexpr (COL) {
@@ -137,7 +137,7 @@ DUCKDB_AUTOVEC_TARGET static inline uint32_t CmpMask32(const T *a, const T *b, T
 		return CmpMaskHorOr(acc);
 	} else {
 		duckdb_cmp_u64x4 acc {};
-		for (unsigned k = 0; k < 8; k++) {
+		for (std::size_t k = 0; k < 8; k++) {
 			V x, yk = y;
 			std::memcpy(&x, a + k * LANES, 32);
 			if constexpr (COL) {
@@ -177,7 +177,7 @@ DUCKDB_AUTOVEC_TARGET inline void NarrowCmpToBitmap(const T *__restrict data, T 
                                                     const validity_t *validity, validity_t *__restrict bitmap) {
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
 	if constexpr (std::is_integral<T>::value) {
-		CmpMaskToBitmap<T, OP, false>(data, nullptr, constant, count, bitmap);
+		CmpMaskToBitmap<T, OP, false>(data, data, constant, count, bitmap);
 		AndValidityIntoBitmap(validity, count, bitmap);
 		return;
 	}
