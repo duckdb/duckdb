@@ -47,6 +47,11 @@ JSONPathType JSONReadFunctionData::CheckPath(const Value &path_val, string &path
 
 JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t len, JSONPathType path_type_p)
     : constant(constant), path(std::move(path_p)), path_type(path_type_p), ptr(path.c_str()), len(len) {
+	if (constant && len != 0 && path[0] == '$' && path_type == JSONPathType::REGULAR) {
+		// The path was validated in CheckPath, parse it once so execution can skip tokenizing it per row
+		elements = JSONCommon::ParsePathElements(ptr, len, false);
+		use_elements = true;
+	}
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
@@ -89,6 +94,16 @@ JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vecto
     : paths(std::move(paths_p)), lens(std::move(lens_p)) {
 	for (const auto &path : paths) {
 		ptrs.push_back(path.c_str());
+	}
+	for (idx_t i = 0; i < paths.size(); i++) {
+		if (lens[i] != 0 && paths[i][0] == '$') {
+			// The paths were validated in CheckPath, parse them once
+			elements.push_back(JSONCommon::ParsePathElements(ptrs[i], lens[i], false));
+			use_elements.push_back(true);
+		} else {
+			elements.emplace_back();
+			use_elements.push_back(false);
+		}
 	}
 }
 

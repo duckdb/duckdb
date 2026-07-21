@@ -93,6 +93,7 @@ public:
 
 	//! How many values have we compressed so far?
 	idx_t total_tuple_count = 0;
+	bool verify_compression = false;
 
 private:
 	void *encoder = nullptr;

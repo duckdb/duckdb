@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -369,17 +370,98 @@ int8_t SignOperator::Operation(double input) {
 	}
 }
 
+// Returns whether we could safely produce output bounds.
+template <class T>
+bool SignStatsBounds(const BaseStatistics &input_stats, int8_t &min_sign, int8_t &max_sign) {
+	auto min = NumericStats::GetMin<T>(input_stats);
+	auto max = NumericStats::GetMax<T>(input_stats);
+	if constexpr (std::is_floating_point<T>::value) {
+		if (Value::IsNan(min) || Value::IsNan(max)) {
+			return false;
+		}
+	}
+	min_sign = SignOperator::Operation<T, int8_t>(min);
+	max_sign = SignOperator::Operation<T, int8_t>(max);
+	return true;
+}
+
+unique_ptr<BaseStatistics> PropagateSignStats(ClientContext &context, FunctionStatisticsInput &input) {
+	(void)context;
+	auto &child_stats = input.child_stats;
+	D_ASSERT(child_stats.size() == 1);
+	auto &input_stats = child_stats[0];
+	auto result = NumericStats::CreateEmpty(LogicalType::TINYINT);
+	result.CopyValidity(input_stats);
+	if (!input_stats.CanHaveNoNull()) {
+		return result.ToUnique();
+	}
+	if (!NumericStats::HasMinMax(input_stats)) {
+		return nullptr;
+	}
+
+	int8_t min_sign = 0;
+	int8_t max_sign = 0;
+	bool success = false;
+	switch (input.expr.GetChildren()[0]->GetReturnType().InternalType()) {
+	case PhysicalType::INT8:
+		success = SignStatsBounds<int8_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::INT16:
+		success = SignStatsBounds<int16_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::INT32:
+		success = SignStatsBounds<int32_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::INT64:
+		success = SignStatsBounds<int64_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::INT128:
+		success = SignStatsBounds<hugeint_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT8:
+		success = SignStatsBounds<uint8_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT16:
+		success = SignStatsBounds<uint16_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT32:
+		success = SignStatsBounds<uint32_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT64:
+		success = SignStatsBounds<uint64_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::UINT128:
+		success = SignStatsBounds<uhugeint_t>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::FLOAT:
+		success = SignStatsBounds<float>(input_stats, min_sign, max_sign);
+		break;
+	case PhysicalType::DOUBLE:
+		success = SignStatsBounds<double>(input_stats, min_sign, max_sign);
+		break;
+	default:
+		return nullptr;
+	}
+	if (!success) {
+		return nullptr;
+	}
+
+	NumericStats::SetMin(result, min_sign);
+	NumericStats::SetMax(result, max_sign);
+	return result.ToUnique();
+}
+
 } // namespace
 ScalarFunctionSet SignFun::GetFunctions() {
 	ScalarFunctionSet sign;
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
-		} else {
-			sign.AddFunction(
-			    ScalarFunction({type}, LogicalType::TINYINT,
-			                   ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type)));
 		}
+		ScalarFunction function({type}, LogicalType::TINYINT,
+		                        ScalarFunction::GetScalarUnaryFunctionFixedReturn<int8_t, SignOperator>(type));
+		function.SetStatisticsCallback(PropagateSignStats);
+		sign.AddFunction(function);
 	}
 	return sign;
 }
@@ -1040,10 +1122,68 @@ struct IEEEPowOperator {
 	}
 };
 
+unique_ptr<BaseStatistics> PropagatePowStats(ClientContext &context, FunctionStatisticsInput &input) {
+	D_ASSERT(input.child_stats.size() == 2);
+	auto &base_stats = input.child_stats[0];
+	auto &exponent_stats = input.child_stats[1];
+	if (!NumericStats::HasMinMax(exponent_stats)) {
+		return nullptr;
+	}
+
+	auto exponent_min = NumericStats::Min(exponent_stats).GetValue<double>();
+	auto exponent_max = NumericStats::Max(exponent_stats).GetValue<double>();
+	double result_min;
+	double result_max;
+	if (exponent_min == 0 && exponent_max == 0) {
+		result_min = 1;
+		result_max = 1;
+	} else {
+		if (!Value::IsFinite(exponent_min) || exponent_min != exponent_max || exponent_min < 0 ||
+		    std::trunc(exponent_min) != exponent_min) {
+			return nullptr;
+		}
+		if (!NumericStats::HasMinMax(base_stats)) {
+			return nullptr;
+		}
+		auto base_min = NumericStats::Min(base_stats).GetValue<double>();
+		auto base_max = NumericStats::Max(base_stats).GetValue<double>();
+		// Positive integer exponents have safe bounds across the complete finite base domain
+		if (!Value::IsFinite(base_min) || !Value::IsFinite(base_max)) {
+			return nullptr;
+		}
+		auto power_min = std::pow(base_min, exponent_min);
+		auto power_max = std::pow(base_max, exponent_min);
+		if (!Value::IsFinite(power_min) || !Value::IsFinite(power_max)) {
+			return nullptr;
+		}
+		// Odd powers preserve order; even powers decrease toward zero and increase away from zero
+		if (std::fmod(exponent_min, 2) != 0) {
+			result_min = power_min;
+			result_max = power_max;
+		} else if (base_min <= 0 && base_max >= 0) {
+			result_min = 0;
+			result_max = MaxValue(power_min, power_max);
+		} else if (base_max < 0) {
+			result_min = power_max;
+			result_max = power_min;
+		} else {
+			result_min = power_min;
+			result_max = power_max;
+		}
+	}
+
+	auto result = NumericStats::CreateEmpty(input.expr.GetReturnType());
+	NumericStats::SetMin(result, Value::DOUBLE(result_min));
+	NumericStats::SetMax(result, Value::DOUBLE(result_max));
+	result.CombineValidity(base_stats, exponent_stats);
+	return result.ToUnique();
+}
+
 } // namespace
 ScalarFunction PowOperatorFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingBinary<PowOperator, IEEEPowOperator>);
+	function.SetStatisticsCallback(PropagatePowStats);
 	function.SetFallible();
 	return function;
 }
@@ -1516,8 +1656,10 @@ struct ATanOperator {
 } // namespace
 
 ScalarFunction AtanFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, ATanOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                        ScalarFunction::UnaryFunction<double, double, ATanOperator>);
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1613,8 +1755,10 @@ struct SinhOperator {
 } // namespace
 
 ScalarFunction SinhFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, SinhOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                        ScalarFunction::UnaryFunction<double, double, SinhOperator>);
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1630,8 +1774,10 @@ struct AsinhOperator {
 } // namespace
 
 ScalarFunction AsinhFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, AsinhOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                        ScalarFunction::UnaryFunction<double, double, AsinhOperator>);
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1647,8 +1793,10 @@ struct TanhOperator {
 } // namespace
 
 ScalarFunction TanhFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, TanhOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                        ScalarFunction::UnaryFunction<double, double, TanhOperator>);
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	return function;
 }
 
 //===--------------------------------------------------------------------===//

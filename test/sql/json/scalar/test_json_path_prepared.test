@@ -1,0 +1,64 @@
+# name: test/sql/json/scalar/test_json_path_prepared.test
+# description: Test JSON path functions with prepared statement parameters as paths
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+statement ok
+PREPARE extract_stmt AS SELECT json_extract('{"a":1,"b":{"c":2}}', $1);
+
+query T
+EXECUTE extract_stmt('$.a')
+----
+1
+
+query T
+EXECUTE extract_stmt('$.b.c')
+----
+2
+
+query T
+EXECUTE extract_stmt('/b/c')
+----
+2
+
+statement ok
+PREPARE set_stmt AS SELECT json_set('{"a":1}', $1, '2');
+
+query T
+EXECUTE set_stmt('$.b')
+----
+{"a":1,"b":2}
+
+query T
+EXECUTE set_stmt('$.a')
+----
+{"a":2}
+
+statement ok
+PREPARE remove_stmt AS SELECT json_remove('{"a":1,"b":2}', $1);
+
+query T
+EXECUTE remove_stmt('$.a')
+----
+{"b":2}
+
+query T
+EXECUTE remove_stmt('$.c')
+----
+{"a":1,"b":2}
+
+# Malformed path through a parameter still raises the path error
+statement error
+EXECUTE set_stmt('$not_a_path')
+----
+JSON path error
+
+# Constant folding still works when the path comes from a scalar subquery
+query T
+SELECT json_set('{"a":1}', (SELECT '$.b'), '2')
+----
+{"a":1,"b":2}

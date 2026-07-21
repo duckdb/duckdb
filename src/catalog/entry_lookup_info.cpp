@@ -30,9 +30,14 @@ EntryLookupInfo::EntryLookupInfo(const EntryLookupInfo &parent, optional_ptr<Bou
                       parent.error_context) {
 }
 
-EntryLookupInfo EntryLookupInfo::SchemaLookup(const EntryLookupInfo &parent, Identifier schema_name) {
-	return EntryLookupInfo(CatalogType::SCHEMA_ENTRY, QualifiedName(std::move(schema_name)), parent.at_clause,
-	                       parent.error_context);
+EntryLookupInfo EntryLookupInfo::SchemaLookup(const EntryLookupInfo &parent, vector<Identifier> schema_path) {
+	Identifier schema_name;
+	if (!schema_path.empty()) {
+		schema_name = std::move(schema_path.back());
+		schema_path.pop_back();
+	}
+	return EntryLookupInfo(CatalogType::SCHEMA_ENTRY, QualifiedName(std::move(schema_path), std::move(schema_name)),
+	                       parent.at_clause, parent.error_context);
 }
 
 CatalogType EntryLookupInfo::GetCatalogType() const {

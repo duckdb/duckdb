@@ -1,5 +1,6 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
@@ -8,22 +9,18 @@ namespace duckdb {
 enum class JSONModifyType : uint8_t { SET, INSERT, REPLACE, REMOVE };
 
 //! Parse a JSONPath or bare key into path elements (throws on malformed paths and wildcards)
-static vector<JSONPathElement> ParseModifyPath(const string_t &path_str) {
+static vector<JSONPathElement> ParseModifyPath(const char *ptr, idx_t len, bool binder) {
 	vector<JSONPathElement> elements;
-	auto ptr = path_str.GetData();
-	auto len = path_str.GetSize();
 	if (len == 0) {
 		return elements; // The empty path addresses the whole document
 	}
 	if (*ptr == '$') {
-		JSONPathIterator iterator(ptr, len, false);
-		JSONPathElement element;
-		while (iterator.Next(element)) {
+		elements = JSONCommon::ParsePathElements(ptr, len, binder);
+		for (const auto &element : elements) {
 			if (element.type == JSONPathElementType::WILDCARD ||
 			    element.type == JSONPathElementType::RECURSIVE_WILDCARD) {
 				throw InvalidInputException("JSON path wildcards are not supported in JSON modification functions");
 			}
-			elements.push_back(element);
 		}
 	} else {
 		// Bare key name
@@ -34,6 +31,50 @@ static vector<JSONPathElement> ParseModifyPath(const string_t &path_str) {
 	}
 	return elements;
 }
+
+//! Bind data for the JSON modification functions, holds the path elements of a constant path
+struct JSONModifyFunctionData : public FunctionData {
+public:
+	JSONModifyFunctionData(bool constant_p, string path_p) : constant(constant_p), path(std::move(path_p)) {
+		if (constant && (path.empty() || path[0] != '/')) {
+			// JSONPath, bare key, or empty path: parse it once so execution can skip tokenizing it per row
+			try {
+				elements = ParseModifyPath(path.c_str(), path.size(), true);
+				use_elements = true;
+			} catch (const std::exception &) {
+				// Invalid path: parse per row instead, so the error surfaces only if a row is actually
+				// evaluated, keeping it catchable by TRY and silent in unreachable branches
+			}
+		}
+	}
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<JSONModifyFunctionData>(constant, path);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<JSONModifyFunctionData>();
+		return constant == other.constant && path == other.path;
+	}
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &arguments = input.GetArguments();
+		bool constant = false;
+		string path;
+		if (arguments[1]->IsFoldable()) {
+			const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+			if (!path_val.IsNull()) {
+				constant = true;
+				path = path_val.DefaultCastAs(LogicalType::VARCHAR).GetValue<string>();
+			}
+		}
+		return make_uniq<JSONModifyFunctionData>(constant, std::move(path));
+	}
+
+public:
+	const bool constant;
+	const string path;
+	vector<JSONPathElement> elements;
+	bool use_elements = false;
+};
 
 //! Resolve an array path element to a position, returns false if it is out of range
 static bool ResolveArrayPosition(yyjson_mut_val *arr, const JSONPathElement &element, idx_t &pos) {
@@ -226,24 +267,36 @@ static void ModifyAtPointer(yyjson_mut_doc *doc, const string_t &path_str, yyjso
 	}
 }
 
-//! Apply a modification at a JSONPath or JSON Pointer, returns false if the root was removed
-static bool ModifyDocument(yyjson_mut_doc *doc, const string_t &path_str, yyjson_mut_val *new_val,
-                           JSONModifyType type) {
-	auto ptr = path_str.GetData();
-	auto len = path_str.GetSize();
-	if (len != 0 && *ptr == '/') {
-		ModifyAtPointer(doc, path_str, new_val, type);
+//! Apply a modification at pre-parsed path elements
+static void ModifyDocumentElements(yyjson_mut_doc *doc, const vector<JSONPathElement> &elements,
+                                   yyjson_mut_val *new_val, JSONModifyType type) {
+	if (elements.empty()) {
+		ModifyRoot(doc, type, new_val);
+		return;
+	}
+	const auto create = type == JSONModifyType::SET || type == JSONModifyType::INSERT;
+	JSONModifyTarget target;
+	if (ResolveParent(doc, elements, create, target) &&
+	    ApplyModify(doc, target.parent, elements.back(), type, new_val) && target.created) {
+		AttachChild(doc, target.attach_to, *target.attach_element, target.created);
+	}
+}
+
+//! Apply a modification at a JSONPath or JSON Pointer, using the bind data's path elements when available
+static bool ModifyDocument(yyjson_mut_doc *doc, const JSONModifyFunctionData &info, const string_t &path_str,
+                           yyjson_mut_val *new_val, JSONModifyType type) {
+	if (info.use_elements) {
+		ModifyDocumentElements(doc, info.elements, new_val, type);
+	} else if (info.constant && !info.path.empty() && info.path[0] == '/') {
+		ModifyAtPointer(doc, string_t(info.path.c_str(), UnsafeNumericCast<uint32_t>(info.path.size())), new_val, type);
 	} else {
-		auto elements = ParseModifyPath(path_str);
-		if (elements.empty()) {
-			ModifyRoot(doc, type, new_val);
+		// Non constant path, or a constant path that did not parse at bind time (the error surfaces here)
+		auto ptr = path_str.GetData();
+		auto len = path_str.GetSize();
+		if (len != 0 && *ptr == '/') {
+			ModifyAtPointer(doc, path_str, new_val, type);
 		} else {
-			const auto create = type == JSONModifyType::SET || type == JSONModifyType::INSERT;
-			JSONModifyTarget target;
-			if (ResolveParent(doc, elements, create, target) &&
-			    ApplyModify(doc, target.parent, elements.back(), type, new_val) && target.created) {
-				AttachChild(doc, target.attach_to, *target.attach_element, target.created);
-			}
+			ModifyDocumentElements(doc, ParseModifyPath(ptr, len, false), new_val, type);
 		}
 	}
 	return yyjson_mut_doc_get_root(doc) != nullptr;
@@ -251,6 +304,8 @@ static bool ModifyDocument(yyjson_mut_doc *doc, const string_t &path_str, yyjson
 
 //! Shared implementation of json_set, json_insert, and json_replace
 static void ModifyFunction(JSONModifyType type, DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	const auto &info = func_expr.BindInfo()->Cast<JSONModifyFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -262,7 +317,7 @@ static void ModifyFunction(JSONModifyType type, DataChunk &args, ExpressionState
 		    auto val_doc = JSONCommon::ReadDocument(val_str, JSONCommon::READ_FLAG, alc);
 		    auto new_val = yyjson_val_mut_copy(mut_doc, val_doc->root);
 
-		    ModifyDocument(mut_doc, path_str, new_val, type);
+		    ModifyDocument(mut_doc, info, path_str, new_val, type);
 		    return JSONCommon::WriteVal<yyjson_mut_val>(yyjson_mut_doc_get_root(mut_doc), alc);
 	    });
 
@@ -286,6 +341,8 @@ static void JsonReplaceFunction(DataChunk &args, ExpressionState &state, Vector 
 
 //! Remove the value at a path in a JSON document (no-op if the path does not exist)
 static void JsonRemoveFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	const auto &info = func_expr.BindInfo()->Cast<JSONModifyFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -294,7 +351,7 @@ static void JsonRemoveFunction(DataChunk &args, ExpressionState &state, Vector &
 		    auto doc = JSONCommon::ReadDocument(doc_str, JSONCommon::READ_FLAG, alc);
 		    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
 
-		    if (!ModifyDocument(mut_doc, path_str, nullptr, JSONModifyType::REMOVE)) {
+		    if (!ModifyDocument(mut_doc, info, path_str, nullptr, JSONModifyType::REMOVE)) {
 			    return nullopt; // Removing the root leaves no document behind
 		    }
 		    return JSONCommon::WriteVal<yyjson_mut_val>(yyjson_mut_doc_get_root(mut_doc), alc);
@@ -305,25 +362,28 @@ static void JsonRemoveFunction(DataChunk &args, ExpressionState &state, Vector &
 
 ScalarFunctionSet JSONFunctions::GetSetFunction() {
 	ScalarFunction fun("json_set", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
-	                   LogicalType::JSON(), JsonSetFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	                   LogicalType::JSON(), JsonSetFunction, JSONModifyFunctionData::Bind, nullptr,
+	                   JSONFunctionLocalState::Init);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetInsertFunction() {
 	ScalarFunction fun("json_insert", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
-	                   LogicalType::JSON(), JsonInsertFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	                   LogicalType::JSON(), JsonInsertFunction, JSONModifyFunctionData::Bind, nullptr,
+	                   JSONFunctionLocalState::Init);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetReplaceFunction() {
 	ScalarFunction fun("json_replace", {LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON()},
-	                   LogicalType::JSON(), JsonReplaceFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	                   LogicalType::JSON(), JsonReplaceFunction, JSONModifyFunctionData::Bind, nullptr,
+	                   JSONFunctionLocalState::Init);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetRemoveFunction() {
 	ScalarFunction fun("json_remove", {LogicalType::JSON(), LogicalType::VARCHAR}, LogicalType::JSON(),
-	                   JsonRemoveFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	                   JsonRemoveFunction, JSONModifyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init);
 	return ScalarFunctionSet(fun);
 }
 

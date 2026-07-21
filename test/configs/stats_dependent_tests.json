@@ -4,6 +4,7 @@
       "reason": "Statistics are not set without optimizers.",
       "paths": [
         "test/optimizer/statistics/statistics_numeric.test",
+        "test/sql/optimizer/power_zonemap_pruning.test",
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
         "test/parquet/parquet_stats_function.test",
@@ -37,6 +38,8 @@
         "test/sql/storage/compression/dict_fsst/repeated_string_stats.test",
         "test/sql/types/geo/geometry_from_wkb_stats.test",
         "test/parquet/variant/variant_stats_propagation.test",
+        "test/parquet/parquet_extract_pushdown.test",
+        "test/parquet/variant/variant_shred_unsigned_types.test",
         "test/sql/types/geo/geometry_stats.test",
         "test/sql/types/geo/geometry_compatability.test",
         "test/sql/function/numeric/test_random.test",

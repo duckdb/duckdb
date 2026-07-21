@@ -118,6 +118,9 @@ jobs:
         shell: bash
         run: |
           effective_git_describe="${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.git_ref }}" && -z "$effective_git_describe" ]]; then
+            effective_git_describe="v2.0.0-alpha${{ github.run_number }}"
+          fi
           echo "effective_git_describe=$effective_git_describe" >> "$GITHUB_OUTPUT"
           echo "Using effective_git_describe=$effective_git_describe"
 
@@ -1473,6 +1476,11 @@ jobs:
             run_python=true
           fi
 
+          run_release_dispatch=false
+          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && -n "$OVERRIDE_GIT_DESCRIBE" ]]; then
+            run_release_dispatch=true
+          fi
+
           echo "summary dispatch context:"
           echo "  event_name=$EVENT_NAME"
           echo "  repository=$REPOSITORY"
@@ -1487,13 +1495,32 @@ jobs:
           echo "  run_vendor=$run_vendor"
           echo "  run_nightly=$run_nightly"
           echo "  run_python=$run_python"
+          echo "  run_release_dispatch=$run_release_dispatch"
 
           {
             echo "target_branch=$target_branch"
             echo "run_vendor=$run_vendor"
             echo "run_nightly=$run_nightly"
             echo "run_python=$run_python"
+            echo "run_release_dispatch=$run_release_dispatch"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Run release dispatch
+        if: ${{ always() && steps.summary-context.outputs.run_release_dispatch == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SOURCE_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh workflow run dispatch.yml \
+            --repo duckdb/duckdb-workflow-trigger \
+            --ref main \
+            --field event=core_ready \
+            --field duckdb_version="${{ needs.prepare.outputs.effective_git_describe }}" \
+            --field duckdb_commit="${{ needs.prepare.outputs.git_sha }}" \
+            --field status=success \
+            --field source_run_url="$SOURCE_RUN_URL" \
+            --field message="DuckDB Main CI release artifacts are ready"
 
       - name: Run ODBC Vendor
         if: ${{ always() && steps.summary-context.outputs.run_vendor == 'true' }}

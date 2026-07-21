@@ -15,7 +15,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
       options(std::move(options_p)) {
 	// Initialize Buffer Manager
 	if (!buffer_manager) {
-		buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file, per_file_single_threaded);
+		buffer_manager = CSVBufferManager::Open(context, options, file, per_file_single_threaded);
 	}
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
@@ -53,7 +53,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, con
                          const MultiFileOptions &file_options)
     : BaseFileReader(file_p), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(options_p) {
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file);
+	buffer_manager = CSVBufferManager::Open(context, options, file);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();

@@ -22,6 +22,7 @@ class LocalDatabaseFileSystem;
 class BufferManager;
 class DatabaseManager;
 class ExternalResourceTypeRegistry;
+class ExternalResourcesManager;
 class StorageManager;
 class Catalog;
 class TransactionManager;
@@ -56,6 +57,7 @@ public:
 	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API ExternalResourceTypeRegistry &GetExternalResourceTypeRegistry();
+	DUCKDB_API ExternalResourcesManager &GetExternalResourcesManager();
 	DUCKDB_API FileSystem &GetFileSystem();
 	DUCKDB_API FileSystem &GetLocalFileSystem();
 	DUCKDB_API ExternalFileCache &GetExternalFileCache();
@@ -97,6 +99,7 @@ private:
 	shared_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<ExternalResourceTypeRegistry> external_resource_type_registry;
+	unique_ptr<ExternalResourcesManager> external_resources_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;

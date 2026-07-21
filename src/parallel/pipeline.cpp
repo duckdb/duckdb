@@ -16,6 +16,10 @@
 
 namespace duckdb {
 
+static shared_ptr<GlobalSourceState> ToSharedSourceState(unique_ptr<GlobalSourceState> state) {
+	return shared_ptr<GlobalSourceState>(std::move(state));
+}
+
 PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
     : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p) {
 }
@@ -86,9 +90,20 @@ bool Pipeline::GetProgress(ProgressData &progress) {
 	}
 	auto &client = executor.context;
 
-	progress = source->GetProgress(client, *source_state);
+	auto state = GetSourceState();
+	if (state) {
+		progress = source->GetProgress(client, *state);
+	} else {
+		progress.done = 0;
+		progress.total = double(source_cardinality);
+	}
 	progress.Normalize(double(source_cardinality));
-	progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
+	if (sink) {
+		lock_guard<mutex> guard(sink->lock);
+		if (sink->sink_state) {
+			progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
+		}
+	}
 	return progress.IsValid();
 }
 
@@ -106,6 +121,8 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 	if (!source->ParallelSource()) {
 		return false;
 	}
+	auto source_state = GetSourceState();
+	D_ASSERT(source_state);
 	max_threads = source_state->MaxThreads();
 
 	for (auto &op_ref : operators) {
@@ -113,6 +130,7 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 		if (!op.ParallelOperator()) {
 			return false;
 		}
+		lock_guard<mutex> guard(op.lock);
 		if (op.op_state) {
 			max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
 		}
@@ -123,8 +141,11 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
 	}
-	if (sink && sink->sink_state) {
-		max_threads = sink->sink_state->MaxThreads(max_threads);
+	if (sink) {
+		lock_guard<mutex> guard(sink->lock);
+		if (sink->sink_state) {
+			max_threads = sink->sink_state->MaxThreads(max_threads);
+		}
 	}
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
@@ -190,9 +211,58 @@ bool Pipeline::IsOrderDependent() const {
 	return false;
 }
 
+void Pipeline::SetExternalInput() {
+	input_mode = PipelineInputMode::EXTERNAL_INPUT;
+	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
+	external_input_event.reset();
+	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_UNSET;
+}
+
+bool Pipeline::CanUseExternalInput() const {
+	if (!sink || !sink->ParallelSink() || sink->SinkOrderDependent()) {
+		return false;
+	}
+	if (sink->GetExternalInputSupport() != PipelineExternalInputSupport::SUPPORTED) {
+		return false;
+	}
+	if (sink->RequiredPartitionInfo().AnyRequired()) {
+		return false;
+	}
+	for (auto &op_ref : operators) {
+		auto &op = op_ref.get();
+		if (op.GetExternalInputSupport() != PipelineExternalInputSupport::SUPPORTED) {
+			return false;
+		}
+		if (!op.ParallelOperator()) {
+			return false;
+		}
+		if (op.OperatorOrder() == OrderPreservationType::FIXED_ORDER) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool Pipeline::CanStopSourceEarly() const {
+	// Used by CTE fanout selection to keep streaming only when the consumer may finish early.
+	if (sink && sink->GetSourceConsumption() == PipelineSourceConsumption::MAY_STOP_EARLY) {
+		return true;
+	}
+	for (auto &op_ref : operators) {
+		if (op_ref.get().GetSourceConsumption() == PipelineSourceConsumption::MAY_STOP_EARLY) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);
+	if (IsExternalInput()) {
+		ScheduleExternalInputEvent(event);
+		return;
+	}
 	Reset();
 	if (!ScheduleParallel(event)) {
 		// could not parallelize this pipeline: push a sequential task instead
@@ -258,7 +328,7 @@ void Pipeline::PrepareFinalize() {
 	}
 }
 
-void Pipeline::Reset() {
+void Pipeline::ResetSinkAndOperators() {
 	ResetSink();
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
@@ -267,9 +337,11 @@ void Pipeline::Reset() {
 			op.op_state = op.GetGlobalOperatorState(GetClientContext());
 		}
 	}
+}
+
+void Pipeline::Reset() {
+	ResetSinkAndOperators();
 	ResetSource(false);
-	// we no longer reset source here because this function is no longer guaranteed to be called by the main thread
-	// source reset needs to be called by the main thread because resetting a source may call into clients like R
 	initialized = true;
 }
 
@@ -290,10 +362,11 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
-	if (!allow_reuse || !source_state || !source_state->SupportsReuse()) {
-		source_state = source->GetGlobalSourceState(client);
-	} else {
+	auto source_state = GetSourceState();
+	if (allow_reuse && source_state && source_state->SupportsReuse()) {
 		source_state->Reset(client);
+	} else {
+		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(client)));
 	}
 	initialized = true;
 }
@@ -302,8 +375,155 @@ void Pipeline::ResetSource(bool force) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
+	auto source_state = GetSourceState();
 	if (force || !source_state) {
-		source_state = source->GetGlobalSourceState(GetClientContext());
+		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(GetClientContext())));
+	}
+}
+
+void Pipeline::PrepareExternalInput() {
+	if (!IsExternalInput()) {
+		throw InternalException("PrepareExternalInput called for a pipeline that is not externally fed");
+	}
+	if (initialized) {
+		return;
+	}
+	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
+	if (initialized) {
+		return;
+	}
+	ResetSinkAndOperators();
+	initialized = true;
+}
+
+shared_ptr<GlobalSourceState> Pipeline::GetSourceState() {
+	annotated_lock_guard<annotated_mutex> guard(source_state_lock);
+	return source_state;
+}
+
+void Pipeline::SetSourceState(shared_ptr<GlobalSourceState> state) {
+	annotated_lock_guard<annotated_mutex> guard(source_state_lock);
+	source_state = std::move(state);
+}
+
+void Pipeline::FinishSourceAndPreventBlocking(ClientContext &context) {
+	if (IsExternalInput() || !source) {
+		return;
+	}
+	auto source_state = GetSourceState();
+	if (!source_state) {
+		return;
+	}
+	source->SourceFinished(context, *source_state);
+	annotated_lock_guard<annotated_mutex> state_guard(source_state->lock);
+	source_state->PreventBlocking();
+	source_state->UnblockTasks();
+}
+
+void Pipeline::PreventSourceBlocking() {
+	auto source_state = GetSourceState();
+	if (!source_state) {
+		return;
+	}
+	annotated_lock_guard<annotated_mutex> state_guard(source_state->lock);
+	source_state->PreventBlocking();
+	source_state->UnblockTasks();
+}
+
+void Pipeline::PreventSinkBlocking() {
+	auto sink = GetSink();
+	if (!sink) {
+		return;
+	}
+	lock_guard<mutex> sink_guard(sink->lock);
+	if (!sink->sink_state) {
+		return;
+	}
+	annotated_lock_guard<annotated_mutex> state_guard(sink->sink_state->lock);
+	sink->sink_state->PreventBlocking();
+	sink->sink_state->UnblockTasks();
+}
+
+void Pipeline::PreventBlocking() {
+	PreventSourceBlocking();
+	PreventSinkBlocking();
+}
+
+void Pipeline::SetExternalInputEvent(const shared_ptr<Event> &event) {
+	if (!IsExternalInput()) {
+		throw InternalException("SetExternalInputEvent called for a pipeline that is not externally fed");
+	}
+	if (!event) {
+		throw InternalException("SetExternalInputEvent called with a null event");
+	}
+	annotated_lock_guard<annotated_mutex> guard(external_input_lock);
+	auto existing_event = external_input_event.lock();
+	if (existing_event && existing_event.get() != event.get()) {
+		throw InternalException("External input pipeline event was registered more than once");
+	}
+	external_input_event = event;
+	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_REGISTERED;
+}
+
+void Pipeline::ScheduleExternalInputEvent(shared_ptr<Event> event) {
+	shared_ptr<Event> event_to_finish;
+	{
+		annotated_lock_guard<annotated_mutex> guard(external_input_lock);
+		if (!IsExternalInput()) {
+			throw InternalException("ScheduleExternalInputEvent called for a pipeline that is not externally fed");
+		}
+		if (!event) {
+			throw InternalException("ScheduleExternalInputEvent called with a null event");
+		}
+		auto existing_event = external_input_event.lock();
+		if (existing_event && existing_event.get() != event.get()) {
+			throw InternalException("External input pipeline event was registered more than once");
+		}
+		external_input_event = event;
+		switch (external_input_event_state) {
+		case ExternalInputEventState::EXTERNAL_INPUT_COMPLETED_BEFORE_SCHEDULE:
+			external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_COMPLETED;
+			event_to_finish = std::move(event);
+			break;
+		case ExternalInputEventState::EXTERNAL_INPUT_COMPLETED:
+			event_to_finish = std::move(event);
+			break;
+		case ExternalInputEventState::EXTERNAL_INPUT_UNSET:
+		case ExternalInputEventState::EXTERNAL_INPUT_REGISTERED:
+		case ExternalInputEventState::EXTERNAL_INPUT_EVENT_SCHEDULED:
+			external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_EVENT_SCHEDULED;
+			break;
+		}
+	}
+	if (event_to_finish && !event_to_finish->IsFinished()) {
+		event_to_finish->Finish();
+	}
+}
+
+void Pipeline::CompleteExternalInput() {
+	shared_ptr<Event> event;
+	{
+		annotated_lock_guard<annotated_mutex> guard(external_input_lock);
+		if (!IsExternalInput()) {
+			throw InternalException("CompleteExternalInput called for a pipeline that is not externally fed");
+		}
+		if (external_input_event_state == ExternalInputEventState::EXTERNAL_INPUT_COMPLETED ||
+		    external_input_event_state == ExternalInputEventState::EXTERNAL_INPUT_COMPLETED_BEFORE_SCHEDULE) {
+			return;
+		}
+		event = external_input_event.lock();
+		if (!event) {
+			throw InternalException("Completing external input pipeline before its event was scheduled");
+		}
+		if (external_input_event_state == ExternalInputEventState::EXTERNAL_INPUT_REGISTERED) {
+			external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_COMPLETED_BEFORE_SCHEDULE;
+			return;
+		}
+		D_ASSERT(external_input_event_state == ExternalInputEventState::EXTERNAL_INPUT_EVENT_SCHEDULED);
+		external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_COMPLETED;
+	}
+	if (!event->IsFinished()) {
+		event->Finish();
 	}
 }
 
@@ -318,6 +538,18 @@ void Pipeline::Ready() {
 void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 	D_ASSERT(pipeline);
 	dependencies.push_back(weak_ptr<Pipeline>(pipeline));
+	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
+}
+
+void Pipeline::AddDataflowDependency(shared_ptr<Pipeline> &pipeline) {
+	D_ASSERT(pipeline);
+	dataflow_dependencies.push_back(weak_ptr<Pipeline>(pipeline));
+	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
+}
+
+void Pipeline::AddExternalFinishDependency(shared_ptr<Pipeline> &pipeline) {
+	D_ASSERT(pipeline);
+	external_finish_dependencies.push_back(weak_ptr<Pipeline>(pipeline));
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
 }
 
@@ -371,6 +603,7 @@ const vector<reference<PhysicalOperator>> &Pipeline::GetIntermediateOperators() 
 }
 
 void Pipeline::ClearSource() {
+	annotated_lock_guard<annotated_mutex> source_guard(source_state_lock);
 	source_state.reset();
 	batch_indexes.clear();
 }
