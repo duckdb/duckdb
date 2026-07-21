@@ -200,8 +200,8 @@ public:
 	//! Appends a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
 	//! table_chunk is in table layout. Bound indexes append it; unbound indexes buffer their own columns of it.
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-	                                 DataChunk &table_chunk, row_t row_start,
-	                                 const IndexAppendMode index_append_mode, optional_idx active_checkpoint);
+	                                 DataChunk &table_chunk, row_t row_start, const IndexAppendMode index_append_mode,
+	                                 optional_idx active_checkpoint);
 	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk, row_t row_start,
 	                          const IndexAppendMode index_append_mode);
 	//! Revert a previous append made to indexes in a chunk with the row ids [row_start, ..., row_start + chunk.size()]

@@ -468,9 +468,9 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
 	idx_t base_id = offset + state.append_state.total_append_count;
 
 	if (!storage->append_indexes.Empty()) {
-		auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk,
-		                                        NumericCast<row_t>(base_id), storage->index_append_mode,
-		                                        optional_idx());
+		auto error =
+		    DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk,
+		                               NumericCast<row_t>(base_id), storage->index_append_mode, optional_idx());
 		if (error.HasError()) {
 			error.Throw();
 		}

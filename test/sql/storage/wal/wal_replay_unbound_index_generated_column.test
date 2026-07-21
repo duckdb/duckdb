@@ -1,6 +1,5 @@
 # name: test/sql/storage/wal/wal_replay_unbound_index_generated_column.test
-# description: WAL replay into an unbound index on a table with a generated column, so that the
-#              indexed column's logical and physical ids differ
+# description: WAL replay into an unbound index where a generated column shifts logical vs physical ids
 # group: [wal]
 
 require skip_reload

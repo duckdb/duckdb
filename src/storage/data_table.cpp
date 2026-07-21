@@ -1369,8 +1369,8 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 // Indexes
 //===--------------------------------------------------------------------===//
 ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-                                     DataChunk &table_chunk, row_t row_start,
-                                     const IndexAppendMode index_append_mode, optional_idx active_checkpoint) {
+                                     DataChunk &table_chunk, row_t row_start, const IndexAppendMode index_append_mode,
+                                     optional_idx active_checkpoint) {
 	// Generate the vector of row identifiers.
 	Vector row_ids(LogicalType::ROW_TYPE);
 	VectorOperations::GenerateSequence(row_ids, table_chunk.size(), row_start, 1);

@@ -33,7 +33,6 @@ class Vector;
 class WriteAheadLog;
 struct ColumnFetchState;
 struct LocalAppendState;
-struct DataTableInfo;
 struct ParallelCollectionScanState;
 struct TableAppendState;
 struct TransactionData;

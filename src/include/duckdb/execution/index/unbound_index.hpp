@@ -69,12 +69,10 @@ private:
 	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
 	BufferedIndexReplays buffered_replays;
 
-	//! Maps positions in the buffered chunks to physical column numbers of the table:
-	//! buffered column [i] holds the data of the table's physical column mapped_column_ids[i].
-	//! For example, for an index on column c of t(a, b, c), buffered chunks are [c, rowid] and
-	//! mapped_column_ids is [2].
-	//! Contains exactly this index's own columns, deduplicated and sorted. Fixed on construction;
-	//! BufferChunk projects every incoming chunk onto this layout.
+	//! Layout of the buffered replay chunks: buffered column [i] holds the table's physical column
+	//! mapped_column_ids[i] (e.g. an index on column c of t(a, b, c) buffers [c, rowid], mapping [2]).
+	//! Exactly this index's own columns deduplicated and sorted. fixed on construction + BufferChunk
+	//! projects every incoming chunk onto this layout.
 	vector<StorageIndex> mapped_column_ids;
 
 public:
