@@ -104,11 +104,11 @@ void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(unique_ptr<Lo
 	RemapProjectionMap(projection_map, child_bindings_before, child_bindings_after);
 }
 
-void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
-                                                  const std::function<void(unique_ptr<Expression> *child)> &callback) {
+template <class OPERATOR, class CALLBACK>
+static void EnumerateOperatorExpressions(OPERATOR &op, const CALLBACK &callback) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-		auto &get = op.Cast<LogicalExpressionGet>();
+		auto &get = op.template Cast<LogicalExpressionGet>();
 		for (auto &expr_list : get.expressions) {
 			for (auto &expr : expr_list) {
 				callback(&expr);
@@ -117,21 +117,21 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto &order = op.Cast<LogicalOrder>();
+		auto &order = op.template Cast<LogicalOrder>();
 		for (auto &node : order.orders) {
 			callback(&node.expression);
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_TOP_N: {
-		auto &order = op.Cast<LogicalTopN>();
+		auto &order = op.template Cast<LogicalTopN>();
 		for (auto &node : order.orders) {
 			callback(&node.expression);
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		auto &distinct = op.Cast<LogicalDistinct>();
+		auto &distinct = op.template Cast<LogicalDistinct>();
 		for (auto &target : distinct.distinct_targets) {
 			callback(&target);
 		}
@@ -143,7 +143,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		auto &rec = op.Cast<LogicalRecursiveCTE>();
+		auto &rec = op.template Cast<LogicalRecursiveCTE>();
 
 		for (auto &target : rec.key_targets) {
 			callback(&target);
@@ -154,7 +154,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT: {
-		auto &insert = op.Cast<LogicalInsert>();
+		auto &insert = op.template Cast<LogicalInsert>();
 		if (insert.on_conflict_info.on_conflict_condition) {
 			callback(&insert.on_conflict_info.on_conflict_condition);
 		}
@@ -164,7 +164,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
-		auto &join = op.Cast<LogicalDependentJoin>();
+		auto &join = op.template Cast<LogicalDependentJoin>();
 		if (join.condition) {
 			callback(&join.condition);
 		}
@@ -173,7 +173,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op.Cast<LogicalComparisonJoin>();
+		auto &join = op.template Cast<LogicalComparisonJoin>();
 		for (auto &expr : join.duplicate_eliminated_columns) {
 			callback(&expr);
 		}
@@ -188,12 +188,12 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-		auto &join = op.Cast<LogicalAnyJoin>();
+		auto &join = op.template Cast<LogicalAnyJoin>();
 		callback(&join.condition);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
-		auto &limit = op.Cast<LogicalLimit>();
+		auto &limit = op.template Cast<LogicalLimit>();
 		if (limit.limit_val.GetExpression()) {
 			callback(&limit.limit_val.GetExpression());
 		}
@@ -203,14 +203,14 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggr = op.Cast<LogicalAggregate>();
+		auto &aggr = op.template Cast<LogicalAggregate>();
 		for (auto &group : aggr.groups) {
 			callback(&group);
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_MERGE_INTO: {
-		auto &merge_into = op.Cast<LogicalMergeInto>();
+		auto &merge_into = op.template Cast<LogicalMergeInto>();
 		for (auto &entry : merge_into.actions) {
 			for (auto &action : entry.second) {
 				if (action->condition) {
@@ -229,6 +229,16 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	for (auto &expression : op.expressions) {
 		callback(&expression);
 	}
+}
+
+void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
+                                                  const std::function<void(unique_ptr<Expression> *child)> &callback) {
+	EnumerateOperatorExpressions(op, callback);
+}
+
+void LogicalOperatorVisitor::EnumerateExpressions(
+    const LogicalOperator &op, const std::function<void(const unique_ptr<Expression> *child)> &callback) {
+	EnumerateOperatorExpressions(op, callback);
 }
 
 void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {

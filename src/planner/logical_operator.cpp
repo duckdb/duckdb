@@ -111,9 +111,9 @@ bool LogicalOperator::HasSideEffects() const {
 	return false;
 }
 
-bool LogicalOperator::HasVolatileExpressions() {
+bool LogicalOperator::HasVolatileExpressions() const {
 	bool is_volatile = false;
-	LogicalOperatorVisitor::EnumerateExpressions(*this, [&](unique_ptr<Expression> *expression) {
+	LogicalOperatorVisitor::EnumerateExpressions(*this, [&](const unique_ptr<Expression> *expression) {
 		if ((*expression)->IsVolatile()) {
 			is_volatile = true;
 		}

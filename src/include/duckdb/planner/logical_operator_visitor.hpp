@@ -31,6 +31,8 @@ public:
 
 	static void EnumerateExpressions(LogicalOperator &op,
 	                                 const std::function<void(unique_ptr<Expression> *child)> &callback);
+	static void EnumerateExpressions(const LogicalOperator &op,
+	                                 const std::function<void(const unique_ptr<Expression> *child)> &callback);
 	//! Return the projection map owned by an operator for the given child, if any
 	static optional_ptr<vector<ProjectionIndex>> GetProjectionMap(LogicalOperator &op, idx_t child_index);
 	//! Preserve the selected binding identities after a child rewrite changes its output layout

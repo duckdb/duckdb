@@ -84,8 +84,20 @@ public:
 		}
 		return left;
 	}
+	const unique_ptr<Expression> &LeftReference() const {
+		if (!IsComparison()) {
+			throw InternalException("LeftReference used on a JoinCondition that is not a left/right comparison");
+		}
+		return left;
+	}
 
 	unique_ptr<Expression> &RightReference() {
+		if (!IsComparison()) {
+			throw InternalException("RightReference used on a JoinCondition that is not a left/right comparison");
+		}
+		return right;
+	}
+	const unique_ptr<Expression> &RightReference() const {
 		if (!IsComparison()) {
 			throw InternalException("RightReference used on a JoinCondition that is not a left/right comparison");
 		}

@@ -14,6 +14,8 @@ namespace duckdb {
 
 class BoundColumnRefExpression;
 class BoundSubqueryExpression;
+class ClientContext;
+class ColumnBindingReplacer;
 
 struct ReplacementBinding {
 public:
@@ -26,6 +28,38 @@ public:
 
 	bool replace_type;
 	LogicalType new_type;
+};
+
+//! A validated graph of binding replacements. Resolution is transitive and independent of insertion order.
+class BindingReplacementMap {
+public:
+	ColumnBinding Resolve(ColumnBinding binding) const;
+	bool TryAdd(const ReplacementBinding &replacement);
+	void Add(ColumnBinding old_binding, ColumnBinding new_binding);
+	void Add(const ReplacementBinding &replacement);
+	void Merge(const BindingReplacementMap &replacements);
+	void Merge(const vector<ReplacementBinding> &replacements);
+	void AddTo(ColumnBindingReplacer &replacer) const;
+
+	bool Empty() const {
+		return replacement_bindings.empty();
+	}
+	idx_t Size() const {
+		return replacement_bindings.size();
+	}
+	void Reserve(idx_t capacity) {
+		replacement_bindings.reserve(capacity);
+	}
+	vector<ReplacementBinding>::const_iterator begin() const {
+		return replacement_bindings.begin();
+	}
+	vector<ReplacementBinding>::const_iterator end() const {
+		return replacement_bindings.end();
+	}
+
+private:
+	ReplacementBinding ResolveReplacement(ColumnBinding binding) const;
+	vector<ReplacementBinding> replacement_bindings;
 };
 
 //! The ColumnBindingReplacer updates column bindings (e.g., after changing the operator plan), utility for optimizers
@@ -62,6 +96,18 @@ public:
 protected:
 	using ColumnBindingReplacer::VisitReplace;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
+};
+
+//! Applies binding replacements together with their projection-layout and join-condition invariants.
+class ColumnBindingRewrite {
+public:
+	static bool ApplyToChild(ClientContext &context, unique_ptr<LogicalOperator> &op, idx_t child_index,
+	                         vector<ColumnBinding> old_child_bindings, const BindingReplacementMap &replacements);
+	static void ApplyToOperatorBindings(LogicalOperator &op, const BindingReplacementMap &replacements);
+	static void FinalizeOperator(ClientContext &context, unique_ptr<LogicalOperator> &op);
+	static void RemapProjectionMapStrict(vector<ProjectionIndex> &projection_map,
+	                                     const vector<ColumnBinding> &child_bindings_before,
+	                                     const vector<ColumnBinding> &child_bindings_after);
 };
 
 } // namespace duckdb

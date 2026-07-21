@@ -62,7 +62,7 @@ public:
 	//! elimination of DML CTEs.
 	bool HasSideEffects() const;
 	//! Returns true if this operator or any of its descendants contains a volatile expression
-	bool HasVolatileExpressions();
+	bool HasVolatileExpressions() const;
 
 	virtual string GetName() const;
 	virtual InsertionOrderPreservingMap<string> ParamsToString() const;

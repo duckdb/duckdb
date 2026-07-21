@@ -74,7 +74,7 @@ bool RecursiveDependentJoinPlanner::CanRewritePairDependentJoinCondition(Logical
 
 static unique_ptr<LogicalOperator> RestoreJoinOutput(Binder &binder, unique_ptr<LogicalOperator> plan,
                                                      const vector<ColumnBinding> &expected_bindings,
-                                                     vector<ReplacementBinding> &replacements) {
+                                                     BindingReplacementMap &replacements) {
 	plan->ResolveOperatorTypes();
 	auto output = ColumnBindingLayout(plan->GetColumnBindings(), "normalized pair-dependent join output");
 	if (output.HasSameLayout(expected_bindings)) {
@@ -90,14 +90,14 @@ static unique_ptr<LogicalOperator> RestoreJoinOutput(Binder &binder, unique_ptr<
 	projection->children.push_back(std::move(plan));
 	auto projection_bindings = projection->GetColumnBindings();
 	for (idx_t i = 0; i < expected_bindings.size(); i++) {
-		replacements.emplace_back(expected_bindings[i], projection_bindings[i]);
+		replacements.Add(expected_bindings[i], projection_bindings[i]);
 	}
 	return std::move(projection);
 }
 
 bool RecursiveDependentJoinPlanner::TryRewritePairDependentJoinCondition(Binder &binder,
                                                                          unique_ptr<LogicalOperator> &op,
-                                                                         vector<ReplacementBinding> &replacements) {
+                                                                         BindingReplacementMap &replacements) {
 	if (!op || !CanRewritePairDependentJoinCondition(*op)) {
 		return false;
 	}

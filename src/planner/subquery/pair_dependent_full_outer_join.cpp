@@ -307,12 +307,12 @@ LogicalRewriteResult PairDependentFullOuterJoinBuilder::Build() {
 	auto output_bindings = output->GetColumnBindings();
 
 	LogicalRewriteResult result;
-	result.output_replacements.reserve(output_bindings.size());
+	result.output_replacements.Reserve(output_bindings.size());
 	for (idx_t i = 0; i < left_side.payload_count; i++) {
-		result.output_replacements.emplace_back(left_side.bindings[i], output_bindings[i]);
+		result.output_replacements.Add(left_side.bindings[i], output_bindings[i]);
 	}
 	for (idx_t i = 0; i < right_side.payload_count; i++) {
-		result.output_replacements.emplace_back(right_side.bindings[i], output_bindings[left_side.payload_count + i]);
+		result.output_replacements.Add(right_side.bindings[i], output_bindings[left_side.payload_count + i]);
 	}
 
 	unique_ptr<LogicalOperator> plan = std::move(output);

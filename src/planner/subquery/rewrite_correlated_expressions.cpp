@@ -8,7 +8,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
@@ -34,7 +34,7 @@ void RewriteCorrelatedExpressions::Rewrite(ClientContext &context, LogicalDepend
 
 void RewriteCorrelatedExpressions::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	RewriteOperator(*op);
-	LogicalComparisonJoin::ReclassifyJoinConditions(context, op);
+	ColumnBindingRewrite::FinalizeOperator(context, op);
 }
 
 void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding &source_binding,

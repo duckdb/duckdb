@@ -509,116 +509,32 @@ void RecursiveDependentJoinPlanner::PlanJoinChildFilters(LogicalOperator &op) {
 	}
 }
 
-static ColumnBinding ResolveBindingReplacement(ColumnBinding binding, const vector<ReplacementBinding> &replacements) {
-	column_binding_set_t visited;
-	while (visited.insert(binding).second) {
-		bool replaced = false;
-		for (auto &replacement : replacements) {
-			if (replacement.old_binding != binding) {
-				continue;
-			}
-			binding = replacement.new_binding;
-			replaced = true;
-			break;
-		}
-		if (!replaced) {
-			return binding;
-		}
-	}
-	throw InternalException("Cyclic binding replacements while recursively planning dependent joins");
-}
-
-static void AddBindingReplacement(vector<ReplacementBinding> &target, const ReplacementBinding &replacement) {
-	auto new_binding = ResolveBindingReplacement(replacement.new_binding, target);
-	if (replacement.old_binding == new_binding) {
-		return;
-	}
-	for (auto &existing : target) {
-		if (existing.old_binding != replacement.old_binding) {
-			continue;
-		}
-		if (ResolveBindingReplacement(existing.new_binding, target) != new_binding) {
-			throw InternalException("Conflicting binding replacements while recursively planning dependent joins");
-		}
-		return;
-	}
-	if (ResolveBindingReplacement(new_binding, target) == replacement.old_binding) {
-		throw InternalException("Cyclic binding replacements while recursively planning dependent joins");
-	}
-	target.emplace_back(replacement.old_binding, new_binding);
-}
-
-static void MergeBindingReplacements(vector<ReplacementBinding> &target,
-                                     const vector<ReplacementBinding> &replacements) {
-	for (auto &replacement : replacements) {
-		AddBindingReplacement(target, replacement);
-	}
-}
-
-static bool RemapChangedChildProjectionMap(LogicalOperator &op, idx_t child_index,
-                                           vector<ColumnBinding> old_child_bindings,
-                                           const vector<ReplacementBinding> &replacements) {
-	for (auto &binding : old_child_bindings) {
-		binding = ResolveBindingReplacement(binding, replacements);
-	}
-	auto new_child_bindings = op.children[child_index]->GetColumnBindings();
-	auto layout_changed = old_child_bindings != new_child_bindings;
-	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(op, child_index);
-	if (projection_map && !projection_map->empty()) {
-		LogicalOperatorVisitor::RemapProjectionMap(*projection_map, old_child_bindings, new_child_bindings);
-	}
-	return layout_changed;
-}
-
-static void ApplyBindingReplacements(ClientContext &context, unique_ptr<LogicalOperator> &op, idx_t child_index,
-                                     vector<ColumnBinding> old_child_bindings,
-                                     const vector<ReplacementBinding> &replacements) {
-	auto layout_changed = RemapChangedChildProjectionMap(*op, child_index, std::move(old_child_bindings), replacements);
-	if (replacements.empty() && !layout_changed) {
-		return;
-	}
-	if (!replacements.empty()) {
-		CorrelatedColumnBindingReplacer replacer;
-		for (auto &replacement : replacements) {
-			replacer.AddReplacement(replacement.old_binding,
-			                        ResolveBindingReplacement(replacement.old_binding, replacements));
-		}
-		if (op->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && child_index == 0) {
-			replacer.stop_operator = *op->children[child_index];
-			replacer.VisitOperator(*op);
-		} else {
-			replacer.VisitOperatorBindings(*op);
-		}
-	}
-	LogicalComparisonJoin::ReclassifyJoinConditions(context, op);
-}
-
-static vector<ReplacementBinding>
-PropagateOutputBindingReplacements(const vector<ColumnBinding> &old_bindings, const vector<ColumnBinding> &new_bindings,
-                                   const vector<ReplacementBinding> &operator_replacements) {
+static BindingReplacementMap PropagateOutputBindingReplacements(const vector<ColumnBinding> &old_bindings,
+                                                                const vector<ColumnBinding> &new_bindings,
+                                                                const BindingReplacementMap &operator_replacements) {
 	ColumnBindingLayout new_output(new_bindings, "recursively planned operator output");
-	vector<ReplacementBinding> result;
+	BindingReplacementMap result;
 	for (auto &old_binding : old_bindings) {
-		auto new_binding = ResolveBindingReplacement(old_binding, operator_replacements);
+		auto new_binding = operator_replacements.Resolve(old_binding);
 		if (new_output.positions.find(new_binding) == new_output.positions.end()) {
 			throw InternalException("Dependent-join planning lost output binding %s (resolved to %s)",
 			                        old_binding.ToString(), new_binding.ToString());
 		}
 		if (old_binding != new_binding) {
-			result.emplace_back(old_binding, new_binding);
+			result.Add(old_binding, new_binding);
 		}
 	}
 	return result;
 }
 
-vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<LogicalOperator> &op_ptr) {
+BindingReplacementMap RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<LogicalOperator> &op_ptr) {
 	PlanJoinChildFilters(*op_ptr);
 	if (op_ptr->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN &&
 	    op_ptr->Cast<LogicalDependentJoin>().dependent_type == DependentJoinType::JOIN_CONDITION) {
 		return PlanJoinCondition(op_ptr);
 	}
 	auto old_output = op_ptr->GetColumnBindings();
-	vector<ReplacementBinding> operator_replacements;
+	BindingReplacementMap operator_replacements;
 	if (!op_ptr->children.empty()) {
 		// Collect all recursive CTEs during recursive descend
 		if (op_ptr->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
@@ -641,30 +557,31 @@ vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanOperator(unique_pt
 			D_ASSERT(op_ptr->children[i]);
 			auto old_child_bindings = op_ptr->children[i]->GetColumnBindings();
 			auto child_replacements = PlanOperator(op_ptr->children[i]);
-			ApplyBindingReplacements(binder.context, op_ptr, i, std::move(old_child_bindings), child_replacements);
-			MergeBindingReplacements(operator_replacements, child_replacements);
+			ColumnBindingRewrite::ApplyToChild(binder.context, op_ptr, i, std::move(old_child_bindings),
+			                                   child_replacements);
+			operator_replacements.Merge(child_replacements);
 		}
 	}
 	return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 }
 
-vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanJoinCondition(unique_ptr<LogicalOperator> &op_ptr) {
+BindingReplacementMap RecursiveDependentJoinPlanner::PlanJoinCondition(unique_ptr<LogicalOperator> &op_ptr) {
 	auto old_output = op_ptr->GetColumnBindings();
-	vector<ReplacementBinding> operator_replacements;
+	BindingReplacementMap operator_replacements;
 
 	for (idx_t child_index = 0; child_index < op_ptr->children.size(); child_index++) {
 		auto old_child_bindings = op_ptr->children[child_index]->GetColumnBindings();
 		auto child_replacements = PlanOperator(op_ptr->children[child_index]);
-		ApplyBindingReplacements(binder.context, op_ptr, child_index, std::move(old_child_bindings),
-		                         child_replacements);
-		MergeBindingReplacements(operator_replacements, child_replacements);
+		ColumnBindingRewrite::ApplyToChild(binder.context, op_ptr, child_index, std::move(old_child_bindings),
+		                                   child_replacements);
+		operator_replacements.Merge(child_replacements);
 	}
 
-	vector<ReplacementBinding> pair_replacements;
+	BindingReplacementMap pair_replacements;
 	if (TryRewritePairDependentJoinCondition(binder, op_ptr, pair_replacements)) {
-		MergeBindingReplacements(operator_replacements, pair_replacements);
+		operator_replacements.Merge(pair_replacements);
 		auto recursive_replacements = PlanOperator(op_ptr);
-		MergeBindingReplacements(operator_replacements, recursive_replacements);
+		operator_replacements.Merge(recursive_replacements);
 		return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 	}
 
@@ -674,9 +591,9 @@ vector<ReplacementBinding> RecursiveDependentJoinPlanner::PlanJoinCondition(uniq
 	for (idx_t child_index = 0; child_index < pending.children.size(); child_index++) {
 		auto old_child_bindings = pending.children[child_index]->GetColumnBindings();
 		auto child_replacements = PlanOperator(pending.children[child_index]);
-		ApplyBindingReplacements(binder.context, op_ptr, child_index, std::move(old_child_bindings),
-		                         child_replacements);
-		MergeBindingReplacements(operator_replacements, child_replacements);
+		ColumnBindingRewrite::ApplyToChild(binder.context, op_ptr, child_index, std::move(old_child_bindings),
+		                                   child_replacements);
+		operator_replacements.Merge(child_replacements);
 	}
 
 	auto join_type = pending.join_type;

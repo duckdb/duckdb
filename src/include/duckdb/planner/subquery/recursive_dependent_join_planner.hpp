@@ -22,7 +22,7 @@ class LogicalJoin;
 
 struct LogicalRewriteResult {
 	unique_ptr<LogicalOperator> plan;
-	vector<ReplacementBinding> output_replacements;
+	BindingReplacementMap output_replacements;
 };
 
 /*
@@ -36,15 +36,15 @@ private:
 	explicit RecursiveDependentJoinPlanner(Binder &binder) : binder(binder) {
 	}
 	static bool TryRewritePairDependentJoinCondition(Binder &binder, unique_ptr<LogicalOperator> &op,
-	                                                 vector<ReplacementBinding> &replacements);
+	                                                 BindingReplacementMap &replacements);
 	static bool CanRewritePairDependentJoinCondition(LogicalOperator &op);
 	static unique_ptr<LogicalOperator> PlanPairDependentLateralJoin(Binder &binder, unique_ptr<LogicalOperator> left,
 	                                                                unique_ptr<LogicalOperator> right,
 	                                                                unique_ptr<Expression> condition,
 	                                                                const unordered_set<TableIndex> &left_bindings,
 	                                                                JoinType join_type);
-	vector<ReplacementBinding> PlanOperator(unique_ptr<LogicalOperator> &op);
-	vector<ReplacementBinding> PlanJoinCondition(unique_ptr<LogicalOperator> &op);
+	BindingReplacementMap PlanOperator(unique_ptr<LogicalOperator> &op);
+	BindingReplacementMap PlanJoinCondition(unique_ptr<LogicalOperator> &op);
 	void PlanJoinChildFilters(LogicalOperator &op);
 	void PlanJoinExpressions(LogicalOperator &op);
 	void PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr, JoinSide uncorrelated_side);

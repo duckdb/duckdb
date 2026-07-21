@@ -37,7 +37,7 @@ private:
 		}
 
 		vector<ColumnBinding> bindings;
-		vector<ReplacementBinding> binding_replacements;
+		BindingReplacementMap binding_replacements;
 	};
 	struct DependentJoinOutput {
 		vector<ColumnBinding> left_payload;
@@ -72,7 +72,7 @@ private:
 	optional_ptr<const ColumnBinding> GetCorrelatedBase(const ColumnBinding &binding) const;
 	optional_idx GetCorrelatedIndex(const ColumnBinding &binding) const;
 	void MergeCorrelatedAliases(const FlattenDependentJoins &source);
-	void AddReplacementAliases(const vector<ReplacementBinding> &replacements);
+	void AddReplacementAliases(const BindingReplacementMap &replacements);
 	Binder &binder;
 	column_binding_map_t<ColumnBinding> correlated_aliases;
 	column_binding_map_t<idx_t> replacement_map;
@@ -83,13 +83,6 @@ private:
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
 	mutable reference_map_t<LogicalOperator, bool> dependency_cache;
-	static ColumnBinding ResolveBinding(ColumnBinding binding, const vector<ReplacementBinding> &replacements);
-	static void AddBindingReplacement(UnnestingState &state, ColumnBinding old_binding, ColumnBinding new_binding);
-	static void MergeBindingReplacements(UnnestingState &target, const UnnestingState &source);
-	static void RewriteOperatorBindings(LogicalOperator &op, const UnnestingState &state);
-	void RewriteOperatorBindings(unique_ptr<LogicalOperator> &op, const UnnestingState &state);
-	static void RewriteChildProjectionMap(LogicalOperator &op, idx_t child_index,
-	                                      vector<ColumnBinding> projected_bindings, const UnnestingState &state);
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
 	                             bool include_names) const;
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
@@ -103,7 +96,7 @@ private:
 	                                              vector<ColumnBinding> state) const;
 	void PatchAccessingOperators(LogicalOperator &subtree_root, TableIndex table_index,
 	                             const CorrelatedColumns &correlated_columns);
-	UnnestingState PrepareDependentJoinLeft(LogicalDependentJoin &op, bool propagate_null_values,
+	UnnestingState PrepareDependentJoinLeft(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                        vector<ColumnBinding> state);
 	UnnestingState PushDownChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                             vector<ColumnBinding> state, bool rewrite_parent = true, idx_t child_idx = 0);

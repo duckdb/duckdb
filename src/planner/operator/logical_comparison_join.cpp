@@ -91,7 +91,7 @@ bool LogicalComparisonJoin::ConditionsAreCanonical(LogicalComparisonJoin &join) 
 	return true;
 }
 
-void LogicalComparisonJoin::ReclassifyJoinConditions(ClientContext &context, unique_ptr<LogicalOperator> &plan) {
+void LogicalComparisonJoin::FinalizeBindingRewrite(ClientContext &context, unique_ptr<LogicalOperator> &plan) {
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		if (!ConditionsAreCanonical(plan->Cast<LogicalComparisonJoin>())) {
 			throw InternalException("Binding rewrite changed condition ownership in a DELIM_JOIN");
@@ -106,10 +106,10 @@ void LogicalComparisonJoin::ReclassifyJoinConditions(ClientContext &context, uni
 		return;
 	}
 
-	D_ASSERT(join.mark_types.empty());
-	D_ASSERT(join.duplicate_eliminated_columns.empty());
-	D_ASSERT(!join.delim_flipped);
-	D_ASSERT(!join.filter_pushdown);
+	if (!join.mark_types.empty() || !join.duplicate_eliminated_columns.empty() || join.delim_flipped ||
+	    join.filter_pushdown) {
+		throw InternalException("Cannot reclassify a comparison join with specialized join metadata");
+	}
 	auto join_type = join.join_type;
 	auto convert_mark_to_semi = join.convert_mark_to_semi;
 	auto condition = JoinCondition::CreateExpression(std::move(join.conditions));
