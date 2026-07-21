@@ -18,6 +18,24 @@ SELECT count(*) FROM substring_pruning WHERE substr(s, 2) = '495000';
 ----
 1
 
+# Prefix substrings preserve the ordering of the input min/max values.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 1, 2) > 'p3';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+# Offset zero starts before the first character, reducing the effective length by one.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 0, 3) > 'p3';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+# Bounds shorter than the requested prefix length are preserved unchanged.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 1, 20) > 'p491519';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
 # Shared UTF-8 prefixes use character offsets rather than byte offsets.
 statement ok
 CREATE TABLE substring_pruning_utf8 AS

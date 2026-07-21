@@ -320,10 +320,60 @@ bool GetPrefixByteLength(const string &value, idx_t character_count, idx_t &byte
 	return true;
 }
 
+bool GetPrefix(const string &value, idx_t character_count, string &result) {
+	idx_t prefix_size;
+	if (!GetPrefixByteLength(value, character_count, prefix_size) && prefix_size != value.size()) {
+		return false;
+	}
+	result = value.substr(0, prefix_size);
+	return true;
+}
+
+unique_ptr<BaseStatistics> SubstringStatsFromPrefix(FunctionStatisticsInput &input, int64_t offset) {
+	auto &expr = input.expr;
+	auto &children = expr.GetChildren();
+	if (children.size() != 3 || children[2]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return nullptr;
+	}
+	auto &length_value = children[2]->Cast<BoundConstantExpression>().GetValue();
+	if (length_value.IsNull()) {
+		return nullptr;
+	}
+	auto length = length_value.GetValue<int64_t>();
+	if (offset == 0) {
+		length--;
+	} else if (offset != 1) {
+		return nullptr;
+	}
+	if (length <= 0 || length > NumericLimits<uint32_t>::Maximum()) {
+		return nullptr;
+	}
+
+	auto &string_stats = input.child_stats[0];
+	if (!StringStats::HasMinMax(string_stats)) {
+		return nullptr;
+	}
+	auto min = StringStats::Min(string_stats);
+	auto max = StringStats::Max(string_stats);
+	string result_min;
+	string result_max;
+	auto character_count = NumericCast<idx_t>(length);
+	if (!GetPrefix(min, character_count, result_min) || !GetPrefix(max, character_count, result_max)) {
+		return nullptr;
+	}
+
+	auto result = StringStats::CreateUnknown(expr.GetReturnType());
+	StringStats::SetMin(result, string_t(result_min), StringStats::GetMinType(string_stats));
+	StringStats::SetMax(result, string_t(result_max), StringStats::GetMaxType(string_stats));
+	result.CopyValidity(string_stats);
+	return result.ToUnique();
+}
+
 unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInput &input) {
 	auto &expr = input.expr;
 	auto &children = expr.GetChildren();
-	if (children.size() != 2 || children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+	if ((children.size() != 2 && children.size() != 3) ||
+	    children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return nullptr;
 	}
 	auto &offset_value = children[1]->Cast<BoundConstantExpression>().GetValue();
@@ -331,7 +381,10 @@ unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInpu
 		return nullptr;
 	}
 	auto offset = offset_value.GetValue<int64_t>();
-	if (offset <= 1) {
+	if (offset == 0 || offset == 1) {
+		return SubstringStatsFromPrefix(input, offset);
+	}
+	if (offset < 0 || children.size() != 2) {
 		return nullptr;
 	}
 
