@@ -117,6 +117,8 @@ public:
 	//! While Flatten mutates the buffers / vector type, it does not change the *logical* representation of a vector
 	//! As such, it can be used on constant vectors.
 	DUCKDB_API void Flatten() const;
+	//! FOR vectors: widen in place and compute the row hashes in the same pass; false when not applicable
+	DUCKDB_API bool TryFlattenWithHashes(hash_t *hashes, idx_t hash_count, hash_t null_hash) const;
 	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count) const;
 
 	[[deprecated("ToUnifiedFormat no longer requires a count - use ToUnifiedFormat(data) instead")]] DUCKDB_API void

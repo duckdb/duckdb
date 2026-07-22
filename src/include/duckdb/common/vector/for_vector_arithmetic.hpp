@@ -84,12 +84,94 @@ static bool FORBounds(T lmin, T lmax, T rmin, T rmax, T &result_min, T &result_m
 	}
 }
 
-// FOR (op) constant: compute result width once, then run one narrow payload loop.
+#ifndef DUCKDB_SMALLER_BINARY
+using binary_buffer_kernel_t = void (*)(const BinaryBufferArgs &);
+
+// Resolves the buffer-level kernels the registered arithmetic already instantiated: same-width,
+// or a mixed unsigned pair whose wider side carries the result (in-register argument promotion
+// widens the narrow side). No arithmetic loop exists on the FOR side at all.
+template <class OP>
+struct FORStandardExecutor {
+	static PhysicalType MaxStored(PhysicalType a, PhysicalType b) {
+		return GetTypeIdSize(a) >= GetTypeIdSize(b) ? a : b;
+	}
+	static LogicalType ViewType(PhysicalType stored) {
+		switch (stored) {
+		case PhysicalType::UINT8:
+			return LogicalType::UTINYINT;
+		case PhysicalType::UINT16:
+			return LogicalType::USMALLINT;
+		case PhysicalType::UINT32:
+			return LogicalType::UINTEGER;
+		default:
+			return LogicalType::UBIGINT;
+		}
+	}
+	static binary_buffer_kernel_t Kernel(PhysicalType lw, PhysicalType rw, PhysicalType res) {
+		if (lw == rw) {
+			D_ASSERT(lw == res);
+			switch (res) {
+			case PhysicalType::UINT8:
+				return BinaryExecutor::ExecuteBuffersStandard<uint8_t, uint8_t, uint8_t, OP>;
+			case PhysicalType::UINT16:
+				return BinaryExecutor::ExecuteBuffersStandard<uint16_t, uint16_t, uint16_t, OP>;
+			case PhysicalType::UINT32:
+				return BinaryExecutor::ExecuteBuffersStandard<uint32_t, uint32_t, uint32_t, OP>;
+			default:
+				return BinaryExecutor::ExecuteBuffersStandard<uint64_t, uint64_t, uint64_t, OP>;
+			}
+		}
+		D_ASSERT(res == MaxStored(lw, rw));
+#define DUCKDB_FOR_MIXED_PAIR(LP, RP, TL, TR_, TRES)                                                                   \
+	if (lw == PhysicalType::LP && rw == PhysicalType::RP) {                                                            \
+		return BinaryExecutor::ExecuteBuffersStandard<TL, TR_, TRES, OP>;                                              \
+	}
+		DUCKDB_FOR_MIXED_PAIR(UINT16, UINT8, uint16_t, uint8_t, uint16_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT8, UINT16, uint8_t, uint16_t, uint16_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT32, UINT8, uint32_t, uint8_t, uint32_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT8, UINT32, uint8_t, uint32_t, uint32_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT32, UINT16, uint32_t, uint16_t, uint32_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT16, UINT32, uint16_t, uint32_t, uint32_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT64, UINT8, uint64_t, uint8_t, uint64_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT8, UINT64, uint8_t, uint64_t, uint64_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT64, UINT16, uint64_t, uint16_t, uint64_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT16, UINT64, uint16_t, uint64_t, uint64_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT64, UINT32, uint64_t, uint32_t, uint64_t)
+		DUCKDB_FOR_MIXED_PAIR(UINT32, UINT64, uint32_t, uint64_t, uint64_t)
+#undef DUCKDB_FOR_MIXED_PAIR
+		throw InternalException("Unsupported type pair for FOR arithmetic kernel");
+	}
+	//! Widen a payload to the result width when the result outgrows both operands (existing WidenToFlat)
+	static data_ptr_t Operand(data_ptr_t data, PhysicalType stored, PhysicalType compute, idx_t count,
+	                          unique_ptr<Vector> &scratch) {
+		if (stored == compute) {
+			return data;
+		}
+		if (!scratch) {
+			scratch = make_uniq<Vector>(LogicalType::UBIGINT, idx_t(STANDARD_VECTOR_SIZE));
+		}
+		auto target = FlatVector::GetDataMutable(*scratch);
+		FORVector::WidenToFlat(ViewType(compute), stored, data, target, *FlatVector::IncrementalSelectionVector(),
+		                       count);
+		return target;
+	}
+};
+#endif
+
+// FOR (op) constant: compute the result width once, then run the registered kernel on the narrow payload.
 template <class DOMAIN_T, class OP>
-static bool TryFORConstant(Vector &left, Vector &right, Vector &result, idx_t count) {
+static bool TryFORConstant(Vector &left, Vector &right, Vector &result, idx_t count,
+                           buffer_ptr<DictionaryEntry> &dict_cache) {
 	using TRAITS = FOROpTraits<OP>;
-	if constexpr (!TRAITS::IS_SUPPORTED || std::is_same<DOMAIN_T, hugeint_t>::value ||
-	              std::is_same<DOMAIN_T, uhugeint_t>::value) {
+#ifdef DUCKDB_SMALLER_BINARY
+	(void)left;
+	(void)right;
+	(void)result;
+	(void)count;
+	(void)dict_cache;
+	return false;
+#else
+	if constexpr (!TRAITS::IS_SUPPORTED) {
 		return false;
 	} else {
 		FORVector::ScanData<DOMAIN_T> left_scan;
@@ -126,81 +208,67 @@ static bool TryFORConstant(Vector &left, Vector &right, Vector &result, idx_t co
 		if (!FORVector::TryGetStoredTypeForMax<DOMAIN_T>(result_max, result_stored)) {
 			return false;
 		}
+		using EXECUTOR = FORStandardExecutor<typename TRAITS::ExecOp>;
+		// the payload stays at its stored width; the constant carries the result width
+		const auto compute = EXECUTOR::MaxStored(result_stored, scan.stored_type);
 		auto fill_result = [&](Vector &target, idx_t target_count) {
-			FORVector::Create<DOMAIN_T>(target, result_stored, result_max);
-			if (scan.validity->CanHaveNull()) {
-				FORVector::Validity(target).Initialize(*scan.validity);
+			FORVector::Create<DOMAIN_T>(target, compute, result_max);
+			// little-endian: reading the low bytes of the u64 storage truncates modularly (exact by bounds)
+			uint64_t cval = static_cast<uint64_t>(constant);
+			BinaryBufferArgs args;
+			args.count = target_count;
+			args.result_data = FORVector::GetData(target);
+			args.result_validity = &FORVector::Validity(target);
+			if (TRAITS::IS_SUBTRACT && !left_for) {
+				args.ldata = const_data_ptr_cast(&cval);
+				args.lconstant = true;
+				args.rdata = FORVector::GetData(*scan.for_vec);
+				args.rvalidity = scan.validity.get();
+				EXECUTOR::Kernel(compute, scan.stored_type, compute)(args);
+			} else {
+				args.ldata = FORVector::GetData(*scan.for_vec);
+				args.lvalidity = scan.validity.get();
+				args.rdata = const_data_ptr_cast(&cval);
+				args.rconstant = true;
+				EXECUTOR::Kernel(scan.stored_type, compute, compute)(args);
 			}
-			auto source =
-			    FORVector::CreatePayloadView(scan.stored_type, FORVector::GetData(*scan.for_vec), target_count);
-			auto target_payload = FORVector::CreatePayloadView(result_stored, FORVector::GetData(target), target_count);
-			FOR_SWITCH_STORED(scan.stored_type, ST, {
-				FOR_SWITCH_STORED(result_stored, RST, {
-					Vector constant_view(Value::CreateValue(UnsafeNumericCast<RST>(constant)), count_t(target_count));
-					if constexpr (TRAITS::IS_ADD) {
-						BinaryExecutor::ExecuteStandard<ST, RST, RST, AddOperator>(source, constant_view,
-						                                                           target_payload, target_count);
-					} else if constexpr (TRAITS::IS_MULTIPLY) {
-						BinaryExecutor::ExecuteStandard<ST, RST, RST, MultiplyOperator>(source, constant_view,
-						                                                                target_payload, target_count);
-					} else if (left_for) {
-						BinaryExecutor::ExecuteStandard<ST, RST, RST, SubtractOperator>(source, constant_view,
-						                                                                target_payload, target_count);
-					} else {
-						BinaryExecutor::ExecuteStandard<RST, ST, RST, SubtractOperator>(constant_view, source,
-						                                                                target_payload, target_count);
-					}
-				});
-			});
 		};
 		if (scan.sel) {
-			Vector child(result.GetType(), scan.for_vec->size());
-			fill_result(child, scan.for_vec->size());
-			auto entry = make_buffer<DictionaryEntry>(std::move(child));
-			result.Dictionary(std::move(entry), *scan.sel, count);
+			const idx_t child_count = scan.for_vec->size();
+			if (child_count > STANDARD_VECTOR_SIZE) {
+				return false;
+			}
+			// reuse the cached dictionary child across chunks (mirrors TryExecuteDictionaryExpression)
+			if (!dict_cache || dict_cache->data.GetType() != result.GetType()) {
+				dict_cache = make_buffer<DictionaryEntry>(Vector(result.GetType(), STANDARD_VECTOR_SIZE));
+				// full-stride allocation and pipeline-local, so consumers may widen it in place
+				dict_cache->data.BufferMutable().cache_owned = true;
+			}
+			fill_result(dict_cache->data, child_count);
+			result.Dictionary(dict_cache, *scan.sel, count);
 		} else {
 			fill_result(result, count);
 		}
 		return true;
 	}
+#endif
 }
 
-// One-pass widening binary kernel: read narrow operands, cast to result width, apply OP, write result.
-template <class OP>
-struct WideningBinaryExecutor {
-	template <class L, class R, class RES, bool GATHER>
-	static void Loop(const L *__restrict l, const R *__restrict r, RES *__restrict res, const SelectionVector *sel,
-	                 idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			const idx_t idx = GATHER ? sel->get_index(i) : i;
-			res[i] = OP::template Operation<RES, RES, RES>(static_cast<RES>(l[idx]), static_cast<RES>(r[idx]));
-		}
-	}
-	static void Execute(const_data_ptr_t l, PhysicalType lw, const_data_ptr_t r, PhysicalType rw, data_ptr_t res,
-	                    PhysicalType res_w, const SelectionVector *sel, idx_t count) {
-		FOR_SWITCH_STORED(lw, L, {
-			FOR_SWITCH_STORED(rw, R, {
-				FOR_SWITCH_STORED(res_w, RES, {
-					auto lp = reinterpret_cast<const L *>(l);
-					auto rp = reinterpret_cast<const R *>(r);
-					auto resp = reinterpret_cast<RES *>(res);
-					if (sel) {
-						Loop<L, R, RES, true>(lp, rp, resp, sel, count);
-					} else {
-						Loop<L, R, RES, false>(lp, rp, resp, sel, count);
-					}
-				});
-			});
-		});
-	}
-};
-
-// FOR (op) FOR for op in {+, *}: compute result width once, then run one widening payload loop.
+// FOR (op) FOR for op in {+, *}: compute the result width once, then run the registered kernel on both payloads.
 template <class DOMAIN_T, class OP>
-static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t count) {
+static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t count,
+                         buffer_ptr<DictionaryEntry> &dict_cache, unique_ptr<Vector> &scratch) {
 	using TRAITS = FOROpTraits<OP>;
-	if constexpr (!TRAITS::IS_SUPPORTED || TRAITS::IS_SUBTRACT || std::is_same<DOMAIN_T, hugeint_t>::value ||
-	              std::is_same<DOMAIN_T, uhugeint_t>::value) {
+#ifdef DUCKDB_SMALLER_BINARY
+	(void)left;
+	(void)right;
+	(void)result;
+	(void)count;
+	(void)dict_cache;
+	(void)scratch;
+	return false;
+#else
+	if constexpr (!TRAITS::IS_SUPPORTED || TRAITS::IS_SUBTRACT) {
 		return false;
 	} else {
 		FORVector::ScanData<DOMAIN_T> lscan;
@@ -235,34 +303,60 @@ static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t coun
 		if (!FORVector::TryGetStoredTypeForMax<DOMAIN_T>(result_max, res_stored)) {
 			return false;
 		}
-		FORVector::Create<DOMAIN_T>(result, res_stored, result_max);
-		const bool lnull = lscan.validity->CanHaveNull();
-		const bool rnull = rscan.validity->CanHaveNull();
-		if (lnull || rnull) {
-			auto &result_validity = FORVector::Validity(result);
-			if (!sel) {
-				if (lnull) {
-					result_validity.Initialize(*lscan.validity);
-					if (rnull) {
-						result_validity.Combine(*rscan.validity, count);
-					}
+		using EXECUTOR = FORStandardExecutor<typename TRAITS::ExecOp>;
+		const auto pair_max = EXECUTOR::MaxStored(lscan.stored_type, rscan.stored_type);
+		const auto compute = EXECUTOR::MaxStored(res_stored, pair_max);
+		const idx_t child_count = sel ? lscan.for_vec->size() : count;
+		if (child_count > STANDARD_VECTOR_SIZE || (sel && rscan.for_vec->size() != child_count)) {
+			return false;
+		}
+		auto fill_result = [&](Vector &target, idx_t n, const SelectionVector *gather_sel) {
+			FORVector::Create<DOMAIN_T>(target, compute, result_max);
+			auto ldata = FORVector::GetData(*lscan.for_vec);
+			auto rdata = FORVector::GetData(*rscan.for_vec);
+			auto lw = lscan.stored_type;
+			auto rw = rscan.stored_type;
+			if (compute != pair_max) {
+				// the result outgrows both operands: align the wider side so the pair carries the result width
+				const idx_t align_count = gather_sel ? child_count : n;
+				if (GetTypeIdSize(lw) >= GetTypeIdSize(rw)) {
+					ldata = EXECUTOR::Operand(ldata, lw, compute, align_count, scratch);
+					lw = compute;
 				} else {
-					result_validity.Initialize(*rscan.validity);
-				}
-			} else {
-				for (idx_t i = 0; i < count; i++) {
-					const auto idx = sel->get_index(i);
-					if ((lnull && !lscan.validity->RowIsValid(idx)) || (rnull && !rscan.validity->RowIsValid(idx))) {
-						result_validity.SetInvalid(i);
-					}
+					rdata = EXECUTOR::Operand(rdata, rw, compute, align_count, scratch);
+					rw = compute;
 				}
 			}
+			BinaryBufferArgs args;
+			args.ldata = ldata;
+			args.rdata = rdata;
+			args.result_data = FORVector::GetData(target);
+			args.count = n;
+			args.lsel = gather_sel;
+			args.rsel = gather_sel;
+			args.lvalidity = lscan.validity.get();
+			args.rvalidity = rscan.validity.get();
+			args.result_validity = &FORVector::Validity(target);
+			EXECUTOR::Kernel(lw, rw, compute)(args);
+		};
+		if (sel && !DenseAutoVecPaysOff(count, child_count, GetTypeIdSize(compute))) {
+			// selective: gather both payloads through sel, result stays dense
+			fill_result(result, count, sel);
+		} else if (sel) {
+			// dense enough: compute over the children once, wrap the result in the cached dictionary
+			if (!dict_cache || dict_cache->data.GetType() != result.GetType()) {
+				dict_cache = make_buffer<DictionaryEntry>(Vector(result.GetType(), STANDARD_VECTOR_SIZE));
+				// full-stride allocation and pipeline-local, so consumers may widen it in place
+				dict_cache->data.BufferMutable().cache_owned = true;
+			}
+			fill_result(dict_cache->data, child_count, nullptr);
+			result.Dictionary(dict_cache, *sel, count);
+		} else {
+			fill_result(result, count, nullptr);
 		}
-		using EXEC_OP = typename TRAITS::ExecOp;
-		WideningBinaryExecutor<EXEC_OP>::Execute(lscan.data, lscan.stored_type, rscan.data, rscan.stored_type,
-		                                         FORVector::GetData(result), res_stored, sel, count);
 		return true;
 	}
+#endif
 }
 
 } // namespace duckdb

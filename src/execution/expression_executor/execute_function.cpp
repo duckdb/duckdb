@@ -97,9 +97,10 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 
 	// Autovec-friendly ops ignore the selection vector: run the kernel over the flat dictionary child in place and
 	// keep the input's selection on the result. The child is pointed at (no gather, no copy), the output buffer is
-	// reused, and the fill guard skips this when the selection is too sparse to pay for computing the whole child.
+	// reused, and the lane-aware guard skips this when the selection is too sparse to pay for computing the whole
+	// child.
 	if (IsSafeAutoVecArithmetic(expr) && input_dictionary_size <= STANDARD_VECTOR_SIZE &&
-	    static_cast<double>(args.size()) >= CHUNK_FILL_RATIO_THRESHOLD * static_cast<double>(input_dictionary_size)) {
+	    DenseAutoVecPaysOff(args.size(), input_dictionary_size, GetTypeIdSize(result.GetType().InternalType()))) {
 		for (idx_t idx = 1; idx < dictionary_input_indices.size(); idx++) {
 			const auto &input = args.data[dictionary_input_indices[idx]];
 			if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {

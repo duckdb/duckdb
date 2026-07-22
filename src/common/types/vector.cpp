@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/sequence_vector.hpp"
@@ -451,6 +452,31 @@ void Vector::Flatten() const {
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
+}
+
+bool Vector::TryFlattenWithHashes(hash_t *hashes, idx_t hash_count, hash_t null_hash) const {
+	if (GetVectorType() != VectorType::FOR_VECTOR || !buffer->cache_owned || hash_count > buffer->Size()) {
+		return false;
+	}
+	auto data = buffer->GetData();
+	const idx_t count = buffer->Size();
+	auto &validity = buffer->GetValidityMask();
+	const bool has_nulls = validity.CanHaveNull();
+	FOR_SWITCH_LOGICAL(GetType().InternalType(), LOGICAL_T, {
+		FOR_SWITCH_STORED(buffer->for_stored_type, STORED_T, {
+			auto src = reinterpret_cast<const STORED_T *>(data);
+			auto dst = reinterpret_cast<LOGICAL_T *>(data);
+			for (idx_t i = count; i-- > 0;) {
+				const LOGICAL_T wide = FORVector::WidenStored<LOGICAL_T>(src[i]);
+				dst[i] = wide;
+				if (i < hash_count) {
+					hashes[i] = has_nulls && !validity.RowIsValid(i) ? null_hash : duckdb::Hash<LOGICAL_T>(wide);
+				}
+			}
+		});
+	});
+	buffer->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
+	return true;
 }
 
 void Vector::Flatten(const SelectionVector &sel, idx_t count) const {

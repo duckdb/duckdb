@@ -287,6 +287,11 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 	if (span > STANDARD_VECTOR_SIZE) {
 		return false;
 	}
+	// too few selected rows to pay for the dense compare: leave it to the generic gather-select.
+	// FOR columns stay dense regardless: the generic path would widen the whole payload anyway.
+	if (have_sel && !l_for && !DenseAutoVecPaysOff(count, span, GetTypeIdSize(pt))) {
+		return false;
+	}
 
 	SelectionResult &t = bitmap_sel ? *bitmap_sel : tmp_sel1;
 	auto t_bm = reinterpret_cast<validity_t *>(t.PrepareBitmap(span));

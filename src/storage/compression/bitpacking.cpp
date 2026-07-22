@@ -546,6 +546,30 @@ template <class T>
 static T DeltaDecode(T *data, T previous_value, const size_t size) {
 	D_ASSERT(size >= 1);
 
+#if DUCKDB_AUTOVEC
+	if (sizeof(T) == 4) {
+		// 4-lane prefix sum: the carried chain is one add+splat per 4 values, ~2x the serial loop
+		typedef duckdb_bitpacking::internal::duckdb_bp_u32x4 v4su;
+		auto d32 = reinterpret_cast<uint32_t *>(data);
+		const v4su zero = {};
+		v4su run = zero + static_cast<uint32_t>(previous_value);
+		size_t k = 0;
+		for (; k + 4 <= size; k += 4) {
+			v4su v;
+			memcpy(&v, d32 + k, 16);
+			v += __builtin_shufflevector(zero, v, 0, 4, 5, 6);
+			v += __builtin_shufflevector(zero, v, 0, 1, 4, 5);
+			v += run;
+			memcpy(d32 + k, &v, 16);
+			run = __builtin_shufflevector(v, v, 3, 3, 3, 3);
+		}
+		uint32_t prev = run[0];
+		for (; k < size; k++) {
+			prev = d32[k] += prev;
+		}
+		return static_cast<T>(prev);
+	}
+#endif
 	data[0] += previous_value;
 
 	const size_t UnrollQty = 4;
@@ -873,15 +897,28 @@ void BitpackingScanPartialInternal(ColumnSegment &segment, ColumnScanState &stat
 			}
 			if (can_for) {
 				for_st = PhysicalType::UINT32;
-				DecodeFORGroupDirect(scan_state, scan_state.current_group_offset, offset_in_compression_group, to_scan,
-				                     result_buf, scanned, PhysicalType::UINT32);
+				// the can_for bound covers the whole remaining metadata group, so aligned scans decode in one batch
+				idx_t remaining = MinValue<idx_t>(scan_count - scanned,
+				                                  BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+				idx_t batch_count = offset_in_compression_group == 0
+				                        ? remaining & ~(BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1)
+				                        : 0;
+				idx_t delta_count = to_scan;
+				if (batch_count > 0) {
+					DecodeFORGroupsBatch(scan_state, scan_state.current_group_offset, batch_count, result_buf, scanned,
+					                     PhysicalType::UINT32);
+					delta_count = batch_count;
+				} else {
+					DecodeFORGroupDirect(scan_state, scan_state.current_group_offset, offset_in_compression_group,
+					                     to_scan, result_buf, scanned, PhysicalType::UINT32);
+				}
 				auto data32 = reinterpret_cast<uint32_t *>(result_buf + scanned * sizeof(uint32_t));
 				const uint32_t last =
-				    DeltaDecode<uint32_t>(data32, static_cast<uint32_t>(scan_state.current_delta_offset), to_scan);
+				    DeltaDecode<uint32_t>(data32, static_cast<uint32_t>(scan_state.current_delta_offset), delta_count);
 				scan_state.current_delta_offset = static_cast<T>(last);
 				for_max = MaxValue(for_max, static_cast<T>(last));
-				scanned += to_scan;
-				scan_state.current_group_offset += to_scan;
+				scanned += delta_count;
+				scan_state.current_group_offset += delta_count;
 				continue;
 			}
 		}

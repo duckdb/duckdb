@@ -1,9 +1,11 @@
 #include "duckdb/common/vector/for_vector.hpp"
 
+#include "duckdb/common/autovec.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
@@ -48,28 +50,45 @@ FOR_INSTANTIATE(uhugeint_t)
 // Shared helpers
 //===--------------------------------------------------------------------===//
 
-Vector FORVector::CreatePayloadView(PhysicalType stored_type, data_ptr_t payload, idx_t count) {
-	LogicalType type;
-	switch (stored_type) {
-	case PhysicalType::UINT8:
-		type = LogicalType::UTINYINT;
-		break;
-	case PhysicalType::UINT16:
-		type = LogicalType::USMALLINT;
-		break;
-	case PhysicalType::UINT32:
-		type = LogicalType::UINTEGER;
-		break;
-	case PhysicalType::UINT64:
-		type = LogicalType::UBIGINT;
-		break;
-	default:
-		throw InternalException("Unsupported stored type for FOR vector");
+#if DUCKDB_AUTOVEC
+// Zero-extend 8 values from src into dst; all loads complete before the stores, so overlapping in-place
+// buffers are safe when processed back-to-front. Unsigned lanes are bit-identical to the signed widen.
+template <class S, class L>
+DUCKDB_AUTOVEC_TARGET static inline void WidenBlock8(const S *src, L *dst) {
+	using namespace duckdb_bitpacking::internal;
+	if constexpr (sizeof(S) == 1) {
+		duckdb_bp_u8x8 v;
+		std::memcpy(&v, src, 8);
+		if constexpr (sizeof(L) == 2) {
+			auto w = __builtin_convertvector(v, duckdb_bp_u16x8);
+			std::memcpy(dst, &w, 16);
+			return;
+		}
+		auto w = __builtin_convertvector(v, duckdb_bp_u32x8);
+		if constexpr (sizeof(L) == 4) {
+			std::memcpy(dst, &w, 32);
+			return;
+		}
+		WidenBlock8<uint32_t, uint64_t>(reinterpret_cast<const uint32_t *>(&w), reinterpret_cast<uint64_t *>(dst));
+	} else if constexpr (sizeof(S) == 2) {
+		duckdb_bp_u16x8 v;
+		std::memcpy(&v, src, 16);
+		auto w = __builtin_convertvector(v, duckdb_bp_u32x8);
+		if constexpr (sizeof(L) == 4) {
+			std::memcpy(dst, &w, 32);
+			return;
+		}
+		WidenBlock8<uint32_t, uint64_t>(reinterpret_cast<const uint32_t *>(&w), reinterpret_cast<uint64_t *>(dst));
+	} else {
+		duckdb_bp_u32x8 v;
+		std::memcpy(&v, src, 32);
+		auto lo = __builtin_convertvector(__builtin_shufflevector(v, v, 0, 1, 2, 3), duckdb_bp_u64x4);
+		auto hi = __builtin_convertvector(__builtin_shufflevector(v, v, 4, 5, 6, 7), duckdb_bp_u64x4);
+		std::memcpy(dst + 0, &lo, 32);
+		std::memcpy(dst + 4, &hi, 32);
 	}
-	Vector payload_vec(type, payload, count);
-	payload_vec.SetVectorType(VectorType::FLAT_VECTOR);
-	return payload_vec;
 }
+#endif
 
 template <class LOGICAL_T>
 static void WidenFORPayload(PhysicalType stored_type, const_data_ptr_t source, data_ptr_t target,
@@ -77,7 +96,20 @@ static void WidenFORPayload(PhysicalType stored_type, const_data_ptr_t source, d
 	auto target_data = reinterpret_cast<LOGICAL_T *>(target);
 	FOR_SWITCH_STORED(stored_type, STORED_T, {
 		auto source_data = reinterpret_cast<const STORED_T *>(source);
-		for (idx_t i = 0; i < count; i++) {
+		idx_t i = 0;
+#if DUCKDB_AUTOVEC
+		if constexpr (sizeof(LOGICAL_T) <= 8 && sizeof(STORED_T) < sizeof(LOGICAL_T)) {
+			if (!sel.IsSet()) {
+				// dense case: disjoint buffers, widen forward in 8-value blocks
+				using UL = typename MakeUnsigned<LOGICAL_T>::type;
+				auto udst = reinterpret_cast<UL *>(target);
+				for (; i + 8 <= count; i += 8) {
+					WidenBlock8<STORED_T, UL>(source_data + i, udst + i);
+				}
+			}
+		}
+#endif
+		for (; i < count; i++) {
 			target_data[i] = FORVector::WidenStored<LOGICAL_T>(source_data[sel.get_index(i)]);
 		}
 	});
@@ -93,16 +125,50 @@ void FORVector::WidenInPlace(const LogicalType &type, VectorBuffer &buffer) {
 	D_ASSERT(buffer.GetVectorType() == VectorType::FOR_VECTOR);
 	auto data = buffer.GetData();
 	auto count = buffer.Size();
+	const auto stored_type = buffer.for_stored_type;
+	buffer.SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 	FOR_SWITCH_LOGICAL(type.InternalType(), LOGICAL_T, {
-		FOR_SWITCH_STORED(buffer.for_stored_type, STORED_T, {
+		FOR_SWITCH_STORED(stored_type, STORED_T, {
 			auto src = reinterpret_cast<const STORED_T *>(data);
 			auto dst = reinterpret_cast<LOGICAL_T *>(data);
-			for (idx_t i = count; i-- > 0;) {
-				dst[i] = WidenStored<LOGICAL_T>(src[i]);
+			if constexpr (sizeof(STORED_T) >= sizeof(LOGICAL_T)) {
+				// payload is already the logical width bit-for-bit
+				(void)src;
+				(void)dst;
+			} else {
+				bool done = false;
+#if DUCKDB_AUTOVEC
+				if constexpr (sizeof(LOGICAL_T) <= 8) {
+					// widen back-to-front in 8-value blocks: each block loads before it stores
+					using UL = typename MakeUnsigned<LOGICAL_T>::type;
+					auto udst = reinterpret_cast<UL *>(data);
+					idx_t i = count & ~idx_t(7);
+					for (idx_t k = count; k-- > i;) {
+						dst[k] = WidenStored<LOGICAL_T>(src[k]);
+					}
+					while (i) {
+						i -= 8;
+						WidenBlock8<STORED_T, UL>(src + i, udst + i);
+					}
+					done = true;
+				}
+#endif
+				if (!done) {
+					// widen back-to-front in chunks via a stack copy so the loop has disjoint operands
+					STORED_T tmp[STANDARD_VECTOR_SIZE];
+					for (idx_t end = count; end > 0;) {
+						const idx_t base = end > STANDARD_VECTOR_SIZE ? end - STANDARD_VECTOR_SIZE : 0;
+						const idx_t n = end - base;
+						memcpy(tmp, src + base, n * sizeof(STORED_T));
+						for (idx_t i = 0; i < n; i++) {
+							dst[base + i] = WidenStored<LOGICAL_T>(tmp[i]);
+						}
+						end = base;
+					}
+				}
 			}
 		});
 	});
-	buffer.SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 }
 
 template <class LOGICAL_T>
@@ -194,6 +260,18 @@ static bool IsPlainIntegral(const LogicalType &type) {
 	}
 }
 
+// casts whose payload is bit-identical: integral <-> integral, integer -> scale-0 decimal, same-scale decimal widening
+static bool IsPayloadIdentityCast(const LogicalType &src, const LogicalType &dst) {
+	if (IsPlainIntegral(src)) {
+		return IsPlainIntegral(dst) || (dst.id() == LogicalTypeId::DECIMAL && DecimalType::GetScale(dst) == 0);
+	}
+	if (src.id() == LogicalTypeId::DECIMAL && dst.id() == LogicalTypeId::DECIMAL) {
+		return DecimalType::GetScale(src) == DecimalType::GetScale(dst) &&
+		       DecimalType::GetWidth(dst) >= DecimalType::GetWidth(src);
+	}
+	return false;
+}
+
 bool FORVector::TryCastType(Vector &source, Vector &result, idx_t count) {
 	if (source.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(source);
@@ -208,9 +286,9 @@ bool FORVector::TryCastType(Vector &source, Vector &result, idx_t count) {
 	if (source.GetVectorType() != VectorType::FOR_VECTOR) {
 		return false;
 	}
-	// only plain integral <-> integral casts are the identity on the payload; anything with
-	// conversion semantics (decimal rescaling, date/timestamp, enum) must run the real cast
-	if (!IsPlainIntegral(source.GetType()) || !IsPlainIntegral(result.GetType())) {
+	// only payload-identity casts qualify; anything with conversion semantics
+	// (decimal rescaling, date/timestamp, enum) must run the real cast
+	if (!IsPayloadIdentityCast(source.GetType(), result.GetType())) {
 		return false;
 	}
 	auto st = GetStoredType(source);
@@ -225,6 +303,11 @@ bool FORVector::TryCastType(Vector &source, Vector &result, idx_t count) {
 		                   { success = TryCastFORMetadata<SRC_T, DST_T>(source, max_storage); });
 	});
 	if (!success) {
+		return false;
+	}
+	// decimal targets additionally bound the value domain by their width
+	if (result.GetType().id() == LogicalTypeId::DECIMAL &&
+	    max_storage >= Uhugeint::POWERS_OF_TEN[DecimalType::GetWidth(result.GetType())]) {
 		return false;
 	}
 

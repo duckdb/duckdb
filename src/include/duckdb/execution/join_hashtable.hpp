@@ -434,7 +434,7 @@ public:
 private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             optional_ptr<const SelectionVector> &current_sel);
-	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes, bool combine_only = false);
 
 	//! Dictionary-aware variant of Probe. Returns false if the LHS keys are not dictionary-eligible.
 	bool TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,

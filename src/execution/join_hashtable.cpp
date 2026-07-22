@@ -385,16 +385,21 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 	}
 }
 
-void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes) {
+void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes,
+                         bool combine_only) {
 	if (count == keys.size()) {
 		// no null values are filtered: use regular hash functions
-		VectorOperations::Hash(keys.data[0], hashes, count);
+		if (!combine_only) {
+			VectorOperations::Hash(keys.data[0], hashes, count);
+		}
 		for (idx_t i = 1; i < equality_types.size(); i++) {
 			VectorOperations::CombineHash(hashes, keys.data[i], count);
 		}
 	} else {
 		// null values were filtered: use selection vector
-		VectorOperations::Hash(keys.data[0], hashes, sel, count);
+		if (!combine_only) {
+			VectorOperations::Hash(keys.data[0], hashes, sel, count);
+		}
 		for (idx_t i = 1; i < equality_types.size(); i++) {
 			VectorOperations::CombineHash(hashes, keys.data[i], sel, count);
 		}
@@ -624,6 +629,9 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	source_chunk.data[col_offset].Reference(hash_values);
 	source_chunk.SetChildCardinality(keys.size());
 
+	// fused widen+hash for a FOR first key: ToUnifiedFormat below would otherwise widen it in a separate pass
+	const bool hashes_ready = VectorOperations::TryFusedHash(keys.data[0], hash_values, keys.size());
+
 	// ToUnifiedFormat the source chunk
 	TupleDataCollection::ToUnifiedFormat(append_state.chunk_state, source_chunk);
 
@@ -640,7 +648,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
-	Hash(keys, *current_sel, added_count, hash_values);
+	Hash(keys, *current_sel, added_count, hash_values, hashes_ready);
 	if (bloom_filter.IsInitialized()) {
 		bloom_filter.InsertHashes(hash_values);
 	}
@@ -1132,17 +1140,23 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 	}
 
 	optional_ptr<const SelectionVector> current_sel;
-	InitializeScanStructure(scan_structure, keys, key_state, current_sel);
-	if (scan_structure.count == 0) {
-		return;
-	}
 	if (precomputed_hashes) {
+		InitializeScanStructure(scan_structure, keys, key_state, current_sel);
+		if (scan_structure.count == 0) {
+			return;
+		}
 		GetRowPointers(keys, key_state, probe_state, *precomputed_hashes, current_sel, scan_structure.count,
 		               scan_structure.pointers, scan_structure.sel_vector, scan_structure.has_null_value_filter);
 	} else {
 		Vector hashes(LogicalType::HASH);
+		// fused widen+hash for a FOR first key, before InitializeScanStructure widens it in a separate pass
+		const bool hashes_ready = VectorOperations::TryFusedHash(keys.data[0], hashes, keys.size());
+		InitializeScanStructure(scan_structure, keys, key_state, current_sel);
+		if (scan_structure.count == 0) {
+			return;
+		}
 		// hash all the keys
-		Hash(keys, *current_sel, scan_structure.count, hashes);
+		Hash(keys, *current_sel, scan_structure.count, hashes, hashes_ready);
 
 		// now initialize the pointers of the scan structure based on the hashes
 		GetRowPointers(keys, key_state, probe_state, hashes, current_sel, scan_structure.count, scan_structure.pointers,

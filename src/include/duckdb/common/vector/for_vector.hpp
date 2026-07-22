@@ -100,8 +100,6 @@ struct FORVector {
 	// Shared helpers used by comparison, filter pushdown, and arithmetic.
 	//===--------------------------------------------------------------------===//
 
-	//! Create a temporary FLAT_VECTOR view over a narrow FOR payload buffer.
-	static Vector CreatePayloadView(PhysicalType stored_type, data_ptr_t payload, idx_t count);
 	template <class LOGICAL_T>
 	static bool TryGetStoredTypeForMax(LOGICAL_T max_value, PhysicalType &stored_type) {
 		if (max_value < LOGICAL_T(0)) {
