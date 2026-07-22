@@ -8,113 +8,254 @@
 
 #pragma once
 
-#include "duckdb/common/stack.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 
 namespace duckdb {
 
-enum class ARTScanHandling : uint8_t {
-	EMPLACE,
-	POP,
+//===--------------------------------------------------------------------===//
+// ARTScanPreOrder
+//===--------------------------------------------------------------------===//
+
+enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
+
+enum class ARTScanAction : uint8_t { PUSH_NODE, SKIP };
+
+struct ARTScanStep {
+	explicit ARTScanStep(ARTScanAction action_p, NodePtr node_p = NodePtr()) : action(action_p), node(node_p) {
+	}
+
+	static ARTScanStep Push(NodePtr node) {
+		return ARTScanStep(ARTScanAction::PUSH_NODE, node);
+	}
+
+	static ARTScanStep Skip() {
+		return ARTScanStep(ARTScanAction::SKIP);
+	}
+
+	ARTScanAction action;
+	NodePtr node;
 };
 
-//! ARTScanner scans the entire ART and processes each node.
-template <ARTScanHandling HANDLING, class NODE>
-class ARTScanner {
-public:
-	template <class FUNC>
-	explicit ARTScanner(ART &art, FUNC &&handler, NODE &root) : art(art) {
-		Emplace(handler, root);
+//! Pins the parent node and calls preorder_handler on all its children. The handler can update each child pointer
+//! in place and returns whether a child should be pushed onto the stack for further traversal.
+template <class NODE, class PRE_HANDLER>
+static void ScanChildren(ART &art, NodePtr node, PRE_HANDLER &&pre_handler, vector<NodePtr> &stack) {
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<NODE>();
+	NODE::Iterator(n, [&](NodePtr &child) {
+		auto step = pre_handler(child);
+		if (step.action == ARTScanAction::PUSH_NODE) {
+			stack.push_back(step.node);
+		}
+	});
+}
+
+//! Pre-order scanner: each child pointer in the parent node is processed by pre_handler before being pushed onto the
+//! stack (either in its original or processed form). When a node is popped, scan_strategy decides whether to scan
+//! its children or skip it. If the child pointers need to be scanned, the popped node is pinned in ScanChildren and
+//! any updates are performed in place within that pinned node using preorder_handler (which also defines what NodePtr
+//! to push onto the stack for further traversal).
+template <class SCAN_STRATEGY, class PRE_HANDLER>
+void ARTScanPreorder(ART &art, NodePtr &root, SCAN_STRATEGY &&scan_strategy, PRE_HANDLER &&preorder_handler) {
+	vector<NodePtr> stack;
+
+	// The root node pointer lives in the ART object, not inside a fixed-size buffer.
+	auto step = preorder_handler(root);
+	if (step.action == ARTScanAction::PUSH_NODE) {
+		stack.push_back(step.node);
 	}
 
-public:
-	template <class FUNC>
-	void Scan(FUNC &&handler) {
-		while (!s.empty()) {
-			auto &entry = s.top();
-			if (entry.exhausted) {
-				Pop(handler, entry.node);
-				continue;
-			}
-			entry.exhausted = true;
+	while (!stack.empty()) {
+		NodePtr current = stack.back();
+		stack.pop_back();
 
-			const auto type = entry.node.GetType();
-			switch (type) {
-			case NType::LEAF_INLINED:
-			case NType::LEAF:
-			case NType::NODE_7_LEAF:
-			case NType::NODE_15_LEAF:
-			case NType::NODE_256_LEAF:
-				break;
-			case NType::PREFIX: {
-				Prefix prefix(art, entry.node, true);
-				Emplace(handler, *prefix.ptr);
-				break;
-			}
+		if (scan_strategy(current) == ScanNodeResult::SKIP) {
+			continue;
+		}
 
-			case NType::NODE_4: {
-				IterateChildren<FUNC, Node4>(handler, entry.node, type);
-				break;
+		switch (current.GetType()) {
+		case NType::LEAF_INLINED:
+		case NType::LEAF:
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			break;
+		case NType::PREFIX: {
+			NodeHandle handle(art, current);
+			auto &child = PrefixHandle::ChildRef(art, handle);
+			step = preorder_handler(child);
+			if (step.action == ARTScanAction::PUSH_NODE) {
+				stack.push_back(step.node);
 			}
-			case NType::NODE_16: {
-				IterateChildren<FUNC, Node16>(handler, entry.node, type);
-				break;
-			}
-			case NType::NODE_48: {
-				IterateChildren<FUNC, Node48>(handler, entry.node, type);
-				break;
-			}
-			case NType::NODE_256: {
-				IterateChildren<FUNC, Node256>(handler, entry.node, type);
-				break;
-			}
-			default:
-				throw InternalException("invalid node type for ART ARTScanner: %d", type);
-			}
+			break;
+		}
+		case NType::NODE_4:
+			ScanChildren<Node4>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_16:
+			ScanChildren<Node16>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_48:
+			ScanChildren<Node48>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_256:
+			ScanChildren<Node256>(art, current, preorder_handler, stack);
+			break;
+		default:
+			throw InternalException("invalid node type for ARTScanPreOrder: %d", current.GetType());
 		}
 	}
+}
 
-private:
-	template <class FUNC>
-	void Emplace(FUNC &&handler, NODE &node) {
-		if (HANDLING == ARTScanHandling::EMPLACE) {
-			auto result = handler(node);
-			if (result == ARTHandlingResult::SKIP) {
-				return;
+template <class NODE, class PRE_HANDLER>
+static void ConstScanChildren(const ART &art, NodePtr node, PRE_HANDLER &&preorder_handler, vector<NodePtr> &stack) {
+	ConstNodeHandle handle(art, node);
+	auto &n = handle.Get<NODE>();
+	NODE::Iterator(n, [&](const NodePtr &child) {
+		auto step = preorder_handler(child);
+		if (step.action == ARTScanAction::PUSH_NODE) {
+			stack.push_back(step.node);
+		}
+	});
+}
+
+template <class SCAN_STRATEGY, class PRE_HANDLER>
+void ARTConstScanPreorder(const ART &art, const NodePtr &root, SCAN_STRATEGY &&scan_strategy,
+                          PRE_HANDLER &&preorder_handler) {
+	vector<NodePtr> stack;
+
+	auto step = preorder_handler(root);
+	if (step.action == ARTScanAction::PUSH_NODE) {
+		stack.push_back(step.node);
+	}
+
+	while (!stack.empty()) {
+		NodePtr current = stack.back();
+		stack.pop_back();
+
+		if (scan_strategy(current) == ScanNodeResult::SKIP) {
+			continue;
+		}
+
+		switch (current.GetType()) {
+		case NType::LEAF_INLINED:
+		case NType::LEAF:
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			break;
+		case NType::PREFIX: {
+			ConstNodeHandle handle(art, current);
+			auto child = ConstPrefixHandle::ChildRef(art, handle);
+			step = preorder_handler(child);
+			if (step.action == ARTScanAction::PUSH_NODE) {
+				stack.push_back(step.node);
 			}
-			D_ASSERT(result == ARTHandlingResult::CONTINUE);
+			break;
 		}
-		s.emplace(node);
-	}
-
-	template <class FUNC>
-	void Pop(FUNC &&handler, NODE &node) {
-		if (HANDLING == ARTScanHandling::POP) {
-			handler(node);
+		case NType::NODE_4:
+			ConstScanChildren<Node4>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_16:
+			ConstScanChildren<Node16>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_48:
+			ConstScanChildren<Node48>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_256:
+			ConstScanChildren<Node256>(art, current, preorder_handler, stack);
+			break;
+		default:
+			throw InternalException("invalid node type for ARTConstScanPreOrder: %d", current.GetType());
 		}
-		s.pop();
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// ARTScanPostOrder
+//===--------------------------------------------------------------------===//
+
+struct ScanEntry {
+	ScanEntry(NodePtr node_p, bool children_scanned_p) : node(node_p), children_visited(children_scanned_p) {
 	}
 
-	template <class FUNC, class NODE_TYPE>
-	void IterateChildren(FUNC &&handler, NODE &node, const NType type) {
-		auto &n = Node::Ref<NODE_TYPE>(art, node, type);
-		NODE_TYPE::Iterator(n, [&](NODE &child) { Emplace(handler, child); });
-	}
-
-private:
-	struct NodeEntry {
-		NodeEntry() = delete;
-		explicit NodeEntry(NODE &node) : node(node), exhausted(false) {};
-
-		NODE &node;
-		bool exhausted;
-	};
-
-	ART &art;
-	stack<NodeEntry> s;
+	NodePtr node;
+	bool children_visited;
 };
+
+//! Pins the parent node and iterates over all its children. The child_selector receives each child by reference
+//! and returns whether a child should be pushed onto the stack for further traversal.
+template <class NODE, class CHILD_SELECTOR>
+static void ScanChildren(ART &art, NodePtr node, CHILD_SELECTOR &&child_selector, vector<ScanEntry> &stack) {
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<NODE>();
+	NODE::Iterator(n, [&](NodePtr &child) {
+		auto step = child_selector(child);
+		if (step.action == ARTScanAction::PUSH_NODE) {
+			stack.push_back(ScanEntry {step.node, false});
+		}
+	});
+}
+
+//! Post-order scanner: each node is visited twice via the children_visited flag in ScanEntry.
+//! On the first visit (children_visited = false), the node is marked as visited and the child_selector decides which
+//! children to push onto the stack.
+//! On the second visit (children_visited = true, after all descendants have been processed),
+//! post_handler fires on the node and then we pop it from the stack.
+template <class CHILD_SELECTOR, class POST_HANDLER>
+void ARTScanPostorder(ART &art, NodePtr &root, CHILD_SELECTOR &&child_selector, POST_HANDLER &&postorder_handler) {
+	vector<ScanEntry> stack;
+
+	D_ASSERT(root.HasMetadata());
+	stack.push_back(ScanEntry {root, false});
+
+	while (!stack.empty()) {
+		if (stack.back().children_visited) {
+			auto current = stack.back().node;
+			postorder_handler(current);
+			stack.pop_back();
+			continue;
+		}
+
+		auto current = stack.back().node;
+		stack.back().children_visited = true;
+
+		switch (current.GetType()) {
+		case NType::LEAF_INLINED:
+		case NType::LEAF:
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			break;
+		case NType::PREFIX: {
+			NodeHandle handle(art, current);
+			auto &child = PrefixHandle::ChildRef(art, handle);
+			auto step = child_selector(child);
+			if (step.action == ARTScanAction::PUSH_NODE) {
+				stack.push_back(ScanEntry {step.node, false});
+			}
+			break;
+		}
+		case NType::NODE_4:
+			ScanChildren<Node4>(art, current, child_selector, stack);
+			break;
+		case NType::NODE_16:
+			ScanChildren<Node16>(art, current, child_selector, stack);
+			break;
+		case NType::NODE_48:
+			ScanChildren<Node48>(art, current, child_selector, stack);
+			break;
+		case NType::NODE_256:
+			ScanChildren<Node256>(art, current, child_selector, stack);
+			break;
+		default:
+			throw InternalException("invalid node type for ARTScanPostOrder: %d", current.GetType());
+		}
+	}
+}
 
 } // namespace duckdb
