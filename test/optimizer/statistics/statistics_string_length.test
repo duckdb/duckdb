@@ -12,3 +12,19 @@ query II
 EXPLAIN SELECT count(*) FROM strings WHERE length(v) > 30;
 ----
 physical_plan	<REGEX>:.*Empty Result.*
+
+# strlen uses byte-length statistics for row-group pruning
+statement ok
+CREATE TABLE varying_string_lengths AS
+SELECT CASE WHEN i < 122880 THEN 'short' ELSE repeat('x', 50) END AS v
+FROM range(245760) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(strlen(v)) FROM varying_string_lengths WHERE strlen(v) > 30;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query II
+EXPLAIN ANALYZE SELECT sum(strlen(v)) FROM varying_string_lengths WHERE strlen(v) < 10;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*

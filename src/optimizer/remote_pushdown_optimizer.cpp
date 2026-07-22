@@ -643,7 +643,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 			// the generic TableRef dispatch records the function so a remote catalog can veto it
 			auto result = CatalogPushdownResult::NoCatalogReference();
 			for (auto &arg : func_expr.GetArgumentsMutable()) {
-				result = Merge(result, Rewrite(arg.GetExpressionMutable()));
+				result = Merge(result, RewriteTableFunctionArgument(arg.GetExpressionMutable()));
 			}
 			return result;
 		}
@@ -662,6 +662,17 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	return CatalogPushdownResult::Unknown();
 }
 
+CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionArgument(unique_ptr<ParsedExpression> &arg) {
+	// folding names the constant after the expression it replaces, but the binder reads an alias on a
+	// table function argument as a named parameter - so only an alias the user wrote may survive
+	const bool user_aliased = !arg->GetAlias().empty();
+	auto result = Rewrite(arg);
+	if (!user_aliased) {
+		arg->SetAlias(Identifier());
+	}
+	return result;
+}
+
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	// rewrite the table function only
 	auto result = RewriteTableFunctionOnly(ref);
@@ -672,7 +683,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	// recurse into the function arguments
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 	for (auto &arg : func_expr.GetArgumentsMutable()) {
-		result = Merge(result, Rewrite(arg.GetExpressionMutable()));
+		result = Merge(result, RewriteTableFunctionArgument(arg.GetExpressionMutable()));
 	}
 	return result;
 }

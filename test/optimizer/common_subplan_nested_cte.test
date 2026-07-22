@@ -1,0 +1,73 @@
+# name: test/optimizer/common_subplan_nested_cte.test
+# description: Test canonical bindings after nested common subplan extraction
+# group: [optimizer]
+
+statement ok
+CREATE TABLE tag(id INTEGER, name VARCHAR);
+
+statement ok
+CREATE TABLE person_interest(person_id BIGINT, tag_id INTEGER);
+
+statement ok
+CREATE TABLE person_knows(person1_id BIGINT, person2_id BIGINT);
+
+statement ok
+INSERT INTO tag VALUES (1, 'Frank_Sinatra');
+
+statement ok
+INSERT INTO person_interest VALUES (1, 1), (2, 1);
+
+statement ok
+INSERT INTO person_knows VALUES (1, 10), (2, 10);
+
+# Extracting a nested common subplan creates new CTE reader bindings. A later
+# common subplan must retain the canonical identities of those generated bindings.
+query III
+WITH RECURSIVE
+interest_source AS (
+    SELECT * FROM person_interest
+),
+tag_source AS (
+    SELECT * FROM tag
+),
+knows_source AS (
+    SELECT * FROM person_knows
+),
+knows AS (
+    SELECT person1_id, person2_id
+    FROM knows_source
+    UNION ALL
+    SELECT person2_id, person1_id
+    FROM knows_source
+),
+interested_people AS (
+    SELECT interest.person_id
+    FROM interest_source interest
+    JOIN tag_source tag ON tag.id = interest.tag_id
+    WHERE tag.name = 'Frank_Sinatra'
+),
+friends_of_interested AS (
+    SELECT knows.person1_id AS interested_id,
+           knows.person2_id AS friend_id
+    FROM interested_people interested
+    JOIN knows ON interested.person_id = knows.person1_id
+)
+SELECT friend1.interested_id,
+       friend2.interested_id,
+       count(friend1.friend_id) AS mutual_friend_count
+FROM friends_of_interested friend1
+JOIN friends_of_interested friend2
+  ON friend1.friend_id = friend2.friend_id
+WHERE friend1.interested_id <> friend2.interested_id
+  AND (friend2.interested_id, friend1.interested_id) NOT IN (
+      SELECT person1_id, person2_id
+      FROM knows
+  )
+GROUP BY friend1.interested_id, friend2.interested_id
+ORDER BY mutual_friend_count DESC,
+         friend1.interested_id,
+         friend2.interested_id
+LIMIT 20;
+----
+1	2	1
+2	1	1

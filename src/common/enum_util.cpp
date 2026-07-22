@@ -125,6 +125,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
+#include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
@@ -162,9 +163,12 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
+#include "duckdb/optimizer/rule/like_optimizations.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
@@ -980,6 +984,25 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 19, "CSVState", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCTEExecutionModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CTEExecutionMode::MATERIALIZED), "MATERIALIZED" },
+		{ static_cast<uint32_t>(CTEExecutionMode::STREAMING_FANOUT), "STREAMING_FANOUT" },
+		{ static_cast<uint32_t>(CTEExecutionMode::HYBRID_FANOUT), "HYBRID_FANOUT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CTEExecutionMode>(CTEExecutionMode value) {
+	return StringUtil::EnumToString(GetCTEExecutionModeValues(), 3, "CTEExecutionMode", static_cast<uint32_t>(value));
+}
+
+template<>
+CTEExecutionMode EnumUtil::FromString<CTEExecutionMode>(const char *value) {
+	return static_cast<CTEExecutionMode>(StringUtil::StringToEnum(GetCTEExecutionModeValues(), 3, "CTEExecutionMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCTEMaterializeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CTEMaterialize::CTE_MATERIALIZE_DEFAULT), "CTE_MATERIALIZE_DEFAULT" },
@@ -1690,19 +1713,20 @@ const StringUtil::EnumStringLiteral *GetDebugVerificationModeValues() {
 		{ static_cast<uint32_t>(DebugVerificationMode::NONE), "NONE" },
 		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_VECTORS), "VERIFY_VECTORS" },
 		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_SERIALIZATION), "VERIFY_SERIALIZATION" },
-		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_FUNCTIONS), "VERIFY_FUNCTIONS" }
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_FUNCTIONS), "VERIFY_FUNCTIONS" },
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_COMPRESSION), "VERIFY_COMPRESSION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DebugVerificationMode>(DebugVerificationMode value) {
-	return StringUtil::EnumToString(GetDebugVerificationModeValues(), 5, "DebugVerificationMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDebugVerificationModeValues(), 6, "DebugVerificationMode", static_cast<uint32_t>(value));
 }
 
 template<>
 DebugVerificationMode EnumUtil::FromString<DebugVerificationMode>(const char *value) {
-	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 5, "DebugVerificationMode", value));
+	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 6, "DebugVerificationMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDecimalBitWidthValues() {
@@ -4119,6 +4143,24 @@ PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const ch
 	return static_cast<PartitionedTupleDataType>(StringUtil::StringToEnum(GetPartitionedTupleDataTypeValues(), 2, "PartitionedTupleDataType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetPatternMatchTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PatternMatchType::LIKE), "LIKE" },
+		{ static_cast<uint32_t>(PatternMatchType::GLOB), "GLOB" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PatternMatchType>(PatternMatchType value) {
+	return StringUtil::EnumToString(GetPatternMatchTypeValues(), 2, "PatternMatchType", static_cast<uint32_t>(value));
+}
+
+template<>
+PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value) {
+	return static_cast<PatternMatchType>(StringUtil::StringToEnum(GetPatternMatchTypeValues(), 2, "PatternMatchType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetPendingExecutionResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PendingExecutionResult::RESULT_READY), "RESULT_READY" },
@@ -4298,6 +4340,44 @@ const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value) {
 template<>
 PhysicalType EnumUtil::FromString<PhysicalType>(const char *value) {
 	return static_cast<PhysicalType>(StringUtil::StringToEnum(GetPhysicalTypeValues(), 21, "PhysicalType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPipelineBroadcastExchangeConsumerModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PipelineBroadcastExchangeConsumerMode::UNRESOLVED), "UNRESOLVED" },
+		{ static_cast<uint32_t>(PipelineBroadcastExchangeConsumerMode::BUFFERED), "BUFFERED" },
+		{ static_cast<uint32_t>(PipelineBroadcastExchangeConsumerMode::DIRECT), "DIRECT" },
+		{ static_cast<uint32_t>(PipelineBroadcastExchangeConsumerMode::MATERIALIZED), "MATERIALIZED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeConsumerMode>(PipelineBroadcastExchangeConsumerMode value) {
+	return StringUtil::EnumToString(GetPipelineBroadcastExchangeConsumerModeValues(), 4, "PipelineBroadcastExchangeConsumerMode", static_cast<uint32_t>(value));
+}
+
+template<>
+PipelineBroadcastExchangeConsumerMode EnumUtil::FromString<PipelineBroadcastExchangeConsumerMode>(const char *value) {
+	return static_cast<PipelineBroadcastExchangeConsumerMode>(StringUtil::StringToEnum(GetPipelineBroadcastExchangeConsumerModeValues(), 4, "PipelineBroadcastExchangeConsumerMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPipelineInputModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PipelineInputMode::SCHEDULED_SOURCE), "SCHEDULED_SOURCE" },
+		{ static_cast<uint32_t>(PipelineInputMode::EXTERNAL_INPUT), "EXTERNAL_INPUT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value) {
+	return StringUtil::EnumToString(GetPipelineInputModeValues(), 2, "PipelineInputMode", static_cast<uint32_t>(value));
+}
+
+template<>
+PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value) {
+	return static_cast<PipelineInputMode>(StringUtil::StringToEnum(GetPipelineInputModeValues(), 2, "PipelineInputMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPragmaTypeValues() {
@@ -4869,19 +4949,20 @@ const StringUtil::EnumStringLiteral *GetSecretPersistTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SecretPersistType::DEFAULT), "DEFAULT" },
 		{ static_cast<uint32_t>(SecretPersistType::TEMPORARY), "TEMPORARY" },
-		{ static_cast<uint32_t>(SecretPersistType::PERSISTENT), "PERSISTENT" }
+		{ static_cast<uint32_t>(SecretPersistType::PERSISTENT), "PERSISTENT" },
+		{ static_cast<uint32_t>(SecretPersistType::TRANSACTION), "TRANSACTION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value) {
-	return StringUtil::EnumToString(GetSecretPersistTypeValues(), 3, "SecretPersistType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSecretPersistTypeValues(), 4, "SecretPersistType", static_cast<uint32_t>(value));
 }
 
 template<>
 SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value) {
-	return static_cast<SecretPersistType>(StringUtil::StringToEnum(GetSecretPersistTypeValues(), 3, "SecretPersistType", value));
+	return static_cast<SecretPersistType>(StringUtil::StringToEnum(GetSecretPersistTypeValues(), 4, "SecretPersistType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSecretSerializationTypeValues() {

@@ -468,6 +468,19 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, Serializer &seria
 	serializer.WriteProperty(100, "schema", &schema);
 }
 
+static unique_ptr<CreateInfo> ReadCreateInfo(Deserializer &deserializer, CatalogType expected_type,
+                                             const char *entry_name) {
+	// 100 is the serialization field ID for the catalog entry's CreateInfo payload
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, entry_name);
+	if (!info) {
+		throw IOException("corrupt database file - %s entry without create info", entry_name);
+	}
+	if (info->type != expected_type) {
+		throw IOException("corrupt database file - catalog entry type mismatch for %s", entry_name);
+	}
+	return info;
+}
+
 void CheckpointReader::ReadEntry(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<CatalogType>(99, "type");
 
@@ -509,13 +522,13 @@ void CheckpointReader::ReadEntry(CatalogTransaction transaction, Deserializer &d
 		break;
 	}
 	default:
-		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
+		throw IOException("corrupt database file - unrecognized catalog type in checkpoint");
 	}
 }
 
 void CheckpointReader::ReadSchema(CatalogTransaction transaction, Deserializer &deserializer) {
 	// Read the schema and create it in the catalog
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "schema");
+	auto info = ReadCreateInfo(deserializer, CatalogType::SCHEMA_ENTRY, "schema");
 	auto &schema_info = info->Cast<CreateSchemaInfo>();
 
 	// we set create conflict to IGNORE_ON_CONFLICT, so that we can ignore a failure when recreating the main schema
@@ -531,7 +544,7 @@ void CheckpointWriter::WriteView(ViewCatalogEntry &view, Serializer &serializer)
 }
 
 void CheckpointReader::ReadView(CatalogTransaction transaction, Deserializer &deserializer) {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "view");
+	auto info = ReadCreateInfo(deserializer, CatalogType::VIEW_ENTRY, "view");
 	auto &view_info = info->Cast<CreateViewInfo>();
 	catalog.CreateView(transaction, view_info);
 }
@@ -544,7 +557,7 @@ void CheckpointWriter::WriteTrigger(TriggerCatalogEntry &trigger, Serializer &se
 }
 
 void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer &deserializer) {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "trigger");
+	auto info = ReadCreateInfo(deserializer, CatalogType::TRIGGER_ENTRY, "trigger");
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
 	trigger_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	auto &schema = catalog.GetSchema(transaction, trigger_info.GetQualifiedName().Schema());
@@ -565,7 +578,7 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &seri
 }
 
 void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "sequence");
+	auto info = ReadCreateInfo(deserializer, CatalogType::SEQUENCE_ENTRY, "sequence");
 	auto &sequence_info = info->Cast<CreateSequenceInfo>();
 	catalog.CreateSequence(transaction, sequence_info);
 }
@@ -583,7 +596,7 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog_entry, Serial
 
 void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &deserializer) {
 	// we need to keep the tag "index", even though it is slightly misleading.
-	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
+	auto create_info = ReadCreateInfo(deserializer, CatalogType::INDEX_ENTRY, "index");
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// also, we have to read the root_block_pointer, which will not be valid for newer storage versions.
@@ -641,7 +654,7 @@ void CheckpointWriter::WriteType(TypeCatalogEntry &type, Serializer &serializer)
 }
 
 void CheckpointReader::ReadType(CatalogTransaction transaction, Deserializer &deserializer) {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "type");
+	auto info = ReadCreateInfo(deserializer, CatalogType::TYPE_ENTRY, "type");
 	auto &type_info = info->Cast<CreateTypeInfo>();
 	catalog.CreateType(transaction, type_info);
 }
@@ -654,7 +667,7 @@ void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro, Serializer &se
 }
 
 void CheckpointReader::ReadMacro(CatalogTransaction transaction, Deserializer &deserializer) {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "macro");
+	auto info = ReadCreateInfo(deserializer, CatalogType::MACRO_ENTRY, "macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
 	catalog.CreateFunction(transaction, macro_info);
 }
@@ -664,7 +677,7 @@ void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro, Serializer
 }
 
 void CheckpointReader::ReadTableMacro(CatalogTransaction transaction, Deserializer &deserializer) {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table_macro");
+	auto info = ReadCreateInfo(deserializer, CatalogType::TABLE_MACRO_ENTRY, "table_macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
 	catalog.CreateFunction(transaction, macro_info);
 }
@@ -695,8 +708,11 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 
 void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {
 	// deserialize the table meta data
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table");
-	auto &schema = catalog.GetSchema(transaction, info->GetQualifiedName().Schema());
+	auto info = ReadCreateInfo(deserializer, CatalogType::TABLE_ENTRY, "table");
+	// the qualified name is [catalog, schema_path..., name] - navigate the (possibly nested) schema path
+	auto &path = info->GetQualifiedName().Path();
+	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	auto &schema = *catalog.GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	for (auto &dep : bound_info->Base().dependencies.Set()) {

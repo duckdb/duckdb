@@ -12,6 +12,13 @@
 
 namespace duckdb {
 
-enum class DebugVerificationMode : uint8_t { DEFAULT, NONE, VERIFY_VECTORS, VERIFY_SERIALIZATION, VERIFY_FUNCTIONS };
+enum class DebugVerificationMode : uint8_t {
+	DEFAULT,
+	NONE,
+	VERIFY_VECTORS,
+	VERIFY_SERIALIZATION,
+	VERIFY_FUNCTIONS,
+	VERIFY_COMPRESSION
+};
 
 } // namespace duckdb

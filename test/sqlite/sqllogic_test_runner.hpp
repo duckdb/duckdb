@@ -109,6 +109,7 @@ public:
 public:
 	void ExecuteFile(string script);
 	void ExecuteStream(std::istream &input, const string &source_name);
+	void ExecuteScript(SQLLogicParser &parser, const string &script);
 	virtual void LoadDatabase(string dbpath, bool load_extensions);
 
 	string ReplaceKeywords(string input);

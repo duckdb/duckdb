@@ -6,6 +6,15 @@
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_tests": [
     {
+      "reason": "In-memory external resource type registry is instance-scoped and does not survive database restarts.",
+      "paths": [
+        "test/sql/table_function/external_resource_types.test",
+        "test/sql/table_function/create_external_resource.test",
+        "test/sql/table_function/register_external_resource.test",
+        "test/sql/table_function/external_resource_logging.test"
+      ]
+    },
+    {
       "reason": "Contains explicit use of the memory catalog.",
       "paths": [
         "test/sql/attach/attach_use_rollback.test",

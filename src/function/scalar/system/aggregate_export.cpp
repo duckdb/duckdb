@@ -989,16 +989,10 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 			                      "constant");
 		}
 	}
-	auto function_name_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	if (function_name_val.IsNull()) {
-		throw BinderException("to_aggregate_state: the aggregate name cannot be NULL");
-	}
+	auto function_name_val = input.GetNonNullConstant(1);
 	auto function_name = StringValue::Get(function_name_val);
 
-	auto signature_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
-	if (signature_val.IsNull()) {
-		throw BinderException("to_aggregate_state: the signature must be a list of types");
-	}
+	auto signature_val = input.GetNonNullConstant(2);
 	// the signature lists all of the argument types in order
 	vector<LogicalType> argument_types;
 	for (auto &arg : ListValue::GetChildren(signature_val)) {
@@ -1009,7 +1003,7 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 	// NULL value of the argument type (e.g. string_agg's separator), keyed by the argument's index
 	map<idx_t, Value> constant_parameters;
 	if (arguments.size() > 3) {
-		auto constants_val = ExpressionExecutor::EvaluateScalar(context, *arguments[3]);
+		auto constants_val = input.GetConstant(3);
 		ParseConstantParameters(constants_val, argument_types.size(), constant_parameters);
 	}
 	for (auto &entry : constant_parameters) {
@@ -1036,7 +1030,7 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 		const auto buffer_struct = ListType::GetChildType(state_type);
 		const idx_t column_count = StructType::GetChildTypes(buffer_struct).size();
 		vector<SortedAggregateStateOrder> orders;
-		auto order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[4]);
+		auto order_value = input.GetConstant(4);
 		ParseOrderBys(order_value, column_count, orders);
 		if (orders.empty()) {
 			throw BinderException("to_aggregate_state: an ordered aggregate state must have at least one ORDER BY key");
@@ -1153,6 +1147,16 @@ ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 		}
 		ScalarFunction function("to_aggregate_state", arguments, LogicalTypeId::ANY, ToAggregateStateFunction,
 		                        ToAggregateStateBind);
+		auto &sig = function.GetSignature();
+		sig.GetParameter(0).SetName("data");
+		sig.GetParameter(1).SetName("name");
+		sig.GetParameter(2).SetName("signature");
+		if (sig.GetParameterCount() > 3) {
+			sig.GetParameter(3).SetName("constant_parameters");
+		}
+		if (sig.GetParameterCount() > 4) {
+			sig.GetParameter(4).SetName("order_by");
+		}
 		function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 		set.AddFunction(std::move(function));
 	}

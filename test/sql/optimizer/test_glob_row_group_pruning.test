@@ -1,0 +1,49 @@
+# name: test/sql/optimizer/test_glob_row_group_pruning.test
+# description: Row-group pruning on string columns using GLOB
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/glob_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE t AS
+         SELECT CASE
+                    WHEN range < 2048 THEN 'aaa' || range::VARCHAR
+                    WHEN range < 4096 THEN 'mmm' || range::VARCHAR
+                    ELSE 'zzz' || range::VARCHAR
+                END AS s
+         FROM range(6144);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s GLOB 'mmm*';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT count(*) FROM t WHERE s GLOB 'mmm*';
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s GLOB 'qqq';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+
+query I
+SELECT count(*) FROM t WHERE s GLOB 'qqq';
+----
+0
+
+# Add a case with a glob that should not be optimized to a simple prefix due to a question mark
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE s GLOB 'm?m*';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+query I
+SELECT count(*) FROM t WHERE s NOT GLOB 'qqq';
+----
+6144

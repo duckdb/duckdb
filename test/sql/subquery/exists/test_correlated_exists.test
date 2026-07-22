@@ -188,3 +188,31 @@ query R
 SELECT (SELECT COVAR_POP(i1.i, i1.i) FROM integers i2 LIMIT 1) FROM integers i1 ORDER BY 1;
 ----
 0.666667
+
+# The CTE deliminator must preserve regular NULL semantics for correlated inequality predicates.
+statement ok
+SET delim_join_as_cte=true;
+
+statement ok
+CREATE TABLE exists_sales(o INTEGER, ship_date INTEGER, wh INTEGER);
+
+statement ok
+INSERT INTO exists_sales VALUES
+	(1, 1, NULL), (1, 0, 1), (1, 0, 2),
+	(2, 1, 2), (2, 0, 2),
+	(3, 1, 3), (3, 0, 4);
+
+query IIT
+SELECT o, wh, EXISTS(
+	SELECT 1
+	FROM exists_sales s2
+	WHERE s1.o=s2.o
+		AND s1.wh<>s2.wh
+) AS ex
+FROM exists_sales s1
+WHERE ship_date=1
+ORDER BY o;
+----
+1	NULL	0
+2	2	0
+3	3	1

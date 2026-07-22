@@ -111,6 +111,14 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// comparison with constant NULL, return NULL
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
+	if (BoundComparisonExpression::IsComparison(column_ref_expr) && !constant_value.IsNull() &&
+	    constant_value.type().id() == LogicalTypeId::BOOLEAN && BooleanValue::Get(constant_value)) {
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_EQUAL ||
+		    (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM && is_root &&
+		     op.type == LogicalOperatorType::LOGICAL_FILTER)) {
+			return column_ref_left ? std::move(left) : std::move(right);
+		}
+	}
 	if (column_ref_expr.GetExpressionClass() == ExpressionClass::BOUND_CAST) {
 		//! Here we check if we can apply the expression on the constant side
 		//! We can do this if the cast itself is invertible and casting the constant is

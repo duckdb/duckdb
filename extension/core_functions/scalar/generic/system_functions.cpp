@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -53,10 +54,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 	if (arguments[0]->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 		throw BinderException("current_schemas requires a boolean input");
 	}
-	if (!arguments[0]->IsFoldable()) {
-		throw NotImplementedException("current_schemas requires a constant input");
-	}
-	Value schema_value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
+	Value schema_value = input.GetConstant(0);
 	Value result_val;
 	if (schema_value.IsNull()) {
 		// null
@@ -128,8 +126,8 @@ ScalarFunction CurrentDatabaseFun::GetFunction() {
 
 ScalarFunction CurrentSchemasFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
-	ScalarFunction current_schemas({LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction,
-	                               CurrentSchemasBind);
+	ScalarFunction current_schemas({{"include_implicit", LogicalType::BOOLEAN}}, varchar_list_type,
+	                               CurrentSchemasFunction, CurrentSchemasBind);
 	current_schemas.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 	return current_schemas;
 }

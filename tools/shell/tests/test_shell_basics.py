@@ -389,6 +389,12 @@ def test_read(shell, generated_file):
     result = test.run()
     result.check_stdout("42")
 
+def test_recursive_read(shell, tmp_path):
+    sql_file = tmp_path / "recursive_read.sql"
+    sql_file.write_text(f".read {sql_file.as_posix()}")
+    result = ShellTest(shell).statement(f".read {sql_file.as_posix()}").run()
+    result.check_stderr("recursive .read")
+
 @pytest.mark.parametrize('generated_file', ["select 42"], indirect=True)
 def test_execute_file(shell, generated_file):
     test = (

@@ -271,11 +271,7 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, BoundScalar
 }
 
 template <class T>
-static T GetOrder(ClientContext &context, Expression &expr) {
-	if (!expr.IsFoldable()) {
-		throw InvalidInputException("Sorting order must be a constant");
-	}
-	Value order_value = ExpressionExecutor::EvaluateScalar(context, expr);
+static T GetOrder(const Value &order_value) {
 	auto order_name = StringUtil::Upper(order_value.ToString());
 	return EnumUtil::FromString<T>(order_name.c_str());
 }
@@ -290,11 +286,11 @@ static unique_ptr<FunctionData> ListGradeUpBind(BindScalarFunctionInput &input) 
 
 	// get the sorting order
 	if (arguments.size() >= 2) {
-		order = GetOrder<OrderType>(context, *arguments[1]);
+		order = GetOrder<OrderType>(input.GetConstant(1));
 	}
 	// get the null sorting order
 	if (arguments.size() == 3) {
-		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
+		null_order = GetOrder<OrderByNullType>(input.GetConstant(2));
 	}
 	auto &config = DBConfig::GetConfig(context);
 	order = config.ResolveOrder(context, order);
@@ -318,11 +314,11 @@ static unique_ptr<FunctionData> ListNormalSortBind(BindScalarFunctionInput &inpu
 
 	// get the sorting order
 	if (arguments.size() >= 2) {
-		order = GetOrder<OrderType>(context, *arguments[1]);
+		order = GetOrder<OrderType>(input.GetConstant(1));
 	}
 	// get the null sorting order
 	if (arguments.size() == 3) {
-		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
+		null_order = GetOrder<OrderByNullType>(input.GetConstant(2));
 	}
 	auto &config = DBConfig::GetConfig(context);
 	order = config.ResolveOrder(context, order);
@@ -338,7 +334,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(BindScalarFunctionInput &inp
 	auto null_order = OrderByNullType::ORDER_DEFAULT;
 
 	if (arguments.size() == 2) {
-		null_order = GetOrder<OrderByNullType>(context, *arguments[1]);
+		null_order = GetOrder<OrderByNullType>(input.GetConstant(1));
 	}
 	auto &config = DBConfig::GetConfig(context);
 	order = config.ResolveOrder(context, order);
@@ -358,15 +354,17 @@ static unique_ptr<FunctionData> ListReverseSortBind(BindScalarFunctionInput &inp
 
 ScalarFunctionSet ListSortFun::GetFunctions() {
 	// one parameter: list
-	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
-	                    ListNormalSortBind);
+	ScalarFunction sort({{"list", LogicalType::LIST(LogicalType::ANY)}}, LogicalType::LIST(LogicalType::ANY),
+	                    ListSortFunction, ListNormalSortBind);
 
 	// two parameters: list, order
-	ScalarFunction sort_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
+	ScalarFunction sort_order({{"list", LogicalType::LIST(LogicalType::ANY)}, {"sort_order", LogicalType::VARCHAR}},
 	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	// three parameters: list, order, null order
-	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
+	ScalarFunction sort_orders({{"list", LogicalType::LIST(LogicalType::ANY)},
+	                            {"sort_order", LogicalType::VARCHAR},
+	                            {"null_order", LogicalType::VARCHAR}},
 	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	ScalarFunctionSet list_sort;
@@ -378,15 +376,17 @@ ScalarFunctionSet ListSortFun::GetFunctions() {
 
 ScalarFunctionSet ListGradeUpFun::GetFunctions() {
 	// one parameter: list
-	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
-	                    ListGradeUpBind);
+	ScalarFunction sort({{"list", LogicalType::LIST(LogicalType::ANY)}}, LogicalType::LIST(LogicalType::ANY),
+	                    ListSortFunction, ListGradeUpBind);
 
 	// two parameters: list, order
-	ScalarFunction sort_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
+	ScalarFunction sort_order({{"list", LogicalType::LIST(LogicalType::ANY)}, {"sort_order", LogicalType::VARCHAR}},
 	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
 
 	// three parameters: list, order, null order
-	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
+	ScalarFunction sort_orders({{"list", LogicalType::LIST(LogicalType::ANY)},
+	                            {"sort_order", LogicalType::VARCHAR},
+	                            {"null_order", LogicalType::VARCHAR}},
 	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
 
 	ScalarFunctionSet list_grade_up;
@@ -398,12 +398,13 @@ ScalarFunctionSet ListGradeUpFun::GetFunctions() {
 
 ScalarFunctionSet ListReverseSortFun::GetFunctions() {
 	// one parameter: list
-	ScalarFunction sort_reverse({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
+	ScalarFunction sort_reverse({{"list", LogicalType::LIST(LogicalType::ANY)}}, LogicalType::LIST(LogicalType::ANY),
 	                            ListSortFunction, ListReverseSortBind);
 
 	// two parameters: list, null order
-	ScalarFunction sort_reverse_null_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
-	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListReverseSortBind);
+	ScalarFunction sort_reverse_null_order(
+	    {{"list", LogicalType::LIST(LogicalType::ANY)}, {"null_order", LogicalType::VARCHAR}},
+	    LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListReverseSortBind);
 
 	ScalarFunctionSet list_reverse_sort;
 	list_reverse_sort.AddFunction(sort_reverse);
