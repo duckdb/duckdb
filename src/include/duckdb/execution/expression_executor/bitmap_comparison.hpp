@@ -144,6 +144,10 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 	if (span > STANDARD_VECTOR_SIZE) {
 		return false;
 	}
+	// too few selected rows to pay for the dense compare: leave it to the generic gather-select
+	if (have_sel && !DenseAutoVecPaysOff(count, span, GetTypeIdSize(pt))) {
+		return false;
+	}
 
 	// dense comparison -> bitmap (the true side), in the caller's bitmap when one is requested else a scratch
 	SelectionResult &t = bitmap_sel ? *bitmap_sel : tmp_sel1;

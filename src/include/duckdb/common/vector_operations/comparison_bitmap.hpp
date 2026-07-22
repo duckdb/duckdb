@@ -73,30 +73,8 @@ DUCKDB_AUTOVEC_TARGET inline void AndValidityIntoBitmap(const validity_t *validi
 }
 
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
-//! 32 comparison bits for 32 consecutive rows, without ISA-specific builtins: vector compares give 0/-1 lanes,
-//! AND with per-lane bit weights, then an OR-reduction (shufflevector tree) collapses them into the mask word.
-typedef uint8_t duckdb_cmp_u8x32 __attribute__((vector_size(32)));
-typedef uint32_t duckdb_cmp_u32x8 __attribute__((vector_size(32)));
-typedef uint64_t duckdb_cmp_u64x4 __attribute__((vector_size(32)));
-
-DUCKDB_AUTOVEC_TARGET inline uint32_t CmpMaskHorOr(duckdb_cmp_u32x8 v) {
-	v |= __builtin_shufflevector(v, v, 4, 5, 6, 7, 4, 5, 6, 7);
-	v |= __builtin_shufflevector(v, v, 2, 3, 2, 3, 2, 3, 2, 3);
-	v |= __builtin_shufflevector(v, v, 1, 1, 1, 1, 1, 1, 1, 1);
-	return v[0];
-}
-
-//! One 0/-1 mask byte per row -> 32 bits: nibble weights per u32 lane, fold, position by lane, OR-reduce.
-DUCKDB_AUTOVEC_TARGET inline uint32_t CmpMaskBytes(duckdb_cmp_u8x32 p) {
-	const duckdb_cmp_u8x32 wb = {1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8,
-	                             1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8};
-	duckdb_cmp_u32x8 v = (duckdb_cmp_u32x8)(p & wb);
-	v = v | (v >> 16);
-	v = (v | (v >> 8)) & 0xF;
-	v <<= duckdb_cmp_u32x8 {0, 4, 8, 12, 16, 20, 24, 28};
-	return CmpMaskHorOr(v);
-}
-
+//! 32 comparison bits for 32 consecutive rows: vector compares give 0/-1 lanes, MoveMask packs the
+//! lane top bits (single-instruction builtins on x86, weighted OR-reduction elsewhere).
 template <class T, class OP, bool COL>
 DUCKDB_AUTOVEC_TARGET static inline uint32_t CmpMask32(const T *a, const T *b, T constant) {
 	typedef T V __attribute__((vector_size(32)));
@@ -105,49 +83,44 @@ DUCKDB_AUTOVEC_TARGET static inline uint32_t CmpMask32(const T *a, const T *b, T
 	if constexpr (!COL) {
 		y = V {} + constant;
 	}
-	if constexpr (sizeof(T) <= 2) {
-		V x0, y0 = y;
-		std::memcpy(&x0, a, 32);
+	if constexpr (sizeof(T) == 1) {
+		V x;
+		std::memcpy(&x, a, 32);
 		if constexpr (COL) {
-			std::memcpy(&y0, b, 32);
+			std::memcpy(&y, b, 32);
 		}
-		duckdb_cmp_u8x32 m0 = (duckdb_cmp_u8x32)OP::Apply(x0, y0);
-		if constexpr (sizeof(T) == 1) {
-			return CmpMaskBytes(m0);
-		}
-		V x1, y1 = y;
+		return MoveMask((duckdb_av_u8x32)OP::Apply(x, y));
+	} else if constexpr (sizeof(T) == 2) {
+		V x0, x1, y0 = y, y1 = y;
+		std::memcpy(&x0, a, 32);
 		std::memcpy(&x1, a + 16, 32);
 		if constexpr (COL) {
+			std::memcpy(&y0, b, 32);
 			std::memcpy(&y1, b + 16, 32);
 		}
-		duckdb_cmp_u8x32 m1 = (duckdb_cmp_u8x32)OP::Apply(x1, y1);
-		// 16-bit lanes: keep one mask byte per lane (both bytes are equal), giving 32 mask bytes
-		return CmpMaskBytes(__builtin_shufflevector(m0, m1, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
-		                                            32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62));
+		return MoveMask((duckdb_av_u16x16)OP::Apply(x0, y0), (duckdb_av_u16x16)OP::Apply(x1, y1));
 	} else if constexpr (sizeof(T) == 4) {
-		duckdb_cmp_u32x8 acc {};
+		uint32_t mask = 0;
 		for (std::size_t k = 0; k < 4; k++) {
 			V x, yk = y;
 			std::memcpy(&x, a + k * LANES, 32);
 			if constexpr (COL) {
 				std::memcpy(&yk, b + k * LANES, 32);
 			}
-			acc |= (duckdb_cmp_u32x8)OP::Apply(x, yk) & (duckdb_cmp_u32x8 {1, 2, 4, 8, 16, 32, 64, 128} << (k * 8));
+			mask |= MoveMask((duckdb_av_u32x8)OP::Apply(x, yk)) << (k * 8);
 		}
-		return CmpMaskHorOr(acc);
+		return mask;
 	} else {
-		duckdb_cmp_u64x4 acc {};
+		uint32_t mask = 0;
 		for (std::size_t k = 0; k < 8; k++) {
 			V x, yk = y;
 			std::memcpy(&x, a + k * LANES, 32);
 			if constexpr (COL) {
 				std::memcpy(&yk, b + k * LANES, 32);
 			}
-			acc |= (duckdb_cmp_u64x4)OP::Apply(x, yk) & (duckdb_cmp_u64x4 {1, 2, 4, 8} << (k * 4));
+			mask |= MoveMask((duckdb_av_u64x4)OP::Apply(x, yk)) << (k * 4);
 		}
-		acc |= __builtin_shufflevector(acc, acc, 2, 3, 2, 3);
-		acc |= __builtin_shufflevector(acc, acc, 1, 1, 1, 1);
-		return uint32_t(acc[0]);
+		return mask;
 	}
 }
 
