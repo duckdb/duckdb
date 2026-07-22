@@ -46,6 +46,24 @@ FROM (
 ----
 true	true
 
+# Projected LogicalColumnDataGet plans serialize their underlying column ids
+query I
+SELECT column_name FROM (DESCRIBE SELECT 42 AS a, 84 AS b);
+----
+a
+b
+
+query II
+SELECT plan::VARCHAR LIKE '%LOGICAL_CHUNK_GET%', plan::VARCHAR LIKE '%"column_ids"%'
+FROM (
+	SELECT json_serialize_plan(
+		'SELECT column_name FROM (DESCRIBE SELECT 42 AS a, 84 AS b)',
+		skip_default := true, optimize := true
+	) plan
+);
+----
+true	true
+
 # Example with syntax error
 query I
 SELECT json_serialize_plan('SELECT AND LAUNCH ROCKETS WHERE 1 = 1');

@@ -392,6 +392,8 @@ enum class PhysicalType : uint8_t;
 
 enum class PipelineBroadcastExchangeConsumerMode : uint8_t;
 
+enum class PipelineBroadcastExchangeOrderMode : uint8_t;
+
 enum class PipelineInputMode : uint8_t;
 
 enum class PragmaType : uint8_t;
@@ -1128,6 +1130,9 @@ const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value);
 
 template<>
 const char* EnumUtil::ToChars<PipelineBroadcastExchangeConsumerMode>(PipelineBroadcastExchangeConsumerMode value);
+
+template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeOrderMode>(PipelineBroadcastExchangeOrderMode value);
 
 template<>
 const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value);
@@ -1963,6 +1968,9 @@ PhysicalType EnumUtil::FromString<PhysicalType>(const char *value);
 
 template<>
 PipelineBroadcastExchangeConsumerMode EnumUtil::FromString<PipelineBroadcastExchangeConsumerMode>(const char *value);
+
+template<>
+PipelineBroadcastExchangeOrderMode EnumUtil::FromString<PipelineBroadcastExchangeOrderMode>(const char *value);
 
 template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value);

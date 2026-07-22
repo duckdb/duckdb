@@ -4364,6 +4364,25 @@ PipelineBroadcastExchangeConsumerMode EnumUtil::FromString<PipelineBroadcastExch
 	return static_cast<PipelineBroadcastExchangeConsumerMode>(StringUtil::StringToEnum(GetPipelineBroadcastExchangeConsumerModeValues(), 4, "PipelineBroadcastExchangeConsumerMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetPipelineBroadcastExchangeOrderModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PipelineBroadcastExchangeOrderMode::UNORDERED), "UNORDERED" },
+		{ static_cast<uint32_t>(PipelineBroadcastExchangeOrderMode::SEQUENTIAL), "SEQUENTIAL" },
+		{ static_cast<uint32_t>(PipelineBroadcastExchangeOrderMode::BATCH_INDEX), "BATCH_INDEX" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeOrderMode>(PipelineBroadcastExchangeOrderMode value) {
+	return StringUtil::EnumToString(GetPipelineBroadcastExchangeOrderModeValues(), 3, "PipelineBroadcastExchangeOrderMode", static_cast<uint32_t>(value));
+}
+
+template<>
+PipelineBroadcastExchangeOrderMode EnumUtil::FromString<PipelineBroadcastExchangeOrderMode>(const char *value) {
+	return static_cast<PipelineBroadcastExchangeOrderMode>(StringUtil::StringToEnum(GetPipelineBroadcastExchangeOrderModeValues(), 3, "PipelineBroadcastExchangeOrderMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetPipelineInputModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PipelineInputMode::SCHEDULED_SOURCE), "SCHEDULED_SOURCE" },
