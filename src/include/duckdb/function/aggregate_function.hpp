@@ -54,27 +54,22 @@ struct WindowPartitionInput {
 	InterruptState &interrupt_state;
 };
 
-class BindAggregateFunctionInput {
+class BindAggregateFunctionInput : public BindFunctionInput {
 public:
+	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundAggregateFunction.
 	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
-	                           vector<unique_ptr<Expression>> &arguments_p)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p) {
-	}
+	                           vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p);
 
-	ClientContext &GetClientContext() const {
-		return context;
-	}
+	//! Construct without argument names - looking arguments up by name is not available in this case.
+	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
+	                           vector<unique_ptr<Expression>> &arguments_p);
+
 	BoundAggregateFunction &GetBoundFunction() const {
 		return bound_function;
 	}
-	vector<unique_ptr<Expression>> &GetArguments() const {
-		return arguments;
-	}
 
 private:
-	ClientContext &context;
 	BoundAggregateFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
 };
 
 //! The type used for sizing hashed aggregate function states

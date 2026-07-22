@@ -118,7 +118,6 @@ struct StringAggFunction {
 };
 
 unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments.size() == 1) {
@@ -132,13 +131,7 @@ unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("Separator argument to StringAgg must be a constant");
-	}
-	auto separator_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	auto separator_val = input.GetConstant(1);
 	string separator_string = ",";
 	if (separator_val.IsNull()) {
 		arguments[0] = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
@@ -186,11 +179,13 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
 	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
 	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), StringAggBind);
+
+	string_agg_param.GetSignature().GetParameter(0).SetName("input");
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg_param.SetStructStateExport(StringAggStateType);
 	string_agg.AddFunction(string_agg_param);
-	string_agg_param.GetSignature().AddParameter(LogicalType::VARCHAR);
+	string_agg_param.GetSignature().AddParameter("separator", LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);
 	return string_agg;
 }

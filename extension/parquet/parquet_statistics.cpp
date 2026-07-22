@@ -678,7 +678,8 @@ static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const 
 		return nullptr;
 	}
 	auto &comp = expr.Cast<BoundFunctionExpression>();
-	if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+	if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+	    comp.GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		return nullptr;
 	}
 	auto &left = BoundComparisonExpression::Left(comp);
@@ -853,6 +854,30 @@ static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnS
 	}
 }
 
+static bool BloomFilterExcludes(const Value &constant, ParquetBloomFilter &bloom_filter,
+                                const ParquetColumnSchema &schema) {
+	// Floating-point equality treats positive and negative zero as equal, but Parquet hashes their bit patterns.
+	switch (constant.type().InternalType()) {
+	case PhysicalType::FLOAT:
+		if (constant.GetValue<float>() == 0.0f) {
+			return !bloom_filter.FilterCheck(ValueXH64FixedWidth(0.0f)) &&
+			       !bloom_filter.FilterCheck(ValueXH64FixedWidth(-0.0f));
+		}
+		break;
+	case PhysicalType::DOUBLE:
+		if (constant.GetValue<double>() == 0.0) {
+			return !bloom_filter.FilterCheck(ValueXH64FixedWidth(0.0)) &&
+			       !bloom_filter.FilterCheck(ValueXH64FixedWidth(-0.0));
+		}
+		break;
+	default:
+		break;
+	}
+
+	auto hash = ValueXXH64(constant, schema);
+	return hash && !bloom_filter.FilterCheck(*hash);
+}
+
 static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_filter,
                              const ParquetColumnSchema &schema) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
@@ -860,8 +885,7 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 		if (!constant) {
 			return false;
 		}
-		auto hash = ValueXXH64(constant->GetValue(), schema);
-		return hash && !bloom_filter.FilterCheck(*hash);
+		return BloomFilterExcludes(constant->GetValue(), bloom_filter, schema);
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;

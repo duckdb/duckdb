@@ -29,14 +29,11 @@ unique_ptr<FunctionData> GetVariableBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto &function = input.GetBoundFunction();
 
-	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	if (!arguments[0]->IsFoldable()) {
-		throw NotImplementedException("getvariable requires a constant input");
-	}
+	auto variable_name = input.GetConstant(0);
 	Value value;
-	auto variable_name = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 	if (!variable_name.IsNull()) {
 		ClientConfig::GetConfig(context).GetUserVariable(variable_name.ToString(), value);
 	}
@@ -57,7 +54,8 @@ unique_ptr<Expression> BindGetVariableExpression(FunctionBindExpressionInput &in
 } // namespace
 
 ScalarFunction GetVariableFun::GetFunction() {
-	ScalarFunction getvar("getvariable", {LogicalType::VARCHAR}, LogicalType::ANY, nullptr, GetVariableBind, nullptr);
+	ScalarFunction getvar("getvariable", {{"variable_name", LogicalType::VARCHAR}}, LogicalType::ANY, nullptr,
+	                      GetVariableBind, nullptr);
 	getvar.SetBindExpressionCallback(BindGetVariableExpression);
 	return getvar;
 }

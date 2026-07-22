@@ -89,22 +89,13 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 }
 
 unique_ptr<FunctionData> NextValBind(BindScalarFunctionInput &input) {
-	auto &arguments = input.GetArguments();
-
-	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[0]->IsFoldable()) {
-		throw NotImplementedException(
-		    "currval/nextval requires a constant sequence - non-constant sequences are no longer supported");
-	}
-	auto &binder = input.GetBinder();
 	// parameter to nextval function is a foldable constant
 	// evaluate the constant and perform the catalog lookup already
-	auto seqname = ExpressionExecutor::EvaluateScalar(binder.context, *arguments[0]);
+	const auto seqname = input.GetConstant(0);
 	if (seqname.IsNull()) {
 		return nullptr;
 	}
+	auto &binder = input.GetBinder();
 	auto &seq = BindSequence(binder, Identifier(seqname.ToString()));
 	return make_uniq<NextvalBindData>(seq);
 }
@@ -137,7 +128,7 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 } // namespace
 
 ScalarFunction NextvalFun::GetFunction() {
-	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
+	ScalarFunction next_val("nextval", {{"sequence_name", LogicalType::VARCHAR}}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, nullptr, nullptr);
 	next_val.SetBindCallback(NextValBind);
 	next_val.SetSerializeCallback(Serialize);
@@ -150,7 +141,7 @@ ScalarFunction NextvalFun::GetFunction() {
 }
 
 ScalarFunction CurrvalFun::GetFunction() {
-	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
+	ScalarFunction curr_val("currval", {{"sequence_name", LogicalType::VARCHAR}}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
 	curr_val.SetBindCallback(NextValBind);
 	curr_val.SetSerializeCallback(Serialize);

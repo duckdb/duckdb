@@ -529,7 +529,6 @@ struct RemapEntry {
 };
 
 unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 4);
@@ -565,13 +564,9 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 		                      from_type.ToString(), to_type.ToString());
 	}
 
-	if (!arguments[2]->IsFoldable()) {
-		throw BinderException("Remap keys for remap_struct needs to be a constant value");
-	}
+	Value remap_val = input.GetConstant(2);
 	auto source_map = RemapIndex::GetMap(from_type);
 	auto target_map = RemapIndex::GetMap(to_type);
-
-	Value remap_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 
 	// (recursively) generate the remap entries
 	identifier_map_t<RemapEntry> remap_map;
@@ -618,7 +613,10 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 
 ScalarFunction RemapStructFun::GetFunction() {
 	ScalarFunction remap("remap_struct",
-	                     {LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalTypeId::ANY},
+	                     {{"input", LogicalTypeId::ANY},
+	                      {"target_type", LogicalTypeId::ANY},
+	                      {"mapping", LogicalTypeId::ANY},
+	                      {"defaults", LogicalTypeId::ANY}},
 	                     LogicalTypeId::ANY, RemapStructFunction, RemapStructBind);
 	remap.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return remap;

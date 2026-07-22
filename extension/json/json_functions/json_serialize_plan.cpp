@@ -38,7 +38,6 @@ public:
 };
 
 static unique_ptr<FunctionData> JsonSerializePlanBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw BinderException("json_serialize_plan takes at least one argument");
@@ -57,38 +56,32 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(BindScalarFunctionInput &i
 
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto &arg = arguments[i];
-		if (arg->HasParameter()) {
-			throw ParameterNotResolvedException();
-		}
-		if (!arg->IsFoldable()) {
-			throw BinderException("json_serialize_plan: arguments must be constant");
-		}
 		auto &alias = arg->GetAlias();
 		if (alias == "skip_null") {
 			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_null' argument must be a boolean");
 			}
-			skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			skip_if_null = BooleanValue::Get(input.GetConstant(i));
 		} else if (alias == "skip_empty") {
 			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_empty' argument must be a boolean");
 			}
-			skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			skip_if_empty = BooleanValue::Get(input.GetConstant(i));
 		} else if (alias == "skip_default") {
 			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_default' argument must be a boolean");
 			}
-			skip_if_default = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			skip_if_default = BooleanValue::Get(input.GetConstant(i));
 		} else if (alias == "format") {
 			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'format' argument must be a boolean");
 			}
-			format = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			format = BooleanValue::Get(input.GetConstant(i));
 		} else if (alias == "optimize") {
 			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'optimize' argument must be a boolean");
 			}
-			optimize = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			optimize = BooleanValue::Get(input.GetConstant(i));
 		} else {
 			throw BinderException(StringUtil::Format("json_serialize_plan: Unknown argument '%s'", alias));
 		}
