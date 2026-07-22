@@ -56,6 +56,7 @@ static void StageVolatileExpression(unique_ptr<Expression> &expr, TableIndex pro
 
 void AggregateRewriteHelper::StageVolatileAggregateInputs(Optimizer &optimizer, LogicalAggregate &aggr,
                                                           unique_ptr<LogicalOperator> &child) {
+	// Branching rewrites must not multiply the evaluation of volatile aggregate inputs.
 	bool has_volatile_input = false;
 	for (auto &group : aggr.groups) {
 		has_volatile_input |= group->IsVolatile();

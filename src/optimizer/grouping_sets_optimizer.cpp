@@ -235,6 +235,7 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 	}
 	vector<GroupingSetLevel> levels;
 	if (!can_cascade || !FindCascade(aggr.grouping_sets, levels)) {
+		// Explicit branches support arbitrary aggregates and expose single grouping sets to subsequent rewrites.
 		return TryExpandGroupingSets(op);
 	}
 

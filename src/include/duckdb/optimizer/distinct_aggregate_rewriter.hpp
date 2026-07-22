@@ -14,7 +14,8 @@
 namespace duckdb {
 class Optimizer;
 
-//! The DistinctAggregateRewriter rewrites eligible DISTINCT aggregates into explicit GROUP BY operations.
+//! The DistinctAggregateRewriter turns each DISTINCT argument/filter set into a deduplication aggregate followed by
+//! a non-distinct aggregate. Multiple sets share the original input through a CTE and join on the original group keys.
 class DistinctAggregateRewriter : public LogicalOperatorVisitor {
 public:
 	explicit DistinctAggregateRewriter(Optimizer &optimizer);

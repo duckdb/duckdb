@@ -144,6 +144,7 @@ static BranchResult CreateDistinctBranch(Optimizer &optimizer, LogicalAggregate 
 	}
 	optional_idx filter_column_offset;
 	if (source_aggregate.GetFilter()) {
+		// Keeping FILTER as a deduplication key preserves argument evaluation and groups with no qualifying rows.
 		filter_column_offset = distinct_groups.size();
 		distinct_groups.push_back(
 		    AggregateRewriteHelper::CopyAndRebind(*source_aggregate.GetFilter(), input_replacements));
@@ -226,6 +227,7 @@ static unique_ptr<LogicalOperator> JoinBranches(const vector<BranchResult> &bran
                                                 const vector<unique_ptr<Expression>> &groups) {
 	D_ASSERT(!branch_plans.empty());
 	if (groups.empty()) {
+		// Ungrouped aggregate branches each produce one row, including for empty inputs.
 		auto result = std::move(branch_plans[0]);
 		for (idx_t branch_idx = 1; branch_idx < branch_plans.size(); branch_idx++) {
 			result = LogicalCrossProduct::Create(std::move(result), std::move(branch_plans[branch_idx]));
@@ -233,6 +235,7 @@ static unique_ptr<LogicalOperator> JoinBranches(const vector<BranchResult> &bran
 		return result;
 	}
 
+	// Every branch consumes the same rows and retains every original group; null-safe inner joins preserve NULL keys.
 	auto result = std::move(branch_plans[0]);
 	const auto anchor_table = branches[0].table_index;
 	for (idx_t branch_idx = 1; branch_idx < branch_plans.size(); branch_idx++) {
@@ -396,6 +399,7 @@ bool DistinctAggregateRewriter::TryRewrite(unique_ptr<LogicalOperator> &op) {
 	}
 
 	if (needs_cte) {
+		// DEFAULT keeps the shared input eligible for direct streaming fan-out during CTE planning.
 		auto cte_name = Identifier(StringUtil::Format("__distinct_aggregate_cte_%llu", cte_index.index));
 		result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(),
 		                                           std::move(op->children[0]), std::move(result),
