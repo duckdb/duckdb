@@ -7,8 +7,6 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-#include <cstdio>
-#include <iostream>
 
 #include <algorithm>
 #include <sstream>
@@ -55,9 +53,7 @@ int64_t SequenceCatalogEntry::CurrentValue() {
 }
 
 int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
-	std::cerr << "NextValue locking" << std::endl;
 	lock_guard<mutex> seqlock(lock);
-	std::cerr << "NextValue locked" << std::endl;
 	int64_t result;
 	result = data.counter;
 	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, data.counter);
@@ -83,6 +79,28 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 		transaction.PushSequenceUsage(*this, data);
 	}
 	return result;
+}
+
+int64_t SequenceCatalogEntry::SetValue(DuckTransaction &transaction, int64_t value, bool is_called) {
+	{
+		lock_guard<mutex> seqlock(lock);
+		if (value < data.min_value || value > data.max_value) {
+			throw SequenceException("setval: value %lld is out of bounds for sequence \"%s\" (%lld..%lld)", value, name,
+			                        data.min_value, data.max_value);
+		}
+
+		data.counter = value;
+		if (!is_called) {
+			data.usage_count++;
+			if (!temporary) {
+				transaction.PushSequenceUsage(*this, data);
+			}
+			return value;
+		}
+	}
+
+	// is_called: behave as if nextval() was just invoked and returned `value`.
+	return NextValue(transaction);
 }
 
 void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter, optional<int64_t> last_value) {

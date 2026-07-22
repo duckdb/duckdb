@@ -42,7 +42,7 @@ struct SetvalFun {
 	static constexpr const char *Example = "setval('my_sequence_name', 100, true)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 } // namespace duckdb

@@ -2,33 +2,36 @@
 #include "duckdb/function/scalar/sequence_utils.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/planner/binder.hpp"
-#include <iostream>
 
 namespace duckdb {
 
 namespace {
 
 struct CurrentSequenceValueOperator {
-	static int64_t Operation(DuckTransaction &, SequenceCatalogEntry &seq) {
+	static int64_t Operation(DuckTransaction &, SequenceCatalogEntry &seq, const int64_t, const bool) {
 		return seq.CurrentValue();
 	}
 };
 
 struct NextSequenceValueOperator {
-	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq) {
+	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq, const int64_t, const bool) {
 		return seq.NextValue(transaction);
+	}
+};
+
+struct SetValValueOperator {
+	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq, const int64_t value,
+	                         const bool is_called) {
+		return seq.SetValue(transaction, value, is_called);
 	}
 };
 
@@ -57,6 +60,11 @@ struct NextValLocalState : public FunctionLocalState {
 	SequenceCatalogEntry &sequence;
 };
 
+template <class T>
+bool RowIsValid(const unique_ptr<VectorIterator<T>> &entries, idx_t i) {
+	return !entries || (*entries)[i].IsValid();
+}
+
 unique_ptr<FunctionLocalState> NextValLocalFunction(ExpressionState &state, const BoundFunctionExpression &expr,
                                                     FunctionData *bind_data) {
 	if (!bind_data) {
@@ -71,7 +79,6 @@ unique_ptr<FunctionLocalState> NextValLocalFunction(ExpressionState &state, cons
 
 template <class OP>
 void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	std::cerr << "NextValFunction" << std::endl;
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (!func_expr.BindInfo()) {
 		// no bind info - return null
@@ -83,10 +90,29 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// increment the sequence
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
+	unique_ptr<VectorIterator<int64_t>> new_val_entries;
+	unique_ptr<VectorIterator<bool>> is_called_entries;
+	if constexpr (std::is_same_v<OP, SetValValueOperator>) {
+		const auto &new_vals = args.data[1];
+		new_val_entries = make_uniq<VectorIterator<int64_t>>(new_vals.Values<int64_t>());
+
+		if (args.ColumnCount() == 3) {
+			const auto &is_called_val = args.data[2];
+			is_called_entries = make_uniq<VectorIterator<bool>>(is_called_val.Values<bool>());
+		}
+	}
+
 	auto result_data = FlatVector::Writer<int64_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
+		if (!RowIsValid(new_val_entries, i) || !RowIsValid(is_called_entries, i)) {
+			result_data.WriteNull();
+			continue;
+		}
+
+		int64_t value = new_val_entries ? (*new_val_entries)[i].GetValue() : 0;
+		bool is_called = is_called_entries ? (*is_called_entries)[i].GetValue() : true;
 		// get the next value from the sequence
-		result_data.WriteValue(OP::Operation(lstate.transaction, lstate.sequence));
+		result_data.WriteValue(OP::Operation(lstate.transaction, lstate.sequence, value, is_called));
 	}
 }
 
@@ -163,16 +189,25 @@ ScalarFunction CurrvalFun::GetFunction() {
 	return curr_val;
 }
 
-ScalarFunction SetvalFun::GetFunction() {
-	ScalarFunction curr_val("setval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
-	curr_val.SetBindCallback(NextValBind);
-	curr_val.SetSerializeCallback(Serialize);
-	curr_val.SetDeserializeCallback(Deserialize);
-	curr_val.SetInitStateCallback(NextValLocalFunction);
-	curr_val.SetVolatile();
-	curr_val.SetFallible();
-	return curr_val;
+ScalarFunctionSet SetvalFun::GetFunctions() {
+	ScalarFunction set_val("setval", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::BIGINT,
+	                       NextValFunction<SetValValueOperator>, nullptr, nullptr);
+	set_val.SetBindCallback(NextValBind);
+	set_val.SetSerializeCallback(Serialize);
+	set_val.SetDeserializeCallback(Deserialize);
+	set_val.SetModifiedDatabasesCallback(NextValModifiedDatabases);
+	set_val.SetInitStateCallback(NextValLocalFunction);
+	set_val.SetVolatile();
+	set_val.SetFallible();
+
+	ScalarFunctionSet set_val_set;
+	set_val_set.AddFunction(set_val);
+
+	// Add an overload that takes an additional boolean parameter
+	set_val.GetSignature().AddParameter(LogicalType::BOOLEAN);
+	set_val_set.AddFunction(set_val);
+
+	return set_val_set;
 }
 
 } // namespace duckdb
