@@ -7,8 +7,9 @@ load {TEST_DIR}/variant_extract_string_shredded.db readwrite v1.5.0
 statement ok
 SET variant_minimum_shredding_size = 0;
 
+# non-lexicographic order to test consistency when rendering string
 statement ok
-SET force_variant_shredding = 'STRUCT(a INTEGER, arr INTEGER[], obj STRUCT(x VARCHAR))';
+SET force_variant_shredding = 'STRUCT(obj STRUCT(x VARCHAR), arr INTEGER[], a INTEGER)';
 
 statement ok
 CREATE TABLE variants(id INTEGER, v VARIANT);

@@ -279,7 +279,7 @@ void VariantStringSerializer::SerializeVariant(const VariantNode &node) const {
 	case VariantLogicalType::OBJECT: {
 		tmp += '{';
 		bool first = true;
-		for (const auto &[key, value] : node.GetObjectChildren()) {
+		for (const auto &[key, value] : node.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC)) {
 			if (!first) {
 				tmp += ',';
 			}

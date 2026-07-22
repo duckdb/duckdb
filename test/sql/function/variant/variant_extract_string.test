@@ -41,8 +41,8 @@ Binder Error: No function matches the given name and argument types 'variant_ext
 query I
 select variant_extract_string(a, '') from struct_cast_data();
 ----
-{"a":[{"b":"hello","c":null,"a":"1970-03-15"},{"b":null,"c":true,"a":"2020-11-03"}]}
-{"a":[{"b":"this is a long string","c":false,"a":"1953-09-16"}],"b":42,"c":{"d":"world"}}
+{"a":[{"a":"1970-03-15","b":"hello","c":null},{"a":"2020-11-03","b":null,"c":true}]}
+{"a":[{"a":"1953-09-16","b":"this is a long string","c":false}],"b":42,"c":{"d":"world"}}
 
 query I
 select variant_extract_string(a, []) from struct_cast_data();
@@ -53,8 +53,8 @@ select variant_extract_string(a, []) from struct_cast_data();
 query I
 select variant_extract_string(a, ['']) from struct_cast_data();
 ----
-['{"a":[{"b":"hello","c":null,"a":"1970-03-15"},{"b":null,"c":true,"a":"2020-11-03"}]}']
-['{"a":[{"b":"this is a long string","c":false,"a":"1953-09-16"}],"b":42,"c":{"d":"world"}}']
+['{"a":[{"a":"1970-03-15","b":"hello","c":null},{"a":"2020-11-03","b":null,"c":true}]}']
+['{"a":[{"a":"1953-09-16","b":"this is a long string","c":false}],"b":42,"c":{"d":"world"}}']
 
 # Single path supplied
 
@@ -135,7 +135,7 @@ SELECT variant_extract_string({
 FROM test_all_types()
 WHERE bool = false;
 ----
-{"uuid":"00000000-0000-0000-0000-000000000000","blob":"thisisalongblob\\x00withnullbytes","bit":"0010001001011100010101011010111","interval":"00:00:00","timestamp":"290309-12-22 (BC) 00:00:00","timestamp_tz":"290309-12-22 (BC) 00:00:00+00","geometry":"POINT EMPTY"}
+{"bit":"0010001001011100010101011010111","blob":"thisisalongblob\\x00withnullbytes","geometry":"POINT EMPTY","interval":"00:00:00","timestamp":"290309-12-22 (BC) 00:00:00","timestamp_tz":"290309-12-22 (BC) 00:00:00+00","uuid":"00000000-0000-0000-0000-000000000000"}
 
 # Escape Sequences
 
