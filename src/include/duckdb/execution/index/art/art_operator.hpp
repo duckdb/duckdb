@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
@@ -19,54 +21,48 @@ namespace duckdb {
 //! ARTOperator provides functionality for different ART operations.
 class ARTOperator {
 public:
-	//! Lookup returns a pointer to the leaf matching the key,
-	//! or nullptr, if no such leaf exists.
-	static unsafe_optional_ptr<const Node> Lookup(ART &art, const Node &node, const ARTKey &key, idx_t depth) {
-		reference<const Node> ref(node);
+	//! Lookup returns a NodePtr Pointer by value matching the key, or empty optional if no such leaf exists.
+	static optional<NodePtr> Lookup(ART &art, const NodePtr &node, const ARTKey &key, idx_t depth) {
+		NodePtr current(node);
 
-		while (ref.get().HasMetadata()) {
-			// Return the leaf.
-			if (ref.get().IsAnyLeaf() || ref.get().GetGateStatus() == GateStatus::GATE_SET) {
-				return unsafe_optional_ptr<const Node>(ref.get());
+		while (current.HasMetadata()) {
+			if (current.IsAnyLeaf() || current.GetGateStatus() == GateStatus::GATE_SET) {
+				return current;
 			}
 
-			// Traverse the prefix.
-			if (ref.get().GetType() == NType::PREFIX) {
-				Prefix prefix(art, ref.get());
-				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
-					if (prefix.data[i] != key[depth]) {
-						// The key and the prefix don't match.
-						return nullptr;
+			if (current.GetType() == NType::PREFIX) {
+				ConstNodeHandle handle(art, current);
+				auto data = handle.GetPtr();
+				auto child = ConstPrefixHandle::ChildRef(art, handle);
+				for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
+					if (data[i] != key[depth]) {
+						return nullopt;
 					}
 					depth++;
 				}
-				ref = *prefix.ptr;
+				current = child;
 				continue;
 			}
 
-			// Get the child node.
 			D_ASSERT(depth < key.len);
-			auto child = ref.get().GetChild(art, key[depth]);
-
-			// No child at the key byte, return nullptr.
-			if (!child) {
-				return nullptr;
+			auto child = current.GetChildNode(art, key[depth]);
+			if (!child.HasMetadata()) {
+				return nullopt;
 			}
 
-			// Continue in the child.
-			ref = *child;
-			D_ASSERT(ref.get().HasMetadata());
+			current = child;
+			D_ASSERT(current.HasMetadata());
 			depth++;
 		}
 
-		return nullptr;
+		return nullopt;
 	}
 
 	//! LookupInLeaf returns true if the rowid is in the leaf:
 	//! 1) If the leaf is an inlined leaf, check if the rowid matches.
 	//! 2) If the leaf is a gate node, perform a search in the nested ART for the rowid.
-	static bool LookupInLeaf(ART &art, const Node &node, const ARTKey &rowid) {
-		reference<const Node> ref(node);
+	static bool LookupInLeaf(ART &art, const NodePtr &node, const ARTKey &rowid) {
+		reference<const NodePtr> ref(node);
 		idx_t depth = 0;
 
 		while (ref.get().HasMetadata()) {
@@ -119,10 +115,10 @@ public:
 	//! Insert a key and its row ID into the node.
 	//! Starts at depth (in the key).
 	//! status indicates if the insert happens inside a gate or not.
-	static ARTConflictType Insert(ArenaAllocator &arena, ART &art, Node &node, const ARTKey &key, idx_t depth,
+	static ARTConflictType Insert(ArenaAllocator &arena, ART &art, NodePtr &node, const ARTKey &key, idx_t depth,
 	                              const ARTKey &row_id, GateStatus status, DeleteIndexInfo delete_index_info,
 	                              const IndexAppendMode append_mode) {
-		reference<Node> active_node_ref(node);
+		reference<NodePtr> active_node_ref(node);
 		reference<const ARTKey> active_key_ref(key);
 
 		// Early-out, if the node is empty.
@@ -181,7 +177,7 @@ public:
 			case NType::NODE_256_LEAF: {
 				// Row IDs are unique; there are never any duplicate byte conflicts.
 				auto byte = active_key[Prefix::ROW_ID_COUNT];
-				Node::InsertChild(art, active_node, byte);
+				NodePtr::InsertChild(art, active_node, byte);
 				return ARTConflictType::NO_CONFLICT;
 			}
 			case NType::NODE_4:
@@ -223,14 +219,14 @@ public:
 
 	//! Delete a key and its row ID.
 	//! Assumes that deletion starts at the root of the tree.
-	static bool Delete(ART &art, Node &node, const ARTKey &key, const ARTKey &row_id) {
+	static bool Delete(ART &art, NodePtr &node, const ARTKey &key, const ARTKey &row_id) {
 		// If we need to compress a Node4 into a one-way node,
 		// then we need the previous prefix before the Node4.
-		Node empty;
-		reference<Node> greatgrandparent(empty);
-		reference<Node> grandparent(empty);
-		reference<Node> parent(node);
-		reference<Node> current(node);
+		NodePtr empty;
+		reference<NodePtr> greatgrandparent(empty);
+		reference<NodePtr> grandparent(empty);
+		reference<NodePtr> parent(node);
+		reference<NodePtr> current(node);
 		reference<const ARTKey> current_key(key);
 
 		idx_t grandparent_depth = 0;
@@ -256,7 +252,7 @@ public:
 				}
 				if (!passed_node && parent.get().GetType() == NType::PREFIX) {
 					// The tree contains exactly one element with a prefix.
-					Node::FreeTree(art, parent);
+					NodePtr::FreeTree(art, parent);
 					return true;
 				}
 				if (parent.get().GetType() == NType::PREFIX) {
@@ -264,11 +260,11 @@ public:
 					// PREFIX (greatgrandparent) - Node4 (grandparent) - PREFIX - INLINED_LEAF.
 					// The parent does not have to be passed in, as it is a child of the possibly being compressed N4.
 					// Then, when we delete that child, we also free it.
-					Node::DeleteChild(art, grandparent, greatgrandparent, current_key.get()[grandparent_depth], status,
-					                  row_id);
+					NodePtr::DeleteChild(art, grandparent, greatgrandparent, current_key.get()[grandparent_depth],
+					                     status, row_id);
 					return true;
 				}
-				Node::DeleteChild(art, parent, grandparent, current_key.get()[parent_depth], status, row_id);
+				NodePtr::DeleteChild(art, parent, grandparent, current_key.get()[parent_depth], status, row_id);
 				return true;
 			}
 			case NType::LEAF: {
@@ -325,7 +321,7 @@ public:
 			case NType::NODE_256_LEAF: {
 				const auto byte = current_key.get()[depth];
 				if (current.get().HasByte(art, byte)) {
-					Node::DeleteChild(art, current, parent, byte, status, row_id);
+					NodePtr::DeleteChild(art, current, parent, byte, status, row_id);
 					return true;
 				}
 				return false;
@@ -336,10 +332,10 @@ public:
 	}
 
 private:
-	static ARTConflictType InsertIntoInlined(ArenaAllocator &arena, ART &art, Node &node, const ARTKey &key,
+	static ARTConflictType InsertIntoInlined(ArenaAllocator &arena, ART &art, NodePtr &node, const ARTKey &key,
 	                                         const ARTKey &row_id, const idx_t depth, const GateStatus status,
 	                                         DeleteIndexInfo delete_index_info, const IndexAppendMode append_mode) {
-		Node row_id_node;
+		NodePtr row_id_node;
 		Leaf::New(row_id_node, row_id.GetRowId());
 
 		if (!art.IsUnique() || append_mode == IndexAppendMode::INSERT_DUPLICATES) {
@@ -376,19 +372,19 @@ private:
 		return ARTConflictType::CONSTRAINT;
 	}
 
-	static void InsertIntoNode(ART &art, Node &node, const ARTKey &key, const ARTKey &row_id, const idx_t depth,
+	static void InsertIntoNode(ART &art, NodePtr &node, const ARTKey &key, const ARTKey &row_id, const idx_t depth,
 	                           const GateStatus status) {
 		if (status == GateStatus::GATE_SET) {
 			// Inside gates, we compress prefixes that only have an inlined
 			// row ID as their child.
-			Node row_id_node;
+			NodePtr row_id_node;
 			Leaf::New(row_id_node, row_id.GetRowId());
-			Node::InsertChild(art, node, row_id[depth], row_id_node);
+			NodePtr::InsertChild(art, node, row_id[depth], row_id_node);
 			return;
 		}
 
-		Node leaf;
-		reference<Node> leaf_ref(leaf);
+		NodePtr leaf;
+		reference<NodePtr> leaf_ref(leaf);
 		if (depth + 1 < key.len) {
 			// Outside of gates, we create a prefix for the inlined leaf.
 			auto count = key.len - depth - 1;
@@ -397,15 +393,15 @@ private:
 
 		// Create and insert the inlined leaf.
 		Leaf::New(leaf_ref, row_id.GetRowId());
-		Node::InsertChild(art, node, key[depth], leaf);
+		NodePtr::InsertChild(art, node, key[depth], leaf);
 	}
 
-	static void InsertIntoPrefix(ART &art, reference<Node> &node_ref, const ARTKey &key, const ARTKey &row_id,
+	static void InsertIntoPrefix(ART &art, reference<NodePtr> &node_ref, const ARTKey &key, const ARTKey &row_id,
 	                             const idx_t pos, const idx_t depth, const GateStatus status) {
 		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos);
 		const auto byte = Prefix::GetByte(art, node_ref, cast_pos);
 
-		Node child;
+		NodePtr child;
 		const auto split_status = Prefix::Split(art, node_ref, child, cast_pos);
 
 		Node4::New(art, node_ref);
