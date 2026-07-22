@@ -1,0 +1,19 @@
+# name: test/optimizer/statistics/string_expression_filter_pruning.test
+# description: String expression filters should generate pruning-friendly predicates
+# group: [statistics]
+
+statement ok
+CREATE TABLE string_expr_prune AS
+SELECT ('k' || lpad(i::VARCHAR, 8, '0')) AS s
+FROM range(0, 300000) tbl(i)
+ORDER BY i;
+
+query I
+SELECT sum(length(s)) FROM string_expr_prune WHERE replace(s, 'z', 'z') = 'k00200000';
+----
+9
+
+query II
+EXPLAIN ANALYZE SELECT sum(length(s)) FROM string_expr_prune WHERE replace(s, 'z', 'z') = 'k00200000';
+----
+analyzed_plan	<REGEX>:(?s).*s = 'k00200000'.*Row Groups Scanned: 1 / 3.*
