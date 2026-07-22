@@ -206,6 +206,11 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	if (target_type.IsJSONType() && !source_type.IsJSONType()) {
 		return true;
 	}
+	// Every value has a string representation, so casting to VARCHAR never throws. VARCHAR is not the maximum
+	// of the coercion lattice (you do not implicitly widen to it), so the max-type check below would miss this.
+	if (target_type.id() == LogicalTypeId::VARCHAR) {
+		return false;
+	}
 	// Casting into a fixed-size ARRAY throws whenever the source length differs. ARRAY is nevertheless the
 	// maximum of LIST and ARRAY, so the check below would consider such a cast safe.
 	if (TypeVisitor::Contains(target_type, LogicalTypeId::ARRAY)) {
