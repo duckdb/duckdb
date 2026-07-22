@@ -1,11 +1,12 @@
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/function/scalar/variant_path_function.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
-#include "fmt/printf.h"
+#include "fmt/format.h"
 
 namespace duckdb {
 
@@ -40,38 +41,57 @@ private:
 };
 
 void VariantStringSerializer::AppendJSONString(const char *data, const idx_t size) const {
+	static constexpr char HEX_DIGITS[] = "0123456789abcdef";
+	// reserve for the no-escape needed case
+	tmp.reserve(tmp.size() + size + 2);
 	tmp += '"';
+	idx_t start = 0;
 	for (idx_t i = 0; i < size; i++) {
 		const auto byte = static_cast<uint8_t>(data[i]);
+		char escape = '\0';
 		switch (byte) {
 		case '"':
-			tmp += "\\\"";
+			escape = '"';
 			break;
 		case '\\':
-			tmp += "\\\\";
+			escape = '\\';
 			break;
 		case '\b':
-			tmp += "\\b";
+			escape = 'b';
 			break;
 		case '\f':
-			tmp += "\\f";
+			escape = 'f';
 			break;
 		case '\n':
-			tmp += "\\n";
+			escape = 'n';
 			break;
 		case '\r':
-			tmp += "\\r";
+			escape = 'r';
 			break;
 		case '\t':
-			tmp += "\\t";
+			escape = 't';
 			break;
 		default:
-			if (byte < 0x20) {
-				tmp += duckdb_fmt::sprintf("\\u%04x", static_cast<unsigned int>(byte));
-			} else {
-				tmp += static_cast<char>(byte);
+			if (byte >= 0x20) {
+				// keep collecting bytes until we reach a byte which needs escaping
+				continue;
 			}
 		}
+		// we've either encountered a character which should be escaped, or there are no more bytes, append what
+		// we have collected until now
+		tmp.append(data + start, i - start);
+		if (escape) {
+			tmp += '\\';
+			tmp += escape;
+		} else {
+			// escape bytes < 0x20
+			const char unicode_escape[] = {'\\', 'u', '0', '0', HEX_DIGITS[byte >> 4], HEX_DIGITS[byte & 0x0F]};
+			tmp.append(unicode_escape, sizeof(unicode_escape));
+		}
+		start = i + 1;
+	}
+	if (start < size) {
+		tmp.append(data + start, size - start);
 	}
 	tmp += '"';
 }
@@ -309,11 +329,17 @@ void VariantStringSerializer::SerializeTopLevel(const VariantNode &node) const {
 
 void VariantStringSerializer::operator()(const optional<VariantNode> &node,
                                          VectorWriter<string_t> &string_writer) const {
+	// clean up per-row state
 	tmp.clear();
 	heap.GetAllocator().Reset();
 
 	if (!node || node->GetTypeId() == VariantLogicalType::VARIANT_NULL) {
 		string_writer.WriteNull();
+		return;
+	}
+	// shortcut; write value directly into result
+	if (node->GetTypeId() == VariantLogicalType::VARCHAR) {
+		string_writer.WriteValue(node->GetString());
 		return;
 	}
 
