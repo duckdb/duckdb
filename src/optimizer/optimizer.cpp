@@ -65,6 +65,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<LeastGreatestSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConjunctionSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DatePartSimplificationRule>(rewriter));

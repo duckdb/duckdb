@@ -297,21 +297,11 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 	return nullptr;
 }
 
-unique_ptr<Expression> BindLeastGreatestExpression(FunctionBindExpressionInput &input) {
-	if (input.children.size() == 2 && !input.children[0]->IsVolatile() &&
-	    input.children[0]->Equals(*input.children[1])) {
-		return std::move(input.children[0]);
-	}
-	return nullptr;
-}
-
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
-	auto function = ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>,
-	                               PropagateLeastGreatestStats<OP>, nullptr, LogicalType::ANY,
-	                               FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
-	function.SetBindExpressionCallback(BindLeastGreatestExpression);
-	return function;
+	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>,
+	                      PropagateLeastGreatestStats<OP>, nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
+	                      FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 template <class OP>
