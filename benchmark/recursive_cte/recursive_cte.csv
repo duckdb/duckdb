@@ -18,3 +18,4 @@ benchmark/recursive_cte/partial_probe_sparse.benchmark
 benchmark/recursive_cte/partial_probe_single_epoch.benchmark
 benchmark/recursive_cte/partial_probe_five_epochs.benchmark
 benchmark/recursive_cte/partial_probe_sparse_large.benchmark
+benchmark/recursive_cte/tiny_frontier_union_all.benchmark

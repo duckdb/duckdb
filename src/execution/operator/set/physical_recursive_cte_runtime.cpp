@@ -19,7 +19,6 @@
 #include "duckdb/parallel/pipeline_prepare_finish_event.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
-#include "duckdb/main/settings.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
@@ -113,9 +112,13 @@ static idx_t GetRecursiveFrontierStorageBytes(const RecursiveCTEState &state) {
 	return recursive_bytes;
 }
 
-static idx_t GetRecursiveWorkerCount(const RecursiveCTEState &state, idx_t work_units, idx_t frontier_rows) {
-	const auto row_limit =
-	    MaxValue<idx_t>((frontier_rows + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
+static idx_t GetRecursiveRowLimit(idx_t frontier_rows) {
+	return MaxValue<idx_t>((frontier_rows + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
+}
+
+static idx_t GetRecursiveWorkerCount(const RecursiveCTEState &state, idx_t work_units, idx_t row_limit) {
+	D_ASSERT(work_units > 1);
+	D_ASSERT(row_limit > 1);
 	const auto configured_threads =
 	    TaskScheduler::GetScheduler(state.op.recursive_meta_pipeline->GetExecutor().context).NumberOfThreads();
 	const auto worker_count = MinValue(MinValue(row_limit, work_units), configured_threads);
@@ -885,10 +888,11 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 
 	auto &gstate = sink_state->Cast<RecursiveCTEState>();
 	auto &executor = recursive_meta_pipeline->GetExecutor();
-	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
+	const auto allow_reuse = gstate.allow_executor_reuse;
+	const auto collect_metrics = gstate.metrics.Enabled();
 	auto active_meta_pipelines = GetActiveRecursiveMetaPipelines(*this, gstate);
 	auto can_cache_invariant_meta_pipelines = allow_reuse && !invariant_meta_pipelines.empty();
-	if (gstate.metrics.Enabled() && gstate.invariant_meta_pipelines_materialized) {
+	if (collect_metrics && gstate.invariant_meta_pipelines_materialized) {
 		for (auto &meta_pipeline : invariant_meta_pipelines) {
 			auto sink = meta_pipeline.get().GetSink();
 			if (sink && sink->type == PhysicalOperatorType::CTE) {
@@ -945,10 +949,20 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		}
 	}
 
-	const auto work_units = GetRecursiveWorkUnits(gstate);
 	const auto frontier_rows = GetRecursiveFrontierRows(gstate);
-	const auto frontier_storage_bytes = gstate.metrics.Enabled() ? GetRecursiveFrontierStorageBytes(gstate) : 0;
-	const auto worker_count = GetRecursiveWorkerCount(gstate, work_units, frontier_rows);
+	const auto row_limit = GetRecursiveRowLimit(frontier_rows);
+	idx_t work_units = 1;
+	idx_t worker_count = 1;
+	if (row_limit > 1) {
+		work_units = GetRecursiveWorkUnits(gstate);
+		if (work_units > 1) {
+			worker_count = GetRecursiveWorkerCount(gstate, work_units, row_limit);
+		}
+	} else if (collect_metrics) {
+		// Runtime metrics report exact frontier work even when the row bound makes the epoch serial.
+		work_units = GetRecursiveWorkUnits(gstate);
+	}
+	const auto frontier_storage_bytes = collect_metrics ? GetRecursiveFrontierStorageBytes(gstate) : 0;
 	gstate.scheduler.SetEpochThreadLimit(worker_count);
 	if (!using_key && union_all) {
 		gstate.use_local_union_all_output = worker_count > 1 && work_units / worker_count >= 2;
@@ -961,7 +975,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		gstate.PromoteDistinctState(context.client, partition_count);
 	}
 	const auto epoch_start =
-	    gstate.metrics.Enabled() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	    collect_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 	auto inline_execution = allow_reuse && worker_count == 1;
 
 	if (inline_execution) {
@@ -972,14 +986,14 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		WaitForRecursiveEvents(executor, events);
 	}
 
-	if (gstate.metrics.Enabled()) {
+	if (collect_metrics) {
 		const auto epoch_end = std::chrono::steady_clock::now();
 		const auto elapsed_us =
 		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(epoch_end - epoch_start).count());
 		gstate.metrics.RecordEpoch(worker_count, elapsed_us, frontier_rows, work_units, frontier_storage_bytes);
 	}
 	if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
-		if (gstate.metrics.Enabled() && !gstate.invariant_meta_pipelines_materialized) {
+		if (collect_metrics && !gstate.invariant_meta_pipelines_materialized) {
 			for (auto &meta_pipeline : invariant_meta_pipelines) {
 				auto sink = meta_pipeline.get().GetSink();
 				if (sink && sink->type == PhysicalOperatorType::CTE) {

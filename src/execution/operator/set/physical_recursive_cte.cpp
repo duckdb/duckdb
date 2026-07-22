@@ -218,10 +218,15 @@ public:
 	}
 
 	void Reset(ExecutionContext &context, GlobalSinkState &gstate) override {
-		if (output) {
-			output->ResetForReuse();
-			output->InitializeAppend(append_state);
+		if (!output) {
+			return;
 		}
+		auto &recursive_state = gstate.Cast<RecursiveCTEState>();
+		if (recursive_state.op.union_all && !recursive_state.use_local_union_all_output) {
+			return;
+		}
+		output->ResetForReuse();
+		output->InitializeAppend(append_state);
 	}
 };
 
@@ -493,25 +498,27 @@ InsertionOrderPreservingMap<string> PhysicalRecursiveCTEStateScan::ParamsToStrin
 
 SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+	const auto collect_metrics = gstate.metrics.Enabled();
 
 	if (!using_key && union_all) {
 		if (!gstate.use_local_union_all_output) {
-			const auto before_lock =
-			    gstate.metrics.Enabled() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+			if (!collect_metrics) {
+				lock_guard<mutex> guard(gstate.intermediate_table_lock);
+				gstate.CurrentOutputTable().Append(gstate.CurrentOutputAppendState(), chunk);
+				return SinkResultType::NEED_MORE_INPUT;
+			}
+			const auto before_lock = std::chrono::steady_clock::now();
 			{
 				lock_guard<mutex> guard(gstate.intermediate_table_lock);
-				const auto after_lock = gstate.metrics.Enabled() ? std::chrono::steady_clock::now()
-				                                                 : std::chrono::steady_clock::time_point();
+				const auto after_lock = std::chrono::steady_clock::now();
 				gstate.CurrentOutputTable().Append(gstate.CurrentOutputAppendState(), chunk);
-				if (gstate.metrics.Enabled()) {
-					const auto after_work = std::chrono::steady_clock::now();
-					gstate.RecordSinkMetrics(
-					    NumericCast<idx_t>(
-					        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
-					    NumericCast<idx_t>(
-					        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
-					    chunk.size());
-				}
+				const auto after_work = std::chrono::steady_clock::now();
+				gstate.RecordSinkMetrics(
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
+				    chunk.size());
 			}
 			return SinkResultType::NEED_MORE_INPUT;
 		}
