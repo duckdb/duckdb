@@ -117,6 +117,8 @@ public:
 
 private:
 	void ExecuteRecursivePipelines(ExecutionContext &context) const;
+	SourceResultType GetUsingKeyData(ExecutionContext &context, DataChunk &chunk, RecursiveCTEState &state) const;
+	SourceResultType GetUnionData(ExecutionContext &context, DataChunk &chunk, RecursiveCTEState &state) const;
 
 private:
 	mutable shared_ptr<RecursiveExecutorPool> shared_executor_pool;
