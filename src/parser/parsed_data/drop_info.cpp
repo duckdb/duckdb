@@ -38,6 +38,13 @@ string DropInfo::ToString() const {
 				result += trigger_info.base_table->Cast<BaseTableRef>().ToString();
 			}
 		}
+		if (type == CatalogType::SECRET_ENTRY && extra_drop_info) {
+			// Preserve the `FROM <storage>` storage specifier so `DROP SECRET <name> FROM <storage>` round-trips.
+			auto &secret_info = extra_drop_info->Cast<ExtraDropSecretInfo>();
+			if (!secret_info.secret_storage.empty()) {
+				result += " FROM " + SQLIdentifier(secret_info.secret_storage);
+			}
+		}
 		if (cascade) {
 			result += " CASCADE";
 		}

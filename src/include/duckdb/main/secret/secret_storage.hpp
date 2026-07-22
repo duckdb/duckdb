@@ -37,8 +37,10 @@ public:
 	    : storage_name(name), tie_break_offset(tie_break_offset), persistent(false) {};
 	virtual ~SecretStorage() = default;
 
-	//! Default storage backend offsets
+	//! Default storage backend offsets. Lower offsets win tie-breaks (equal path-match score), so the connection-scoped
+	//! storage is preferred over the global ones when a connection secret and a global secret match equally well.
 	static const int64_t TRANSACTION_STORAGE_OFFSET = 0;
+	static const int64_t CONNECTION_STORAGE_OFFSET = 5;
 	static const int64_t TEMPORARY_STORAGE_OFFSET = 10;
 	static const int64_t LOCAL_FILE_STORAGE_OFFSET = 20;
 
@@ -181,6 +183,32 @@ protected:
 	identifier_set_t persistent_secrets;
 	//! Path that is searched for secrets;
 	string secret_path;
+};
+
+//! A secret storage whose secrets are scoped to the calling connection. It is registered once on the SecretManager but
+//! presents a per-ClientContext view: every operation reads the connection out of the passed CatalogTransaction and
+//! works only on that connection's secrets, which live in a state object on the connection's RegisteredStateManager.
+//! That gives automatic, crash-robust cleanup (the secrets die with the ClientContext) and full isolation between
+//! connections. A context-less lookup (e.g. a system/background call) simply returns no match, so it never leaks
+//! across connections and never resolves where there is no connection to attribute the request to.
+//! The per-connection container is a CatalogSet, so these secrets get the same MVCC visibility and rollback behaviour
+//! as the global storages: a CREATE or DROP inside an aborted transaction is undone.
+class ConnectionSecretStorage : public SecretStorage {
+public:
+	explicit ConnectionSecretStorage(const string &name_p) : SecretStorage(name_p, CONNECTION_STORAGE_OFFSET) {
+		// persistent stays false (base default): these secrets are connection-lifetime only.
+	}
+
+public:
+	unique_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                    optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	vector<SecretEntry> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	void DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
+	                      optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	SecretMatch LookupSecret(const string &path, const string &type,
+	                         optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	unique_ptr<SecretEntry> GetSecretByName(const string &name,
+	                                        optional_ptr<CatalogTransaction> transaction = nullptr) override;
 };
 
 } // namespace duckdb
