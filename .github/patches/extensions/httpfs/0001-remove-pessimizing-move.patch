@@ -1,0 +1,12 @@
+diff --git a/src/httpfs_curl_client.cpp b/src/httpfs_curl_client.cpp
+--- a/src/httpfs_curl_client.cpp
++++ b/src/httpfs_curl_client.cpp
+@@ -643,7 +643,7 @@ private:
+ 				curl_headers.Add(entry.first + ": " + entry.second);
+ 			}
+ 		}
+-		return std::move(curl_headers);
++		return curl_headers;
+ 	}
+ 
+ 	void ResetRequestInfo() {
