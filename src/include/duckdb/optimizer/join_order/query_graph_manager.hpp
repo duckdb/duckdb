@@ -47,6 +47,11 @@ public:
 	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan);
 	//! Plan enumerator may not find a full plan and therefore will need to create cross  products to create edges.
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
+	//! Validate that a candidate partition preserves every non-inner join's semantic input sides. If this partition
+	//! completes a non-inner join, non_inner_connection identifies the edge that must be used at this node.
+	bool ValidateJoinPartition(JoinRelationSet &left, JoinRelationSet &right,
+	                           const vector<reference<NeighborInfo>> &connections,
+	                           optional_ptr<NeighborInfo> &non_inner_connection) const;
 
 	//! Get a reference to the QueryGraphEdges structure that stores edges between nodes and hypernodes.
 	const QueryGraphEdges &GetQueryGraphEdges() const;

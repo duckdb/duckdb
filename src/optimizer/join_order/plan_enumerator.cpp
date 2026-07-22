@@ -147,18 +147,12 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       DPJoinNode &left, DPJoinNode &right) {
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = possible_connections.back().get();
-	optional_ptr<NonInnerJoinEdge> non_inner_join;
-	for (auto &connection : possible_connections) {
-		if (!connection.get().non_inner_join) {
-			continue;
-		}
-		if (non_inner_join && non_inner_join != connection.get().non_inner_join) {
-			return nullptr;
-		}
-		non_inner_join = connection.get().non_inner_join;
-		best_connection = connection.get();
+	optional_ptr<NeighborInfo> non_inner_connection;
+	if (!query_graph_manager.ValidateJoinPartition(left.set, right.set, possible_connections, non_inner_connection)) {
+		return nullptr;
 	}
-	if (best_connection->non_inner_join) {
+	if (non_inner_connection) {
+		best_connection = non_inner_connection;
 		auto cost = cost_model.ComputeCost(left, right, set, possible_connections);
 		auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
 		result->cardinality = cost_model.GetCardinalityEstimator().EstimateCardinalityWithSet<idx_t>(set);
@@ -419,6 +413,7 @@ bool PlanEnumerator::FindCrossProductPair(const vector<reference<JoinRelationSet
                                           idx_t &right_index) {
 	bool found_pair = false;
 	double best_cost = NumericLimits<double>::Maximum();
+	const vector<reference<NeighborInfo>> no_connections;
 	for (idx_t i = 0; i < join_relations.size(); i++) {
 		auto &left = join_relations[i].get();
 		auto left_plan = plans.find(left);
@@ -430,6 +425,11 @@ bool PlanEnumerator::FindCrossProductPair(const vector<reference<JoinRelationSet
 			if (!GetConnections(left, right).empty()) {
 				continue;
 			}
+			optional_ptr<NeighborInfo> non_inner_connection;
+			if (!query_graph_manager.ValidateJoinPartition(left, right, no_connections, non_inner_connection)) {
+				continue;
+			}
+			D_ASSERT(!non_inner_connection);
 			auto right_plan = plans.find(right);
 			if (right_plan == plans.end()) {
 				throw InternalException("Missing right plan while selecting a cross-product join-order partition");

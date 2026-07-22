@@ -44,8 +44,8 @@ private:
 	                                      DPJoinNode &right);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
-	//! the newly created plan, or an existing plan). Returns nullptr if the partition completes multiple distinct
-	//! non-inner join edges.
+	//! the newly created plan, or an existing plan). Returns nullptr if the partition violates a non-inner join's
+	//! semantic input sides.
 	optional_ptr<DPJoinNode> EmitPair(JoinRelationSet &left, JoinRelationSet &right,
 	                                  const vector<reference<NeighborInfo>> &info);
 	//! Find the cheapest pair of relation sets without a query-graph connection.

@@ -665,7 +665,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			combined = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(combined),
 			                                                 std::move(unused_residual_predicates[i]));
 		}
-		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+		    result_operator->Cast<LogicalComparisonJoin>().join_type == JoinType::INNER) {
 			result_operator->Cast<LogicalComparisonJoin>().conditions.emplace_back(std::move(combined));
 		} else {
 			result_operator = PushFilter(std::move(result_operator), std::move(combined));
@@ -717,6 +718,18 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					result_operator = PushFilter(std::move(result_operator), std::move(filter));
 					continue;
 				}
+				// Ordinary predicates have INNER semantics. They can become join conditions only when the current
+				// operator is an INNER join (or a cross product that can be converted into one).
+				auto join_node = result_operator.get();
+				if (join_node->type == LogicalOperatorType::LOGICAL_FILTER) {
+					join_node = join_node->children[0].get();
+				}
+				if (join_node->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT &&
+				    (join_node->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+				     join_node->Cast<LogicalComparisonJoin>().join_type != JoinType::INNER)) {
+					result_operator = PushFilter(std::move(result_operator), std::move(filter));
+					continue;
+				}
 				// create the join condition
 				D_ASSERT(BoundComparisonExpression::IsComparison(*filter));
 				auto &comparison = filter->Cast<BoundFunctionExpression>();
@@ -738,26 +751,21 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				}
 				JoinCondition cond(std::move(left), std::move(right), comp_type);
 				// now find the join to push it into
-				auto node = result_operator.get();
-				if (node->type == LogicalOperatorType::LOGICAL_FILTER) {
-					node = node->children[0].get();
-				}
-				if (node->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+				if (join_node->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 					// turn into comparison join
 					auto comp_join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-					comp_join->children.push_back(std::move(node->children[0]));
-					comp_join->children.push_back(std::move(node->children[1]));
+					comp_join->children.push_back(std::move(join_node->children[0]));
+					comp_join->children.push_back(std::move(join_node->children[1]));
 					comp_join->conditions.push_back(std::move(cond));
-					if (node == result_operator.get()) {
+					if (join_node == result_operator.get()) {
 						result_operator = std::move(comp_join);
 					} else {
 						D_ASSERT(result_operator->type == LogicalOperatorType::LOGICAL_FILTER);
 						result_operator->children[0] = std::move(comp_join);
 					}
 				} else {
-					D_ASSERT(node->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-					         node->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
-					auto &comp_join = node->Cast<LogicalComparisonJoin>();
+					D_ASSERT(join_node->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
+					auto &comp_join = join_node->Cast<LogicalComparisonJoin>();
 					comp_join.conditions.push_back(std::move(cond));
 				}
 			}
@@ -777,6 +785,54 @@ const QueryGraphEdges &QueryGraphManager::GetQueryGraphEdges() const {
 void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right) {
 	query_graph.CreateEdge(left, right, nullptr);
 	query_graph.CreateEdge(right, left, nullptr);
+}
+
+bool QueryGraphManager::ValidateJoinPartition(JoinRelationSet &left, JoinRelationSet &right,
+                                              const vector<reference<NeighborInfo>> &connections,
+                                              optional_ptr<NeighborInfo> &non_inner_connection) const {
+	non_inner_connection = nullptr;
+	optional_ptr<NonInnerJoinEdge> completed_edge;
+	for (auto &edge_ptr : non_inner_joins) {
+		auto &edge = *edge_ptr;
+		auto completed_in_left = JoinRelationSet::IsSubset(left, edge.required_left_set) &&
+		                         JoinRelationSet::IsSubset(left, edge.required_right_set);
+		auto completed_in_right = JoinRelationSet::IsSubset(right, edge.required_left_set) &&
+		                          JoinRelationSet::IsSubset(right, edge.required_right_set);
+		if (completed_in_left || completed_in_right) {
+			continue;
+		}
+
+		auto touches_left_input = NonInnerRelationSetsIntersect(left, edge.required_left_set) ||
+		                          NonInnerRelationSetsIntersect(right, edge.required_left_set);
+		auto touches_right_input = NonInnerRelationSetsIntersect(left, edge.required_right_set) ||
+		                           NonInnerRelationSetsIntersect(right, edge.required_right_set);
+		if (!touches_left_input || !touches_right_input) {
+			continue;
+		}
+
+		// If the edge was not completed below, a partition touching both inputs must complete it here. Once portions
+		// of both semantic sides enter the same subtree, no ancestor can separate them again.
+		auto direct = JoinRelationSet::IsSubset(left, edge.required_left_set) &&
+		              JoinRelationSet::IsSubset(right, edge.required_right_set);
+		auto inverted = JoinRelationSet::IsSubset(right, edge.required_left_set) &&
+		                JoinRelationSet::IsSubset(left, edge.required_right_set);
+		if (direct == inverted || completed_edge) {
+			return false;
+		}
+		completed_edge = edge;
+	}
+
+	for (auto &connection_ref : connections) {
+		auto &connection = connection_ref.get();
+		if (!connection.non_inner_join) {
+			continue;
+		}
+		if (!completed_edge || connection.non_inner_join != completed_edge) {
+			return false;
+		}
+		non_inner_connection = connection;
+	}
+	return !completed_edge || non_inner_connection;
 }
 
 } // namespace duckdb

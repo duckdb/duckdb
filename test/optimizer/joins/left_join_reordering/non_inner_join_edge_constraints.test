@@ -1,0 +1,59 @@
+# name: test/optimizer/joins/left_join_reordering/non_inner_join_edge_constraints.test
+# description: Preserve non-inner join semantics during exact and greedy join enumeration
+# group: [left_join_reordering]
+
+foreach threshold 0 30
+
+statement ok
+SET approximate_join_order_threshold={threshold};
+
+# An INNER residual that depends on the nullable side of the preceding LEFT join must remain a filter.
+query I
+WITH a(k,v) AS (VALUES (-1,0)),
+     b(k) AS (VALUES (-1)),
+     c(k,v) AS (VALUES (-1,NULL::INTEGER)),
+     d(k) AS (VALUES (-1))
+SELECT count(*)
+FROM a
+INNER JOIN b ON b.k = a.k
+LEFT JOIN c ON c.k = b.k AND (c.v IS NULL OR c.v <> a.v)
+INNER JOIN d ON d.k = a.k AND (c.k IS NULL OR d.k > c.k);
+----
+0
+
+# Enumeration must not combine portions of both semantic sides before the non-inner edge can be formed.
+query I
+WITH a(k) AS (VALUES (NULL::INTEGER)),
+     b(k) AS (VALUES (-1)),
+     c(k) AS (VALUES (4)),
+     d(k) AS (VALUES (3)),
+     e(k) AS (VALUES (0))
+SELECT count(*)
+FROM a
+SEMI JOIN b ON b.k IS NOT DISTINCT FROM a.k
+LEFT JOIN c ON c.k = a.k
+JOIN d ON d.k IS NOT DISTINCT FROM c.k
+ANTI JOIN e ON e.k = a.k AND d.k BETWEEN -1 AND 2;
+----
+0
+
+# The same constraint applies when the left side of an ANTI edge spans several relations.
+query I
+WITH a(k) AS (VALUES (NULL::INTEGER)),
+     b(k) AS (VALUES (-1)),
+     c(k) AS (VALUES (4)),
+     d(k) AS (VALUES (3)),
+     e(k) AS (VALUES (0))
+SELECT count(*)
+FROM a
+JOIN b ON b.k = a.k
+LEFT JOIN c ON c.k = a.k
+JOIN d ON d.k IS NOT DISTINCT FROM c.k
+ANTI JOIN e ON e.k = a.k AND d.k BETWEEN -1 AND 2;
+----
+0
+
+endloop
+
+statement ok
+RESET approximate_join_order_threshold;
