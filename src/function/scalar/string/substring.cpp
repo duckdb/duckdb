@@ -340,12 +340,15 @@ unique_ptr<BaseStatistics> SubstringStatsFromPrefix(FunctionStatisticsInput &inp
 		return nullptr;
 	}
 	auto length = length_value.GetValue<int64_t>();
+	if (length <= 0 || length > NumericLimits<uint32_t>::Maximum()) {
+		return nullptr;
+	}
 	if (offset == 0) {
 		length--;
 	} else if (offset != 1) {
 		return nullptr;
 	}
-	if (length <= 0 || length > NumericLimits<uint32_t>::Maximum()) {
+	if (length == 0) {
 		return nullptr;
 	}
 
