@@ -203,6 +203,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
@@ -3200,6 +3201,25 @@ const char* EnumUtil::ToChars<LoggingTargetTable>(LoggingTargetTable value) {
 template<>
 LoggingTargetTable EnumUtil::FromString<LoggingTargetTable>(const char *value) {
 	return static_cast<LoggingTargetTable>(StringUtil::StringToEnum(GetLoggingTargetTableValues(), 3, "LoggingTargetTable", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalOperatorRepeatabilityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalOperatorRepeatability::REPEATABLE), "REPEATABLE" },
+		{ static_cast<uint32_t>(LogicalOperatorRepeatability::NON_REPEATABLE), "NON_REPEATABLE" },
+		{ static_cast<uint32_t>(LogicalOperatorRepeatability::UNKNOWN), "UNKNOWN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalOperatorRepeatability>(LogicalOperatorRepeatability value) {
+	return StringUtil::EnumToString(GetLogicalOperatorRepeatabilityValues(), 3, "LogicalOperatorRepeatability", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalOperatorRepeatability EnumUtil::FromString<LogicalOperatorRepeatability>(const char *value) {
+	return static_cast<LogicalOperatorRepeatability>(StringUtil::StringToEnum(GetLogicalOperatorRepeatabilityValues(), 3, "LogicalOperatorRepeatability", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
