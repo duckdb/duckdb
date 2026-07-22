@@ -82,3 +82,31 @@ WITH RECURSIVE t(i, payload) USING KEY (i) AS (
 SELECT i, payload FROM t;
 ----
 1	12
+
+# Pruning must not remove volatile expressions from the anchor.
+statement ok
+CREATE SEQUENCE recursive_anchor_pruning_sequence START 1;
+
+query II
+WITH RECURSIVE t(i, unused) AS (
+	SELECT 1, nextval('recursive_anchor_pruning_sequence')
+	UNION ALL
+	SELECT i + 1, unused FROM t WHERE i < 3
+)
+SELECT max(i), currval('recursive_anchor_pruning_sequence') FROM t;
+----
+3	1
+
+# The same protection applies to volatile expressions in the recursive member.
+statement ok
+CREATE SEQUENCE recursive_member_pruning_sequence START 1;
+
+query II
+WITH RECURSIVE t(i, unused) AS (
+	VALUES (1, 0::BIGINT)
+	UNION ALL
+	SELECT i + 1, nextval('recursive_member_pruning_sequence') FROM t WHERE i < 3
+)
+SELECT max(i), currval('recursive_member_pruning_sequence') FROM t;
+----
+3	2

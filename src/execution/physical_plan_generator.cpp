@@ -6,10 +6,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
@@ -74,50 +72,8 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 	return std::move(physical_plan);
 }
 
-static bool ExpressionIsRepeatable(unique_ptr<Expression> &expression) {
-	if (expression->IsVolatile()) {
-		return false;
-	}
-	bool repeatable = true;
-	ExpressionIterator::VisitExpression<BoundAggregateExpression>(*expression, [&](const auto &aggregate) {
-		if (aggregate.Function().GetStability() == FunctionStability::VOLATILE) {
-			repeatable = false;
-		}
-	});
-	ExpressionIterator::VisitExpression<BoundWindowExpression>(*expression, [&](const auto &window) {
-		if ((window.AggregateFunction() && window.AggregateFunction()->GetStability() == FunctionStability::VOLATILE) ||
-		    (window.WindowFunction() && window.WindowFunction()->GetStability() == FunctionStability::VOLATILE)) {
-			repeatable = false;
-		}
-	});
-	return repeatable;
-}
-
-static bool LogicalOperatorIsRepeatable(LogicalOperator &op) {
-	if (op.HasSideEffects()) {
-		return false;
-	}
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_INSERT:
-	case LogicalOperatorType::LOGICAL_UPDATE:
-	case LogicalOperatorType::LOGICAL_DELETE:
-	case LogicalOperatorType::LOGICAL_MERGE_INTO:
-	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		return false;
-	default:
-		break;
-	}
-	bool repeatable = true;
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
-		if (!ExpressionIsRepeatable(*expression)) {
-			repeatable = false;
-		}
-	});
-	return repeatable;
-}
-
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
-	const auto repeatable = LogicalOperatorIsRepeatable(op);
+	const auto repeatable = ClassifyLogicalOperatorRepeatability(op) == LogicalOperatorRepeatability::REPEATABLE;
 	auto &result = CreatePlanInternal(op);
 	if (!repeatable) {
 		non_repeatable_operators.insert(result);

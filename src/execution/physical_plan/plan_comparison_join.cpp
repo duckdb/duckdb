@@ -23,14 +23,14 @@ static void RewriteJoinCondition(unique_ptr<Expression> &root_expr, idx_t offset
 	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.IndexMutable() += offset; });
 }
 
-static optional_ptr<PhysicalRecursiveCTEStateScan> FindDirectRecursiveStateScan(
-    PhysicalOperator &op,
-    const unordered_map<TableIndex, vector<reference<PhysicalRecursiveCTEStateScan>>> &recursive_state_scans) {
+static optional_ptr<PhysicalRecursiveCTEStateScan>
+FindDirectRecursiveStateScan(PhysicalOperator &op,
+                             const unordered_map<TableIndex, RecursiveCTEPlanningInfo> &recursive_cte_planning) {
 	if (op.type != PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN) {
 		return nullptr;
 	}
-	for (auto &entry : recursive_state_scans) {
-		for (auto &scan_ref : entry.second) {
+	for (auto &entry : recursive_cte_planning) {
+		for (auto &scan_ref : entry.second.state_scans) {
 			if (&scan_ref.get() == &op) {
 				return scan_ref.get();
 			}
@@ -110,8 +110,8 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	auto &right = CreatePlan(*op.children[1]);
 	left.estimated_cardinality = lhs_cardinality;
 	right.estimated_cardinality = rhs_cardinality;
-	auto left_state = FindDirectRecursiveStateScan(left, recursive_state_scans);
-	auto right_state = FindDirectRecursiveStateScan(right, recursive_state_scans);
+	auto left_state = FindDirectRecursiveStateScan(left, recursive_cte_planning);
+	auto right_state = FindDirectRecursiveStateScan(right, recursive_cte_planning);
 	vector<idx_t> state_key_indices;
 	vector<idx_t> probe_key_indices;
 	bool state_on_left;
@@ -122,12 +122,13 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 		auto left_projection_map = PhysicalJoin::FillProjectionMap(left, op.left_projection_map);
 		auto right_projection_map = PhysicalJoin::FillProjectionMap(right, op.right_projection_map);
 		if (state_key_indices.size() < state_scan.distinct_idx.size()) {
+			RecursiveCTEPartialKeySpec new_spec(state_key_indices, state_scan.distinct_idx.size());
 			bool found = false;
 			for (auto &spec : state_scan.partial_key_index_specs) {
-				found = found || spec == state_key_indices;
+				found = found || spec == new_spec;
 			}
 			if (!found) {
-				state_scan.partial_key_index_specs.push_back(state_key_indices);
+				state_scan.partial_key_index_specs.push_back(std::move(new_spec));
 			}
 		}
 		return Make<PhysicalRecursiveCTEKeyJoin>(op, probe, state_scan, state_on_left, std::move(state_key_indices),

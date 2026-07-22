@@ -41,10 +41,10 @@ public:
 	TupleDataScanState scan_states;
 };
 
-//! Task-local scratch state for read-only group lookups.
-struct AggregateHTLookupState {
+//! Scratch shared by mutable append probes and task-local read-only lookups.
+struct AggregateHTProbeState {
 public:
-	AggregateHTLookupState();
+	AggregateHTProbeState();
 
 	Vector hashes;
 	Vector ht_offsets;
@@ -52,13 +52,20 @@ public:
 	Vector addresses;
 	SelectionVector group_compare_vector;
 	SelectionVector no_match_vector;
-	SelectionVector missing_vector;
 	DataChunk group_chunk;
+	optional_ptr<const GroupedAggregateHashTable> owner;
+	bool initialized = false;
+};
+
+//! Task-local scratch state for read-only group lookups.
+struct AggregateHTLookupState : public AggregateHTProbeState {
+public:
+	AggregateHTLookupState();
+
+	SelectionVector missing_vector;
 	TupleDataChunkState chunk_state;
 	RowMatcher row_matcher;
 	vector<TupleDataGatherFunction> gather_functions;
-	optional_ptr<const GroupedAggregateHashTable> owner;
-	bool initialized = false;
 };
 
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
@@ -111,6 +118,8 @@ public:
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
 
 	void InitializeScan(AggregateHTScanState &scan_state);
+	//! Scans group columns without reading or finalizing aggregate states.
+	bool ScanGroups(AggregateHTScanState &scan_state, DataChunk &distinct_rows);
 	bool Scan(AggregateHTScanState &scan_state, DataChunk &distinct_rows, DataChunk &payload_rows);
 
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
@@ -231,20 +240,13 @@ private:
 	vector<shared_ptr<ArenaAllocator>> stored_allocators;
 
 	//! Append state
-	struct AggregateHTAppendState {
+	struct AggregateHTAppendState : public AggregateHTProbeState {
 		explicit AggregateHTAppendState(ArenaAllocator &allocator);
 
 		PartitionedTupleDataAppendState partitioned_append_state;
 		PartitionedTupleDataAppendState unpartitioned_append_state;
 
-		Vector hashes;
-		Vector ht_offsets;
-		Vector hash_salts;
 		SelectionVector new_groups;
-		SelectionVector group_compare_vector;
-		SelectionVector no_match_vector;
-		Vector addresses;
-		DataChunk group_chunk;
 		AggregateDictionaryState dict_state;
 
 		RowOperationsState row_state;
