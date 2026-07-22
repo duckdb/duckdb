@@ -311,8 +311,11 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 				continue;
 			}
 			const idx_t location = block_idx * block_size;
-			const bool loaded = !block.block_handle->GetMemory().IsUnloaded();
-			result.push_back({file->path, block.nr_bytes, location, loaded});
+			const auto &memory = block.block_handle->GetMemory();
+			const bool loaded = !memory.IsUnloaded();
+			// An unloaded block sits in the temporary directory if it could be written there on eviction
+			const bool spilled = !loaded && memory.WritesToTemporaryFile();
+			result.push_back({file->path, block.nr_bytes, location, loaded, spilled});
 		}
 	}
 	return result;
@@ -341,7 +344,7 @@ BufferHandle ExternalFileCache::AllocateCacheBuffer(BufferManager &buffer_manage
 		return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 	}
 	auto buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes, false);
-	buffer.GetBlockHandle()->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::SPILL_FAILURE);
+	buffer.GetBlockHandle()->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::EVICTION_UNLESS_SPILLED);
 	return buffer;
 }
 

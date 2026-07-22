@@ -1848,7 +1848,7 @@ const StringUtil::EnumStringLiteral *GetDestroyBufferUponValues() {
 		{ static_cast<uint32_t>(DestroyBufferUpon::BLOCK), "BLOCK" },
 		{ static_cast<uint32_t>(DestroyBufferUpon::EVICTION), "EVICTION" },
 		{ static_cast<uint32_t>(DestroyBufferUpon::UNPIN), "UNPIN" },
-		{ static_cast<uint32_t>(DestroyBufferUpon::SPILL_FAILURE), "SPILL_FAILURE" }
+		{ static_cast<uint32_t>(DestroyBufferUpon::EVICTION_UNLESS_SPILLED), "EVICTION_UNLESS_SPILLED" }
 	};
 	return values;
 }

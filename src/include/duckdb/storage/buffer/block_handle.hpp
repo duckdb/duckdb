@@ -153,7 +153,7 @@ public:
 	//! Returns true, if unloading the buffer writes it to a temporary file.
 	bool WritesToTemporaryFile() const {
 		const auto destroy_upon = destroy_buffer_upon.load();
-		return destroy_upon == DestroyBufferUpon::BLOCK || destroy_upon == DestroyBufferUpon::SPILL_FAILURE;
+		return destroy_upon == DestroyBufferUpon::BLOCK || destroy_upon == DestroyBufferUpon::EVICTION_UNLESS_SPILLED;
 	}
 	//! Returns the memory usage.
 	idx_t GetMemoryUsage() const {

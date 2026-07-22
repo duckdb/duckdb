@@ -37,6 +37,11 @@ SELECT temporary_storage_bytes FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_C
 ----
 0
 
+query I
+SELECT count(*) FROM duckdb_external_file_cache() WHERE spilled;
+----
+0
+
 statement ok
 SET external_file_cache_spill=true;
 
@@ -63,6 +68,17 @@ SELECT temporary_storage_bytes > 0 FROM duckdb_memory() WHERE tag = 'EXTERNAL_FI
 ----
 true
 
+# the cache listing shows which blocks are in memory and which sit in the temporary directory
+query I
+SELECT count(*) > 0 FROM duckdb_external_file_cache() WHERE NOT loaded AND spilled;
+----
+true
+
+query I
+SELECT count(*) FROM duckdb_external_file_cache() WHERE loaded AND spilled;
+----
+0
+
 # reads must reassemble the same data through the spilled blocks
 query II
 SELECT sum(b) - (SELECT sum(hash(i * 2)) FROM range(12000000) t(i)),
@@ -71,8 +87,10 @@ FROM read_parquet('__TEST_DIR__/efc_spill.parquet');
 ----
 0	0
 
-# blocks below the block allocation size are never spilled: with tiny cache blocks
-# the cache drops them under pressure, and reads still work
+# changing the cache block size re-indexes the cache, dropping the spilled blocks,
+# and reads still reassemble the correct content afterwards.
+# blocks below the block allocation size are also never spilled: with tiny cache blocks
+# the cache drops them under pressure instead
 statement ok
 SET external_file_cache_local_block_size=16384;
 
@@ -80,3 +98,43 @@ query I
 SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('__TEST_DIR__/efc_spill.parquet');
 ----
 0
+
+query I
+SELECT count(*) FROM duckdb_external_file_cache() WHERE spilled;
+----
+0
+
+query I
+SELECT temporary_storage_bytes FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+0
+
+# spill again with large blocks, then disabling the cache must also delete the spilled blocks
+statement ok
+SET external_file_cache_local_block_size=2097152;
+
+query I
+SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('__TEST_DIR__/efc_spill.parquet');
+----
+0
+
+query I
+SELECT temporary_storage_bytes > 0 FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+true
+
+statement ok
+SET enable_external_file_cache=false;
+
+query I
+SELECT count(*) FROM duckdb_external_file_cache();
+----
+0
+
+query I
+SELECT temporary_storage_bytes FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+0
+
+statement ok
+SET enable_external_file_cache=true;
