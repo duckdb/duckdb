@@ -21,6 +21,12 @@ CHECKPOINT rebuild_then_remap;
 statement ok
 CREATE INDEX t_i_idx ON rebuild_then_remap.t(i);
 
+# Before vacuum (rebuild / dense-renumber)
+query II
+SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 4096;
+----
+4096	4096
+
 statement ok
 DELETE FROM rebuild_then_remap.t WHERE i >= 2048 AND i < 4096;
 
@@ -56,6 +62,15 @@ DETACH rebuild_then_remap;
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_rebuild_then_remap.db' AS rebuild_then_remap (STORAGE_VERSION 'latest');
+
+# Before vacuum (remap). i=4096..6143 were dense-renumbered to rid 2048..4095 in phase 1.
+query II
+SELECT rowid, i FROM rebuild_then_remap.t WHERE i IN (0, 1023, 5120, 6143) ORDER BY i;
+----
+0	0
+1023	1023
+3072	5120
+4095	6143
 
 # Merge partially live row groups, shifting the second group's rowids.
 statement ok

@@ -48,6 +48,13 @@ DELETE FROM remap_across_gap.t WHERE i >= 1000 AND i < 2000;
 statement ok
 SET max_vacuum_tasks = 99;
 
+# Before vacuum
+query II
+SELECT rowid, i FROM remap_across_gap.t WHERE i IN (999, 2000) ORDER BY i;
+----
+999	999
+2000	2000
+
 statement ok
 FORCE CHECKPOINT remap_across_gap;
 

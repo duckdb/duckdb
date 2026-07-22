@@ -38,6 +38,15 @@ CREATE INDEX t_g_idx ON rowid_gap_remap.t(g);
 statement ok
 CREATE INDEX t_n_idx ON rowid_gap_remap.t(n);
 
+# Before vacuum
+query II
+SELECT rowid, i FROM rowid_gap_remap.t WHERE i IN (1000, 1001, 2048, 3047) ORDER BY i;
+----
+1000	1000
+1001	1001
+2048	2048
+3047	3047
+
 statement ok
 DELETE FROM rowid_gap_remap.t WHERE i < 1000;
 

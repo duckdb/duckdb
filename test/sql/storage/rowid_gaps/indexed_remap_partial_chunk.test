@@ -33,6 +33,23 @@ CREATE UNIQUE INDEX t_i_idx ON remap_partial.t(i);
 statement ok
 CREATE INDEX t_g_idx ON remap_partial.t(g);
 
+# Before vacuum
+query II
+SELECT rowid, i FROM remap_partial.t WHERE i IN (0, 99, 200, 2047, 2048, 2147) ORDER BY i;
+----
+0	0
+99	99
+200	200
+2047	2047
+2048	2048
+2147	2147
+
+query II
+SELECT rowid, i FROM remap_partial.t WHERE g = 7 ORDER BY i;
+----
+99	99
+2100	2100
+
 statement ok
 DELETE FROM remap_partial.t WHERE i >= 100 AND i < 200;
 

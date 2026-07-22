@@ -24,10 +24,6 @@ CREATE UNIQUE INDEX t_i_idx ON remap_collision.t(i);
 statement ok
 CREATE INDEX t_g_idx ON remap_collision.t(g);
 
-# Keep every third row in the first two row groups.
-statement ok
-DELETE FROM remap_collision.t WHERE i < 4096 AND i % 3 <> 2;
-
 # Before vacuum
 query II
 SELECT rowid, i FROM remap_collision.t WHERE i IN (2, 5, 2045, 2048, 4094, 4096, 6143) ORDER BY i;
@@ -45,6 +41,10 @@ SELECT rowid, i FROM remap_collision.t WHERE g = 9 ORDER BY i;
 ----
 2	2
 6143	6143
+
+# Keep every third row in the first two row groups.
+statement ok
+DELETE FROM remap_collision.t WHERE i < 4096 AND i % 3 <> 2;
 
 statement ok
 FORCE CHECKPOINT remap_collision;

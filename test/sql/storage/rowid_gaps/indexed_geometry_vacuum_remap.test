@@ -31,6 +31,17 @@ CREATE UNIQUE INDEX t_i_idx ON remap_geom.t(i);
 statement ok
 CREATE INDEX t_geom_idx ON remap_geom.t(geom);
 
+# Before vacuum
+query II
+SELECT rowid, i FROM remap_geom.t WHERE geom = 'POINT (1500 1500)'::GEOMETRY;
+----
+1500	1500
+
+query II
+SELECT rowid, i FROM remap_geom.t WHERE i = 2048;
+----
+2048	2048
+
 statement ok
 DELETE FROM remap_geom.t WHERE i < 1000;
 
