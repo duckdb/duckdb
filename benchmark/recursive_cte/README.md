@@ -27,7 +27,8 @@ published row equality so it covers safe equality normalization. The
 offset-based Game of Life variant expresses the same neighborhood through eight
 equality joins and keeps the original spatial formulation as a comparison. The
 direct-probe workloads isolate complete-key lookups and sparse partial-key
-fan-out over large recurring states.
+fan-out over large recurring states. The tiny-frontier `UNION ALL` workload
+guards fixed per-epoch runtime overhead across many one-row iterations.
 
 None of the eight published algorithms naturally joins recurring state on only
 a proper subset of a composite `USING KEY`. The partial-probe workloads are

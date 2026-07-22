@@ -37,6 +37,48 @@ SELECT count(*), sum(i) FROM t;
 ----
 12288	50319360
 
+# Worker-local output must be initialized only for the broad middle epoch.
+query III
+WITH RECURSIVE t(i, level) AS (
+	VALUES (0::BIGINT, 0)
+	UNION ALL
+	SELECT next.i, t.level + 1
+	FROM t
+	CROSS JOIN LATERAL range(
+		CASE
+			WHEN t.level = 0 THEN 50000
+			ELSE 1
+		END
+	) next(i)
+	WHERE t.level = 0 OR (t.level = 1 AND t.i = 0)
+)
+SELECT count(*), sum(i), max(level) FROM t;
+----
+50002	1249975000	2
+
+# Reusing combined worker-local segments must reset their original allocator.
+statement ok
+SET memory_limit='32MB';
+
+statement ok
+SET temp_directory='';
+
+query I
+WITH RECURSIVE t(i) AS (
+	VALUES (0::BIGINT)
+	UNION ALL
+	SELECT i + 1 FROM t WHERE i < 4999
+)
+SELECT count(*) FROM t;
+----
+5000
+
+statement ok
+RESET memory_limit;
+
+statement ok
+RESET temp_directory;
+
 statement ok
 SET enable_caching_operators=false;
 
