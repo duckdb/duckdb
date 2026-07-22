@@ -140,6 +140,16 @@ public:
 	bool ShouldRetry() const;
 };
 
+//! How a HTTPClient advertises (Accept-Encoding) and handles the response Content-Encoding
+enum class ResponseContentEncodingMode : uint8_t {
+	//! Advertise identity, if the server responds with an encoded body anyway, deliver it decoded (or error)
+	IDENTITY_DECODE_FALLBACK,
+	//! Advertise identity, never decode (response bytes are passed through untouched)
+	IDENTITY_NO_DECODE,
+	//! Advertise what the client can decode, deliver the body decoded
+	NEGOTIATE
+};
+
 struct BaseRequest {
 	BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params);
 	// Out-of-line so the symbol is emitted/exported for loadable (WASM side-module) extensions.
@@ -170,6 +180,9 @@ struct BaseRequest {
 	bool have_time_to_fst_byte = false;
 	double time_to_fst_byte_sec = 0;
 	idx_t bytes_received = 0;
+
+	//! How to advertise and handle response content encoding.
+	ResponseContentEncodingMode response_content_encoding = ResponseContentEncodingMode::IDENTITY_DECODE_FALLBACK;
 
 	template <class TARGET>
 	TARGET &Cast() {
