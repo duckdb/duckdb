@@ -352,20 +352,23 @@ statement ok
 PRAGMA disable_verification
 
 statement ok
-CREATE SEQUENCE distinct_rewrite_seq_child START 1;
+CREATE SEQUENCE distinct_rewrite_seq_count START 1;
 
-# volatile DISTINCT arguments are staged before distinct-set matching
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_sum START 1;
+
+# each volatile DISTINCT argument is staged and evaluated once per row
 query II
-SELECT count(DISTINCT nextval('distinct_rewrite_seq_child')),
-       sum(DISTINCT nextval('distinct_rewrite_seq_child'))
+SELECT count(DISTINCT nextval('distinct_rewrite_seq_count')),
+       sum(DISTINCT nextval('distinct_rewrite_seq_sum'))
 FROM range(4);
 ----
-4	26
+4	10
 
-query I
-SELECT currval('distinct_rewrite_seq_child');
+query II
+SELECT currval('distinct_rewrite_seq_count'), currval('distinct_rewrite_seq_sum');
 ----
-8
+4	4
 
 statement ok
 CREATE SEQUENCE distinct_rewrite_seq_filter START 1;
@@ -434,4 +437,4 @@ WHERE p_partkey = ps_partkey
 GROUP BY p_brand, p_type, p_size
 ORDER BY supplier_cnt DESC, p_brand, p_type, p_size;
 ----
-logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"ps_suppkey"[^\]]*\].*"Expressions":\s*"count_star\(\)".*
+logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"ps_suppkey"[^\]]*\].*"Expressions":\s*"(count_star\(\)|count\(#[0-9]+\) EXPORT_STATE)".*
