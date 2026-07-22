@@ -20,6 +20,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_block.hpp"
 
@@ -86,6 +87,11 @@ public:
 	//! Gets the shared cached file for the given path, creating it if not yet present.
 	//! When caching is disabled, returns a transient CachedFile that is not tracked in the cached file map.
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
+
+	//! Allocate a buffer holding a cache block. Blocks of at least the block allocation size spill to
+	//! the temporary directory when they are evicted, instead of being dropped and re-read from the
+	//! source. Smaller blocks are always dropped, they would each need their own file to spill.
+	static BufferHandle AllocateCacheBuffer(BufferManager &buffer_manager, idx_t nr_bytes);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);

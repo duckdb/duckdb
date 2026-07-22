@@ -88,6 +88,11 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 		if (block.state != CacheBlockState::LOADED || !block.block_handle) {
 			continue;
 		}
+		if (block.block_handle->GetMemory().IsUnloaded()) {
+			// Evicted blocks do not survive a re-index, whether they spilled or were dropped:
+			// pinning all of them to copy them over could exceed the memory limit
+			continue;
+		}
 		auto pin = buffer_manager.Pin(block.block_handle);
 		if (pin.IsValid()) {
 			pinned.emplace(old_idx, make_pair(std::move(pin), block.nr_bytes));
@@ -129,7 +134,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 			}
 			const idx_t new_size = new_end - new_start;
 
-			auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, new_size);
+			auto buf = AllocateCacheBuffer(buffer_manager, new_size);
 
 			// Copy from each contributing old block in the run.
 			const idx_t contrib_first = new_start / old_block_size;
@@ -328,6 +333,16 @@ ExternalFileCache &ExternalFileCache::Get(ClientContext &context) {
 
 BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
+}
+
+BufferHandle ExternalFileCache::AllocateCacheBuffer(BufferManager &buffer_manager, idx_t nr_bytes) {
+	if (nr_bytes < buffer_manager.GetBlockAllocSize() ||
+	    !Settings::Get<ExternalFileCacheSpillSetting>(buffer_manager.GetDatabase())) {
+		return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+	}
+	auto buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes, false);
+	buffer.GetBlockHandle()->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::SPILL_FAILURE);
+	return buffer;
 }
 
 void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &paths) {
