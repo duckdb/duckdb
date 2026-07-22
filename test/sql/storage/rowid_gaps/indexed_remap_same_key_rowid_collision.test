@@ -28,6 +28,24 @@ CREATE INDEX t_g_idx ON remap_collision.t(g);
 statement ok
 DELETE FROM remap_collision.t WHERE i < 4096 AND i % 3 <> 2;
 
+# Before vacuum
+query II
+SELECT rowid, i FROM remap_collision.t WHERE i IN (2, 5, 2045, 2048, 4094, 4096, 6143) ORDER BY i;
+----
+2	2
+5	5
+2045	2045
+2048	2048
+4094	4094
+4096	4096
+6143	6143
+
+query II
+SELECT rowid, i FROM remap_collision.t WHERE g = 9 ORDER BY i;
+----
+2	2
+6143	6143
+
 statement ok
 FORCE CHECKPOINT remap_collision;
 
