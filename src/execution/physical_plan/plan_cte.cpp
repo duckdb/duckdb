@@ -47,7 +47,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 		                           ? PipelineBroadcastExchangeCompletionMode::RUN_TO_COMPLETION
 		                           : PipelineBroadcastExchangeCompletionMode::STOP_WHEN_UNCONSUMED;
 		exchange = make_shared_ptr<PipelineBroadcastExchange>(context, op.children[0]->types, completion_mode,
-		                                                     source_order, use_batch_index);
+		                                                      source_order, use_batch_index);
 		materialized_cte_exchanges[op.table_index] = exchange;
 	}
 

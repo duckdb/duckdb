@@ -240,7 +240,6 @@ struct PipelineBroadcastExchange::SpoolReadReservation {
 	shared_ptr<BroadcastSpool> spool;
 	shared_ptr<BroadcastSpoolReader> reader;
 	idx_t position = 0;
-	idx_t batch_index = DConstants::INVALID_INDEX;
 
 	bool IsSet() const {
 		return spool != nullptr;
@@ -372,15 +371,19 @@ struct PipelineBroadcastExchange::BufferState {
 			spool_read.spool = shared_spool;
 			spool_read.reader = reader;
 			spool_read.position = position;
-			spool_read.batch_index = shared_spool->BatchIndex(position);
-			batch_index = spool_read.batch_index;
+			auto stored_batch_index = shared_spool->BatchIndex(position);
+			if (stored_batch_index != DConstants::INVALID_INDEX) {
+				batch_index = stored_batch_index;
+			}
 			return;
 		}
 		D_ASSERT(position >= base_position);
 		auto chunk_idx = position - base_position;
 		D_ASSERT(chunk_idx < chunks.size());
 		next_chunk = chunks[chunk_idx].chunk;
-		batch_index = chunks[chunk_idx].batch_index;
+		if (chunks[chunk_idx].batch_index != DConstants::INVALID_INDEX) {
+			batch_index = chunks[chunk_idx].batch_index;
+		}
 	}
 
 	void CreateSharedSpool() {
@@ -468,10 +471,9 @@ PipelineBroadcastExchange::PipelineBroadcastExchange(ClientContext &context, vec
                                                      PipelineBroadcastExchangeCompletionMode completion_mode_p,
                                                      OrderPreservationType source_order_p, bool use_batch_index_p)
     : context(context), types(std::move(types_p)), completion_mode(completion_mode_p),
-      order_mode(use_batch_index_p ? PipelineBroadcastExchangeOrderMode::BATCH_INDEX
-                                   : source_order_p == OrderPreservationType::NO_ORDER
-                                         ? PipelineBroadcastExchangeOrderMode::UNORDERED
-                                         : PipelineBroadcastExchangeOrderMode::SEQUENTIAL),
+      order_mode(use_batch_index_p                                   ? PipelineBroadcastExchangeOrderMode::BATCH_INDEX
+                 : source_order_p == OrderPreservationType::NO_ORDER ? PipelineBroadcastExchangeOrderMode::UNORDERED
+                                                                     : PipelineBroadcastExchangeOrderMode::SEQUENTIAL),
       source_order(source_order_p),
       max_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())) {
 	D_ASSERT(!use_batch_index_p || source_order_p != OrderPreservationType::NO_ORDER);
@@ -758,8 +760,7 @@ PipelineBroadcastExchange::PrepareAppendLocked(const InterruptState &interrupt_s
 
 PipelineBroadcastExchange::AppendAdmission
 PipelineBroadcastExchange::ReserveAppendLocked(idx_t batch_index, const InterruptState &interrupt_state,
-                                               AppendReservation &reservation,
-                                               vector<ExchangeLogEntry> &log_entries) {
+                                               AppendReservation &reservation, vector<ExchangeLogEntry> &log_entries) {
 	auto admission = PrepareAppendLocked(interrupt_state, log_entries);
 	if (admission != AppendAdmission::READY) {
 		return admission;
@@ -778,12 +779,10 @@ PipelineBroadcastExchange::PrepareStageLocked(idx_t batch_index, const Interrupt
 	if (active_consumers == 0) {
 		return AppendAdmission::UNCONSUMED;
 	}
-	if (batch_index > buffer->MinBatchIndex() &&
-	    buffer->PendingCount() >= PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS) {
+	if (batch_index > buffer->MinBatchIndex() && buffer->PendingCount() >= PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS) {
 		if (watermark_state == WatermarkState::BELOW_HIGH_WATERMARK) {
 			watermark_state = WatermarkState::ABOVE_HIGH_WATERMARK;
-			log_entries.push_back(
-			    {ExchangeLogEvent::HIGH_WATERMARK_BLOCKED, active_consumers, buffer->PendingCount()});
+			log_entries.push_back({ExchangeLogEvent::HIGH_WATERMARK_BLOCKED, active_consumers, buffer->PendingCount()});
 		}
 		blocked_writers.push_back(interrupt_state);
 		return AppendAdmission::BLOCKED;
@@ -905,8 +904,9 @@ PipelineBroadcastExchange::FlushReadyBatches(idx_t min_batch_index, const Interr
 	}
 }
 
-PipelineBroadcastExchange::BufferedPushState PipelineBroadcastExchange::Append(
-    DataChunk &chunk, idx_t batch_index, idx_t min_batch_index, const InterruptState &interrupt_state) {
+PipelineBroadcastExchange::BufferedPushState PipelineBroadcastExchange::Append(DataChunk &chunk, idx_t batch_index,
+                                                                               idx_t min_batch_index,
+                                                                               const InterruptState &interrupt_state) {
 	if (SupportsBatchIndex()) {
 		auto flush_result = FlushReadyBatches(min_batch_index, interrupt_state);
 		if (flush_result == BufferedPushState::BLOCKED || flush_result == BufferedPushState::UNCONSUMED ||
@@ -1008,7 +1008,8 @@ PipelineBroadcastExchange::BufferedPushState PipelineBroadcastExchange::Append(
 	BufferedPushState result;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		result = CompleteAppendLocked(reservation, std::move(copy), chunk.size(), true, readers, appenders, log_entries);
+		result =
+		    CompleteAppendLocked(reservation, std::move(copy), chunk.size(), true, readers, appenders, log_entries);
 	}
 	CallbackAll(readers);
 	CallbackAll(appenders);
@@ -1026,6 +1027,10 @@ void PipelineBroadcastExchange::Finish() {
 	vector<ExchangeLogEntry> log_entries;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
+		if (active_consumers > 0 && buffer->PendingCount() > 0) {
+			throw InternalException("Finishing ordered pipeline broadcast exchange with %llu pending chunks",
+			                        buffer->PendingCount());
+		}
 		if (producer_state == ProducerState::ACTIVE) {
 			producer_state = ProducerState::FINISHED;
 		}
@@ -1069,8 +1074,7 @@ void PipelineBroadcastExchange::Cancel() {
 }
 
 SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &chunk,
-                                                 shared_ptr<DataChunk> &current_chunk,
-                                                 optional_idx &batch_index,
+                                                 shared_ptr<DataChunk> &current_chunk, optional_idx &batch_index,
                                                  const InterruptState &interrupt_state) {
 	vector<InterruptState> writers;
 	vector<InterruptState> readers;
@@ -1081,8 +1085,8 @@ SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &
 	batch_index = optional_idx();
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		result = ReserveScanLocked(consumer_idx, interrupt_state, next_chunk, batch_index, spool_read, writers,
-		                           log_entries);
+		result =
+		    ReserveScanLocked(consumer_idx, interrupt_state, next_chunk, batch_index, spool_read, writers, log_entries);
 	}
 
 	if (spool_read.IsSet()) {

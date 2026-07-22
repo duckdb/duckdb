@@ -44,7 +44,9 @@ public:
 class CTEConsumerLocalSourceState : public LocalSourceState {
 public:
 	shared_ptr<DataChunk> current_chunk;
-	optional_idx batch_index;
+	optional_idx exchange_batch_index;
+	optional_idx previous_exchange_batch_index;
+	idx_t local_batch_index = 0;
 };
 
 PhysicalCTEConsumerSource::PhysicalCTEConsumerSource(PhysicalPlan &physical_plan, vector<LogicalType> types,
@@ -67,18 +69,25 @@ SourceResultType PhysicalCTEConsumerSource::GetDataInternal(ExecutionContext &co
                                                             OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<CTEConsumerGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<CTEConsumerLocalSourceState>();
-	return gstate.exchange->Scan(gstate.consumer_idx, chunk, lstate.current_chunk, lstate.batch_index,
+	return gstate.exchange->Scan(gstate.consumer_idx, chunk, lstate.current_chunk, lstate.exchange_batch_index,
 	                             input.interrupt_state);
 }
 
 OperatorPartitionData PhysicalCTEConsumerSource::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
-                                                                  GlobalSourceState &gstate,
-                                                                  LocalSourceState &lstate_p,
+                                                                  GlobalSourceState &gstate, LocalSourceState &lstate_p,
                                                                   const OperatorPartitionInfo &partition_info) const {
 	D_ASSERT(SupportsPartitioning(partition_info));
 	auto &lstate = lstate_p.Cast<CTEConsumerLocalSourceState>();
-	D_ASSERT(lstate.batch_index.IsValid());
-	return OperatorPartitionData(lstate.batch_index.GetIndex());
+	D_ASSERT(lstate.exchange_batch_index.IsValid());
+	// Exchange batch indexes are producer-global; source partition indexes are pipeline-local.
+	if (!lstate.previous_exchange_batch_index.IsValid()) {
+		lstate.previous_exchange_batch_index = lstate.exchange_batch_index;
+	} else if (lstate.previous_exchange_batch_index != lstate.exchange_batch_index) {
+		D_ASSERT(lstate.exchange_batch_index.GetIndex() > lstate.previous_exchange_batch_index.GetIndex());
+		lstate.previous_exchange_batch_index = lstate.exchange_batch_index;
+		lstate.local_batch_index++;
+	}
+	return OperatorPartitionData(lstate.local_batch_index);
 }
 
 bool PhysicalCTEConsumerSource::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {

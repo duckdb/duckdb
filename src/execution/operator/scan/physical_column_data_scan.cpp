@@ -177,6 +177,9 @@ bool PhysicalColumnDataScan::SupportsPartitioning(const OperatorPartitionInfo &p
 	if (!partition_info.RequiresBatchIndex()) {
 		return false;
 	}
+	if (type == PhysicalOperatorType::CTE_SCAN && cte_source) {
+		return cte_source->SupportsPartitioning(partition_info);
+	}
 	return type == PhysicalOperatorType::COLUMN_DATA_SCAN || type == PhysicalOperatorType::CTE_SCAN;
 }
 

@@ -102,8 +102,7 @@ public:
 	                    const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
 	SinkNextBatchType NextBatch(const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
 	SinkCombineResultType FinishLocal(PipelineBroadcastExchangeLocalState &lstate,
-	                                  const SourcePartitionInfo &partition_info,
-	                                  const InterruptState &interrupt_state);
+	                                  const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
 	void Finish();
 	void FinishDirectConsumers();
 	void Cancel();
@@ -185,22 +184,20 @@ private:
 	AppendAdmission PrepareAppendLocked(const InterruptState &interrupt_state, vector<ExchangeLogEntry> &log_entries)
 	    DUCKDB_REQUIRES(lock);
 	AppendAdmission ReserveAppendLocked(idx_t batch_index, const InterruptState &interrupt_state,
-	                                    AppendReservation &reservation,
-	                                    vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
+	                                    AppendReservation &reservation, vector<ExchangeLogEntry> &log_entries)
+	    DUCKDB_REQUIRES(lock);
 	AppendAdmission PrepareStageLocked(idx_t batch_index, const InterruptState &interrupt_state,
 	                                   vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
 	BufferedPushState CompleteAppendLocked(const AppendReservation &reservation, shared_ptr<DataChunk> copy,
-	                                       idx_t row_count, bool record_produced_rows,
-	                                       vector<InterruptState> &readers,
+	                                       idx_t row_count, bool record_produced_rows, vector<InterruptState> &readers,
 	                                       vector<InterruptState> &appenders, vector<ExchangeLogEntry> &log_entries)
 	    DUCKDB_REQUIRES(lock);
 	void AbortAppendReservation(vector<InterruptState> &readers, vector<InterruptState> &writers,
 	                            vector<InterruptState> &appenders) DUCKDB_REQUIRES(lock);
 	SourceResultType ReserveScanLocked(idx_t consumer_idx, const InterruptState &interrupt_state,
 	                                   shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index,
-	                                   SpoolReadReservation &spool_read,
-	                                   vector<InterruptState> &writers, vector<ExchangeLogEntry> &log_entries)
-	    DUCKDB_REQUIRES(lock);
+	                                   SpoolReadReservation &spool_read, vector<InterruptState> &writers,
+	                                   vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
 	void CompleteSpoolReadLocked(idx_t consumer_idx, const SpoolReadReservation &spool_read, DataChunk &chunk,
 	                             vector<InterruptState> &readers, vector<InterruptState> &writers,
 	                             vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
