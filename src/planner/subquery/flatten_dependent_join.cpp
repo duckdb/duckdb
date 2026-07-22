@@ -82,11 +82,17 @@ FlattenDependentJoins::GetCurrentBindings(const vector<ColumnBinding> &state) co
 
 void FlattenDependentJoins::RewriteCorrelatedBindings(LogicalDependentJoin &op, const vector<ColumnBinding> &state) {
 	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
+	InvalidateAccessCache();
 }
 
 void FlattenDependentJoins::RewriteCorrelatedBindings(unique_ptr<LogicalOperator> &op,
                                                       const vector<ColumnBinding> &state) {
 	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
+	InvalidateAccessCache();
+}
+
+void FlattenDependentJoins::InvalidateAccessCache() {
+	access_cache.clear();
 }
 
 FlattenDependentJoins::SubtreeAccess FlattenDependentJoins::GetSubtreeAccess(LogicalOperator &op) const {
@@ -156,24 +162,37 @@ optional_idx FlattenDependentJoins::GetCorrelatedIndex(const ColumnBinding &bind
 }
 
 void FlattenDependentJoins::MergeCorrelatedAliases(const FlattenDependentJoins &source) {
+	bool changed = false;
 	for (auto &entry : source.correlated_aliases) {
 		if (!GetCorrelatedIndex(entry.second).IsValid()) {
 			continue;
 		}
 		auto result = correlated_aliases.emplace(entry);
+		changed |= result.second;
 		if (!result.second) {
 			D_ASSERT(result.first->second == entry.second);
 		}
 	}
+	if (changed) {
+		InvalidateAccessCache();
+	}
 }
 
 void FlattenDependentJoins::AddReplacementAliases(const BindingReplacementMap &replacements) {
+	bool changed = false;
 	for (auto &replacement : replacements) {
 		auto current_binding = replacements.Resolve(replacement.old_binding);
 		auto base_binding = GetCorrelatedBase(current_binding);
 		if (base_binding) {
-			correlated_aliases[replacement.old_binding] = *base_binding;
+			auto entry = correlated_aliases.find(replacement.old_binding);
+			if (entry == correlated_aliases.end() || entry->second != *base_binding) {
+				correlated_aliases[replacement.old_binding] = *base_binding;
+				changed = true;
+			}
 		}
+	}
+	if (changed) {
+		InvalidateAccessCache();
 	}
 }
 
@@ -276,7 +295,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::DecorrelateSubtree(
                                                                                 bool propagate_null_values,
                                                                                 vector<ColumnBinding> state) {
 	auto result = DecorrelateSubtreeInternal(plan, propagate_null_values, std::move(state));
-	access_cache.clear();
+	InvalidateAccessCache();
 	D_ASSERT(VerifyUnnestingState(*plan, result));
 	return result;
 }
@@ -1303,7 +1322,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCTE(unique_
 	cte.correlated_columns = correlated_columns;
 	binder.recursive_ctes[cte.table_index] = &cte;
 	PatchAccessingOperators(*plan->children[1], cte.table_index, correlated_columns);
-	access_cache.clear();
+	InvalidateAccessCache();
 
 	// The CTE outputs a contiguous block of bindings. Lock this state in.
 	auto cte_state = CreateContiguousState(ColumnBinding(cte.table_index, ProjectionIndex(cte.column_count)));
@@ -1361,7 +1380,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCorrelatedN
                                                                                     bool propagate_null_values,
                                                                                     vector<ColumnBinding> state) {
 	auto result = PushDownCorrelatedNodeInternal(plan, propagate_null_values, std::move(state));
-	access_cache.clear();
+	InvalidateAccessCache();
 	D_ASSERT(VerifyUnnestingState(*plan, result));
 	return result;
 }

@@ -415,6 +415,37 @@ bool PlanEnumerator::SolveJoinOrderExactly() {
 	return true;
 }
 
+bool PlanEnumerator::FindCrossProductPair(const vector<reference<JoinRelationSet>> &join_relations, idx_t &left_index,
+                                          idx_t &right_index) {
+	bool found_pair = false;
+	double best_cost = NumericLimits<double>::Maximum();
+	for (idx_t i = 0; i < join_relations.size(); i++) {
+		auto &left = join_relations[i].get();
+		auto left_plan = plans.find(left);
+		if (left_plan == plans.end()) {
+			throw InternalException("Missing left plan while selecting a cross-product join-order partition");
+		}
+		for (idx_t j = i + 1; j < join_relations.size(); j++) {
+			auto &right = join_relations[j].get();
+			if (!GetConnections(left, right).empty()) {
+				continue;
+			}
+			auto right_plan = plans.find(right);
+			if (right_plan == plans.end()) {
+				throw InternalException("Missing right plan while selecting a cross-product join-order partition");
+			}
+			auto cost = left_plan->second->cost + right_plan->second->cost;
+			if (!found_pair || cost < best_cost) {
+				found_pair = true;
+				best_cost = cost;
+				left_index = i;
+				right_index = j;
+			}
+		}
+	}
+	return found_pair;
+}
+
 void PlanEnumerator::SolveJoinOrderApproximately() {
 	// at this point, we exited the dynamic programming but did not compute the final join order because it took too
 	// long instead, we use a greedy heuristic to obtain a join ordering now we use Greedy Operator Ordering to
@@ -461,41 +492,13 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			}
 		}
 		if (!found_connection) {
-			// could not find a connection, but we were not done with finding a completed plan
-			// we have to add a cross product; we add it between the two smallest relations
-			optional_ptr<DPJoinNode> smallest_plans[2];
-			size_t smallest_index[2];
-			D_ASSERT(join_relations.size() >= 2);
-
-			// first just add the first two join relations. It doesn't matter the cost as the JOO
-			// will swap them on estimated cardinality anyway.
-			for (idx_t i = 0; i < 2; i++) {
-				optional_ptr<DPJoinNode> current_plan = plans[join_relations[i]];
-				smallest_plans[i] = current_plan;
-				smallest_index[i] = i;
+			// No valid connected partition remains. Add a cross product between the cheapest pair that is genuinely
+			// disconnected in the current query graph.
+			if (!FindCrossProductPair(join_relations, best_left, best_right)) {
+				throw InternalException("Could not find a disconnected relation pair in the join order optimizer");
 			}
-
-			// if there are any other join relations that don't have connections
-			// add them if they have lower estimated cardinality.
-			for (idx_t i = 2; i < join_relations.size(); i++) {
-				// get the plan for this relation
-				optional_ptr<DPJoinNode> current_plan = plans[join_relations[i]];
-				// check if the cardinality is smaller than the smallest two found so far
-				for (idx_t j = 0; j < 2; j++) {
-					if (!smallest_plans[j] || smallest_plans[j]->cost > current_plan->cost) {
-						smallest_plans[j] = current_plan;
-						smallest_index[j] = i;
-						break;
-					}
-				}
-			}
-			if (!smallest_plans[0] || !smallest_plans[1]) {
-				throw InternalException("Internal error in join order optimizer");
-			}
-			D_ASSERT(smallest_plans[0] && smallest_plans[1]);
-			D_ASSERT(smallest_index[0] != smallest_index[1]);
-			auto &left = smallest_plans[0]->set;
-			auto &right = smallest_plans[1]->set;
+			auto &left = join_relations[best_left].get();
+			auto &right = join_relations[best_right].get();
 			// create a cross product edge (i.e. edge with empty filter) between these two sets in the query graph
 			query_graph_manager.CreateQueryGraphCrossProduct(left, right);
 			connection_cache.clear();
@@ -505,14 +508,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 
 			auto cross_product = EmitPair(left, right, connections);
 			if (!cross_product) {
-				throw InternalException("Could not create a valid cross-product join-order partition");
-			}
-			best_left = smallest_index[0];
-			best_right = smallest_index[1];
-
-			// the code below assumes best_right > best_left
-			if (best_left > best_right) {
-				std::swap(best_left, best_right);
+				throw InternalException("Disconnected cross-product join-order partition was rejected");
 			}
 		}
 		// now update the to-be-checked pairs

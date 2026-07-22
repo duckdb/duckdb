@@ -443,6 +443,26 @@ ORDER BY ALL;
 ----
 1	10	1	10
 
+# The greedy fallback must add a cross product only between relation sets that
+# have no current query-graph connection.
+query IIIIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99)),
+     e(x) AS (VALUES (7)),
+     f(y) AS (VALUES (8))
+SELECT a.k, a.v, b.k, b.v, e.x, f.y
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+CROSS JOIN e
+CROSS JOIN f
+ORDER BY ALL;
+----
+1	10	1	10	7	8
+
 endloop
 
 statement ok
@@ -462,6 +482,25 @@ ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
 ORDER BY ALL;
 ----
 1	10	1	10
+
+# The unreordered plan is also the semantic baseline for the disconnected case.
+query IIIIII
+WITH a(k, v) AS (VALUES (1, 10), (2, 20), (3, 30)),
+     b(k, v) AS (VALUES (1, 10), (2, 99)),
+     c(k, v) AS (VALUES (1, 15), (3, 35)),
+     d(k, v) AS (VALUES (3, 30), (2, 99)),
+     e(x) AS (VALUES (7)),
+     f(y) AS (VALUES (8))
+SELECT a.k, a.v, b.k, b.v, e.x, f.y
+FROM a
+LEFT JOIN b ON b.k = a.k AND b.v >= a.v AND a.v < 25
+SEMI JOIN c ON c.k = a.k AND (b.k IS NULL OR c.v > b.v)
+ANTI JOIN d ON d.k = a.k AND (b.k IS NULL OR d.v = b.v)
+CROSS JOIN e
+CROSS JOIN f
+ORDER BY ALL;
+----
+1	10	1	10	7	8
 
 statement ok
 SET disabled_optimizers='';

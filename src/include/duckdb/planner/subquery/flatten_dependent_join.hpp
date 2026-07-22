@@ -68,6 +68,7 @@ private:
 	column_binding_map_t<ColumnBinding> GetCurrentBindings(const vector<ColumnBinding> &state) const;
 	void RewriteCorrelatedBindings(unique_ptr<LogicalOperator> &op, const vector<ColumnBinding> &state);
 	void RewriteCorrelatedBindings(LogicalDependentJoin &op, const vector<ColumnBinding> &state);
+	void InvalidateAccessCache();
 	//! Checks whether a subtree must be evaluated in this flattener's active domain.
 	bool RequiresDomain(LogicalOperator &op) const;
 	SubtreeAccess GetSubtreeAccess(LogicalOperator &op) const;

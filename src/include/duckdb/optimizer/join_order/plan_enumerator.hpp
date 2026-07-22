@@ -44,9 +44,13 @@ private:
 	                                      DPJoinNode &right);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
-	//! the newly created plan, or an existing plan)
+	//! the newly created plan, or an existing plan). Returns nullptr if the partition completes multiple distinct
+	//! non-inner join edges.
 	optional_ptr<DPJoinNode> EmitPair(JoinRelationSet &left, JoinRelationSet &right,
 	                                  const vector<reference<NeighborInfo>> &info);
+	//! Find the cheapest pair of relation sets without a query-graph connection.
+	bool FindCrossProductPair(const vector<reference<JoinRelationSet>> &join_relations, idx_t &left_index,
+	                          idx_t &right_index);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);

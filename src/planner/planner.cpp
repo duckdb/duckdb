@@ -11,10 +11,13 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -148,7 +151,7 @@ static void SpecializeAnyJoins(unique_ptr<LogicalOperator> &plan) {
 	plan = std::move(specialized);
 }
 
-static bool ComparisonJoinsAreCanonical(const LogicalOperator &plan) {
+static bool VerifyCanonicalComparisonJoins(const LogicalOperator &plan) {
 	if (plan.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	    plan.type == LogicalOperatorType::LOGICAL_DELIM_JOIN || plan.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 		auto &join = plan.Cast<LogicalComparisonJoin>();
@@ -162,14 +165,33 @@ static bool ComparisonJoinsAreCanonical(const LogicalOperator &plan) {
 			}
 			auto left_side = JoinSide::GetCurrentJoinSide(condition.GetLHS(), left_bindings, right_bindings);
 			auto right_side = JoinSide::GetCurrentJoinSide(condition.GetRHS(), left_bindings, right_bindings);
-			if (left_side == JoinSide::BOTH || right_side == JoinSide::BOTH || left_side == JoinSide::RIGHT ||
-			    right_side == JoinSide::LEFT) {
+			if (left_side != JoinSide::LEFT || right_side != JoinSide::RIGHT) {
 				return false;
 			}
 		}
 	}
 	for (auto &child : plan.children) {
-		if (!ComparisonJoinsAreCanonical(*child)) {
+		if (!VerifyCanonicalComparisonJoins(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool VerifyPlannedExpressions(const LogicalOperator &plan) {
+	bool valid = true;
+	LogicalOperatorVisitor::EnumerateExpressions(plan, [&](const unique_ptr<Expression> *expression) {
+		if ((*expression)->HasSubquery()) {
+			valid = false;
+		}
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+		    **expression, [&](const BoundColumnRefExpression &column_ref) { valid &= column_ref.Depth() == 0; });
+	});
+	if (!valid) {
+		return false;
+	}
+	for (auto &child : plan.children) {
+		if (!VerifyPlannedExpressions(*child)) {
 			return false;
 		}
 	}
@@ -242,8 +264,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		this->plan = std::move(lowered.plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 		D_ASSERT(!ContainsDependentJoin(*this->plan));
+		D_ASSERT(VerifyPlannedExpressions(*this->plan));
 		SpecializeAnyJoins(this->plan);
-		D_ASSERT(ComparisonJoinsAreCanonical(*this->plan));
+		D_ASSERT(VerifyPlannedExpressions(*this->plan));
+		D_ASSERT(VerifyCanonicalComparisonJoins(*this->plan));
 	}
 	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
