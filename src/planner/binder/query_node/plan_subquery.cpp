@@ -595,10 +595,9 @@ BindingReplacementMap RecursiveDependentJoinPlanner::PlanAnyJoinCondition(unique
 	return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 }
 
-LogicalRewriteResult RecursiveDependentJoinPlanner::Plan(Binder &binder, unique_ptr<LogicalOperator> op) {
+void RecursiveDependentJoinPlanner::Plan(Binder &binder, unique_ptr<LogicalOperator> &op) {
 	RecursiveDependentJoinPlanner planner(binder);
-	auto replacements = planner.PlanOperator(op);
-	return {std::move(op), std::move(replacements)};
+	planner.PlanOperator(op);
 }
 
 unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubqueryExpression &expr,

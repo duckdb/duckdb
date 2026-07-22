@@ -11,7 +11,6 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
-#include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
@@ -436,18 +435,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
 	}
 	if (!ref.duplicate_eliminated_columns.empty()) {
-		if (result->type == LogicalOperatorType::LOGICAL_FILTER) {
-			join = result->children[0].get();
-		} else {
-			join = result.get();
-		}
-		if (join->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			// duplicate_eliminated_columns is internal delim-join metadata. Pair-dependent
-			// rewrites can replace the join by generated CTEs, where that metadata no longer
-			// has a well-defined target join to attach to.
-			throw NotImplementedException(
-			    "Cannot combine duplicate-eliminated joins with pair-dependent join condition subqueries");
-		}
+		D_ASSERT(join->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
 		comp_join.delim_flipped = ref.delim_flipped;

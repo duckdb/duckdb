@@ -20,17 +20,12 @@ class Binder;
 class JoinSide;
 class LogicalJoin;
 
-struct LogicalRewriteResult {
-	unique_ptr<LogicalOperator> plan;
-	BindingReplacementMap output_replacements;
-};
-
 /*
  * Recursively plan subqueries and flatten dependent joins from outermost to innermost (like peeling an onion).
  */
 class RecursiveDependentJoinPlanner : public LogicalOperatorVisitor {
 public:
-	static LogicalRewriteResult Plan(Binder &binder, unique_ptr<LogicalOperator> op);
+	static void Plan(Binder &binder, unique_ptr<LogicalOperator> &op);
 
 private:
 	explicit RecursiveDependentJoinPlanner(Binder &binder) : binder(binder) {

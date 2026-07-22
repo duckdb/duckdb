@@ -260,8 +260,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		CheckTreeDepth(*plan, max_tree_depth);
 
 		RewriteTriggersToDependent(*this->binder, *this->plan);
-		auto lowered = RecursiveDependentJoinPlanner::Plan(*this->binder, std::move(this->plan));
-		this->plan = std::move(lowered.plan);
+		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 		D_ASSERT(!ContainsDependentJoin(*this->plan));
 		D_ASSERT(VerifyPlannedExpressions(*this->plan));

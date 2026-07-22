@@ -20,7 +20,6 @@ namespace duckdb {
 class LogicalAggregate;
 class LogicalComparisonJoin;
 class LogicalCTERef;
-class LogicalDependentJoin;
 class LogicalExpressionGet;
 class LogicalJoin;
 
@@ -32,7 +31,6 @@ public:
 
 private:
 	struct UnnestingState {
-		UnnestingState() = default;
 		explicit UnnestingState(vector<ColumnBinding> bindings_p) : bindings(std::move(bindings_p)) {
 		}
 
@@ -66,8 +64,7 @@ private:
 	                                      const CorrelatedColumns &correlated_columns,
 	                                      const vector<ColumnBinding> &state, bool perform_delim);
 	column_binding_map_t<ColumnBinding> GetCurrentBindings(const vector<ColumnBinding> &state) const;
-	void RewriteCorrelatedBindings(unique_ptr<LogicalOperator> &op, const vector<ColumnBinding> &state);
-	void RewriteCorrelatedBindings(LogicalDependentJoin &op, const vector<ColumnBinding> &state);
+	void RewriteCorrelatedBindings(LogicalOperator &op, const vector<ColumnBinding> &state);
 	void InvalidateAccessCache();
 	//! Checks whether a subtree must be evaluated in this flattener's active domain.
 	bool RequiresDomain(LogicalOperator &op) const;

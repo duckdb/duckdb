@@ -27,36 +27,16 @@ void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
 
 void LogicalOperatorVisitor::VisitOperatorWithProjectionMapChildren(LogicalOperator &op) {
 	D_ASSERT(op.HasProjectionMap());
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
-		auto &join = op.Cast<LogicalJoin>();
-		VisitChildOfOperatorWithProjectionMap(op.children[0], join.left_projection_map);
-		VisitChildOfOperatorWithProjectionMap(op.children[1], join.right_projection_map);
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto &order = op.Cast<LogicalOrder>();
-		VisitChildOfOperatorWithProjectionMap(op.children[0], order.projection_map);
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto &filter = op.Cast<LogicalFilter>();
-		VisitChildOfOperatorWithProjectionMap(op.children[0], filter.projection_map);
-		break;
-	}
-	default:
-		throw NotImplementedException("VisitOperatorWithProjectionMapChildren for %s", EnumUtil::ToString(op.type));
+	for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
+		auto projection_map = GetProjectionMap(op, child_index);
+		if (!projection_map) {
+			throw NotImplementedException("VisitOperatorWithProjectionMapChildren for %s", EnumUtil::ToString(op.type));
+		}
+		VisitChildOfOperatorWithProjectionMap(op.children[child_index], *projection_map);
 	}
 }
 
 optional_ptr<vector<ProjectionIndex>> LogicalOperatorVisitor::GetProjectionMap(LogicalOperator &op, idx_t child_index) {
-	if (!op.HasProjectionMap()) {
-		return nullptr;
-	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
@@ -72,7 +52,7 @@ optional_ptr<vector<ProjectionIndex>> LogicalOperatorVisitor::GetProjectionMap(L
 	case LogicalOperatorType::LOGICAL_FILTER:
 		return op.Cast<LogicalFilter>().projection_map;
 	default:
-		throw NotImplementedException("GetProjectionMap for %s", EnumUtil::ToString(op.type));
+		return nullptr;
 	}
 }
 

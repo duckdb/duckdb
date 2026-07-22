@@ -143,6 +143,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 
 	{
 		LateralBinder lateral_binder(left_binder, context);
+
 		right_binder.BeginSubqueryBind(left_binder, lateral_binder);
 		result->right = right_binder.BindJoin(*this, *ref.right);
 		if (!ref.duplicate_eliminated_columns.empty()) {

@@ -777,19 +777,15 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 					}
 				}
 
-				if (!conjunction_expression->GetChildrenMutable().empty()) {
-					auto &full_set = set_manager.Union(*left_set, *right_set);
-					D_ASSERT(full_set.count > 0);
-
-					auto filter_index = filters_and_bindings.size();
-					auto filter_info = make_uniq<FilterInfo>(std::move(conjunction_expression), full_set, filter_index,
-					                                         join.join_type);
-					filter_info->SetLeftSet(left_set);
-					filter_info->SetRightSet(right_set);
-					filters_and_bindings.push_back(std::move(filter_info));
-					non_inner_edge->costing_predicate_indices.push_back(filter_index);
-				}
-				D_ASSERT(!non_inner_edge->costing_predicate_indices.empty());
+				D_ASSERT(!conjunction_expression->GetChildrenMutable().empty());
+				auto &full_set = set_manager.Union(*left_set, *right_set);
+				auto filter_index = filters_and_bindings.size();
+				auto filter_info =
+				    make_uniq<FilterInfo>(std::move(conjunction_expression), full_set, filter_index, join.join_type);
+				filter_info->SetLeftSet(left_set);
+				filter_info->SetRightSet(right_set);
+				filters_and_bindings.push_back(std::move(filter_info));
+				non_inner_edge->costing_predicate_indices.push_back(filter_index);
 				non_inner_edges.push_back(std::move(non_inner_edge));
 				break;
 			}
@@ -817,34 +813,30 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 				D_ASSERT(full_right_set && full_right_set->count == 1);
 				auto non_inner_edge = make_uniq<NonInnerJoinEdge>(
 				    non_inner_edges.size(), join.join_type, *full_left_set, *full_right_set, std::move(conditions));
+				auto &full_set = set_manager.Union(*full_left_set, *full_right_set);
 
-				if (!full_left_set->Empty() || !full_right_set->Empty()) {
-					auto &full_set = set_manager.Union(*full_left_set, *full_right_set);
-
-					for (auto &cond : non_inner_edge->conditions) {
-						if (!cond.IsComparison()) {
-							continue;
-						}
-						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
-						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
-
-						auto filter_index = filters_and_bindings.size();
-						auto filter_info =
-						    make_uniq<FilterInfo>(std::move(comparison), full_set, filter_index, join.join_type);
-						filter_info->SetLeftSet(full_left_set);
-						filter_info->SetRightSet(full_right_set);
-						filters_and_bindings.push_back(std::move(filter_info));
-						non_inner_edge->costing_predicate_indices.push_back(filter_index);
+				for (auto &cond : non_inner_edge->conditions) {
+					if (!cond.IsComparison()) {
+						continue;
 					}
+					auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(), cond.GetLHS().Copy(),
+					                                                    cond.GetRHS().Copy());
 
-					// Filters above a LEFT join that reference nullable-side bindings must be evaluated
-					// after the LEFT join has introduced NULL-extended rows. Pin them to the full LEFT
-					// join output, otherwise reconstruction can push null-aware predicates like
-					// "lhs IS DISTINCT FROM rhs" below the LEFT join and turn them into inner filters.
-					for (idx_t filter_idx = 0; filter_idx < filter_count_before_left_join; filter_idx++) {
-						PinFilterAfterLeftJoin(*filters_and_bindings[filter_idx], *full_right_set, full_set,
-						                       set_manager);
-					}
+					auto filter_index = filters_and_bindings.size();
+					auto filter_info =
+					    make_uniq<FilterInfo>(std::move(comparison), full_set, filter_index, join.join_type);
+					filter_info->SetLeftSet(full_left_set);
+					filter_info->SetRightSet(full_right_set);
+					filters_and_bindings.push_back(std::move(filter_info));
+					non_inner_edge->costing_predicate_indices.push_back(filter_index);
+				}
+
+				// Filters above a LEFT join that reference nullable-side bindings must be evaluated
+				// after the LEFT join has introduced NULL-extended rows. Pin them to the full LEFT
+				// join output, otherwise reconstruction can push null-aware predicates like
+				// "lhs IS DISTINCT FROM rhs" below the LEFT join and turn them into inner filters.
+				for (idx_t filter_idx = 0; filter_idx < filter_count_before_left_join; filter_idx++) {
+					PinFilterAfterLeftJoin(*filters_and_bindings[filter_idx], *full_right_set, full_set, set_manager);
 				}
 				D_ASSERT(!non_inner_edge->costing_predicate_indices.empty());
 				non_inner_edges.push_back(std::move(non_inner_edge));

@@ -17,22 +17,10 @@ RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(column_binding_map_t<
     : current_binding_map(std::move(current_binding_map)), correlated_aliases(correlated_aliases) {
 }
 
-void RewriteCorrelatedExpressions::Rewrite(unique_ptr<LogicalOperator> &op,
-                                           column_binding_map_t<ColumnBinding> current_binding_map,
+void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, column_binding_map_t<ColumnBinding> current_binding_map,
                                            column_binding_map_t<ColumnBinding> &correlated_aliases) {
 	RewriteCorrelatedExpressions rewriter(std::move(current_binding_map), correlated_aliases);
-	rewriter.VisitOperator(*op);
-}
-
-void RewriteCorrelatedExpressions::Rewrite(LogicalDependentJoin &op,
-                                           column_binding_map_t<ColumnBinding> current_binding_map,
-                                           column_binding_map_t<ColumnBinding> &correlated_aliases) {
-	RewriteCorrelatedExpressions rewriter(std::move(current_binding_map), correlated_aliases);
-	rewriter.RewriteOperator(op);
-}
-
-void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
-	RewriteOperator(op);
+	rewriter.VisitOperator(op);
 }
 
 void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding &source_binding,
@@ -45,7 +33,7 @@ void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding
 	}
 }
 
-void RewriteCorrelatedExpressions::RewriteOperator(LogicalOperator &op) {
+void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	if (op.type != LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		VisitOperatorChildren(op);
 	}

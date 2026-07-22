@@ -274,8 +274,6 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	auto left_node = std::move(left.plan);
 	auto right_node = std::move(right.plan);
 
-	// check if there are any unplanned subqueries left in either child
-
 	// for both the left and right sides, cast them to the same types
 	left_node = CastLogicalOperatorToTypes(left.types, internal_types, std::move(left_node));
 	right_node = CastLogicalOperatorToTypes(right.types, internal_types, std::move(right_node));

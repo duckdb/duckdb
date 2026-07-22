@@ -195,7 +195,7 @@ public:
 	      left_table_bindings(left_bindings), right_table_bindings(right_bindings) {
 	}
 
-	LogicalRewriteResult Build();
+	PairDependentJoinPlan Build();
 
 private:
 	Binder &binder;
@@ -206,7 +206,7 @@ private:
 	const unordered_set<TableIndex> &right_table_bindings;
 };
 
-LogicalRewriteResult PairDependentFullOuterJoinBuilder::Build() {
+PairDependentJoinPlan PairDependentFullOuterJoinBuilder::Build() {
 	column_binding_set_t left_references;
 	column_binding_set_t right_references;
 	CollectPairDependentBindings(*condition, left_table_bindings, right_table_bindings, left_references,
@@ -239,8 +239,7 @@ LogicalRewriteResult PairDependentFullOuterJoinBuilder::Build() {
 	unique_ptr<LogicalOperator> match_projection =
 	    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(match_expressions));
 	match_projection->children.push_back(std::move(match_root));
-	auto planned_match = RecursiveDependentJoinPlanner::Plan(binder, std::move(match_projection));
-	match_projection = std::move(planned_match.plan);
+	RecursiveDependentJoinPlanner::Plan(binder, match_projection);
 	match_projection->ResolveOperatorTypes();
 	auto match_bindings = match_projection->GetColumnBindings();
 	auto left_domain_count = NumericCast<vector<ColumnBinding>::difference_type>(left_domain.bindings.size());
@@ -281,8 +280,7 @@ LogicalRewriteResult PairDependentFullOuterJoinBuilder::Build() {
 	output->children.push_back(std::move(final_join));
 	auto output_bindings = output->GetColumnBindings();
 
-	LogicalRewriteResult result;
-	result.output_replacements.Reserve(output_bindings.size());
+	PairDependentJoinPlan result;
 	for (idx_t i = 0; i < left_side.payload_count; i++) {
 		result.output_replacements.Add(left_side.bindings[i], output_bindings[i]);
 	}
@@ -302,11 +300,11 @@ LogicalRewriteResult PairDependentFullOuterJoinBuilder::Build() {
 	return result;
 }
 
-LogicalRewriteResult PairDependentFullOuterJoinPlanner::Plan(Binder &binder, unique_ptr<Expression> condition,
-                                                             unique_ptr<LogicalOperator> left,
-                                                             unique_ptr<LogicalOperator> right,
-                                                             const unordered_set<TableIndex> &left_bindings,
-                                                             const unordered_set<TableIndex> &right_bindings) {
+PairDependentJoinPlan PairDependentFullOuterJoinPlanner::Plan(Binder &binder, unique_ptr<Expression> condition,
+                                                              unique_ptr<LogicalOperator> left,
+                                                              unique_ptr<LogicalOperator> right,
+                                                              const unordered_set<TableIndex> &left_bindings,
+                                                              const unordered_set<TableIndex> &right_bindings) {
 	PairDependentFullOuterJoinBuilder builder(binder, std::move(condition), std::move(left), std::move(right),
 	                                          left_bindings, right_bindings);
 	return builder.Build();

@@ -15,9 +15,6 @@
 namespace duckdb {
 
 struct ColumnBindingLayout {
-	ColumnBindingLayout() : error_context("output layout") {
-	}
-
 	explicit ColumnBindingLayout(vector<ColumnBinding> bindings_p, string error_context_p = "output layout")
 	    : bindings(std::move(bindings_p)), error_context(std::move(error_context_p)) {
 		for (idx_t i = 0; i < bindings.size(); i++) {

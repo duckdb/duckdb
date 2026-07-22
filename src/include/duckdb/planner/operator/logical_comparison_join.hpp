@@ -54,6 +54,7 @@ public:
 	                                              unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              vector<JoinCondition> conditions);
+
 	static void ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
 	                                  unique_ptr<LogicalOperator> &left_child, unique_ptr<LogicalOperator> &right_child,
 	                                  const unordered_set<TableIndex> &left_bindings,

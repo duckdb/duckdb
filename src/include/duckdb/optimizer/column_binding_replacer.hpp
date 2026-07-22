@@ -37,17 +37,10 @@ public:
 	void Add(ColumnBinding old_binding, ColumnBinding new_binding);
 	void Add(const ReplacementBinding &replacement);
 	void Merge(const BindingReplacementMap &replacements);
-	void Merge(const vector<ReplacementBinding> &replacements);
 	void AddTo(ColumnBindingReplacer &replacer) const;
 
 	bool Empty() const {
 		return replacement_bindings.empty();
-	}
-	idx_t Size() const {
-		return replacement_bindings.size();
-	}
-	void Reserve(idx_t capacity) {
-		replacement_bindings.reserve(capacity);
 	}
 	vector<ReplacementBinding>::const_iterator begin() const {
 		return replacement_bindings.begin();
@@ -71,8 +64,6 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 	//! Update bindings owned by this operator without visiting its children
 	virtual void VisitOperatorBindings(LogicalOperator &op);
-	//! Add a binding replacement
-	void AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding);
 	//! Add binding replacements by position
 	void AddReplacements(const vector<ColumnBinding> &old_bindings, const vector<ColumnBinding> &new_bindings);
 
@@ -100,9 +91,11 @@ protected:
 //! Applies binding replacements together with their projection-layout invariants.
 class ColumnBindingRewrite {
 public:
-	static bool ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
+	static void ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
 	                         vector<ColumnBinding> old_child_bindings, const BindingReplacementMap &replacements);
 	static void ApplyToOperatorBindings(LogicalOperator &op, const BindingReplacementMap &replacements);
+
+private:
 	static void RemapProjectionMapStrict(vector<ProjectionIndex> &projection_map,
 	                                     const vector<ColumnBinding> &child_bindings_before,
 	                                     const vector<ColumnBinding> &child_bindings_after);

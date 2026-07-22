@@ -54,20 +54,20 @@ static vector<Identifier> GenerateCTEColumnNames(idx_t column_count, const strin
 	return result;
 }
 
-static vector<ReplacementBinding> CreateConstructedBindingReplacements(const vector<ColumnBinding> &old_bindings,
-                                                                       const vector<ColumnBinding> &new_bindings) {
+static BindingReplacementMap CreateConstructedBindingReplacements(const vector<ColumnBinding> &old_bindings,
+                                                                  const vector<ColumnBinding> &new_bindings) {
 	D_ASSERT(old_bindings.size() == new_bindings.size());
-	vector<ReplacementBinding> result;
+	BindingReplacementMap result;
 	for (idx_t i = 0; i < old_bindings.size(); i++) {
 		if (old_bindings[i] != new_bindings[i]) {
-			result.emplace_back(old_bindings[i], new_bindings[i]);
+			result.Add(old_bindings[i], new_bindings[i]);
 		}
 	}
 	return result;
 }
 
 static unique_ptr<LogicalOperator> CreateIdentityProjection(Binder &binder, unique_ptr<LogicalOperator> child,
-                                                            vector<ReplacementBinding> *replacements = nullptr) {
+                                                            BindingReplacementMap &replacements) {
 	child->ResolveOperatorTypes();
 	auto bindings = child->GetColumnBindings();
 	vector<unique_ptr<Expression>> expressions;
@@ -78,9 +78,7 @@ static unique_ptr<LogicalOperator> CreateIdentityProjection(Binder &binder, uniq
 	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
 	projection->children.push_back(std::move(child));
 	projection->ResolveOperatorTypes();
-	if (replacements) {
-		*replacements = CreateConstructedBindingReplacements(bindings, projection->GetColumnBindings());
-	}
+	replacements = CreateConstructedBindingReplacements(bindings, projection->GetColumnBindings());
 	return std::move(projection);
 }
 
@@ -1620,7 +1618,7 @@ struct GeneratedDomainRef {
 
 class GeneratedDomainJoinEliminator {
 public:
-	GeneratedDomainJoinEliminator(ClientContext &context, unique_ptr<LogicalOperator> &rewrite_root,
+	GeneratedDomainJoinEliminator(unique_ptr<LogicalOperator> &rewrite_root,
 	                              const vector<TableIndex> &generated_dedup_cte_indexes);
 
 	bool Rewrite();
@@ -1650,16 +1648,14 @@ private:
 	                               bool under_aggregate, bool under_evidence_side);
 
 private:
-	ClientContext &context;
 	unique_ptr<LogicalOperator> &rewrite_root;
 	const vector<TableIndex> &generated_dedup_cte_indexes;
 	vector<reference<LogicalCTE>> ctes;
 };
 
-GeneratedDomainJoinEliminator::GeneratedDomainJoinEliminator(ClientContext &context,
-                                                             unique_ptr<LogicalOperator> &rewrite_root,
+GeneratedDomainJoinEliminator::GeneratedDomainJoinEliminator(unique_ptr<LogicalOperator> &rewrite_root,
                                                              const vector<TableIndex> &generated_dedup_cte_indexes)
-    : context(context), rewrite_root(rewrite_root), generated_dedup_cte_indexes(generated_dedup_cte_indexes) {
+    : rewrite_root(rewrite_root), generated_dedup_cte_indexes(generated_dedup_cte_indexes) {
 }
 
 void GeneratedDomainJoinEliminator::CollectCTEs(LogicalOperator &op) {
@@ -2382,7 +2378,7 @@ BindingReplacementMap DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr
 		    left_bindings.begin() + NumericCast<vector<ColumnBinding>::difference_type>(old_left_bindings.size()));
 		auto projection_replacements = CreateConstructedBindingReplacements(old_left_bindings, projected_left_bindings);
 		CorrelatedColumnBindingReplacer projection_replacer;
-		projection_replacer.replacement_bindings = projection_replacements;
+		projection_replacements.AddTo(projection_replacer);
 		projection_replacer.stop_operator = plan->children[1];
 		projection_replacer.VisitOperator(*plan);
 		output_replacements.Merge(projection_replacements);
@@ -2418,7 +2414,7 @@ BindingReplacementMap DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr
 
 	plan->children[0] = std::move(left_cte_ref);
 	ColumnBindingReplacer replacer;
-	replacer.replacement_bindings = binding_replacements;
+	binding_replacements.AddTo(replacer);
 	replacer.stop_operator = plan->children[1];
 	replacer.VisitOperator(*plan);
 
@@ -2443,14 +2439,14 @@ BindingReplacementMap DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr
 	dedup->children.push_back(std::move(dedup_child));
 
 	auto dedup_cte_name = Identifier("__duckdb_delim_dedup_" + to_string(dedup_cte_index.index));
-	vector<ReplacementBinding> dedup_output_replacements;
-	auto dedup_cte_child = CreateIdentityProjection(binder, std::move(plan), &dedup_output_replacements);
+	BindingReplacementMap dedup_output_replacements;
+	auto dedup_cte_child = CreateIdentityProjection(binder, std::move(plan), dedup_output_replacements);
 	output_replacements.Merge(dedup_output_replacements);
 	auto dedup_cte =
 	    make_uniq<LogicalMaterializedCTE>(dedup_cte_name, dedup_cte_index, dedup_types.size(), std::move(dedup),
 	                                      std::move(dedup_cte_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	vector<ReplacementBinding> cte_output_replacements;
-	auto cte_child = CreateIdentityProjection(binder, std::move(dedup_cte), &cte_output_replacements);
+	BindingReplacementMap cte_output_replacements;
+	auto cte_child = CreateIdentityProjection(binder, std::move(dedup_cte), cte_output_replacements);
 	output_replacements.Merge(cte_output_replacements);
 	auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, left_column_count, std::move(cte_source),
 	                                             std::move(cte_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
@@ -2502,8 +2498,7 @@ void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
 	if (cte_deliminator_enabled) {
 		auto cte_deliminator_timer =
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
-		GeneratedDomainJoinEliminator generated_domain_join_eliminator(binder.context, plan,
-		                                                               generated_dedup_cte_indexes);
+		GeneratedDomainJoinEliminator generated_domain_join_eliminator(plan, generated_dedup_cte_indexes);
 		generated_domain_join_eliminator.Rewrite();
 	}
 	VerifyNoDelim(*plan);

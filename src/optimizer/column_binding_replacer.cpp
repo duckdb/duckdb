@@ -91,11 +91,7 @@ void BindingReplacementMap::Add(const ReplacementBinding &replacement) {
 }
 
 void BindingReplacementMap::Merge(const BindingReplacementMap &replacements) {
-	Merge(replacements.replacement_bindings);
-}
-
-void BindingReplacementMap::Merge(const vector<ReplacementBinding> &replacements) {
-	for (auto &replacement : replacements) {
+	for (auto &replacement : replacements.replacement_bindings) {
 		Add(replacement);
 	}
 }
@@ -115,12 +111,6 @@ void BindingReplacementMap::AddTo(ColumnBindingReplacer &replacer) const {
 ColumnBindingReplacer::ColumnBindingReplacer() {
 }
 
-void ColumnBindingReplacer::AddReplacement(ColumnBinding old_binding, ColumnBinding new_binding) {
-	if (old_binding != new_binding) {
-		replacement_bindings.emplace_back(old_binding, new_binding);
-	}
-}
-
 void ColumnBindingReplacer::AddReplacements(const vector<ColumnBinding> &old_bindings,
                                             const vector<ColumnBinding> &new_bindings) {
 	if (old_bindings.size() != new_bindings.size()) {
@@ -128,7 +118,9 @@ void ColumnBindingReplacer::AddReplacements(const vector<ColumnBinding> &old_bin
 	}
 	replacement_bindings.reserve(replacement_bindings.size() + old_bindings.size());
 	for (idx_t i = 0; i < old_bindings.size(); i++) {
-		AddReplacement(old_bindings[i], new_bindings[i]);
+		if (old_bindings[i] != new_bindings[i]) {
+			replacement_bindings.emplace_back(old_bindings[i], new_bindings[i]);
+		}
 	}
 }
 
@@ -242,7 +234,7 @@ void ColumnBindingRewrite::ApplyToOperatorBindings(LogicalOperator &op, const Bi
 	replacer.VisitOperatorBindings(op);
 }
 
-bool ColumnBindingRewrite::ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
+void ColumnBindingRewrite::ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
                                         vector<ColumnBinding> old_child_bindings,
                                         const BindingReplacementMap &replacements) {
 	if (child_index >= op->children.size()) {
@@ -264,25 +256,22 @@ bool ColumnBindingRewrite::ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t c
 	for (auto &binding : old_child_bindings) {
 		binding = replacements.Resolve(binding);
 	}
-	auto layout_changed = old_child_bindings != new_child_bindings;
-	auto projection_map = LogicalOperatorVisitor::GetProjectionMap(*op, child_index);
-	if (projection_map) {
+	if (op->HasProjectionMap()) {
+		auto projection_map = LogicalOperatorVisitor::GetProjectionMap(*op, child_index);
+		D_ASSERT(projection_map);
 		RemapProjectionMapStrict(*projection_map, old_child_bindings, new_child_bindings);
 	}
-	if (replacements.Empty() && !layout_changed) {
-		return false;
+	if (replacements.Empty()) {
+		return;
 	}
-	if (!replacements.Empty()) {
-		CorrelatedColumnBindingReplacer replacer;
-		replacements.AddTo(replacer);
-		if (op->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && child_index == 0) {
-			replacer.stop_operator = *op->children[child_index];
-			replacer.VisitOperator(*op);
-		} else {
-			replacer.VisitOperatorBindings(*op);
-		}
+	CorrelatedColumnBindingReplacer replacer;
+	replacements.AddTo(replacer);
+	if (op->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && child_index == 0) {
+		replacer.stop_operator = *op->children[child_index];
+		replacer.VisitOperator(*op);
+	} else {
+		replacer.VisitOperatorBindings(*op);
 	}
-	return true;
 }
 
 } // namespace duckdb

@@ -1,8 +1,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 
