@@ -79,6 +79,11 @@ PhysicalRecursiveCTEKeyJoin::PhysicalRecursiveCTEKeyJoin(
 	children.push_back(probe);
 }
 
+struct RecursiveCTEKeyJoinResult {
+	idx_t match_count;
+	OperatorResultType result_type;
+};
+
 class RecursiveCTEKeyJoinState : public CachingOperatorState {
 public:
 	RecursiveCTEKeyJoinState(ClientContext &context, const PhysicalRecursiveCTEKeyJoin &op)
@@ -94,6 +99,29 @@ public:
 		payload_rows.Initialize(Allocator::Get(context), op.Layout().PayloadTypes());
 	}
 
+	OperatorResultType Execute(DataChunk &input, DataChunk &output, const RecursiveCTEKeyJoinLayout &layout,
+	                           RecursiveCTEState &recursive_state);
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetCachingState();
+		partial_input_initialized = false;
+		active_probe = false;
+	}
+
+private:
+	RecursiveCTEKeyJoinResult ProbeCompleteKey(DataChunk &input, const RecursiveCTEKeyJoinLayout &layout,
+	                                           RecursiveCTEState &recursive_state);
+	RecursiveCTEKeyJoinResult ProbePartialKey(DataChunk &input, const RecursiveCTEKeyJoinLayout &layout,
+	                                          RecursiveCTEState &recursive_state);
+	void FinalizePayload(const RecursiveCTEKeyJoinLayout &layout, RecursiveCTEState &recursive_state,
+	                     idx_t match_count);
+	void EmitResult(DataChunk &input, DataChunk &output, const RecursiveCTEKeyJoinLayout &layout, idx_t match_count);
+
+private:
 	DataChunk probe_keys;
 	DataChunk lookup_keys;
 	DataChunk candidate_keys;
@@ -120,16 +148,6 @@ public:
 	bool partial_matcher_initialized = false;
 	bool partial_input_initialized = false;
 	bool active_probe = false;
-
-	bool SupportsReuse() const override {
-		return true;
-	}
-
-	void Reset() override {
-		ResetCachingState();
-		partial_input_initialized = false;
-		active_probe = false;
-	}
 };
 
 unique_ptr<OperatorState> PhysicalRecursiveCTEKeyJoin::GetOperatorState(ExecutionContext &context) const {
@@ -153,220 +171,234 @@ static idx_t SelectNonNullKeys(DataChunk &keys, vector<UnifiedVectorFormat> &for
 	return result_count;
 }
 
-OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
-                                                                DataChunk &chunk, GlobalOperatorState &gstate,
-                                                                OperatorState &state_p) const {
-	auto &state_scan = layout.StateScan();
+RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbeCompleteKey(DataChunk &input,
+                                                                     const RecursiveCTEKeyJoinLayout &layout,
+                                                                     RecursiveCTEState &recursive_state) {
+	const auto &probe_key_indices = layout.ProbeKeyIndices();
+	probe_keys.Reset();
+	for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
+		probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
+	}
+	probe_keys.CheckCardinality(input.size());
+	const auto current_non_null_count = SelectNonNullKeys(probe_keys, key_formats, non_null_sel);
+	if (current_non_null_count == 0) {
+		return {0, OperatorResultType::NEED_MORE_INPUT};
+	}
+
+	lookup_keys.Reset();
+	if (current_non_null_count == input.size()) {
+		lookup_keys.Reference(probe_keys);
+	} else {
+		lookup_keys.Slice(probe_keys, non_null_sel, current_non_null_count);
+	}
+	const auto match_count = recursive_state.ht->LookupGroups(lookup_keys, lookup_state, found_key_sel);
+	if (recursive_state.metrics.Enabled()) {
+		recursive_state.metrics.RecordDirectProbeRows(current_non_null_count);
+		recursive_state.metrics.RecordDirectProbeMatches(match_count);
+	}
+	if (match_count == 0) {
+		return {0, OperatorResultType::NEED_MORE_INPUT};
+	}
+
+	matched_addresses.SetVectorType(VectorType::FLAT_VECTOR);
+	auto matched_address_data = FlatVector::GetDataMutable<data_ptr_t>(matched_addresses);
+	auto lookup_addresses = FlatVector::GetData<data_ptr_t>(lookup_state.addresses);
+	for (idx_t match_idx = 0; match_idx < match_count; match_idx++) {
+		const auto lookup_idx = found_key_sel.get_index_unsafe(match_idx);
+		const auto input_idx =
+		    current_non_null_count == input.size() ? lookup_idx : non_null_sel.get_index_unsafe(lookup_idx);
+		matched_input_sel.set_index(match_idx, input_idx);
+		matched_address_data[match_idx] = lookup_addresses[lookup_idx];
+	}
+	FlatVector::SetSize(matched_addresses, match_count);
+	recursive_state.ht->GatherGroups(lookup_state, found_key_sel, match_count, state_keys);
+	return {match_count, OperatorResultType::NEED_MORE_INPUT};
+}
+
+RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &input,
+                                                                    const RecursiveCTEKeyJoinLayout &layout,
+                                                                    RecursiveCTEState &recursive_state) {
 	const auto &state_key_indices = layout.StateKeyIndices();
 	const auto &probe_key_indices = layout.ProbeKeyIndices();
-	const auto &left_projection_map = layout.LeftProjectionMap();
-	const auto &right_projection_map = layout.RightProjectionMap();
-	const auto &state_key_map = layout.StateKeyMap();
-	const auto &state_payload_map = layout.StatePayloadMap();
-	const auto &key_types = layout.KeyTypes();
-	const auto &payload_types = layout.PayloadTypes();
-	const auto state_on_left = layout.StateOnLeft();
-	if (!state_scan.recursive_cte || !state_scan.recursive_cte->sink_state) {
-		throw InternalException("USING KEY direct probe has no recursive state");
-	}
-	auto &recursive_state = state_scan.recursive_cte->sink_state->Cast<RecursiveCTEState>();
-	auto &state = state_p.Cast<RecursiveCTEKeyJoinState>();
-
-	idx_t match_count;
-	auto result_type = OperatorResultType::NEED_MORE_INPUT;
-	const bool partial_key = state_key_indices.size() < state_scan.distinct_idx.size();
-	if (!partial_key) {
-		state.probe_keys.Reset();
+	auto &index = recursive_state.GetPartialKeyIndex(state_key_indices);
+	if (!partial_input_initialized) {
+		probe_keys.Reset();
 		for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
-			state.probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
+			probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
 		}
-		state.probe_keys.CheckCardinality(input.size());
-		const auto non_null_count = SelectNonNullKeys(state.probe_keys, state.key_formats, state.non_null_sel);
+		probe_keys.CheckCardinality(input.size());
+		non_null_count = SelectNonNullKeys(probe_keys, key_formats, non_null_sel);
 		if (non_null_count == 0) {
-			return OperatorResultType::NEED_MORE_INPUT;
+			return {0, OperatorResultType::NEED_MORE_INPUT};
 		}
-
-		state.lookup_keys.Reset();
-		if (non_null_count == input.size()) {
-			state.lookup_keys.Reference(state.probe_keys);
-		} else {
-			state.lookup_keys.Slice(state.probe_keys, state.non_null_sel, non_null_count);
-		}
-		match_count = recursive_state.ht->LookupGroups(state.lookup_keys, state.lookup_state, state.found_key_sel);
+		probe_keys.Hash(probe_hashes);
+		non_null_position = 0;
+		active_probe = false;
+		partial_input_initialized = true;
 		if (recursive_state.metrics.Enabled()) {
 			recursive_state.metrics.RecordDirectProbeRows(non_null_count);
-			recursive_state.metrics.RecordDirectProbeMatches(match_count);
 		}
-		if (match_count == 0) {
-			return OperatorResultType::NEED_MORE_INPUT;
+	}
+	if (!partial_matcher_initialized) {
+		vector<ExpressionType> predicates(state_key_indices.size(), ExpressionType::COMPARE_EQUAL);
+		vector<column_t> columns;
+		for (auto key_idx : state_key_indices) {
+			columns.push_back(key_idx);
 		}
+		TupleDataCollection::InitializeChunkState(match_chunk_state, layout.KeyTypes(), columns);
+		partial_matcher.Initialize(false, recursive_state.ht->GetLayout(), predicates, std::move(columns));
+		partial_matcher_initialized = true;
+	}
 
-		state.matched_addresses.SetVectorType(VectorType::FLAT_VECTOR);
-		auto matched_addresses = FlatVector::GetDataMutable<data_ptr_t>(state.matched_addresses);
-		auto lookup_addresses = FlatVector::GetData<data_ptr_t>(state.lookup_state.addresses);
-		for (idx_t match_idx = 0; match_idx < match_count; match_idx++) {
-			const auto lookup_idx = state.found_key_sel.get_index_unsafe(match_idx);
-			const auto input_idx =
-			    non_null_count == input.size() ? lookup_idx : state.non_null_sel.get_index_unsafe(lookup_idx);
-			state.matched_input_sel.set_index(match_idx, input_idx);
-			matched_addresses[match_idx] = lookup_addresses[lookup_idx];
-		}
-		FlatVector::SetSize(state.matched_addresses, match_count);
-		recursive_state.ht->GatherGroups(state.lookup_state, state.found_key_sel, match_count, state.state_keys);
-	} else {
-		auto &index = recursive_state.GetPartialKeyIndex(state_key_indices);
-		if (!state.partial_input_initialized) {
-			state.probe_keys.Reset();
-			for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
-				state.probe_keys.data[key_idx].Reference(input.data[probe_key_indices[key_idx]]);
-			}
-			state.probe_keys.CheckCardinality(input.size());
-			state.non_null_count = SelectNonNullKeys(state.probe_keys, state.key_formats, state.non_null_sel);
-			if (state.non_null_count == 0) {
-				return OperatorResultType::NEED_MORE_INPUT;
-			}
-			state.probe_keys.Hash(state.probe_hashes);
-			state.non_null_position = 0;
-			state.active_probe = false;
-			state.partial_input_initialized = true;
-			if (recursive_state.metrics.Enabled()) {
-				recursive_state.metrics.RecordDirectProbeRows(state.non_null_count);
-			}
-		}
-		if (!state.partial_matcher_initialized) {
-			vector<ExpressionType> predicates(state_key_indices.size(), ExpressionType::COMPARE_EQUAL);
-			vector<column_t> columns;
-			for (auto key_idx : state_key_indices) {
-				columns.push_back(key_idx);
-			}
-			TupleDataCollection::InitializeChunkState(state.match_chunk_state, key_types, columns);
-			state.partial_matcher.Initialize(false, recursive_state.ht->GetLayout(), predicates, std::move(columns));
-			state.partial_matcher_initialized = true;
-		}
-
-		while (true) {
-			idx_t candidate_count = 0;
-			state.candidate_addresses.SetVectorType(VectorType::FLAT_VECTOR);
-			auto candidate_addresses = FlatVector::GetDataMutable<data_ptr_t>(state.candidate_addresses);
-			const auto probe_hashes = state.probe_hashes.Values<hash_t>();
-			while (candidate_count < STANDARD_VECTOR_SIZE) {
-				if (!state.active_probe) {
-					if (state.non_null_position >= state.non_null_count) {
-						break;
-					}
-					state.current_probe_input = state.non_null_sel.get_index_unsafe(state.non_null_position++);
-					const auto hash = probe_hashes[state.current_probe_input].GetValue();
-					state.current_entry = index.GetHead(hash);
-					state.active_probe = true;
+	while (true) {
+		idx_t candidate_count = 0;
+		candidate_addresses.SetVectorType(VectorType::FLAT_VECTOR);
+		auto candidate_address_data = FlatVector::GetDataMutable<data_ptr_t>(candidate_addresses);
+		const auto hash_data = probe_hashes.Values<hash_t>();
+		while (candidate_count < STANDARD_VECTOR_SIZE) {
+			if (!active_probe) {
+				if (non_null_position >= non_null_count) {
+					break;
 				}
-				if (state.current_entry == DConstants::INVALID_INDEX) {
-					state.active_probe = false;
-					continue;
-				}
-				const auto &entry = index.GetEntry(state.current_entry);
-				state.current_entry = entry.next;
-				if (recursive_state.metrics.Enabled()) {
-					recursive_state.metrics.RecordPartialProbeChainVisit();
-				}
-				if (entry.hash != probe_hashes[state.current_probe_input].GetValue()) {
-					continue;
-				}
-				state.candidate_input_sel.set_index(candidate_count, state.current_probe_input);
-				candidate_addresses[candidate_count++] = entry.address;
+				current_probe_input = non_null_sel.get_index_unsafe(non_null_position++);
+				current_entry = index.GetHead(hash_data[current_probe_input].GetValue());
+				active_probe = true;
 			}
-			if (state.active_probe && state.current_entry == DConstants::INVALID_INDEX) {
-				state.active_probe = false;
-			}
-			const bool has_more = state.active_probe || state.non_null_position < state.non_null_count;
-			if (candidate_count == 0) {
-				state.partial_input_initialized = false;
-				return OperatorResultType::NEED_MORE_INPUT;
-			}
-			FlatVector::SetSize(state.candidate_addresses, candidate_count);
-			state.candidate_keys.Reset();
-			for (idx_t partial_idx = 0; partial_idx < state_key_indices.size(); partial_idx++) {
-				const auto state_key_idx = state_key_indices[partial_idx];
-				state.candidate_keys.data[state_key_idx].Slice(state.probe_keys.data[partial_idx],
-				                                               state.candidate_input_sel, candidate_count);
-			}
-			state.candidate_keys.SetChildCardinality(candidate_count);
-			TupleDataCollection::ToUnifiedFormat(state.match_chunk_state, state.candidate_keys);
-			for (idx_t candidate_idx = 0; candidate_idx < candidate_count; candidate_idx++) {
-				state.candidate_match_sel.set_index(candidate_idx, candidate_idx);
-			}
-			idx_t no_match_count = 0;
-			match_count = state.partial_matcher.Match(state.candidate_keys, state.match_chunk_state.vector_data,
-			                                          state.candidate_match_sel, candidate_count,
-			                                          state.candidate_addresses, nullptr, no_match_count);
-			if (match_count == 0 && has_more) {
+			if (current_entry == DConstants::INVALID_INDEX) {
+				active_probe = false;
 				continue;
 			}
-			if (match_count == 0) {
-				state.partial_input_initialized = false;
-				return OperatorResultType::NEED_MORE_INPUT;
-			}
-
-			state.matched_addresses.SetVectorType(VectorType::FLAT_VECTOR);
-			auto matched_addresses = FlatVector::GetDataMutable<data_ptr_t>(state.matched_addresses);
-			for (idx_t match_idx = 0; match_idx < match_count; match_idx++) {
-				const auto candidate_idx = state.candidate_match_sel.get_index_unsafe(match_idx);
-				state.matched_input_sel.set_index(match_idx, state.candidate_input_sel.get_index_unsafe(candidate_idx));
-				matched_addresses[match_idx] = candidate_addresses[candidate_idx];
-			}
-			FlatVector::SetSize(state.matched_addresses, match_count);
-			recursive_state.ht->GatherGroups(state.lookup_state, state.matched_addresses,
-			                                 *FlatVector::IncrementalSelectionVector(), match_count, state.state_keys);
+			const auto &entry = index.GetEntry(current_entry);
+			current_entry = entry.next;
 			if (recursive_state.metrics.Enabled()) {
-				recursive_state.metrics.RecordDirectProbeMatches(match_count);
+				recursive_state.metrics.RecordPartialProbeChainVisit();
 			}
-			if (has_more) {
-				result_type = OperatorResultType::HAVE_MORE_OUTPUT;
-			} else {
-				state.partial_input_initialized = false;
+			if (entry.hash != hash_data[current_probe_input].GetValue()) {
+				continue;
 			}
-			break;
+			candidate_input_sel.set_index(candidate_count, current_probe_input);
+			candidate_address_data[candidate_count++] = entry.address;
 		}
-	}
+		if (active_probe && current_entry == DConstants::INVALID_INDEX) {
+			active_probe = false;
+		}
+		const bool has_more = active_probe || non_null_position < non_null_count;
+		if (candidate_count == 0) {
+			partial_input_initialized = false;
+			return {0, OperatorResultType::NEED_MORE_INPUT};
+		}
+		FlatVector::SetSize(candidate_addresses, candidate_count);
+		candidate_keys.Reset();
+		for (idx_t partial_idx = 0; partial_idx < state_key_indices.size(); partial_idx++) {
+			const auto state_key_idx = state_key_indices[partial_idx];
+			candidate_keys.data[state_key_idx].Slice(probe_keys.data[partial_idx], candidate_input_sel,
+			                                         candidate_count);
+		}
+		candidate_keys.SetChildCardinality(candidate_count);
+		TupleDataCollection::ToUnifiedFormat(match_chunk_state, candidate_keys);
+		for (idx_t candidate_idx = 0; candidate_idx < candidate_count; candidate_idx++) {
+			candidate_match_sel.set_index(candidate_idx, candidate_idx);
+		}
+		idx_t no_match_count = 0;
+		const auto match_count =
+		    partial_matcher.Match(candidate_keys, match_chunk_state.vector_data, candidate_match_sel, candidate_count,
+		                          candidate_addresses, nullptr, no_match_count);
+		if (match_count == 0 && has_more) {
+			continue;
+		}
+		if (match_count == 0) {
+			partial_input_initialized = false;
+			return {0, OperatorResultType::NEED_MORE_INPUT};
+		}
 
-	state.payload_rows.Reset();
-	state.payload_rows.SetChildCardinality(match_count);
-	if (!payload_types.empty()) {
-		lock_guard<mutex> guard(recursive_state.ht_finalize_lock);
-		auto layout = recursive_state.ht->GetLayoutPtr();
-		RowOperations::FinalizeStates(state.row_state, *layout, state.matched_addresses, state.payload_rows, 0);
+		matched_addresses.SetVectorType(VectorType::FLAT_VECTOR);
+		auto matched_address_data = FlatVector::GetDataMutable<data_ptr_t>(matched_addresses);
+		for (idx_t match_idx = 0; match_idx < match_count; match_idx++) {
+			const auto candidate_idx = candidate_match_sel.get_index_unsafe(match_idx);
+			matched_input_sel.set_index(match_idx, candidate_input_sel.get_index_unsafe(candidate_idx));
+			matched_address_data[match_idx] = candidate_address_data[candidate_idx];
+		}
+		FlatVector::SetSize(matched_addresses, match_count);
+		recursive_state.ht->GatherGroups(lookup_state, matched_addresses, *FlatVector::IncrementalSelectionVector(),
+		                                 match_count, state_keys);
+		if (recursive_state.metrics.Enabled()) {
+			recursive_state.metrics.RecordDirectProbeMatches(match_count);
+		}
+		if (!has_more) {
+			partial_input_initialized = false;
+		}
+		return {match_count, has_more ? OperatorResultType::HAVE_MORE_OUTPUT : OperatorResultType::NEED_MORE_INPUT};
 	}
+}
 
+void RecursiveCTEKeyJoinState::FinalizePayload(const RecursiveCTEKeyJoinLayout &layout,
+                                               RecursiveCTEState &recursive_state, idx_t match_count) {
+	payload_rows.Reset();
+	payload_rows.SetChildCardinality(match_count);
+	if (layout.PayloadTypes().empty()) {
+		return;
+	}
+	lock_guard<mutex> guard(recursive_state.ht_finalize_lock);
+	auto row_layout = recursive_state.ht->GetLayoutPtr();
+	RowOperations::FinalizeStates(row_state, *row_layout, matched_addresses, payload_rows, 0);
+}
+
+void RecursiveCTEKeyJoinState::EmitResult(DataChunk &input, DataChunk &output, const RecursiveCTEKeyJoinLayout &layout,
+                                          idx_t match_count) {
 	idx_t output_idx = 0;
 	auto emit_probe = [&](const vector<idx_t> &projection_map) {
 		for (auto probe_idx : projection_map) {
-			chunk.data[output_idx++].Slice(input.data[probe_idx], state.matched_input_sel, match_count);
+			output.data[output_idx++].Slice(input.data[probe_idx], matched_input_sel, match_count);
 		}
 	};
 	auto emit_state = [&](const vector<idx_t> &projection_map) {
 		for (auto state_idx : projection_map) {
-			const auto key_idx = state_key_map[state_idx];
+			const auto key_idx = layout.StateKeyMap()[state_idx];
 			if (key_idx != DConstants::INVALID_INDEX) {
-				chunk.data[output_idx++].Reference(state.state_keys.data[key_idx]);
+				output.data[output_idx++].Reference(state_keys.data[key_idx]);
 				continue;
 			}
-			const auto payload_idx = state_payload_map[state_idx];
+			const auto payload_idx = layout.StatePayloadMap()[state_idx];
 			D_ASSERT(payload_idx != DConstants::INVALID_INDEX);
-			chunk.data[output_idx++].Reference(state.payload_rows.data[payload_idx]);
+			output.data[output_idx++].Reference(payload_rows.data[payload_idx]);
 		}
 	};
-	if (state_on_left) {
-		emit_state(left_projection_map);
-		emit_probe(right_projection_map);
+	if (layout.StateOnLeft()) {
+		emit_state(layout.LeftProjectionMap());
+		emit_probe(layout.RightProjectionMap());
 	} else {
-		emit_probe(left_projection_map);
-		emit_state(right_projection_map);
+		emit_probe(layout.LeftProjectionMap());
+		emit_state(layout.RightProjectionMap());
 	}
-	if (output_idx != chunk.ColumnCount()) {
+	if (output_idx != output.ColumnCount()) {
 		throw InternalException("USING KEY direct probe produced %d columns, expected %d", output_idx,
-		                        chunk.ColumnCount());
+		                        output.ColumnCount());
 	}
-	chunk.CheckCardinality(match_count);
-	return result_type;
+	output.CheckCardinality(match_count);
+}
+
+OperatorResultType RecursiveCTEKeyJoinState::Execute(DataChunk &input, DataChunk &output,
+                                                     const RecursiveCTEKeyJoinLayout &layout,
+                                                     RecursiveCTEState &recursive_state) {
+	auto result = layout.IsPartial() ? ProbePartialKey(input, layout, recursive_state)
+	                                 : ProbeCompleteKey(input, layout, recursive_state);
+	if (result.match_count == 0) {
+		return result.result_type;
+	}
+	FinalizePayload(layout, recursive_state, result.match_count);
+	EmitResult(input, output, layout, result.match_count);
+	return result.result_type;
+}
+
+OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
+                                                                DataChunk &chunk, GlobalOperatorState &gstate,
+                                                                OperatorState &state_p) const {
+	auto &state_scan = layout.StateScan();
+	if (!state_scan.recursive_cte || !state_scan.recursive_cte->sink_state) {
+		throw InternalException("USING KEY direct probe has no recursive state");
+	}
+	auto &recursive_state = state_scan.recursive_cte->sink_state->Cast<RecursiveCTEState>();
+	return state_p.Cast<RecursiveCTEKeyJoinState>().Execute(input, chunk, layout, recursive_state);
 }
 
 string PhysicalRecursiveCTEKeyJoin::GetName() const {
