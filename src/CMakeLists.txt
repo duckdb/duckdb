@@ -141,6 +141,11 @@ install(
   FILES_MATCHING
   PATTERN "*.hpp"
   PATTERN "*.ipp")
+install(
+  DIRECTORY "${PROJECT_SOURCE_DIR}/third_party/fmt/include/fmt"
+  DESTINATION "${INSTALL_INCLUDE_DIR}"
+  FILES_MATCHING
+  PATTERN "*.h")
 install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
               "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
         DESTINATION "${INSTALL_INCLUDE_DIR}")

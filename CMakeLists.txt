@@ -1045,7 +1045,7 @@ set(CMAKE_CONFIG_VERSION_TEMPLATE
 if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
 
   # Configure cmake package config for the build tree
-  set(CONF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/include")
+  set(CONF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/include;${PROJECT_SOURCE_DIR}/third_party/fmt/include")
   configure_file(${CMAKE_CONFIG_TEMPLATE}
                  "${PROJECT_BINARY_DIR}/DuckDBConfig.cmake" @ONLY)
 
