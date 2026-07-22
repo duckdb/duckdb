@@ -13,6 +13,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/query_node/copy_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -28,6 +29,12 @@
 #include "duckdb/main/extension_entries.hpp"
 
 namespace duckdb {
+
+BoundStatement Binder::BindNode(CopyQueryNode &node) {
+	CopyStatement statement;
+	statement.info = std::move(node.info);
+	return Bind(statement, CopyToType::COPY_TO_FILE);
+}
 
 static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();

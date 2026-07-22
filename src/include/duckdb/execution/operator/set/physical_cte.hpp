@@ -68,7 +68,7 @@ public:
 
 	TableIndex table_index;
 	Identifier ctename;
-	bool cte_body_is_dml = false;
+	bool cte_body_has_side_effects = false;
 	CTEPipelineSelectionState pipeline_selection_state = CTEPipelineSelectionState::UNRESOLVED;
 
 public:

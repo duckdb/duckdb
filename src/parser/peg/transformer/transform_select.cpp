@@ -20,11 +20,27 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/copy_query_node.hpp"
 
 namespace duckdb {
+
+static bool IsDMLCTEQueryNode(QueryNodeType type) {
+	return type == QueryNodeType::INSERT_QUERY_NODE || type == QueryNodeType::UPDATE_QUERY_NODE ||
+	       type == QueryNodeType::DELETE_QUERY_NODE;
+}
+
+static void ValidateRecursiveCTEQueryNode(const QueryNode &query_node) {
+	if (query_node.type == QueryNodeType::COPY_QUERY_NODE) {
+		throw ParserException("Recursive CTEs with COPY statements are not supported");
+	}
+	if (IsDMLCTEQueryNode(query_node.type)) {
+		throw ParserException("Recursive CTEs with DML statements are not supported");
+	}
+}
 
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformSelectStatement(PEGTransformer &transformer,
@@ -1070,11 +1086,7 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 			if (!query_node) {
 				throw ParserException("Recursive CTEs with DML statements are not supported");
 			}
-			if (query_node->type == QueryNodeType::INSERT_QUERY_NODE ||
-			    query_node->type == QueryNodeType::UPDATE_QUERY_NODE ||
-			    query_node->type == QueryNodeType::DELETE_QUERY_NODE) {
-				throw ParserException("Recursive CTEs with DML statements are not supported");
-			}
+			ValidateRecursiveCTEQueryNode(*query_node);
 			// Now safe to call on SELECT, VALUES, etc.
 			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
 			                            with_entry.second->key_targets);
@@ -1116,11 +1128,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWithClauseTrampo
 			if (!query_node) {
 				throw ParserException("Recursive CTEs with DML statements are not supported");
 			}
-			if (query_node->type == QueryNodeType::INSERT_QUERY_NODE ||
-			    query_node->type == QueryNodeType::UPDATE_QUERY_NODE ||
-			    query_node->type == QueryNodeType::DELETE_QUERY_NODE) {
-				throw ParserException("Recursive CTEs with DML statements are not supported");
-			}
+			ValidateRecursiveCTEQueryNode(*query_node);
 			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
 			                            with_entry.second->key_targets);
 		}
@@ -1180,8 +1188,16 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformCTEDMLBody(PEGTransformer &
 	case StatementType::DELETE_STATEMENT:
 		query_node = unique_ptr_cast<DeleteQueryNode, QueryNode>(std::move(statement->Cast<DeleteStatement>().node));
 		break;
+	case StatementType::COPY_STATEMENT: {
+		auto &copy = statement->Cast<CopyStatement>();
+		if (copy.info->is_from) {
+			throw ParserException("COPY FROM cannot be used as a CTE body");
+		}
+		query_node = make_uniq<CopyQueryNode>(std::move(copy.info));
+		break;
+	}
 	default:
-		throw ParserException("A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement");
+		throw ParserException("A CTE body must be a SELECT, INSERT, UPDATE, DELETE, or COPY TO statement");
 	}
 	auto select_statement = make_uniq<SelectStatement>();
 	select_statement->node = std::move(query_node);

@@ -22,7 +22,7 @@ static bool ContainsRecursiveCTE(const LogicalOperator &op) {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) {
 	D_ASSERT(op.children.size() == 2);
 
-	auto cte_body_is_dml = op.children[0]->HasSideEffects();
+	auto cte_body_has_side_effects = op.children[0]->HasSideEffects();
 	auto use_exchange = planning_recursive_cte_depth == 0 && !ContainsRecursiveCTE(*op.children[0]) &&
 	                    !ContainsRecursiveCTE(*op.children[1]);
 
@@ -30,8 +30,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.children[0]->types);
 	shared_ptr<PipelineBroadcastExchange> exchange;
 	if (use_exchange) {
-		auto completion_mode = cte_body_is_dml ? PipelineBroadcastExchangeCompletionMode::RUN_TO_COMPLETION
-		                                       : PipelineBroadcastExchangeCompletionMode::STOP_WHEN_UNCONSUMED;
+		auto completion_mode = cte_body_has_side_effects
+		                           ? PipelineBroadcastExchangeCompletionMode::RUN_TO_COMPLETION
+		                           : PipelineBroadcastExchangeCompletionMode::STOP_WHEN_UNCONSUMED;
 		exchange = make_shared_ptr<PipelineBroadcastExchange>(context, op.children[0]->types, completion_mode);
 	}
 
@@ -52,7 +53,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 	cast_cte.working_table = working_table;
 	cast_cte.exchange = exchange;
 	cast_cte.cte_scans = materialized_ctes[op.table_index];
-	cast_cte.cte_body_is_dml = cte_body_is_dml;
+	cast_cte.cte_body_has_side_effects = cte_body_has_side_effects;
 	return cte;
 }
 
