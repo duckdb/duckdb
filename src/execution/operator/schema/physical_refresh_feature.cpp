@@ -185,8 +185,8 @@ static void EvictOldVersions(ClientContext &context, DuckTableEntry &table, idx_
 	TableFilterSet filters;
 	auto version_ref = make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, storage_t(0));
 	auto cutoff_value = make_uniq<BoundConstantExpression>(Value::BIGINT(cutoff));
-	auto version_filter = BoundComparisonExpression::Create(
-	    ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(version_ref), std::move(cutoff_value));
+	auto version_filter = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+	                                                        std::move(version_ref), std::move(cutoff_value));
 	filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(version_filter)));
 
 	TableScanState scan_state;
