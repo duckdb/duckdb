@@ -225,6 +225,64 @@ SELECT k, v FROM t;
 statement ok
 SET debug_verify_serializer=false;
 
+# Reused complete-key probe state rebinds to each nested recursive CTE hash table.
+statement ok
+SET threads=1;
+
+query II rowsort
+WITH RECURSIVE outer_cte(a, b) AS (
+	SELECT 1, 1
+	UNION
+	(
+		WITH RECURSIVE inner_cte(k, v) USING KEY (k) AS (
+			SELECT a, 0 FROM outer_cte WHERE b < 4
+			UNION ALL
+			SELECT n.k, r.v + 1
+			FROM inner_cte n
+			JOIN recurring.inner_cte r USING (k)
+			WHERE n.v < 1
+		)
+		SELECT k, b + 1
+		FROM inner_cte, outer_cte
+		WHERE v = 1 AND b < 4
+	)
+)
+SELECT * FROM outer_cte;
+----
+1	1
+1	2
+1	3
+1	4
+
+# Partial-key matcher state is hash-table-bound and must rebind as well.
+query II rowsort
+WITH RECURSIVE outer_cte(a, b) AS (
+	SELECT 1, 1
+	UNION
+	(
+		WITH RECURSIVE inner_cte(k1, k2, v) USING KEY (k1, k2) AS (
+			SELECT a, 10, 0 FROM outer_cte WHERE b < 4
+			UNION ALL
+			SELECT n.k1, n.k2, r.v + 1
+			FROM inner_cte n
+			JOIN recurring.inner_cte r ON r.k1 = n.k1
+			WHERE n.v < 1
+		)
+		SELECT k1, b + 1
+		FROM inner_cte, outer_cte
+		WHERE v = 1 AND b < 4
+	)
+)
+SELECT * FROM outer_cte;
+----
+1	1
+1	2
+1	3
+1	4
+
+statement ok
+SET threads=8;
+
 # A proper subset of a composite key uses the epoch-stable partial-key index.
 query II
 EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (

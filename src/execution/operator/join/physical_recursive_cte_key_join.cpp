@@ -84,6 +84,19 @@ struct RecursiveCTEKeyJoinResult {
 	OperatorResultType result_type;
 };
 
+struct RecursiveCTEKeyJoinHashTableState {
+	RecursiveCTEKeyJoinHashTableState(GroupedAggregateHashTable &hash_table_p, shared_ptr<TupleDataLayout> layout_p)
+	    : hash_table(hash_table_p), layout(std::move(layout_p)) {
+	}
+
+	optional_ptr<const GroupedAggregateHashTable> hash_table;
+	shared_ptr<TupleDataLayout> layout;
+	AggregateHTLookupState lookup_state;
+	TupleDataChunkState match_chunk_state;
+	RowMatcher partial_matcher;
+	bool partial_matcher_initialized = false;
+};
+
 class RecursiveCTEKeyJoinState : public CachingOperatorState {
 public:
 	RecursiveCTEKeyJoinState(ClientContext &context, const PhysicalRecursiveCTEKeyJoin &op)
@@ -113,6 +126,7 @@ public:
 	}
 
 private:
+	void BindHashTable(GroupedAggregateHashTable &hash_table);
 	RecursiveCTEKeyJoinResult ProbeCompleteKey(DataChunk &input, const RecursiveCTEKeyJoinLayout &layout,
 	                                           RecursiveCTEState &recursive_state);
 	RecursiveCTEKeyJoinResult ProbePartialKey(DataChunk &input, const RecursiveCTEKeyJoinLayout &layout,
@@ -136,16 +150,13 @@ private:
 	Vector matched_addresses;
 	Vector probe_hashes;
 	vector<UnifiedVectorFormat> key_formats;
-	AggregateHTLookupState lookup_state;
-	TupleDataChunkState match_chunk_state;
-	RowMatcher partial_matcher;
+	unique_ptr<RecursiveCTEKeyJoinHashTableState> hash_table_state;
 	ArenaAllocator arena;
 	RowOperationsState row_state;
 	idx_t non_null_position = 0;
 	idx_t non_null_count = 0;
 	idx_t current_probe_input = 0;
 	idx_t current_entry = DConstants::INVALID_INDEX;
-	bool partial_matcher_initialized = false;
 	bool partial_input_initialized = false;
 	bool active_probe = false;
 };
@@ -171,6 +182,17 @@ static idx_t SelectNonNullKeys(DataChunk &keys, vector<UnifiedVectorFormat> &for
 	return result_count;
 }
 
+void RecursiveCTEKeyJoinState::BindHashTable(GroupedAggregateHashTable &hash_table) {
+	if (hash_table_state && hash_table_state->hash_table.get() == &hash_table &&
+	    hash_table_state->layout.get() == &hash_table.GetLayout()) {
+		return;
+	}
+	if (partial_input_initialized) {
+		throw InternalException("USING KEY direct probe changed hash tables while producing output");
+	}
+	hash_table_state = make_uniq<RecursiveCTEKeyJoinHashTableState>(hash_table, hash_table.GetLayoutPtr());
+}
+
 RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbeCompleteKey(DataChunk &input,
                                                                      const RecursiveCTEKeyJoinLayout &layout,
                                                                      RecursiveCTEState &recursive_state) {
@@ -191,6 +213,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbeCompleteKey(DataChunk &
 	} else {
 		lookup_keys.Slice(probe_keys, non_null_sel, current_non_null_count);
 	}
+	auto &lookup_state = hash_table_state->lookup_state;
 	const auto match_count = recursive_state.ht->LookupGroups(lookup_keys, lookup_state, found_key_sel);
 	if (recursive_state.metrics.Enabled()) {
 		recursive_state.metrics.RecordDirectProbeRows(current_non_null_count);
@@ -221,6 +244,8 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 	const auto &state_key_indices = layout.StateKeyIndices();
 	const auto &probe_key_indices = layout.ProbeKeyIndices();
 	auto &index = recursive_state.GetPartialKeyIndex(state_key_indices);
+	auto &match_chunk_state = hash_table_state->match_chunk_state;
+	auto &partial_matcher = hash_table_state->partial_matcher;
 	if (!partial_input_initialized) {
 		probe_keys.Reset();
 		for (idx_t key_idx = 0; key_idx < probe_key_indices.size(); key_idx++) {
@@ -239,7 +264,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 			recursive_state.metrics.RecordDirectProbeRows(non_null_count);
 		}
 	}
-	if (!partial_matcher_initialized) {
+	if (!hash_table_state->partial_matcher_initialized) {
 		vector<ExpressionType> predicates(state_key_indices.size(), ExpressionType::COMPARE_EQUAL);
 		vector<column_t> columns;
 		for (auto key_idx : state_key_indices) {
@@ -247,7 +272,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 		}
 		TupleDataCollection::InitializeChunkState(match_chunk_state, layout.KeyTypes(), columns);
 		partial_matcher.Initialize(false, recursive_state.ht->GetLayout(), predicates, std::move(columns));
-		partial_matcher_initialized = true;
+		hash_table_state->partial_matcher_initialized = true;
 	}
 
 	while (true) {
@@ -319,8 +344,8 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 			matched_address_data[match_idx] = candidate_address_data[candidate_idx];
 		}
 		FlatVector::SetSize(matched_addresses, match_count);
-		recursive_state.ht->GatherGroups(lookup_state, matched_addresses, *FlatVector::IncrementalSelectionVector(),
-		                                 match_count, state_keys);
+		recursive_state.ht->GatherGroups(hash_table_state->lookup_state, matched_addresses,
+		                                 *FlatVector::IncrementalSelectionVector(), match_count, state_keys);
 		if (recursive_state.metrics.Enabled()) {
 			recursive_state.metrics.RecordDirectProbeMatches(match_count);
 		}
@@ -380,6 +405,8 @@ void RecursiveCTEKeyJoinState::EmitResult(DataChunk &input, DataChunk &output, c
 OperatorResultType RecursiveCTEKeyJoinState::Execute(DataChunk &input, DataChunk &output,
                                                      const RecursiveCTEKeyJoinLayout &layout,
                                                      RecursiveCTEState &recursive_state) {
+	D_ASSERT(recursive_state.ht);
+	BindHashTable(*recursive_state.ht);
 	auto result = layout.IsPartial() ? ProbePartialKey(input, layout, recursive_state)
 	                                 : ProbeCompleteKey(input, layout, recursive_state);
 	if (result.match_count == 0) {
