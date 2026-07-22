@@ -8,31 +8,75 @@
 
 namespace duckdb {
 
+RecursiveCTEKeyJoinLayout::RecursiveCTEKeyJoinLayout(PhysicalRecursiveCTEStateScan &state_scan_p,
+                                                     PhysicalOperator &probe, bool state_on_left_p,
+                                                     vector<idx_t> state_key_indices_p,
+                                                     vector<idx_t> probe_key_indices_p,
+                                                     vector<idx_t> left_projection_map_p,
+                                                     vector<idx_t> right_projection_map_p)
+    : state_scan(state_scan_p), state_on_left(state_on_left_p), state_key_indices(std::move(state_key_indices_p)),
+      probe_key_indices(std::move(probe_key_indices_p)), left_projection_map(std::move(left_projection_map_p)),
+      right_projection_map(std::move(right_projection_map_p)),
+      state_key_map(state_scan.GetTypes().size(), DConstants::INVALID_INDEX),
+      state_payload_map(state_scan.GetTypes().size(), DConstants::INVALID_INDEX) {
+	if (state_key_indices.empty() || state_key_indices.size() != probe_key_indices.size() ||
+	    state_key_indices.size() > state_scan.distinct_idx.size() ||
+	    !std::is_sorted(state_key_indices.begin(), state_key_indices.end()) ||
+	    std::adjacent_find(state_key_indices.begin(), state_key_indices.end()) != state_key_indices.end()) {
+		throw InternalException("Invalid USING KEY join key layout");
+	}
+	for (idx_t key_idx = 0; key_idx < state_scan.distinct_idx.size(); key_idx++) {
+		const auto state_idx = state_scan.distinct_idx[key_idx];
+		if (state_idx >= state_scan.GetTypes().size()) {
+			throw InternalException("Invalid USING KEY state key ordinal");
+		}
+		state_key_map[state_idx] = key_idx;
+		key_types.push_back(state_scan.GetTypes()[state_idx]);
+	}
+	for (idx_t join_key_idx = 0; join_key_idx < state_key_indices.size(); join_key_idx++) {
+		const auto state_key_idx = state_key_indices[join_key_idx];
+		const auto probe_key_idx = probe_key_indices[join_key_idx];
+		if (state_key_idx >= key_types.size() || probe_key_idx >= probe.GetTypes().size() ||
+		    key_types[state_key_idx] != probe.GetTypes()[probe_key_idx]) {
+			throw InternalException("Invalid USING KEY join key ordinal");
+		}
+		probe_key_types.push_back(key_types[state_key_idx]);
+	}
+	for (idx_t payload_idx = 0; payload_idx < state_scan.payload_idx.size(); payload_idx++) {
+		const auto state_idx = state_scan.payload_idx[payload_idx];
+		if (state_idx >= state_scan.GetTypes().size()) {
+			throw InternalException("Invalid USING KEY state payload ordinal");
+		}
+		state_payload_map[state_idx] = payload_idx;
+		payload_types.push_back(state_scan.GetTypes()[state_idx]);
+	}
+	const auto &left_types = state_on_left ? state_scan.GetTypes() : probe.GetTypes();
+	const auto &right_types = state_on_left ? probe.GetTypes() : state_scan.GetTypes();
+	for (auto projection_idx : left_projection_map) {
+		if (projection_idx >= left_types.size()) {
+			throw InternalException("Invalid USING KEY left projection ordinal");
+		}
+	}
+	for (auto projection_idx : right_projection_map) {
+		if (projection_idx >= right_types.size()) {
+			throw InternalException("Invalid USING KEY right projection ordinal");
+		}
+	}
+}
+
+bool RecursiveCTEKeyJoinLayout::IsPartial() const {
+	return state_key_indices.size() < state_scan.distinct_idx.size();
+}
+
 PhysicalRecursiveCTEKeyJoin::PhysicalRecursiveCTEKeyJoin(
     PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &probe,
     PhysicalRecursiveCTEStateScan &state_scan_p, bool state_on_left_p, vector<idx_t> state_key_indices_p,
     vector<idx_t> probe_key_indices_p, vector<idx_t> left_projection_map_p, vector<idx_t> right_projection_map_p,
     idx_t estimated_cardinality)
     : CachingPhysicalOperator(physical_plan, PhysicalOperatorType::RECURSIVE_KEY_JOIN, op.types, estimated_cardinality),
-      state_scan(state_scan_p), state_on_left(state_on_left_p), state_key_indices(std::move(state_key_indices_p)),
-      probe_key_indices(std::move(probe_key_indices_p)), left_projection_map(std::move(left_projection_map_p)),
-      right_projection_map(std::move(right_projection_map_p)),
-      state_key_map(state_scan.GetTypes().size(), DConstants::INVALID_INDEX),
-      state_payload_map(state_scan.GetTypes().size(), DConstants::INVALID_INDEX) {
+      layout(state_scan_p, probe, state_on_left_p, std::move(state_key_indices_p), std::move(probe_key_indices_p),
+             std::move(left_projection_map_p), std::move(right_projection_map_p)) {
 	children.push_back(probe);
-	for (idx_t key_idx = 0; key_idx < state_scan.distinct_idx.size(); key_idx++) {
-		const auto state_idx = state_scan.distinct_idx[key_idx];
-		state_key_map[state_idx] = key_idx;
-		key_types.push_back(state_scan.GetTypes()[state_idx]);
-	}
-	for (auto key_idx : state_key_indices) {
-		probe_key_types.push_back(key_types[key_idx]);
-	}
-	for (idx_t payload_idx = 0; payload_idx < state_scan.payload_idx.size(); payload_idx++) {
-		const auto state_idx = state_scan.payload_idx[payload_idx];
-		state_payload_map[state_idx] = payload_idx;
-		payload_types.push_back(state_scan.GetTypes()[state_idx]);
-	}
 }
 
 class RecursiveCTEKeyJoinState : public CachingOperatorState {
@@ -42,12 +86,12 @@ public:
 	      matched_input_sel(STANDARD_VECTOR_SIZE), candidate_input_sel(STANDARD_VECTOR_SIZE),
 	      candidate_match_sel(STANDARD_VECTOR_SIZE), candidate_addresses(LogicalType::POINTER),
 	      matched_addresses(LogicalType::POINTER), probe_hashes(LogicalType::HASH),
-	      key_formats(op.probe_key_types.size()), arena(Allocator::Get(context)), row_state(arena) {
-		probe_keys.Initialize(Allocator::Get(context), op.probe_key_types);
-		lookup_keys.Initialize(Allocator::Get(context), op.probe_key_types);
-		candidate_keys.Initialize(Allocator::Get(context), op.key_types);
-		state_keys.Initialize(Allocator::Get(context), op.key_types);
-		payload_rows.Initialize(Allocator::Get(context), op.payload_types);
+	      key_formats(op.Layout().ProbeKeyTypes().size()), arena(Allocator::Get(context)), row_state(arena) {
+		probe_keys.Initialize(Allocator::Get(context), op.Layout().ProbeKeyTypes());
+		lookup_keys.Initialize(Allocator::Get(context), op.Layout().ProbeKeyTypes());
+		candidate_keys.Initialize(Allocator::Get(context), op.Layout().KeyTypes());
+		state_keys.Initialize(Allocator::Get(context), op.Layout().KeyTypes());
+		payload_rows.Initialize(Allocator::Get(context), op.Layout().PayloadTypes());
 	}
 
 	DataChunk probe_keys;
@@ -112,6 +156,16 @@ static idx_t SelectNonNullKeys(DataChunk &keys, vector<UnifiedVectorFormat> &for
 OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
                                                                 DataChunk &chunk, GlobalOperatorState &gstate,
                                                                 OperatorState &state_p) const {
+	auto &state_scan = layout.StateScan();
+	const auto &state_key_indices = layout.StateKeyIndices();
+	const auto &probe_key_indices = layout.ProbeKeyIndices();
+	const auto &left_projection_map = layout.LeftProjectionMap();
+	const auto &right_projection_map = layout.RightProjectionMap();
+	const auto &state_key_map = layout.StateKeyMap();
+	const auto &state_payload_map = layout.StatePayloadMap();
+	const auto &key_types = layout.KeyTypes();
+	const auto &payload_types = layout.PayloadTypes();
+	const auto state_on_left = layout.StateOnLeft();
 	if (!state_scan.recursive_cte || !state_scan.recursive_cte->sink_state) {
 		throw InternalException("USING KEY direct probe has no recursive state");
 	}
@@ -139,9 +193,9 @@ OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext
 			state.lookup_keys.Slice(state.probe_keys, state.non_null_sel, non_null_count);
 		}
 		match_count = recursive_state.ht->LookupGroups(state.lookup_keys, state.lookup_state, state.found_key_sel);
-		if (recursive_state.collect_runtime_metrics) {
-			recursive_state.cumulative_direct_probe_rows.fetch_add(non_null_count);
-			recursive_state.cumulative_direct_probe_matches.fetch_add(match_count);
+		if (recursive_state.metrics.Enabled()) {
+			recursive_state.metrics.RecordDirectProbeRows(non_null_count);
+			recursive_state.metrics.RecordDirectProbeMatches(match_count);
 		}
 		if (match_count == 0) {
 			return OperatorResultType::NEED_MORE_INPUT;
@@ -175,8 +229,8 @@ OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext
 			state.non_null_position = 0;
 			state.active_probe = false;
 			state.partial_input_initialized = true;
-			if (recursive_state.collect_runtime_metrics) {
-				recursive_state.cumulative_direct_probe_rows.fetch_add(state.non_null_count);
+			if (recursive_state.metrics.Enabled()) {
+				recursive_state.metrics.RecordDirectProbeRows(state.non_null_count);
 			}
 		}
 		if (!state.partial_matcher_initialized) {
@@ -211,8 +265,8 @@ OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext
 				}
 				const auto &entry = index.GetEntry(state.current_entry);
 				state.current_entry = entry.next;
-				if (recursive_state.collect_runtime_metrics) {
-					recursive_state.cumulative_partial_probe_chain_visits.fetch_add(1);
+				if (recursive_state.metrics.Enabled()) {
+					recursive_state.metrics.RecordPartialProbeChainVisit();
 				}
 				if (entry.hash != probe_hashes[state.current_probe_input].GetValue()) {
 					continue;
@@ -262,8 +316,8 @@ OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext
 			FlatVector::SetSize(state.matched_addresses, match_count);
 			recursive_state.ht->GatherGroups(state.lookup_state, state.matched_addresses,
 			                                 *FlatVector::IncrementalSelectionVector(), match_count, state.state_keys);
-			if (recursive_state.collect_runtime_metrics) {
-				recursive_state.cumulative_direct_probe_matches.fetch_add(match_count);
+			if (recursive_state.metrics.Enabled()) {
+				recursive_state.metrics.RecordDirectProbeMatches(match_count);
 			}
 			if (has_more) {
 				result_type = OperatorResultType::HAVE_MORE_OUTPUT;
@@ -316,15 +370,14 @@ OperatorResultType PhysicalRecursiveCTEKeyJoin::ExecuteInternal(ExecutionContext
 }
 
 string PhysicalRecursiveCTEKeyJoin::GetName() const {
-	return state_key_indices.size() == state_scan.distinct_idx.size() ? "RECURSIVE_KEY_JOIN"
-	                                                                  : "RECURSIVE_PARTIAL_KEY_JOIN";
+	return layout.IsPartial() ? "RECURSIVE_PARTIAL_KEY_JOIN" : "RECURSIVE_KEY_JOIN";
 }
 
 InsertionOrderPreservingMap<string> PhysicalRecursiveCTEKeyJoin::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["Join Type"] = "INNER";
-	result["Key Columns"] = to_string(probe_key_indices.size());
-	result["Key Mode"] = state_key_indices.size() == state_scan.distinct_idx.size() ? "COMPLETE" : "PARTIAL";
+	result["Key Columns"] = to_string(layout.ProbeKeyIndices().size());
+	result["Key Mode"] = layout.IsPartial() ? "PARTIAL" : "COMPLETE";
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

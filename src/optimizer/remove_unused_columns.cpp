@@ -7,13 +7,10 @@
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -31,6 +28,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include <utility>
 
 namespace duckdb {
@@ -47,39 +45,6 @@ static void GatherCTEScans(const TableIndex cte_index, const LogicalOperator &op
 	for (auto &child : op.children) {
 		GatherCTEScans(cte_index, *child, expected_readers);
 	}
-}
-
-static bool RecursiveSubtreeIsRepeatable(LogicalOperator &op) {
-	if (op.HasSideEffects() || op.type == LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
-		return false;
-	}
-	bool repeatable = true;
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expression) {
-		if ((*expression)->IsVolatile()) {
-			repeatable = false;
-		}
-		ExpressionIterator::VisitExpression<BoundAggregateExpression>(**expression, [&](const auto &aggregate) {
-			if (aggregate.Function().GetStability() == FunctionStability::VOLATILE) {
-				repeatable = false;
-			}
-		});
-		ExpressionIterator::VisitExpression<BoundWindowExpression>(**expression, [&](const auto &window) {
-			if ((window.AggregateFunction() &&
-			     window.AggregateFunction()->GetStability() == FunctionStability::VOLATILE) ||
-			    (window.WindowFunction() && window.WindowFunction()->GetStability() == FunctionStability::VOLATILE)) {
-				repeatable = false;
-			}
-		});
-	});
-	if (!repeatable) {
-		return false;
-	}
-	for (auto &child : op.children) {
-		if (!RecursiveSubtreeIsRepeatable(*child)) {
-			return false;
-		}
-	}
-	return true;
 }
 
 RemoveUnusedColumns::RemoveUnusedColumns(Optimizer &optimizer)
@@ -133,6 +98,92 @@ bool RemoveUnusedColumns::GatherRecursiveDependencies(LogicalOperator &bottom, T
 	D_ASSERT(cte_entry != cte_map->end());
 	for (auto &entry : cte_entry->second.column_references) {
 		recursive_dependencies.insert(entry.first.column_index);
+	}
+	return true;
+}
+
+bool RemoveUnusedColumns::ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &rec,
+                                                          unordered_set<ProjectionIndex> &required_columns) {
+	for (auto &entry : column_references) {
+		if (entry.first.table_index == rec.table_index) {
+			required_columns.insert(entry.first.column_index);
+		}
+	}
+	if (required_columns.empty()) {
+		required_columns.insert(ProjectionIndex(0));
+	}
+	while (true) {
+		unordered_set<ProjectionIndex> recursive_dependencies;
+		if (!GatherRecursiveDependencies(*rec.children[1], rec.table_index, required_columns, recursive_dependencies)) {
+			return false;
+		}
+		const auto old_count = required_columns.size();
+		required_columns.insert(recursive_dependencies.begin(), recursive_dependencies.end());
+		if (required_columns.size() == old_count) {
+			return required_columns.size() < rec.column_count;
+		}
+	}
+}
+
+void RemoveUnusedColumns::ApplyRecursiveProjections(LogicalRecursiveCTE &rec,
+                                                    const unordered_set<ProjectionIndex> &required_columns) {
+	for (auto column_idx : required_columns) {
+		column_references.emplace(ColumnBinding(rec.table_index, column_idx), ReferencedColumn());
+	}
+	vector<idx_t> entries;
+	for (idx_t i = 0; i < rec.column_count; i++) {
+		entries.push_back(i);
+	}
+	ClearUnusedExpressions(entries, rec.table_index);
+
+	for (auto &child : rec.children) {
+		child->ResolveOperatorTypes();
+		auto bindings = child->GetColumnBindings();
+		vector<unique_ptr<Expression>> expressions;
+		expressions.reserve(entries.size());
+		for (auto column_idx : entries) {
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
+		}
+		auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+		if (child->has_estimated_cardinality) {
+			projection->SetEstimatedCardinality(child->estimated_cardinality);
+		}
+		projection->children.push_back(std::move(child));
+		child = std::move(projection);
+	}
+	vector<LogicalType> internal_types;
+	internal_types.reserve(entries.size());
+	for (auto column_idx : entries) {
+		internal_types.push_back(rec.internal_types[column_idx]);
+	}
+	rec.internal_types = std::move(internal_types);
+	rec.column_count = entries.size();
+}
+
+void RemoveUnusedColumns::RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+                                                        const unordered_set<ProjectionIndex> &required_columns) {
+	CTERefPruner cte_ref_pruner(rec.table_index, required_columns);
+	cte_ref_pruner.VisitOperator(*rec.children[1]);
+	ColumnBindingReplacer column_binding_replacer;
+	column_binding_replacer.replacement_bindings = std::move(cte_ref_pruner.binding_replacements);
+	column_binding_replacer.VisitOperator(*rec.children[1]);
+}
+
+bool RemoveUnusedColumns::TryPruneRecursiveCTE(LogicalRecursiveCTE &rec) {
+	GetCTEMap().insert({rec.table_index, MaterializedCTEInfo()});
+	if (!rec.union_all || !rec.key_targets.empty() || everything_referenced ||
+	    !LogicalSubtreeIsRepeatable(*rec.children[0]) || !LogicalSubtreeIsRepeatable(*rec.children[1])) {
+		return false;
+	}
+	unordered_set<ProjectionIndex> required_columns;
+	if (!ComputeRecursiveRequiredColumns(rec, required_columns)) {
+		return false;
+	}
+	ApplyRecursiveProjections(rec, required_columns);
+	RewriteRecursiveCTEReferences(rec, required_columns);
+	for (auto &child : rec.children) {
+		RemoveUnusedColumns remove(*this, true);
+		remove.VisitOperator(child);
 	}
 	return true;
 }
@@ -409,85 +460,9 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		auto &rec = op.Cast<LogicalRecursiveCTE>();
-		auto &cte_info_map = GetCTEMap();
-		cte_info_map.insert({rec.table_index, MaterializedCTEInfo()});
-		// DISTINCT defines row identity across every recursive column. USING KEY similarly has key/update
-		// semantics that cannot be reduced to ordinary output liveness.
-		if (!rec.union_all || !rec.key_targets.empty() || everything_referenced || !RecursiveSubtreeIsRepeatable(op)) {
+		if (!TryPruneRecursiveCTE(rec)) {
 			everything_referenced = true;
 			break;
-		}
-
-		unordered_set<ProjectionIndex> required_columns;
-		for (auto &entry : column_references) {
-			if (entry.first.table_index == rec.table_index) {
-				required_columns.insert(entry.first.column_index);
-			}
-		}
-		if (required_columns.empty()) {
-			required_columns.insert(ProjectionIndex(0));
-		}
-
-		while (true) {
-			unordered_set<ProjectionIndex> recursive_dependencies;
-			if (!GatherRecursiveDependencies(*rec.children[1], rec.table_index, required_columns,
-			                                 recursive_dependencies)) {
-				everything_referenced = true;
-				break;
-			}
-			const auto old_count = required_columns.size();
-			required_columns.insert(recursive_dependencies.begin(), recursive_dependencies.end());
-			if (required_columns.size() == old_count) {
-				break;
-			}
-		}
-		if (everything_referenced || required_columns.size() >= rec.column_count) {
-			everything_referenced = true;
-			break;
-		}
-
-		for (auto column_idx : required_columns) {
-			column_references.emplace(ColumnBinding(rec.table_index, column_idx), ReferencedColumn());
-		}
-		vector<idx_t> entries;
-		for (idx_t i = 0; i < rec.column_count; i++) {
-			entries.push_back(i);
-		}
-		ClearUnusedExpressions(entries, rec.table_index);
-
-		for (auto &child : rec.children) {
-			child->ResolveOperatorTypes();
-			auto bindings = child->GetColumnBindings();
-			vector<unique_ptr<Expression>> expressions;
-			expressions.reserve(entries.size());
-			for (auto column_idx : entries) {
-				expressions.push_back(
-				    make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
-			}
-			auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-			if (child->has_estimated_cardinality) {
-				projection->SetEstimatedCardinality(child->estimated_cardinality);
-			}
-			projection->children.push_back(std::move(child));
-			child = std::move(projection);
-		}
-		vector<LogicalType> internal_types;
-		internal_types.reserve(entries.size());
-		for (auto column_idx : entries) {
-			internal_types.push_back(rec.internal_types[column_idx]);
-		}
-		rec.internal_types = std::move(internal_types);
-		rec.column_count = entries.size();
-
-		CTERefPruner cte_ref_pruner(rec.table_index, required_columns);
-		cte_ref_pruner.VisitOperator(*rec.children[1]);
-		ColumnBindingReplacer column_binding_replacer;
-		column_binding_replacer.replacement_bindings = std::move(cte_ref_pruner.binding_replacements);
-		column_binding_replacer.VisitOperator(*rec.children[1]);
-
-		for (auto &child : rec.children) {
-			RemoveUnusedColumns remove(*this, true);
-			remove.VisitOperator(child);
 		}
 		return;
 	}

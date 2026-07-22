@@ -520,6 +520,32 @@ SELECT * FROM t;
 ----
 physical_plan	<REGEX>:.*HASH_JOIN.*
 
+# Separate fallback scans share the frozen state but not their scan-global locks.
+statement ok
+SET threads=8;
+
+query II
+WITH RECURSIVE t(k, level, v)
+USING KEY (k, max(level) AS level, approx_quantile(v, 0.5) AS v) AS (
+	SELECT i, 0, i::DOUBLE
+	FROM range(512) r(i)
+	UNION ALL
+	(
+		SELECT n.k, 1, r.v
+		FROM t n
+		JOIN (SELECT k, v FROM recurring.t WHERE v >= 0) r USING (k)
+		WHERE n.level = 0
+		UNION ALL
+		SELECT n.k, 1, r.v
+		FROM t n
+		JOIN (SELECT k, v FROM recurring.t WHERE v >= 0) r USING (k)
+		WHERE n.level = 0
+	)
+)
+SELECT count(*), sum(v) FROM t;
+----
+512	130816.0
+
 # Casted partial keys retain the fallback because the index requires direct bound references.
 query II
 EXPLAIN WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (

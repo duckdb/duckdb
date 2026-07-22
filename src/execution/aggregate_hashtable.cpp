@@ -36,15 +36,16 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 }
 
 GroupedAggregateHashTable::AggregateHTAppendState::AggregateHTAppendState(ArenaAllocator &allocator)
-    : hashes(LogicalType::HASH), ht_offsets(LogicalType::UBIGINT), hash_salts(LogicalType::HASH),
-      new_groups(STANDARD_VECTOR_SIZE), group_compare_vector(STANDARD_VECTOR_SIZE),
-      no_match_vector(STANDARD_VECTOR_SIZE), addresses(LogicalType::POINTER), row_state(allocator) {
+    : new_groups(STANDARD_VECTOR_SIZE), row_state(allocator) {
 }
 
-AggregateHTLookupState::AggregateHTLookupState()
+AggregateHTProbeState::AggregateHTProbeState()
     : hashes(LogicalType::HASH), ht_offsets(LogicalType::UBIGINT), hash_salts(LogicalType::HASH),
       addresses(LogicalType::POINTER), group_compare_vector(STANDARD_VECTOR_SIZE),
-      no_match_vector(STANDARD_VECTOR_SIZE), missing_vector(STANDARD_VECTOR_SIZE) {
+      no_match_vector(STANDARD_VECTOR_SIZE) {
+}
+
+AggregateHTLookupState::AggregateHTLookupState() : missing_vector(STANDARD_VECTOR_SIZE) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, Allocator &allocator,
@@ -56,6 +57,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
     : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
       radix_bits(radix_bits), count(0), capacity(0), sink_count(0), skip_lookups(false), enable_hll(false),
       aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
+	state.owner = this;
+	state.initialized = true;
 	clustered_state.all_clustered = AllAggregatesClustered(aggregate_objects_p);
 	clustered_state.n_clustered = CountAggregatesClustered(aggregate_objects_p);
 	if (clustered_state.n_clustered > 1) {
@@ -777,6 +780,7 @@ static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const 
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
                                                             Vector &addresses_v, SelectionVector &new_groups_out) {
+	D_ASSERT(state.initialized && state.owner.get() == this);
 	D_ASSERT(groups.ColumnCount() + 1 == layout_ptr->ColumnCount());
 	D_ASSERT(group_hashes_v.GetType() == LogicalType::HASH);
 	D_ASSERT(state.ht_offsets.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -1181,18 +1185,15 @@ void GroupedAggregateHashTable::InitializeScan(AggregateHTScanState &scan_state)
 	partition->InitializeScan(scan_state.scan_states, group_indexes);
 }
 
-bool GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk &distinct_rows,
-                                     DataChunk &payload_rows) {
+bool GroupedAggregateHashTable::ScanGroups(AggregateHTScanState &scan_state, DataChunk &distinct_rows) {
 	if (scan_state.partition_idx >= partitioned_data->PartitionCount()) {
 		return false;
 	}
 
-	payload_rows.Reset();
 	distinct_rows.Reset();
 	auto &current_partition = partitioned_data->GetPartitions()[scan_state.partition_idx];
 
 	if (current_partition->Scan(scan_state.scan_states, distinct_rows)) {
-		FetchAggregates(distinct_rows, payload_rows);
 		return true;
 	} else {
 		if (++(scan_state.partition_idx) >= partitioned_data->PartitionCount()) {
@@ -1203,6 +1204,18 @@ bool GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk
 			return true;
 		}
 	}
+}
+
+bool GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk &distinct_rows,
+                                     DataChunk &payload_rows) {
+	payload_rows.Reset();
+	if (!ScanGroups(scan_state, distinct_rows)) {
+		return false;
+	}
+	if (distinct_rows.size() > 0) {
+		FetchAggregates(distinct_rows, payload_rows);
+	}
+	return true;
 }
 
 void GroupedAggregateHashTable::ResetForNewIteration(idx_t radix_bits_p) {

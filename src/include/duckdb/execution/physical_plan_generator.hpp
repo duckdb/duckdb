@@ -24,6 +24,13 @@ class ColumnDataCollection;
 class PipelineBroadcastExchange;
 class PhysicalRecursiveCTEStateScan;
 
+struct RecursiveCTEPlanningInfo {
+	bool using_key = false;
+	vector<idx_t> distinct_indices;
+	vector<idx_t> payload_indices;
+	vector<reference<PhysicalRecursiveCTEStateScan>> state_scans;
+};
+
 class PhysicalPlan {
 public:
 	explicit PhysicalPlan(Allocator &allocator) : arena(allocator) {};
@@ -80,11 +87,8 @@ public:
 	unordered_map<TableIndex, shared_ptr<PipelineBroadcastExchange>> materialized_cte_exchanges;
 	//! Used to reference the recurring tables
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
-	//! USING KEY recurring references scan a frozen aggregate state directly.
-	unordered_set<TableIndex> using_key_recursive_ctes;
-	unordered_map<TableIndex, vector<idx_t>> using_key_distinct_indices;
-	unordered_map<TableIndex, vector<idx_t>> using_key_payload_indices;
-	unordered_map<TableIndex, vector<reference<PhysicalRecursiveCTEStateScan>>> recursive_state_scans;
+	//! Physical planning information for recursive CTE state references.
+	unordered_map<TableIndex, RecursiveCTEPlanningInfo> recursive_cte_planning;
 	//! Materialized CTE ids must be collected.
 	unordered_map<TableIndex, vector<const_reference<PhysicalOperator>>> materialized_ctes;
 	//! The index for duplicate eliminated joins.

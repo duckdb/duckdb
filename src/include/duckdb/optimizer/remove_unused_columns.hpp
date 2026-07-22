@@ -22,6 +22,7 @@ namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
+class LogicalRecursiveCTE;
 class Optimizer;
 
 struct ReferencedExtractComponent {
@@ -155,6 +156,11 @@ private:
 	bool GatherRecursiveDependencies(LogicalOperator &bottom, TableIndex cte_index,
 	                                 const unordered_set<ProjectionIndex> &required_columns,
 	                                 unordered_set<ProjectionIndex> &recursive_dependencies);
+	bool ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &rec, unordered_set<ProjectionIndex> &required_columns);
+	void ApplyRecursiveProjections(LogicalRecursiveCTE &rec, const unordered_set<ProjectionIndex> &required_columns);
+	void RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+	                                   const unordered_set<ProjectionIndex> &required_columns);
+	bool TryPruneRecursiveCTE(LogicalRecursiveCTE &rec);
 	void WritePushdownExtractColumns(
 	    ReferencedColumn &col,
 	    const std::function<ProjectionIndex(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)>

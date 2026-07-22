@@ -22,6 +22,21 @@ class PhysicalColumnDataScan;
 class Pipeline;
 class PipelineExecutor;
 
+class RecursiveCTEPartialKeySpec {
+public:
+	RecursiveCTEPartialKeySpec(vector<idx_t> indices, idx_t full_key_count);
+
+	const vector<idx_t> &Indices() const {
+		return indices;
+	}
+	bool operator==(const RecursiveCTEPartialKeySpec &other) const {
+		return indices == other.indices;
+	}
+
+private:
+	vector<idx_t> indices;
+};
+
 class PhysicalRecursiveCTE : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_CTE;
@@ -55,7 +70,7 @@ public:
 	// Contains the aggregates for the payload
 	vector<unique_ptr<Expression>> payload_aggregates;
 	//! Physical-only partial-key indexes required by direct recursive state probes.
-	vector<vector<idx_t>> partial_key_index_specs;
+	vector<RecursiveCTEPartialKeySpec> partial_key_index_specs;
 	//! Number of recursive table scans inside the recursive member
 	idx_t recursive_reference_count = 0;
 	//! Number of recurring table scans inside the recursive member
@@ -118,7 +133,7 @@ public:
 	optional_ptr<PhysicalRecursiveCTE> recursive_cte;
 	vector<idx_t> distinct_idx;
 	vector<idx_t> payload_idx;
-	vector<vector<idx_t>> partial_key_index_specs;
+	vector<RecursiveCTEPartialKeySpec> partial_key_index_specs;
 
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,

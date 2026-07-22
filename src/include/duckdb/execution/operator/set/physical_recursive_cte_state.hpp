@@ -67,6 +67,85 @@ struct RecursiveCTEPipelineSchedulePlan {
 	vector<reference<Pipeline>> initialize_on_schedule_pipelines;
 };
 
+class RecursiveCTEMetrics {
+public:
+	RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op);
+
+	bool Enabled() const {
+		return enabled;
+	}
+	void RecordTasks(idx_t count);
+	void RecordEpoch(idx_t workers, idx_t elapsed_us, idx_t frontier_rows, idx_t frontier_chunks,
+	                 idx_t frontier_storage_bytes);
+	void RecordSink(idx_t wait_ns, idx_t work_ns, idx_t rows);
+	void RecordHashRows(idx_t rows);
+	void RecordRecurringScanRows(idx_t rows);
+	void RecordDirectProbeRows(idx_t rows);
+	void RecordDirectProbeMatches(idx_t rows);
+	void RecordPartialProbeChainVisit();
+	void RecordPartialIndexBuild(idx_t elapsed_us);
+	void RecordFinalStateRows(idx_t rows);
+	void RecordRetainedBuild();
+	void RecordRetainedCTEMaterialization();
+	void RecordRetainedCTEReuse();
+	void LogDistinctPromotion(idx_t partitions, idx_t migrated_rows, idx_t elapsed_us) const;
+	void Log(const vector<unique_ptr<RecursiveCTEPartialKeyIndex>> &partial_key_indexes) const;
+
+private:
+	const PhysicalRecursiveCTE &op;
+	shared_ptr<Logger> logger;
+	bool enabled;
+	idx_t epochs = 0;
+	idx_t scheduled_workers = 0;
+	atomic<idx_t> scheduled_tasks {0};
+	idx_t elapsed_us = 0;
+	idx_t frontier_rows = 0;
+	idx_t frontier_chunks = 0;
+	idx_t frontier_storage_bytes = 0;
+	atomic<idx_t> sink_wait_ns {0};
+	atomic<idx_t> sink_work_ns {0};
+	atomic<idx_t> sink_rows {0};
+	atomic<idx_t> sink_calls {0};
+	atomic<idx_t> hash_rows {0};
+	atomic<idx_t> recurring_scan_rows {0};
+	atomic<idx_t> direct_probe_rows {0};
+	atomic<idx_t> direct_probe_matches {0};
+	atomic<idx_t> partial_probe_chain_visits {0};
+	idx_t partial_index_build_us = 0;
+	idx_t final_state_rows = 0;
+	idx_t retained_build_executions = 0;
+	idx_t retained_cte_materializations = 0;
+	idx_t retained_cte_reuses = 0;
+};
+
+class RecursiveCTESchedulerState {
+public:
+	RecursiveCTESchedulerState(shared_ptr<RecursiveExecutorPool> executor_pool, bool allow_executor_reuse);
+	~RecursiveCTESchedulerState();
+
+	void PrepareExecutorEntry(Pipeline &pipeline);
+	void PrepareExecutors(Pipeline &pipeline, idx_t max_threads);
+	vector<unique_ptr<PipelineExecutor>> &GetExecutors(Pipeline &pipeline);
+	void ClearExecutors();
+	unique_ptr<RecursiveCTEPipelineSchedulePlan> &GetSchedulePlan(bool invariant);
+	void InitializeInlinePlan(const RecursiveCTEPipelineSchedulePlan &plan);
+	idx_t ReadyStageCount() const;
+	idx_t ReadyStage(idx_t index) const;
+	void CompleteInlineStage(const RecursiveCTEPipelineSchedulePlan &plan, idx_t stage_idx);
+	void SetEpochThreadLimit(idx_t limit);
+	idx_t EpochThreadLimit() const;
+
+private:
+	shared_ptr<RecursiveExecutorPool> executor_pool;
+	bool allow_executor_reuse;
+	PhysicalRecursiveCTE::executor_cache_t cached_executors;
+	unique_ptr<RecursiveCTEPipelineSchedulePlan> schedule_plan;
+	unique_ptr<RecursiveCTEPipelineSchedulePlan> invariant_schedule_plan;
+	vector<idx_t> remaining_schedule_dependencies;
+	vector<idx_t> ready_schedule_stages;
+	idx_t recursive_epoch_thread_limit = 1;
+};
+
 class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op);
@@ -83,10 +162,6 @@ public:
 	void CommitUsingKeyUpdates();
 	void PromoteDistinctState(ClientContext &context, idx_t partition_count);
 	void RecordSinkMetrics(idx_t wait_ns, idx_t work_ns, idx_t rows);
-	void PrepareCachedExecutorEntry(Pipeline &pipeline);
-	void PrepareCachedExecutors(Pipeline &pipeline, idx_t max_threads);
-	vector<unique_ptr<PipelineExecutor>> &GetCachedExecutors(Pipeline &pipeline);
-	void ClearCachedExecutors();
 	RecursiveCTEPartialKeyIndex &GetPartialKeyIndex(const vector<idx_t> &key_indices);
 
 	unique_ptr<GroupedAggregateHashTable> ht;
@@ -98,9 +173,8 @@ public:
 	Vector new_group_addresses;
 	SelectionVector new_groups;
 	const bool allow_executor_reuse;
-	shared_ptr<Logger> runtime_logger;
-	const bool collect_runtime_metrics;
-	shared_ptr<RecursiveExecutorPool> executor_pool;
+	RecursiveCTEMetrics metrics;
+	RecursiveCTESchedulerState scheduler;
 
 	mutex intermediate_table_lock;
 	mutex ht_finalize_lock;
@@ -122,37 +196,7 @@ public:
 	DataChunk source_distinct_rows;
 	AggregateHTScanState ht_scan_state;
 
-	//! Cached PipelineExecutors per pipeline for reuse across recursive iterations
-	PhysicalRecursiveCTE::executor_cache_t cached_executors;
-	//! Immutable recursive pipeline topology, shared by inline and event execution
-	unique_ptr<RecursiveCTEPipelineSchedulePlan> schedule_plan;
-	//! Cached dependency graph after invariant meta-pipelines have been materialized once
-	unique_ptr<RecursiveCTEPipelineSchedulePlan> invariant_schedule_plan;
-	//! Epoch-reset runtime for scheduler-free execution
-	vector<idx_t> remaining_schedule_dependencies;
-	vector<idx_t> ready_schedule_stages;
-	//! Physical scheduling state (not exposed through profiling or serialization)
-	idx_t recursive_epoch_thread_limit = 1;
 	bool use_local_union_all_output = true;
-	idx_t cumulative_epoch_count = 0;
-	idx_t cumulative_worker_count = 0;
-	atomic<idx_t> cumulative_task_count {0};
-	idx_t cumulative_elapsed_us = 0;
-	idx_t cumulative_frontier_rows = 0;
-	idx_t cumulative_frontier_chunks = 0;
-	idx_t cumulative_frontier_storage_bytes = 0;
-	atomic<idx_t> cumulative_sink_wait_ns {0};
-	atomic<idx_t> cumulative_sink_work_ns {0};
-	atomic<idx_t> cumulative_sink_rows {0};
-	atomic<idx_t> cumulative_sink_calls {0};
-	atomic<idx_t> cumulative_hash_rows {0};
-	atomic<idx_t> cumulative_recurring_scan_rows {0};
-	atomic<idx_t> cumulative_direct_probe_rows {0};
-	atomic<idx_t> cumulative_direct_probe_matches {0};
-	atomic<idx_t> cumulative_partial_probe_chain_visits {0};
-	idx_t cumulative_partial_index_build_us = 0;
-	idx_t cumulative_final_state_rows = 0;
-	idx_t retained_build_executions = 0;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
 };

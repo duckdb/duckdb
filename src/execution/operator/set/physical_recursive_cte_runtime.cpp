@@ -8,6 +8,7 @@
 #include "duckdb/execution/operator/join/physical_recursive_cte_key_join.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -131,7 +132,7 @@ static idx_t GetRecursivePipelineMaxThreads(RecursiveCTEState &state, Pipeline &
 	if (max_threads < 1) {
 		max_threads = 1;
 	}
-	return MinValue(max_threads, state.recursive_epoch_thread_limit);
+	return MinValue(max_threads, state.scheduler.EpochThreadLimit());
 }
 
 static void ExecuteRecursivePipelineInline(PipelineExecutor &pipeline_executor) {
@@ -232,11 +233,11 @@ public:
 		}
 
 		auto max_threads = GetRecursivePipelineMaxThreads(state, *pipeline);
-		if (state.collect_runtime_metrics) {
-			state.cumulative_task_count.fetch_add(max_threads);
+		if (state.metrics.Enabled()) {
+			state.metrics.RecordTasks(max_threads);
 		}
-		state.PrepareCachedExecutors(*pipeline, max_threads);
-		auto &executors = state.GetCachedExecutors(*pipeline);
+		state.scheduler.PrepareExecutors(*pipeline, max_threads);
+		auto &executors = state.scheduler.GetExecutors(*pipeline);
 		D_ASSERT(executors.size() >= max_threads);
 
 		// Create tasks using cached executors
@@ -498,7 +499,7 @@ static void CountDirectRecursiveReferences(const PhysicalOperator &op, TableInde
                                            idx_t &recursive_reference_count, idx_t &recurring_reference_count) {
 	if (op.type == PhysicalOperatorType::RECURSIVE_KEY_JOIN) {
 		auto &key_join = op.Cast<PhysicalRecursiveCTEKeyJoin>();
-		if (key_join.state_scan.cte_index == cte_index) {
+		if (key_join.StateScan().cte_index == cte_index) {
 			recurring_reference_count++;
 		}
 		return;
@@ -647,9 +648,6 @@ FindInvariantRecursiveMetaPipelines(const vector<shared_ptr<MetaPipeline>> &meta
 
 	reference_set_t<const MetaPipeline> result;
 	for (auto &meta_pipeline : meta_pipelines) {
-		if (meta_pipeline->Type() != MetaPipelineType::JOIN_BUILD) {
-			continue;
-		}
 		auto sink = meta_pipeline->GetSink();
 		if (!sink) {
 			continue;
@@ -657,23 +655,38 @@ FindInvariantRecursiveMetaPipelines(const vector<shared_ptr<MetaPipeline>> &meta
 
 		bool can_cache_build = false;
 		switch (sink->type) {
+		case PhysicalOperatorType::CTE: {
+			auto &cte = sink->Cast<PhysicalCTE>();
+			can_cache_build = meta_pipeline->Type() == MetaPipelineType::REGULAR && !cte.cte_body_is_dml &&
+			                  cte.GetExecutionMode() == CTEExecutionMode::MATERIALIZED;
+			break;
+		}
 		case PhysicalOperatorType::HASH_JOIN: {
+			if (meta_pipeline->Type() != MetaPipelineType::JOIN_BUILD) {
+				break;
+			}
 			auto &hash_join = sink->Cast<PhysicalHashJoin>();
 			can_cache_build = !PropagatesBuildSide(hash_join.join_type);
 			break;
 		}
 		case PhysicalOperatorType::NESTED_LOOP_JOIN: {
+			if (meta_pipeline->Type() != MetaPipelineType::JOIN_BUILD) {
+				break;
+			}
 			auto &nested_loop_join = sink->Cast<PhysicalNestedLoopJoin>();
 			can_cache_build = !PropagatesBuildSide(nested_loop_join.join_type);
 			break;
 		}
 		case PhysicalOperatorType::BLOCKWISE_NL_JOIN: {
+			if (meta_pipeline->Type() != MetaPipelineType::JOIN_BUILD) {
+				break;
+			}
 			auto &blockwise_nl_join = sink->Cast<PhysicalBlockwiseNLJoin>();
 			can_cache_build = !PropagatesBuildSide(blockwise_nl_join.join_type);
 			break;
 		}
 		case PhysicalOperatorType::CROSS_PRODUCT:
-			can_cache_build = true;
+			can_cache_build = meta_pipeline->Type() == MetaPipelineType::JOIN_BUILD;
 			break;
 		default:
 			break;
@@ -825,22 +838,10 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 		pipeline.get().ResetSource(true);
 	}
 
-	auto &remaining_dependencies = state.remaining_schedule_dependencies;
-	remaining_dependencies.clear();
-	remaining_dependencies.reserve(plan.stages.size());
-	auto &ready_stages = state.ready_schedule_stages;
-	ready_stages.clear();
-	ready_stages.reserve(plan.stages.size());
-	for (idx_t stage_idx = 0; stage_idx < plan.stages.size(); stage_idx++) {
-		auto dependency_count = plan.stages[stage_idx].dependency_count;
-		remaining_dependencies.push_back(dependency_count);
-		if (dependency_count == 0) {
-			ready_stages.push_back(stage_idx);
-		}
-	}
+	state.scheduler.InitializeInlinePlan(plan);
 
-	for (idx_t ready_idx = 0; ready_idx < ready_stages.size(); ready_idx++) {
-		auto stage_idx = ready_stages[ready_idx];
+	for (idx_t ready_idx = 0; ready_idx < state.scheduler.ReadyStageCount(); ready_idx++) {
+		auto stage_idx = state.scheduler.ReadyStage(ready_idx);
 		auto &stage = plan.stages[stage_idx];
 		auto &pipeline = stage.pipeline.get();
 		switch (stage.type) {
@@ -848,12 +849,12 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 			pipeline.ResetForReschedule(false);
 			auto max_threads = GetRecursivePipelineMaxThreads(state, pipeline);
 			D_ASSERT(max_threads == 1);
-			state.PrepareCachedExecutors(pipeline, max_threads);
-			auto &executors = state.GetCachedExecutors(pipeline);
+			state.scheduler.PrepareExecutors(pipeline, max_threads);
+			auto &executors = state.scheduler.GetExecutors(pipeline);
 			D_ASSERT(executors.size() >= max_threads);
 			executors[0]->PrepareForExecution();
-			if (state.collect_runtime_metrics) {
-				state.cumulative_task_count.fetch_add(1);
+			if (state.metrics.Enabled()) {
+				state.metrics.RecordTasks(1);
 			}
 			ExecuteRecursivePipelineInline(*executors[0]);
 			break;
@@ -868,19 +869,10 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 			throw InternalException("Unsupported recursive inline stage");
 		}
 
-		for (auto dependent_stage : stage.dependents) {
-			auto &remaining = remaining_dependencies[dependent_stage];
-			if (remaining == 0) {
-				throw InternalException("Recursive inline schedule dependency underflow");
-			}
-			remaining--;
-			if (remaining == 0) {
-				ready_stages.push_back(dependent_stage);
-			}
-		}
+		state.scheduler.CompleteInlineStage(plan, stage_idx);
 	}
 
-	if (ready_stages.size() != plan.stages.size()) {
+	if (state.scheduler.ReadyStageCount() != plan.stages.size()) {
 		throw InternalException("Recursive inline plan did not schedule every stage");
 	}
 }
@@ -896,6 +888,14 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
 	auto active_meta_pipelines = GetActiveRecursiveMetaPipelines(*this, gstate);
 	auto can_cache_invariant_meta_pipelines = allow_reuse && !invariant_meta_pipelines.empty();
+	if (gstate.metrics.Enabled() && gstate.invariant_meta_pipelines_materialized) {
+		for (auto &meta_pipeline : invariant_meta_pipelines) {
+			auto sink = meta_pipeline.get().GetSink();
+			if (sink && sink->type == PhysicalOperatorType::CTE) {
+				gstate.metrics.RecordRetainedCTEReuse();
+			}
+		}
+	}
 
 	// The generic executor path would rebuild the recursive event graph and allocate fresh
 	// PipelineExecutors/tasks every iteration. Recursive execution keeps the already-built recursive
@@ -920,11 +920,10 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	ConfigureInvariantRecursiveBuildReuse(*this, can_cache_invariant_meta_pipelines);
 
 	if (!allow_reuse) {
-		gstate.ClearCachedExecutors();
+		gstate.scheduler.ClearExecutors();
 	}
 
-	auto &schedule_plan =
-	    gstate.invariant_meta_pipelines_materialized ? gstate.invariant_schedule_plan : gstate.schedule_plan;
+	auto &schedule_plan = gstate.scheduler.GetSchedulePlan(gstate.invariant_meta_pipelines_materialized);
 	const auto prepare_cached_executor_entries = !allow_reuse || !schedule_plan;
 	if (!schedule_plan) {
 		schedule_plan = BuildRecursivePipelineSchedulePlan(active_meta_pipelines);
@@ -940,7 +939,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 			meta_pipeline->GetPipelines(pipelines, false);
 			for (auto &pipeline : pipelines) {
 				if (prepared_pipelines.insert(*pipeline).second) {
-					gstate.PrepareCachedExecutorEntry(*pipeline);
+					gstate.scheduler.PrepareExecutorEntry(*pipeline);
 				}
 			}
 		}
@@ -948,9 +947,9 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 
 	const auto work_units = GetRecursiveWorkUnits(gstate);
 	const auto frontier_rows = GetRecursiveFrontierRows(gstate);
-	const auto frontier_storage_bytes = gstate.collect_runtime_metrics ? GetRecursiveFrontierStorageBytes(gstate) : 0;
+	const auto frontier_storage_bytes = gstate.metrics.Enabled() ? GetRecursiveFrontierStorageBytes(gstate) : 0;
 	const auto worker_count = GetRecursiveWorkerCount(gstate, work_units, frontier_rows);
-	gstate.recursive_epoch_thread_limit = worker_count;
+	gstate.scheduler.SetEpochThreadLimit(worker_count);
 	if (!using_key && union_all) {
 		gstate.use_local_union_all_output = worker_count > 1 && work_units / worker_count >= 2;
 		if (!gstate.use_local_union_all_output) {
@@ -962,7 +961,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		gstate.PromoteDistinctState(context.client, partition_count);
 	}
 	const auto epoch_start =
-	    gstate.collect_runtime_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	    gstate.metrics.Enabled() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 	auto inline_execution = allow_reuse && worker_count == 1;
 
 	if (inline_execution) {
@@ -973,20 +972,22 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		WaitForRecursiveEvents(executor, events);
 	}
 
-	if (gstate.collect_runtime_metrics) {
+	if (gstate.metrics.Enabled()) {
 		const auto epoch_end = std::chrono::steady_clock::now();
 		const auto elapsed_us =
 		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(epoch_end - epoch_start).count());
-		gstate.cumulative_epoch_count++;
-		gstate.cumulative_worker_count += worker_count;
-		gstate.cumulative_elapsed_us += elapsed_us;
-		gstate.cumulative_frontier_rows += frontier_rows;
-		gstate.cumulative_frontier_chunks += work_units;
-		gstate.cumulative_frontier_storage_bytes += frontier_storage_bytes;
+		gstate.metrics.RecordEpoch(worker_count, elapsed_us, frontier_rows, work_units, frontier_storage_bytes);
 	}
 	if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
-		if (gstate.collect_runtime_metrics && !gstate.invariant_meta_pipelines_materialized) {
-			gstate.retained_build_executions += invariant_meta_pipelines.size();
+		if (gstate.metrics.Enabled() && !gstate.invariant_meta_pipelines_materialized) {
+			for (auto &meta_pipeline : invariant_meta_pipelines) {
+				auto sink = meta_pipeline.get().GetSink();
+				if (sink && sink->type == PhysicalOperatorType::CTE) {
+					gstate.metrics.RecordRetainedCTEMaterialization();
+				} else {
+					gstate.metrics.RecordRetainedBuild();
+				}
+			}
 		}
 		gstate.invariant_meta_pipelines_materialized = true;
 	}

@@ -82,9 +82,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	// If the key variant has been used, a recurring table will be created.
 	auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 	recurring_cte_tables[op.table_index] = recurring_table;
-	using_key_recursive_ctes.insert(op.table_index);
-	using_key_distinct_indices[op.table_index] = distinct_idx;
-	using_key_payload_indices[op.table_index] = payload_idx;
+	{
+		auto &planning_info = recursive_cte_planning[op.table_index];
+		planning_info.using_key = true;
+		planning_info.distinct_indices = distinct_idx;
+		planning_info.payload_indices = payload_idx;
+	}
 
 	planning_recursive_cte_depth++;
 	auto &right = CreatePlan(*op.children[1]);
@@ -103,9 +106,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	cast_cte.working_table = working_table;
 	cast_cte.recurring_table = recurring_table;
 	cast_cte.non_repeatable_operators = non_repeatable_operators;
-	auto state_scans = recursive_state_scans.find(op.table_index);
-	if (state_scans != recursive_state_scans.end()) {
-		for (auto &scan_ref : state_scans->second) {
+	auto planning_entry = recursive_cte_planning.find(op.table_index);
+	D_ASSERT(planning_entry != recursive_cte_planning.end());
+	if (!planning_entry->second.state_scans.empty()) {
+		for (auto &scan_ref : planning_entry->second.state_scans) {
 			auto &scan = scan_ref.get();
 			scan.recursive_cte = cast_cte;
 			scan.distinct_idx = distinct_idx;
@@ -165,18 +169,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 	if (cte == recursive_cte_tables.end()) {
 		throw InvalidInputException("Referenced recursive CTE does not exist.");
 	}
-	if (op.is_recurring && using_key_recursive_ctes.find(op.cte_index) != using_key_recursive_ctes.end()) {
+	auto planning_entry = recursive_cte_planning.find(op.cte_index);
+	if (op.is_recurring && planning_entry != recursive_cte_planning.end() && planning_entry->second.using_key) {
 		auto &state_scan = Make<PhysicalRecursiveCTEStateScan>(op.chunk_types, op.estimated_cardinality, op.cte_index)
 		                       .Cast<PhysicalRecursiveCTEStateScan>();
-		auto distinct_indices = using_key_distinct_indices.find(op.cte_index);
-		auto payload_indices = using_key_payload_indices.find(op.cte_index);
-		if (distinct_indices == using_key_distinct_indices.end() ||
-		    payload_indices == using_key_payload_indices.end()) {
-			throw InternalException("USING KEY recursive state metadata is missing");
-		}
-		state_scan.distinct_idx = distinct_indices->second;
-		state_scan.payload_idx = payload_indices->second;
-		recursive_state_scans[op.cte_index].push_back(state_scan);
+		state_scan.distinct_idx = planning_entry->second.distinct_indices;
+		state_scan.payload_idx = planning_entry->second.payload_indices;
+		planning_entry->second.state_scans.push_back(state_scan);
 		return state_scan;
 	}
 
