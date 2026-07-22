@@ -1,0 +1,53 @@
+# name: test/sql/function/list/lambdas/lambda_substring_stats.test
+# description: statistics seeded into lambda bodies must not corrupt substring results (issue #23229)
+# group: [lambdas]
+
+# Statistics seeded into a lambda body must never be more restrictive than reality: a wrong capture/element
+# reference-index mapping would put an ASCII column's "no unicode" stats onto a unicode reference, making
+# substring take its byte path and corrupt multi-byte characters. enable_verification re-runs each query with
+# the optimizer disabled (no stats reach the lambda) and asserts identical results, so any such regression fails.
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+statement ok
+PRAGMA enable_verification
+
+# Two captures, one ASCII and one unicode, in the same lambda body. The ASCII column may take the fast path;
+# the unicode column must stay character-correct. Offsets start at 2 so byte-truncation of the 2-byte chars
+# can never coincide with the correct result.
+statement ok
+CREATE TABLE multi AS SELECT 'abcdef' AS a_col, 'áéíóúü' AS u_col;
+
+query I
+SELECT list_transform([2, 3, 4], lambda i: substring(a_col, i, 2) || '|' || substring(u_col, i, 2)) FROM multi;
+----
+[bc|éí, cd|íó, de|óú]
+
+# Three captures (two ASCII, one unicode): only with >= 3 captures can a *shift* of the capture indices be
+# distinguished from a *swap*. Any wrong index moves ASCII stats onto the unicode reference and garbles it.
+statement ok
+CREATE TABLE three_cap AS SELECT 'abc' AS a1, 'def' AS a2, 'áéí' AS u1;
+
+query I
+SELECT list_transform([1, 2, 3], lambda i: substring(a1, i, 1) || substring(a2, i, 1) || substring(u1, i, 1)) FROM three_cap;
+----
+[adá, beé, cfí]
+
+# Element-seeding path: the substring argument is the list element (not a capture), seeded from the list
+# argument's child statistics. A unicode element must not take the byte path.
+query I
+SELECT list_transform(['café', 'abcd'], lambda x: substring(x, 2, 2));
+----
+[af, bc]
+
+# list_reduce with an initial value and a captured unicode column. Reduce has a distinct mapping (the element
+# is the second lambda parameter, and the initial value interposes between the list and the captures), so this
+# guards that path independently of list_transform.
+statement ok
+CREATE TABLE reduni AS SELECT 'áéí' AS u;
+
+query I
+SELECT list_reduce(['a', 'b'], lambda acc, x: acc || substring(u, 2, 1), 'Q') FROM reduni;
+----
+Qéé
