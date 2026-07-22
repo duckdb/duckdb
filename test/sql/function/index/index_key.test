@@ -317,7 +317,7 @@ SELECT index_key({'table': 'tbl1'}, 'PRIMARY_' || 'tbl1_0', 1);
 statement error
 SELECT index_key({'table': 'tbl1'}, txt, 1) FROM tbl1;
 ----
-index_key: parameter 'index_name' must be a constant
+must be a constant expression
 
 statement error
 SELECT index_key($1, 'PRIMARY_tbl1_0', 1);

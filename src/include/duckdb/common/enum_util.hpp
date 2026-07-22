@@ -380,6 +380,8 @@ enum class PartitionedColumnDataType : uint8_t;
 
 enum class PartitionedTupleDataType : uint8_t;
 
+enum class PatternMatchType : uint8_t;
+
 enum class PendingExecutionResult : uint8_t;
 
 enum class PhysicalOperatorType : uint8_t;
@@ -1104,6 +1106,9 @@ const char* EnumUtil::ToChars<PartitionedColumnDataType>(PartitionedColumnDataTy
 
 template<>
 const char* EnumUtil::ToChars<PartitionedTupleDataType>(PartitionedTupleDataType value);
+
+template<>
+const char* EnumUtil::ToChars<PatternMatchType>(PatternMatchType value);
 
 template<>
 const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult value);
@@ -1930,6 +1935,9 @@ PartitionedColumnDataType EnumUtil::FromString<PartitionedColumnDataType>(const 
 
 template<>
 PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const char *value);
+
+template<>
+PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value);
 
 template<>
 PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value);

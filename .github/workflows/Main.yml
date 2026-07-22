@@ -323,8 +323,10 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
       timeout-minutes: 10
@@ -368,6 +370,7 @@ jobs:
       run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  tidy-check:
@@ -382,9 +385,11 @@ jobs:
       CLANGD_BINARY: clangd-20
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
-        fetch-depth: 0
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
@@ -426,6 +431,7 @@ jobs:
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
       opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || '' }}
       runners: ${{ needs.prepare.outputs.runners }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  wasm-eh:
@@ -439,8 +445,10 @@ jobs:
       GEN: make
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: emscripten-core/setup-emsdk@v16
@@ -626,11 +634,12 @@ jobs:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-        fetch-depth: 0
-        fetch-tags: true
+        fetch_depth: 0
 
     - name: Install tools
       timeout-minutes: 10
@@ -734,8 +743,10 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Check staged extension install/load
@@ -761,11 +772,12 @@ jobs:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
-        fetch-depth: 0
-        fetch-tags: true
+        fetch_depth: 0
 
     - name: Install tools
       timeout-minutes: 10
@@ -933,6 +945,7 @@ jobs:
     with:
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
 
  windows:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'windows') }}
@@ -945,6 +958,7 @@ jobs:
       override_git_describe: ${{ needs.prepare.outputs.effective_git_describe }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       runners: ${{ needs.prepare.outputs.runners }}
+      runner_provider: ${{ needs.prepare.outputs.runner_provider }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
@@ -980,9 +994,11 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          fetch-depth: 0
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          fetch_depth: 0
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install dependencies
@@ -1211,8 +1227,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
@@ -1263,8 +1281,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
@@ -1296,8 +1316,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
@@ -1340,8 +1362,10 @@ jobs:
       - linux-release
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
       with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: actions/setup-python@v6
