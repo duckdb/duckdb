@@ -1,5 +1,6 @@
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 
+#include "duckdb/function/window_function.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
