@@ -127,6 +127,7 @@ SetStatement:
   by_value: true
   rules:
     - SetAssignmentOrTimeZone
+    - SetSchema
     - SetTimeZone
     - StandardAssignment
 

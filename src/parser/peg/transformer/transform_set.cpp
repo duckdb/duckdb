@@ -39,6 +39,13 @@ PEGTransformerFactory::TransformSetStatement(PEGTransformer &transformer,
 	return std::move(set_assignment_or_time_zone);
 }
 
+// SetSchema <- 'SCHEMA' StringLiteral
+unique_ptr<SetStatement> PEGTransformerFactory::TransformSetSchema(PEGTransformer &transformer,
+                                                                   const string &string_literal) {
+	auto value = make_uniq<ConstantExpression>(Value(string_literal));
+	return make_uniq<SetVariableStatement>("schema", std::move(value), SetScope::AUTOMATIC);
+}
+
 // ZoneLocal <- 'LOCAL'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneLocal(PEGTransformer &transformer) {
 	return make_uniq<DefaultExpression>();
