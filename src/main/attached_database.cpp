@@ -265,8 +265,6 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 			return;
 		}
 	}
-	// we hold the last reference: no other thread can obtain a reference to the database anymore,
-	// so we can close (which may checkpoint and grab the WAL lock) without holding the close lock
 	attached_db->Close(close_action);
 	attached_db.reset();
 }
