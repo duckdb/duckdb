@@ -32,11 +32,72 @@ SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloo
 ----
 true
 
+# IS NOT DISTINCT FROM a non-NULL constant can use the same Bloom filter probe as equality
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r = 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Equal inclusive bounds are reduced to equality, enabling Bloom filter pruning
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r BETWEEN 201 AND 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r IS NOT DISTINCT FROM 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r >= 201 AND r <= 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
 # this value is outside min/max
 query I
 SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloom1.parquet', 'r', '112121212');
 ----
 true
+
+statement ok
+COPY (
+    SELECT
+        printf('00000000-0000-0000-0000-%012d', (i % 100) * 2)::UUID AS u,
+        i::BIGINT AS payload
+    FROM range(20480) t(i)
+) TO '{TEST_DIR}/bloom_uuid.parquet' (
+    FORMAT PARQUET,
+    ROW_GROUP_SIZE 2048,
+    DICTIONARY_SIZE_LIMIT 1000,
+    WRITE_BLOOM_FILTER TRUE
+);
+
+# The UUID is absent from every row group but falls within every min/max range
+query I
+SELECT BOOL_AND(bloom_filter_excludes)
+FROM parquet_bloom_probe(
+    '{TEST_DIR}/bloom_uuid.parquet',
+    'u',
+    '00000000-0000-0000-0000-000000000101'
+);
+----
+true
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_uuid.parquet')
+WHERE u = '00000000-0000-0000-0000-000000000101'::UUID;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_uuid.parquet')
+WHERE u = '00000000-0000-0000-0000-000000000101'::UUID;
+----
+0
 
 statement ok
 CREATE MACRO assert_bloom_filter_hit(file, col, val) AS TABLE
@@ -141,6 +202,211 @@ SELECT bloom_filter_excludes
 FROM parquet_bloom_probe('{TEST_DIR}/bloom_blob.parquet', 'b', from_hex('FE')::BLOB);
 ----
 true
+
+# Temporal bloom filters use the encoded Parquet value, including the timestamp unit
+statement ok
+COPY (
+    SELECT
+        (DATE '2000-01-01' + (2 * (i % 2048))::INTEGER)::DATE AS dt,
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP_S AS ts_sec,
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP AS ts,
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP_MS AS ts_ms,
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMP_NS AS ts_ns,
+        (TIMESTAMP '2000-01-01' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMPTZ AS ts_tz,
+        (TIMESTAMP '2000-01-01' +
+         (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMESTAMPTZ_NS AS ts_tz_ns,
+        (TIME '00:00:00' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIME AS tm,
+        (TIMETZ '12:00:00+02' + (2 * (i % 2048)) * INTERVAL 1 SECOND)::TIMETZ AS tm_tz
+    FROM range(8192) t(i)
+) TO '{TEST_DIR}/bloom_temporal.parquet' (
+    FORMAT PARQUET,
+    ROW_GROUP_SIZE 2048,
+    DICTIONARY_SIZE_LIMIT 4096,
+    BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.0001
+);
+
+query III
+SELECT column_id, bool_and(bloom_filter_offset IS NOT NULL), bool_and(bloom_filter_length IS NOT NULL)
+FROM parquet_metadata('{TEST_DIR}/bloom_temporal.parquet')
+GROUP BY column_id
+ORDER BY column_id;
+----
+0	true	true
+1	true	true
+2	true	true
+3	true	true
+4	true	true
+5	true	true
+6	true	true
+7	true	true
+8	true	true
+
+# Verify the DuckDB logical types and physical Parquet timestamp units under test
+query TTIIIT
+SELECT name, type,
+       coalesce(contains(logical_type, 'MILLIS=MilliSeconds()'), false),
+       coalesce(contains(logical_type, 'MICROS=MicroSeconds()'), false),
+       coalesce(contains(logical_type, 'NANOS=NanoSeconds()'), false),
+       duckdb_type
+FROM parquet_schema('{TEST_DIR}/bloom_temporal.parquet')
+WHERE type IS NOT NULL
+ORDER BY name;
+----
+dt	INT32	false	false	false	DATE
+tm	INT64	false	true	false	TIME
+tm_tz	INT64	false	true	false	TIME WITH TIME ZONE
+ts	INT64	false	true	false	TIMESTAMP
+ts_ms	INT64	true	false	false	TIMESTAMP
+ts_ns	INT64	false	false	true	TIMESTAMP_NS
+ts_sec	INT64	false	true	false	TIMESTAMP
+ts_tz	INT64	false	true	false	TIMESTAMP WITH TIME ZONE
+ts_tz_ns	INT64	false	false	true	TIMESTAMPTZ_NS
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'dt', DATE '2000-01-01' + 1001);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts_sec',
+                         TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts',
+                         TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts_ms',
+                         TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts_ns',
+                         TIMESTAMP_NS '2000-01-01' + INTERVAL 1001 SECOND);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts_tz',
+                         (TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND)::TIMESTAMPTZ);
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'ts_tz_ns',
+                         TIMESTAMPTZ_NS '2000-01-01 00:16:41+00');
+----
+true
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'tm', TIME '00:16:41');
+----
+true
+
+# Parquet normalizes TIME WITH TIME ZONE to UTC before hashing
+query I
+SELECT bool_or(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'tm_tz', TIMETZ '12:00:00+02');
+----
+false
+
+query I
+SELECT bool_and(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_temporal.parquet', 'tm_tz', TIMETZ '12:16:41+02');
+----
+true
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE dt = DATE '2000-01-01' + 1001;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts_sec = TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts = TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts_ms = TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts_ns = TIMESTAMP_NS '2000-01-01' + INTERVAL 1001 SECOND;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts_tz = (TIMESTAMP '2000-01-01' + INTERVAL 1001 SECOND)::TIMESTAMPTZ;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE ts_tz_ns = TIMESTAMPTZ_NS '2000-01-01 00:16:41+00';
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom_temporal.parquet'
+WHERE tm = TIME '00:16:41';
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 4.*
+
+# Infinite timestamp sentinels are preserved in Parquet regardless of the timestamp unit
+statement ok
+COPY (
+	SELECT CASE
+		WHEN i = 0 THEN 'infinity'::TIMESTAMP_MS
+		WHEN i = 1 THEN '-infinity'::TIMESTAMP_MS
+		ELSE (TIMESTAMP '2000-01-01' + i * INTERVAL 1 MILLISECOND)::TIMESTAMP_MS
+	END AS ts
+	FROM range(2048) range_table(i)
+)
+TO '{TEST_DIR}/timestamp_ms_infinity_bloom.parquet' (
+	FORMAT parquet,
+	ROW_GROUP_SIZE 2048,
+	DICTIONARY_SIZE_LIMIT 4096,
+	BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.0001
+)
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/timestamp_ms_infinity_bloom.parquet')
+WHERE ts = 'infinity'::TIMESTAMP
+----
+1
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/timestamp_ms_infinity_bloom.parquet')
+WHERE ts = '-infinity'::TIMESTAMP
+----
+1
 
 # Computed expressions do not operate in the raw column's bloom filter domain
 query I
@@ -339,3 +605,49 @@ query I
 select encodings in ('PLAIN_DICTIONARY', 'RLE_DICTIONARY') from parquet_metadata('{TEST_DIR}/my.parquet');
 ----
 false
+
+statement ok
+COPY (
+	SELECT CASE
+		WHEN i < 2048 THEN (-1.0::DOUBLE / 'Infinity'::DOUBLE)
+		WHEN i % 2 = 0 THEN -1.0::DOUBLE
+		ELSE 1.0::DOUBLE
+	END AS x
+	FROM range(4096) t(i)
+	ORDER BY i
+) TO '{TEST_DIR}/bloom_ndf_signed_zero.parquet' (
+	FORMAT PARQUET,
+	ROW_GROUP_SIZE 2048,
+	WRITE_BLOOM_FILTER TRUE,
+	DICTIONARY_SIZE_LIMIT 1000
+);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
+WHERE x IS NOT DISTINCT FROM 0.0;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
+WHERE x IS NOT DISTINCT FROM 0.0;
+----
+2048
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
+WHERE x IS NOT DISTINCT FROM -0.0;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
+WHERE x IS NOT DISTINCT FROM -0.0;
+----
+2048

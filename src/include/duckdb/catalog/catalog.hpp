@@ -259,6 +259,9 @@ public:
 	                                                      OnEntryNotFound if_not_found);
 	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const Identifier &schema,
 	                                                      OnEntryNotFound if_not_found);
+	//! Look up a (possibly nested) schema by its path (outermost first) in this catalog
+	DUCKDB_API optional_ptr<SchemaCatalogEntry>
+	GetSchema(CatalogTransaction transaction, const vector<Identifier> &schema_path, OnEntryNotFound if_not_found);
 	[[deprecated("Fold the catalog into the EntryLookupInfo and use GetSchema(context, "
 	             "EntryLookupInfo)")]] DUCKDB_API static optional_ptr<SchemaCatalogEntry>
 	GetSchema(ClientContext &context, const Identifier &catalog_name, const EntryLookupInfo &schema_lookup,
@@ -267,6 +270,11 @@ public:
 	                                                const Identifier &schema);
 	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const Identifier &catalog_name,
 	                                                             const Identifier &schema,
+	                                                             OnEntryNotFound if_not_found);
+	//! Look up a (possibly nested) schema by its path (outermost first). A single-element path is the normal top-level
+	//! lookup; deeper paths navigate the nested-schema chain.
+	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const Identifier &catalog_name,
+	                                                             const vector<Identifier> &schema_path,
 	                                                             OnEntryNotFound if_not_found);
 	[[deprecated("Fold the catalog into the EntryLookupInfo and use GetSchema(retriever, "
 	             "EntryLookupInfo)")]] DUCKDB_API static optional_ptr<SchemaCatalogEntry>

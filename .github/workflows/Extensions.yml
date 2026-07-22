@@ -30,55 +30,13 @@ on:
       runners:
         type: string
         required: true
+      runner_provider:
+        type: string
+        required: true
       save_cache:
         type: boolean
         required: false
         default: false
-  workflow_dispatch:
-    inputs:
-      override_git_describe:
-        description: 'Version tag to override git describe. Use to produce binaries'
-        type: string
-      git_ref:
-        description: 'Set to override the DuckDB version, leave empty for current commit'
-        type: string
-        required: false
-        default: ''
-      extra_exclude_archs:
-        description: 'Inject more architectures to skip'
-        type: string
-        required: false
-        default: ''
-      opt_in_archs:
-        description: 'Semicolon-separated list of architectures to opt into'
-        type: string
-        required: false
-        default: 'windows_arm64;'
-      skip_tests:
-        description: 'Set to true to skip all testing'
-        type: boolean
-        required: false
-        default: false
-      run_all:
-        type: boolean
-        required: false
-        default: true
-      run_disk_clean_step:
-        description: 'Disabling this can result in faster builds, but may run out of space on some runners'
-        type: boolean
-        required: false
-        default: true
-      runners:
-        description: 'JSON object with runner labels, e.g. {"linux_x64":"ubuntu-latest","linux_22_x64":"ubuntu-22.04","linux_arm64":"ubuntu-24.04-arm"}'
-        type: string
-        required: false
-        default: '{}'
-      save_cache:
-        description: 'Override whether extension build caches should be saved'
-        type: boolean
-        required: false
-        default: false
-
 concurrency:
   group: extensions-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
@@ -219,9 +177,11 @@ jobs:
     needs:
       - extensions-build
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          fetch-depth: 0
+          runner_provider: ${{ inputs.runner_provider }}
+          fetch_depth: 0
           ref: ${{ inputs.git_ref }}
 
       - uses: ./.github/actions/ccache-action

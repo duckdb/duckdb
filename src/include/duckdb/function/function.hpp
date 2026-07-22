@@ -15,6 +15,8 @@
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "fmt/core.h"
 
 namespace duckdb {
@@ -169,6 +171,12 @@ public:
 		for (auto &arg : arguments) {
 			AddParameter(std::move(arg));
 		}
+	}
+	FunctionSignature(vector<FunctionParameter> parameters, LogicalType return_type)
+	    : parameters(std::move(parameters)), varargs(LogicalTypeId::INVALID), return_type(std::move(return_type)) {
+	}
+	FunctionSignature(vector<FunctionParameter> parameters, LogicalType varargs, LogicalType return_type)
+	    : parameters(std::move(parameters)), varargs(std::move(varargs)), return_type(std::move(return_type)) {
 	}
 	FunctionSignature(vector<LogicalType> arguments, LogicalType return_type)
 	    : FunctionSignature(std::move(arguments), LogicalType(LogicalTypeId::INVALID), std::move(return_type)) {
@@ -550,6 +558,62 @@ public:
 	auto SetReturnType(LogicalType return_type_p) -> void {
 		return_type = std::move(return_type_p);
 	}
+};
+
+//! Shared state of the "bind" callback inputs of scalar, aggregate and window functions: the arguments the function
+//! was called with, their resolved names, and helpers to extract constant arguments during binding.
+class BindFunctionInput {
+public:
+	BindFunctionInput(ClientContext &context_p, const BoundSimpleFunction &function_p,
+	                  vector<unique_ptr<Expression>> &arguments_p,
+	                  optional_ptr<const vector<Identifier>> argument_names_p)
+	    : context(context_p), function(function_p), arguments(arguments_p), argument_names(argument_names_p) {
+	}
+
+	ClientContext &GetClientContext() const {
+		return context;
+	}
+	vector<unique_ptr<Expression>> &GetArguments() const {
+		return arguments;
+	}
+	//! The resolved name of every argument, parallel to GetArguments(). Not set if the names are unavailable.
+	optional_ptr<const vector<Identifier>> GetArgumentNames() const {
+		return argument_names;
+	}
+
+	//! Get the constant value of an argument.
+	//! Throws ParameterNotResolvedException if unresolved, and BinderException for non-constant arguments.
+	//! When 'accept_null' is false, also throws if the (constant) value is NULL.
+	DUCKDB_API Value GetConstant(idx_t arg_idx, bool accept_null = true) const;
+	DUCKDB_API Value GetConstant(const Identifier &name, bool accept_null = true) const;
+
+	//! Shorthand for GetConstant(<arg>, false)
+	DUCKDB_API Value GetNonNullConstant(idx_t index) const {
+		return GetConstant(index, false);
+	}
+	DUCKDB_API Value GetNonNullConstant(const Identifier &name) const {
+		return GetConstant(name, false);
+	}
+
+	//! Try to get the constant value of an argument.
+	//! Never throws: returns none if the argument...
+	//! - is not constant (unresolved parameter or a non-foldable expression)
+	//! - index is out of range
+	//! - was not found when looking up by name
+	//! Use this when a non-constant argument should fall back to the runtime value instead of being an error.
+	DUCKDB_API optional<Value> TryGetConstant(idx_t arg_idx) const;
+	DUCKDB_API optional<Value> TryGetConstant(const Identifier &name) const;
+
+private:
+	//! Resolve a named argument to its position, or an empty optional_idx if no argument with that name was provided.
+	optional_idx GetArgumentIndex(const Identifier &name) const;
+
+private:
+	ClientContext &context;
+	//! Only used to name the function in error messages
+	const BoundSimpleFunction &function;
+	vector<unique_ptr<Expression>> &arguments;
+	optional_ptr<const vector<Identifier>> argument_names;
 };
 
 } // namespace duckdb

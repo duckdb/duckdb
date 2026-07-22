@@ -24,7 +24,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include <cmath>
@@ -709,19 +708,15 @@ static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input
 
 static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
+	D_ASSERT(input.GetArguments().size() == 1);
 
-	D_ASSERT(arguments.size() == 1);
-	if (arguments[0]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
-		return nullptr;
-	}
-	auto &const_expr = arguments[0]->Cast<BoundConstantExpression>();
-	if (const_expr.GetValue().IsNull()) {
+	// only need to promote if the argument is a constant that exactly equals the type's minimum value
+	auto constant = input.TryGetConstant(0);
+	if (!constant || constant->IsNull()) {
 		return nullptr;
 	}
 	auto &type = bound_function.GetArguments()[0];
-	// only need to promote if the constant exactly equals the type's minimum value
-	if (const_expr.GetValue() != Value::MinimumValue(type)) {
+	if (*constant != Value::MinimumValue(type)) {
 		return nullptr;
 	}
 	LogicalType promoted_type;

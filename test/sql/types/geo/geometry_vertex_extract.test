@@ -149,13 +149,13 @@ SELECT vertex_extract('POINT(1 2)'::GEOMETRY, 'w');
 statement error
 SELECT vertex_extract('POINT(1 2)'::GEOMETRY, NULL::VARCHAR);
 ----
-<REGEX>:Binder Error:.*cannot be NULL.*
+<REGEX>:Binder Error:.*must not be NULL.*
 
 # The ordinate must be a constant, not a per-row value
 statement error
 SELECT geom.x, vertex_extract(geom, ord) FROM (SELECT 'POINT(1 2)'::GEOMETRY AS geom, 'x' AS ord);
 ----
-<REGEX>:Binder Error:.*must be constant.*
+<REGEX>:Binder Error:.*must be a constant.*
 
 # ------------------------------------------------------------------------------
 # Statistics propagation

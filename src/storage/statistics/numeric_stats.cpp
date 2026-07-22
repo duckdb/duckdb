@@ -127,6 +127,11 @@ double GetNumericValueUnion::Operation(const NumericValueUnion &v) {
 	return v.value_.double_;
 }
 
+template <>
+interval_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.interval;
+}
+
 template <class T>
 T NumericStats::GetMinUnsafe(const BaseStatistics &stats) {
 	return GetNumericValueUnion::Operation<T>(NumericStats::GetDataUnsafe(stats).min);
@@ -270,6 +275,8 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 		return CheckZonemapTemplated<float>(stats, comparison_type, constants);
 	case PhysicalType::DOUBLE:
 		return CheckZonemapTemplated<double>(stats, comparison_type, constants);
+	case PhysicalType::INTERVAL:
+		return CheckZonemapTemplated<interval_t>(stats, comparison_type, constants);
 	default:
 		throw InternalException("Unsupported type for NumericStats::CheckZonemap");
 	}
@@ -328,6 +335,9 @@ void SetNumericValueInternal(const Value &input, const LogicalType &type, Numeri
 	case PhysicalType::DOUBLE:
 		val.value_.double_ = DoubleValue::Get(input);
 		break;
+	case PhysicalType::INTERVAL:
+		val.value_.interval = IntervalValue::Get(input);
+		break;
 	default:
 		throw InternalException("Unsupported type for NumericStatistics::SetValueInternal");
 	}
@@ -371,6 +381,8 @@ Value NumericValueUnionToValueInternal(const LogicalType &type, const NumericVal
 		return Value::FLOAT(val.value_.float_);
 	case PhysicalType::DOUBLE:
 		return Value::DOUBLE(val.value_.double_);
+	case PhysicalType::INTERVAL:
+		return Value::INTERVAL(val.value_.interval);
 	default:
 		throw InternalException("Unsupported type for NumericValueUnionToValue");
 	}
@@ -475,6 +487,9 @@ static void SerializeNumericStatsValue(const LogicalType &type, NumericValueUnio
 	case PhysicalType::DOUBLE:
 		serializer.WriteProperty(101, "value", val.value_.double_);
 		break;
+	case PhysicalType::INTERVAL:
+		serializer.WriteProperty(101, "value", val.value_.interval);
+		break;
 	default:
 		throw InternalException("Unsupported type for serializing numeric statistics");
 	}
@@ -528,6 +543,9 @@ static void DeserializeNumericStatsValue(const LogicalType &type, NumericValueUn
 	case PhysicalType::DOUBLE:
 		result.value_.double_ = deserializer.ReadProperty<double>(101, "value");
 		break;
+	case PhysicalType::INTERVAL:
+		result.value_.interval = deserializer.ReadProperty<interval_t>(101, "value");
+		break;
 	default:
 		throw InternalException("Unsupported type for serializing numeric statistics");
 	}
@@ -535,6 +553,10 @@ static void DeserializeNumericStatsValue(const LogicalType &type, NumericValueUn
 
 void NumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
+	// INTERVAL stats are only serialized in V2.0.0 and later.
+	if (stats.GetType().id() == LogicalTypeId::INTERVAL && !serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		return;
+	}
 	serializer.WriteObject(200, "min", [&](Serializer &object) {
 		SerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, object);
 	});
@@ -545,7 +567,9 @@ void NumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer
 
 void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &result) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(result);
-
+	if (!deserializer.CanDeserializeProperty(200, "min")) {
+		return;
+	}
 	deserializer.ReadObject(200, "min", [&](Deserializer &object) {
 		DeserializeNumericStatsValue(result.GetType(), numeric_stats.min, numeric_stats.has_min, object);
 	});
@@ -627,6 +651,9 @@ void NumericStats::Verify(const BaseStatistics &stats, const Vector &vector, con
 		break;
 	case PhysicalType::DOUBLE:
 		TemplatedVerify<double>(stats, vector, sel, count);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedVerify<interval_t>(stats, vector, sel, count);
 		break;
 	default:
 		throw InternalException("Unsupported type %s for numeric statistics verify", type.ToString());

@@ -21,6 +21,7 @@ add_library_unity(
   monotone_preimage.cpp
   move_constants.cpp
   not_comparison_simplification.cpp
+  not_conjunction_simplification.cpp
   ordered_aggregate_optimizer.cpp
   predicate_factoring.cpp
   regex_optimizations.cpp
