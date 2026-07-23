@@ -3,6 +3,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -379,7 +380,7 @@ struct ValueOrNull {
 
 	bool operator>(const ValueOrNull &other) const {
 		if (is_valid && other.is_valid) {
-			return value > other.value;
+			return GreaterThan::Operation(value, other.value);
 		}
 		if (!is_valid && !other.is_valid) {
 			return false;

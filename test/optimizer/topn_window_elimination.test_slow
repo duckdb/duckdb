@@ -42,6 +42,19 @@ WHERE s < random()
 QUALIFY row_number() OVER (ORDER BY s) <= 1
 ----
 
+# NaN sorts after all finite floating-point values
+query II
+WITH floating_values(id, val) AS (
+	VALUES (1, 0.0::DOUBLE), (2, 'NaN'::DOUBLE), (3, -1.0::DOUBLE)
+)
+SELECT id, val
+FROM floating_values
+QUALIFY row_number() OVER (ORDER BY val ASC NULLS LAST) <= 2
+ORDER BY id
+----
+1	0.0
+3	-1.0
+
 statement ok
 CREATE MACRO window_fun(table_name, col_names, sort_order, topn) AS TABLE
 FROM query(
