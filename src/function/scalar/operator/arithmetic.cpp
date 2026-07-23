@@ -89,15 +89,6 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 	return function;
 }
 
-// checked ops only have same-type specializations: promote the narrow side, then check at the result width
-template <class OP>
-struct MixedOverflowCheck {
-	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right) {
-		return OP::template Operation<TR, TR, TR>(TR(left), TR(right));
-	}
-};
-
 // mixed-width integer pairs compute at the wider operand's width via in-register argument promotion
 template <class OP>
 static scalar_function_t GetMixedIntegerFunction(PhysicalType left, PhysicalType right) {
@@ -655,30 +646,6 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 	// LCOV_EXCL_STOP
 }
 
-// mixed-width integer overloads: exact binder matches replace the cast-to-common plan, eliding the cast pass
-template <class OPOVERFLOWCHECK, class TRYOP, class PROPAGATE, class BASEOP>
-static void AddMixedIntegerFunctions(ScalarFunctionSet &set) {
-	const LogicalType ladders[2][4] = {
-	    {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT},
-	    {LogicalType::UTINYINT, LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT}};
-	for (auto &ladder : ladders) {
-		for (idx_t wide = 1; wide < 4; wide++) {
-			for (idx_t narrow = 0; narrow < wide; narrow++) {
-				for (bool wide_left : {true, false}) {
-					auto &left = wide_left ? ladder[wide] : ladder[narrow];
-					auto &right = wide_left ? ladder[narrow] : ladder[wide];
-					ScalarFunction function({left, right}, ladder[wide],
-					                        GetMixedIntegerFunction<MixedOverflowCheck<OPOVERFLOWCHECK>>(
-					                            left.InternalType(), right.InternalType()),
-					                        nullptr, PropagateNumericStats<TRYOP, PROPAGATE, BASEOP>);
-					function.SetFallible();
-					set.AddFunction(function);
-				}
-			}
-		}
-	}
-}
-
 ScalarFunctionSet OperatorAddFun::GetFunctions() {
 	ScalarFunctionSet add("+");
 	for (auto &type : LogicalType::Numeric()) {
@@ -687,7 +654,6 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 		// binary add function adds two numbers together
 		add.AddFunction(AddFunction::GetFunction(type, type));
 	}
-	AddMixedIntegerFunctions<AddOperatorOverflowCheck, TryAddOperator, AddPropagateStatistics, AddOperator>(add);
 	// we can add integers to dates
 	add.AddFunction(AddFunction::GetFunction(LogicalType::DATE, LogicalType::INTEGER));
 	add.AddFunction(AddFunction::GetFunction(LogicalType::INTEGER, LogicalType::DATE));
@@ -976,8 +942,6 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 		// binary subtract function "a - b", subtracts b from a
 		subtract.AddFunction(SubtractFunction::GetFunction(type, type));
 	}
-	AddMixedIntegerFunctions<SubtractOperatorOverflowCheck, TrySubtractOperator, SubtractPropagateStatistics,
-	                         SubtractOperator>(subtract);
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::BIGNUM));
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::BIGNUM, LogicalType::BIGNUM));
 	// we can subtract dates from each other
@@ -1138,8 +1102,6 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
 		}
 	}
-	AddMixedIntegerFunctions<MultiplyOperatorOverflowCheck, TryMultiplyOperator, MultiplyPropagateStatistics,
-	                         MultiplyOperator>(multiply);
 	multiply.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, double, interval_t, MultiplyOperator>));
