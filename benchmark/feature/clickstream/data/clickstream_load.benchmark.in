@@ -1,10 +1,11 @@
 # Shared clickstream source-data loader, included by refresh/serve/cases templates. Builds the
 # ClickBench-derived source (hits_raw -> users -> hits) once per PARQUET_COUNT scale, then applies
 # the scenario-specific SETUP_SQL (feature definitions, serving spine, seed refreshes).
-# `hits` is inserted ORDER BY EventTime so it is physically clustered by the event timestamp: its
-# per-row-group EventTime zonemaps become monotonic and non-overlapping, which lets a REFRESH's
-# WINDOW filter (EventTime >= ts - window AND EventTime < ts) prune whole row groups at scan time.
-# Clustering at load costs one sort on a write we already do -- far cheaper than reordering later.
+# The stub supplies ${CLUSTER_BY}: `ORDER BY EventTime` (clustered variant) or empty (unclustered control).
+# When clustered, `hits` lands physically ordered by the event timestamp, so its per-row-group EventTime
+# zonemaps are monotonic and non-overlapping and a REFRESH's WINDOW filter (EventTime >= ts - window AND
+# EventTime < ts) prunes whole row groups at scan time. Clustering at load costs one sort on a write we
+# already do -- far cheaper than reordering later.
 # NOTE: no SQL "--" comments inside the load/reload blocks; the interpreter joins lines with a
 # space, which would comment out everything that follows on the same joined line.
 
@@ -20,9 +21,10 @@ nruns 3
 
 disable_timeout
 
-# Cache the source data per scale. The cache key MUST include PARQUET_COUNT, otherwise the
-# 20-file and 100-file datasets would collide in a single db file.
-cache feature_src_${PARQUET_COUNT}.db
+# Cache the source data per scale AND layout. The cache key MUST include PARQUET_COUNT (else the 20-file
+# and 100-file datasets collide) and CLUSTER_TAG (else the clustered and unclustered `hits` layouts collide
+# in one db file, and a stale cache would silently defeat the clustered/unclustered comparison).
+cache feature_src_${PARQUET_COUNT}_${CLUSTER_TAG}.db
 
 # First run for a given scale: build the source (cached), then materialise the feature setup.
 load
@@ -30,7 +32,7 @@ CREATE TABLE hits_raw AS SELECT CAST(UserID AS BIGINT) AS UserID, epoch_ms(Event
 CREATE TABLE users (UserID BIGINT PRIMARY KEY);
 INSERT INTO users SELECT DISTINCT UserID FROM hits_raw;
 CREATE TABLE hits (UserID BIGINT, EventTime TIMESTAMP, RegionID INTEGER, CounterID INTEGER, FOREIGN KEY (UserID) REFERENCES users(UserID));
-INSERT INTO hits SELECT UserID, EventTime, RegionID, CounterID FROM hits_raw ORDER BY EventTime;
+INSERT INTO hits SELECT UserID, EventTime, RegionID, CounterID FROM hits_raw ${CLUSTER_BY};
 DROP TABLE hits_raw;
 ${SETUP_SQL}
 
