@@ -473,8 +473,20 @@ def repo_root():
 CLUSTER_VARIANTS = [("clu", "ORDER BY EventTime"), ("unc", "")]
 
 
-def stub_text(subdir, prefix, tmpl_rel, bench_name, name, pc, setup, run, seed, desc, cluster_tag="clu",
-              cluster_by="ORDER BY EventTime"):
+def stub_text(
+    subdir,
+    prefix,
+    tmpl_rel,
+    bench_name,
+    name,
+    pc,
+    setup,
+    run,
+    seed,
+    desc,
+    cluster_tag="clu",
+    cluster_by="ORDER BY EventTime",
+):
     header_path = "benchmark/feature/clickstream/{}/{}{}.benchmark".format(subdir, prefix, name)
     return (
         "# name: {path}\n"
