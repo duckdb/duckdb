@@ -105,6 +105,16 @@ struct ModFun {
 	static constexpr const char *Name = "mod";
 };
 
+struct CastFun {
+	static constexpr const char *Name = "__cast";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Casts value to the target type of the expression.";
+	static constexpr const char *Example = "__cast(3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct DecimalDivisionFun {
 	static constexpr const char *Name = "decimal_division";
 	static constexpr const char *Parameters = "x,y[,scale]";

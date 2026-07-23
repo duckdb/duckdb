@@ -55,11 +55,11 @@ void OuterJoinSimplification::AddRequiredColumns(const vector<JoinCondition> &co
 
 bool OuterJoinSimplification::GetColumnBinding(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-		if (expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+		if (!BoundCastExpression::IsCast(expr)) {
 			return false;
 		}
-		auto &cast = expr.Cast<BoundCastExpression>();
-		return GetColumnBinding(cast.Child(), binding);
+		auto &cast = expr.Cast<BoundFunctionExpression>();
+		return GetColumnBinding(BoundCastExpression::Child(cast), binding);
 	}
 	auto &colref = expr.Cast<BoundColumnRefExpression>();
 	binding = colref.Binding();
@@ -68,14 +68,15 @@ bool OuterJoinSimplification::GetColumnBinding(const Expression &expr, ColumnBin
 
 bool OuterJoinSimplification::GetNullPreservingColumnBinding(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-		if (expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+		if (!BoundCastExpression::IsCast(expr)) {
 			return false;
 		}
-		auto &cast = expr.Cast<BoundCastExpression>();
-		if (cast.IsTryCast() || !BoundCastExpression::CastIsInvertible(cast.source_type(), cast.GetReturnType())) {
+		auto &cast = expr.Cast<BoundFunctionExpression>();
+		if (BoundCastExpression::IsTryCast(cast) ||
+		    !BoundCastExpression::CastIsInvertible(BoundCastExpression::SourceType(cast), cast.GetReturnType())) {
 			return false;
 		}
-		return GetNullPreservingColumnBinding(cast.Child(), binding);
+		return GetNullPreservingColumnBinding(BoundCastExpression::Child(cast), binding);
 	}
 	auto &colref = expr.Cast<BoundColumnRefExpression>();
 	binding = colref.Binding();
