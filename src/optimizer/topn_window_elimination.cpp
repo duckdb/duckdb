@@ -1018,6 +1018,13 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				// We cannot use late materialization by scanning a single table.
 				return false;
 			}
+			if (join.HasProjectionMap()) {
+				const auto &projection_map =
+				    all_right_replaceable ? join.left_projection_map : join.right_projection_map;
+				if (projection_map.empty()) {
+					return false;
+				}
+			}
 
 			TableIndex replace_table_idx = all_right_replaceable ? right_idx : left_idx;
 			for (idx_t i = 0; i < projections.size(); i++) {

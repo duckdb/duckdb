@@ -151,3 +151,31 @@ WITH cte AS (SELECT a, b, c::TIMESTAMPTZ AS c FROM casted)
 SELECT * FROM cte QUALIFY row_number() OVER (PARTITION BY a ORDER BY c DESC) = 1
 ----
 x	false	2024-01-01 00:00:00+00
+
+# A join can have an explicit projection map on only the other side.
+statement ok
+CREATE TABLE filter_left (id INTEGER, sort_key INTEGER, x INTEGER, y INTEGER)
+
+statement ok
+INSERT INTO filter_left VALUES (1, 0, 5, 5), (1, 1, 1, 1)
+
+statement ok
+CREATE TABLE filter_right (id INTEGER, z INTEGER)
+
+statement ok
+INSERT INTO filter_right VALUES (1, 1)
+
+statement ok
+SET disabled_optimizers = 'filter_pushdown,join_order'
+
+query III
+SELECT l.id, l.x, l.y
+FROM filter_left l
+JOIN filter_right r USING (id)
+WHERE l.x + r.z < 5
+QUALIFY row_number() OVER (PARTITION BY l.id ORDER BY l.sort_key) = 1
+----
+1	1	1
+
+statement ok
+SET disabled_optimizers = ''
