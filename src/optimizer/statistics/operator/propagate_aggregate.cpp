@@ -103,20 +103,21 @@ bool TryGetMinMaxColumnInfo(const Expression &expr, MinMaxColumnInfo &info) {
 		info.result_type = col_ref.GetReturnType();
 		return true;
 	}
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+	if (!BoundCastExpression::IsCast(expr)) {
 		return false;
 	}
-	const auto &cast = expr.Cast<BoundCastExpression>();
-	if (cast.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+	const auto &cast = expr.Cast<BoundFunctionExpression>();
+	const auto &cast_child = BoundCastExpression::Child(cast);
+	if (cast_child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return false;
 	}
-	const auto &col_ref = cast.Child().Cast<BoundColumnRefExpression>();
-	if (!IsSafeMinMaxCast(col_ref.GetReturnType(), cast.GetReturnType())) {
+	const auto &col_ref = cast_child.Cast<BoundColumnRefExpression>();
+	if (!IsSafeMinMaxCast(col_ref.GetReturnType(), BoundCastExpression::TargetType(cast))) {
 		return false;
 	}
 	info.binding = col_ref.Binding();
 	info.input_type = col_ref.GetReturnType();
-	info.result_type = cast.GetReturnType();
+	info.result_type = BoundCastExpression::TargetType(cast);
 	return true;
 }
 
