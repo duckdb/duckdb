@@ -239,14 +239,15 @@ unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStat
 	return StatisticsOperationsNumericNumericCast(stats, target);
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast,
-                                                                     unique_ptr<Expression> &expr_ptr) {
-	auto child_stats = PropagateExpression(cast.ChildMutable());
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateCast(BoundFunctionExpression &cast,
+                                                               unique_ptr<Expression> &expr_ptr) {
+	auto child_stats = PropagateExpression(BoundCastExpression::ChildMutable(cast));
 	if (!child_stats) {
 		return nullptr;
 	}
-	auto result_stats = TryPropagateCast(*child_stats, cast.Child().GetReturnType(), cast.GetReturnType());
-	if (cast.IsTryCast() && result_stats) {
+	auto result_stats =
+	    TryPropagateCast(*child_stats, BoundCastExpression::Child(cast).GetReturnType(), cast.GetReturnType());
+	if (BoundCastExpression::IsTryCast(cast) && result_stats) {
 		result_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
 	return result_stats;

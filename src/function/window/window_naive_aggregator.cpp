@@ -234,9 +234,10 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	EqualRow equal_row(*this);
 	RowSet row_set(STANDARD_VECTOR_SIZE, hash_row, equal_row);
 
+	AggregateStateInput state_input(aggr.function, aggr.GetFunctionData());
 	WindowAggregator::EvaluateSubFrames(bounds, aggregator.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
-		auto agg_state = fdata[rid];
-		aggr.function.GetStateInitCallback()(aggr.function, agg_state);
+		data_ptr_t agg_state = fdata[rid];
+		aggr.function.GetStateInitCallback()(state_input, &agg_state, 1);
 
 		//	Reset the DISTINCT hash table
 		row_set.clear();

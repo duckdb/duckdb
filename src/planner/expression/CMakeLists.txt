@@ -19,6 +19,7 @@ add_library_unity(
   bound_unnest_expression.cpp
   bound_window_expression.cpp
   legacy_bound_between_expression.cpp
+  legacy_bound_cast_expression.cpp
   legacy_bound_comparison_expression.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner_expression>
