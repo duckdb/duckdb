@@ -141,16 +141,6 @@ ColumnBinding GetRowNumberColumnBinding(const unique_ptr<LogicalOperator> &op) {
 	}
 }
 
-idx_t TraverseAndFindAggregateOffset(const unique_ptr<LogicalOperator> &op) {
-	reference<LogicalOperator> current_op = *op;
-	while (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-		D_ASSERT(!current_op.get().children.empty());
-		current_op = *current_op.get().children[0];
-	}
-	const auto &aggregate = current_op.get().Cast<LogicalAggregate>();
-	return aggregate.groups.size();
-}
-
 struct LHSColumnInfo {
 	string name;
 	LogicalType type;
@@ -278,7 +268,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	}
 
 	op = UpdateTopmostBindings(window_idx, std::move(op), topmost_types, group_projection_idxs, topmost_bindings,
-	                           new_bindings, replacer);
+	                           new_bindings, replacer, params);
 
 	replacer.stop_operator = op.get();
 
@@ -763,7 +753,8 @@ unique_ptr<LogicalOperator>
 TopNWindowElimination::UpdateTopmostBindings(idx_t window_idx, unique_ptr<LogicalOperator> op,
                                              const vector<LogicalType> &types, const map<idx_t, idx_t> &group_idxs,
                                              const vector<ColumnBinding> &topmost_bindings,
-                                             vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer) {
+                                             vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer,
+                                             const TopNWindowEliminationParameters &params) {
 	// The top-most operator's column order is:
 	// [projected groups][aggregate args/value][row number]
 	// Now set the new bindings according to this order and remember replacements in replacer
@@ -803,8 +794,8 @@ TopNWindowElimination::UpdateTopmostBindings(idx_t window_idx, unique_ptr<Logica
 		current_column_idx = 0;
 	}
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		// We do not have an aggregate index, so we need to set an offset to hit the correct columns
-		current_column_idx = TraverseAndFindAggregateOffset(op->children[1]);
+		// The late-materialized LHS contains the semantic partitions, not synthetic aggregate groups.
+		current_column_idx = params.partition_count;
 	}
 
 	// Project the args/value
@@ -870,6 +861,7 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	params.include_row_number = BindingsReferenceRowNumber(bindings, window);
 	params.payload_type = aggregate_payload.size() > 1 ? TopNPayloadType::STRUCT_PACK : TopNPayloadType::SINGLE_COLUMN;
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	params.partition_count = window_expr.partitions.size();
 	params.order_type = window_expr.orders[0].type;
 
 	VisitExpression(&window_expr.orders[0].expression);
