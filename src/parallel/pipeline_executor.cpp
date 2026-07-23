@@ -23,7 +23,8 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
 			// batch index is not set yet - initialize before fetching anything
-			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
+			partition_info.batch_index =
+			    pipeline.IsExternalInput() ? pipeline.GetBaseBatchIndex() : pipeline.RegisterNewBatchIndex();
 			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
@@ -87,7 +88,8 @@ void PipelineExecutor::Reset() {
 			D_ASSERT(pipeline.source->SupportsPartitioning(required_partition_info));
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
-			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
+			partition_info.batch_index =
+			    pipeline.IsExternalInput() ? pipeline.GetBaseBatchIndex() : pipeline.RegisterNewBatchIndex();
 			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
@@ -235,9 +237,35 @@ OperatorPartitionData PipelineExecutor::ToPipelinePartitionData(const OperatorPa
 	return result;
 }
 
-SinkNextBatchType PipelineExecutor::NextBatch(OperatorPartitionData next_data, bool force) {
+SinkNextBatchType PipelineExecutor::NextBatch(OperatorPartitionData next_data, bool force,
+                                              optional_idx external_min_batch_index) {
 	auto &partition_info = local_sink_state->partition_info;
+	optional_idx mapped_external_min_batch_index;
+	if (pipeline.IsExternalInput()) {
+		if (!external_min_batch_index.IsValid()) {
+			throw InternalException("External pipeline did not provide a minimum batch index");
+		}
+		auto min_batch_offset = external_min_batch_index.GetIndex();
+		if (min_batch_offset >= PipelineBuildState::BATCH_INCREMENT) {
+			throw InternalException("External pipeline minimum batch index is outside its pipeline");
+		}
+		auto min_batch_index = pipeline.GetBaseBatchIndex() + min_batch_offset;
+		if (min_batch_index > next_data.batch_index) {
+			throw InternalException("External pipeline minimum batch index %llu exceeds current batch index %llu",
+			                        min_batch_index, next_data.batch_index);
+		}
+		if (min_batch_index < partition_info.min_batch_index.GetIndex()) {
+			throw InternalException("External pipeline minimum batch index decreased from %llu to %llu",
+			                        partition_info.min_batch_index.GetIndex(), min_batch_index);
+		}
+		mapped_external_min_batch_index = min_batch_index;
+	} else if (external_min_batch_index.IsValid()) {
+		throw InternalException("Source-driven pipeline received an external minimum batch index");
+	}
 	if (!force && next_data.batch_index == partition_info.batch_index.GetIndex()) {
+		if (mapped_external_min_batch_index.IsValid()) {
+			partition_info.min_batch_index = mapped_external_min_batch_index;
+		}
 		// no changes, return
 		return SinkNextBatchType::READY;
 	}
@@ -273,7 +301,11 @@ SinkNextBatchType PipelineExecutor::NextBatch(OperatorPartitionData next_data, b
 		return SinkNextBatchType::BLOCKED;
 	}
 
-	partition_info.min_batch_index = pipeline.UpdateBatchIndex(current_batch, next_data.batch_index);
+	if (mapped_external_min_batch_index.IsValid()) {
+		partition_info.min_batch_index = mapped_external_min_batch_index;
+	} else {
+		partition_info.min_batch_index = pipeline.UpdateBatchIndex(current_batch, next_data.batch_index);
+	}
 
 	return SinkNextBatchType::READY;
 }
@@ -366,14 +398,16 @@ PipelineExecuteResult PipelineExecutor::Execute() {
 }
 
 PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input,
-                                                     const OperatorPartitionData &source_partition_data) {
+                                                     const OperatorPartitionData &source_partition_data,
+                                                     optional_idx source_min_batch_index) {
 	D_ASSERT(pipeline.sink);
 	D_ASSERT(pipeline.IsExternalInput());
 	if (IsFinished()) {
 		return PipelineExecuteResult::FINISHED;
 	}
 	if (required_partition_info.AnyRequired() && !remaining_sink_chunk) {
-		auto next_batch_result = NextBatch(ToPipelinePartitionData(source_partition_data), !external_batch_initialized);
+		auto next_batch_result = NextBatch(ToPipelinePartitionData(source_partition_data), !external_batch_initialized,
+		                                   source_min_batch_index);
 		next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
 		if (next_batch_blocked) {
 			return PipelineExecuteResult::INTERRUPTED;
@@ -389,7 +423,7 @@ PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input,
 	return PushInputChunk(input, chunk_budget, PipelineInputChunkMode::PUSH_INPUT);
 }
 
-PipelineExecuteResult PipelineExecutor::FinishExternal() {
+PipelineExecuteResult PipelineExecutor::FinishExternal(optional_idx source_min_batch_index) {
 	D_ASSERT(pipeline.sink);
 	D_ASSERT(pipeline.IsExternalInput());
 	if (finalized) {
@@ -397,7 +431,8 @@ PipelineExecuteResult PipelineExecutor::FinishExternal() {
 	}
 	if (required_partition_info.AnyRequired()) {
 		auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
-		auto next_batch_result = NextBatch(OperatorPartitionData(max_batch_index), !external_batch_initialized);
+		auto next_batch_result =
+		    NextBatch(OperatorPartitionData(max_batch_index), !external_batch_initialized, source_min_batch_index);
 		next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
 		if (next_batch_blocked) {
 			return PipelineExecuteResult::INTERRUPTED;
