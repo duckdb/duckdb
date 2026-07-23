@@ -58,42 +58,50 @@ struct VariantStringExtractLocalState : public FunctionLocalState {
 
 class VariantStringSerializer {
 public:
-	explicit VariantStringSerializer(VariantStringExtractLocalState &state) : allocator(state.allocator) {
+	explicit VariantStringSerializer(VariantStringAllocator &allocator) : allocator(allocator) {
 	}
 
 public:
 	void operator()(const optional<VariantNode> &node, VectorWriter<string_t> &string_writer) const;
 
 private:
+	static yyjson_mut_val *CreateString(yyjson_mut_doc *document, const string_t &value);
+	static yyjson_mut_val *CreateRaw(yyjson_mut_doc *document, const string_t &value);
+	//! Return whether nested values of this type require JSON string quoting
 	static bool SerializesAsString(VariantLogicalType type);
-	string_t FormatString(const VariantNode &node, VariantLogicalType type) const;
-	string_t FormatRaw(const VariantNode &node, VariantLogicalType type) const;
+	//! Return whether a root value can bypass yyjson serialization
+	static bool IsDirectSerializable(const VariantLogicalType &type);
+	//! Format a primitive as unquoted text
+	string_t FormatPrimitive(const VariantNode &node, VariantLogicalType type) const;
+	//! Serialize a primitive into a yyjson value
 	yyjson_mut_val *SerializePrimitive(const VariantNode &node, VariantLogicalType type,
 	                                   yyjson_mut_doc *document) const;
+	//! Recursively serialize a VARIANT value into yyjson
 	yyjson_mut_val *SerializeVariant(const VariantNode &node, yyjson_mut_doc *document) const;
+	//! Serialize a yyjson value into the result vector
 	void WriteJSON(const yyjson_mut_val *value, VectorWriter<string_t> &string_writer) const;
 
 	string_t AddString(const string &value) const {
 		return allocator.GetStringHeap().AddString(value);
 	}
 
-	static yyjson_mut_val *CreateString(yyjson_mut_doc *document, const string_t &value) {
-		if (value.IsInlined()) {
-			return yyjson_mut_strncpy(document, value.GetData(), value.GetSize());
-		}
-		return yyjson_mut_strn(document, value.GetData(), value.GetSize());
-	}
-
-	static yyjson_mut_val *CreateRaw(yyjson_mut_doc *document, const string_t &value) {
-		if (value.IsInlined()) {
-			return yyjson_mut_rawncpy(document, value.GetData(), value.GetSize());
-		}
-		return yyjson_mut_rawn(document, value.GetData(), value.GetSize());
-	}
-
 private:
 	VariantStringAllocator &allocator;
 };
+
+yyjson_mut_val *VariantStringSerializer::CreateString(yyjson_mut_doc *document, const string_t &value) {
+	if (value.IsInlined()) {
+		return yyjson_mut_strncpy(document, value.GetData(), value.GetSize());
+	}
+	return yyjson_mut_strn(document, value.GetData(), value.GetSize());
+}
+
+yyjson_mut_val *VariantStringSerializer::CreateRaw(yyjson_mut_doc *document, const string_t &value) {
+	if (value.IsInlined()) {
+		return yyjson_mut_rawncpy(document, value.GetData(), value.GetSize());
+	}
+	return yyjson_mut_rawn(document, value.GetData(), value.GetSize());
+}
 
 bool VariantStringSerializer::SerializesAsString(const VariantLogicalType type) {
 	switch (type) {
@@ -119,7 +127,21 @@ bool VariantStringSerializer::SerializesAsString(const VariantLogicalType type) 
 	}
 }
 
-string_t VariantStringSerializer::FormatString(const VariantNode &node, const VariantLogicalType type) const {
+bool VariantStringSerializer::IsDirectSerializable(const VariantLogicalType &type) {
+	if (SerializesAsString(type)) {
+		return true;
+	}
+	if (type == VariantLogicalType::ARRAY || type == VariantLogicalType::OBJECT) {
+		return false;
+	}
+	if (type == VariantLogicalType::FLOAT || type == VariantLogicalType::DOUBLE) {
+		return false;
+	}
+
+	return true;
+}
+
+string_t VariantStringSerializer::FormatPrimitive(const VariantNode &node, const VariantLogicalType type) const {
 	auto &heap = allocator.GetStringHeap();
 
 	switch (type) {
@@ -161,15 +183,6 @@ string_t VariantStringSerializer::FormatString(const VariantNode &node, const Va
 		const auto value = node.GetString();
 		return AddString(Value::GEOMETRY(const_data_ptr_cast(value.GetData()), value.GetSize()).ToString());
 	}
-	default:
-		throw InternalException("Cannot format VARIANT type %s as a string", EnumUtil::ToString(type));
-	}
-}
-
-string_t VariantStringSerializer::FormatRaw(const VariantNode &node, const VariantLogicalType type) const {
-	auto &heap = allocator.GetStringHeap();
-
-	switch (type) {
 	case VariantLogicalType::BOOL_TRUE:
 		return heap.AddString("true", 4);
 	case VariantLogicalType::BOOL_FALSE:
@@ -214,14 +227,14 @@ string_t VariantStringSerializer::FormatRaw(const VariantNode &node, const Varia
 		return AddString(Value::BIGNUM(const_data_ptr_cast(value.GetData()), value.GetSize()).ToString());
 	}
 	default:
-		throw InternalException("Cannot format VARIANT type %s as raw JSON", EnumUtil::ToString(type));
+		throw InternalException("Cannot format VARIANT primitive type %s", EnumUtil::ToString(type));
 	}
 }
 
 yyjson_mut_val *VariantStringSerializer::SerializePrimitive(const VariantNode &node, const VariantLogicalType type,
                                                             yyjson_mut_doc *document) const {
 	if (SerializesAsString(type)) {
-		return CreateString(document, FormatString(node, type));
+		return CreateString(document, FormatPrimitive(node, type));
 	}
 
 	switch (type) {
@@ -239,8 +252,6 @@ yyjson_mut_val *VariantStringSerializer::SerializePrimitive(const VariantNode &n
 		return yyjson_mut_sint(document, node.GetData<int32_t>());
 	case VariantLogicalType::INT64:
 		return yyjson_mut_sint(document, node.GetData<int64_t>());
-	case VariantLogicalType::INT128:
-		return CreateRaw(document, FormatRaw(node, type));
 	case VariantLogicalType::UINT8:
 		return yyjson_mut_uint(document, node.GetData<uint8_t>());
 	case VariantLogicalType::UINT16:
@@ -249,14 +260,16 @@ yyjson_mut_val *VariantStringSerializer::SerializePrimitive(const VariantNode &n
 		return yyjson_mut_uint(document, node.GetData<uint32_t>());
 	case VariantLogicalType::UINT64:
 		return yyjson_mut_uint(document, node.GetData<uint64_t>());
-	case VariantLogicalType::UINT128:
-	case VariantLogicalType::DECIMAL:
-	case VariantLogicalType::BIGNUM:
-		return CreateRaw(document, FormatRaw(node, type));
 	case VariantLogicalType::FLOAT:
 		return yyjson_mut_real(document, node.GetData<float>());
 	case VariantLogicalType::DOUBLE:
 		return yyjson_mut_real(document, node.GetData<double>());
+	case VariantLogicalType::INT128:
+	case VariantLogicalType::UINT128:
+	case VariantLogicalType::DECIMAL:
+	case VariantLogicalType::BIGNUM:
+		// yyjson cannot represent these types natively
+		return CreateRaw(document, FormatPrimitive(node, type));
 	default:
 		throw NotImplementedException("Cannot stringify VARIANT type %s", EnumUtil::ToString(type));
 	}
@@ -314,14 +327,9 @@ void VariantStringSerializer::operator()(const optional<VariantNode> &node,
 		return;
 	}
 
-	// shortcut for root primitive types
-	if (SerializesAsString(type)) {
-		string_writer.WriteValue(FormatString(*node, type));
-		return;
-	}
-	if (type != VariantLogicalType::ARRAY && type != VariantLogicalType::OBJECT && type != VariantLogicalType::FLOAT &&
-	    type != VariantLogicalType::DOUBLE) {
-		string_writer.WriteValue(FormatRaw(*node, type));
+	// shortcut for primitive types
+	if (IsDirectSerializable(type)) {
+		string_writer.WriteValue(FormatPrimitive(*node, type));
 		return;
 	}
 
@@ -336,7 +344,7 @@ static unique_ptr<FunctionLocalState> VariantExtractStringInit(ExpressionState &
 
 static void VariantExtractStringFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &local_state = ExecuteFunctionState::GetFunctionState(state)->Cast<VariantStringExtractLocalState>();
-	VariantPathFunction::Execute<string_t>(input, state, result, VariantStringSerializer(local_state));
+	VariantPathFunction::Execute<string_t>(input, state, result, VariantStringSerializer(local_state.allocator));
 }
 
 ScalarFunctionSet VariantExtractStringFun::GetFunctions() {
