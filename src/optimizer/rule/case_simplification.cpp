@@ -42,6 +42,17 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 		// no case checks left: return the ELSE expression
 		return std::move(root.ElseMutable());
 	}
+	// if all THEN branches are identical to the ELSE branch, we can just return the ELSE expression
+	bool all_identical = true;
+	for (auto &case_check : root.CaseChecks()) {
+		if (!Expression::Equals(case_check.then_expr, root.ElseMutable())) {
+			all_identical = false;
+			break;
+		}
+	}
+	if (all_identical) {
+		return std::move(root.ElseMutable());
+	}
 	return nullptr;
 }
 

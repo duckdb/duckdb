@@ -32,3 +32,26 @@ query I nosort casenorm3
 EXPLAIN SELECT X+2 FROM test
 ----
 
+query I nosort casenorm4
+EXPLAIN SELECT CASE WHEN X>5 THEN X ELSE X END FROM test
+----
+
+query I nosort casenorm4
+EXPLAIN SELECT X FROM test
+----
+
+query I nosort casenorm5
+EXPLAIN SELECT CASE WHEN X>10 THEN X WHEN X>5 THEN X ELSE X END FROM test
+----
+
+query I nosort casenorm5
+EXPLAIN SELECT X FROM test
+----
+
+query I nosort casenorm6
+EXPLAIN SELECT CASE WHEN X>5 THEN X ELSE X+1 END FROM test
+----
+
+query I nosort casenorm6
+EXPLAIN SELECT CASE WHEN X>5 THEN X ELSE X+1 END FROM test
+----
