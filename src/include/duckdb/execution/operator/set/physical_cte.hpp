@@ -29,6 +29,8 @@ public:
 	                          TableIndex cte_index, shared_ptr<PipelineBroadcastExchange> exchange, idx_t consumer_idx);
 
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context,
+	                                                   const OperatorPartitionInfo &partition_info) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -76,6 +78,8 @@ public:
 	bool preserve_order = false;
 	bool use_batch_index = false;
 	bool parallel = true;
+	optional_idx preferred_batch_size;
+	bool conflicting_batch_sizes = false;
 
 public:
 	// Sink interface
@@ -98,7 +102,8 @@ public:
 	}
 
 	OperatorPartitionInfo RequiredPartitionInfo() const override {
-		return use_batch_index ? OperatorPartitionInfo::BatchIndex() : OperatorPartitionInfo::NoPartitionInfo();
+		return use_batch_index ? OperatorPartitionInfo::BatchIndex(preferred_batch_size)
+		                       : OperatorPartitionInfo::NoPartitionInfo();
 	}
 
 	bool SinkOrderDependent() const override {
@@ -114,12 +119,15 @@ public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	bool TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
 	bool ShouldUseBufferedConsumer(Pipeline &pipeline) const;
-	void RegisterBufferedConsumer(idx_t consumer_idx);
+	void RegisterBufferedConsumer(Pipeline &pipeline, idx_t consumer_idx);
 	void RegisterMaterializedConsumer(idx_t consumer_idx);
 	CTEExecutionMode GetExecutionMode() const;
 	bool UseStreamingExchange() const;
 
 	vector<const_reference<PhysicalOperator>> GetSources() const override;
+
+private:
+	void RegisterBatchPreference(Pipeline &pipeline);
 };
 
 } // namespace duckdb

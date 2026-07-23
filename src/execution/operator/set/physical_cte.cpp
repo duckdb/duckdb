@@ -17,8 +17,10 @@ enum class CTECombineState : uint8_t { PENDING, COMBINED };
 
 class CTEConsumerGlobalSourceState : public GlobalSourceState {
 public:
-	CTEConsumerGlobalSourceState(shared_ptr<PipelineBroadcastExchange> exchange_p, idx_t consumer_idx_p)
-	    : exchange(std::move(exchange_p)), consumer_idx(consumer_idx_p) {
+	CTEConsumerGlobalSourceState(shared_ptr<PipelineBroadcastExchange> exchange_p, idx_t consumer_idx_p,
+	                             bool use_batch_index)
+	    : exchange(std::move(exchange_p)), consumer_idx(consumer_idx_p),
+	      max_threads(use_batch_index || !exchange->PreservesOrder() ? exchange->MaxThreads() : 1) {
 	}
 
 	~CTEConsumerGlobalSourceState() override {
@@ -26,7 +28,7 @@ public:
 	}
 
 	idx_t MaxThreads() override {
-		return exchange->MaxThreads();
+		return max_threads;
 	}
 
 	void Unregister() {
@@ -38,15 +40,18 @@ public:
 
 	shared_ptr<PipelineBroadcastExchange> exchange;
 	idx_t consumer_idx;
+	idx_t max_threads;
 	atomic<bool> unregistered {false};
 };
 
 class CTEConsumerLocalSourceState : public LocalSourceState {
 public:
-	shared_ptr<DataChunk> current_chunk;
+	explicit CTEConsumerLocalSourceState(shared_ptr<PipelineBroadcastExchangeScanState> scan_state_p)
+	    : scan_state(std::move(scan_state_p)) {
+	}
+
+	shared_ptr<PipelineBroadcastExchangeScanState> scan_state;
 	optional_idx exchange_batch_index;
-	optional_idx previous_exchange_batch_index;
-	idx_t local_batch_index = 0;
 };
 
 PhysicalCTEConsumerSource::PhysicalCTEConsumerSource(PhysicalPlan &physical_plan, vector<LogicalType> types,
@@ -57,19 +62,25 @@ PhysicalCTEConsumerSource::PhysicalCTEConsumerSource(PhysicalPlan &physical_plan
 }
 
 unique_ptr<GlobalSourceState> PhysicalCTEConsumerSource::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<CTEConsumerGlobalSourceState>(exchange, consumer_idx);
+	return GetGlobalSourceState(context, OperatorPartitionInfo::NoPartitionInfo());
+}
+
+unique_ptr<GlobalSourceState>
+PhysicalCTEConsumerSource::GetGlobalSourceState(ClientContext &context,
+                                                const OperatorPartitionInfo &partition_info) const {
+	return make_uniq<CTEConsumerGlobalSourceState>(exchange, consumer_idx, partition_info.RequiresBatchIndex());
 }
 
 unique_ptr<LocalSourceState> PhysicalCTEConsumerSource::GetLocalSourceState(ExecutionContext &context,
                                                                             GlobalSourceState &gstate) const {
-	return make_uniq<CTEConsumerLocalSourceState>();
+	return make_uniq<CTEConsumerLocalSourceState>(exchange->GetScanState());
 }
 
 SourceResultType PhysicalCTEConsumerSource::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                             OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<CTEConsumerGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<CTEConsumerLocalSourceState>();
-	return gstate.exchange->Scan(gstate.consumer_idx, chunk, lstate.current_chunk, lstate.exchange_batch_index,
+	return gstate.exchange->Scan(gstate.consumer_idx, chunk, *lstate.scan_state, lstate.exchange_batch_index,
 	                             input.interrupt_state);
 }
 
@@ -79,15 +90,7 @@ OperatorPartitionData PhysicalCTEConsumerSource::GetPartitionData(ExecutionConte
 	D_ASSERT(SupportsPartitioning(partition_info));
 	auto &lstate = lstate_p.Cast<CTEConsumerLocalSourceState>();
 	D_ASSERT(lstate.exchange_batch_index.IsValid());
-	// Exchange batch indexes are producer-global; source partition indexes are pipeline-local.
-	if (!lstate.previous_exchange_batch_index.IsValid()) {
-		lstate.previous_exchange_batch_index = lstate.exchange_batch_index;
-	} else if (lstate.previous_exchange_batch_index != lstate.exchange_batch_index) {
-		D_ASSERT(lstate.exchange_batch_index.GetIndex() > lstate.previous_exchange_batch_index.GetIndex());
-		lstate.previous_exchange_batch_index = lstate.exchange_batch_index;
-		lstate.local_batch_index++;
-	}
-	return OperatorPartitionData(lstate.local_batch_index);
+	return OperatorPartitionData(lstate.exchange_batch_index.GetIndex());
 }
 
 bool PhysicalCTEConsumerSource::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
@@ -100,7 +103,7 @@ OrderPreservationType PhysicalCTEConsumerSource::SourceOrder() const {
 }
 
 bool PhysicalCTEConsumerSource::ParallelSource() const {
-	return !exchange->PreservesOrder();
+	return exchange->OrderMode() != PipelineBroadcastExchangeOrderMode::SEQUENTIAL;
 }
 
 ProgressData PhysicalCTEConsumerSource::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
@@ -350,6 +353,8 @@ SinkFinalizeType PhysicalCTE::Finalize(Pipeline &pipeline, Event &event, ClientC
 void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	D_ASSERT(children.size() == 2);
 	pipeline_selection_state = CTEPipelineSelectionState::UNRESOLVED;
+	preferred_batch_size = optional_idx();
+	conflicting_batch_sizes = false;
 	op_state.reset();
 	sink_state.reset();
 	if (exchange) {
@@ -411,7 +416,11 @@ bool PhysicalCTE::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_i
 	if (!exchange) {
 		return false;
 	}
-	return exchange->TryRegisterDirectConsumer(pipeline, consumer_idx);
+	if (!exchange->TryRegisterDirectConsumer(pipeline, consumer_idx)) {
+		return false;
+	}
+	RegisterBatchPreference(pipeline);
+	return true;
 }
 
 bool PhysicalCTE::ShouldUseBufferedConsumer(Pipeline &pipeline) const {
@@ -426,9 +435,10 @@ bool PhysicalCTE::ShouldUseBufferedConsumer(Pipeline &pipeline) const {
 	return pipeline.CanStopSourceEarly();
 }
 
-void PhysicalCTE::RegisterBufferedConsumer(idx_t consumer_idx) {
+void PhysicalCTE::RegisterBufferedConsumer(Pipeline &pipeline, idx_t consumer_idx) {
 	D_ASSERT(exchange);
 	exchange->SelectBufferedConsumer(consumer_idx);
+	RegisterBatchPreference(pipeline);
 }
 
 void PhysicalCTE::RegisterMaterializedConsumer(idx_t consumer_idx) {
@@ -449,6 +459,25 @@ CTEExecutionMode PhysicalCTE::GetExecutionMode() const {
 		return CTEExecutionMode::HYBRID_FANOUT;
 	}
 	return CTEExecutionMode::STREAMING_FANOUT;
+}
+
+void PhysicalCTE::RegisterBatchPreference(Pipeline &pipeline) {
+	auto sink = pipeline.GetSink();
+	if (!sink) {
+		return;
+	}
+	auto partition_info = sink->RequiredPartitionInfo();
+	if (!partition_info.RequiresBatchIndex() || !partition_info.preferred_batch_size.IsValid() ||
+	    conflicting_batch_sizes) {
+		return;
+	}
+	auto batch_size = partition_info.preferred_batch_size.GetIndex();
+	if (!preferred_batch_size.IsValid()) {
+		preferred_batch_size = batch_size;
+	} else if (preferred_batch_size.GetIndex() != batch_size) {
+		preferred_batch_size = optional_idx();
+		conflicting_batch_sizes = true;
+	}
 }
 
 bool PhysicalCTE::UseStreamingExchange() const {
@@ -496,6 +525,10 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	}
 	if (exchange) {
 		auto summary = exchange->GetConsumerSummary();
+		result["Order Mode"] = EnumUtil::ToString(exchange->OrderMode());
+		if (preferred_batch_size.IsValid()) {
+			result["Preferred Batch Size"] = StringUtil::Format("%llu", preferred_batch_size.GetIndex());
+		}
 		if (summary.materialized > 0) {
 			result["Materialized Consumers"] = StringUtil::Format("%llu", summary.materialized);
 		}
