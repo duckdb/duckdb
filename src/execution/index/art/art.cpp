@@ -682,6 +682,11 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 	return delete_count;
 }
 
+bool ART::HasLegacyGeometryKeys() const {
+	// Equivalent to asking whether key generation applies the legacy GEOMETRY conversion for this index.
+	return KeyInputNeedConversion(logical_types, storage_version);
+}
+
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//

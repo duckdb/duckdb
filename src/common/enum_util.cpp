@@ -218,6 +218,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_order_options.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
@@ -6220,6 +6221,26 @@ const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value) {
 template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 	return static_cast<UnionInvalidReason>(StringUtil::StringToEnum(GetUnionInvalidReasonValues(), 6, "UnionInvalidReason", value));
+}
+
+const StringUtil::EnumStringLiteral *GetVacuumIndexStrategyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VacuumIndexStrategy::KEEP_ROW_IDS), "KEEP_ROW_IDS" },
+		{ static_cast<uint32_t>(VacuumIndexStrategy::NO_INDEXES), "NO_INDEXES" },
+		{ static_cast<uint32_t>(VacuumIndexStrategy::REBUILD), "REBUILD" },
+		{ static_cast<uint32_t>(VacuumIndexStrategy::REMAP), "REMAP" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VacuumIndexStrategy>(VacuumIndexStrategy value) {
+	return StringUtil::EnumToString(GetVacuumIndexStrategyValues(), 4, "VacuumIndexStrategy", static_cast<uint32_t>(value));
+}
+
+template<>
+VacuumIndexStrategy EnumUtil::FromString<VacuumIndexStrategy>(const char *value) {
+	return static_cast<VacuumIndexStrategy>(StringUtil::StringToEnum(GetVacuumIndexStrategyValues(), 4, "VacuumIndexStrategy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVariantChildLookupModeValues() {

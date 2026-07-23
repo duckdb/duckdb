@@ -6,6 +6,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -128,8 +129,7 @@ public:
 	bool started_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
-	//! Synchronize <ART version, SegmentTree<RowGroup>> when vacuum_rebuild_indexes is enabled (since
-	//! ART indexes are rebuilt during vacuuming with this setting).
+	//! Keep ART rowids and row-group trees paired while rowid-shifting index vacuum can run.
 	unique_ptr<StorageLockKey> vacuum_lock;
 
 public:
@@ -802,18 +802,18 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	bool index_scan = false;
 	set<row_t> row_ids;
 
-	// If vacuum_rebuild_indexes is enabled, grab a shared vacuum lock before
-	// scanning the index. This prevents the checkpoint from rebuilding the index and swapping
-	// row groups while we hold row IDs from the ART, ensuring we always see a consistent
-	// <ART index, SegmentTree<RowGroup> pairing.
+	info->BindIndexes(context, ART::TYPE_NAME);
+
+	// Exclude rowid-shifting vacuum from the ART probe until the index scan finishes: collected rowids must be
+	// fetched against the matching row-group tree. Falling back to a table scan releases the lock on return.
 	unique_ptr<StorageLockKey> vacuum_lock;
-	const auto &attached = storage.GetAttached();
-	if (attached.GetVacuumRebuildIndexThreshold() > 0) {
-		auto &transaction_manager = DuckTransactionManager::Get(storage.GetAttached());
-		vacuum_lock = transaction_manager.SharedVacuumLock();
+	auto &attached = storage.GetAttached();
+	const bool indexed_vacuum_may_move_rowids = attached.GetVacuumRebuildIndexThreshold() > 0 ||
+	                                            StorageCompatibility::FromDatabase(attached).CanPersistRowIdGaps();
+	if (indexed_vacuum_may_move_rowids) {
+		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
-	info->BindIndexes(context, ART::TYPE_NAME);
 	for (auto &entry : indexes.IndexEntries()) {
 		auto &index = *entry.index;
 		if (index.GetIndexType() != ART::TYPE_NAME) {
