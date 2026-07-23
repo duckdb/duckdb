@@ -1,5 +1,6 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/execution/executor.hpp"
 
 namespace duckdb {
@@ -70,6 +71,16 @@ MetaPipelineType MetaPipeline::Type() const {
 	return type;
 }
 
+bool MetaPipeline::HasEagerBuildFinalize() const {
+	return build_eager_finalize;
+}
+
+void MetaPipeline::SetEagerBuildFinalize() {
+	D_ASSERT(type == MetaPipelineType::JOIN_BUILD);
+	D_ASSERT(!HasRecursiveCTE());
+	build_eager_finalize = true;
+}
+
 bool MetaPipeline::HasRecursiveCTE() const {
 	return recursive_cte;
 }
@@ -85,7 +96,14 @@ void MetaPipeline::AssignNextBatchIndex(Pipeline &pipeline) {
 void MetaPipeline::Build(PhysicalOperator &op) {
 	D_ASSERT(pipelines.size() == 1);
 	D_ASSERT(children.empty());
+	if (type == MetaPipelineType::JOIN_BUILD) {
+		state.join_build_stack.push_back(*this);
+	}
 	op.BuildPipelines(*pipelines.back(), *this);
+	if (type == MetaPipelineType::JOIN_BUILD) {
+		D_ASSERT(RefersToSameObject(state.join_build_stack.back().get(), *this));
+		state.join_build_stack.pop_back();
+	}
 }
 
 void MetaPipeline::Ready() const {
