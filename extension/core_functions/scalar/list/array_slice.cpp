@@ -405,7 +405,8 @@ unique_ptr<BaseStatistics> ArraySlicePropagateStats(ClientContext &context, Func
 			return nullptr;
 		}
 		auto end_character_count = NumericCast<idx_t>(end);
-		character_count = end_character_count > start_character_index ? (end_character_count - start_character_index) : 0;
+		character_count =
+		    end_character_count > start_character_index ? (end_character_count - start_character_index) : 0;
 	}
 	return PropagateStringSliceStats(input, start_character_index, character_count);
 }
