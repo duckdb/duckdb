@@ -200,3 +200,44 @@ statement error
 SELECT regexp_matches(s, p) FROM regex
 ----
 <REGEX>:.*Invalid Input Error.*missing.*
+
+# test regexp_full_match literal optimizations
+statement ok
+CREATE TABLE test_full_match_opt (s VARCHAR);
+
+statement ok
+INSERT INTO test_full_match_opt VALUES (''), ('a'), ('.'), ('100%'), ('a_b'), ('abc'), ('ba'), ('100x'), ('axb');
+
+query I
+SELECT regexp_full_match(s, '') FROM test_full_match_opt WHERE s IN ('', 'a') ORDER BY s
+----
+true
+false
+
+query I
+SELECT regexp_full_match(s, '\.') FROM test_full_match_opt WHERE s = '.'
+----
+true
+
+query I
+SELECT regexp_full_match(s, '100%') FROM test_full_match_opt WHERE s IN ('100%', '100x') ORDER BY s
+----
+true
+false
+
+query I
+SELECT regexp_full_match(s, 'a_b') FROM test_full_match_opt WHERE s IN ('a_b', 'axb') ORDER BY s
+----
+true
+false
+
+query I
+SELECT regexp_full_match(s, 'ABC', 'i') FROM test_full_match_opt WHERE s = 'abc'
+----
+true
+
+query I
+SELECT regexp_full_match(s, 'a.*') FROM test_full_match_opt WHERE s IN ('abc', 'ba') ORDER BY s
+----
+true
+false
