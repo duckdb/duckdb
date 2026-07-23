@@ -46,7 +46,7 @@ SELECT name, type, managed FROM duckdb_external_resources();
 local_d1	mock@disc	true
 
 # With discovery, the locally registered handle is shown once (as managed) and the discovered duplicate is
-# suppressed — dedup is by handle. state/reference are empty (NULL) for the managed row.
+# suppressed — dedup is by (type, handle). state/reference are empty (NULL) for the managed row.
 query TTTTT
 SELECT name, type, managed, state, reference FROM duckdb_external_resources(discover := true) ORDER BY managed DESC;
 ----
@@ -61,3 +61,30 @@ query I
 SELECT count(*) FROM duckdb_external_resources(discover := true);
 ----
 2
+
+# Dedup is scoped per type: a second type reporting the same handle 'd1' is a different resource, so it is
+# still surfaced even though 'd1' is registered locally under mock@disc.
+statement ok
+CREATE MACRO other_list(opts) AS TABLE
+    SELECT * FROM (VALUES (MAP {'id': 'd1'}, 'other-1', 'running')) t(handle, reference, state);
+
+statement ok
+CALL register_external_resource_type('other@disc', kind := 'catalog', create_function := 'noop_create', list_function := 'other_list');
+
+query TTTTT
+SELECT name, type, managed, state, reference FROM duckdb_external_resources(discover := true) ORDER BY type, reference;
+----
+NULL	mock@disc	false	stopped	ext-2
+local_d1	mock@disc	true	NULL	NULL
+NULL	other@disc	false	running	other-1
+
+# Registering that handle under the second type too makes both managed, independently of each other.
+statement ok
+CALL register_external_resource('other@disc', 'other_d1', MAP {'id': 'd1'});
+
+query TTT
+SELECT name, type, managed FROM duckdb_external_resources(discover := true) ORDER BY type, name;
+----
+local_d1	mock@disc	true
+NULL	mock@disc	false
+other_d1	other@disc	true

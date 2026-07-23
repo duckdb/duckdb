@@ -2,6 +2,7 @@
 
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/connection.hpp"
@@ -73,6 +74,8 @@ static unique_ptr<FunctionData> ExternalResourcesBind(ClientContext &context, Ta
 }
 
 //! A stable key for a handle, so a discovered resource can be matched against a locally registered one.
+//! Handles are only ever compared within a single type: the durable identity is (type, handle), so a
+//! matching handle under a different type is a different resource.
 static string HandleKey(const Value &handle) {
 	return handle.IsNull() ? string() : handle.ToString();
 }
@@ -132,7 +135,7 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 		// with a clear message rather than a cast failure deep in the output append.
 		auto handle = RequireResourceMap(res->GetValue(handle_idx, r), type.list_function, "handle");
 		if (managed_handles.count(HandleKey(handle)) > 0) {
-			continue; // already shown as a locally managed resource
+			continue; // already shown as a locally managed resource of this type
 		}
 		ExternalResourceRow row;
 		row.type = type.name;
@@ -156,7 +159,8 @@ static unique_ptr<GlobalTableFunctionState> ExternalResourcesInit(ClientContext 
 	auto result = make_uniq<ExternalResourcesGlobalState>();
 
 	// Locally registered resources — always shown (managed = true).
-	set<string> managed_handles;
+	// Handles of the locally registered resources, bucketed per type - handles are only comparable within a type.
+	map<string, set<string>> managed_handles;
 	for (auto &instance : ExternalResourcesManager::Get(context).List()) {
 		ExternalResourceRow row;
 		row.name = instance.name;
@@ -165,7 +169,7 @@ static unique_ptr<GlobalTableFunctionState> ExternalResourcesInit(ClientContext 
 		row.uri = instance.uri;
 		row.attached_db_type = instance.attached_db_type;
 		row.managed = true;
-		managed_handles.insert(HandleKey(instance.handle));
+		managed_handles[instance.type].insert(HandleKey(instance.handle));
 		result->rows.push_back(std::move(row));
 	}
 
@@ -176,7 +180,8 @@ static unique_ptr<GlobalTableFunctionState> ExternalResourcesInit(ClientContext 
 			if (type.list_function.empty()) {
 				continue;
 			}
-			DiscoverExternalResources(context, type, managed_handles, result->rows);
+			// operator[] gives an empty bucket for a type with nothing registered locally
+			DiscoverExternalResources(context, type, managed_handles[type.name], result->rows);
 		}
 	}
 	return std::move(result);
