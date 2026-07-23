@@ -1,0 +1,438 @@
+# name: test/sql/trigger/trigger_after_update_old_new.test
+# description: AFTER UPDATE triggers with OLD and NEW transition tables (FOR EACH STATEMENT)
+# group: [trigger]
+
+require noforcestorage
+
+# OLD-only alias exposes the pre-update rows
+statement ok
+CREATE TABLE target (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE old_audit (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO target VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TRIGGER trg_old AFTER UPDATE ON target
+REFERENCING OLD TABLE AS o
+FOR EACH STATEMENT
+    INSERT INTO old_audit SELECT id, val FROM o;
+
+statement ok
+UPDATE target SET val = val + 5 WHERE id = 1;
+
+query II rowsort
+SELECT id, val FROM old_audit;
+----
+1	10
+
+query II rowsort
+SELECT id, val FROM target;
+----
+1	15
+2	20
+3	30
+
+# Both aliases in one trigger, joined on the unchanged key column
+statement ok
+CREATE TABLE both_audit (id INTEGER, old_val INTEGER, new_val INTEGER);
+
+statement ok
+CREATE TRIGGER trg_both AFTER UPDATE ON target
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO both_audit SELECT n.id, o.val, n.val FROM o JOIN n ON o.id = n.id;
+
+statement ok
+UPDATE target SET val = val * 10 WHERE id <= 2;
+
+# trg_old also fired: captures pre-update values of the two updated rows
+query II rowsort
+SELECT id, val FROM old_audit;
+----
+1	10
+1	15
+2	20
+
+query III rowsort
+SELECT id, old_val, new_val FROM both_audit;
+----
+1	15	150
+2	20	200
+
+# REFERENCING order NEW ... OLD works identically
+statement ok
+CREATE TABLE t2 (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t2_audit (id INTEGER, old_val INTEGER, new_val INTEGER);
+
+statement ok
+INSERT INTO t2 VALUES (1, 100), (2, 200);
+
+statement ok
+CREATE TRIGGER trg_no AFTER UPDATE ON t2
+REFERENCING NEW TABLE AS n OLD TABLE AS o
+FOR EACH STATEMENT
+    INSERT INTO t2_audit SELECT o.id, o.val, n.val FROM o JOIN n ON o.id = n.id;
+
+statement ok
+UPDATE t2 SET val = val + 1;
+
+query III rowsort
+SELECT id, old_val, new_val FROM t2_audit;
+----
+1	100	101
+2	200	201
+
+# Zero affected rows: both transition tables are empty
+statement ok
+CREATE TABLE t_zero (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_zero_log (old_cnt INTEGER, new_cnt INTEGER);
+
+statement ok
+INSERT INTO t_zero VALUES (1, 10);
+
+statement ok
+CREATE TRIGGER trg_zero AFTER UPDATE ON t_zero
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_zero_log SELECT (SELECT COUNT(*) FROM o), (SELECT COUNT(*) FROM n);
+
+statement ok
+UPDATE t_zero SET val = 99 WHERE id = 999;
+
+query II
+SELECT old_cnt, new_cnt FROM t_zero_log;
+----
+0	0
+
+# SET x = x: OLD equals NEW
+statement ok
+CREATE TABLE t_noop (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_noop_log (id INTEGER, old_val INTEGER, new_val INTEGER);
+
+statement ok
+INSERT INTO t_noop VALUES (1, 7), (2, 8);
+
+statement ok
+CREATE TRIGGER trg_noop AFTER UPDATE ON t_noop
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_noop_log SELECT o.id, o.val, n.val FROM o JOIN n ON o.id = n.id;
+
+statement ok
+UPDATE t_noop SET val = val;
+
+query III rowsort
+SELECT id, old_val, new_val FROM t_noop_log;
+----
+1	7	7
+2	8	8
+
+# UPDATE ... FROM: OLD/NEW captured once from the joined update
+statement ok
+CREATE TABLE t_from (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_src (id INTEGER, v INTEGER);
+
+statement ok
+CREATE TABLE t_from_log (id INTEGER, old_val INTEGER, new_val INTEGER);
+
+statement ok
+INSERT INTO t_from VALUES (1, 1), (2, 2), (3, 3);
+
+statement ok
+INSERT INTO t_src VALUES (1, 111), (2, 222);
+
+statement ok
+CREATE TRIGGER trg_from AFTER UPDATE ON t_from
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_from_log SELECT o.id, o.val, n.val FROM o JOIN n ON o.id = n.id;
+
+statement ok
+UPDATE t_from SET val = t_src.v FROM t_src WHERE t_from.id = t_src.id;
+
+query III rowsort
+SELECT id, old_val, new_val FROM t_from_log;
+----
+1	1	111
+2	2	222
+
+# Single evaluation: a volatile SET expression is applied (and captured) exactly once
+statement ok
+CREATE TABLE t_vol (id INTEGER, val INTEGER);
+
+statement ok
+CREATE SEQUENCE seq_vol START 1;
+
+statement ok
+CREATE TABLE t_vol_log (id INTEGER, new_val INTEGER);
+
+statement ok
+INSERT INTO t_vol VALUES (1, 0), (2, 0), (3, 0);
+
+statement ok
+CREATE TRIGGER trg_vol AFTER UPDATE ON t_vol
+REFERENCING NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_vol_log SELECT id, val FROM n;
+
+statement ok
+UPDATE t_vol SET val = nextval('seq_vol');
+
+# The captured NEW values must equal the values actually persisted (proves the SET ran once per row)
+query I
+SELECT COUNT(*) FROM t_vol_log l JOIN t_vol t ON l.id = t.id AND l.new_val = t.val;
+----
+3
+
+# The sequence advanced by exactly the row count (3), not double
+query I
+SELECT MAX(new_val) - MIN(new_val) FROM t_vol_log;
+----
+2
+
+# Forced delete+insert update path produces the same OLD/NEW images
+statement ok
+CREATE TABLE t_di (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_di_log (id INTEGER, old_val INTEGER, new_val INTEGER);
+
+statement ok
+INSERT INTO t_di VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TRIGGER trg_di AFTER UPDATE ON t_di
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_di_log SELECT o.id, o.val, n.val FROM o JOIN n ON o.id = n.id;
+
+statement ok
+SET force_update_to_del_and_insert = true;
+
+statement ok
+UPDATE t_di SET val = val + 1 WHERE id >= 2;
+
+statement ok
+SET force_update_to_del_and_insert = false;
+
+query III rowsort
+SELECT id, old_val, new_val FROM t_di_log;
+----
+2	20	21
+3	30	31
+
+# Update over a LIST column (naturally delete+insert) with OLD/NEW capture
+statement ok
+CREATE TABLE t_list (id INTEGER, vals INTEGER[]);
+
+statement ok
+CREATE TABLE t_list_log (id INTEGER, old_len INTEGER, new_len INTEGER);
+
+statement ok
+INSERT INTO t_list VALUES (1, [1, 2]), (2, [3, 4, 5]);
+
+statement ok
+CREATE TRIGGER trg_list AFTER UPDATE ON t_list
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_list_log SELECT o.id, len(o.vals), len(n.vals) FROM o JOIN n ON o.id = n.id;
+
+statement ok
+UPDATE t_list SET vals = [9, 9, 9, 9] WHERE id = 1;
+
+query III rowsort
+SELECT id, old_len, new_len FROM t_list_log;
+----
+1	2	4
+
+# Generated columns: OLD and NEW compute the generated value from their own image
+statement ok
+CREATE TABLE t_gen (id INTEGER, a INTEGER, total INTEGER GENERATED ALWAYS AS (a * 2));
+
+statement ok
+CREATE TABLE t_gen_log (id INTEGER, old_a INTEGER, old_total INTEGER, new_a INTEGER, new_total INTEGER);
+
+statement ok
+INSERT INTO t_gen (id, a) VALUES (1, 5), (2, 6);
+
+statement ok
+CREATE TRIGGER trg_gen AFTER UPDATE ON t_gen
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_gen_log SELECT o.id, o.a, o.total, n.a, n.total FROM o JOIN n ON o.id = n.id;
+
+statement ok
+UPDATE t_gen SET a = 7 WHERE id = 1;
+
+query IIIII rowsort
+SELECT id, old_a, old_total, new_a, new_total FROM t_gen_log;
+----
+1	5	10	7	14
+
+# Generated columns that reference each other, declared out of dependency order (g2 before g1):
+# the OLD image must still recompute them correctly, independent of declaration order
+statement ok
+CREATE TABLE t_gen_order (
+    x INTEGER,
+    g2 INTEGER GENERATED ALWAYS AS (g1 + 1),
+    g1 INTEGER GENERATED ALWAYS AS (x + 1)
+);
+
+statement ok
+CREATE TABLE t_gen_order_log (x INTEGER, g2 INTEGER, g1 INTEGER);
+
+statement ok
+INSERT INTO t_gen_order (x) VALUES (1);
+
+statement ok
+CREATE TRIGGER trg_gen_order AFTER UPDATE ON t_gen_order
+REFERENCING OLD TABLE AS o
+FOR EACH STATEMENT
+    INSERT INTO t_gen_order_log SELECT * FROM o;
+
+statement ok
+UPDATE t_gen_order SET x = 10;
+
+# OLD image of the single row: x=1, g1=x+1=2, g2=g1+1=3
+query III
+SELECT x, g2, g1 FROM t_gen_order_log;
+----
+1	3	2
+
+# RETURNING binds against the NEW image and coexists with both transition aliases
+statement ok
+CREATE TABLE t_ret (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_ret_log (id INTEGER, old_val INTEGER, new_val INTEGER);
+
+statement ok
+INSERT INTO t_ret VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TRIGGER trg_ret AFTER UPDATE ON t_ret
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_ret_log SELECT o.id, o.val, n.val FROM o JOIN n ON o.id = n.id;
+
+query II rowsort
+UPDATE t_ret SET val = val + 100 RETURNING id, val;
+----
+1	110
+2	120
+
+query III rowsort
+SELECT id, old_val, new_val FROM t_ret_log;
+----
+1	10	110
+2	20	120
+
+# SELECT * over a transition table exposes exactly the logical table columns (no rowid/internal columns)
+statement ok
+CREATE TABLE t_shape (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_shape_old (id INTEGER, val INTEGER);
+
+statement ok
+CREATE TABLE t_shape_new (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO t_shape VALUES (1, 10);
+
+statement ok
+CREATE TRIGGER trg_shape AFTER UPDATE ON t_shape
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_shape_old SELECT * FROM o;
+
+statement ok
+CREATE TRIGGER trg_shape_new AFTER UPDATE ON t_shape
+REFERENCING NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_shape_new SELECT * FROM n;
+
+statement ok
+UPDATE t_shape SET val = 20;
+
+query II
+SELECT id, val FROM t_shape_old;
+----
+1	10
+
+query II
+SELECT id, val FROM t_shape_new;
+----
+1	20
+
+# A user column named exactly like the reserved OLD-capture prefix must not corrupt the OLD image
+statement ok
+CREATE TABLE t_name (__duckdb_old_col_0 INTEGER, id INTEGER);
+
+statement ok
+CREATE TABLE t_name_log (captured_old INTEGER, captured_id INTEGER);
+
+statement ok
+INSERT INTO t_name VALUES (10, 1);
+
+statement ok
+CREATE TRIGGER trg_name AFTER UPDATE ON t_name
+REFERENCING OLD TABLE AS o
+FOR EACH STATEMENT
+    INSERT INTO t_name_log SELECT o.__duckdb_old_col_0, o.id FROM o;
+
+statement ok
+UPDATE t_name SET __duckdb_old_col_0 = 999 WHERE id = 1;
+
+# OLD must be the pre-update value (10), not the NEW value (999)
+query II
+SELECT captured_old, captured_id FROM t_name_log;
+----
+10	1
+
+# The update itself still persisted the NEW value
+query II
+SELECT __duckdb_old_col_0, id FROM t_name;
+----
+999	1
+
+# A failing trigger body rolls back the whole UPDATE
+statement ok
+CREATE TABLE t_rb (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO t_rb VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TABLE t_rb_unique (v INTEGER UNIQUE);
+
+statement ok
+INSERT INTO t_rb_unique VALUES (999);
+
+statement ok
+CREATE TRIGGER trg_rb AFTER UPDATE ON t_rb
+REFERENCING OLD TABLE AS o NEW TABLE AS n
+FOR EACH STATEMENT
+    INSERT INTO t_rb_unique SELECT 999 FROM o JOIN n ON o.id = n.id LIMIT 1;
+
+statement error
+UPDATE t_rb SET val = val + 1;
+----
+Constraint Error:
+
+query II rowsort
+SELECT id, val FROM t_rb;
+----
+1	10
+2	20

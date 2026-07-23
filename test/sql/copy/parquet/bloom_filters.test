@@ -32,6 +32,28 @@ SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloo
 ----
 true
 
+# IS NOT DISTINCT FROM a non-NULL constant can use the same Bloom filter probe as equality
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r = 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Equal inclusive bounds are reduced to equality, enabling Bloom filter pruning
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r BETWEEN 201 AND 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r IS NOT DISTINCT FROM 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r >= 201 AND r <= 201;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
 # this value is outside min/max
 query I
 SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloom1.parquet', 'r', '112121212');
@@ -583,3 +605,49 @@ query I
 select encodings in ('PLAIN_DICTIONARY', 'RLE_DICTIONARY') from parquet_metadata('{TEST_DIR}/my.parquet');
 ----
 false
+
+statement ok
+COPY (
+	SELECT CASE
+		WHEN i < 2048 THEN (-1.0::DOUBLE / 'Infinity'::DOUBLE)
+		WHEN i % 2 = 0 THEN -1.0::DOUBLE
+		ELSE 1.0::DOUBLE
+	END AS x
+	FROM range(4096) t(i)
+	ORDER BY i
+) TO '{TEST_DIR}/bloom_ndf_signed_zero.parquet' (
+	FORMAT PARQUET,
+	ROW_GROUP_SIZE 2048,
+	WRITE_BLOOM_FILTER TRUE,
+	DICTIONARY_SIZE_LIMIT 1000
+);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
+WHERE x IS NOT DISTINCT FROM 0.0;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
+WHERE x IS NOT DISTINCT FROM 0.0;
+----
+2048
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
+WHERE x IS NOT DISTINCT FROM -0.0;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
+WHERE x IS NOT DISTINCT FROM -0.0;
+----
+2048

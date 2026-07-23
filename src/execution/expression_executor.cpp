@@ -235,8 +235,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 		return InitializeState(expr.Cast<BoundReferenceExpression>(), state);
 	case ExpressionClass::BOUND_CASE:
 		return InitializeState(expr.Cast<BoundCaseExpression>(), state);
-	case ExpressionClass::BOUND_CAST:
-		return InitializeState(expr.Cast<BoundCastExpression>(), state);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return InitializeState(expr.Cast<BoundConjunctionExpression>(), state);
 	case ExpressionClass::BOUND_CONSTANT:
@@ -281,9 +279,6 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		break;
 	case ExpressionClass::BOUND_CASE:
 		Execute(expr.Cast<BoundCaseExpression>(), state, sel, count, result);
-		break;
-	case ExpressionClass::BOUND_CAST:
-		Execute(expr.Cast<BoundCastExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
 		Execute(expr.Cast<BoundConjunctionExpression>(), state, sel, count, result);

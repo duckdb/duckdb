@@ -41,10 +41,10 @@ static void ManyJSONKeysFunction(DataChunk &args, ExpressionState &state, Vector
 static void GetJSONKeysFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
 	set.AddFunction(ScalarFunction({input_type}, LogicalType::LIST(LogicalType::VARCHAR), UnaryJSONKeysFunction,
 	                               nullptr, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::LIST(LogicalType::VARCHAR),
-	                               BinaryJSONKeysFunction, JSONReadFunctionData::Bind, nullptr,
-	                               JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
+	set.AddFunction(ScalarFunction({{"json", input_type}, {"path", LogicalType::VARCHAR}},
+	                               LogicalType::LIST(LogicalType::VARCHAR), BinaryJSONKeysFunction,
+	                               JSONReadFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction({{"json", input_type}, {"path", LogicalType::LIST(LogicalType::VARCHAR)}},
 	                               LogicalType::LIST(LogicalType::LIST(LogicalType::VARCHAR)), ManyJSONKeysFunction,
 	                               JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
 }

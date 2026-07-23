@@ -231,12 +231,16 @@ void QueryGraphManager::GetEquivalenceBinding(const Expression &expression, Colu
 		binding = ColumnBinding(TableIndex(entry->second.index), colref.Binding().column_index);
 		return;
 	}
-	case ExpressionClass::BOUND_CAST: {
-		auto &cast = expression.Cast<BoundCastExpression>();
-		if (cast.IsTryCast() || !BoundCastExpression::CastIsInvertible(cast.source_type(), cast.GetReturnType())) {
+	case ExpressionClass::BOUND_FUNCTION: {
+		if (!BoundCastExpression::IsCast(expression)) {
 			return;
 		}
-		GetEquivalenceBinding(cast.Child(), binding);
+		auto &cast = expression.Cast<BoundFunctionExpression>();
+		if (BoundCastExpression::IsTryCast(cast) ||
+		    !BoundCastExpression::CastIsInvertible(BoundCastExpression::SourceType(cast), cast.GetReturnType())) {
+			return;
+		}
+		GetEquivalenceBinding(BoundCastExpression::Child(cast), binding);
 		return;
 	}
 	default:

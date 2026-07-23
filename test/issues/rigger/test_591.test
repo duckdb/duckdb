@@ -4,7 +4,7 @@
 
 # Subtracting a large integer from a DATE results in a 'double free or corruption'
 query T
-SELECT (- 41756167 + '1969-12-11 032657' ::DATE)::VARCHAR;
+SELECT (- 41756167 + '1969-12-11' ::DATE)::VARCHAR;
 ----
 112356-06-10 (BC)
 

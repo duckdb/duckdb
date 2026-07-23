@@ -38,16 +38,16 @@ TimeStampComparison::TimeStampComparison(ExpressionRewriter &rewriter) : Rule(re
 	root = std::move(op);
 }
 
-static BoundCastExpression *GetTimestampCast(Expression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+static optional_ptr<BoundFunctionExpression> GetTimestampCast(Expression &expr) {
+	if (!BoundCastExpression::IsCast(expr)) {
 		return nullptr;
 	}
-	auto &cast_expr = expr.Cast<BoundCastExpression>();
+	auto &cast_expr = expr.Cast<BoundFunctionExpression>();
 	if (cast_expr.GetReturnType().id() != LogicalTypeId::DATE) {
 		return nullptr;
 	}
-	if (cast_expr.Child().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-	    cast_expr.Child().GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
+	if (BoundCastExpression::Child(cast_expr).GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+	    BoundCastExpression::Child(cast_expr).GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
 		return nullptr;
 	}
 	return &cast_expr;
@@ -58,7 +58,7 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
 	D_ASSERT(comparison.GetChildren().size() == 2);
 
-	BoundCastExpression *cast_expr = nullptr;
+	optional_ptr<BoundFunctionExpression> cast_expr;
 	Expression *constant_expr = nullptr;
 	for (auto &child : comparison.GetChildren()) {
 		if (auto timestamp_cast = GetTimestampCast(*child)) {
@@ -72,7 +72,7 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 	}
 
 	auto cast_constant = constant_expr->Copy();
-	auto cast_columnref = cast_expr->Child().Copy();
+	auto cast_columnref = BoundCastExpression::Child(*cast_expr).Copy();
 	auto new_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 
 	Value result;

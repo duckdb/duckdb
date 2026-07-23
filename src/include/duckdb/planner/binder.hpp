@@ -52,6 +52,7 @@ class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
 class LogicalGet;
+class LogicalUpdate;
 class LogicalVacuum;
 
 class ColumnList;
@@ -192,6 +193,13 @@ struct GlobalBinderState {
 	optional_ptr<BoundParameterMap> parameters;
 	//! Tables whose triggers have already been expanded in this query (recursion detection)
 	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
+	//! Generated base-UPDATE nodes that must capture the pre-update (OLD) row image (the capture request),
+	//! keyed by node identity. Internal trigger-expansion state; never set by SQL parsing and never serialized.
+	reference_set_t<QueryNode> trigger_old_capture;
+	//! Optional presentation detail for the statement-trigger CTE consumer: the reserved column names, in physical
+	//! table order, under which the captured OLD image is exposed via SQL aliases. Only populated for capture
+	//! requests presented through a CTE; a consumer that reads the OLD image directly leaves it absent.
+	reference_map_t<QueryNode, vector<Identifier>> trigger_old_capture_cte_names;
 	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
@@ -451,6 +459,9 @@ private:
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
 	void BindDropTrigger(DropStatement &stmt, StatementProperties &properties);
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
+	//! Append references to the scanned pre-update (OLD) value of every physical column, in table order, to the
+	//! UPDATE child projection (before rowid). Records the input-chunk offset of the OLD block on the update.
+	void BindOldRowCapture(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update);
 	//! Build a mapping from storage column index to scan chunk index for RETURNING.
 	//! Ensures all physical columns are present in the scan.
 	//! return_columns[storage_idx] = scan_chunk_idx

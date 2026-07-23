@@ -233,7 +233,8 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk
-	idx_t size = aggr.Function().GetStateSizeCallback()(aggr.Function());
+	AggregateStateInput state_input(aggr.Function(), aggr.BindInfo().get());
+	idx_t size = aggr.Function().GetStateSizeCallback()(state_input);
 	auto state_buffer = make_unsafe_uniq_array_uninitialized<data_t>(size * count);
 
 	// state vector for initialize and finalize
@@ -252,7 +253,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 		// initialize the state for this list
 		auto state_ptr = state_buffer.get() + size * i;
 		states[i] = state_ptr;
-		aggr.Function().GetStateInitCallback()(aggr.Function(), states[i]);
+		aggr.Function().GetStateInitCallback()(state_input, &states[i], 1);
 
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];
@@ -436,12 +437,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 
 	string function_name = "histogram";
 	if (IS_AGGR) { // get the name of the aggregate function
-		if (!arguments[1]->IsFoldable()) {
-			throw InvalidInputException("Aggregate function name must be a constant");
-		}
-		// get the function name
-		Value function_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		function_name = function_value.ToString();
+		function_name = input.GetConstant(1).ToString();
 	}
 
 	// look up the aggregate function in the catalog

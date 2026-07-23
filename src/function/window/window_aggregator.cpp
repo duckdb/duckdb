@@ -11,7 +11,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr)
     : wexpr(wexpr), aggr(wexpr), result_type(wexpr.GetReturnType()),
-      state_size(aggr.function.GetStateSizeCallback()(aggr.function)), exclude_mode(wexpr.WindowExclude()) {
+      state_size(aggr.function.GetStateSize(aggr.GetFunctionData())), exclude_mode(wexpr.WindowExclude()) {
 	for (auto &child : wexpr.GetChildren()) {
 		arg_types.emplace_back(child->GetReturnType());
 	}

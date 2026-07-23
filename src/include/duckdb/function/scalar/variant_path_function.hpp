@@ -9,19 +9,23 @@
 #pragma once
 
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
 struct VariantPathFunction {
+	//! Provides unified construction of path based processing functions.
+	static ScalarFunctionSet CreateFunctionSet(const Identifier &name, const scalar_function_t &function,
+	                                           const LogicalType &return_type, bool path_optional = true);
+
 	//! Executes scalar VARIANT functions that accept an optional constant path argument.
 	//! The function may be called as f(VARIANT), f(VARIANT, VARCHAR) or f(VARIANT, VARCHAR[]).
-	//! `collect_fn` is run once for each requested path and produces an intermediate result.
-	//! `write_fn` writes one row from that intermediate result.
-	template <class COLLECTED_TYPE, class RESULT_TYPE, class COLLECT_FUNCTION, class WRITE_FUNCTION>
+	//! The callback `write_fn` writes the result for one row.
+	template <class RESULT_TYPE, class WRITE_FUNCTION>
 	static void Execute(DataChunk &input, const ExpressionState &state, Vector &result,
-	                    const COLLECT_FUNCTION &collect_fn, const WRITE_FUNCTION &write_fn) {
+	                    const WRITE_FUNCTION &write_fn) {
 		D_ASSERT(input.ColumnCount() == 1 || input.ColumnCount() == 2);
 		const auto count = input.size();
 		const auto &variant_vec = input.data[0];
@@ -37,7 +41,7 @@ struct VariantPathFunction {
 		auto n_columns = input.ColumnCount();
 
 		if (n_columns == 1) {
-			ExecuteUnary<COLLECTED_TYPE, RESULT_TYPE>(variant_vec, {}, result, count, collect_fn, write_fn);
+			ExecuteUnary<RESULT_TYPE>(variant_vec, {}, result, count, write_fn);
 			return;
 		}
 
@@ -45,72 +49,91 @@ struct VariantPathFunction {
 		const auto &path_type_id = input.data[1].GetType().id();
 
 		if (path_type_id == LogicalTypeId::VARCHAR) {
-			ExecuteUnary<COLLECTED_TYPE, RESULT_TYPE>(variant_vec, info.paths[0], result, count, collect_fn, write_fn);
+			ExecuteUnary<RESULT_TYPE>(variant_vec, info.paths[0], result, count, write_fn);
 			return;
 		}
 		if (path_type_id == LogicalTypeId::LIST) {
-			ExecuteMany<COLLECTED_TYPE, RESULT_TYPE>(variant_vec, info.paths, result, count, collect_fn, write_fn);
+			ExecuteMany<RESULT_TYPE>(variant_vec, info.paths, result, count, write_fn);
 			return;
 		}
 	}
 
 private:
 	//! Executes a single path and writes RESULT_TYPE per input row.
-	template <class COLLECTED_TYPE, class RESULT_TYPE, class COLLECT_FUNCTION, class WRITE_FUNCTION>
-	static void ExecuteUnary(const Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-	                         const idx_t count, const COLLECT_FUNCTION &collect_fn, const WRITE_FUNCTION &write_fn) {
-		RecursiveUnifiedVectorFormat source_format;
-		Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
-		const UnifiedVariantVectorData variant(source_format);
-
-		const COLLECTED_TYPE collected = collect_fn(variant, components, count);
+	template <class RESULT_TYPE, class WRITE_FUNCTION>
+	static void ExecuteUnary(const Vector &input, const vector<VariantPathComponent> &path, Vector &result,
+	                         const idx_t count, const WRITE_FUNCTION &write_fn) {
+		const VectorIterator<VectorVariantType> variants(input);
 
 		result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 		auto row_writer = FlatVector::Writer<RESULT_TYPE>(result, count);
 
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-			if (!variant.RowIsValid(row_idx)) {
+			if (!variants.RowIsValid(row_idx)) {
 				row_writer.WriteNull();
 				continue;
 			}
 
-			write_fn(variant, row_writer, collected, row_idx);
+			write_fn(ResolvePath(variants[row_idx], path), row_writer);
 		}
 	}
 
 	//! Executes a list of paths and writes LIST<RESULT_TYPE> per input row.
-	template <class COLLECTED_TYPE, class RESULT_TYPE, class COLLECT_FUNCTION, class WRITE_FUNCTION>
-	static void ExecuteMany(const Vector &variant_vec, const vector<vector<VariantPathComponent>> &paths,
-	                        Vector &result, const idx_t count, const COLLECT_FUNCTION &collect_fn,
-	                        const WRITE_FUNCTION &write_fn) {
-		vector<COLLECTED_TYPE> collected_by_path;
-		collected_by_path.reserve(paths.size());
-
-		RecursiveUnifiedVectorFormat source_format;
-		Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
-		const UnifiedVariantVectorData variant(source_format);
-
-		for (const auto &path : paths) {
-			collected_by_path.push_back(collect_fn(variant, path, count));
-		}
+	template <class RESULT_TYPE, class WRITE_FUNCTION>
+	static void ExecuteMany(const Vector &input, const vector<vector<VariantPathComponent>> &paths, Vector &result,
+	                        const idx_t count, const WRITE_FUNCTION &write_fn) {
+		const VectorIterator<VectorVariantType> variants(input);
 
 		result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 		auto result_writer = FlatVector::Writer<VectorListType<RESULT_TYPE>>(result, count);
 
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-			if (!variant.RowIsValid(row_idx)) {
+			if (!variants.RowIsValid(row_idx)) {
 				result_writer.WriteNull();
 				continue;
 			}
 
 			auto row_writer = result_writer.WriteList(paths.size());
+			const auto variant = variants[row_idx];
 
 			idx_t path_idx = 0;
 			for (auto &path_writer : row_writer) {
-				write_fn(variant, path_writer, collected_by_path[path_idx], row_idx);
+				write_fn(ResolvePath(variant, paths[path_idx]), path_writer);
 				path_idx++;
 			}
 		}
+	}
+
+	//! Walks the VARIANT using a path, which may be either (partially) shredded or unshredded. Returns nullopt if the
+	//! path is missing in the VARIANT, and the present value with VariantNode otherwise.
+	static optional<VariantNode> ResolvePath(VariantNode node, const vector<VariantPathComponent> &path) {
+		for (const auto &component : path) {
+			if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
+				throw InternalException("Path indexes are not supported for this function");
+			}
+			if (node.IsNull() || node.IsMissing()) {
+				return {};
+			}
+
+			if (node.GetTypeId() != VariantLogicalType::OBJECT) {
+				return {};
+			}
+
+			bool found = false;
+			for (const auto &[key, value] : node.GetObjectChildren()) {
+				if (key == component.key) {
+					node = value;
+					found = true;
+					break;
+				}
+			}
+
+			if (!found) {
+				return {};
+			}
+		}
+
+		return node;
 	}
 };
 } // namespace duckdb

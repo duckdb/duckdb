@@ -13,6 +13,7 @@ ParserPackratCache::ParserPackratCache() = default;
 ParserPackratCache::~ParserPackratCache() = default;
 
 optional_ptr<ParseResult> ParserPackratCache::Match(const Matcher &matcher, MatchState &state) {
+	D_ASSERT(matcher.IsPackratMemoized());
 	if (!matcher.IsPackratMemoized()) {
 		return matcher.MatchParseResultInternal(state);
 	}

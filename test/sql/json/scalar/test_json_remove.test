@@ -223,6 +223,12 @@ SELECT json_remove('{"a":1}', '$not_a_path')
 ----
 JSON path error
 
+# Constant modification path errors remain catchable by TRY
+query T
+SELECT TRY(json_remove('{"a":1}', '$[#-'))
+----
+NULL
+
 # Wildcards are not supported in modification functions
 statement error
 SELECT json_remove('{"a":[1,2]}', '$.a[*]')
