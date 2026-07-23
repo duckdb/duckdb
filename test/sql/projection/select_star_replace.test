@@ -41,9 +41,19 @@ SELECT * REPLACE (i+100 AS blabla) FROM integers
 <REGEX>:.*Binder Error.*not found in FROM clause.*
 
 statement error
+SELECT * REPLACE (i+100 AS ii) FROM integers
+----
+<REGEX>:.*Binder Error.*not found in FROM clause.*Candidate bindings: "i".*
+
+statement error
 SELECT integers.* REPLACE (i+100 AS blabla) FROM integers
 ----
 <REGEX>:.*Binder Error.*not found in integers.*
+
+statement error
+SELECT integers.* REPLACE (i+100 AS ii) FROM integers
+----
+<REGEX>:.*Binder Error.*not found in integers.*Candidate bindings: "i".*
 
 # column cannot occur in both exclude and replace list
 statement error

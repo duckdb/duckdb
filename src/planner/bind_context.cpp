@@ -451,14 +451,14 @@ unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenc
 }
 
 struct StarBindInfo {
-	explicit StarBindInfo(vector<unique_ptr<ParsedExpression>> &new_select_list)
-	    : new_select_list(new_select_list) {
+	explicit StarBindInfo(vector<unique_ptr<ParsedExpression>> &new_select_list) : new_select_list(new_select_list) {
 	}
 
 	vector<unique_ptr<ParsedExpression>> &new_select_list;
 	identifier_set_t excluded_columns;
 	qualified_column_set_t excluded_qualified_columns;
 	identifier_set_t replaced_columns;
+	vector<Identifier> candidate_columns;
 };
 
 bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, StarBindInfo &info) {
@@ -489,6 +489,20 @@ bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_nam
 	return true;
 }
 
+string CandidateColumnMessage(const vector<Identifier> &candidate_columns, const Identifier &missing_column) {
+	identifier_set_t unique_columns;
+	vector<Identifier> candidates;
+	for (auto &candidate_column : candidate_columns) {
+		if (unique_columns.find(candidate_column) != unique_columns.end()) {
+			continue;
+		}
+		unique_columns.insert(candidate_column);
+		candidates.push_back(candidate_column);
+	}
+	auto closest_candidates = StringUtil::TopNJaroWinkler(IdentifiersToStrings(candidates), missing_column);
+	return StringUtil::CandidatesMessage(closest_candidates, "Candidate bindings");
+}
+
 void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
                                                vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	if (bindings_list.empty()) {
@@ -504,6 +518,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			auto &column_names = binding.GetColumnNames();
 			auto &binding_alias = binding.GetBindingAlias();
 			for (auto &column_name : column_names) {
+				star_info.candidate_columns.push_back(column_name);
 				QualifiedColumnName qualified_column(binding_alias, column_name);
 				if (CheckExclusionList(expr, qualified_column, star_info)) {
 					continue;
@@ -578,6 +593,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			column_names[0] = binding->GetAlias();
 			column_names[1] = expr.RelationName();
 			for (auto &child : struct_children) {
+				star_info.candidate_columns.push_back(child.first);
 				QualifiedColumnName qualified_name(child.first);
 				if (CheckExclusionList(expr, qualified_name, star_info)) {
 					continue;
@@ -590,6 +606,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 		} else {
 			for (auto &column_name : column_names) {
+				star_info.candidate_columns.push_back(column_name);
 				QualifiedColumnName qualified_name(binding_alias, column_name);
 				if (CheckExclusionList(expr, qualified_name, star_info)) {
 					continue;
@@ -614,17 +631,21 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	//! Verify correctness of the exclude list
 	for (auto &excluded : expr.ExcludeList()) {
 		if (star_info.excluded_qualified_columns.find(excluded) == star_info.excluded_qualified_columns.end()) {
-			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded.ToString(),
-			                      expr.RelationName().empty() ? "FROM clause" : expr.RelationName().c_str());
+			auto candidate_str = CandidateColumnMessage(star_info.candidate_columns, excluded.column);
+			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s%s", excluded.ToDisplayString(),
+			                      expr.RelationName().empty() ? "FROM clause" : expr.RelationName().c_str(),
+			                      candidate_str);
 		}
 	}
 
 	//! Verify correctness of the replace list
 	for (auto &entry : expr.ReplaceList()) {
 		if (star_info.excluded_columns.find(entry.first) == star_info.excluded_columns.end()) {
-			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first.GetIdentifierName(),
+			auto candidate_str = CandidateColumnMessage(star_info.candidate_columns, entry.first);
+			throw BinderException("Column \"%s\" in REPLACE list not found in %s%s", entry.first.GetIdentifierName(),
 			                      expr.RelationName().empty() ? string("FROM clause")
-			                                                  : expr.RelationName().GetIdentifierName());
+			                                                  : expr.RelationName().GetIdentifierName(),
+			                      candidate_str);
 		}
 	}
 }
