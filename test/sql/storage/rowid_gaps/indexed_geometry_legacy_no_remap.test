@@ -4,6 +4,9 @@
 
 require noforcestorage
 
+statement ok
+SET wal_autocheckpoint = '1TB';
+
 # Create a legacy-encoded geometry index.
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_geom_legacy.db' AS geom_legacy (STORAGE_VERSION 'v1.4.0', ROW_GROUP_SIZE 2048);
