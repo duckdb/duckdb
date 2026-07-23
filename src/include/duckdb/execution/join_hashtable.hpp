@@ -439,6 +439,8 @@ public:
 		DataChunk correlated_payload;
 		//! Result chunk used for aggregating into correlated_counts
 		DataChunk result_chunk;
+		//! Whether an RHS condition can produce UNKNOWN during equality comparison
+		bool uncorrelated_has_null = false;
 		//! All RHS condition rows, used only for uncorrelated row equality NULL refinement
 		unique_ptr<ColumnDataCollection> uncorrelated_condition_rows;
 	} mark_join_info;

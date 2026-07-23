@@ -116,6 +116,32 @@ SELECT row([1, NULL::INT], 0) IN (
 ----
 NULL
 
+# A nested build NULL requires refinement for a non-NULL probe.
+query I
+SELECT row([1, 2], 0) IN (
+	SELECT * FROM (VALUES ([1, NULL::INT], 0)) rhs(a, b)
+)
+----
+NULL
+
+# Build-side nested NULL tracking covers the supported nested physical types.
+query IIII
+SELECT row(array_value(1, 2), 0) IN (
+	       SELECT * FROM (VALUES (array_value(1, NULL::INT), 0)) rhs(a, b)
+       ),
+       row(map([1, 2], [1, 2]), 0) IN (
+	       SELECT * FROM (VALUES (map([1, 2], [1, NULL::INT]), 0)) rhs(a, b)
+       ),
+       row({'a': 1, 'b': 2}, 0) IN (
+	       SELECT * FROM (VALUES ({'a': 1, 'b': NULL::INT}, 0)) rhs(a, b)
+       ),
+       row(union_value(num := 1)::UNION(num INT, str VARCHAR), 0) IN (
+	       SELECT *
+	       FROM (VALUES (union_value(num := NULL::INT)::UNION(num INT, str VARCHAR), 0)) rhs(a, b)
+       )
+----
+NULL	NULL	NULL	NULL
+
 query I
 SELECT row(array_value(1, NULL::INT), 0) IN (
 	SELECT * FROM (VALUES (array_value(1, 2), 0)) rhs(a, b)
@@ -151,6 +177,34 @@ SELECT row([9, NULL::INT], 0) IN (
 )
 ----
 false
+
+# Clean nested keys cannot produce UNKNOWN and do not require refinement.
+query I
+SELECT count(*)
+FROM range(10000) lhs(i)
+WHERE row(list_value(i), 0::INT) NOT IN (
+	SELECT list_value((i + 100000)::BIGINT), 0::INT
+	FROM range(10000) rhs(i)
+)
+----
+10000
+
+# Exact matches do not scan the refinement collection when the RHS also contains NULL.
+query III
+SELECT count(*), count(marker), count_if(marker)
+FROM (
+	SELECT row(i, 0::INT) IN (
+		SELECT a, b
+		FROM (
+			SELECT i::BIGINT AS a, 0::INT AS b FROM range(100000) rhs(i)
+			UNION ALL
+			SELECT NULL::BIGINT, 0::INT
+		)
+	) AS marker
+	FROM range(100000) lhs(i)
+)
+----
+100000	100000	100000
 
 # A subquery can expose the complete row as one tuple-valued column.
 query I
