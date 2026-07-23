@@ -1,7 +1,6 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
@@ -302,35 +301,6 @@ void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-// Find the byte length of the first character_count UTF-8 code points.
-bool GetPrefixByteLength(const string &value, idx_t character_count, idx_t &byte_count) {
-	auto data = reinterpret_cast<const utf8proc_uint8_t *>(value.c_str());
-	byte_count = 0;
-	for (idx_t character_idx = 0; character_idx < character_count; character_idx++) {
-		if (byte_count >= value.size()) {
-			return false;
-		}
-		utf8proc_int32_t codepoint;
-		auto codepoint_size =
-		    utf8proc_iterate(data + byte_count, NumericCast<utf8proc_ssize_t>(value.size() - byte_count), &codepoint);
-		if (codepoint_size <= 0) {
-			return false;
-		}
-		byte_count += NumericCast<idx_t>(codepoint_size);
-	}
-	return true;
-}
-
-// Return at most character_count UTF-8 code points, preserving shorter values in full.
-bool GetPrefix(const string &value, idx_t character_count, string &result) {
-	idx_t prefix_size;
-	if (!GetPrefixByteLength(value, character_count, prefix_size) && prefix_size != value.size()) {
-		return false;
-	}
-	result = value.substr(0, prefix_size);
-	return true;
-}
-
 struct SubstringStatsParameters {
 	// 0-based index of the first character of the substring.
 	idx_t start_character_index = 0;
@@ -382,47 +352,13 @@ bool TryGetSubstringStatsParameters(BoundFunctionExpression &expr, SubstringStat
 	return true;
 }
 
-bool GetSubstringStatsBound(const string &value, idx_t prefix_size, optional_idx character_count, string &result) {
-	auto suffix = value.substr(prefix_size);
-	if (!character_count.IsValid()) {
-		result = std::move(suffix);
-		return true;
-	}
-	return GetPrefix(suffix, character_count.GetIndex(), result);
-}
-
 unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInput &input) {
 	auto &expr = input.expr;
 	SubstringStatsParameters parameters;
 	if (!TryGetSubstringStatsParameters(expr, parameters)) {
 		return nullptr;
 	}
-
-	auto &string_stats = input.child_stats[0];
-	if (!StringStats::HasMinMax(string_stats)) {
-		return nullptr;
-	}
-
-	auto min = StringStats::Min(string_stats);
-	auto max = StringStats::Max(string_stats);
-	idx_t prefix_size = 0;
-	if (!GetPrefixByteLength(min, parameters.start_character_index, prefix_size) ||
-	    prefix_size > StringUtil::GetCommonPrefixSize(min, max)) {
-		return nullptr;
-	}
-
-	string result_min;
-	string result_max;
-	if (!GetSubstringStatsBound(min, prefix_size, parameters.character_count, result_min) ||
-	    !GetSubstringStatsBound(max, prefix_size, parameters.character_count, result_max)) {
-		return nullptr;
-	}
-
-	auto result = StringStats::CreateUnknown(expr.GetReturnType());
-	StringStats::SetMin(result, string_t(result_min), StringStats::GetMinType(string_stats));
-	StringStats::SetMax(result, string_t(result_max), StringStats::GetMaxType(string_stats));
-	result.CopyValidity(string_stats);
-	return result.ToUnique();
+	return PropagateStringSliceStats(input, parameters.start_character_index, parameters.character_count);
 }
 
 unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
