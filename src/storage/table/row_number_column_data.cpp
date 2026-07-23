@@ -60,7 +60,9 @@ idx_t RowNumberColumnData::ScanCount(ColumnScanState &state, Vector &result, idx
 }
 
 void RowNumberColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
-                                 Vector &result, SelectionVector &sel, idx_t count) {
+                                 Vector &result, SelectionVector &sel, idx_t count, idx_t scan_count) {
+	// row_number is a dense sequence: it advances by the number of emitted rows (count), not physical
+	// scan_count, so sub-batching needs no special handling here
 	auto base = GetRowNumberBase(state);
 	// row_number is a dense sequence - deleted/filtered rows don't get numbers
 	// 1-indexed

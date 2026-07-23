@@ -1239,6 +1239,13 @@
         "default_value": "true"
     },
     {
+        "name": "scan_target_size_bytes",
+        "description": "Target maximum size in bytes for each scan result chunk. When set, the scan dynamically reduces the number of rows per chunk to stay under this limit. 0 = disabled (scan full vectors of 2048 rows).",
+        "type": "UBIGINT",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "scheduler_process_partial",
         "description": "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries",
         "type": "BOOLEAN",

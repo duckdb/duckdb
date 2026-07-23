@@ -1471,6 +1471,23 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Scan Target Size Bytes
+//===----------------------------------------------------------------------===//
+void ScanTargetSizeBytesSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.scan_target_size_bytes = input.GetValue<idx_t>();
+}
+
+void ScanTargetSizeBytesSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).scan_target_size_bytes = ClientConfig().scan_target_size_bytes;
+}
+
+Value ScanTargetSizeBytesSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::UBIGINT(config.scan_target_size_bytes);
+}
+
+//===----------------------------------------------------------------------===//
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
