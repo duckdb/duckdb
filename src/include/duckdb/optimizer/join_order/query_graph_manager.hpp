@@ -46,6 +46,10 @@ public:
 	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan);
 	//! Plan enumerator may not find a full plan and therefore will need to create cross  products to create edges.
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
+	//! Add the explicit cross-product edges required to connect the predicate graph.
+	bool ActivateRequiredCrossProducts();
+	//! Whether the predicate graph still has disconnected components.
+	bool RequiresCrossProduct() const;
 	bool IsConnectionApplicable(const NeighborInfo &connection, const JoinRelationSet &left,
 	                            const JoinRelationSet &right) const;
 	bool IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> selected_operator, bool generated_cross_product,
@@ -67,6 +71,9 @@ private:
 	void BuildPredicateModel();
 	void BuildInnerCompanionSets();
 	void ClearExtractedExpressions();
+	idx_t FindGraphComponent(RelationIndex relation);
+	idx_t GetGraphComponent(RelationIndex relation) const;
+	void ConnectGraphComponents(const JoinRelationSet &left, const JoinRelationSet &right);
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
 
@@ -89,6 +96,8 @@ private:
 	unordered_set<idx_t> operator_costing_predicates;
 	unordered_set<idx_t> reconstructed_operators;
 	vector<idx_t> inner_companion_roots;
+	vector<idx_t> graph_component_roots;
+	bool required_cross_products_activated = false;
 
 	QueryGraphEdges query_graph;
 	JoinPredicateModel predicate_model;

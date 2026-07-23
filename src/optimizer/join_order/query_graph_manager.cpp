@@ -350,6 +350,11 @@ static bool IsUnconstrainedInner(const JoinOrderOperator &op) {
 }
 
 void QueryGraphManager::CreateHyperGraphEdges() {
+	graph_component_roots.resize(relation_manager.NumRelations());
+	for (idx_t relation_idx = 0; relation_idx < graph_component_roots.size(); relation_idx++) {
+		graph_component_roots[relation_idx] = relation_idx;
+	}
+
 	vector<optional_ptr<JoinPredicate>> predicates_by_index(filters_and_bindings.size(), nullptr);
 	for (auto predicate_ref : predicate_model.GetPredicates()) {
 		auto &predicate = predicate_ref.get();
@@ -371,24 +376,12 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 		}
 		query_graph.CreateEdge(predicate.GetLeftSet(), predicate.GetRightSet(), predicate);
 		query_graph.CreateEdge(predicate.GetRightSet(), predicate.GetLeftSet(), predicate);
+		ConnectGraphComponents(predicate.GetLeftSet(), predicate.GetRightSet());
 	}
 
 	for (auto &operator_ptr : join_operators) {
 		auto &op = *operator_ptr;
 		if (op.type == JoinOrderOperatorType::CROSS_PRODUCT) {
-			if (Settings::Get<DebugForceNoCrossProductSetting>(context)) {
-				continue;
-			}
-			// Cross products have an empty SES. Pairwise edges make the original components visible to DPhyp, while
-			// IsApplicable enforces the conservative original-side check from Section 6.2.
-			for (idx_t left_idx = 0; left_idx < op.left_relations.get().count; left_idx++) {
-				auto &left = set_manager.GetJoinRelation(op.left_relations.get().relations[left_idx]);
-				for (idx_t right_idx = 0; right_idx < op.right_relations.get().count; right_idx++) {
-					auto &right = set_manager.GetJoinRelation(op.right_relations.get().relations[right_idx]);
-					query_graph.CreateEdge(left, right, nullptr, op);
-					query_graph.CreateEdge(right, left, nullptr, op);
-				}
-			}
 			continue;
 		}
 		if (IsUnconstrainedInner(op)) {
@@ -410,11 +403,13 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			}
 			query_graph.CreateEdge(op.left_total_set, op.right_total_set, *predicate, op);
 			query_graph.CreateEdge(op.right_total_set, op.left_total_set, *predicate, op);
+			ConnectGraphComponents(op.left_total_set, op.right_total_set);
 			created_edge = true;
 		}
 		if (!created_edge) {
 			query_graph.CreateEdge(op.left_total_set, op.right_total_set, nullptr, op);
 			query_graph.CreateEdge(op.right_total_set, op.left_total_set, nullptr, op);
+			ConnectGraphComponents(op.left_total_set, op.right_total_set);
 		}
 	}
 }
@@ -856,6 +851,95 @@ const QueryGraphEdges &QueryGraphManager::GetQueryGraphEdges() const {
 void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right) {
 	query_graph.CreateEdge(left, right, nullptr, nullptr, true);
 	query_graph.CreateEdge(right, left, nullptr, nullptr, true);
+}
+
+idx_t QueryGraphManager::FindGraphComponent(RelationIndex relation) {
+	auto component = relation.index;
+	D_ASSERT(component < graph_component_roots.size());
+	while (graph_component_roots[component] != component) {
+		graph_component_roots[component] = graph_component_roots[graph_component_roots[component]];
+		component = graph_component_roots[component];
+	}
+	return component;
+}
+
+idx_t QueryGraphManager::GetGraphComponent(RelationIndex relation) const {
+	auto component = relation.index;
+	D_ASSERT(component < graph_component_roots.size());
+	while (graph_component_roots[component] != component) {
+		component = graph_component_roots[component];
+	}
+	return component;
+}
+
+void QueryGraphManager::ConnectGraphComponents(const JoinRelationSet &left, const JoinRelationSet &right) {
+	D_ASSERT(!left.Empty() && !right.Empty());
+	auto root = FindGraphComponent(left.relations[0]);
+	auto connect = [&](const JoinRelationSet &relations) {
+		for (idx_t relation_idx = 0; relation_idx < relations.count; relation_idx++) {
+			auto next_root = FindGraphComponent(relations.relations[relation_idx]);
+			if (root == next_root) {
+				continue;
+			}
+			graph_component_roots[MaxValue(root, next_root)] = MinValue(root, next_root);
+			root = MinValue(root, next_root);
+		}
+	};
+	connect(left);
+	connect(right);
+}
+
+bool QueryGraphManager::ActivateRequiredCrossProducts() {
+	if (required_cross_products_activated || Settings::Get<DebugForceNoCrossProductSetting>(context)) {
+		return false;
+	}
+	required_cross_products_activated = true;
+
+	bool added_edge = false;
+	// Operators are stored in postorder. Required child cross products therefore connect each input scope before its
+	// parent is considered.
+	for (auto &operator_ptr : join_operators) {
+		auto &op = *operator_ptr;
+		if (op.type != JoinOrderOperatorType::CROSS_PRODUCT) {
+			continue;
+		}
+		D_ASSERT(!op.left_relations.get().Empty() && !op.right_relations.get().Empty());
+		bool connects_components = false;
+		for (idx_t left_idx = 0; left_idx < op.left_relations.get().count && !connects_components; left_idx++) {
+			auto left_root = FindGraphComponent(op.left_relations.get().relations[left_idx]);
+			for (idx_t right_idx = 0; right_idx < op.right_relations.get().count; right_idx++) {
+				if (left_root != FindGraphComponent(op.right_relations.get().relations[right_idx])) {
+					connects_components = true;
+					break;
+				}
+			}
+		}
+		if (!connects_components) {
+			continue;
+		}
+		for (idx_t left_idx = 0; left_idx < op.left_relations.get().count; left_idx++) {
+			auto &left = set_manager.GetJoinRelation(op.left_relations.get().relations[left_idx]);
+			for (idx_t right_idx = 0; right_idx < op.right_relations.get().count; right_idx++) {
+				auto &right = set_manager.GetJoinRelation(op.right_relations.get().relations[right_idx]);
+				query_graph.CreateEdge(left, right, nullptr, op);
+				query_graph.CreateEdge(right, left, nullptr, op);
+			}
+		}
+		ConnectGraphComponents(op.left_relations, op.right_relations);
+		added_edge = true;
+	}
+	return added_edge;
+}
+
+bool QueryGraphManager::RequiresCrossProduct() const {
+	D_ASSERT(!graph_component_roots.empty());
+	auto root = GetGraphComponent(RelationIndex(0));
+	for (idx_t relation_idx = 1; relation_idx < graph_component_roots.size(); relation_idx++) {
+		if (GetGraphComponent(RelationIndex(relation_idx)) != root) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool QueryGraphManager::IsConnectionApplicable(const NeighborInfo &connection, const JoinRelationSet &left,

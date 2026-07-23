@@ -451,6 +451,9 @@ bool PlanEnumerator::SolveJoinOrderApproximately() {
 			}
 		}
 		if (!found_connection) {
+			if (ActivateRequiredCrossProducts()) {
+				continue;
+			}
 			// Optimizer-introduced cross products are valid only inside an inner-join companion set (Section 6.2).
 			for (idx_t i = 0; i < join_relations.size(); i++) {
 				auto &left = join_relations[i].get();
@@ -503,6 +506,25 @@ bool PlanEnumerator::SolveJoinOrderApproximately() {
 	return true;
 }
 
+bool PlanEnumerator::HasCompletePlan() const {
+	unordered_set<RelationIndex> bindings;
+	for (idx_t relation_idx = 0; relation_idx < query_graph_manager.relation_manager.NumRelations(); relation_idx++) {
+		bindings.emplace(relation_idx);
+	}
+	auto &total_relation = query_graph_manager.set_manager.GetJoinRelation(bindings);
+	return plans.find(total_relation) != plans.end();
+}
+
+bool PlanEnumerator::ActivateRequiredCrossProducts() {
+	if (!query_graph_manager.ActivateRequiredCrossProducts()) {
+		return false;
+	}
+	pairs = 0;
+	connection_cache.clear();
+	neighbor_set_cache.clear();
+	return true;
+}
+
 bool PlanEnumerator::PlanUsesCrossProduct(const DPJoinNode &node) const {
 	if (node.is_leaf) {
 		return false;
@@ -552,11 +574,17 @@ bool PlanEnumerator::SolveJoinOrder() {
 	bool solved;
 	if (query_graph_manager.relation_manager.NumRelations() >= swap_to_approximate_threshold) {
 		solved = SolveJoinOrderApproximately();
-	} else if (!SolveJoinOrderExactly()) {
-		// otherwise, if that times out we resort to a greedy algorithm
-		solved = SolveJoinOrderApproximately();
 	} else {
-		solved = true;
+		auto completed_exactly = SolveJoinOrderExactly();
+		if (completed_exactly && !HasCompletePlan() && ActivateRequiredCrossProducts()) {
+			completed_exactly = SolveJoinOrderExactly();
+		}
+		if (!completed_exactly || !HasCompletePlan()) {
+			// Exact enumeration either reached its pair budget or could not connect the graph.
+			solved = SolveJoinOrderApproximately();
+		} else {
+			solved = true;
+		}
 	}
 
 	// now the optimal join path should have been found
@@ -568,6 +596,10 @@ bool PlanEnumerator::SolveJoinOrder() {
 	auto &total_relation = query_graph_manager.set_manager.GetJoinRelation(bindings);
 	auto final_plan = plans.find(total_relation);
 	if (!solved) {
+		if (force_no_cross_product && query_graph_manager.RequiresCrossProduct()) {
+			throw InvalidInputException(
+			    "Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
+		}
 		return false;
 	}
 	if (final_plan == plans.end()) {

@@ -66,6 +66,8 @@ private:
 	//! Solve the join order approximately using a greedy algorithm
 	bool SolveJoinOrderApproximately();
 	bool PlanUsesCrossProduct(const DPJoinNode &node) const;
+	bool HasCompletePlan() const;
+	bool ActivateRequiredCrossProducts();
 
 private:
 	//! The set of edges used in the join optimizer
