@@ -24,15 +24,17 @@
 namespace duckdb {
 
 class JoinPredicate;
-struct NonInnerJoinEdge;
+struct JoinOrderOperator;
 
 struct NeighborInfo {
 public:
-	NeighborInfo(optional_ptr<JoinRelationSet> neighbor, optional_ptr<NonInnerJoinEdge> non_inner_join);
+	NeighborInfo(optional_ptr<JoinRelationSet> neighbor, optional_ptr<JoinOrderOperator> join_operator,
+	             bool generated_cross_product);
 
 public:
 	optional_ptr<JoinRelationSet> neighbor;
-	optional_ptr<NonInnerJoinEdge> non_inner_join;
+	optional_ptr<JoinOrderOperator> join_operator;
+	bool generated_cross_product;
 	vector<reference<JoinPredicate>> predicates;
 };
 
@@ -59,7 +61,7 @@ public:
 	void EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback) const;
 	//! Create an edge in the edge_set
 	void CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<JoinPredicate> predicate,
-	                optional_ptr<NonInnerJoinEdge> non_inner_join = nullptr);
+	                optional_ptr<JoinOrderOperator> join_operator = nullptr, bool generated_cross_product = false);
 
 private:
 	//! Get the QueryEdge of a specific node

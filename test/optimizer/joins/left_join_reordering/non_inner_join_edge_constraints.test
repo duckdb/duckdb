@@ -53,6 +53,52 @@ ANTI JOIN e ON e.k = a.k AND d.k BETWEEN -1 AND 2;
 ----
 0
 
+# Explicit CROSS JOIN scopes must remain available when sibling LEFT joins share both inputs.
+query I
+WITH a(k) AS (VALUES (0)),
+     q(k) AS (VALUES (0)),
+     b(k) AS (VALUES (0)),
+     c(k) AS (VALUES (0))
+SELECT count(*)
+FROM a
+CROSS JOIN q
+LEFT JOIN b ON b.k = a.k AND q.k = b.k
+LEFT JOIN c ON c.k = a.k AND q.k = c.k;
+----
+1
+
+# A bushy plan must apply both LEFT joins before the multi-relation ANTI join consumes their payloads.
+query I
+WITH a(k) AS (VALUES (1)),
+     b(k) AS (VALUES (0)),
+     c(k) AS (VALUES (0)),
+     d(k) AS (VALUES (0)),
+     e(k) AS (VALUES (0)),
+     f(k) AS (VALUES (0))
+SELECT count(*)
+FROM (((a LEFT JOIN b ON b.k = a.k)
+       INNER JOIN (c LEFT JOIN d ON d.k = c.k) ON d.k IS NOT DISTINCT FROM a.k)
+      INNER JOIN e ON e.k IS NOT DISTINCT FROM d.k)
+ANTI JOIN f ON f.k = c.k AND f.k = a.k;
+----
+0
+
+# Figure 14 from Moerkotte et al. (SIGMOD 2013): applying the ANTI join above the LEFT join is invalid.
+query I
+WITH r0(a) AS (VALUES (1)),
+     r1(a,b) AS (VALUES (1,1)),
+     r2(b,c) AS (VALUES (1,1)),
+     r3(c) AS (VALUES (1))
+SELECT count(*)
+FROM r0
+LEFT JOIN (
+  r1
+  INNER JOIN (r2 ANTI JOIN r3 ON r2.c = r3.c)
+    ON r1.b = r2.b
+) ON r0.a = r1.a;
+----
+1
+
 endloop
 
 statement ok

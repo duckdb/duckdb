@@ -33,7 +33,7 @@ public:
 
 public:
 	//! Perform the join order solving
-	void SolveJoinOrder();
+	bool SolveJoinOrder();
 	void InitLeafPlans();
 
 	const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &GetPlans() const;
@@ -48,9 +48,6 @@ private:
 	//! semantic input sides.
 	optional_ptr<DPJoinNode> EmitPair(JoinRelationSet &left, JoinRelationSet &right,
 	                                  const vector<reference<NeighborInfo>> &info);
-	//! Find the cheapest pair of relation sets without a query-graph connection.
-	bool FindCrossProductPair(const vector<reference<JoinRelationSet>> &join_relations, idx_t &left_index,
-	                          idx_t &right_index);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
@@ -63,14 +60,12 @@ private:
 	bool EmitCSG(JoinRelationSet &node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
 	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<RelationIndex> &exclusion_set);
-	//! Generate cross product edges inside the side
-	void GenerateCrossProducts();
-
 	//! Solve the join order exactly using dynamic programming. Returns true if it was completed successfully (i.e. did
 	//! not time-out)
 	bool SolveJoinOrderExactly();
 	//! Solve the join order approximately using a greedy algorithm
-	void SolveJoinOrderApproximately();
+	bool SolveJoinOrderApproximately();
+	bool PlanUsesCrossProduct(const DPJoinNode &node) const;
 
 private:
 	//! The set of edges used in the join optimizer

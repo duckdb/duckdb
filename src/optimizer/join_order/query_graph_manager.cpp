@@ -2,6 +2,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -20,90 +21,6 @@ GenerateJoinRelation::GenerateJoinRelation(optional_ptr<JoinRelationSet> set, un
 }
 
 QueryGraphManager::QueryGraphManager(ClientContext &context) : context(context), relation_manager(context) {
-}
-
-static bool NonInnerRelationSetsIntersect(const JoinRelationSet &left, const JoinRelationSet &right) {
-	for (idx_t left_idx = 0; left_idx < left.count; left_idx++) {
-		for (idx_t right_idx = 0; right_idx < right.count; right_idx++) {
-			if (left.relations[left_idx] == right.relations[right_idx]) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-void QueryGraphManager::ResolveNonInnerJoinPrerequisites() {
-	struct Prerequisite {
-		idx_t edge_index;
-		JoinSide consumer_side;
-	};
-	vector<vector<Prerequisite>> direct_prerequisites(non_inner_joins.size());
-	for (idx_t consumer_idx = 0; consumer_idx < non_inner_joins.size(); consumer_idx++) {
-		auto &consumer = *non_inner_joins[consumer_idx];
-		if (consumer.predicate_left_set.get().Empty() || consumer.predicate_right_set.get().Empty()) {
-			throw InternalException("Non-inner join %llu has an empty predicate endpoint", consumer.index);
-		}
-		if (NonInnerRelationSetsIntersect(consumer.predicate_left_set, consumer.predicate_right_set)) {
-			throw InternalException("Non-inner join %llu has overlapping predicate endpoints", consumer.index);
-		}
-		for (idx_t producer_idx = 0; producer_idx < non_inner_joins.size(); producer_idx++) {
-			if (consumer_idx == producer_idx) {
-				continue;
-			}
-			auto &producer = *non_inner_joins[producer_idx];
-			if (producer.join_type != JoinType::LEFT) {
-				continue;
-			}
-			auto depends_on_left =
-			    NonInnerRelationSetsIntersect(consumer.predicate_left_set, producer.predicate_right_set);
-			auto depends_on_right =
-			    NonInnerRelationSetsIntersect(consumer.predicate_right_set, producer.predicate_right_set);
-			if (depends_on_left && depends_on_right) {
-				throw InternalException("Non-inner join %llu depends on both sides of non-inner join %llu",
-				                        consumer.index, producer.index);
-			}
-			if (depends_on_left || depends_on_right) {
-				direct_prerequisites[consumer_idx].push_back(
-				    {producer_idx, depends_on_left ? JoinSide::LEFT : JoinSide::RIGHT});
-			}
-		}
-	}
-
-	vector<uint8_t> resolve_state(non_inner_joins.size(), 0);
-	std::function<void(idx_t)> resolve_edge = [&](idx_t edge_idx) {
-		if (resolve_state[edge_idx] == 2) {
-			return;
-		}
-		if (resolve_state[edge_idx] == 1) {
-			throw InternalException("Non-inner join prerequisite cycle involving edge %llu", edge_idx);
-		}
-		resolve_state[edge_idx] = 1;
-		auto &edge = *non_inner_joins[edge_idx];
-		unordered_set<idx_t> prerequisite_ids;
-		for (auto &prerequisite : direct_prerequisites[edge_idx]) {
-			resolve_edge(prerequisite.edge_index);
-			auto &producer = *non_inner_joins[prerequisite.edge_index];
-			auto &producer_input = set_manager.Union(producer.required_left_set, producer.required_right_set);
-			if (prerequisite.consumer_side == JoinSide::LEFT) {
-				edge.required_left_set = set_manager.Union(edge.required_left_set, producer_input);
-			} else {
-				D_ASSERT(prerequisite.consumer_side == JoinSide::RIGHT);
-				edge.required_right_set = set_manager.Union(edge.required_right_set, producer_input);
-			}
-			prerequisite_ids.insert(producer.index);
-			prerequisite_ids.insert(producer.prerequisite_edges.begin(), producer.prerequisite_edges.end());
-		}
-		edge.prerequisite_edges.insert(edge.prerequisite_edges.end(), prerequisite_ids.begin(), prerequisite_ids.end());
-		std::sort(edge.prerequisite_edges.begin(), edge.prerequisite_edges.end());
-		if (NonInnerRelationSetsIntersect(edge.required_left_set, edge.required_right_set)) {
-			throw InternalException("Non-inner join %llu has overlapping required input sets", edge.index);
-		}
-		resolve_state[edge_idx] = 2;
-	};
-	for (idx_t edge_idx = 0; edge_idx < non_inner_joins.size(); edge_idx++) {
-		resolve_edge(edge_idx);
-	}
 }
 
 void QueryGraphManager::BuildPredicateModel() {
@@ -210,6 +127,46 @@ void QueryGraphManager::BuildPredicateModel() {
 	}
 }
 
+void QueryGraphManager::BuildInnerCompanionSets() {
+	inner_companion_roots.resize(relation_manager.NumRelations());
+	for (idx_t relation_idx = 0; relation_idx < inner_companion_roots.size(); relation_idx++) {
+		inner_companion_roots[relation_idx] = relation_idx;
+	}
+	auto find_root = [&](idx_t relation_idx) {
+		while (inner_companion_roots[relation_idx] != relation_idx) {
+			inner_companion_roots[relation_idx] = inner_companion_roots[inner_companion_roots[relation_idx]];
+			relation_idx = inner_companion_roots[relation_idx];
+		}
+		return relation_idx;
+	};
+	auto merge_set = [&](const JoinRelationSet &set) {
+		if (set.count < 2) {
+			return;
+		}
+		auto first_root = find_root(set.relations[0].index);
+		for (idx_t set_idx = 1; set_idx < set.count; set_idx++) {
+			auto next_root = find_root(set.relations[set_idx].index);
+			if (first_root != next_root) {
+				inner_companion_roots[MaxValue(first_root, next_root)] = MinValue(first_root, next_root);
+				first_root = MinValue(first_root, next_root);
+			}
+		}
+	};
+	for (auto &op : join_operators) {
+		if (op->type == JoinOrderOperatorType::INNER) {
+			merge_set(op->syntactic_set);
+		}
+	}
+	for (auto &filter : filters_and_bindings) {
+		if (!filter->join_operator_index.IsValid() && filter->join_type == JoinType::INNER) {
+			merge_set(filter->set);
+		}
+	}
+	for (idx_t relation_idx = 0; relation_idx < inner_companion_roots.size(); relation_idx++) {
+		inner_companion_roots[relation_idx] = find_root(relation_idx);
+	}
+}
+
 bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op) {
 	// have the relation manager extract the join relations and create a reference list of all the
 	// filter operators.
@@ -223,7 +180,8 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	auto extraction = relation_manager.ExtractEdges(op, filter_operators, set_manager);
 	filters_and_bindings = std::move(extraction.filters);
 	non_inner_joins = std::move(extraction.non_inner_edges);
-	ResolveNonInnerJoinPrerequisites();
+	join_operators = std::move(extraction.join_operators);
+	JoinOrderConflictDetector::Build(join_operators, set_manager, relation_manager.relation_mapping);
 	for (auto &non_inner_join : non_inner_joins) {
 		for (auto predicate_index : non_inner_join->costing_predicate_indices) {
 			auto inserted = non_inner_costing_predicates.insert(predicate_index);
@@ -237,6 +195,7 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	BindFilterEndpoints();
 	// Build the predicate model after BindFilterEndpoints so that left_binding/right_binding are populated.
 	BuildPredicateModel();
+	BuildInnerCompanionSets();
 	// Create query_graph hyper edges from the normalized predicate model.
 	CreateHyperGraphEdges();
 	return true;
@@ -379,35 +338,77 @@ void QueryGraphManager::BindFilterEndpoints() {
 	}
 }
 
-void QueryGraphManager::CreateHyperGraphEdges() {
-	for (auto predicate_ref : predicate_model.GetGraphPredicates()) {
-		auto &predicate = predicate_ref.get();
-		D_ASSERT(predicate.GetLeftSetOptional() && predicate.GetRightSetOptional());
-		if (non_inner_costing_predicates.count(predicate.GetIndex())) {
-			continue;
-		}
-		query_graph.CreateEdge(predicate.GetLeftSet(), predicate.GetRightSet(), predicate);
-		query_graph.CreateEdge(predicate.GetRightSet(), predicate.GetLeftSet(), predicate);
-	}
+static bool IsUnconstrainedInner(const JoinOrderOperator &op) {
+	return op.type == JoinOrderOperatorType::INNER && op.conflict_rules.empty() &&
+	       op.total_set.get().count == op.syntactic_set.get().count;
+}
 
+void QueryGraphManager::CreateHyperGraphEdges() {
 	vector<optional_ptr<JoinPredicate>> predicates_by_index(filters_and_bindings.size(), nullptr);
 	for (auto predicate_ref : predicate_model.GetPredicates()) {
 		auto &predicate = predicate_ref.get();
 		D_ASSERT(predicate.GetIndex() < predicates_by_index.size());
 		predicates_by_index[predicate.GetIndex()] = predicate;
 	}
-	for (auto &non_inner_join_ptr : non_inner_joins) {
-		auto &non_inner_join = *non_inner_join_ptr;
-		for (auto predicate_index : non_inner_join.costing_predicate_indices) {
+
+	// Predicates originating in LogicalFilters remain ordinary query-graph edges. Predicates carried by binary
+	// operators are emitted below using the operator's CD-C eligibility sets.
+	for (auto predicate_ref : predicate_model.GetGraphPredicates()) {
+		auto &predicate = predicate_ref.get();
+		D_ASSERT(predicate.GetLeftSetOptional() && predicate.GetRightSetOptional());
+		auto operator_index = filters_and_bindings[predicate.GetIndex()]->join_operator_index;
+		if (operator_index.IsValid()) {
+			D_ASSERT(operator_index.GetIndex() < join_operators.size());
+			if (!IsUnconstrainedInner(*join_operators[operator_index.GetIndex()])) {
+				continue;
+			}
+		}
+		query_graph.CreateEdge(predicate.GetLeftSet(), predicate.GetRightSet(), predicate);
+		query_graph.CreateEdge(predicate.GetRightSet(), predicate.GetLeftSet(), predicate);
+	}
+
+	for (auto &operator_ptr : join_operators) {
+		auto &op = *operator_ptr;
+		if (op.type == JoinOrderOperatorType::CROSS_PRODUCT) {
+			if (Settings::Get<DebugForceNoCrossProductSetting>(context)) {
+				continue;
+			}
+			// Cross products have an empty SES. Pairwise edges make the original components visible to DPhyp, while
+			// IsApplicable enforces the conservative original-side check from Section 6.2.
+			for (idx_t left_idx = 0; left_idx < op.left_relations.get().count; left_idx++) {
+				auto &left = set_manager.GetJoinRelation(op.left_relations.get().relations[left_idx]);
+				for (idx_t right_idx = 0; right_idx < op.right_relations.get().count; right_idx++) {
+					auto &right = set_manager.GetJoinRelation(op.right_relations.get().relations[right_idx]);
+					query_graph.CreateEdge(left, right, nullptr, op);
+					query_graph.CreateEdge(right, left, nullptr, op);
+				}
+			}
+			continue;
+		}
+		if (IsUnconstrainedInner(op)) {
+			// Filter pushdown can place an INNER predicate on an original operator boundary that does not match the
+			// predicate's executable expression endpoints. If CD-C found no constraint, preserve DuckDB's existing
+			// independently movable predicate edge. It was emitted above in the existing filter order; the descriptor
+			// remains available for ancestor conflict detection.
+			continue;
+		}
+
+		bool created_edge = false;
+		for (auto predicate_index : op.predicate_indices) {
+			if (filters_and_bindings[predicate_index]->from_residual_predicate) {
+				continue;
+			}
 			auto predicate = predicates_by_index[predicate_index];
 			if (!predicate || !predicate->GetLeftSetOptional() || !predicate->GetRightSetOptional()) {
-				throw InternalException("Non-inner join %llu has a cost predicate without graph endpoints",
-				                        non_inner_join.index);
+				continue;
 			}
-			query_graph.CreateEdge(non_inner_join.required_left_set, non_inner_join.required_right_set, *predicate,
-			                       non_inner_join);
-			query_graph.CreateEdge(non_inner_join.required_right_set, non_inner_join.required_left_set, *predicate,
-			                       non_inner_join);
+			query_graph.CreateEdge(op.left_total_set, op.right_total_set, *predicate, op);
+			query_graph.CreateEdge(op.right_total_set, op.left_total_set, *predicate, op);
+			created_edge = true;
+		}
+		if (!created_edge) {
+			query_graph.CreateEdge(op.left_total_set, op.right_total_set, nullptr, op);
+			query_graph.CreateEdge(op.right_total_set, op.left_total_set, nullptr, op);
 		}
 	}
 }
@@ -425,9 +426,30 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(unique_ptr<SingleJoinRela
 	throw InternalException("Could not find relation in parent node (?)");
 }
 
+void QueryGraphManager::ClearExtractedExpressions() {
+	for (auto &operator_ref : filter_operators) {
+		auto &op = operator_ref.get();
+		if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+		    op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			op.Cast<LogicalComparisonJoin>().conditions.clear();
+			continue;
+		}
+		vector<unique_ptr<Expression>> remaining_expressions;
+		for (auto &expression : op.expressions) {
+			unordered_set<RelationIndex> bindings;
+			relation_manager.ExtractBindings(*expression, bindings);
+			if (bindings.empty()) {
+				remaining_expressions.push_back(std::move(expression));
+			}
+		}
+		op.expressions = std::move(remaining_expressions);
+	}
+}
+
 unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOperator> plan) {
 	// now we have to rewrite the plan
 	bool root_is_join = plan->children.size() > 1;
+	ClearExtractedExpressions();
 
 	unordered_set<RelationIndex> bindings;
 	for (idx_t i = 0; i < relation_manager.NumRelations(); i++) {
@@ -542,24 +564,15 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		auto right = GenerateJoins(extracted_relations, node->right_set);
 		subtree_edges = left.non_inner_edges;
 		subtree_edges.insert(right.non_inner_edges.begin(), right.non_inner_edges.end());
-		auto non_inner_join = dp_entry->second->info->non_inner_join;
+		auto descriptor = dp_entry->second->info->join_operator;
+		auto non_inner_join = descriptor ? descriptor->non_inner_join : nullptr;
 		if (non_inner_join) {
-			auto direct = JoinRelationSet::IsSubset(*left.set, non_inner_join->required_left_set) &&
-			              JoinRelationSet::IsSubset(*right.set, non_inner_join->required_right_set);
-			auto inverted = JoinRelationSet::IsSubset(*left.set, non_inner_join->required_right_set) &&
-			                JoinRelationSet::IsSubset(*right.set, non_inner_join->required_left_set);
-			if (direct == inverted) {
+			D_ASSERT(descriptor);
+			auto direct = JoinRelationSet::IsSubset(*left.set, descriptor->left_total_set) &&
+			              JoinRelationSet::IsSubset(*right.set, descriptor->right_total_set);
+			if (!direct) {
 				throw InternalException("Could not orient non-inner join %llu in reconstructed join tree",
 				                        non_inner_join->index);
-			}
-			if (inverted) {
-				std::swap(left, right);
-			}
-			for (auto prerequisite : non_inner_join->prerequisite_edges) {
-				if (!subtree_edges.count(prerequisite)) {
-					throw InternalException("Non-inner join %llu is missing prerequisite %llu from its input subtrees",
-					                        non_inner_join->index, prerequisite);
-				}
 			}
 			if (!reconstructed_non_inner_joins.insert(non_inner_join->index).second ||
 			    !subtree_edges.insert(non_inner_join->index).second) {
@@ -679,6 +692,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	for (auto &filter_info : filters_and_bindings) {
 		// check if the filter has already been extracted
 		auto &info = *filter_info;
+		if (non_inner_costing_predicates.count(info.filter_index)) {
+			continue;
+		}
 		if (filters_and_bindings[info.filter_index]->filter) {
 			if (info.from_residual_predicate) {
 				continue;
@@ -783,56 +799,70 @@ const QueryGraphEdges &QueryGraphManager::GetQueryGraphEdges() const {
 }
 
 void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right) {
-	query_graph.CreateEdge(left, right, nullptr);
-	query_graph.CreateEdge(right, left, nullptr);
+	query_graph.CreateEdge(left, right, nullptr, nullptr, true);
+	query_graph.CreateEdge(right, left, nullptr, nullptr, true);
 }
 
-bool QueryGraphManager::ValidateJoinPartition(JoinRelationSet &left, JoinRelationSet &right,
-                                              const vector<reference<NeighborInfo>> &connections,
-                                              optional_ptr<NeighborInfo> &non_inner_connection) const {
-	non_inner_connection = nullptr;
-	optional_ptr<NonInnerJoinEdge> completed_edge;
-	for (auto &edge_ptr : non_inner_joins) {
-		auto &edge = *edge_ptr;
-		auto completed_in_left = JoinRelationSet::IsSubset(left, edge.required_left_set) &&
-		                         JoinRelationSet::IsSubset(left, edge.required_right_set);
-		auto completed_in_right = JoinRelationSet::IsSubset(right, edge.required_left_set) &&
-		                          JoinRelationSet::IsSubset(right, edge.required_right_set);
+bool QueryGraphManager::IsConnectionApplicable(const NeighborInfo &connection, const JoinRelationSet &left,
+                                               const JoinRelationSet &right) const {
+	if ((connection.generated_cross_product ||
+	     (connection.join_operator && connection.join_operator->type == JoinOrderOperatorType::CROSS_PRODUCT)) &&
+	    Settings::Get<DebugForceNoCrossProductSetting>(context)) {
+		return false;
+	}
+	if (!connection.join_operator) {
+		return true;
+	}
+	return JoinOrderConflictDetector::IsApplicable(*connection.join_operator, left, right);
+}
+
+bool QueryGraphManager::FindRequiredSemanticOperator(const JoinRelationSet &left, const JoinRelationSet &right,
+                                                     optional_ptr<JoinOrderOperator> &result) const {
+	result = nullptr;
+	for (auto &operator_ptr : join_operators) {
+		auto &op = *operator_ptr;
+		if (!op.non_inner_join) {
+			continue;
+		}
+		auto completed_in_left =
+		    JoinRelationSet::IsSubset(left, op.left_total_set) && JoinRelationSet::IsSubset(left, op.right_total_set);
+		auto completed_in_right =
+		    JoinRelationSet::IsSubset(right, op.left_total_set) && JoinRelationSet::IsSubset(right, op.right_total_set);
 		if (completed_in_left || completed_in_right) {
 			continue;
 		}
-
-		auto touches_left_input = NonInnerRelationSetsIntersect(left, edge.required_left_set) ||
-		                          NonInnerRelationSetsIntersect(right, edge.required_left_set);
-		auto touches_right_input = NonInnerRelationSetsIntersect(left, edge.required_right_set) ||
-		                           NonInnerRelationSetsIntersect(right, edge.required_right_set);
-		if (!touches_left_input || !touches_right_input) {
+		auto touches_left = JoinRelationSet::Intersects(left, op.left_total_set) ||
+		                    JoinRelationSet::Intersects(right, op.left_total_set);
+		auto touches_right = JoinRelationSet::Intersects(left, op.right_total_set) ||
+		                     JoinRelationSet::Intersects(right, op.right_total_set);
+		if (!touches_left || !touches_right) {
 			continue;
 		}
-
-		// If the edge was not completed below, a partition touching both inputs must complete it here. Once portions
-		// of both semantic sides enter the same subtree, no ancestor can separate them again.
-		auto direct = JoinRelationSet::IsSubset(left, edge.required_left_set) &&
-		              JoinRelationSet::IsSubset(right, edge.required_right_set);
-		auto inverted = JoinRelationSet::IsSubset(right, edge.required_left_set) &&
-		                JoinRelationSet::IsSubset(left, edge.required_right_set);
-		if (direct == inverted || completed_edge) {
+		if (result || !JoinOrderConflictDetector::IsApplicable(op, left, right)) {
 			return false;
 		}
-		completed_edge = edge;
+		result = op;
 	}
+	return true;
+}
 
-	for (auto &connection_ref : connections) {
-		auto &connection = connection_ref.get();
-		if (!connection.non_inner_join) {
-			continue;
-		}
-		if (!completed_edge || connection.non_inner_join != completed_edge) {
+bool QueryGraphManager::CanCreateCrossProduct(const JoinRelationSet &left, const JoinRelationSet &right) const {
+	if (Settings::Get<DebugForceNoCrossProductSetting>(context) || left.Empty() || right.Empty() ||
+	    inner_companion_roots.empty()) {
+		return false;
+	}
+	auto root = inner_companion_roots[left.relations[0].index];
+	for (idx_t left_idx = 0; left_idx < left.count; left_idx++) {
+		if (inner_companion_roots[left.relations[left_idx].index] != root) {
 			return false;
 		}
-		non_inner_connection = connection;
 	}
-	return !completed_edge || non_inner_connection;
+	for (idx_t right_idx = 0; right_idx < right.count; right_idx++) {
+		if (inner_companion_roots[right.relations[right_idx].index] != root) {
+			return false;
+		}
+	}
+	return true;
 }
 
 } // namespace duckdb

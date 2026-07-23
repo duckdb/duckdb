@@ -8,8 +8,9 @@ namespace duckdb {
 
 using QueryEdge = QueryGraphEdges::QueryEdge;
 
-NeighborInfo::NeighborInfo(optional_ptr<JoinRelationSet> neighbor, optional_ptr<NonInnerJoinEdge> non_inner_join)
-    : neighbor(neighbor), non_inner_join(non_inner_join) {
+NeighborInfo::NeighborInfo(optional_ptr<JoinRelationSet> neighbor, optional_ptr<JoinOrderOperator> join_operator,
+                           bool generated_cross_product)
+    : neighbor(neighbor), join_operator(join_operator), generated_cross_product(generated_cross_product) {
 }
 
 // LCOV_EXCL_START
@@ -58,13 +59,14 @@ optional_ptr<QueryEdge> QueryGraphEdges::GetQueryEdge(JoinRelationSet &left) {
 }
 
 void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<JoinPredicate> predicate,
-                                 optional_ptr<NonInnerJoinEdge> non_inner_join) {
+                                 optional_ptr<JoinOrderOperator> join_operator, bool generated_cross_product) {
 	D_ASSERT(left.count > 0 && right.count > 0);
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
 	for (idx_t i = 0; i < info->neighbors.size(); i++) {
-		if (info->neighbors[i]->neighbor == &right && info->neighbors[i]->non_inner_join == non_inner_join) {
+		if (info->neighbors[i]->neighbor == &right && info->neighbors[i]->join_operator == join_operator &&
+		    info->neighbors[i]->generated_cross_product == generated_cross_product) {
 			if (predicate) {
 				// neighbor already exists, just add the predicate if we have one
 				info->neighbors[i]->predicates.push_back(*predicate);
@@ -73,9 +75,7 @@ void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, 
 		}
 	}
 	// neighbor does not exist, create it
-	auto n = make_uniq<NeighborInfo>(&right, non_inner_join);
-	// if the edge represents a cross product, predicate is null. The easiest way then to determine
-	// if an edge is for a cross product is if the predicates are empty
+	auto n = make_uniq<NeighborInfo>(&right, join_operator, generated_cross_product);
 	if (info && predicate) {
 		n->predicates.push_back(*predicate);
 	}

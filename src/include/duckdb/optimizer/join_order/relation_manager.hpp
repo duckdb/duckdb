@@ -12,6 +12,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
+#include "duckdb/optimizer/join_order/join_order_operator.hpp"
 #include "duckdb/optimizer/join_order/non_inner_join_edge.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -27,6 +28,7 @@ class FilterInfo;
 struct JoinOrderExtraction {
 	vector<unique_ptr<FilterInfo>> filters;
 	vector<unique_ptr<NonInnerJoinEdge>> non_inner_edges;
+	vector<unique_ptr<JoinOrderOperator>> join_operators;
 };
 
 //! Represents a single relation and any metadata accompanying that relation
@@ -73,8 +75,6 @@ public:
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<TableIndex, RelationIndex> relation_mapping;
 
-	bool CrossProductWithRelationAllowed(idx_t relation_id);
-
 	void PrintRelationStats();
 
 private:
@@ -87,7 +87,7 @@ private:
 	ClientContext &context;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<SingleJoinRelation>> relations;
-	unordered_set<idx_t> no_cross_product_relations;
+	unordered_map<const LogicalOperator *, RelationIndex> operator_relations;
 };
 
 } // namespace duckdb

@@ -18,6 +18,7 @@
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/optimizer/join_order/non_inner_join_edge.hpp"
+#include "duckdb/optimizer/join_order/join_order_operator.hpp"
 
 namespace duckdb {
 
@@ -47,11 +48,11 @@ public:
 	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan);
 	//! Plan enumerator may not find a full plan and therefore will need to create cross  products to create edges.
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
-	//! Validate that a candidate partition preserves every non-inner join's semantic input sides. If this partition
-	//! completes a non-inner join, non_inner_connection identifies the edge that must be used at this node.
-	bool ValidateJoinPartition(JoinRelationSet &left, JoinRelationSet &right,
-	                           const vector<reference<NeighborInfo>> &connections,
-	                           optional_ptr<NeighborInfo> &non_inner_connection) const;
+	bool IsConnectionApplicable(const NeighborInfo &connection, const JoinRelationSet &left,
+	                            const JoinRelationSet &right) const;
+	bool FindRequiredSemanticOperator(const JoinRelationSet &left, const JoinRelationSet &right,
+	                                  optional_ptr<JoinOrderOperator> &result) const;
+	bool CanCreateCrossProduct(const JoinRelationSet &left, const JoinRelationSet &right) const;
 
 	//! Get a reference to the QueryGraphEdges structure that stores edges between nodes and hypernodes.
 	const QueryGraphEdges &GetQueryGraphEdges() const;
@@ -66,7 +67,8 @@ private:
 
 	//! Build the normalized predicate model after filter endpoints and stats bindings are populated.
 	void BuildPredicateModel();
-	void ResolveNonInnerJoinPrerequisites();
+	void BuildInnerCompanionSets();
+	void ClearExtractedExpressions();
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
 
@@ -87,8 +89,10 @@ private:
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
 	//! Non-inner joins whose semantics must be enumerated and reconstructed atomically.
 	vector<unique_ptr<NonInnerJoinEdge>> non_inner_joins;
+	vector<unique_ptr<JoinOrderOperator>> join_operators;
 	unordered_set<idx_t> non_inner_costing_predicates;
 	unordered_set<idx_t> reconstructed_non_inner_joins;
+	vector<idx_t> inner_companion_roots;
 
 	QueryGraphEdges query_graph;
 	JoinPredicateModel predicate_model;
