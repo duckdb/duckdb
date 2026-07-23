@@ -19,6 +19,24 @@ COPY (SELECT * FROM VALUES (0, [0], null), (0, [1], 1), (1, [2], null), (null, [
 statement ok
 COPY (SELECT * FROM VALUES (0, 'a'), (1, 'b'), (null, 'c'), t(x, y)) TO '__TEST_DIR__/tbl2.parquet'
 
+# Regression test: late materialization must use the actual bindings of a projected GET.
+# The pushed-down filter creates a gap in the GET's projection ids before the row ids are appended.
+statement ok
+COPY (SELECT r % 2 AS grp, r AS a, r + 10 AS b, r + 20 AS c,
+             r % 3 = 0 AS excluded, r AS sort_key
+      FROM range(1, 7) t(r)) TO '__TEST_DIR__/projected_get.parquet' (FORMAT parquet)
+
+query IIII
+WITH source AS (SELECT * FROM read_parquet('__TEST_DIR__/projected_get.parquet'))
+SELECT grp, a, b, c
+FROM source
+WHERE NOT excluded
+QUALIFY row_number() OVER (PARTITION BY grp ORDER BY sort_key DESC) = 1
+ORDER BY ALL
+----
+0	4	14	24
+1	5	15	25
+
 # test min_max
 foreach sort_order ASC DESC
 

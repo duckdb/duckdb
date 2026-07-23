@@ -151,21 +151,39 @@ idx_t TraverseAndFindAggregateOffset(const unique_ptr<LogicalOperator> &op) {
 	return aggregate.groups.size();
 }
 
-string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column_id) {
+struct LHSColumnInfo {
+	string name;
+	LogicalType type;
+	ColumnBinding binding;
+};
+
+LHSColumnInfo GetLHSColumnInfo(const unique_ptr<LogicalOperator> &op, idx_t column_id) {
+	D_ASSERT(column_id < op->types.size());
+	const auto bindings = op->GetColumnBindings();
+	D_ASSERT(column_id < bindings.size());
+
+	LHSColumnInfo result;
+	result.type = op->types[column_id];
+	result.binding = bindings[column_id];
+
 	reference<LogicalOperator> current_op = *op;
+	auto get_binding = result.binding;
 
 	if (op.get()->type != LogicalOperatorType::LOGICAL_GET) {
 		D_ASSERT(op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		D_ASSERT(op.get()->expressions.size() > column_id &&
 		         op.get()->expressions[column_id]->type == ExpressionType::BOUND_COLUMN_REF);
 		const auto &colref = op.get()->expressions[column_id]->Cast<BoundColumnRefExpression>();
-		column_id = colref.binding.column_index;
+		get_binding = colref.binding;
 		current_op = *op.get()->children[0];
 	}
 
 	const auto &logical_get = current_op.get().Cast<LogicalGet>();
-	const auto column_index = logical_get.GetColumnIds()[column_id];
-	return logical_get.GetColumnName(column_index);
+	D_ASSERT(get_binding.table_index == logical_get.table_index);
+	D_ASSERT(get_binding.column_index < logical_get.GetColumnIds().size());
+	const auto column_index = logical_get.GetColumnIds()[get_binding.column_index];
+	result.name = logical_get.GetColumnName(column_index);
+	return result;
 }
 
 } // namespace
@@ -1199,13 +1217,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	for (idx_t i = 0; i < rowid_column_count; i++) {
 		const idx_t lhs_rowid_idx = lhs->types.size() - (rowid_column_count - i);
 		const idx_t rhs_rowid_idx = rhs_binding_offset + i;
-		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
+		const auto lhs_column = GetLHSColumnInfo(lhs, lhs_rowid_idx);
 
 		JoinCondition condition;
 		condition.comparison = ExpressionType::COMPARE_EQUAL;
-		condition.left = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
-		                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
-		condition.right = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
+		condition.left = make_uniq<BoundColumnRefExpression>(lhs_column.name, lhs_column.type, lhs_column.binding);
+		condition.right = make_uniq<BoundColumnRefExpression>(lhs_column.name, rhs->types[aggregate_offset + i],
 		                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
 		join->conditions.push_back(std::move(condition));
 	}
