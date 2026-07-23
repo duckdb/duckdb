@@ -6,11 +6,23 @@ statement ok
 PRAGMA threads=4;
 
 statement ok
+CREATE TABLE cte_order_batch AS SELECT i FROM range(1000000) tbl(i);
+
+query II
+EXPLAIN ANALYZE
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch
+)
+SELECT i FROM t LIMIT 5 OFFSET 500000;
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: BUFFERED.*Order Mode: BATCH_INDEX.*
+
+statement ok
 PRAGMA verify_parallelism;
 
 query I
 WITH t(i) AS MATERIALIZED (
-	SELECT i FROM range(1000000) tbl(i)
+	SELECT i FROM cte_order_batch
 )
 SELECT i FROM t LIMIT 5 OFFSET 500000;
 ----
@@ -19,6 +31,23 @@ SELECT i FROM t LIMIT 5 OFFSET 500000;
 500002
 500003
 500004
+
+query I
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM range(1000000) tbl(i)
+)
+SELECT i FROM t WHERE i % 100000 = 0;
+----
+0
+100000
+200000
+300000
+400000
+500000
+600000
+700000
+800000
+900000
 
 query II
 WITH t(i) AS MATERIALIZED (

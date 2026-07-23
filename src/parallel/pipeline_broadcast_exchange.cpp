@@ -232,7 +232,8 @@ PipelineBroadcastExchange::BroadcastSpoolReader::BroadcastSpoolReader(BroadcastS
 struct PipelineBroadcastExchange::AppendReservation {
 	shared_ptr<BroadcastSpool> shared_spool;
 	idx_t position = 0;
-	idx_t batch_index = DConstants::INVALID_INDEX;
+	idx_t producer_batch_index = DConstants::INVALID_INDEX;
+	idx_t exchange_batch_index = DConstants::INVALID_INDEX;
 	bool pending = false;
 };
 
@@ -249,6 +250,17 @@ struct PipelineBroadcastExchange::SpoolReadReservation {
 struct PipelineBroadcastExchange::BufferedChunk {
 	shared_ptr<DataChunk> chunk;
 	idx_t batch_index;
+};
+
+class PipelineBroadcastExchangeScanState {
+	friend class PipelineBroadcastExchange;
+
+public:
+	PipelineBroadcastExchangeScanState() = default;
+
+private:
+	shared_ptr<DataChunk> current_chunk;
+	shared_ptr<PipelineBroadcastExchange::BroadcastSpoolReader> spool_reader;
 };
 
 struct PipelineBroadcastExchange::BufferState {
@@ -268,12 +280,16 @@ struct PipelineBroadcastExchange::BufferState {
 	void Reset() {
 		chunks.clear();
 		pending_batches.clear();
+		active_batches.clear();
 		shared_spool.reset();
 		base_position = 0;
 		next_position = 0;
 		buffered_chunks = 0;
 		pending_chunks = 0;
 		min_batch_index = 0;
+		producer_pipeline_index = DConstants::INVALID_INDEX;
+		producer_pipeline_offset = 0;
+		max_local_batch_index = 0;
 	}
 
 	shared_ptr<DataChunk> Copy(DataChunk &chunk) {
@@ -305,7 +321,22 @@ struct PipelineBroadcastExchange::BufferState {
 	}
 
 	bool HasReadyBatch() const {
-		return !pending_batches.empty() && pending_batches.begin()->first <= min_batch_index;
+		return !pending_batches.empty() && pending_batches.begin()->first <= min_batch_index &&
+		       (active_batches.empty() || pending_batches.begin()->first <= *active_batches.begin());
+	}
+
+	void RegisterActiveBatch(idx_t batch_index) {
+		active_batches.insert(batch_index);
+	}
+
+	void UnregisterActiveBatch(idx_t batch_index) {
+		auto entry = active_batches.find(batch_index);
+		D_ASSERT(entry != active_batches.end());
+		active_batches.erase(entry);
+	}
+
+	bool HasEarlierActiveBatch(idx_t batch_index) const {
+		return !active_batches.empty() && *active_batches.begin() < batch_index;
 	}
 
 	bool HasSharedSpool() const {
@@ -316,19 +347,53 @@ struct PipelineBroadcastExchange::BufferState {
 		return chunks.empty() && !shared_spool;
 	}
 
-	void ReserveAppend(AppendReservation &reservation, idx_t batch_index) const {
+	idx_t ExchangeBatchIndex(idx_t producer_batch_index) {
+		if (producer_batch_index == DConstants::INVALID_INDEX) {
+			return DConstants::INVALID_INDEX;
+		}
+		auto pipeline_index = producer_batch_index / PipelineBuildState::BATCH_INCREMENT;
+		auto local_batch_index = producer_batch_index % PipelineBuildState::BATCH_INCREMENT;
+		if (local_batch_index == 0) {
+			throw InternalException("Pipeline broadcast exchange received an uninitialized batch index");
+		}
+		if (producer_pipeline_index == DConstants::INVALID_INDEX) {
+			producer_pipeline_index = pipeline_index;
+		} else if (pipeline_index != producer_pipeline_index) {
+			if (pipeline_index < producer_pipeline_index) {
+				throw InternalException("Pipeline broadcast producer index decreased from %llu to %llu",
+				                        producer_pipeline_index, pipeline_index);
+			}
+			producer_pipeline_offset += max_local_batch_index;
+			producer_pipeline_index = pipeline_index;
+			max_local_batch_index = 0;
+		}
+		if (local_batch_index < max_local_batch_index) {
+			throw InternalException("Pipeline broadcast exchange emitted batch %llu after batch %llu",
+			                        local_batch_index, max_local_batch_index);
+		}
+		max_local_batch_index = MaxValue(max_local_batch_index, local_batch_index);
+		auto result = producer_pipeline_offset + local_batch_index - 1;
+		if (result >= PipelineBuildState::BATCH_INCREMENT - 1) {
+			throw InternalException("Pipeline broadcast exchange exceeded the batch index range");
+		}
+		return result;
+	}
+
+	void ReserveAppend(AppendReservation &reservation, idx_t producer_batch_index) {
 		reservation.shared_spool = shared_spool;
 		reservation.position = next_position;
-		reservation.batch_index = batch_index;
+		reservation.producer_batch_index = producer_batch_index;
+		reservation.exchange_batch_index = ExchangeBatchIndex(producer_batch_index);
 		reservation.pending = false;
 	}
 
-	shared_ptr<DataChunk> ReservePendingAppend(AppendReservation &reservation) const {
+	shared_ptr<DataChunk> ReservePendingAppend(AppendReservation &reservation) {
 		D_ASSERT(HasReadyBatch());
 		auto &pending = pending_batches.begin()->second.front();
 		reservation.shared_spool = shared_spool;
 		reservation.position = next_position;
-		reservation.batch_index = pending.batch_index;
+		reservation.producer_batch_index = pending.batch_index;
+		reservation.exchange_batch_index = ExchangeBatchIndex(pending.batch_index);
 		reservation.pending = true;
 		return pending.chunk;
 	}
@@ -342,7 +407,7 @@ struct PipelineBroadcastExchange::BufferState {
 		if (reservation.pending) {
 			D_ASSERT(HasReadyBatch());
 			auto pending_entry = pending_batches.begin();
-			D_ASSERT(pending_entry->first == reservation.batch_index);
+			D_ASSERT(pending_entry->first == reservation.producer_batch_index);
 			D_ASSERT(pending_entry->second.front().chunk == copy);
 			pending_entry->second.pop_front();
 			pending_chunks--;
@@ -351,7 +416,7 @@ struct PipelineBroadcastExchange::BufferState {
 			}
 		}
 		if (!reservation.shared_spool) {
-			chunks.push_back({std::move(copy), reservation.batch_index});
+			chunks.push_back({std::move(copy), reservation.exchange_batch_index});
 		}
 		buffered_chunks++;
 		D_ASSERT(next_position == reservation.position);
@@ -423,12 +488,16 @@ struct PipelineBroadcastExchange::BufferState {
 	shared_ptr<ChunkPool> chunk_pool;
 	deque<BufferedChunk> chunks;
 	map<idx_t, deque<BufferedChunk>> pending_batches;
+	multiset<idx_t> active_batches;
 	shared_ptr<BroadcastSpool> shared_spool;
 	idx_t base_position = 0;
 	idx_t next_position = 0;
 	idx_t buffered_chunks = 0;
 	idx_t pending_chunks = 0;
 	idx_t min_batch_index = 0;
+	idx_t producer_pipeline_index = DConstants::INVALID_INDEX;
+	idx_t producer_pipeline_offset = 0;
+	idx_t max_local_batch_index = 0;
 };
 
 PipelineBroadcastExchange::ConsumerState::ConsumerState() = default;
@@ -482,6 +551,10 @@ PipelineBroadcastExchange::PipelineBroadcastExchange(ClientContext &context, vec
 
 unique_ptr<PipelineBroadcastExchangeLocalState> PipelineBroadcastExchange::GetLocalState(ClientContext &context) const {
 	return make_uniq<PipelineBroadcastExchangeLocalState>(context, *this);
+}
+
+shared_ptr<PipelineBroadcastExchangeScanState> PipelineBroadcastExchange::GetScanState() const {
+	return make_shared_ptr<PipelineBroadcastExchangeScanState>();
 }
 
 idx_t PipelineBroadcastExchange::RegisterConsumer() {
@@ -574,9 +647,8 @@ void PipelineBroadcastExchange::ResetExchangeStateLocked() {
 
 void PipelineBroadcastExchange::ResetConsumerReadStateLocked(ConsumerState &consumer, idx_t position) {
 	consumer.position = position;
-	consumer.read_state = ConsumerReadState::IDLE;
-	consumer.read_position = position;
-	consumer.shared_reader.reset();
+	consumer.exhausted = false;
+	consumer.in_flight_reads.clear();
 }
 
 void PipelineBroadcastExchange::ResetConsumerRegistrationLocked(ConsumerState &consumer) {
@@ -866,7 +938,7 @@ PipelineBroadcastExchange::FlushReadyBatches(idx_t min_batch_index, const Interr
 
 		try {
 			if (reservation.shared_spool) {
-				reservation.shared_spool->Append(*copy, reservation.batch_index);
+				reservation.shared_spool->Append(*copy, reservation.exchange_batch_index);
 			}
 		} catch (...) {
 			vector<InterruptState> readers;
@@ -907,6 +979,20 @@ PipelineBroadcastExchange::FlushReadyBatches(idx_t min_batch_index, const Interr
 PipelineBroadcastExchange::BufferedPushState PipelineBroadcastExchange::Append(DataChunk &chunk, idx_t batch_index,
                                                                                idx_t min_batch_index,
                                                                                const InterruptState &interrupt_state) {
+	if (SupportsBatchIndex()) {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		buffer->RegisterActiveBatch(batch_index);
+	}
+	auto unregister_active_batch = [&](idx_t *) {
+		if (!SupportsBatchIndex()) {
+			return;
+		}
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		buffer->UnregisterActiveBatch(batch_index);
+	};
+	unique_ptr<idx_t, decltype(unregister_active_batch)> active_batch_guard(
+	    SupportsBatchIndex() ? &batch_index : nullptr, unregister_active_batch);
+
 	if (SupportsBatchIndex()) {
 		auto flush_result = FlushReadyBatches(min_batch_index, interrupt_state);
 		if (flush_result == BufferedPushState::BLOCKED || flush_result == BufferedPushState::UNCONSUMED ||
@@ -955,7 +1041,8 @@ PipelineBroadcastExchange::BufferedPushState PipelineBroadcastExchange::Append(D
 		if (SupportsBatchIndex()) {
 			buffer->UpdateMinBatchIndex(min_batch_index);
 		}
-		if (SupportsBatchIndex() && batch_index > buffer->MinBatchIndex()) {
+		if (SupportsBatchIndex() && (batch_index > buffer->MinBatchIndex() ||
+		                             buffer->HasEarlierActiveBatch(batch_index) || buffer->HasReadyBatch())) {
 			admission = PrepareStageLocked(batch_index, interrupt_state, log_entries);
 			if (admission == AppendAdmission::READY) {
 				buffer->Stage(copy, batch_index);
@@ -985,7 +1072,7 @@ PipelineBroadcastExchange::BufferedPushState PipelineBroadcastExchange::Append(D
 
 	try {
 		if (reservation.shared_spool) {
-			reservation.shared_spool->Append(*copy, reservation.batch_index);
+			reservation.shared_spool->Append(*copy, reservation.exchange_batch_index);
 		}
 	} catch (...) {
 		vector<InterruptState> readers;
@@ -1074,8 +1161,8 @@ void PipelineBroadcastExchange::Cancel() {
 }
 
 SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &chunk,
-                                                 shared_ptr<DataChunk> &current_chunk, optional_idx &batch_index,
-                                                 const InterruptState &interrupt_state) {
+                                                 PipelineBroadcastExchangeScanState &scan_state,
+                                                 optional_idx &batch_index, const InterruptState &interrupt_state) {
 	vector<InterruptState> writers;
 	vector<InterruptState> readers;
 	vector<ExchangeLogEntry> log_entries;
@@ -1085,8 +1172,8 @@ SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &
 	batch_index = optional_idx();
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		result =
-		    ReserveScanLocked(consumer_idx, interrupt_state, next_chunk, batch_index, spool_read, writers, log_entries);
+		result = ReserveScanLocked(consumer_idx, interrupt_state, scan_state, next_chunk, batch_index, spool_read,
+		                           writers, log_entries);
 	}
 
 	if (spool_read.IsSet()) {
@@ -1099,7 +1186,7 @@ SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &
 			{
 				annotated_lock_guard<annotated_mutex> guard(lock);
 				auto &consumer = consumers[consumer_idx];
-				consumer.read_state = ConsumerReadState::IDLE;
+				consumer.in_flight_reads.erase(spool_read.position);
 				producer_state = ProducerState::CANCELLED;
 				DeactivateAllConsumersLocked();
 				TryReleaseBufferedStorageLocked();
@@ -1124,34 +1211,28 @@ SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &
 	CallbackAll(writers);
 	LogTransitions(log_entries);
 	if (next_chunk) {
-		current_chunk = std::move(next_chunk);
-		chunk.Reference(*current_chunk);
+		scan_state.current_chunk = std::move(next_chunk);
+		chunk.Reference(*scan_state.current_chunk);
 	}
 	return result;
 }
 
-SourceResultType PipelineBroadcastExchange::ReserveScanLocked(idx_t consumer_idx, const InterruptState &interrupt_state,
-                                                              shared_ptr<DataChunk> &next_chunk,
-                                                              optional_idx &batch_index,
-                                                              SpoolReadReservation &spool_read,
-                                                              vector<InterruptState> &writers,
-                                                              vector<ExchangeLogEntry> &log_entries) {
+SourceResultType PipelineBroadcastExchange::ReserveScanLocked(
+    idx_t consumer_idx, const InterruptState &interrupt_state, PipelineBroadcastExchangeScanState &scan_state,
+    shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index, SpoolReadReservation &spool_read,
+    vector<InterruptState> &writers, vector<ExchangeLogEntry> &log_entries) {
 	D_ASSERT(consumer_idx < consumers.size());
 	auto &consumer = consumers[consumer_idx];
 	if (consumer.lifecycle != ConsumerLifecycle::ACTIVE || producer_state == ProducerState::CANCELLED) {
 		return SourceResultType::FINISHED;
 	}
-	if (consumer.read_state == ConsumerReadState::READING) {
-		blocked_readers.push_back(interrupt_state);
-		return SourceResultType::BLOCKED;
-	}
 	if (consumer.position < buffer->NextPosition()) {
-		buffer->ReserveRead(consumer.position, consumer.shared_reader, next_chunk, batch_index, spool_read);
+		auto position = consumer.position++;
+		buffer->ReserveRead(position, scan_state.spool_reader, next_chunk, batch_index, spool_read);
 		if (spool_read.IsSet()) {
-			consumer.read_state = ConsumerReadState::READING;
-			consumer.read_position = consumer.position;
+			auto inserted = consumer.in_flight_reads.insert(position);
+			D_ASSERT(inserted.second);
 		} else {
-			consumer.position++;
 			consumer.rows_read += next_chunk->size();
 			RetireChunksLocked();
 			WakeWritersLocked(writers, log_entries);
@@ -1159,9 +1240,12 @@ SourceResultType PipelineBroadcastExchange::ReserveScanLocked(idx_t consumer_idx
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 	if (producer_state == ProducerState::FINISHED) {
-		consumer.lifecycle = ConsumerLifecycle::INACTIVE;
-		D_ASSERT(active_consumers > 0);
-		active_consumers--;
+		consumer.exhausted = true;
+		if (consumer.in_flight_reads.empty()) {
+			consumer.lifecycle = ConsumerLifecycle::INACTIVE;
+			D_ASSERT(active_consumers > 0);
+			active_consumers--;
+		}
 		RetireChunksLocked();
 		WakeWritersLocked(writers, log_entries, WriterWakeMode::FORCE);
 		return SourceResultType::FINISHED;
@@ -1177,20 +1261,22 @@ void PipelineBroadcastExchange::CompleteSpoolReadLocked(idx_t consumer_idx, cons
                                                         vector<ExchangeLogEntry> &log_entries) {
 	D_ASSERT(consumer_idx < consumers.size());
 	auto &consumer = consumers[consumer_idx];
-	D_ASSERT(consumer.read_state == ConsumerReadState::READING);
-	D_ASSERT(consumer.read_position == spool_read.position);
-	consumer.read_state = ConsumerReadState::IDLE;
+	auto entry = consumer.in_flight_reads.find(spool_read.position);
+	D_ASSERT(entry != consumer.in_flight_reads.end());
+	consumer.in_flight_reads.erase(entry);
 	if (consumer.lifecycle != ConsumerLifecycle::ACTIVE || producer_state == ProducerState::CANCELLED) {
 		chunk.Reset();
-		consumer.shared_reader.reset();
 		RetireChunksLocked();
 		WakeWritersLocked(writers, log_entries, WriterWakeMode::FORCE);
 		WakeReadersLocked(readers);
 		return;
 	}
-	D_ASSERT(consumer.position == spool_read.position);
-	consumer.position++;
 	consumer.rows_read += chunk.size();
+	if (consumer.exhausted && consumer.in_flight_reads.empty()) {
+		consumer.lifecycle = ConsumerLifecycle::INACTIVE;
+		D_ASSERT(active_consumers > 0);
+		active_consumers--;
+	}
 	RetireChunksLocked();
 	WakeWritersLocked(writers, log_entries);
 	WakeReadersLocked(readers);
@@ -1209,11 +1295,11 @@ void PipelineBroadcastExchange::UnregisterConsumer(idx_t consumer_idx) {
 		if (consumer.lifecycle != ConsumerLifecycle::ACTIVE) {
 			return;
 		}
+		if (consumer.exhausted) {
+			return;
+		}
 		consumer.lifecycle = ConsumerLifecycle::INACTIVE;
 		consumer.position = buffer->NextPosition();
-		if (consumer.read_state != ConsumerReadState::READING) {
-			consumer.shared_reader.reset();
-		}
 		D_ASSERT(active_consumers > 0);
 		active_consumers--;
 		RetireChunksLocked();
@@ -1278,7 +1364,7 @@ ProgressData PipelineBroadcastExchange::SinkProgress(const ProgressData &source_
 }
 
 idx_t PipelineBroadcastExchange::MaxThreads() const {
-	return PreservesOrder() ? 1 : MaxValue<idx_t>(max_threads, 1);
+	return order_mode == PipelineBroadcastExchangeOrderMode::SEQUENTIAL ? 1 : MaxValue<idx_t>(max_threads, 1);
 }
 
 idx_t PipelineBroadcastExchange::RegisteredConsumerCount() const {
@@ -1342,39 +1428,22 @@ void PipelineBroadcastExchange::CreateSharedSpoolLocked(vector<ExchangeLogEntry>
 }
 
 void PipelineBroadcastExchange::RetireChunksLocked() {
-	if (buffer->HasSharedSpool()) {
-		idx_t min_position = buffer->NextPosition();
-		bool found_reader = false;
-		for (auto &consumer : consumers) {
-			if (consumer.read_state == ConsumerReadState::READING) {
-				found_reader = true;
-				min_position = MinValue(min_position, consumer.read_position);
-			}
-			if (consumer.lifecycle == ConsumerLifecycle::ACTIVE) {
-				found_reader = true;
-				min_position = MinValue(min_position, consumer.position);
-			}
-		}
-		if (!found_reader) {
-			min_position = buffer->NextPosition();
-		}
-		buffer->RetireBefore(min_position);
-		TryReleaseBufferedStorageLocked();
-		return;
-	}
 	if (buffer->Empty()) {
 		return;
 	}
 	idx_t min_position = buffer->NextPosition();
-	bool found_active = false;
+	bool found_reader = false;
 	for (auto &consumer : consumers) {
-		if (consumer.lifecycle != ConsumerLifecycle::ACTIVE) {
-			continue;
+		if (!consumer.in_flight_reads.empty()) {
+			found_reader = true;
+			min_position = MinValue(min_position, *consumer.in_flight_reads.begin());
 		}
-		found_active = true;
-		min_position = MinValue(min_position, consumer.position);
+		if (consumer.lifecycle == ConsumerLifecycle::ACTIVE) {
+			found_reader = true;
+			min_position = MinValue(min_position, consumer.position);
+		}
 	}
-	if (!found_active) {
+	if (!found_reader) {
 		min_position = buffer->NextPosition();
 	}
 	buffer->RetireBefore(min_position);
@@ -1386,10 +1455,9 @@ void PipelineBroadcastExchange::TryReleaseBufferedStorageLocked() {
 		return;
 	}
 	for (auto &consumer : consumers) {
-		if (consumer.read_state == ConsumerReadState::READING) {
+		if (!consumer.in_flight_reads.empty()) {
 			return;
 		}
-		consumer.shared_reader.reset();
 	}
 	buffer->Release();
 }
@@ -1401,9 +1469,6 @@ void PipelineBroadcastExchange::DeactivateAllConsumersLocked() {
 		}
 		consumer.lifecycle = ConsumerLifecycle::INACTIVE;
 		consumer.position = buffer->NextPosition();
-		if (consumer.read_state != ConsumerReadState::READING) {
-			consumer.shared_reader.reset();
-		}
 	}
 	active_consumers = 0;
 }

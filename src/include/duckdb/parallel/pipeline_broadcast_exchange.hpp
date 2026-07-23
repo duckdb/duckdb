@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/partition_info.hpp"
 #include "duckdb/execution/progress_data.hpp"
@@ -24,6 +25,7 @@ namespace duckdb {
 class ClientContext;
 class Pipeline;
 class PipelineBroadcastExchange;
+class PipelineBroadcastExchangeScanState;
 class PipelineExecutor;
 class PhysicalOperator;
 
@@ -84,11 +86,15 @@ public:
 	bool SupportsBatchIndex() const {
 		return order_mode == PipelineBroadcastExchangeOrderMode::BATCH_INDEX;
 	}
+	PipelineBroadcastExchangeOrderMode OrderMode() const {
+		return order_mode;
+	}
 	OrderPreservationType SourceOrder() const {
 		return source_order;
 	}
 
 	unique_ptr<PipelineBroadcastExchangeLocalState> GetLocalState(ClientContext &context) const;
+	shared_ptr<PipelineBroadcastExchangeScanState> GetScanState() const;
 
 	idx_t RegisterConsumer();
 	bool TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
@@ -107,7 +113,7 @@ public:
 	void FinishDirectConsumers();
 	void Cancel();
 
-	SourceResultType Scan(idx_t consumer_idx, DataChunk &chunk, shared_ptr<DataChunk> &current_chunk,
+	SourceResultType Scan(idx_t consumer_idx, DataChunk &chunk, PipelineBroadcastExchangeScanState &scan_state,
 	                      optional_idx &batch_index, const InterruptState &interrupt_state);
 	void UnregisterConsumer(idx_t consumer_idx);
 
@@ -119,6 +125,8 @@ public:
 	PipelineBroadcastExchangeConsumerSummary GetConsumerSummary() const;
 
 private:
+	friend class PipelineBroadcastExchangeScanState;
+
 	struct ChunkPool;
 	struct BroadcastSpool;
 	struct BroadcastSpoolReader;
@@ -128,7 +136,6 @@ private:
 	struct BufferState;
 
 	enum class ConsumerLifecycle : uint8_t { ACTIVE, INACTIVE };
-	enum class ConsumerReadState : uint8_t { IDLE, READING };
 	enum class ProducerState : uint8_t { ACTIVE, FINISHED, CANCELLED };
 	enum class AppendReservationState : uint8_t { IDLE, RESERVED };
 	enum class WatermarkState : uint8_t { BELOW_HIGH_WATERMARK, ABOVE_HIGH_WATERMARK };
@@ -160,9 +167,8 @@ private:
 		idx_t rows_read = 0;
 		PipelineBroadcastExchangeConsumerMode mode = PipelineBroadcastExchangeConsumerMode::UNRESOLVED;
 		ConsumerLifecycle lifecycle = ConsumerLifecycle::ACTIVE;
-		ConsumerReadState read_state = ConsumerReadState::IDLE;
-		idx_t read_position = 0;
-		shared_ptr<BroadcastSpoolReader> shared_reader;
+		bool exhausted = false;
+		set<idx_t> in_flight_reads;
 	};
 
 public:
@@ -195,6 +201,7 @@ private:
 	void AbortAppendReservation(vector<InterruptState> &readers, vector<InterruptState> &writers,
 	                            vector<InterruptState> &appenders) DUCKDB_REQUIRES(lock);
 	SourceResultType ReserveScanLocked(idx_t consumer_idx, const InterruptState &interrupt_state,
+	                                   PipelineBroadcastExchangeScanState &scan_state,
 	                                   shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index,
 	                                   SpoolReadReservation &spool_read, vector<InterruptState> &writers,
 	                                   vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
