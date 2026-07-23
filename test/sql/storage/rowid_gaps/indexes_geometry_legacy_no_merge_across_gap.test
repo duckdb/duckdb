@@ -4,9 +4,6 @@
 
 require noforcestorage
 
-statement ok
-SET wal_autocheckpoint = '1TB';
-
 # Build a legacy-encoded geometry index on v1.4.0 storage.
 
 statement ok
