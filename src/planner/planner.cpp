@@ -97,7 +97,10 @@ static bool VerifyCanonicalComparisonJoins(const LogicalOperator &plan) {
 			}
 			auto left_side = JoinSide::GetCurrentJoinSide(condition.GetLHS(), left_bindings, right_bindings);
 			auto right_side = JoinSide::GetCurrentJoinSide(condition.GetRHS(), left_bindings, right_bindings);
-			if (left_side != JoinSide::LEFT || right_side != JoinSide::RIGHT) {
+			// A condition side can be independent of both children, for example a constant or an outer reference.
+			// It is non-canonical only when it requires the opposite child or both children.
+			if (left_side == JoinSide::RIGHT || left_side == JoinSide::BOTH || right_side == JoinSide::LEFT ||
+			    right_side == JoinSide::BOTH) {
 				return false;
 			}
 		}
