@@ -202,6 +202,7 @@ public:
 	}
 
 	void FinalizeBatches() {
+		annotated_lock_guard<annotated_mutex> guard(lhs_lock);
 		if (!ordered_data) {
 			return;
 		}
@@ -552,8 +553,7 @@ ProgressData PhysicalCTE::GetSinkProgress(ClientContext &context, GlobalSinkStat
 	if (!state.working_table_ref) {
 		return ProgressData {0, 1, true};
 	}
-	auto &working_table = *state.working_table_ref;
-	auto count = double(working_table.Count());
+	auto count = double(state.ordered_data ? state.ordered_data->Count() : state.working_table_ref->Count());
 	ProgressData progress;
 	progress.done = count;
 	progress.total = count + source_progress.total;
