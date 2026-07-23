@@ -94,29 +94,6 @@ struct AttachOptions {
 	PrefetchedFileData prefetched;
 };
 
-//! A deleter binding for an external resource: runs `<deleter_function>(<deleter_payload>)` to tear the
-//! resource down. Used to reap a resource on a failed CREATE/REGISTER and to run DESTROY.
-class ResourceDeleter {
-public:
-	ResourceDeleter(DatabaseInstance &db, string deleter_function, Value deleter_payload, string resource_type,
-	                string resource_name);
-
-	//! The teardown query `SELECT * FROM <deleter_function>(<deleter_payload>)`, with the function name
-	//! safely quoted. Empty if there is no deleter. The single source of the teardown SQL.
-	string DeleteSQL() const;
-	//! Run the teardown on a private internal connection; throws on failure, with a retry hint.
-	void Delete();
-	//! Best-effort teardown: logs a warning on failure instead of throwing.
-	void TryDelete();
-
-private:
-	DatabaseInstance &db;
-	string deleter_function;
-	Value deleter_payload;
-	string resource_type;
-	string resource_name;
-};
-
 //! The AttachedDatabase represents an attached database instance.
 class AttachedDatabase : public CatalogEntry, public enable_shared_from_this<AttachedDatabase> {
 public:
