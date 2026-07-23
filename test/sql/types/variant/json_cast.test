@@ -44,6 +44,17 @@ FROM (SELECT '{"outer":{"a":1,"b":2,"a":3}}'::JSON::VARIANT AS v);
 ----
 3	[a, b]	{"outer":{"a":3,"b":2}}
 
+query III
+SELECT (v).a, variant_keys(v), v::JSON
+FROM (
+	VALUES
+		('{"a":null,"a":[1,2]}'::JSON::VARIANT),
+		('{"a":[1,2],"a":null}'::JSON::VARIANT)
+) t(v);
+----
+[1, 2]	[a]	{"a":[1,2]}
+NULL	[a]	{"a":null}
+
 query II
 SELECT (v).a, variant_keys(v)
 FROM (

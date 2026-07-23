@@ -37,6 +37,10 @@ public:
 	yyjson_doc *doc = nullptr;
 };
 
+static inline string_t GetString(yyjson_val *val) {
+	return string_t(unsafe_yyjson_get_str(val), NumericCast<uint32_t>(unsafe_yyjson_get_len(val)));
+}
+
 } // namespace
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
@@ -98,14 +102,13 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 	entries.reserve(iter.max);
 
 	while (auto key = yyjson_obj_iter_next(&iter)) {
-		auto key_string = string_t(yyjson_get_str(key), NumericCast<uint32_t>(unsafe_yyjson_get_len(key)));
-		auto existing_entry = key_to_entry.find(key_string);
+		auto key_string = GetString(key);
+		auto inserted_entry = key_to_entry.emplace(key_string, entries.size());
 		auto val = yyjson_obj_iter_get_val(key);
-		if (existing_entry == key_to_entry.end()) {
-			key_to_entry.emplace(key_string, entries.size());
+		if (inserted_entry.second) {
 			entries.push_back({key, val});
 		} else {
-			entries[existing_entry->second].value = val;
+			entries[inserted_entry.first->second].value = val;
 		}
 	}
 
@@ -132,14 +135,11 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 
 	//! Iterate over all the children in the Object
 	for (const auto &entry : entries) {
-		auto key = entry.key;
-		auto key_string = yyjson_get_str(key);
-		uint32_t key_string_len = NumericCast<uint32_t>(unsafe_yyjson_get_len(key));
+		auto key_string = GetString(entry.key);
 
 		if (WRITE_DATA) {
-			auto str = string_t(key_string, key_string_len);
 			auto keys_index = start_key_index++;
-			auto dictionary_index = result.GetOrCreateIndex(str);
+			auto dictionary_index = result.GetOrCreateIndex(key_string);
 
 			//! Set the keys_index
 			variant.keys_index_data[start_child_index] = keys_index;
@@ -155,14 +155,6 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 	}
 	return true;
 }
-
-namespace {
-
-static inline string_t GetString(yyjson_val *val) {
-	return string_t(unsafe_yyjson_get_str(val), NumericCast<uint32_t>(unsafe_yyjson_get_len(val)));
-}
-
-} // namespace
 
 template <bool WRITE_DATA>
 static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {
