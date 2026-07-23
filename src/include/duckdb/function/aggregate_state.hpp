@@ -62,6 +62,17 @@ struct AggregateLayoutInput {
 	optional_ptr<FunctionData> bind_data;
 };
 
+//! Input to the state size/init callbacks - bundles the bound aggregate function with its bind data so that the
+//! callbacks can size and initialize states using any constant parameters stored in the bind data.
+struct AggregateStateInput {
+	AggregateStateInput(const BoundAggregateFunction &function_p, optional_ptr<const FunctionData> bind_data_p)
+	    : function(function_p), bind_data(bind_data_p) {
+	}
+
+	const BoundAggregateFunction &function;
+	optional_ptr<const FunctionData> bind_data;
+};
+
 //! The input data provided to the finalize callback of an aggregate function.
 //! If the function defines an "init_local_state_finalize" callback, the local state is initialized on construction.
 //! Callers can instead pass in an externally-owned local state - this way the local state can be kept alive and

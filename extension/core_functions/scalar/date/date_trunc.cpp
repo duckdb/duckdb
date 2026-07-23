@@ -557,19 +557,13 @@ function_statistics_t DateTruncStats(DatePartSpecifier type) {
 }
 
 unique_ptr<FunctionData> DateTruncBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	if (!arguments[0]->IsFoldable()) {
+	// Rebind to return a date if we are truncating that far - only possible if the part is a constant
+	auto part_constant = input.TryGetConstant(0);
+	if (!part_constant || part_constant->IsNull()) {
 		return nullptr;
 	}
-
-	// Rebind to return a date if we are truncating that far
-	Value part_value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	if (part_value.IsNull()) {
-		return nullptr;
-	}
-	const auto part_name = part_value.ToString();
+	const auto part_name = part_constant->ToString();
 	const auto part_code = GetDatePartSpecifier(part_name);
 
 	switch (bound_function.GetArguments()[1].id()) {

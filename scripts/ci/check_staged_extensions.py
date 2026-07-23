@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 DEFAULT_ASSET_BASE_URL = "https://duckdb-staging.duckdb.org"
+DOWNLOAD_USER_AGENT = "duckdb-ci/check-staged-extensions"
 DOWNLOAD_RETRIES = 2
 DOWNLOAD_RETRY_SECONDS = 10
 EXTENSION_SEPARATOR_TRANSLATION = str.maketrans({",": " ", ";": " "})
@@ -44,7 +45,8 @@ def download_cli(url: str, target: Path) -> None:
     for attempt in range(1, DOWNLOAD_RETRIES + 1):
         try:
             print(f"Downloading staged CLI ({attempt}/{DOWNLOAD_RETRIES}): {url}", flush=True)
-            with urllib.request.urlopen(url, timeout=60) as response:
+            request = urllib.request.Request(url, headers={"User-Agent": DOWNLOAD_USER_AGENT})
+            with urllib.request.urlopen(request, timeout=60) as response:
                 compressed = response.read()
             target.write_bytes(gzip.decompress(compressed))
             target.chmod(0o755)

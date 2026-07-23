@@ -1,0 +1,58 @@
+# name: test/sql/copy/csv/read_ahead/csv_readahead_rejects.test
+# description: Errors in the last file of a read-ahead scan must reach the rejects tables and the user
+# group: [read_ahead]
+
+require skip_reload
+
+statement ok
+SET threads=8
+
+statement ok
+COPY (SELECT range::VARCHAR AS i FROM range(0, 100000)) TO '{TEST_DIR}/csv_ra_rejects_0.csv' (FORMAT csv, HEADER false)
+
+statement ok
+COPY (SELECT range::VARCHAR AS i FROM range(100000, 200000)) TO '{TEST_DIR}/csv_ra_rejects_1.csv' (FORMAT csv, HEADER false)
+
+# the last file ends with rows that fail the INTEGER cast, placing the errors in its last claim
+statement ok
+COPY (SELECT CASE WHEN range >= 299995 THEN 'oops' ELSE range::VARCHAR END AS i FROM range(200000, 300000))
+TO '{TEST_DIR}/csv_ra_rejects_2.csv' (FORMAT csv, HEADER false)
+
+foreach depth -1 1
+
+statement ok
+SET read_ahead_depth={depth}
+
+# count(i) projects the column, so the failing casts are actually evaluated
+query I
+SELECT count(i) FROM read_csv(
+    ['{TEST_DIR}/csv_ra_rejects_0.csv', '{TEST_DIR}/csv_ra_rejects_1.csv', '{TEST_DIR}/csv_ra_rejects_2.csv'],
+    columns={'i': 'INTEGER'}, header=false, buffer_size=65536, store_rejects=true)
+----
+299995
+
+query I
+SELECT count(*) FROM reject_errors
+----
+5
+
+query I
+SELECT count(*) FROM reject_scans WHERE file_path LIKE '%csv_ra_rejects_2%'
+----
+1
+
+statement ok
+DROP TABLE reject_errors
+
+statement ok
+DROP TABLE reject_scans
+
+# without store_rejects or ignore_errors the cast error in the last claim must surface
+statement error
+SELECT sum(i) FROM read_csv(
+    ['{TEST_DIR}/csv_ra_rejects_0.csv', '{TEST_DIR}/csv_ra_rejects_1.csv', '{TEST_DIR}/csv_ra_rejects_2.csv'],
+    columns={'i': 'INTEGER'}, header=false, buffer_size=65536)
+----
+<REGEX>:.*Could not convert string.*
+
+endloop

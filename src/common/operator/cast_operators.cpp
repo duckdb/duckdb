@@ -1823,11 +1823,46 @@ bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &resu
 //===--------------------------------------------------------------------===//
 // Cast To Date
 //===--------------------------------------------------------------------===//
+static DateCastResult TryConvertDateCast(string_t input, date_t &result, bool strict) {
+	idx_t pos = 0;
+	bool special = false;
+	auto date_result = Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, strict);
+	auto timestamp_suffix_pos = pos;
+	if (date_result == DateCastResult::SUCCESS) {
+		while (pos < input.GetSize() && StringUtil::CharacterIsSpace(input.GetData()[pos])) {
+			pos++;
+		}
+		if (pos == input.GetSize()) {
+			return date_result;
+		}
+	}
+	if (strict || date_result != DateCastResult::SUCCESS) {
+		return date_result;
+	}
+
+	timestamp_t timestamp;
+	auto timestamp_result =
+	    Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), timestamp, /*use_offset=*/false, nullptr,
+	                                   /*strict=*/false);
+	if (timestamp_result == TimestampCastResult::SUCCESS) {
+		return DateCastResult::SUCCESS;
+	}
+	if (timestamp_result == TimestampCastResult::ERROR_RANGE) {
+		string timestamp_input = "2000-01-01"; // placeholder
+		timestamp_input.append(input.GetData() + timestamp_suffix_pos, input.GetSize() - timestamp_suffix_pos);
+		timestamp_result = Timestamp::TryConvertTimestamp(timestamp_input.c_str(), timestamp_input.size(), timestamp,
+		                                                  /*use_offset=*/false, /*nanos=*/nullptr, /*strict=*/false);
+		if (timestamp_result == TimestampCastResult::SUCCESS) {
+			return DateCastResult::SUCCESS;
+		}
+	}
+	return timestamp_result == TimestampCastResult::ERROR_RANGE ? DateCastResult::ERROR_RANGE
+	                                                            : DateCastResult::ERROR_INCORRECT_FORMAT;
+}
+
 template <>
 bool TryCastErrorMessage::Operation(string_t input, date_t &result, CastParameters &parameters) {
-	idx_t pos;
-	bool special = false;
-	switch (Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, parameters.strict)) {
+	switch (TryConvertDateCast(input, result, parameters.strict)) {
 	case DateCastResult::SUCCESS:
 		break;
 	case DateCastResult::ERROR_INCORRECT_FORMAT:
@@ -1842,15 +1877,21 @@ bool TryCastErrorMessage::Operation(string_t input, date_t &result, CastParamete
 
 template <>
 bool TryCast::Operation(string_t input, date_t &result, bool strict) {
-	idx_t pos;
-	bool special = false;
-	return Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, strict) ==
-	       DateCastResult::SUCCESS;
+	return TryConvertDateCast(input, result, strict) == DateCastResult::SUCCESS;
 }
 
 template <>
 date_t Cast::Operation(string_t input) {
-	return Date::FromCString(input.GetData(), input.GetSize());
+	date_t result;
+	switch (TryConvertDateCast(input, result, false)) {
+	case DateCastResult::SUCCESS:
+		return result;
+	case DateCastResult::ERROR_INCORRECT_FORMAT:
+		throw ConversionException(Date::FormatError(input));
+	case DateCastResult::ERROR_RANGE:
+		throw ConversionException(Date::RangeError(input));
+	}
+	throw InternalException("Unknown DateCastResult");
 }
 
 //===--------------------------------------------------------------------===//

@@ -100,7 +100,6 @@ protected:
 	static unique_ptr<ExpressionState> InitializeState(const BoundReferenceExpression &expr,
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundCaseExpression &expr, ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(const BoundCastExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundConjunctionExpression &expr,
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundConstantExpression &expr,
@@ -117,9 +116,6 @@ protected:
 
 	void Execute(const BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
-	void Execute(const BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             Vector &result);
-
 	void Execute(const BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
 	             idx_t count, Vector &result);
 	void Execute(const BoundConstantExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,

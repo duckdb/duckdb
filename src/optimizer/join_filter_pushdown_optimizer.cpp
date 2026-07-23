@@ -62,17 +62,24 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 		path.binding = colref.Binding();
 		return true;
 	}
-	case ExpressionClass::BOUND_CAST: {
+	case ExpressionClass::BOUND_FUNCTION: {
+		if (!BoundCastExpression::IsCast(expr)) {
+			auto &function_expr = expr.Cast<BoundFunctionExpression>();
+			if (function_expr.Function().GetName() != "variant_normalize" || function_expr.GetChildren().size() != 1) {
+				return false;
+			}
+			return PushdownJoinFilterExpressionInternal(*function_expr.GetChildren()[0], path);
+		}
 		// We allow pushing through integral casts and integral/VARIANT casts.
-		const auto &bound_cast = expr.Cast<BoundCastExpression>();
-		const auto &src = bound_cast.Child().GetReturnType();
+		const auto &bound_cast = expr.Cast<BoundFunctionExpression>();
+		const auto &src = BoundCastExpression::Child(bound_cast).GetReturnType();
 		const auto &tgt = bound_cast.GetReturnType();
 		const bool integral_cast = IsJoinFilterPushdownIntegralCast(src, tgt);
 		const bool variant_integral_cast = IsJoinFilterPushdownVariantIntegralCast(src, tgt);
 		if (!integral_cast && !variant_integral_cast) {
 			return false;
 		}
-		if (!PushdownJoinFilterExpressionInternal(bound_cast.Child(), path)) {
+		if (!PushdownJoinFilterExpressionInternal(BoundCastExpression::Child(bound_cast), path)) {
 			return false;
 		}
 		if (variant_integral_cast) {
@@ -80,23 +87,18 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 				path.mode = JoinFilterPushdownMode::STORAGE_ONLY;
 				path.casts.clear();
 			} else if (path.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION) {
-				path.casts.emplace_back(tgt, bound_cast.IsTryCast() ? RuntimeFilterCastMode::TRY_CAST
-				                                                    : RuntimeFilterCastMode::DEFAULT_CAST);
+				path.casts.emplace_back(tgt, BoundCastExpression::IsTryCast(bound_cast)
+				                                 ? RuntimeFilterCastMode::TRY_CAST
+				                                 : RuntimeFilterCastMode::DEFAULT_CAST);
 			}
 			return true;
 		}
 		if (path.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION) {
-			path.casts.emplace_back(tgt, bound_cast.IsTryCast() ? RuntimeFilterCastMode::TRY_CAST
-			                                                    : RuntimeFilterCastMode::DEFAULT_CAST);
+			path.casts.emplace_back(tgt, BoundCastExpression::IsTryCast(bound_cast)
+			                                 ? RuntimeFilterCastMode::TRY_CAST
+			                                 : RuntimeFilterCastMode::DEFAULT_CAST);
 		}
 		return true;
-	}
-	case ExpressionClass::BOUND_FUNCTION: {
-		auto &function_expr = expr.Cast<BoundFunctionExpression>();
-		if (function_expr.Function().GetName() != "variant_normalize" || function_expr.GetChildren().size() != 1) {
-			return false;
-		}
-		return PushdownJoinFilterExpressionInternal(*function_expr.GetChildren()[0], path);
 	}
 	default:
 		return false;

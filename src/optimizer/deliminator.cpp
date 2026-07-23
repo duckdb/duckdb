@@ -58,7 +58,6 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 	if (candidates.empty()) {
 		return op;
 	}
-
 	for (auto &candidate : candidates) {
 		auto &delim_join = candidate.delim_join;
 

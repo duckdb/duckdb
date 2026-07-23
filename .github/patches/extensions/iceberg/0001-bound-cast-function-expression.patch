@@ -1,0 +1,16 @@
+diff --git a/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp b/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
+index f8610453..e7ab802b 100644
+--- a/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
++++ b/src/planning/metadata_io/avro/iceberg_avro_multi_file_reader.cpp
+@@ -476,8 +476,9 @@ static void FixSamePhysicalTypeCasts(BoundCastInfo &cast_info, const LogicalType
+ static void FixSamePhysicalTypeCastsInExpr(Expression &expr) {
+ 	auto expression_type = expr.GetExpressionType();
+ 	if (expression_type == ExpressionType::OPERATOR_CAST) {
+-		auto &cast_expr = expr.Cast<BoundCastExpression>();
+-		FixSamePhysicalTypeCasts(cast_expr.GetBoundCastMutable(), cast_expr.source_type(), cast_expr.GetReturnType());
++		auto &cast_expr = expr.Cast<BoundFunctionExpression>();
++		FixSamePhysicalTypeCasts(BoundCastExpression::GetBoundCastMutable(cast_expr),
++		                         BoundCastExpression::SourceType(cast_expr), cast_expr.GetReturnType());
+ 	} else if (expression_type == ExpressionType::BOUND_FUNCTION) {
+ 		for (auto &child : expr.Cast<BoundFunctionExpression>().GetChildrenMutable()) {
+ 			if (child) {
