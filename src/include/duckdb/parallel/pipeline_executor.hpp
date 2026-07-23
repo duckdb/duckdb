@@ -65,9 +65,10 @@ public:
 	//! Returns true if execution is finished, false if Execute should be called again
 	PipelineExecuteResult Execute(idx_t max_chunks);
 	//! Pushes a chunk from an external producer through this pipeline into the sink
-	PipelineExecuteResult PushExternal(DataChunk &input, const OperatorPartitionData &partition_data);
+	PipelineExecuteResult PushExternal(DataChunk &input, const OperatorPartitionData &partition_data,
+	                                   optional_idx source_min_batch_index);
 	//! Finalizes an externally-fed pipeline executor after the producer is exhausted
-	PipelineExecuteResult FinishExternal();
+	PipelineExecuteResult FinishExternal(optional_idx source_min_batch_index);
 
 	//! Called after depleting the source: finalizes the execution of this pipeline executor
 	//! This should only be called once per PipelineExecutor.
@@ -187,7 +188,8 @@ private:
 
 	//! Notifies the sink that a new batch has started
 	SinkNextBatchType NextBatch(DataChunk &source_chunk, const bool have_more_output);
-	SinkNextBatchType NextBatch(OperatorPartitionData next_data, bool force = false);
+	SinkNextBatchType NextBatch(OperatorPartitionData next_data, bool force = false,
+	                            optional_idx external_min_batch_index = optional_idx());
 	OperatorPartitionData ToPipelinePartitionData(const OperatorPartitionData &source_data) const;
 
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the

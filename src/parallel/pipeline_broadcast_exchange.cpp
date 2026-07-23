@@ -769,7 +769,7 @@ SinkCombineResultType PipelineBroadcastExchange::FinishLocal(PipelineBroadcastEx
 			return SinkCombineResultType::BLOCKED;
 		}
 	}
-	return lstate.Finish(interrupt_state);
+	return lstate.Finish(partition_info, interrupt_state);
 }
 
 SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const SourcePartitionInfo &partition_info,
@@ -778,18 +778,29 @@ SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const
 		direct_idx = 0;
 	}
 	OperatorPartitionData source_partition_data(0);
+	optional_idx source_min_batch_index;
 	if (supports_batch_index) {
-		if (!partition_info.batch_index.IsValid()) {
-			throw InternalException("Batch-indexed pipeline broadcast exchange received no batch index");
+		if (!partition_info.batch_index.IsValid() || !partition_info.min_batch_index.IsValid()) {
+			throw InternalException("Batch-indexed pipeline broadcast exchange received incomplete partition info");
 		}
 		auto batch_index = partition_info.batch_index.GetIndex();
+		auto producer_min_batch_index = partition_info.min_batch_index.GetIndex();
 		if (batch_index <= producer_base_batch_index) {
 			throw InternalException("Pipeline broadcast exchange received invalid producer batch index %llu",
 			                        batch_index);
 		}
+		if (producer_min_batch_index < producer_base_batch_index || producer_min_batch_index > batch_index) {
+			throw InternalException("Pipeline broadcast exchange received invalid producer minimum batch index %llu",
+			                        producer_min_batch_index);
+		}
 		source_partition_data.batch_index = batch_index - producer_base_batch_index - 1;
+		source_min_batch_index = producer_min_batch_index - producer_base_batch_index;
 		if (source_partition_data.batch_index >= PipelineBuildState::BATCH_INCREMENT - 2) {
 			throw InternalException("Pipeline broadcast exchange received producer batch index outside its pipeline");
+		}
+		if (source_min_batch_index.GetIndex() >= PipelineBuildState::BATCH_INCREMENT) {
+			throw InternalException("Pipeline broadcast exchange received producer minimum batch index outside its "
+			                        "pipeline");
 		}
 	}
 	for (; direct_idx < direct_executors.size(); direct_idx++) {
@@ -798,7 +809,7 @@ SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const
 		if (executor.IsFinishedProcessing()) {
 			continue;
 		}
-		auto result = executor.PushExternal(chunk, source_partition_data);
+		auto result = executor.PushExternal(chunk, source_partition_data, source_min_batch_index);
 		if (result == PipelineExecuteResult::INTERRUPTED) {
 			direct_push_state = PipelineBroadcastExchangeDirectPushState::RESUMING;
 			return SinkResultType::BLOCKED;
@@ -815,13 +826,30 @@ SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkCombineResultType PipelineBroadcastExchangeLocalState::Finish(const InterruptState &interrupt_state) {
+SinkCombineResultType PipelineBroadcastExchangeLocalState::Finish(const SourcePartitionInfo &partition_info,
+                                                                  const InterruptState &interrupt_state) {
+	optional_idx source_min_batch_index;
+	if (supports_batch_index) {
+		if (!partition_info.min_batch_index.IsValid()) {
+			throw InternalException("Batch-indexed pipeline broadcast exchange received no minimum batch index");
+		}
+		auto producer_min_batch_index = partition_info.min_batch_index.GetIndex();
+		if (producer_min_batch_index < producer_base_batch_index) {
+			throw InternalException("Pipeline broadcast exchange received invalid producer minimum batch index %llu",
+			                        producer_min_batch_index);
+		}
+		source_min_batch_index = producer_min_batch_index - producer_base_batch_index;
+		if (source_min_batch_index.GetIndex() >= PipelineBuildState::BATCH_INCREMENT) {
+			throw InternalException("Pipeline broadcast exchange received producer minimum batch index outside its "
+			                        "pipeline");
+		}
+	}
 	for (; direct_finalize_idx < direct_executors.size(); direct_finalize_idx++) {
 		auto &executor = *direct_executors[direct_finalize_idx];
 		executor.SetInterruptState(interrupt_state);
 		auto result = PipelineExecuteResult::NOT_FINISHED;
 		while (result == PipelineExecuteResult::NOT_FINISHED) {
-			result = executor.FinishExternal();
+			result = executor.FinishExternal(source_min_batch_index);
 		}
 		if (result == PipelineExecuteResult::INTERRUPTED) {
 			return SinkCombineResultType::BLOCKED;

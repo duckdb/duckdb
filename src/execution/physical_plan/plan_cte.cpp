@@ -36,7 +36,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 	// Create the plan for the left side. This is the materialization.
 	auto &left = CreatePlan(*op.children[0]);
 	const auto cte_body_order = OrderPreservationRecursive(left);
-	const auto preserve_cte_order = !cte_body_is_dml && PreserveInsertionOrder(left);
+	const auto preserve_cte_order = PreserveInsertionOrder(left);
 	const auto use_batch_index = preserve_cte_order && UseBatchIndex(left);
 	const auto source_order = preserve_cte_order ? cte_body_order : OrderPreservationType::NO_ORDER;
 	materialized_cte_orders[op.table_index] = source_order;

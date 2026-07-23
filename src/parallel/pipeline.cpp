@@ -236,6 +236,10 @@ bool Pipeline::CanUseExternalInput(const OperatorPartitionInfo &source_partition
 	if (required_partition_info.RequiresPartitionColumns()) {
 		return false;
 	}
+	if (required_partition_info.RequiresBatchIndex() && base_batch_index != 0) {
+		// Later ordered sink pipelines rely on pipeline dependencies to sequence their batch ranges.
+		return false;
+	}
 	if (required_partition_info.RequiresBatchIndex() && !source_partition_info.RequiresBatchIndex()) {
 		return false;
 	}

@@ -2,6 +2,8 @@
 # description: Test order preservation for materialized CTE scans
 # group: [materialized]
 
+require vector_size 2048
+
 statement ok
 PRAGMA threads=4;
 

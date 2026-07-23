@@ -290,6 +290,23 @@ TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
 		}
 		REQUIRE(count == 1000000);
 	}
+	SECTION("Ordered sink pipeline sequencing") {
+		auto pending = con.PendingQuery("WITH c1 AS MATERIALIZED (SELECT i FROM range(10000) t(i)), "
+		                                "c2 AS MATERIALIZED (SELECT i FROM c1), "
+		                                "c3 AS MATERIALIZED (SELECT i + 10000 AS i FROM c1) "
+		                                "SELECT i FROM c2 UNION ALL SELECT i FROM c3",
+		                                true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
+			count += chunk->size();
+		}
+		REQUIRE(count == 20000);
+	}
 }
 
 static void parallel_pending_query(Connection *conn, bool *correct, size_t threadnr) {

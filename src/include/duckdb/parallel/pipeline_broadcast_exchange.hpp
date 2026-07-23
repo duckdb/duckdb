@@ -56,7 +56,7 @@ private:
 	friend class PipelineBroadcastExchange;
 	SinkResultType Push(DataChunk &chunk, const SourcePartitionInfo &partition_info,
 	                    const InterruptState &interrupt_state);
-	SinkCombineResultType Finish(const InterruptState &interrupt_state);
+	SinkCombineResultType Finish(const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
 	bool HasDirectConsumers() const;
 	bool DirectConsumersFinished() const;
 	void ResetPush();
