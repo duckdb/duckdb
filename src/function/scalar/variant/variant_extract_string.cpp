@@ -1,262 +1,101 @@
-#include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
-#include "duckdb/function/scalar/variant_path_function.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
-#include "fmt/format.h"
+#include "duckdb/function/scalar/variant_path_function.hpp"
+#include "yyjson.hpp"
+
+using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-struct VariantStringExtractLocalState : public FunctionLocalState {
-	string tmp;
+class VariantStringAllocator {
+public:
+	explicit VariantStringAllocator(Allocator &allocator)
+	    : heap(allocator), yyjson_allocator({Allocate, Reallocate, Free, this}) {
+	}
+
+	yyjson_alc *GetYYAlc() {
+		return &yyjson_allocator;
+	}
+
+	StringHeap &GetStringHeap() {
+		return heap;
+	}
+
+	void Reset() {
+		heap.GetAllocator().Reset();
+	}
+
+private:
+	static inline void *Allocate(void *ctx, size_t size) {
+		auto alloc = (VariantStringAllocator *)ctx; // NOLINT
+		return alloc->heap.GetAllocator().AllocateAligned(size);
+	}
+
+	static inline void *Reallocate(void *ctx, void *ptr, size_t old_size, size_t size) {
+		auto alloc = (VariantStringAllocator *)ctx; // NOLINT
+		return alloc->heap.GetAllocator().ReallocateAligned(data_ptr_cast(ptr), old_size, size);
+	}
+
+	static inline void Free(void *ctx, void *ptr) {
+		// NOP because ArenaAllocator can't free
+	}
+
+private:
 	StringHeap heap;
+	yyjson_alc yyjson_allocator;
+};
+
+struct VariantStringExtractLocalState : public FunctionLocalState {
+	explicit VariantStringExtractLocalState(ClientContext &context) : allocator(BufferAllocator::Get(context)) {
+	}
+
+	VariantStringAllocator allocator;
 };
 
 class VariantStringSerializer {
 public:
-	explicit VariantStringSerializer(VariantStringExtractLocalState &state) : tmp(state.tmp), heap(state.heap) {
+	explicit VariantStringSerializer(VariantStringExtractLocalState &state) : allocator(state.allocator) {
 	}
 
 public:
-	//! Row result writer, modeled as part of `VariantStringSerializer` so we have easy access to function scoped state.
 	void operator()(const optional<VariantNode> &node, VectorWriter<string_t> &string_writer) const;
 
 private:
-	template <class T>
-	void AppendStringCast(T value, bool quote) const;
-	void AppendPrimitiveString(const string &value, bool quote) const;
-	void AppendPrimitiveString(const string_t &value, bool quote) const;
-	void SerializePrimitive(const VariantNode &node, VariantLogicalType type, bool quote) const;
-	static bool PrimitiveNeedsQuotes(VariantLogicalType type);
-	void AppendJSONString(const char *data, idx_t size) const;
-	void SerializeVariant(const VariantNode &node) const;
-	void SerializeTopLevel(const VariantNode &node) const;
+	static bool SerializesAsString(VariantLogicalType type);
+	string_t FormatString(const VariantNode &node, VariantLogicalType type) const;
+	string_t FormatRaw(const VariantNode &node, VariantLogicalType type) const;
+	yyjson_mut_val *SerializePrimitive(const VariantNode &node, VariantLogicalType type,
+	                                   yyjson_mut_doc *document) const;
+	yyjson_mut_val *SerializeVariant(const VariantNode &node, yyjson_mut_doc *document) const;
+	void WriteJSON(const yyjson_mut_val *value, VectorWriter<string_t> &string_writer) const;
+
+	string_t AddString(const string &value) const {
+		return allocator.GetStringHeap().AddString(value);
+	}
+
+	static yyjson_mut_val *CreateString(yyjson_mut_doc *document, const string_t &value) {
+		if (value.IsInlined()) {
+			return yyjson_mut_strncpy(document, value.GetData(), value.GetSize());
+		}
+		return yyjson_mut_strn(document, value.GetData(), value.GetSize());
+	}
+
+	static yyjson_mut_val *CreateRaw(yyjson_mut_doc *document, const string_t &value) {
+		if (value.IsInlined()) {
+			return yyjson_mut_rawncpy(document, value.GetData(), value.GetSize());
+		}
+		return yyjson_mut_rawn(document, value.GetData(), value.GetSize());
+	}
 
 private:
-	string &tmp;
-	StringHeap &heap;
+	VariantStringAllocator &allocator;
 };
 
-void VariantStringSerializer::AppendJSONString(const char *data, const idx_t size) const {
-	static constexpr char HEX_DIGITS[] = "0123456789abcdef";
-	// reserve for the no-escape needed case
-	tmp.reserve(tmp.size() + size + 2);
-	tmp += '"';
-	idx_t start = 0;
-	for (idx_t i = 0; i < size; i++) {
-		const auto byte = static_cast<uint8_t>(data[i]);
-		char escape = '\0';
-		switch (byte) {
-		case '"':
-			escape = '"';
-			break;
-		case '\\':
-			escape = '\\';
-			break;
-		case '\b':
-			escape = 'b';
-			break;
-		case '\f':
-			escape = 'f';
-			break;
-		case '\n':
-			escape = 'n';
-			break;
-		case '\r':
-			escape = 'r';
-			break;
-		case '\t':
-			escape = 't';
-			break;
-		default:
-			if (byte >= 0x20) {
-				// keep collecting bytes until we reach a byte which needs escaping
-				continue;
-			}
-		}
-		// we've either encountered a character which should be escaped, or there are no more bytes, append what
-		// we have collected until now
-		tmp.append(data + start, i - start);
-		if (escape) {
-			tmp += '\\';
-			tmp += escape;
-		} else {
-			// escape bytes < 0x20
-			const char unicode_escape[] = {'\\', 'u', '0', '0', HEX_DIGITS[byte >> 4], HEX_DIGITS[byte & 0x0F]};
-			tmp.append(unicode_escape, sizeof(unicode_escape));
-		}
-		start = i + 1;
-	}
-	if (start < size) {
-		tmp.append(data + start, size - start);
-	}
-	tmp += '"';
-}
-
-template <class T>
-void VariantStringSerializer::AppendStringCast(const T value, const bool quote) const {
-	const auto val = StringCast::Operation(value, heap);
-	if (quote) {
-		AppendJSONString(val.GetData(), val.GetSize());
-	} else {
-		tmp.append(val.GetData(), val.GetSize());
-	}
-}
-
-void VariantStringSerializer::AppendPrimitiveString(const string &value, const bool quote) const {
-	if (quote) {
-		AppendJSONString(value.data(), value.size());
-	} else {
-		tmp.append(value);
-	}
-}
-
-void VariantStringSerializer::AppendPrimitiveString(const string_t &value, const bool quote) const {
-	if (quote) {
-		AppendJSONString(value.GetData(), value.GetSize());
-	} else {
-		tmp.append(value.GetData(), value.GetSize());
-	}
-}
-
-void VariantStringSerializer::SerializePrimitive(const VariantNode &node, const VariantLogicalType type,
-                                                 const bool quote) const {
-	switch (type) {
-	case VariantLogicalType::VARIANT_NULL:
-		tmp.append("null");
-		break;
-	case VariantLogicalType::BOOL_TRUE:
-		tmp.append("true");
-		break;
-	case VariantLogicalType::BOOL_FALSE:
-		tmp.append("false");
-		break;
-	case VariantLogicalType::INT8:
-		AppendStringCast(node.GetData<int8_t>(), quote);
-		break;
-	case VariantLogicalType::INT16:
-		AppendStringCast(node.GetData<int16_t>(), quote);
-		break;
-	case VariantLogicalType::INT32:
-		AppendStringCast(node.GetData<int32_t>(), quote);
-		break;
-	case VariantLogicalType::INT64:
-		AppendStringCast(node.GetData<int64_t>(), quote);
-		break;
-	case VariantLogicalType::INT128:
-		AppendStringCast(node.GetData<hugeint_t>(), quote);
-		break;
-	case VariantLogicalType::UINT8:
-		AppendStringCast(node.GetData<uint8_t>(), quote);
-		break;
-	case VariantLogicalType::UINT16:
-		AppendStringCast(node.GetData<uint16_t>(), quote);
-		break;
-	case VariantLogicalType::UINT32:
-		AppendStringCast(node.GetData<uint32_t>(), quote);
-		break;
-	case VariantLogicalType::UINT64:
-		AppendStringCast(node.GetData<uint64_t>(), quote);
-		break;
-	case VariantLogicalType::UINT128:
-		AppendStringCast(node.GetData<uhugeint_t>(), quote);
-		break;
-	case VariantLogicalType::FLOAT:
-		AppendStringCast(node.GetData<float>(), quote);
-		break;
-	case VariantLogicalType::DOUBLE:
-		AppendStringCast(node.GetData<double>(), quote);
-		break;
-	case VariantLogicalType::DECIMAL: {
-		const auto decimal = node.GetDecimal();
-		switch (decimal.GetPhysicalType()) {
-		case PhysicalType::INT16:
-			AppendPrimitiveString(Decimal::ToString(node.GetData<int16_t>(), decimal.width, decimal.scale), quote);
-			break;
-		case PhysicalType::INT32:
-			AppendPrimitiveString(Decimal::ToString(node.GetData<int32_t>(), decimal.width, decimal.scale), quote);
-			break;
-		case PhysicalType::INT64:
-			AppendPrimitiveString(Decimal::ToString(node.GetData<int64_t>(), decimal.width, decimal.scale), quote);
-			break;
-		case PhysicalType::INT128:
-			AppendPrimitiveString(Decimal::ToString(node.GetData<hugeint_t>(), decimal.width, decimal.scale), quote);
-			break;
-		default:
-			throw InternalException("Unsupported VARIANT decimal physical type");
-		}
-		break;
-	}
-	case VariantLogicalType::VARCHAR: {
-		const auto str = node.GetString();
-		AppendPrimitiveString(str, quote);
-		break;
-	}
-	case VariantLogicalType::BLOB: {
-		const auto str = node.GetString();
-		AppendPrimitiveString(Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString(), quote);
-		break;
-	}
-	case VariantLogicalType::UUID:
-		AppendPrimitiveString(Value::UUID(node.GetData<hugeint_t>()).ToString(), quote);
-		break;
-	case VariantLogicalType::DATE:
-		AppendStringCast(node.GetData<date_t>(), quote);
-		break;
-	case VariantLogicalType::TIME_MICROS:
-		AppendStringCast(node.GetData<dtime_t>(), quote);
-		break;
-	case VariantLogicalType::TIME_NANOS:
-		AppendPrimitiveString(Value::TIME_NS(node.GetData<dtime_ns_t>()).ToString(), quote);
-		break;
-	case VariantLogicalType::TIMESTAMP_SEC:
-		AppendPrimitiveString(Value::TIMESTAMPSEC(node.GetData<timestamp_sec_t>()).ToString(), quote);
-		break;
-	case VariantLogicalType::TIMESTAMP_MILIS:
-		AppendPrimitiveString(Value::TIMESTAMPMS(node.GetData<timestamp_ms_t>()).ToString(), quote);
-		break;
-	case VariantLogicalType::TIMESTAMP_MICROS:
-		AppendStringCast(node.GetData<timestamp_t>(), quote);
-		break;
-	case VariantLogicalType::TIMESTAMP_NANOS:
-		AppendPrimitiveString(Value::TIMESTAMPNS(node.GetData<timestamp_ns_t>()).ToString(), quote);
-		break;
-	case VariantLogicalType::TIME_MICROS_TZ:
-		AppendPrimitiveString(Value::TIMETZ(node.GetData<dtime_tz_t>()).ToString(), quote);
-		break;
-	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-		AppendPrimitiveString(Value::TIMESTAMPTZ(node.GetData<timestamp_tz_t>()).ToString(), quote);
-		break;
-	case VariantLogicalType::INTERVAL:
-		AppendStringCast(node.GetData<interval_t>(), quote);
-		break;
-	case VariantLogicalType::BIGNUM: {
-		const auto str = node.GetString();
-		AppendPrimitiveString(Value::BIGNUM(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString(), quote);
-		break;
-	}
-	case VariantLogicalType::BITSTRING: {
-		const auto str = node.GetString();
-		AppendPrimitiveString(Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString(), quote);
-		break;
-	}
-	case VariantLogicalType::GEOMETRY: {
-		const auto str = node.GetString();
-		AppendPrimitiveString(Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString(), quote);
-		break;
-	}
-	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
-		AppendPrimitiveString(Value::TIMESTAMPTZNS(node.GetData<timestamp_tz_ns_t>()).ToString(), quote);
-		break;
-	default:
-		throw NotImplementedException("Cannot stringify VARIANT type %s", EnumUtil::ToString(type));
-	}
-}
-
-bool VariantStringSerializer::PrimitiveNeedsQuotes(const VariantLogicalType type) {
+bool VariantStringSerializer::SerializesAsString(const VariantLogicalType type) {
 	switch (type) {
 	case VariantLogicalType::VARCHAR:
 	case VariantLogicalType::BLOB:
@@ -280,83 +119,224 @@ bool VariantStringSerializer::PrimitiveNeedsQuotes(const VariantLogicalType type
 	}
 }
 
-void VariantStringSerializer::SerializeVariant(const VariantNode &node) const {
-	const auto type = node.GetTypeId();
+string_t VariantStringSerializer::FormatString(const VariantNode &node, const VariantLogicalType type) const {
+	auto &heap = allocator.GetStringHeap();
+
 	switch (type) {
-	case VariantLogicalType::ARRAY: {
-		tmp += '[';
-		bool first = true;
-		for (auto child : node.GetArrayChildren()) {
-			if (!first) {
-				tmp += ',';
-			}
-			first = false;
-			SerializeVariant(child);
-		}
-		tmp += ']';
-		break;
+	case VariantLogicalType::VARCHAR:
+		return node.GetString();
+	case VariantLogicalType::BLOB: {
+		const auto value = node.GetString();
+		return AddString(Value::BLOB(const_data_ptr_cast(value.GetData()), value.GetSize()).ToString());
 	}
-	case VariantLogicalType::OBJECT: {
-		tmp += '{';
-		bool first = true;
-		for (const auto &[key, value] : node.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC)) {
-			if (!first) {
-				tmp += ',';
-			}
-			first = false;
-			AppendJSONString(key.GetData(), key.GetSize());
-			tmp += ':';
-			SerializeVariant(value);
-		}
-		tmp += '}';
-		break;
+	case VariantLogicalType::UUID:
+		return AddString(Value::UUID(node.GetData<hugeint_t>()).ToString());
+	case VariantLogicalType::DATE:
+		return StringCast::Operation(node.GetData<date_t>(), heap);
+	case VariantLogicalType::TIME_MICROS:
+		return StringCast::Operation(node.GetData<dtime_t>(), heap);
+	case VariantLogicalType::TIME_NANOS:
+		return AddString(Value::TIME_NS(node.GetData<dtime_ns_t>()).ToString());
+	case VariantLogicalType::TIME_MICROS_TZ:
+		return AddString(Value::TIMETZ(node.GetData<dtime_tz_t>()).ToString());
+	case VariantLogicalType::TIMESTAMP_SEC:
+		return AddString(Value::TIMESTAMPSEC(node.GetData<timestamp_sec_t>()).ToString());
+	case VariantLogicalType::TIMESTAMP_MILIS:
+		return AddString(Value::TIMESTAMPMS(node.GetData<timestamp_ms_t>()).ToString());
+	case VariantLogicalType::TIMESTAMP_MICROS:
+		return StringCast::Operation(node.GetData<timestamp_t>(), heap);
+	case VariantLogicalType::TIMESTAMP_NANOS:
+		return AddString(Value::TIMESTAMPNS(node.GetData<timestamp_ns_t>()).ToString());
+	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+		return AddString(Value::TIMESTAMPTZ(node.GetData<timestamp_tz_t>()).ToString());
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		return AddString(Value::TIMESTAMPTZNS(node.GetData<timestamp_tz_ns_t>()).ToString());
+	case VariantLogicalType::INTERVAL:
+		return StringCast::Operation(node.GetData<interval_t>(), heap);
+	case VariantLogicalType::BITSTRING: {
+		const auto value = node.GetString();
+		return AddString(Value::BIT(const_data_ptr_cast(value.GetData()), value.GetSize()).ToString());
 	}
-	default: {
-		SerializePrimitive(node, type, PrimitiveNeedsQuotes(type));
-		break;
+	case VariantLogicalType::GEOMETRY: {
+		const auto value = node.GetString();
+		return AddString(Value::GEOMETRY(const_data_ptr_cast(value.GetData()), value.GetSize()).ToString());
 	}
+	default:
+		throw InternalException("Cannot format VARIANT type %s as a string", EnumUtil::ToString(type));
 	}
 }
 
-void VariantStringSerializer::SerializeTopLevel(const VariantNode &node) const {
-	const auto type = node.GetTypeId();
-	if (type == VariantLogicalType::ARRAY || type == VariantLogicalType::OBJECT) {
-		SerializeVariant(node);
-	} else {
-		SerializePrimitive(node, type, false);
+string_t VariantStringSerializer::FormatRaw(const VariantNode &node, const VariantLogicalType type) const {
+	auto &heap = allocator.GetStringHeap();
+
+	switch (type) {
+	case VariantLogicalType::BOOL_TRUE:
+		return heap.AddString("true", 4);
+	case VariantLogicalType::BOOL_FALSE:
+		return heap.AddString("false", 5);
+	case VariantLogicalType::INT8:
+		return StringCast::Operation(node.GetData<int8_t>(), heap);
+	case VariantLogicalType::INT16:
+		return StringCast::Operation(node.GetData<int16_t>(), heap);
+	case VariantLogicalType::INT32:
+		return StringCast::Operation(node.GetData<int32_t>(), heap);
+	case VariantLogicalType::INT64:
+		return StringCast::Operation(node.GetData<int64_t>(), heap);
+	case VariantLogicalType::INT128:
+		return StringCast::Operation(node.GetData<hugeint_t>(), heap);
+	case VariantLogicalType::UINT8:
+		return StringCast::Operation(node.GetData<uint8_t>(), heap);
+	case VariantLogicalType::UINT16:
+		return StringCast::Operation(node.GetData<uint16_t>(), heap);
+	case VariantLogicalType::UINT32:
+		return StringCast::Operation(node.GetData<uint32_t>(), heap);
+	case VariantLogicalType::UINT64:
+		return StringCast::Operation(node.GetData<uint64_t>(), heap);
+	case VariantLogicalType::UINT128:
+		return StringCast::Operation(node.GetData<uhugeint_t>(), heap);
+	case VariantLogicalType::DECIMAL: {
+		const auto decimal = node.GetDecimal();
+		switch (decimal.GetPhysicalType()) {
+		case PhysicalType::INT16:
+			return AddString(Decimal::ToString(node.GetData<int16_t>(), decimal.width, decimal.scale));
+		case PhysicalType::INT32:
+			return AddString(Decimal::ToString(node.GetData<int32_t>(), decimal.width, decimal.scale));
+		case PhysicalType::INT64:
+			return AddString(Decimal::ToString(node.GetData<int64_t>(), decimal.width, decimal.scale));
+		case PhysicalType::INT128:
+			return AddString(Decimal::ToString(node.GetData<hugeint_t>(), decimal.width, decimal.scale));
+		default:
+			throw InternalException("Unsupported VARIANT decimal physical type");
+		}
 	}
+	case VariantLogicalType::BIGNUM: {
+		const auto value = node.GetString();
+		return AddString(Value::BIGNUM(const_data_ptr_cast(value.GetData()), value.GetSize()).ToString());
+	}
+	default:
+		throw InternalException("Cannot format VARIANT type %s as raw JSON", EnumUtil::ToString(type));
+	}
+}
+
+yyjson_mut_val *VariantStringSerializer::SerializePrimitive(const VariantNode &node, const VariantLogicalType type,
+                                                            yyjson_mut_doc *document) const {
+	if (SerializesAsString(type)) {
+		return CreateString(document, FormatString(node, type));
+	}
+
+	switch (type) {
+	case VariantLogicalType::VARIANT_NULL:
+		return yyjson_mut_null(document);
+	case VariantLogicalType::BOOL_TRUE:
+		return yyjson_mut_true(document);
+	case VariantLogicalType::BOOL_FALSE:
+		return yyjson_mut_false(document);
+	case VariantLogicalType::INT8:
+		return yyjson_mut_sint(document, node.GetData<int8_t>());
+	case VariantLogicalType::INT16:
+		return yyjson_mut_sint(document, node.GetData<int16_t>());
+	case VariantLogicalType::INT32:
+		return yyjson_mut_sint(document, node.GetData<int32_t>());
+	case VariantLogicalType::INT64:
+		return yyjson_mut_sint(document, node.GetData<int64_t>());
+	case VariantLogicalType::INT128:
+		return CreateRaw(document, FormatRaw(node, type));
+	case VariantLogicalType::UINT8:
+		return yyjson_mut_uint(document, node.GetData<uint8_t>());
+	case VariantLogicalType::UINT16:
+		return yyjson_mut_uint(document, node.GetData<uint16_t>());
+	case VariantLogicalType::UINT32:
+		return yyjson_mut_uint(document, node.GetData<uint32_t>());
+	case VariantLogicalType::UINT64:
+		return yyjson_mut_uint(document, node.GetData<uint64_t>());
+	case VariantLogicalType::UINT128:
+	case VariantLogicalType::DECIMAL:
+	case VariantLogicalType::BIGNUM:
+		return CreateRaw(document, FormatRaw(node, type));
+	case VariantLogicalType::FLOAT:
+		return yyjson_mut_real(document, node.GetData<float>());
+	case VariantLogicalType::DOUBLE:
+		return yyjson_mut_real(document, node.GetData<double>());
+	default:
+		throw NotImplementedException("Cannot stringify VARIANT type %s", EnumUtil::ToString(type));
+	}
+}
+
+yyjson_mut_val *VariantStringSerializer::SerializeVariant(const VariantNode &node, yyjson_mut_doc *document) const {
+	const auto type = node.GetTypeId();
+	switch (type) {
+	case VariantLogicalType::ARRAY: {
+		const auto result = yyjson_mut_arr(document);
+		for (const auto &child : node.GetArrayChildren()) {
+			if (!yyjson_mut_arr_append(result, SerializeVariant(child, document))) {
+				throw InternalException("Failed to append VARIANT array child to yyjson value");
+			}
+		}
+		return result;
+	}
+	case VariantLogicalType::OBJECT: {
+		const auto result = yyjson_mut_obj(document);
+		for (const auto &[key, value] : node.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC)) {
+			const auto key_value = CreateString(document, key);
+			if (!yyjson_mut_obj_add(result, key_value, SerializeVariant(value, document))) {
+				throw InternalException("Failed to append VARIANT object child to yyjson value");
+			}
+		}
+		return result;
+	}
+	default:
+		return SerializePrimitive(node, type, document);
+	}
+}
+
+void VariantStringSerializer::WriteJSON(const yyjson_mut_val *value, VectorWriter<string_t> &string_writer) const {
+	yyjson_write_err error;
+	size_t size;
+	const auto data =
+	    yyjson_mut_val_write_opts(value, YYJSON_WRITE_ALLOW_INF_AND_NAN, allocator.GetYYAlc(), &size, &error);
+	if (!data) {
+		throw SerializationException("Failed to serialize VARIANT as JSON: %s", error.msg);
+	}
+	string_writer.WriteValue(string_t(data, NumericCast<uint32_t>(size)));
 }
 
 void VariantStringSerializer::operator()(const optional<VariantNode> &node,
                                          VectorWriter<string_t> &string_writer) const {
-	// clean up per-row state
-	tmp.clear();
-	heap.GetAllocator().Reset();
+	allocator.Reset();
 
-	if (!node || node->GetTypeId() == VariantLogicalType::VARIANT_NULL) {
+	if (!node) {
 		string_writer.WriteNull();
 		return;
 	}
-	// shortcut; write value directly into result
-	if (node->GetTypeId() == VariantLogicalType::VARCHAR) {
-		string_writer.WriteValue(node->GetString());
+	const auto type = node->GetTypeId();
+	if (type == VariantLogicalType::VARIANT_NULL) {
+		string_writer.WriteNull();
 		return;
 	}
 
-	SerializeTopLevel(*node);
-	string_writer.WriteValue(tmp);
+	// shortcut for root primitive types
+	if (SerializesAsString(type)) {
+		string_writer.WriteValue(FormatString(*node, type));
+		return;
+	}
+	if (type != VariantLogicalType::ARRAY && type != VariantLogicalType::OBJECT && type != VariantLogicalType::FLOAT &&
+	    type != VariantLogicalType::DOUBLE) {
+		string_writer.WriteValue(FormatRaw(*node, type));
+		return;
+	}
+
+	const auto document = yyjson_mut_doc_new(allocator.GetYYAlc());
+	WriteJSON(SerializeVariant(*node, document), string_writer);
 }
 
-static unique_ptr<FunctionLocalState> VariantExtractStringInit(ExpressionState &, const BoundFunctionExpression &,
+static unique_ptr<FunctionLocalState> VariantExtractStringInit(ExpressionState &state, const BoundFunctionExpression &,
                                                                FunctionData *) {
-	return make_uniq<VariantStringExtractLocalState>();
+	return make_uniq<VariantStringExtractLocalState>(state.GetContext());
 }
 
 static void VariantExtractStringFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &local_state = ExecuteFunctionState::GetFunctionState(state)->Cast<VariantStringExtractLocalState>();
-
-	const VariantStringSerializer serializer(local_state);
-	VariantPathFunction::Execute<string_t>(input, state, result, serializer);
+	VariantPathFunction::Execute<string_t>(input, state, result, VariantStringSerializer(local_state));
 }
 
 ScalarFunctionSet VariantExtractStringFun::GetFunctions() {
