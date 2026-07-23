@@ -68,6 +68,10 @@ public:
 		return true;
 	}
 
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
+	}
+
 public:
 	void AddLocalBatch(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &state) const;
 	void AddRawBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,

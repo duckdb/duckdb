@@ -1,0 +1,41 @@
+# name: test/sql/copy/parquet/cte_batch_exchange.test
+# description: Test batch-indexed direct CTE input for Parquet writes
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA threads=4;
+
+statement ok
+CREATE TABLE cte_parquet_source AS SELECT i FROM range(1000000) t(i);
+
+query II
+EXPLAIN ANALYZE
+COPY (
+	WITH c AS MATERIALIZED (SELECT i FROM cte_parquet_source)
+	SELECT i FROM c
+) TO '{TEST_DIR}/cte_batch_exchange.parquet' (FORMAT parquet);
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: DIRECT.*Order Mode: BATCH_INDEX.*Preferred Batch Size: 122880.*
+
+query III
+SELECT count(*), min(i), max(i)
+FROM read_parquet('{TEST_DIR}/cte_batch_exchange.parquet');
+----
+1000000	0	999999
+
+query I
+SELECT row_group_num_rows
+FROM parquet_metadata('{TEST_DIR}/cte_batch_exchange.parquet')
+ORDER BY row_group_id;
+----
+122880
+122880
+122880
+122880
+122880
+122880
+122880
+122880
+16960

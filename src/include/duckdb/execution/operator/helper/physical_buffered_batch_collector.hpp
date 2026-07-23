@@ -45,6 +45,10 @@ public:
 		return true;
 	}
 
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
+	}
+
 	bool IsStreaming() const override {
 		return true;
 	}

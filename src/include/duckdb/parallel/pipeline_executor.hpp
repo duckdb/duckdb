@@ -65,7 +65,7 @@ public:
 	//! Returns true if execution is finished, false if Execute should be called again
 	PipelineExecuteResult Execute(idx_t max_chunks);
 	//! Pushes a chunk from an external producer through this pipeline into the sink
-	PipelineExecuteResult PushExternal(DataChunk &input);
+	PipelineExecuteResult PushExternal(DataChunk &input, const OperatorPartitionData &partition_data);
 	//! Finalizes an externally-fed pipeline executor after the producer is exhausted
 	PipelineExecuteResult FinishExternal();
 
@@ -159,6 +159,8 @@ private:
 	bool should_flush_current_idx = true;
 	//! Whether this executor has already run at least once
 	bool has_executed = false;
+	//! Whether an externally-fed sink has observed its initial batch
+	bool external_batch_initialized = false;
 
 private:
 	void StartOperator(PhysicalOperator &op);
@@ -185,6 +187,8 @@ private:
 
 	//! Notifies the sink that a new batch has started
 	SinkNextBatchType NextBatch(DataChunk &source_chunk, const bool have_more_output);
+	SinkNextBatchType NextBatch(OperatorPartitionData next_data, bool force = false);
+	OperatorPartitionData ToPipelinePartitionData(const OperatorPartitionData &source_data) const;
 
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
 	//! case of a blocked sink.

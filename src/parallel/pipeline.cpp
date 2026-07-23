@@ -5,6 +5,7 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -25,9 +26,7 @@ PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
 }
 
 bool PipelineTask::TaskBlockedOnResult() const {
-	// If this returns true, it means the pipeline this task belongs to has a cached chunk
-	// that was the result of the Sink method returning BLOCKED
-	return pipeline_executor->RemainingSinkChunk();
+	return pipeline.IsStreamingResultPipeline() && pipeline_executor->RemainingSinkChunk();
 }
 
 const PipelineExecutor &PipelineTask::GetPipelineExecutor() const {
@@ -218,14 +217,26 @@ void Pipeline::SetExternalInput() {
 	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_UNSET;
 }
 
-bool Pipeline::CanUseExternalInput() const {
+bool Pipeline::IsStreamingResultPipeline() const {
+	if (external_streaming_result_producer) {
+		return true;
+	}
+	return sink && sink->type == PhysicalOperatorType::RESULT_COLLECTOR &&
+	       sink->Cast<PhysicalResultCollector>().IsStreaming();
+}
+
+bool Pipeline::CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const {
 	if (!sink || !sink->ParallelSink() || sink->SinkOrderDependent()) {
 		return false;
 	}
 	if (sink->GetExternalInputSupport() != PipelineExternalInputSupport::SUPPORTED) {
 		return false;
 	}
-	if (sink->RequiredPartitionInfo().AnyRequired()) {
+	auto required_partition_info = sink->RequiredPartitionInfo();
+	if (required_partition_info.RequiresPartitionColumns()) {
+		return false;
+	}
+	if (required_partition_info.RequiresBatchIndex() && !source_partition_info.RequiresBatchIndex()) {
 		return false;
 	}
 	for (auto &op_ref : operators) {
