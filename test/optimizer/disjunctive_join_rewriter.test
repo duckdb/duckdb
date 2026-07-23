@@ -1,0 +1,221 @@
+# name: test/optimizer/disjunctive_join_rewriter.test
+# description: Tests for DisjunctiveJoinRewriter optimizer
+# group: [optimizer]
+
+require tpch
+
+statement ok
+PRAGMA memory_limit='1GB'
+
+statement ok
+CALL dbgen(sf=0);
+
+statement ok
+ALTER TABLE orders ALTER o_orderkey DROP NOT NULL;
+
+statement ok
+ALTER TABLE orders ALTER o_custkey DROP NOT NULL;
+
+statement ok
+CREATE TABLE tiny_orders AS SELECT * FROM orders LIMIT 0;
+
+statement ok
+CREATE TABLE tiny_lineitem AS SELECT * FROM lineitem LIMIT 0;
+
+# Tiny Tables - Should NOT Rewrite
+statement ok
+INSERT INTO tiny_orders VALUES
+    (1, 10, 'O', 100.00, '1996-01-01', '1-URGENT', 'Clerk#000000001', 0, 'X1'),
+    (2, 20, 'O', 200.00, '1996-01-02', '1-URGENT', 'Clerk#000000002', 0, 'X2'),
+    (3, 30, 'O', 300.00, '1996-01-03', '1-URGENT', 'Clerk#000000003', 0, 'Y3'),
+    (4, NULL, 'O', 400.00, '1996-01-04', '1-URGENT', 'Clerk#000000004', 0, 'X4'),
+    (5, 50, 'O', 500.00, '1996-01-05', '1-URGENT', 'Clerk#000000005', 0, 'X5'),
+    (6, 60, 'O', 600.00, '1996-01-06', '1-URGENT', 'Clerk#000000006', 0, 'X6'),
+    (NULL, NULL, 'O', 700.00, '1996-01-07', '1-URGENT', 'Clerk#000000007', 0, 'X7');
+
+statement ok
+INSERT INTO tiny_lineitem VALUES
+    (1, 99, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-10', '1996-01-15', '1996-01-20', 'NONE', 'AIR', 'X1'),
+    (88, 20, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-11', '1996-01-16', '1996-01-21', 'NONE', 'AIR', 'X2'),
+    (3, 30, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-12', '1996-01-17', '1996-01-22', 'NONE', 'AIR', 'Y3'),
+    (4, 77, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-13', '1996-01-18', '1996-01-23', 'NONE', 'AIR', 'X4'),
+    (6, 60, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-14', '1996-01-19', '1996-01-24', 'NONE', 'AIR', 'X6'),
+    (101, 100, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-15', '1996-01-20', '1996-01-25', 'NONE', 'AIR', 'X5'),
+    (100, 100, 1, 1, 1.00, 600.00, 0.00, 0.00, 'N', 'O', '1996-01-16', '1996-01-21', '1996-01-26', 'NONE', 'AIR', 'Z7');
+
+query II
+EXPLAIN SELECT o.o_orderkey, l.l_partkey
+FROM tiny_orders o JOIN tiny_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<REGEX>:.*Blockwise Nl Join.*
+
+query IIII rowsort
+SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM tiny_orders o JOIN tiny_lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+1	10	1	99
+2	20	88	20
+3	30	3	30
+4	NULL	4	77
+6	60	6	60
+
+statement ok
+CREATE TABLE med_orders AS SELECT * FROM orders LIMIT 0;
+
+statement ok
+CREATE TABLE med_lineitem AS SELECT * FROM lineitem LIMIT 0;
+
+statement ok
+INSERT INTO med_orders
+SELECT
+    i AS o_orderkey,
+    ((i - 1) % 100) + 1 AS o_custkey,
+    'O' AS o_orderstatus,
+    i * 100.0 AS o_totalprice,
+    DATE('1996-01-01') AS o_orderdate,
+    '1-URGENT' AS o_orderpriority,
+    'Clerk#000000001' AS o_clerk,
+    0 AS o_shippriority,
+    'comment' AS o_comment
+FROM generate_series(1, 4000) AS i;
+
+statement ok
+INSERT INTO med_lineitem
+SELECT
+    CASE WHEN i <= 2000 THEN i ELSE i + 10000 END AS l_orderkey,
+    ((i - 1) % 80) + 1 AS l_partkey,
+    1 AS l_suppkey,
+    1 AS l_linenumber,
+    1.0 AS l_quantity,
+    10.0 AS l_extendedprice,
+    0.0 AS l_discount,
+    0.0 AS l_tax,
+    'N' AS l_returnflag,
+    'O' AS l_linestatus,
+    DATE('1996-01-10') AS l_shipdate,
+    DATE('1996-01-12') AS l_commitdate,
+    DATE('1996-01-15') AS l_receiptdate,
+    'DELIVER IN PERSON' AS l_shipinstruct,
+    'TRUCK' AS l_shipmode,
+    'comment' AS l_comment
+FROM generate_series(1, 4000) AS i;
+
+query II
+EXPLAIN SELECT COUNT(*)
+FROM med_orders o JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query I
+SELECT COUNT(*)
+FROM med_orders o JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+161600
+
+query II
+EXPLAIN SELECT COUNT(*)
+FROM med_orders o LEFT JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query I
+SELECT COUNT(*)
+FROM med_orders o LEFT JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+162000
+
+query II
+EXPLAIN SELECT COUNT(*)
+FROM med_orders o RIGHT JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query I
+SELECT COUNT(*)
+FROM med_orders o RIGHT JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+161600
+
+query II
+EXPLAIN SELECT COUNT(*)
+FROM med_orders o FULL JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query I
+SELECT COUNT(*)
+FROM med_orders o FULL JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+162000
+
+query II
+EXPLAIN SELECT COUNT(*)
+FROM med_orders o SEMI JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*Blockwise Nl Join.*
+
+query I
+SELECT COUNT(*)
+FROM med_orders o SEMI JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+3600
+
+query II
+EXPLAIN SELECT COUNT(*)
+FROM med_orders o ANTI JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*Blockwise Nl Join.*
+
+query I
+SELECT COUNT(*)
+FROM med_orders o ANTI JOIN med_lineitem l
+ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+400
+
+query II
+EXPLAIN SELECT COUNT(*)
+FROM med_orders o JOIN med_lineitem l
+ON o.o_orderkey > l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<REGEX>:.*Blockwise Nl Join.*
+
+statement ok
+CREATE TABLE dups_a AS SELECT * FROM orders LIMIT 0;
+
+statement ok
+CREATE TABLE dups_b AS SELECT * FROM lineitem LIMIT 0;
+
+statement ok
+INSERT INTO dups_a(o_orderkey, o_custkey, o_totalprice, o_comment)
+SELECT ((i-1) % 100) + 1, ((i-1) % 50) + 1, i * 1.0, 'x'
+FROM generate_series(1, 4000) AS i;
+
+statement ok
+INSERT INTO dups_b(l_orderkey, l_partkey, l_extendedprice, l_comment)
+SELECT ((i-1) % 100) + 1, ((i-1) % 50) + 1, i * 1.0, 'y'
+FROM generate_series(1, 4000) AS i;
+
+query II
+EXPLAIN SELECT COUNT(*) FROM dups_a JOIN dups_b
+ON dups_a.o_orderkey = dups_b.l_orderkey OR dups_a.o_custkey = dups_b.l_partkey;
+----
+physical_plan	<!REGEX>:.*Blockwise Nl Join.*
+
+query I
+SELECT COUNT(*) FROM dups_a JOIN dups_b
+ON dups_a.o_orderkey = dups_b.l_orderkey OR dups_a.o_custkey = dups_b.l_partkey;
+----
+320000

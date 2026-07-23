@@ -42,6 +42,8 @@ public:
 
 	//! Do not recurse further than this operator (optional)
 	optional_ptr<LogicalOperator> stop_operator;
+
+	void VisitOperatorExpressionsOnly(LogicalOperator &op);
 };
 
 } // namespace duckdb
