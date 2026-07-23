@@ -18,6 +18,17 @@ SELECT count(*) FROM substring_pruning WHERE substr(s, 2) = '495000';
 ----
 1
 
+# Constant lengths can be applied after removing a shared prefix.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 2, 4) = '4950';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE substr(s, 2, 4) = '4950';
+----
+100
+
 # Prefix substrings preserve the ordering of the input min/max values.
 query II
 EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 1, 2) > 'p3';

@@ -302,6 +302,7 @@ void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
+// Find the byte length of the first character_count UTF-8 code points.
 bool GetPrefixByteLength(const string &value, idx_t character_count, idx_t &byte_count) {
 	auto data = reinterpret_cast<const utf8proc_uint8_t *>(value.c_str());
 	byte_count = 0;
@@ -320,6 +321,7 @@ bool GetPrefixByteLength(const string &value, idx_t character_count, idx_t &byte
 	return true;
 }
 
+// Return at most character_count UTF-8 code points, preserving shorter values in full.
 bool GetPrefix(const string &value, idx_t character_count, string &result) {
 	idx_t prefix_size;
 	if (!GetPrefixByteLength(value, character_count, prefix_size) && prefix_size != value.size()) {
@@ -329,65 +331,70 @@ bool GetPrefix(const string &value, idx_t character_count, string &result) {
 	return true;
 }
 
-unique_ptr<BaseStatistics> SubstringStatsFromPrefix(FunctionStatisticsInput &input, int64_t offset) {
-	auto &expr = input.expr;
+struct SubstringStatsParameters {
+	// 0-based index of the first character of the substring.
+	idx_t start_character_index = 0;
+	optional_idx character_count;
+};
+
+bool TryGetConstantInt64(const Expression &expression, int64_t &result) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return false;
+	}
+	auto &value = expression.Cast<BoundConstantExpression>().GetValue();
+	if (value.IsNull()) {
+		return false;
+	}
+	result = value.GetValue<int64_t>();
+	return true;
+}
+
+bool TryGetSubstringStatsParameters(BoundFunctionExpression &expr, SubstringStatsParameters &result) {
 	auto &children = expr.GetChildren();
-	if (children.size() != 3 || children[2]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
-		return nullptr;
+	if (children.size() != 2 && children.size() != 3) {
+		return false;
 	}
-	auto &length_value = children[2]->Cast<BoundConstantExpression>().GetValue();
-	if (length_value.IsNull()) {
-		return nullptr;
+
+	int64_t offset = 0;
+	if (!TryGetConstantInt64(*children[1], offset)) {
+		return false;
 	}
-	auto length = length_value.GetValue<int64_t>();
-	if (length <= 0 || length > NumericLimits<uint32_t>::Maximum()) {
-		return nullptr;
+	if (children.size() == 3) {
+		int64_t length = 0;
+		if (!TryGetConstantInt64(*children[2], length) || length <= 0 || length > NumericLimits<uint32_t>::Maximum()) {
+			return false;
+		}
+		result.character_count = NumericCast<idx_t>(length);
 	}
+	// Normalize start offset to 1-based index.
 	if (offset == 0) {
-		length--;
-	} else if (offset != 1) {
-		return nullptr;
+		if (!result.character_count.IsValid() || result.character_count.GetIndex() <= 1) {
+			return false;
+		}
+		offset = 1;
+		result.character_count = result.character_count.GetIndex() - 1;
 	}
-	if (length == 0) {
-		return nullptr;
+	// Reject negative offset.
+	if (offset < 1) {
+		return false;
 	}
+	result.start_character_index = NumericCast<idx_t>(offset - 1);
+	return true;
+}
 
-	auto &string_stats = input.child_stats[0];
-	if (!StringStats::HasMinMax(string_stats)) {
-		return nullptr;
+bool GetSubstringStatsBound(const string &value, idx_t prefix_size, optional_idx character_count, string &result) {
+	auto suffix = value.substr(prefix_size);
+	if (!character_count.IsValid()) {
+		result = std::move(suffix);
+		return true;
 	}
-	auto min = StringStats::Min(string_stats);
-	auto max = StringStats::Max(string_stats);
-	string result_min;
-	string result_max;
-	auto character_count = NumericCast<idx_t>(length);
-	if (!GetPrefix(min, character_count, result_min) || !GetPrefix(max, character_count, result_max)) {
-		return nullptr;
-	}
-
-	auto result = StringStats::CreateUnknown(expr.GetReturnType());
-	StringStats::SetMin(result, string_t(result_min), StringStats::GetMinType(string_stats));
-	StringStats::SetMax(result, string_t(result_max), StringStats::GetMaxType(string_stats));
-	result.CopyValidity(string_stats);
-	return result.ToUnique();
+	return GetPrefix(suffix, character_count.GetIndex(), result);
 }
 
 unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInput &input) {
 	auto &expr = input.expr;
-	auto &children = expr.GetChildren();
-	if ((children.size() != 2 && children.size() != 3) ||
-	    children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
-		return nullptr;
-	}
-	auto &offset_value = children[1]->Cast<BoundConstantExpression>().GetValue();
-	if (offset_value.IsNull()) {
-		return nullptr;
-	}
-	auto offset = offset_value.GetValue<int64_t>();
-	if (offset == 0 || offset == 1) {
-		return SubstringStatsFromPrefix(input, offset);
-	}
-	if (offset < 0 || children.size() != 2) {
+	SubstringStatsParameters parameters;
+	if (!TryGetSubstringStatsParameters(expr, parameters)) {
 		return nullptr;
 	}
 
@@ -398,16 +405,20 @@ unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInpu
 
 	auto min = StringStats::Min(string_stats);
 	auto max = StringStats::Max(string_stats);
-	auto prefix_character_count = NumericCast<idx_t>(offset - 1);
 	idx_t prefix_size = 0;
-	if (!GetPrefixByteLength(min, prefix_character_count, prefix_size) ||
+	if (!GetPrefixByteLength(min, parameters.start_character_index, prefix_size) ||
 	    prefix_size > StringUtil::GetCommonPrefixSize(min, max)) {
 		return nullptr;
 	}
 
+	string result_min;
+	string result_max;
+	if (!GetSubstringStatsBound(min, prefix_size, parameters.character_count, result_min) ||
+	    !GetSubstringStatsBound(max, prefix_size, parameters.character_count, result_max)) {
+		return nullptr;
+	}
+
 	auto result = StringStats::CreateUnknown(expr.GetReturnType());
-	auto result_min = min.substr(prefix_size);
-	auto result_max = max.substr(prefix_size);
 	StringStats::SetMin(result, string_t(result_min), StringStats::GetMinType(string_stats));
 	StringStats::SetMax(result, string_t(result_max), StringStats::GetMaxType(string_stats));
 	result.CopyValidity(string_stats);
