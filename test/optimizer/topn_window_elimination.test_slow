@@ -20,6 +20,28 @@ CREATE TABLE tbl2(generated_col AS (x + 1), x INTEGER, y VARCHAR)
 statement ok
 INSERT INTO tbl2 VALUES (0, 'a'), (1, 'b'), (null, 'c')
 
+# An unpartitioned top-1 window must not turn empty input into a NULL row
+statement ok
+CREATE TABLE empty_topn(s INTEGER, p INTEGER)
+
+query I
+SELECT p
+FROM empty_topn
+QUALIFY row_number() OVER (ORDER BY s) <= 1
+----
+
+# The window input can be empty even when the base table is not
+statement ok
+INSERT INTO empty_topn VALUES (1, 42)
+
+# random() is in [0, 1), so this runtime filter rejects s = 1
+query I
+SELECT p
+FROM empty_topn
+WHERE s < random()
+QUALIFY row_number() OVER (ORDER BY s) <= 1
+----
+
 statement ok
 CREATE MACRO window_fun(table_name, col_names, sort_order, topn) AS TABLE
 FROM query(

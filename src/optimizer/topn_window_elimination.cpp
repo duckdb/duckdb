@@ -351,6 +351,10 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	                                             optimizer.binder.GenerateTableIndex(), std::move(select_list));
 	aggregate->groupings_index = optimizer.binder.GenerateTableIndex();
 	aggregate->groups = std::move(window_expr.partitions);
+	if (aggregate->groups.empty() && params.limit == 1) {
+		// A constant group preserves the window's empty-input behavior.
+		aggregate->groups.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
+	}
 	aggregate->children.push_back(std::move(window.children[0]));
 	aggregate->ResolveOperatorTypes();
 
