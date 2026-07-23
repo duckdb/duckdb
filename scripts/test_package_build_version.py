@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import patch
 
@@ -20,9 +21,23 @@ class TestPackageBuildVersion(unittest.TestCase):
             self.assertEqual(package_build.git_dev_version(), 'v2.0.0-alpha35494')
             self.assertEqual(package_build.git_commit_hash(), 'abc123')
 
+    def test_dev_version_from_alpha_tag(self):
+        with patch('package_build.get_git_describe', return_value='v2.0.0-alpha1-42-gabc123'):
+            self.assertEqual(package_build.git_dev_version(), 'v2.0.0-dev42')
+            self.assertEqual(package_build.git_commit_hash(), 'abc123')
+
+    def test_prerelease_git_describe_override(self):
+        with patch.dict(os.environ, {'OVERRIDE_GIT_DESCRIBE': 'v2.0.0-alpha1-42-gabc123'}):
+            self.assertEqual(package_build.get_git_describe(), 'v2.0.0-alpha1-42-gabc123')
+
     def test_rc_tag_version(self):
         with patch('package_build.get_git_describe', return_value='v2.0.0-rc1-0-gabc123'):
             self.assertEqual(package_build.git_dev_version(), 'v2.0.0-rc1')
+            self.assertEqual(package_build.git_commit_hash(), 'abc123')
+
+    def test_dev_version_from_rc_tag(self):
+        with patch('package_build.get_git_describe', return_value='v2.0.0-rc1-42-gabc123'):
+            self.assertEqual(package_build.git_dev_version(), 'v2.0.0-dev42')
             self.assertEqual(package_build.git_commit_hash(), 'abc123')
 
 

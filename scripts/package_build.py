@@ -173,7 +173,7 @@ def get_git_describe():
             return "v0.0.0-0-gdeadbeeff"
     if is_explicit_prerelease_version(override_git_describe):
         return override_git_describe
-    if len(override_git_describe.split('-')) == 3:
+    if parse_git_describe(override_git_describe):
         return override_git_describe
     if len(override_git_describe.split('-')) == 1:
         override_git_describe += "-0"
@@ -239,12 +239,12 @@ def git_dev_version():
             # directly on a tag: emit the regular version
             return "v" + '.'.join(version_splits) + version['prerelease']
         else:
-            # not on a tag: increment the version by one and add a -devX suffix
+            # not on a tag: add a -devX suffix and bump non-prerelease tags
             # this needs to keep in sync with changes to CMakeLists.txt
-            if MAIN_BRANCH_VERSIONING == True:
+            if not version['prerelease'] and MAIN_BRANCH_VERSIONING == True:
                 # increment minor version
                 version_splits[1] = str(int(version_splits[1]) + 1)
-            else:
+            elif not version['prerelease']:
                 # increment patch version
                 version_splits[2] = str(int(version_splits[2]) + 1)
             return "v" + '.'.join(version_splits) + "-dev" + dev_version
