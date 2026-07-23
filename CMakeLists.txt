@@ -380,7 +380,7 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 ######
 option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
 if(${MAIN_BRANCH_VERSIONING})
-  set(VERSIONING_TAG_MATCH "v*.*.0")
+  set(VERSIONING_TAG_MATCH "v*.*.0*")
 endif()
 
 if (UNSAFE_NUMERIC_CAST)
@@ -503,16 +503,17 @@ else()
   endif()
 endif()
 
-if (NOT GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
+if (NOT GIT_DESCRIBE MATCHES "^v([0-9]+)\.([0-9]+)\.([0-9]+)(\-(alpha|rc)[0-9]+)?\-([0-9]+)\-g([a-f0-9]+)$")
   message(FATAL_ERROR "Computed GIT_DESCRIBE '${GIT_DESCRIBE}' is not in the expected form 'vX.Y.Z-N-gGITHASH123'. Consider providing OVERRIDE_GIT_DESCRIBE explicitly to CMake")
 endif()
 
-string(REGEX REPLACE "v([0-9]+)\.[0-9]+\.[0-9]+\-.*" "\\1" DUCKDB_MAJOR_VERSION "${GIT_DESCRIBE}")
-string(REGEX REPLACE "v[0-9]+\.([0-9]+)\.[0-9]+\-.*" "\\1" DUCKDB_MINOR_VERSION "${GIT_DESCRIBE}")
-string(REGEX REPLACE "v[0-9]+\.[0-9]+\.([0-9]+)\-.*" "\\1" DUCKDB_PATCH_VERSION "${GIT_DESCRIBE}")
-string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-([0-9]+)\-g.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_DESCRIBE}")
+set(DUCKDB_MAJOR_VERSION "${CMAKE_MATCH_1}")
+set(DUCKDB_MINOR_VERSION "${CMAKE_MATCH_2}")
+set(DUCKDB_PATCH_VERSION "${CMAKE_MATCH_3}")
+set(DUCKDB_SUFFIX_VERSION "${CMAKE_MATCH_4}")
+set(DUCKDB_DEV_ITERATION "${CMAKE_MATCH_6}")
 if (NOT DEFINED GIT_COMMIT_HASH)
-  string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g([a-f0-9]+)" "\\1" GIT_COMMIT_HASH "${GIT_DESCRIBE}")
+  set(GIT_COMMIT_HASH "${CMAKE_MATCH_7}")
 endif()
 
 set(DUCKDB_VERSION_NUMBER "${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
@@ -529,7 +530,8 @@ if(DUCKDB_EXPLICIT_VERSION)
   set(DUCKDB_VERSION "${DUCKDB_EXPLICIT_VERSION}")
 elseif(DUCKDB_DEV_ITERATION EQUAL 0)
   # on a tag; directly use the version
-  set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
+  set(DUCKDB_VERSION
+      "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}${DUCKDB_SUFFIX_VERSION}")
 else()
   # not on a tag, increment the patch version by one and add a -devX suffix
   if(${MAIN_BRANCH_VERSIONING})
