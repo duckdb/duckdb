@@ -1,0 +1,55 @@
+# name: test/sql/delete/delete_compression_after_restart.test
+# description: Deserialized version info is settled; deletes after a restart still compress
+# group: [delete]
+
+require vector_size 2048
+
+load {TEST_DIR}/delete_compression_after_restart.db
+
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(122880) t(i);
+
+statement ok
+CHECKPOINT
+
+# partial piecemeal deletes leaving one row per vector - the vectors cannot compress
+# (live rows block the collapse) and serialize as per-vector deletion masks
+query I
+DELETE FROM tbl WHERE i % 2048 <> 0 AND i % 2 = 0
+----
+61380
+
+query I
+DELETE FROM tbl WHERE i % 2 = 1
+----
+61440
+
+statement ok
+CHECKPOINT
+
+restart
+
+# the deserialized version info has nothing to compress - the pass finds nothing to do
+statement ok
+CHECKPOINT
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+60	0	120832
+
+# deleting the survivors after the restart makes the deserialized vectors compressible again
+query I
+DELETE FROM tbl WHERE i % 2048 = 0
+----
+60
+
+statement ok
+CHECKPOINT
+
+restart
+
+query I
+SELECT COUNT(*) FROM tbl
+----
+0

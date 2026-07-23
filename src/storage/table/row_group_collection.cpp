@@ -25,6 +25,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/logging/log_type.hpp"
@@ -1711,6 +1712,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	VacuumState vacuum_state;
 	InitializeVacuumState(checkpoint_state, vacuum_state, writer.GetRowGroupCount());
 
+	auto &transaction_manager = DuckTransactionManager::Get(GetAttached());
+	auto lowest_active_start = transaction_manager.LowestActiveStart();
 	try {
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
@@ -1733,6 +1736,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (!RefersToSameObject(row_group.GetCollection(), *this)) {
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
 			}
+			// the row group is kept as-is: try to compress its version information
+			row_group.CompressVersionInfo(lowest_active_start);
 			if (writer.GetCheckpointOptions().type != CheckpointType::VACUUM_ONLY) {
 				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
 				           row_group, vacuum_state.row_start);
