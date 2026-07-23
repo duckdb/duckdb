@@ -114,24 +114,11 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 		// to avoid creating a DictionaryBuffer with a null selection vector.
 		return SliceInternal(type, idx_t(0), count);
 	}
-	// sparse selections over a FOR payload gather the narrow values into a flat FOR vector instead of a
-	// dictionary: downstream then works on few rows directly while the FOR fastpaths still apply.
-	// The logical width is the downstream compute width, and keeps same-typed columns on the same decision.
+	// Sparse selection over a FOR payload: gather-and-widen the few live values into a flat vector rather than
+	// wrapping the full narrow child in a dictionary, which would force FOR interpretation over a mostly-unused child.
 	if (vector_type == VectorType::FOR_VECTOR &&
 	    !DenseAutoVecPaysOff(count, Size(), GetTypeIdSize(type.InternalType()))) {
-		auto allocated_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
-		auto stored_allocator = GetAllocator();
-		auto &allocator = stored_allocator ? *stored_allocator : Allocator::DefaultAllocator();
-		auto new_data = allocator.Allocate(allocated_count * type_size);
-		FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
-		auto result = make_buffer<StandardVectorBuffer>(std::move(new_data), count_t(count), type_size);
-		result->SetVectorTypeOnly(VectorType::FOR_VECTOR);
-		result->for_stored_type = for_stored_type;
-		result->for_max_value = for_max_value;
-		auto &result_validity = result->GetValidityMask();
-		result_validity.Resize(allocated_count);
-		result_validity.CopySel(validity, sel, 0, 0, count);
-		return result;
+		return FlattenSliceInternal(type, sel, count);
 	}
 	Vector child_vector(type, shared_from_this());
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
