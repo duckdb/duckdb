@@ -192,7 +192,10 @@ DROPS = [
     "DROP FEATURE IF EXISTS f3",
 ]
 
-_ANCHOR = datetime.date(2016, 1, 1)  # timestamp of the most recent refresh snapshot
+# ClickBench `hits` EventTime spans July 2013, so anchor the timed REFRESH inside that range: a 1 DAY
+# window then captures ~one day of events, 30 DAYS ~the month, 3650 DAYS everything. Anchoring outside the
+# data (e.g. 2016) makes the 1d/30d windows match zero rows, hiding the window-width -> scan-cost effect.
+_ANCHOR = datetime.date(2013, 7, 31)  # timestamp of the most recent refresh snapshot
 _STEP_DAYS = 30
 
 

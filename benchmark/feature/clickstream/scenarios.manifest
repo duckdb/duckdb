@@ -49,7 +49,7 @@
 #   WINDOW         ['1 DAY', '30 DAYS', '3650 DAYS']
 #   RETAIN         [1, 5, 20]
 #   PRIOR_VERSIONS [0, 5]
-# Fixed: TTL disabled; timed statement = REFRESH FEATURE f AT '2016-01-01 00:00:00'
+# Fixed: TTL disabled; timed statement = REFRESH FEATURE f AT '2013-07-31 00:00:00'
 #idx	PARQUET_COUNT	AGG	WINDOW	RETAIN	PRIOR_VERSIONS
 0	20	distinct	3650 DAYS	1	5
 1	100	simple	30 DAYS	20	5

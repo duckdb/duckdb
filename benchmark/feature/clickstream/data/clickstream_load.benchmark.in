@@ -1,6 +1,10 @@
 # Shared clickstream source-data loader, included by refresh/serve/cases templates. Builds the
 # ClickBench-derived source (hits_raw -> users -> hits) once per PARQUET_COUNT scale, then applies
 # the scenario-specific SETUP_SQL (feature definitions, serving spine, seed refreshes).
+# `hits` is inserted ORDER BY EventTime so it is physically clustered by the event timestamp: its
+# per-row-group EventTime zonemaps become monotonic and non-overlapping, which lets a REFRESH's
+# WINDOW filter (EventTime >= ts - window AND EventTime < ts) prune whole row groups at scan time.
+# Clustering at load costs one sort on a write we already do -- far cheaper than reordering later.
 # NOTE: no SQL "--" comments inside the load/reload blocks; the interpreter joins lines with a
 # space, which would comment out everything that follows on the same joined line.
 
@@ -26,7 +30,7 @@ CREATE TABLE hits_raw AS SELECT CAST(UserID AS BIGINT) AS UserID, epoch_ms(Event
 CREATE TABLE users (UserID BIGINT PRIMARY KEY);
 INSERT INTO users SELECT DISTINCT UserID FROM hits_raw;
 CREATE TABLE hits (UserID BIGINT, EventTime TIMESTAMP, RegionID INTEGER, CounterID INTEGER, FOREIGN KEY (UserID) REFERENCES users(UserID));
-INSERT INTO hits SELECT UserID, EventTime, RegionID, CounterID FROM hits_raw;
+INSERT INTO hits SELECT UserID, EventTime, RegionID, CounterID FROM hits_raw ORDER BY EventTime;
 DROP TABLE hits_raw;
 ${SETUP_SQL}
 
