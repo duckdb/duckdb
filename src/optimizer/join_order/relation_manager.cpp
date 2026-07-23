@@ -666,10 +666,9 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 	// filters in the process
 	JoinOrderExtraction result;
 	auto &filters_and_bindings = result.filters;
-	auto &non_inner_edges = result.non_inner_edges;
 	auto &join_operators = result.join_operators;
 	reference_map_t<LogicalOperator, vector<idx_t>> operator_predicates;
-	reference_map_t<LogicalOperator, optional_ptr<NonInnerJoinEdge>> operator_non_inner_edges;
+	reference_map_t<LogicalOperator, vector<JoinCondition>> operator_conditions;
 	expression_set_t filter_set;
 	auto normalize_conditions = [&](LogicalComparisonJoin &join, const column_binding_set_t &semantic_left_bindings,
 	                                const column_binding_set_t &semantic_right_bindings) {
@@ -743,8 +742,6 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 				auto right_set = semantic_sets.second;
 				D_ASSERT(left_set && left_set->count > 0);
 				D_ASSERT(right_set && right_set->count == 1);
-				auto non_inner_edge =
-				    make_uniq<NonInnerJoinEdge>(non_inner_edges.size(), join.join_type, std::move(conditions));
 				auto conjunction_expression = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 				// create a conjunction expression for the semi/anti join.
 				// It's possible multiple LHS relations have a condition in
@@ -755,8 +752,8 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 				// if we make a conjunction expression and populate the left set and right set with all
 				// the relations from the conditions in the conjunction expression, we can prevent invalid reordering.
 
-				// Only comparison copies participate in costing. The non-inner edge owns the complete condition.
-				for (auto &cond : non_inner_edge->conditions) {
+				// Only comparison copies participate in costing. The operator occurrence owns the complete condition.
+				for (auto &cond : conditions) {
 					if (cond.IsComparison()) {
 						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
 						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
@@ -772,10 +769,8 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 				filter_info->SetLeftSet(left_set);
 				filter_info->SetRightSet(right_set);
 				filters_and_bindings.push_back(std::move(filter_info));
-				non_inner_edge->costing_predicate_indices.push_back(filter_index);
 				operator_predicates[f_op].push_back(filter_index);
-				operator_non_inner_edges[f_op] = *non_inner_edge;
-				non_inner_edges.push_back(std::move(non_inner_edge));
+				operator_conditions[f_op] = std::move(conditions);
 				break;
 			}
 			case JoinType::LEFT: {
@@ -800,11 +795,9 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 				auto full_right_set = semantic_sets.second;
 				D_ASSERT(full_left_set && full_left_set->count > 0);
 				D_ASSERT(full_right_set && full_right_set->count == 1);
-				auto non_inner_edge =
-				    make_uniq<NonInnerJoinEdge>(non_inner_edges.size(), join.join_type, std::move(conditions));
 				auto &full_set = set_manager.Union(*full_left_set, *full_right_set);
 
-				for (auto &cond : non_inner_edge->conditions) {
+				for (auto &cond : conditions) {
 					if (!cond.IsComparison()) {
 						continue;
 					}
@@ -817,7 +810,6 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 					filter_info->SetLeftSet(full_left_set);
 					filter_info->SetRightSet(full_right_set);
 					filters_and_bindings.push_back(std::move(filter_info));
-					non_inner_edge->costing_predicate_indices.push_back(filter_index);
 					operator_predicates[f_op].push_back(filter_index);
 				}
 
@@ -828,12 +820,14 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 				for (idx_t filter_idx = 0; filter_idx < filter_count_before_left_join; filter_idx++) {
 					PinFilterAfterLeftJoin(*filters_and_bindings[filter_idx], *full_right_set, full_set, set_manager);
 				}
-				D_ASSERT(!non_inner_edge->costing_predicate_indices.empty());
-				operator_non_inner_edges[f_op] = *non_inner_edge;
-				non_inner_edges.push_back(std::move(non_inner_edge));
+				D_ASSERT(!operator_predicates[f_op].empty());
+				operator_conditions[f_op] = std::move(conditions);
 				break;
 			}
 			default: {
+				for (auto &cond : join.conditions) {
+					operator_conditions[f_op].push_back(cond.Copy());
+				}
 				// can extract every inner join condition individually.
 				for (auto &cond : join.conditions) {
 					unique_ptr<Expression> expr;
@@ -928,62 +922,39 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 		}
 
 		auto predicate_entry = operator_predicates.find(current);
-		auto non_inner_entry = operator_non_inner_edges.find(current);
-		vector<reference<JoinOrderOperator>> current_operators;
-		auto add_descriptor = [&](JoinRelationSet &syntactic_set, vector<idx_t> predicate_indices,
-		                          optional_ptr<NonInnerJoinEdge> non_inner_join = nullptr) {
-			auto descriptor = make_uniq<JoinOrderOperator>(join_operators.size(), operator_type, left.relations,
-			                                               right.relations, syntactic_set);
-			descriptor->left_operators = left.operators;
-			descriptor->right_operators = right.operators;
-			descriptor->predicate_indices = std::move(predicate_indices);
-			descriptor->non_inner_join = non_inner_join;
-			for (auto predicate_index : descriptor->predicate_indices) {
-				filters_and_bindings[predicate_index]->join_operator_index = optional_idx(descriptor->index);
-			}
-			current_operators.push_back(*descriptor);
-			join_operators.push_back(std::move(descriptor));
-		};
-
-		if (operator_type == JoinOrderOperatorType::INNER) {
-			// INNER conjunctions are independently movable predicates in DuckDB's existing join-order model. Give each
-			// conjunct its own CD-C occurrence so one complex join condition does not unnecessarily enlarge every edge.
-			if (predicate_entry != operator_predicates.end()) {
-				for (auto predicate_index : predicate_entry->second) {
-					unordered_set<RelationIndex> syntactic_relations;
-					ExtractBindings(*filters_and_bindings[predicate_index]->filter, syntactic_relations);
-					auto &syntactic_set = set_manager.GetJoinRelation(syntactic_relations);
-					add_descriptor(syntactic_set, {predicate_index});
-				}
-			}
-		} else {
-			unordered_set<RelationIndex> syntactic_relations;
-			if (current.type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-				auto &join = current.Cast<LogicalComparisonJoin>();
-				for (auto &condition : join.conditions) {
-					if (condition.IsComparison()) {
-						ExtractBindings(condition.GetLHS(), syntactic_relations);
-						ExtractBindings(condition.GetRHS(), syntactic_relations);
-					} else {
-						ExtractBindings(condition.GetJoinExpression(), syntactic_relations);
-					}
-				}
-			}
-			auto &syntactic_set = set_manager.GetJoinRelation(syntactic_relations);
-			vector<idx_t> predicate_indices;
-			if (predicate_entry != operator_predicates.end()) {
-				predicate_indices = predicate_entry->second;
-			}
-			optional_ptr<NonInnerJoinEdge> non_inner_join;
-			if (non_inner_entry != operator_non_inner_edges.end()) {
-				non_inner_join = non_inner_entry->second;
-			}
-			add_descriptor(syntactic_set, std::move(predicate_indices), non_inner_join);
+		auto conditions_entry = operator_conditions.find(current);
+		vector<JoinCondition> conditions;
+		if (conditions_entry != operator_conditions.end()) {
+			conditions = std::move(conditions_entry->second);
 		}
+		unordered_set<RelationIndex> syntactic_relations;
+		for (auto &condition : conditions) {
+			if (condition.IsComparison()) {
+				ExtractBindings(condition.GetLHS(), syntactic_relations);
+				ExtractBindings(condition.GetRHS(), syntactic_relations);
+			} else {
+				ExtractBindings(condition.GetJoinExpression(), syntactic_relations);
+			}
+		}
+		auto &syntactic_set = set_manager.GetJoinRelation(syntactic_relations);
+		vector<idx_t> predicate_indices;
+		if (predicate_entry != operator_predicates.end()) {
+			predicate_indices = predicate_entry->second;
+		}
+		auto descriptor = make_uniq<JoinOrderOperator>(join_operators.size(), operator_type, left.relations,
+		                                               right.relations, syntactic_set, std::move(conditions));
+		descriptor->left_operators = left.operators;
+		descriptor->right_operators = right.operators;
+		descriptor->costing_predicate_indices = std::move(predicate_indices);
+		for (auto predicate_index : descriptor->costing_predicate_indices) {
+			filters_and_bindings[predicate_index]->source_operator_index = optional_idx(descriptor->index);
+		}
+		auto &current_operator = *descriptor;
+		join_operators.push_back(std::move(descriptor));
 
 		auto subtree_operators = std::move(left.operators);
 		subtree_operators.insert(subtree_operators.end(), right.operators.begin(), right.operators.end());
-		subtree_operators.insert(subtree_operators.end(), current_operators.begin(), current_operators.end());
+		subtree_operators.push_back(current_operator);
 		return {set_manager.Union(left.relations, right.relations), std::move(subtree_operators)};
 	};
 	extract_operator_tree(op);

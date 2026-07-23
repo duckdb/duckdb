@@ -13,10 +13,9 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
-
-struct NonInnerJoinEdge;
 
 enum class JoinOrderOperatorType : uint8_t { INNER, LEFT, SEMI, ANTI, CROSS_PRODUCT };
 
@@ -29,18 +28,18 @@ struct JoinOrderConflictRule {
 	reference<JoinRelationSet> requirement;
 };
 
-//! Conflict descriptor for a binary operator occurrence in the original join tree. Independently movable INNER
-//! conjuncts have separate occurrences; non-inner operators retain one occurrence owning their complete condition.
+//! Conflict descriptor for a binary operator occurrence in the original join tree.
 //!
 //! The representation follows CD-C from "On the Correct and Complete Enumeration of the Core Search Space":
 //! syntactic eligibility is expanded into a total eligibility set, while conditional dependencies remain conflict
 //! rules evaluated when the operator is considered for a candidate partition.
 struct JoinOrderOperator {
 	JoinOrderOperator(idx_t index_p, JoinOrderOperatorType type_p, JoinRelationSet &left_relations_p,
-	                  JoinRelationSet &right_relations_p, JoinRelationSet &syntactic_set_p)
+	                  JoinRelationSet &right_relations_p, JoinRelationSet &syntactic_set_p,
+	                  vector<JoinCondition> conditions_p)
 	    : index(index_p), type(type_p), left_relations(left_relations_p), right_relations(right_relations_p),
 	      syntactic_set(syntactic_set_p), total_set(syntactic_set_p), left_total_set(syntactic_set_p),
-	      right_total_set(syntactic_set_p) {
+	      right_total_set(syntactic_set_p), conditions(std::move(conditions_p)) {
 	}
 
 	idx_t index;
@@ -57,10 +56,10 @@ struct JoinOrderOperator {
 	//! Operators originally below the left and right inputs, used while constructing CD-C rules.
 	vector<reference<JoinOrderOperator>> left_operators;
 	vector<reference<JoinOrderOperator>> right_operators;
-	//! Costing/filter predicates carried by this binary operator.
-	vector<idx_t> predicate_indices;
-	//! Present only when this descriptor owns atomic LEFT/SEMI/ANTI semantics.
-	optional_ptr<NonInnerJoinEdge> non_inner_join;
+	//! Complete semantic conditions owned by this operator occurrence.
+	vector<JoinCondition> conditions;
+	//! Predicate copies used only for cardinality estimation and query-graph connectivity.
+	vector<idx_t> costing_predicate_indices;
 };
 
 class JoinOrderConflictDetector {
@@ -68,6 +67,8 @@ public:
 	static void Build(vector<unique_ptr<JoinOrderOperator>> &operators, JoinRelationSetManager &set_manager,
 	                  const unordered_map<TableIndex, RelationIndex> &relation_mapping);
 	static bool IsApplicable(const JoinOrderOperator &op, const JoinRelationSet &left, const JoinRelationSet &right);
+	static bool RequiresExactApplication(const JoinOrderOperator &op);
+	static bool IsCompletedBy(const JoinOrderOperator &op, const JoinRelationSet &relations);
 	static bool IsCommutative(JoinOrderOperatorType type);
 };
 

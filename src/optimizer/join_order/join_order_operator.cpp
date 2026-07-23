@@ -2,7 +2,6 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/optimizer/join_order/non_inner_join_edge.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -173,8 +172,7 @@ static bool IsAssociative(const JoinOrderOperator &left, const JoinOrderOperator
 	}
 	if (left_type == JoinOrderOperatorType::SEMI && right_type == JoinOrderOperatorType::SEMI) {
 		// Table 2, footnote 1: p23 must reject NULLs on the shared input e2.
-		D_ASSERT(right.non_inner_join);
-		return PredicateRejectsNulls(right.non_inner_join->conditions, shared_relations, relation_mapping);
+		return PredicateRejectsNulls(right.conditions, shared_relations, relation_mapping);
 	}
 	return false;
 }
@@ -303,6 +301,24 @@ bool JoinOrderConflictDetector::IsApplicable(const JoinOrderOperator &op, const 
 		           JoinRelationSet::Intersects(right, op.left_relations);
 	}
 	return (direct || inverted) && ObeysConflictRules(op, left, right);
+}
+
+bool JoinOrderConflictDetector::RequiresExactApplication(const JoinOrderOperator &op) {
+	if (op.type != JoinOrderOperatorType::INNER && op.type != JoinOrderOperatorType::CROSS_PRODUCT) {
+		return true;
+	}
+	if (op.type == JoinOrderOperatorType::CROSS_PRODUCT) {
+		return false;
+	}
+	return !op.conflict_rules.empty() || op.total_set.get().count != op.syntactic_set.get().count;
+}
+
+bool JoinOrderConflictDetector::IsCompletedBy(const JoinOrderOperator &op, const JoinRelationSet &relations) {
+	if (op.type == JoinOrderOperatorType::CROSS_PRODUCT) {
+		return JoinRelationSet::Intersects(relations, op.left_relations) &&
+		       JoinRelationSet::Intersects(relations, op.right_relations);
+	}
+	return Contains(relations, op.left_total_set) && Contains(relations, op.right_total_set);
 }
 
 } // namespace duckdb

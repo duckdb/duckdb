@@ -1,7 +1,6 @@
 #include "catch.hpp"
 
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
-#include "duckdb/optimizer/join_order/non_inner_join_edge.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -40,18 +39,13 @@ TEST_CASE("CD-C honors conditional SEMI join associativity", "[optimizer][join_o
 		auto &r0_r1 = set_manager.Union(r0, r1);
 		auto &r1_r2 = set_manager.Union(r1, r2);
 
-		vector<unique_ptr<NonInnerJoinEdge>> edges;
-		edges.push_back(make_uniq<NonInnerJoinEdge>(
-		    0, JoinType::SEMI, Comparison(TableIndex(0), TableIndex(1), ExpressionType::COMPARE_EQUAL)));
-		edges.push_back(
-		    make_uniq<NonInnerJoinEdge>(1, JoinType::SEMI, Comparison(TableIndex(1), TableIndex(2), comparison_type)));
-
 		vector<unique_ptr<JoinOrderOperator>> operators;
-		operators.push_back(make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::SEMI, r0, r1, r0_r1));
-		operators.back()->non_inner_join = *edges[0];
-		operators.push_back(make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::SEMI, r0_r1, r2, r1_r2));
+		operators.push_back(
+		    make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::SEMI, r0, r1, r0_r1,
+		                                 Comparison(TableIndex(0), TableIndex(1), ExpressionType::COMPARE_EQUAL)));
+		operators.push_back(make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::SEMI, r0_r1, r2, r1_r2,
+		                                                 Comparison(TableIndex(1), TableIndex(2), comparison_type)));
 		operators.back()->left_operators.push_back(*operators[0]);
-		operators.back()->non_inner_join = *edges[1];
 
 		unordered_map<TableIndex, RelationIndex> relation_mapping;
 		relation_mapping[TableIndex(0)] = RelationIndex(0);
@@ -78,8 +72,10 @@ TEST_CASE("CD-C expands TES for a conflicting non-inner descendant", "[optimizer
 	auto &r1_r2 = set_manager.Union(r1, r2);
 
 	vector<unique_ptr<JoinOrderOperator>> operators;
-	operators.push_back(make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::LEFT, r0, r1, r0_r1));
-	operators.push_back(make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::ANTI, r0_r1, r2, r1_r2));
+	operators.push_back(
+	    make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::LEFT, r0, r1, r0_r1, vector<JoinCondition>()));
+	operators.push_back(
+	    make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::ANTI, r0_r1, r2, r1_r2, vector<JoinCondition>()));
 	operators.back()->left_operators.push_back(*operators[0]);
 
 	const unordered_map<TableIndex, RelationIndex> relation_mapping;
@@ -98,18 +94,13 @@ TEST_CASE("CD-C tests conditional associativity against the shared input", "[opt
 	auto &r0_r1 = set_manager.Union(r0, r1);
 	auto &r1_r2 = set_manager.Union(r1, r2);
 
-	vector<unique_ptr<NonInnerJoinEdge>> edges;
-	edges.push_back(make_uniq<NonInnerJoinEdge>(
-	    0, JoinType::SEMI, Comparison(TableIndex(0), TableIndex(1), ExpressionType::COMPARE_EQUAL)));
-	edges.push_back(
-	    make_uniq<NonInnerJoinEdge>(1, JoinType::SEMI, NonRejectingDisjunction(TableIndex(1), TableIndex(2))));
-
 	vector<unique_ptr<JoinOrderOperator>> operators;
-	operators.push_back(make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::SEMI, r1, r2, r1_r2));
-	operators.back()->non_inner_join = *edges[1];
-	operators.push_back(make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::SEMI, r0, r1_r2, r0_r1));
+	operators.push_back(make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::SEMI, r1, r2, r1_r2,
+	                                                 NonRejectingDisjunction(TableIndex(1), TableIndex(2))));
+	operators.push_back(
+	    make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::SEMI, r0, r1_r2, r0_r1,
+	                                 Comparison(TableIndex(0), TableIndex(1), ExpressionType::COMPARE_EQUAL)));
 	operators.back()->right_operators.push_back(*operators[0]);
-	operators.back()->non_inner_join = *edges[0];
 
 	unordered_map<TableIndex, RelationIndex> relation_mapping;
 	relation_mapping[TableIndex(0)] = RelationIndex(0);
@@ -136,16 +127,15 @@ TEST_CASE("CD-C implements the supported associativity matrix", "[optimizer][joi
 			auto &r0_r1 = set_manager.Union(r0, r1);
 			auto &r1_r2 = set_manager.Union(r1, r2);
 
-			vector<unique_ptr<NonInnerJoinEdge>> edges;
 			vector<unique_ptr<JoinOrderOperator>> operators;
-			operators.push_back(make_uniq<JoinOrderOperator>(0, child_type, r0, r1, r0_r1));
-			operators.push_back(make_uniq<JoinOrderOperator>(1, parent_type, r0_r1, r2, r1_r2));
-			operators.back()->left_operators.push_back(*operators[0]);
+			operators.push_back(make_uniq<JoinOrderOperator>(0, child_type, r0, r1, r0_r1, vector<JoinCondition>()));
+			vector<JoinCondition> parent_conditions;
 			if (parent_type == JoinOrderOperatorType::SEMI) {
-				edges.push_back(make_uniq<NonInnerJoinEdge>(
-				    0, JoinType::SEMI, Comparison(TableIndex(1), TableIndex(2), ExpressionType::COMPARE_EQUAL)));
-				operators.back()->non_inner_join = *edges.back();
+				parent_conditions = Comparison(TableIndex(1), TableIndex(2), ExpressionType::COMPARE_EQUAL);
 			}
+			operators.push_back(
+			    make_uniq<JoinOrderOperator>(1, parent_type, r0_r1, r2, r1_r2, std::move(parent_conditions)));
+			operators.back()->left_operators.push_back(*operators[0]);
 
 			unordered_map<TableIndex, RelationIndex> relation_mapping;
 			relation_mapping[TableIndex(0)] = RelationIndex(0);
@@ -174,15 +164,15 @@ TEST_CASE("CD-C implements the supported right associative-commutative matrix", 
 			auto &r0_r2 = set_manager.Union(r0, r2);
 			auto &r1_r2 = set_manager.Union(r1, r2);
 
-			vector<unique_ptr<NonInnerJoinEdge>> edges;
 			vector<unique_ptr<JoinOrderOperator>> operators;
-			operators.push_back(make_uniq<JoinOrderOperator>(0, child_type, r1, r2, r1_r2));
+			vector<JoinCondition> child_conditions;
 			if (child_type == JoinOrderOperatorType::SEMI) {
-				edges.push_back(make_uniq<NonInnerJoinEdge>(
-				    0, JoinType::SEMI, Comparison(TableIndex(1), TableIndex(2), ExpressionType::COMPARE_EQUAL)));
-				operators.back()->non_inner_join = *edges.back();
+				child_conditions = Comparison(TableIndex(1), TableIndex(2), ExpressionType::COMPARE_EQUAL);
 			}
-			operators.push_back(make_uniq<JoinOrderOperator>(1, parent_type, r0, r1_r2, r0_r2));
+			operators.push_back(
+			    make_uniq<JoinOrderOperator>(0, child_type, r1, r2, r1_r2, std::move(child_conditions)));
+			operators.push_back(
+			    make_uniq<JoinOrderOperator>(1, parent_type, r0, r1_r2, r0_r2, vector<JoinCondition>()));
 			operators.back()->right_operators.push_back(*operators[0]);
 
 			unordered_map<TableIndex, RelationIndex> relation_mapping;
@@ -208,10 +198,12 @@ TEST_CASE("CD-C preserves explicit cross-product sides", "[optimizer][join_order
 	auto &empty = set_manager.GetJoinRelation(unordered_set<RelationIndex>());
 
 	vector<unique_ptr<JoinOrderOperator>> operators;
-	operators.push_back(make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::CROSS_PRODUCT, r0_r1, r2, empty));
+	operators.push_back(make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::CROSS_PRODUCT, r0_r1, r2, empty,
+	                                                 vector<JoinCondition>()));
 	const unordered_map<TableIndex, RelationIndex> relation_mapping;
 	JoinOrderConflictDetector::Build(operators, set_manager, relation_mapping);
 
+	REQUIRE_FALSE(JoinOrderConflictDetector::RequiresExactApplication(*operators[0]));
 	REQUIRE(JoinOrderConflictDetector::IsApplicable(*operators[0], r0, r2));
 	REQUIRE(JoinOrderConflictDetector::IsApplicable(*operators[0], r2, r1));
 	REQUIRE_FALSE(JoinOrderConflictDetector::IsApplicable(*operators[0], r0, r1));

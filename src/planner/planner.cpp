@@ -12,15 +12,10 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/joinside.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -86,69 +81,6 @@ static bool ContainsDependentJoin(const LogicalOperator &op) {
 		}
 	}
 	return false;
-}
-
-static void SpecializeAnyJoins(unique_ptr<LogicalOperator> &plan) {
-	for (auto &child : plan->children) {
-		SpecializeAnyJoins(child);
-	}
-	if (plan->type != LogicalOperatorType::LOGICAL_ANY_JOIN) {
-		return;
-	}
-
-	auto &any_join = plan->Cast<LogicalAnyJoin>();
-	D_ASSERT(any_join.condition);
-	if (any_join.condition->IsVolatile()) {
-		return;
-	}
-
-	unordered_set<TableIndex> left_bindings;
-	unordered_set<TableIndex> right_bindings;
-	LogicalJoin::GetTableReferences(*any_join.children[0], left_bindings);
-	LogicalJoin::GetTableReferences(*any_join.children[1], right_bindings);
-
-	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(std::move(any_join.condition));
-	LogicalFilter::SplitPredicates(expressions);
-	vector<JoinCondition> conditions;
-	idx_t comparison_count = 0;
-	for (auto &expression : expressions) {
-		if (BoundComparisonExpression::IsComparison(*expression)) {
-			auto &comparison = expression->Cast<BoundFunctionExpression>();
-			auto left_side = JoinSide::GetCurrentJoinSide(BoundComparisonExpression::Left(comparison), left_bindings,
-			                                              right_bindings);
-			auto right_side = JoinSide::GetCurrentJoinSide(BoundComparisonExpression::Right(comparison), left_bindings,
-			                                               right_bindings);
-			if ((left_side == JoinSide::LEFT && right_side == JoinSide::RIGHT) ||
-			    (left_side == JoinSide::RIGHT && right_side == JoinSide::LEFT)) {
-				auto comparison_type = expression->GetExpressionType();
-				auto left = std::move(BoundComparisonExpression::LeftMutable(comparison));
-				auto right = std::move(BoundComparisonExpression::RightMutable(comparison));
-				if (left_side == JoinSide::RIGHT) {
-					std::swap(left, right);
-					comparison_type = FlipComparisonExpression(comparison_type);
-				}
-				conditions.emplace_back(std::move(left), std::move(right), comparison_type);
-				comparison_count++;
-				continue;
-			}
-		}
-		conditions.emplace_back(std::move(expression));
-	}
-
-	if (comparison_count == 0) {
-		any_join.condition = JoinCondition::CreateExpression(std::move(conditions));
-		return;
-	}
-
-	auto join_type = any_join.join_type;
-	auto left = std::move(any_join.children[0]);
-	auto right = std::move(any_join.children[1]);
-	auto specialized = LogicalComparisonJoin::CreateJoin(join_type, JoinRefType::REGULAR, std::move(left),
-	                                                     std::move(right), std::move(conditions));
-	D_ASSERT(specialized->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
-	LogicalJoin::MoveJoinState(any_join, specialized->Cast<LogicalJoin>());
-	plan = std::move(specialized);
 }
 
 static bool VerifyCanonicalComparisonJoins(const LogicalOperator &plan) {
@@ -263,8 +195,6 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 		D_ASSERT(!ContainsDependentJoin(*this->plan));
-		D_ASSERT(VerifyPlannedExpressions(*this->plan));
-		SpecializeAnyJoins(this->plan);
 		D_ASSERT(VerifyPlannedExpressions(*this->plan));
 		D_ASSERT(VerifyCanonicalComparisonJoins(*this->plan));
 	}

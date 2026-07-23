@@ -255,6 +255,13 @@ void FlattenDependentJoins::CreateDelimJoinConditions(vector<JoinCondition> &con
 	}
 }
 
+static void FinalizeAnyJoins(unique_ptr<LogicalOperator> &plan) {
+	for (auto &child : plan->children) {
+		FinalizeAnyJoins(child);
+	}
+	LogicalAnyJoin::TrySpecialize(plan);
+}
+
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
@@ -263,6 +270,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
 		DelimJoinCTERewriter::Rewrite(binder, plan);
 	}
+	// ANY joins must retain their general shape until enclosing decorrelation and binding rewrites are complete.
+	FinalizeAnyJoins(plan);
 	return plan;
 }
 

@@ -99,6 +99,36 @@ LEFT JOIN (
 ----
 1
 
+# A constrained INNER occurrence must be applied before a generated cross product closes its two inputs.
+query I
+WITH r0(k) AS (VALUES (0)),
+     r2(k) AS (VALUES (0)),
+     r4(k) AS (VALUES (NULL::INTEGER), (NULL::INTEGER)),
+     r5(k) AS (VALUES (NULL::INTEGER))
+SELECT count(*)
+FROM r0
+INNER JOIN (
+	(r2 LEFT JOIN r5 ON r2.k = r5.k)
+	INNER JOIN r4 ON r5.k IS NOT DISTINCT FROM r4.k
+) ON r0.k = r2.k;
+----
+2
+
+# An explicit CROSS JOIN must not let an INNER predicate observe a NULL-extended row from the wrong input.
+query I
+WITH r0(k) AS (VALUES (0)),
+     r1(k) AS (VALUES (NULL::INTEGER)),
+     r2(k) AS (VALUES (0)),
+     r3(k) AS (VALUES (0))
+SELECT count(*)
+FROM r3
+INNER JOIN (
+	(r0 LEFT JOIN r1 ON r0.k = r1.k)
+	CROSS JOIN r2
+) ON coalesce(r3.k, -9) = coalesce(r1.k, -9);
+----
+0
+
 endloop
 
 statement ok

@@ -158,7 +158,7 @@ void QueryGraphManager::BuildInnerCompanionSets() {
 		}
 	}
 	for (auto &filter : filters_and_bindings) {
-		if (!filter->join_operator_index.IsValid() && filter->join_type == JoinType::INNER) {
+		if (!filter->source_operator_index.IsValid() && filter->join_type == JoinType::INNER) {
 			merge_set(filter->set);
 		}
 	}
@@ -179,14 +179,16 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
 	auto extraction = relation_manager.ExtractEdges(op, filter_operators, set_manager);
 	filters_and_bindings = std::move(extraction.filters);
-	non_inner_joins = std::move(extraction.non_inner_edges);
 	join_operators = std::move(extraction.join_operators);
 	JoinOrderConflictDetector::Build(join_operators, set_manager, relation_manager.relation_mapping);
-	for (auto &non_inner_join : non_inner_joins) {
-		for (auto predicate_index : non_inner_join->costing_predicate_indices) {
-			auto inserted = non_inner_costing_predicates.insert(predicate_index);
+	for (auto &join_operator : join_operators) {
+		if (!JoinOrderConflictDetector::RequiresExactApplication(*join_operator)) {
+			continue;
+		}
+		for (auto predicate_index : join_operator->costing_predicate_indices) {
+			auto inserted = operator_costing_predicates.insert(predicate_index);
 			if (!inserted.second) {
-				throw InternalException("Join-order predicate %llu belongs to multiple non-inner joins",
+				throw InternalException("Join-order predicate %llu belongs to multiple operator occurrences",
 				                        predicate_index);
 			}
 		}
@@ -360,7 +362,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 	for (auto predicate_ref : predicate_model.GetGraphPredicates()) {
 		auto &predicate = predicate_ref.get();
 		D_ASSERT(predicate.GetLeftSetOptional() && predicate.GetRightSetOptional());
-		auto operator_index = filters_and_bindings[predicate.GetIndex()]->join_operator_index;
+		auto operator_index = filters_and_bindings[predicate.GetIndex()]->source_operator_index;
 		if (operator_index.IsValid()) {
 			D_ASSERT(operator_index.GetIndex() < join_operators.size());
 			if (!IsUnconstrainedInner(*join_operators[operator_index.GetIndex()])) {
@@ -398,7 +400,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 		}
 
 		bool created_edge = false;
-		for (auto predicate_index : op.predicate_indices) {
+		for (auto predicate_index : op.costing_predicate_indices) {
 			if (filters_and_bindings[predicate_index]->from_residual_predicate) {
 				continue;
 			}
@@ -470,19 +472,19 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, total_relation);
-	for (auto &non_inner_join : non_inner_joins) {
-		if (!reconstructed_non_inner_joins.count(non_inner_join->index)) {
-			throw InternalException("Join-order optimizer did not reconstruct non-inner join %llu",
-			                        non_inner_join->index);
+	for (auto &join_operator : join_operators) {
+		if (JoinOrderConflictDetector::RequiresExactApplication(*join_operator) &&
+		    !reconstructed_operators.count(join_operator->index)) {
+			throw InternalException("Join-order optimizer did not reconstruct operator occurrence %llu",
+			                        join_operator->index);
 		}
 	}
 
 	// perform the final pushdown of remaining filters
 	for (auto &filter : filters_and_bindings) {
-		if (non_inner_costing_predicates.count(filter->filter_index)) {
+		if (operator_costing_predicates.count(filter->filter_index)) {
 			if (filter->filter) {
-				throw InternalException("Cost predicate %llu escaped non-inner join reconstruction",
-				                        filter->filter_index);
+				throw InternalException("Cost predicate %llu escaped operator reconstruction", filter->filter_index);
 			}
 			continue;
 		}
@@ -549,13 +551,49 @@ static bool ShouldInvertJoinCondition(JoinRelationSetManager &set_manager, Gener
 	return fallback_invert;
 }
 
+static JoinType GetJoinType(JoinOrderOperatorType type) {
+	switch (type) {
+	case JoinOrderOperatorType::INNER:
+		return JoinType::INNER;
+	case JoinOrderOperatorType::LEFT:
+		return JoinType::LEFT;
+	case JoinOrderOperatorType::SEMI:
+		return JoinType::SEMI;
+	case JoinOrderOperatorType::ANTI:
+		return JoinType::ANTI;
+	default:
+		throw InternalException("Operator occurrence type %d has no comparison join type", static_cast<int>(type));
+	}
+}
+
+static void OrientInnerConditions(RelationManager &relation_manager, JoinRelationSetManager &set_manager,
+                                  vector<JoinCondition> &conditions, const JoinRelationSet &left,
+                                  const JoinRelationSet &right) {
+	for (auto &condition : conditions) {
+		if (!condition.IsComparison()) {
+			continue;
+		}
+		unordered_set<RelationIndex> left_bindings;
+		unordered_set<RelationIndex> right_bindings;
+		relation_manager.ExtractBindings(condition.GetLHS(), left_bindings);
+		relation_manager.ExtractBindings(condition.GetRHS(), right_bindings);
+		if (left_bindings.empty() || right_bindings.empty()) {
+			continue;
+		}
+		auto &condition_left = set_manager.GetJoinRelation(left_bindings);
+		auto &condition_right = set_manager.GetJoinRelation(right_bindings);
+		if (JoinRelationSet::IsSubset(right, condition_left) && JoinRelationSet::IsSubset(left, condition_right)) {
+			condition.Swap();
+		}
+	}
+}
+
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
                                                       JoinRelationSet &set) {
 	optional_ptr<JoinRelationSet> left_node;
 	optional_ptr<JoinRelationSet> right_node;
 	optional_ptr<JoinRelationSet> result_relation;
 	unique_ptr<LogicalOperator> result_operator;
-	unordered_set<idx_t> subtree_edges;
 
 	auto dp_entry = plans->find(set);
 	if (dp_entry == plans->end()) {
@@ -566,40 +604,56 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		// generate the left and right children
 		auto left = GenerateJoins(extracted_relations, node->left_set);
 		auto right = GenerateJoins(extracted_relations, node->right_set);
-		subtree_edges = left.non_inner_edges;
-		subtree_edges.insert(right.non_inner_edges.begin(), right.non_inner_edges.end());
-		auto descriptor = dp_entry->second->info->join_operator;
-		auto non_inner_join = descriptor ? descriptor->non_inner_join : nullptr;
-		if (non_inner_join) {
-			D_ASSERT(descriptor);
-			auto direct = JoinRelationSet::IsSubset(*left.set, descriptor->left_total_set) &&
-			              JoinRelationSet::IsSubset(*right.set, descriptor->right_total_set);
-			if (!direct) {
-				throw InternalException("Could not orient non-inner join %llu in reconstructed join tree",
-				                        non_inner_join->index);
+		auto descriptor = node->join_operator;
+		if (descriptor) {
+			D_ASSERT(descriptor->type == JoinOrderOperatorType::CROSS_PRODUCT ||
+			         JoinOrderConflictDetector::RequiresExactApplication(*descriptor));
+			bool direct;
+			bool inverted;
+			if (descriptor->type == JoinOrderOperatorType::CROSS_PRODUCT) {
+				direct = JoinRelationSet::Intersects(*left.set, descriptor->left_relations) &&
+				         JoinRelationSet::Intersects(*right.set, descriptor->right_relations);
+				inverted = JoinRelationSet::Intersects(*left.set, descriptor->right_relations) &&
+				           JoinRelationSet::Intersects(*right.set, descriptor->left_relations);
+			} else {
+				direct = JoinRelationSet::IsSubset(*left.set, descriptor->left_total_set) &&
+				         JoinRelationSet::IsSubset(*right.set, descriptor->right_total_set);
+				inverted = JoinOrderConflictDetector::IsCommutative(descriptor->type) &&
+				           JoinRelationSet::IsSubset(*left.set, descriptor->right_total_set) &&
+				           JoinRelationSet::IsSubset(*right.set, descriptor->left_total_set);
 			}
-			if (!reconstructed_non_inner_joins.insert(non_inner_join->index).second ||
-			    !subtree_edges.insert(non_inner_join->index).second) {
-				throw InternalException("Non-inner join %llu was reconstructed more than once", non_inner_join->index);
+			if (!direct && !inverted) {
+				throw InternalException("Could not orient operator occurrence %llu in reconstructed join tree",
+				                        descriptor->index);
+			}
+			if (!reconstructed_operators.insert(descriptor->index).second) {
+				throw InternalException("Operator occurrence %llu was reconstructed more than once", descriptor->index);
 			}
 
-			auto join = make_uniq<LogicalComparisonJoin>(non_inner_join->join_type);
-			join->children.push_back(std::move(left.op));
-			join->children.push_back(std::move(right.op));
-			join->conditions = std::move(non_inner_join->conditions);
-			if (join->conditions.empty()) {
-				throw InternalException("Non-inner join %llu has no conditions", non_inner_join->index);
-			}
-			for (auto predicate_index : non_inner_join->costing_predicate_indices) {
+			for (auto predicate_index : descriptor->costing_predicate_indices) {
 				auto &filter = filters_and_bindings.at(predicate_index);
 				if (!filter->filter) {
-					throw InternalException("Cost predicate %llu was consumed before non-inner join %llu",
-					                        predicate_index, non_inner_join->index);
+					throw InternalException("Cost predicate %llu was consumed before operator occurrence %llu",
+					                        predicate_index, descriptor->index);
 				}
 				filter->filter.reset();
 			}
-			result_operator = std::move(join);
-		} else if (dp_entry->second->info->predicates.empty()) {
+			if (descriptor->type == JoinOrderOperatorType::CROSS_PRODUCT) {
+				result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
+			} else {
+				auto join = make_uniq<LogicalComparisonJoin>(GetJoinType(descriptor->type));
+				join->children.push_back(std::move(left.op));
+				join->children.push_back(std::move(right.op));
+				join->conditions = std::move(descriptor->conditions);
+				if (descriptor->type == JoinOrderOperatorType::INNER) {
+					OrientInnerConditions(relation_manager, set_manager, join->conditions, *left.set, *right.set);
+				}
+				if (join->conditions.empty()) {
+					throw InternalException("Operator occurrence %llu has no conditions", descriptor->index);
+				}
+				result_operator = std::move(join);
+			}
+		} else if (node->predicates.empty()) {
 			// no filters, create a cross product
 			auto cardinality = left.op->estimated_cardinality * right.op->estimated_cardinality;
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
@@ -613,7 +667,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			join->children.push_back(std::move(right.op));
 
 			// set the join conditions from the join node
-			for (auto predicate_ref : node->info->predicates) {
+			for (auto predicate_ref : node->predicates) {
 				auto f = &predicate_ref.get().GetFilter();
 				// extract the filter from the operator it originally belonged to
 				auto &filter_and_binding = filters_and_bindings.at(f->filter_index);
@@ -696,7 +750,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	for (auto &filter_info : filters_and_bindings) {
 		// check if the filter has already been extracted
 		auto &info = *filter_info;
-		if (non_inner_costing_predicates.count(info.filter_index)) {
+		if (operator_costing_predicates.count(info.filter_index)) {
 			continue;
 		}
 		if (filters_and_bindings[info.filter_index]->filter) {
@@ -792,9 +846,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		}
 	}
 	auto result = GenerateJoinRelation(result_relation, std::move(result_operator));
-	if (!node->is_leaf) {
-		result.non_inner_edges = std::move(subtree_edges);
-	}
 	return result;
 }
 
@@ -820,32 +871,32 @@ bool QueryGraphManager::IsConnectionApplicable(const NeighborInfo &connection, c
 	return JoinOrderConflictDetector::IsApplicable(*connection.join_operator, left, right);
 }
 
-bool QueryGraphManager::FindRequiredSemanticOperator(const JoinRelationSet &left, const JoinRelationSet &right,
-                                                     optional_ptr<JoinOrderOperator> &result) const {
-	result = nullptr;
+bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> selected_operator,
+                                             bool generated_cross_product, JoinRelationSet &left,
+                                             JoinRelationSet &right) {
+	if (generated_cross_product && !CanCreateCrossProduct(left, right)) {
+		return false;
+	}
+	auto &combined = set_manager.Union(left, right);
+	if (selected_operator && (!JoinOrderConflictDetector::IsApplicable(*selected_operator, left, right) ||
+	                          JoinOrderConflictDetector::IsCompletedBy(*selected_operator, left) ||
+	                          JoinOrderConflictDetector::IsCompletedBy(*selected_operator, right) ||
+	                          !JoinOrderConflictDetector::IsCompletedBy(*selected_operator, combined))) {
+		return false;
+	}
 	for (auto &operator_ptr : join_operators) {
 		auto &op = *operator_ptr;
-		if (!op.non_inner_join) {
+		if (JoinOrderConflictDetector::IsCompletedBy(op, left) || JoinOrderConflictDetector::IsCompletedBy(op, right) ||
+		    !JoinOrderConflictDetector::IsCompletedBy(op, combined)) {
 			continue;
 		}
-		auto completed_in_left =
-		    JoinRelationSet::IsSubset(left, op.left_total_set) && JoinRelationSet::IsSubset(left, op.right_total_set);
-		auto completed_in_right =
-		    JoinRelationSet::IsSubset(right, op.left_total_set) && JoinRelationSet::IsSubset(right, op.right_total_set);
-		if (completed_in_left || completed_in_right) {
-			continue;
-		}
-		auto touches_left = JoinRelationSet::Intersects(left, op.left_total_set) ||
-		                    JoinRelationSet::Intersects(right, op.left_total_set);
-		auto touches_right = JoinRelationSet::Intersects(left, op.right_total_set) ||
-		                     JoinRelationSet::Intersects(right, op.right_total_set);
-		if (!touches_left || !touches_right) {
-			continue;
-		}
-		if (result || !JoinOrderConflictDetector::IsApplicable(op, left, right)) {
+		if (op.type == JoinOrderOperatorType::CROSS_PRODUCT) {
+			if (!JoinOrderConflictDetector::IsApplicable(op, left, right)) {
+				return false;
+			}
+		} else if (JoinOrderConflictDetector::RequiresExactApplication(op) && selected_operator != &op) {
 			return false;
 		}
-		result = op;
 	}
 	return true;
 }

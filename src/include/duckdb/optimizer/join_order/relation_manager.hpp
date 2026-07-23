@@ -14,7 +14,6 @@
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
-#include "duckdb/optimizer/join_order/non_inner_join_edge.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -28,7 +27,6 @@ class FilterInfo;
 
 struct JoinOrderExtraction {
 	vector<unique_ptr<FilterInfo>> filters;
-	vector<unique_ptr<NonInnerJoinEdge>> non_inner_edges;
 	vector<unique_ptr<JoinOrderOperator>> join_operators;
 };
 

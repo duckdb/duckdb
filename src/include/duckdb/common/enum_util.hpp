@@ -278,6 +278,8 @@ enum class InterruptMode : uint8_t;
 
 enum class JoinFilterPushdownMode : uint8_t;
 
+enum class JoinOrderOperatorType : uint8_t;
+
 enum class JoinRefType : uint8_t;
 
 enum class JoinType : uint8_t;
@@ -955,6 +957,9 @@ const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value);
 
 template<>
 const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode value);
+
+template<>
+const char* EnumUtil::ToChars<JoinOrderOperatorType>(JoinOrderOperatorType value);
 
 template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
@@ -1787,6 +1792,9 @@ InterruptMode EnumUtil::FromString<InterruptMode>(const char *value);
 
 template<>
 JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value);
+
+template<>
+JoinOrderOperatorType EnumUtil::FromString<JoinOrderOperatorType>(const char *value);
 
 template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);

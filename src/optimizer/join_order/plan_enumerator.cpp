@@ -127,22 +127,35 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       DPJoinNode &left, DPJoinNode &right) {
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	vector<reference<NeighborInfo>> applicable_connections;
-	optional_ptr<JoinOrderOperator> required_semantic_operator;
-	if (!query_graph_manager.FindRequiredSemanticOperator(left.set, right.set, required_semantic_operator)) {
-		return nullptr;
-	}
-	optional_ptr<NeighborInfo> semantic_connection;
-	optional_ptr<NeighborInfo> structural_connection;
-	idx_t structural_priority = 0;
+	struct JoinCandidate {
+		optional_ptr<JoinOrderOperator> join_operator;
+		vector<reference<JoinPredicate>> predicates;
+		bool generated_cross_product = false;
+		idx_t priority = 0;
+	};
+	vector<JoinCandidate> candidates;
 	for (auto &connection_ref : possible_connections) {
 		auto &connection = connection_ref.get();
 		if (!query_graph_manager.IsConnectionApplicable(connection, left.set, right.set)) {
 			continue;
 		}
 		applicable_connections.push_back(connection);
-		if (required_semantic_operator && connection.join_operator == required_semantic_operator) {
-			semantic_connection = connection;
+		optional_ptr<JoinCandidate> candidate;
+		for (auto &entry : candidates) {
+			if (entry.join_operator == connection.join_operator &&
+			    entry.generated_cross_product == connection.generated_cross_product) {
+				candidate = entry;
+				break;
+			}
 		}
+		if (!candidate) {
+			candidates.emplace_back();
+			candidate = candidates.back();
+			candidate->join_operator = connection.join_operator;
+			candidate->generated_cross_product = connection.generated_cross_product;
+		}
+		candidate->predicates.insert(candidate->predicates.end(), connection.predicates.begin(),
+		                             connection.predicates.end());
 		idx_t priority = 0;
 		if (!connection.predicates.empty()) {
 			priority = 3;
@@ -151,42 +164,27 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 		} else if (connection.generated_cross_product) {
 			priority = 1;
 		}
-		if (priority > structural_priority) {
-			structural_connection = connection;
-			structural_priority = priority;
-		}
+		candidate->priority = MaxValue(candidate->priority, priority);
 	}
-	if (applicable_connections.empty() || (required_semantic_operator && !semantic_connection)) {
+	if (applicable_connections.empty()) {
 		return nullptr;
 	}
-	optional_ptr<NeighborInfo> best_connection = semantic_connection ? semantic_connection : structural_connection;
-	if (!best_connection ||
-	    (best_connection->generated_cross_product && !query_graph_manager.CanCreateCrossProduct(left.set, right.set))) {
-		return nullptr;
-	}
-	if (semantic_connection) {
-		auto cost = cost_model.ComputeCost(left, right, set, applicable_connections);
-		auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
-		result->cardinality = cost_model.GetCardinalityEstimator().EstimateCardinalityWithSet<idx_t>(set);
-		return result;
-	}
-	auto join_type = JoinType::INVALID;
-	for (auto predicate_ref : best_connection->predicates) {
-		auto &predicate = predicate_ref.get();
-		if (!predicate.GetLeftSetOptional() || !predicate.GetRightSetOptional()) {
+	optional_ptr<JoinCandidate> best_candidate;
+	for (auto &candidate : candidates) {
+		if (!query_graph_manager.IsJoinOrderCandidate(candidate.join_operator, candidate.generated_cross_product,
+		                                              left.set, right.set)) {
 			continue;
 		}
-
-		join_type = predicate.GetJoinType();
-		// prefer joining on semi and anti joins as they have a higher chance of being more
-		// selective
-		if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
-			break;
+		if (!best_candidate || candidate.priority > best_candidate->priority) {
+			best_candidate = candidate;
 		}
 	}
-	// need the filter info from the Neighborhood info.
+	if (!best_candidate) {
+		return nullptr;
+	}
 	auto cost = cost_model.ComputeCost(left, right, set, applicable_connections);
-	auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
+	auto result = make_uniq<DPJoinNode>(set, best_candidate->join_operator, std::move(best_candidate->predicates),
+	                                    best_candidate->generated_cross_product, left.set, right.set, cost);
 	result->cardinality = cost_model.GetCardinalityEstimator().EstimateCardinalityWithSet<idx_t>(set);
 	return result;
 }
@@ -509,9 +507,8 @@ bool PlanEnumerator::PlanUsesCrossProduct(const DPJoinNode &node) const {
 	if (node.is_leaf) {
 		return false;
 	}
-	D_ASSERT(node.info);
-	if (node.info->generated_cross_product ||
-	    (node.info->join_operator && node.info->join_operator->type == JoinOrderOperatorType::CROSS_PRODUCT)) {
+	if (node.generated_cross_product ||
+	    (node.join_operator && node.join_operator->type == JoinOrderOperatorType::CROSS_PRODUCT)) {
 		return true;
 	}
 	auto left = plans.find(node.left_set);

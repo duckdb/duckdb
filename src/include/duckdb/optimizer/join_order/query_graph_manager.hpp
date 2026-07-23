@@ -17,7 +17,6 @@
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
-#include "duckdb/optimizer/join_order/non_inner_join_edge.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
 
 namespace duckdb {
@@ -31,7 +30,6 @@ public:
 public:
 	optional_ptr<JoinRelationSet> set;
 	unique_ptr<LogicalOperator> op;
-	unordered_set<idx_t> non_inner_edges;
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
@@ -50,8 +48,8 @@ public:
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
 	bool IsConnectionApplicable(const NeighborInfo &connection, const JoinRelationSet &left,
 	                            const JoinRelationSet &right) const;
-	bool FindRequiredSemanticOperator(const JoinRelationSet &left, const JoinRelationSet &right,
-	                                  optional_ptr<JoinOrderOperator> &result) const;
+	bool IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> selected_operator, bool generated_cross_product,
+	                          JoinRelationSet &left, JoinRelationSet &right);
 	bool CanCreateCrossProduct(const JoinRelationSet &left, const JoinRelationSet &right) const;
 
 	//! Get a reference to the QueryGraphEdges structure that stores edges between nodes and hypernodes.
@@ -87,11 +85,9 @@ private:
 	//! Filter information including the column_bindings that join filters
 	//! used by the cardinality estimator to estimate distinct counts
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
-	//! Non-inner joins whose semantics must be enumerated and reconstructed atomically.
-	vector<unique_ptr<NonInnerJoinEdge>> non_inner_joins;
 	vector<unique_ptr<JoinOrderOperator>> join_operators;
-	unordered_set<idx_t> non_inner_costing_predicates;
-	unordered_set<idx_t> reconstructed_non_inner_joins;
+	unordered_set<idx_t> operator_costing_predicates;
+	unordered_set<idx_t> reconstructed_operators;
 	vector<idx_t> inner_companion_roots;
 
 	QueryGraphEdges query_graph;
