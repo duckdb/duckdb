@@ -2945,19 +2945,20 @@ const StringUtil::EnumStringLiteral *GetJoinRefTypeValues() {
 		{ static_cast<uint32_t>(JoinRefType::CROSS), "CROSS" },
 		{ static_cast<uint32_t>(JoinRefType::POSITIONAL), "POSITIONAL" },
 		{ static_cast<uint32_t>(JoinRefType::ASOF), "ASOF" },
-		{ static_cast<uint32_t>(JoinRefType::DEPENDENT), "DEPENDENT" }
+		{ static_cast<uint32_t>(JoinRefType::DEPENDENT), "DEPENDENT" },
+		{ static_cast<uint32_t>(JoinRefType::NEAREST), "NEAREST" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value) {
-	return StringUtil::EnumToString(GetJoinRefTypeValues(), 6, "JoinRefType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetJoinRefTypeValues(), 7, "JoinRefType", static_cast<uint32_t>(value));
 }
 
 template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value) {
-	return static_cast<JoinRefType>(StringUtil::StringToEnum(GetJoinRefTypeValues(), 6, "JoinRefType", value));
+	return static_cast<JoinRefType>(StringUtil::StringToEnum(GetJoinRefTypeValues(), 7, "JoinRefType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetJoinTypeValues() {

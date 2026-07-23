@@ -1,0 +1,88 @@
+# name: test/sql/join/nearest/nearest_parser.test
+# description: NEAREST BY - keywords stay unreserved and clause round-trips
+# group: [nearest]
+
+# NEAREST/APPROX/EXACT/DISTANCE/SIMILARITY stay usable as bare table and column identifiers
+statement ok
+CREATE TABLE nearest(approx INT, exact INT, distance INT, similarity INT);
+
+statement ok
+INSERT INTO nearest VALUES (1, 2, 3, 4);
+
+query IIII
+SELECT approx, exact, distance, similarity FROM nearest ORDER BY nearest.approx;
+----
+1	2	3	4
+
+# ... and as column aliases
+query III
+SELECT 5 AS nearest, 6 AS approx, 7 AS exact;
+----
+5	6	7
+
+statement ok
+CREATE TABLE users(user_id INT, embedding FLOAT[3]);
+
+statement ok
+INSERT INTO users VALUES (1,[1,0,0]),(2,[0,1,0]);
+
+statement ok
+CREATE TABLE products(product_id VARCHAR, embedding FLOAT[3]);
+
+statement ok
+INSERT INTO products VALUES ('P1',[0.9,0.1,0.1]),('P2',[0.1,0.9,0.1]),('P3',[0.5,0.5,0.0]);
+
+# NEAREST BY is exactly equivalent to a hand-written lateral top-k join (symmetric difference is empty)
+query II
+(
+  SELECT q.user_id, t.product_id FROM users q
+    INNER JOIN products t NEAREST 2 BY DISTANCE array_distance(q.embedding, t.embedding)
+  EXCEPT
+  SELECT q.user_id, t.product_id FROM users q
+    INNER JOIN (SELECT * FROM products ORDER BY array_distance(q.embedding, products.embedding) LIMIT 2) t ON TRUE
+)
+UNION ALL
+(
+  SELECT q.user_id, t.product_id FROM users q
+    INNER JOIN (SELECT * FROM products ORDER BY array_distance(q.embedding, products.embedding) LIMIT 2) t ON TRUE
+  EXCEPT
+  SELECT q.user_id, t.product_id FROM users q
+    INNER JOIN products t NEAREST 2 BY DISTANCE array_distance(q.embedding, t.embedding)
+);
+----
+
+# The clause round-trips through ToString (via a view definition) and re-parses
+statement ok
+CREATE VIEW nearest_view AS
+  SELECT q.user_id, t.product_id FROM users q
+    INNER JOIN products t APPROX NEAREST 2 BY SIMILARITY array_cosine_similarity(q.embedding, t.embedding);
+
+query I
+SELECT sql LIKE '%APPROX NEAREST 2 BY SIMILARITY%' FROM duckdb_views() WHERE view_name = 'nearest_view';
+----
+true
+
+# The stored (re-parsed) view is executable
+query I
+SELECT count(*) FROM nearest_view;
+----
+4
+
+# Unaliased bare targets: base table, subquery, table function, VALUES, and parenthesized joins
+query I
+SELECT count(*) FROM users q
+  INNER JOIN products NEAREST 1 BY DISTANCE array_distance(q.embedding, products.embedding);
+----
+2
+
+query I
+SELECT count(*) FROM users q
+  INNER JOIN (SELECT embedding AS temb FROM products) NEAREST 1 BY DISTANCE array_distance(q.embedding, temb);
+----
+2
+
+query I
+SELECT count(*) FROM (SELECT 1 AS a) q
+  INNER JOIN (VALUES (10),(20),(30)) NEAREST 2 BY DISTANCE abs(col0 - q.a);
+----
+2

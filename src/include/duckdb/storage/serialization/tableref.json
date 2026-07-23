@@ -123,6 +123,33 @@
         "type": "bool",
         "default": "true",
         "version": "v1.4.0"
+      },
+      {
+        "id": 209,
+        "name": "ranking_expression",
+        "type": "ParsedExpression*",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 210,
+        "name": "nearest_count",
+        "type": "idx_t",
+        "default": "1",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 211,
+        "name": "nearest_order_type",
+        "type": "OrderType",
+        "default": "OrderType::ASCENDING",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 212,
+        "name": "nearest_approx",
+        "type": "bool",
+        "default": "true",
+        "version": "v2.0.0"
       }
     ]
   },

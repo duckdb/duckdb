@@ -11,6 +11,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/common/vector.hpp"
@@ -45,6 +46,14 @@ public:
 	bool delim_flipped = false;
 	//! Whether or not this is an implicit cross join
 	bool is_implicit = false;
+	//! The ranking expression (NEAREST only)
+	unique_ptr<ParsedExpression> ranking_expression;
+	//! How many nearest rows to return per left row (NEAREST only)
+	idx_t nearest_count = 1;
+	//! ASCENDING for BY DISTANCE, DESCENDING for BY SIMILARITY (NEAREST only)
+	OrderType nearest_order_type = OrderType::ASCENDING;
+	//! Whether APPROX (instead of EXACT) was specified (NEAREST only) - currently informational
+	bool nearest_approx = true;
 
 public:
 	string ToString() const override;

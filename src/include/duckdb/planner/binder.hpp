@@ -529,6 +529,8 @@ private:
 	BoundStatement Bind(BaseTableRef &ref);
 	BoundStatement Bind(BoundRefWrapper &ref);
 	BoundStatement Bind(JoinRef &ref);
+	//! Rewrites a NEAREST BY join into a lateral join over a top-k subquery and binds the result
+	BoundStatement BindNearestJoin(JoinRef &ref);
 	BoundStatement Bind(SubqueryRef &ref);
 	BoundStatement Bind(TableFunctionRef &ref);
 	BoundStatement Bind(EmptyTableRef &ref);
