@@ -193,8 +193,20 @@ struct WALDropIndex {
 };
 
 struct WALUseTable {
-	Identifier schema;
-	Identifier table;
+	// the table as a QualifiedName (the containing schema path + the table name)
+	QualifiedName qualified_name;
+
+	WALUseTable() = default;
+	explicit WALUseTable(QualifiedName qualified_name_p) : qualified_name(std::move(qualified_name_p)) {
+	}
+
+	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
+	Identifier LegacySchema() const {
+		return qualified_name.Schema();
+	}
+	Identifier LegacyTable() const {
+		return qualified_name.Name();
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static WALUseTable Deserialize(Deserializer &deserializer);

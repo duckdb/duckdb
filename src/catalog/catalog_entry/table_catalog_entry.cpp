@@ -97,12 +97,7 @@ vector<LogicalType> TableCatalogEntry::GetTypes() const {
 unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTableInfo>();
 	// carry the full (possibly nested) schema path: [catalog, schema_path..., name]
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	for (auto &component : schema.GetSchemaPath()) {
-		path.push_back(component);
-	}
-	result->SetQualifiedName(QualifiedName(std::move(path), name));
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->columns = columns.Copy();
 	result->constraints.reserve(constraints.size());
 	result->dependencies = dependencies;

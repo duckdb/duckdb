@@ -156,11 +156,11 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	auto at_clause = BindAtClause(ref.at_clause);
 	auto entry_at_clause = at_clause ? at_clause.get() : entry_retriever.GetAtClause();
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(ref.Table()), entry_at_clause, error_context);
-	BindSchemaOrCatalog(entry_retriever, ref.GetQualifiedNameMutable());
-	auto table_or_view = entry_retriever.GetEntry(
-	    EntryLookupInfo(table_lookup, QualifiedName(ref.GetQualifiedName().Catalog(), ref.GetQualifiedName().Schema(),
-	                                                table_lookup.GetEntryIdentifier())),
-	    OnEntryNotFound::RETURN_NULL);
+	// resolve the catalog/schema qualification for the lookup only - the reference itself keeps the name as written,
+	// which is what name extraction and replacement scans report
+	auto bound_name = BindTableName(entry_retriever, ref.GetQualifiedName());
+	auto table_or_view =
+	    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, bound_name), OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES || GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -228,10 +228,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
 		// in catalogs that do not have transactional DDL
 		table_or_view =
-		    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, QualifiedName(ref.GetQualifiedName().Catalog(),
-		                                                                         ref.GetQualifiedName().Schema(),
-		                                                                         table_lookup.GetEntryIdentifier())),
-		                             OnEntryNotFound::THROW_EXCEPTION);
+		    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
