@@ -31,13 +31,18 @@ static unique_ptr<ColumnRefExpression> FeatureColumnRef(const string &column_nam
 //! (SELECT DISTINCT <key columns> FROM <entity_table>) aliased "entity". DISTINCT guarantees one row per
 //! entity even when the entity table has no primary key (or duplicate key rows), so the snapshot's LEFT JOIN
 //! does not fan out.
-static unique_ptr<SubqueryRef> FeatureDistinctEntitySource(const string &entity_table,
-                                                           const vector<string> &entity_key_columns) {
+//! The entity spine: one row per distinct entity key. The DISTINCT deduplicates the entity table by its key
+//! columns; when those columns are already unique (a PRIMARY KEY covers them) it removes nothing, so we skip it
+//! -- that DISTINCT is otherwise a full hash-aggregate over the whole entity table on every REFRESH.
+static unique_ptr<SubqueryRef> FeatureEntitySource(const string &entity_table, const vector<string> &entity_key_columns,
+                                                   bool entity_key_is_unique) {
 	auto select = make_uniq<SelectNode>();
 	for (auto &key_column : entity_key_columns) {
 		select->select_list.push_back(FeatureColumnRef(key_column));
 	}
-	select->modifiers.push_back(make_uniq<DistinctModifier>());
+	if (!entity_key_is_unique) {
+		select->modifiers.push_back(make_uniq<DistinctModifier>());
+	}
 	select->from_table = FeatureBaseTable(entity_table, string());
 	auto statement = make_uniq<SelectStatement>();
 	statement->node = std::move(select);
@@ -194,7 +199,8 @@ unique_ptr<SelectStatement> BuildFeatureSnapshotQuery(const SelectNode &select_n
 
 		auto join = make_uniq<JoinRef>(JoinRefType::REGULAR);
 		join->type = JoinType::LEFT;
-		join->left = FeatureDistinctEntitySource(parameters.entity_table, parameters.entity_key_columns);
+		join->left = FeatureEntitySource(parameters.entity_table, parameters.entity_key_columns,
+		                                 parameters.entity_key_is_unique);
 		join->right = std::move(agg_ref);
 		join->condition = std::move(join_condition);
 		result_select->from_table = std::move(join);

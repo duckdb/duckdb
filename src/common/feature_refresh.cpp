@@ -10,7 +10,8 @@
 
 namespace duckdb {
 
-static FeatureSnapshotParameters SnapshotParameters(const FeatureCatalogEntry &feat, timestamp_t feature_ts) {
+static FeatureSnapshotParameters SnapshotParameters(const FeatureCatalogEntry &feat, timestamp_t feature_ts,
+                                                    bool entity_key_is_unique) {
 	FeatureSnapshotParameters parameters;
 	parameters.entity_table = feat.entity_table;
 	parameters.entity_columns = feat.entity_columns;
@@ -19,15 +20,16 @@ static FeatureSnapshotParameters SnapshotParameters(const FeatureCatalogEntry &f
 	parameters.timestamp_table = feat.timestamp_table;
 	parameters.window_interval = feat.window_interval;
 	parameters.feature_ts = feature_ts;
+	parameters.entity_key_is_unique = entity_key_is_unique;
 	return parameters;
 }
 
 //! SELECT snap.*, <new_version> AS __feature_version, TIMESTAMP '<feature_ts>' AS __feature_timestamp
 //! FROM (<snapshot query>) snap
 static unique_ptr<SelectNode> BuildTaggedSnapshotNode(const FeatureCatalogEntry &feat, timestamp_t feature_ts,
-                                                      int64_t new_version) {
-	auto snapshot =
-	    BuildFeatureSnapshotQuery(feat.query->node->Cast<SelectNode>(), SnapshotParameters(feat, feature_ts));
+                                                      int64_t new_version, bool entity_key_is_unique) {
+	auto snapshot = BuildFeatureSnapshotQuery(feat.query->node->Cast<SelectNode>(),
+	                                          SnapshotParameters(feat, feature_ts, entity_key_is_unique));
 
 	auto node = make_uniq<SelectNode>();
 	node->select_list.push_back(make_uniq<StarExpression>("snap"));
@@ -45,12 +47,12 @@ static unique_ptr<SelectNode> BuildTaggedSnapshotNode(const FeatureCatalogEntry 
 }
 
 unique_ptr<SelectStatement> BuildFeatureRefreshQuery(const FeatureCatalogEntry &feat, timestamp_t feature_ts,
-                                                     int64_t new_version) {
+                                                     int64_t new_version, bool entity_key_is_unique) {
 	// The child produces exactly the new snapshot (one row per entity), tagged with the version and
 	// timestamp. It is appended to the persistent store table; eviction of old versions is handled by the
 	// refresh operator, not by rewriting the store.
 	auto result = make_uniq<SelectStatement>();
-	result->node = BuildTaggedSnapshotNode(feat, feature_ts, new_version);
+	result->node = BuildTaggedSnapshotNode(feat, feature_ts, new_version, entity_key_is_unique);
 	return result;
 }
 
