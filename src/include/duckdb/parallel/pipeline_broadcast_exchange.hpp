@@ -48,12 +48,14 @@ struct PipelineBroadcastExchangeConsumerSummary {
 
 class PipelineBroadcastExchangeLocalState {
 public:
-	PipelineBroadcastExchangeLocalState(ClientContext &context, const PipelineBroadcastExchange &exchange);
+	PipelineBroadcastExchangeLocalState(ClientContext &context, const PipelineBroadcastExchange &exchange,
+	                                    idx_t producer_base_batch_index);
 	~PipelineBroadcastExchangeLocalState();
 
 private:
 	friend class PipelineBroadcastExchange;
-	SinkResultType Push(DataChunk &chunk, const InterruptState &interrupt_state);
+	SinkResultType Push(DataChunk &chunk, const SourcePartitionInfo &partition_info,
+	                    const InterruptState &interrupt_state);
 	SinkCombineResultType Finish(const InterruptState &interrupt_state);
 	bool HasDirectConsumers() const;
 	bool DirectConsumersFinished() const;
@@ -62,6 +64,8 @@ private:
 	vector<unique_ptr<PipelineExecutor>> direct_executors;
 	idx_t direct_idx = 0;
 	idx_t direct_finalize_idx = 0;
+	idx_t producer_base_batch_index;
+	bool supports_batch_index;
 	PipelineBroadcastExchangeLocalMode mode = PipelineBroadcastExchangeLocalMode::BUFFERED;
 	PipelineBroadcastExchangeDirectPushState direct_push_state = PipelineBroadcastExchangeDirectPushState::NOT_STARTED;
 };
@@ -93,9 +97,11 @@ public:
 		return source_order;
 	}
 
-	unique_ptr<PipelineBroadcastExchangeLocalState> GetLocalState(ClientContext &context) const;
+	unique_ptr<PipelineBroadcastExchangeLocalState> GetLocalState(ClientContext &context,
+	                                                              idx_t producer_base_batch_index) const;
 	shared_ptr<PipelineBroadcastExchangeScanState> GetScanState() const;
 
+	void SetProducerPipelines(const vector<shared_ptr<Pipeline>> &pipelines);
 	idx_t RegisterConsumer();
 	bool TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
 	void SelectBufferedConsumer(idx_t consumer_idx);
@@ -229,6 +235,7 @@ private:
 	PipelineBroadcastExchangeOrderMode order_mode;
 	OrderPreservationType source_order;
 	idx_t max_threads;
+	vector<reference<Pipeline>> producer_pipelines;
 	unique_ptr<BufferState> buffer;
 
 	mutable annotated_mutex lock;

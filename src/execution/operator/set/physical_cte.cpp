@@ -17,10 +17,9 @@ enum class CTECombineState : uint8_t { PENDING, COMBINED };
 
 class CTEConsumerGlobalSourceState : public GlobalSourceState {
 public:
-	CTEConsumerGlobalSourceState(shared_ptr<PipelineBroadcastExchange> exchange_p, idx_t consumer_idx_p,
-	                             bool use_batch_index)
+	CTEConsumerGlobalSourceState(shared_ptr<PipelineBroadcastExchange> exchange_p, idx_t consumer_idx_p)
 	    : exchange(std::move(exchange_p)), consumer_idx(consumer_idx_p),
-	      max_threads(use_batch_index || !exchange->PreservesOrder() ? exchange->MaxThreads() : 1) {
+	      max_threads(exchange->PreservesOrder() ? 1 : exchange->MaxThreads()) {
 	}
 
 	~CTEConsumerGlobalSourceState() override {
@@ -68,7 +67,7 @@ unique_ptr<GlobalSourceState> PhysicalCTEConsumerSource::GetGlobalSourceState(Cl
 unique_ptr<GlobalSourceState>
 PhysicalCTEConsumerSource::GetGlobalSourceState(ClientContext &context,
                                                 const OperatorPartitionInfo &partition_info) const {
-	return make_uniq<CTEConsumerGlobalSourceState>(exchange, consumer_idx, partition_info.RequiresBatchIndex());
+	return make_uniq<CTEConsumerGlobalSourceState>(exchange, consumer_idx);
 }
 
 unique_ptr<LocalSourceState> PhysicalCTEConsumerSource::GetLocalSourceState(ExecutionContext &context,
@@ -215,21 +214,22 @@ public:
 
 class CTELocalState : public LocalSinkState {
 public:
-	explicit CTELocalState(ClientContext &context, const PhysicalCTE &op)
+	explicit CTELocalState(ExecutionContext &context, const PhysicalCTE &op)
 	    : execution_mode(op.GetExecutionMode()), use_batch_index(op.use_batch_index) {
 		if (execution_mode != CTEExecutionMode::STREAMING_FANOUT) {
 			D_ASSERT(op.working_table);
 			if (use_batch_index) {
-				lhs_batches = make_uniq<BatchedDataCollection>(context, op.working_table->Types(),
+				lhs_batches = make_uniq<BatchedDataCollection>(context.client, op.working_table->Types(),
 				                                               op.working_table->GetAllocatorType());
 			} else {
-				lhs_data = make_uniq<ColumnDataCollection>(context, op.working_table->Types());
+				lhs_data = make_uniq<ColumnDataCollection>(context.client, op.working_table->Types());
 				lhs_data->InitializeAppend(append_state);
 			}
 		}
 		if (execution_mode != CTEExecutionMode::MATERIALIZED) {
 			D_ASSERT(op.exchange);
-			exchange_state = op.exchange->GetLocalState(context);
+			D_ASSERT(context.pipeline);
+			exchange_state = op.exchange->GetLocalState(context.client, context.pipeline->GetBaseBatchIndex());
 		}
 	}
 
@@ -262,7 +262,7 @@ unique_ptr<GlobalSinkState> PhysicalCTE::GetGlobalSinkState(ClientContext &conte
 }
 
 unique_ptr<LocalSinkState> PhysicalCTE::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_uniq<CTELocalState>(context.client, *this);
+	auto state = make_uniq<CTELocalState>(context, *this);
 	return std::move(state);
 }
 
@@ -374,6 +374,11 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	    current, *this, MetaPipelineType::REGULAR,
 	    exchange ? MetaPipelineDependencyMode::NO_DEPENDENCY : MetaPipelineDependencyMode::ADD_DEPENDENCY);
 	child_meta_pipeline.Build(children[0]);
+	if (exchange) {
+		vector<shared_ptr<Pipeline>> producer_pipelines;
+		child_meta_pipeline.GetPipelines(producer_pipelines, false);
+		exchange->SetProducerPipelines(producer_pipelines);
+	}
 
 	for (auto &cte_scan : cte_scans) {
 		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));

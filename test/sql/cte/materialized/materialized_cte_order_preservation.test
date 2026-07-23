@@ -17,6 +17,21 @@ SELECT i FROM t LIMIT 5 OFFSET 500000;
 ----
 analyzed_plan	<REGEX>:.*Fanout Mode: BUFFERED.*Order Mode: BATCH_INDEX.*
 
+query II
+EXPLAIN ANALYZE
+CREATE TABLE cte_order_direct AS
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch
+)
+SELECT i FROM t;
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: DIRECT.*Order Mode: BATCH_INDEX.*Preferred Batch Size: 122880.*
+
+query III
+SELECT count(*), min(i), max(i) FROM cte_order_direct;
+----
+1000000	0	999999
+
 statement ok
 PRAGMA verify_parallelism;
 
@@ -34,7 +49,7 @@ SELECT i FROM t LIMIT 5 OFFSET 500000;
 
 query I
 WITH t(i) AS MATERIALIZED (
-	SELECT i FROM range(1000000) tbl(i)
+	SELECT i FROM cte_order_batch
 )
 SELECT i FROM t WHERE i % 100000 = 0;
 ----
@@ -48,6 +63,34 @@ SELECT i FROM t WHERE i % 100000 = 0;
 700000
 800000
 900000
+
+query I
+CREATE TABLE cte_order_sparse AS
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch WHERE i % 100000 = 0
+)
+SELECT i FROM t;
+----
+10
+
+query III
+SELECT count(*), min(i), max(i) FROM cte_order_sparse;
+----
+10	0	900000
+
+query I
+CREATE TABLE cte_order_empty AS
+WITH t(i) AS MATERIALIZED (
+	SELECT i FROM cte_order_batch WHERE false
+)
+SELECT i FROM t;
+----
+0
+
+query I
+SELECT count(*) FROM cte_order_empty;
+----
+0
 
 query II
 WITH t(i) AS MATERIALIZED (
@@ -84,6 +127,18 @@ CREATE TABLE cte_order_left AS SELECT i FROM range(4000) tbl(i);
 
 statement ok
 CREATE TABLE cte_order_right AS SELECT i + 4000 AS i FROM range(4000) tbl(i);
+
+query II
+EXPLAIN ANALYZE
+CREATE TABLE cte_order_union_copy AS
+WITH t AS MATERIALIZED (
+	SELECT * FROM cte_order_left
+	UNION ALL
+	SELECT * FROM cte_order_right
+)
+SELECT i FROM t;
+----
+analyzed_plan	<REGEX>:.*Fanout Mode: BUFFERED.*Order Mode: BATCH_INDEX.*Preferred Batch Size: 122880.*
 
 query I
 WITH t AS MATERIALIZED (
@@ -122,6 +177,26 @@ WITH t(i) AS MATERIALIZED (
 	ORDER BY i DESC
 )
 SELECT i FROM t LIMIT 5;
+----
+9999
+9998
+9997
+9996
+9995
+
+query I
+CREATE TABLE cte_order_sorted_copy AS
+WITH t(i) AS MATERIALIZED (
+	SELECT i
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT i FROM t;
+----
+10000
+
+query I
+SELECT i FROM cte_order_sorted_copy LIMIT 5;
 ----
 9999
 9998

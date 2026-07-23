@@ -65,6 +65,7 @@ void PipelineExecutor::Reset() {
 	done_flushing = false;
 	remaining_sink_chunk = false;
 	next_batch_blocked = false;
+	external_batch_initialized = false;
 	finished_processing_idx = -1;
 	source_profiling_finalized = false;
 	source_finish_notification_state = SourceFinishNotificationState::PENDING;
@@ -214,20 +215,29 @@ SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk, const boo
 		D_ASSERT(local_source_state);
 		D_ASSERT(global_source_state);
 		// if we retrieved data - initialize the next batch index
-		auto partition_data = pipeline.source->GetPartitionData(context, source_chunk, *global_source_state,
-		                                                        *local_source_state, required_partition_info);
-		auto batch_index = partition_data.batch_index;
-		// we start with the base_batch_index as a valid starting value. Make sure that next batch is called below
-		next_data = std::move(partition_data);
-		next_data.batch_index = pipeline.base_batch_index + batch_index + 1;
-		if (next_data.batch_index >= max_batch_index) {
-			throw InternalException("Pipeline batch index - invalid batch index %llu returned by source operator",
-			                        batch_index);
-		}
+		auto source_data = pipeline.source->GetPartitionData(context, source_chunk, *global_source_state,
+		                                                     *local_source_state, required_partition_info);
+		next_data = ToPipelinePartitionData(source_data);
 	} else if (have_more_output) {
 		next_data.batch_index = partition_info.batch_index.GetIndex();
 	}
-	if (next_data.batch_index == partition_info.batch_index.GetIndex()) {
+	return NextBatch(std::move(next_data));
+}
+
+OperatorPartitionData PipelineExecutor::ToPipelinePartitionData(const OperatorPartitionData &source_data) const {
+	auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
+	OperatorPartitionData result(pipeline.base_batch_index + source_data.batch_index + 1);
+	result.partition_data = source_data.partition_data;
+	if (result.batch_index >= max_batch_index) {
+		throw InternalException("Pipeline batch index - invalid batch index %llu returned by source operator",
+		                        source_data.batch_index);
+	}
+	return result;
+}
+
+SinkNextBatchType PipelineExecutor::NextBatch(OperatorPartitionData next_data, bool force) {
+	auto &partition_info = local_sink_state->partition_info;
+	if (!force && next_data.batch_index == partition_info.batch_index.GetIndex()) {
 		// no changes, return
 		return SinkNextBatchType::READY;
 	}
@@ -355,13 +365,22 @@ PipelineExecuteResult PipelineExecutor::Execute() {
 	return Execute(NumericLimits<idx_t>::Maximum());
 }
 
-PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input) {
+PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input,
+                                                     const OperatorPartitionData &source_partition_data) {
 	D_ASSERT(pipeline.sink);
 	D_ASSERT(pipeline.IsExternalInput());
 	if (IsFinished()) {
 		return PipelineExecuteResult::FINISHED;
 	}
-	if (!remaining_sink_chunk) {
+	if (required_partition_info.AnyRequired() && !remaining_sink_chunk) {
+		auto next_batch_result = NextBatch(ToPipelinePartitionData(source_partition_data), !external_batch_initialized);
+		next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
+		if (next_batch_blocked) {
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+		external_batch_initialized = true;
+	}
+	if (!remaining_sink_chunk && !next_batch_blocked) {
 		context.thread.profiler.StartOperator(pipeline.source.get());
 		context.thread.profiler.EndOperator(&input);
 	}
@@ -375,6 +394,15 @@ PipelineExecuteResult PipelineExecutor::FinishExternal() {
 	D_ASSERT(pipeline.IsExternalInput());
 	if (finalized) {
 		return PipelineExecuteResult::FINISHED;
+	}
+	if (required_partition_info.AnyRequired()) {
+		auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
+		auto next_batch_result = NextBatch(OperatorPartitionData(max_batch_index), !external_batch_initialized);
+		next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
+		if (next_batch_blocked) {
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+		external_batch_initialized = true;
 	}
 
 	ExecutionBudget chunk_budget(NumericLimits<idx_t>::Maximum());
