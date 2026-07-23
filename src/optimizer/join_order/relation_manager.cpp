@@ -53,7 +53,7 @@ void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional
 			relation_mapping[binding.table_index] = relation_id;
 		}
 	}
-	operator_relations[&op] = relation_id;
+	operator_relations[op] = relation_id;
 	relations.push_back(std::move(relation));
 	op.estimated_cardinality = stats.cardinality;
 	op.has_estimated_cardinality = true;
@@ -104,7 +104,7 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 			relation_mapping[table_index] = relation_id;
 		}
 	}
-	operator_relations[&op] = relation_id;
+	operator_relations[op] = relation_id;
 	relations.push_back(std::move(relation));
 	op.estimated_cardinality = stats.cardinality;
 	op.has_estimated_cardinality = true;
@@ -668,8 +668,8 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 	auto &filters_and_bindings = result.filters;
 	auto &non_inner_edges = result.non_inner_edges;
 	auto &join_operators = result.join_operators;
-	unordered_map<const LogicalOperator *, vector<idx_t>> operator_predicates;
-	unordered_map<const LogicalOperator *, optional_ptr<NonInnerJoinEdge>> operator_non_inner_edges;
+	reference_map_t<LogicalOperator, vector<idx_t>> operator_predicates;
+	reference_map_t<LogicalOperator, optional_ptr<NonInnerJoinEdge>> operator_non_inner_edges;
 	expression_set_t filter_set;
 	auto normalize_conditions = [&](LogicalComparisonJoin &join, const column_binding_set_t &semantic_left_bindings,
 	                                const column_binding_set_t &semantic_right_bindings) {
@@ -773,8 +773,8 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 				filter_info->SetRightSet(right_set);
 				filters_and_bindings.push_back(std::move(filter_info));
 				non_inner_edge->costing_predicate_indices.push_back(filter_index);
-				operator_predicates[&f_op].push_back(filter_index);
-				operator_non_inner_edges[&f_op] = non_inner_edge.get();
+				operator_predicates[f_op].push_back(filter_index);
+				operator_non_inner_edges[f_op] = *non_inner_edge;
 				non_inner_edges.push_back(std::move(non_inner_edge));
 				break;
 			}
@@ -818,7 +818,7 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 					filter_info->SetRightSet(full_right_set);
 					filters_and_bindings.push_back(std::move(filter_info));
 					non_inner_edge->costing_predicate_indices.push_back(filter_index);
-					operator_predicates[&f_op].push_back(filter_index);
+					operator_predicates[f_op].push_back(filter_index);
 				}
 
 				// Filters above a LEFT join that reference nullable-side bindings must be evaluated
@@ -829,7 +829,7 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 					PinFilterAfterLeftJoin(*filters_and_bindings[filter_idx], *full_right_set, full_set, set_manager);
 				}
 				D_ASSERT(!non_inner_edge->costing_predicate_indices.empty());
-				operator_non_inner_edges[&f_op] = non_inner_edge.get();
+				operator_non_inner_edges[f_op] = *non_inner_edge;
 				non_inner_edges.push_back(std::move(non_inner_edge));
 				break;
 			}
@@ -856,7 +856,7 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 						    make_uniq<FilterInfo>(std::move(expr), set, filters_and_bindings.size(), join.join_type);
 						filter_info->from_residual_predicate = is_residual;
 						filters_and_bindings.push_back(std::move(filter_info));
-						operator_predicates[&f_op].push_back(filters_and_bindings.size() - 1);
+						operator_predicates[f_op].push_back(filters_and_bindings.size() - 1);
 					}
 				}
 				break;
@@ -890,7 +890,7 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 	};
 	std::function<ExtractedOperatorSubtree(LogicalOperator &)> extract_operator_tree;
 	extract_operator_tree = [&](LogicalOperator &current) -> ExtractedOperatorSubtree {
-		auto relation_entry = operator_relations.find(&current);
+		auto relation_entry = operator_relations.find(current);
 		if (relation_entry != operator_relations.end()) {
 			return {set_manager.GetJoinRelation(relation_entry->second), {}};
 		}
@@ -927,8 +927,8 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 			}
 		}
 
-		auto predicate_entry = operator_predicates.find(&current);
-		auto non_inner_entry = operator_non_inner_edges.find(&current);
+		auto predicate_entry = operator_predicates.find(current);
+		auto non_inner_entry = operator_non_inner_edges.find(current);
 		vector<reference<JoinOrderOperator>> current_operators;
 		auto add_descriptor = [&](JoinRelationSet &syntactic_set, vector<idx_t> predicate_indices,
 		                          optional_ptr<NonInnerJoinEdge> non_inner_join = nullptr) {

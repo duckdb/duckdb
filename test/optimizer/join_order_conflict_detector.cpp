@@ -48,10 +48,10 @@ TEST_CASE("CD-C honors conditional SEMI join associativity", "[optimizer][join_o
 
 		vector<unique_ptr<JoinOrderOperator>> operators;
 		operators.push_back(make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::SEMI, r0, r1, r0_r1));
-		operators.back()->non_inner_join = edges[0].get();
+		operators.back()->non_inner_join = *edges[0];
 		operators.push_back(make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::SEMI, r0_r1, r2, r1_r2));
 		operators.back()->left_operators.push_back(*operators[0]);
-		operators.back()->non_inner_join = edges[1].get();
+		operators.back()->non_inner_join = *edges[1];
 
 		unordered_map<TableIndex, RelationIndex> relation_mapping;
 		relation_mapping[TableIndex(0)] = RelationIndex(0);
@@ -106,10 +106,10 @@ TEST_CASE("CD-C tests conditional associativity against the shared input", "[opt
 
 	vector<unique_ptr<JoinOrderOperator>> operators;
 	operators.push_back(make_uniq<JoinOrderOperator>(0, JoinOrderOperatorType::SEMI, r1, r2, r1_r2));
-	operators.back()->non_inner_join = edges[1].get();
+	operators.back()->non_inner_join = *edges[1];
 	operators.push_back(make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::SEMI, r0, r1_r2, r0_r1));
 	operators.back()->right_operators.push_back(*operators[0]);
-	operators.back()->non_inner_join = edges[0].get();
+	operators.back()->non_inner_join = *edges[0];
 
 	unordered_map<TableIndex, RelationIndex> relation_mapping;
 	relation_mapping[TableIndex(0)] = RelationIndex(0);
@@ -144,7 +144,7 @@ TEST_CASE("CD-C implements the supported associativity matrix", "[optimizer][joi
 			if (parent_type == JoinOrderOperatorType::SEMI) {
 				edges.push_back(make_uniq<NonInnerJoinEdge>(
 				    0, JoinType::SEMI, Comparison(TableIndex(1), TableIndex(2), ExpressionType::COMPARE_EQUAL)));
-				operators.back()->non_inner_join = edges.back().get();
+				operators.back()->non_inner_join = *edges.back();
 			}
 
 			unordered_map<TableIndex, RelationIndex> relation_mapping;
@@ -162,7 +162,7 @@ TEST_CASE("CD-C implements the supported associativity matrix", "[optimizer][joi
 	}
 }
 
-TEST_CASE("CD-C implements the supported right-asscom matrix", "[optimizer][join_order]") {
+TEST_CASE("CD-C implements the supported right associative-commutative matrix", "[optimizer][join_order]") {
 	const vector<JoinOrderOperatorType> types {JoinOrderOperatorType::INNER, JoinOrderOperatorType::LEFT,
 	                                           JoinOrderOperatorType::SEMI, JoinOrderOperatorType::ANTI};
 	for (auto parent_type : types) {
@@ -180,7 +180,7 @@ TEST_CASE("CD-C implements the supported right-asscom matrix", "[optimizer][join
 			if (child_type == JoinOrderOperatorType::SEMI) {
 				edges.push_back(make_uniq<NonInnerJoinEdge>(
 				    0, JoinType::SEMI, Comparison(TableIndex(1), TableIndex(2), ExpressionType::COMPARE_EQUAL)));
-				operators.back()->non_inner_join = edges.back().get();
+				operators.back()->non_inner_join = *edges.back();
 			}
 			operators.push_back(make_uniq<JoinOrderOperator>(1, parent_type, r0, r1_r2, r0_r2));
 			operators.back()->right_operators.push_back(*operators[0]);
@@ -191,10 +191,10 @@ TEST_CASE("CD-C implements the supported right-asscom matrix", "[optimizer][join
 			relation_mapping[TableIndex(2)] = RelationIndex(2);
 			JoinOrderConflictDetector::Build(operators, set_manager, relation_mapping);
 
-			auto has_right_asscom =
+			auto is_right_associative_commutative =
 			    parent_type == JoinOrderOperatorType::INNER && child_type == JoinOrderOperatorType::INNER;
 			INFO("parent type " << static_cast<int>(parent_type) << ", child type " << static_cast<int>(child_type));
-			REQUIRE(operators[1]->total_set.get().count == (has_right_asscom ? 2 : 3));
+			REQUIRE(operators[1]->total_set.get().count == (is_right_associative_commutative ? 2 : 3));
 		}
 	}
 }

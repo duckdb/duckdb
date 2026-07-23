@@ -65,7 +65,7 @@ void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, 
 	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
 	for (idx_t i = 0; i < info->neighbors.size(); i++) {
-		if (info->neighbors[i]->neighbor == &right && info->neighbors[i]->join_operator == join_operator &&
+		if (info->neighbors[i]->neighbor == right && info->neighbors[i]->join_operator == join_operator &&
 		    info->neighbors[i]->generated_cross_product == generated_cross_product) {
 			if (predicate) {
 				// neighbor already exists, just add the predicate if we have one

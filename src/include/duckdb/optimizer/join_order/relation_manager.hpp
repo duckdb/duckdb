@@ -10,6 +10,7 @@
 
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
@@ -87,7 +88,7 @@ private:
 	ClientContext &context;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<SingleJoinRelation>> relations;
-	unordered_map<const LogicalOperator *, RelationIndex> operator_relations;
+	reference_map_t<LogicalOperator, RelationIndex> operator_relations;
 };
 
 } // namespace duckdb

@@ -59,7 +59,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		plan_enumerator.InitLeafPlans();
 		if (plan_enumerator.SolveJoinOrder()) {
 			// now reconstruct a logical plan from the query graph plan
-			query_graph_manager.plans = &plan_enumerator.GetPlans();
+			query_graph_manager.plans = plan_enumerator.GetPlans();
 			new_logical_plan = query_graph_manager.Reconstruct(std::move(plan));
 		} else {
 			// Approximate enumeration can conservatively reject every remaining partition. The original tree is still

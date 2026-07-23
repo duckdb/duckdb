@@ -179,14 +179,14 @@ static bool IsAssociative(const JoinOrderOperator &left, const JoinOrderOperator
 	return false;
 }
 
-static bool HasLeftAsscom(const JoinOrderOperator &left, const JoinOrderOperator &right) {
+static bool IsLeftAssociativeCommutative(const JoinOrderOperator &left, const JoinOrderOperator &right) {
 	(void)left;
 	(void)right;
-	// For INNER, LEFT OUTER, ANTI, and SEMI joins every entry in the left-asscom half of Table 3 is true.
+	// For INNER, LEFT OUTER, ANTI, and SEMI joins every left associative-commutative entry in Table 3 is true.
 	return true;
 }
 
-static bool HasRightAsscom(const JoinOrderOperator &left, const JoinOrderOperator &right) {
+static bool IsRightAssociativeCommutative(const JoinOrderOperator &left, const JoinOrderOperator &right) {
 	return AlgebraicType(left.type) == JoinOrderOperatorType::INNER &&
 	       AlgebraicType(right.type) == JoinOrderOperatorType::INNER;
 }
@@ -217,7 +217,7 @@ static void BuildConflictRules(JoinOrderOperator &op, JoinRelationSetManager &se
 			auto &requirement = PredicateIntersectionOrInput(set_manager, child.left_relations, child.syntactic_set);
 			AddConflictRule(op, child.right_relations, requirement);
 		}
-		if (!HasLeftAsscom(child, op)) {
+		if (!IsLeftAssociativeCommutative(child, op)) {
 			auto &requirement = PredicateIntersectionOrInput(set_manager, child.right_relations, child.syntactic_set);
 			AddConflictRule(op, child.left_relations, requirement);
 		}
@@ -228,7 +228,7 @@ static void BuildConflictRules(JoinOrderOperator &op, JoinRelationSetManager &se
 			auto &requirement = PredicateIntersectionOrInput(set_manager, child.right_relations, child.syntactic_set);
 			AddConflictRule(op, child.left_relations, requirement);
 		}
-		if (!HasRightAsscom(op, child)) {
+		if (!IsRightAssociativeCommutative(op, child)) {
 			auto &requirement = PredicateIntersectionOrInput(set_manager, child.left_relations, child.syntactic_set);
 			AddConflictRule(op, child.right_relations, requirement);
 		}
@@ -236,18 +236,18 @@ static void BuildConflictRules(JoinOrderOperator &op, JoinRelationSetManager &se
 }
 
 static void SimplifyConflictRules(JoinOrderOperator &op, JoinRelationSetManager &set_manager) {
-	auto total_set = &op.syntactic_set.get();
+	reference<JoinRelationSet> total_set = op.syntactic_set;
 	bool changed;
 	do {
 		changed = false;
 		for (auto &rule : op.conflict_rules) {
-			if (JoinRelationSet::Intersects(*total_set, rule.trigger) && !Contains(*total_set, rule.requirement)) {
-				total_set = &set_manager.Union(*total_set, rule.requirement);
+			if (JoinRelationSet::Intersects(total_set, rule.trigger) && !Contains(total_set, rule.requirement)) {
+				total_set = set_manager.Union(total_set, rule.requirement);
 				changed = true;
 			}
 		}
 	} while (changed);
-	op.total_set = *total_set;
+	op.total_set = total_set;
 
 	vector<JoinOrderConflictRule> remaining_rules;
 	for (auto &rule : op.conflict_rules) {
