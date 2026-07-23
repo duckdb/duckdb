@@ -1,0 +1,74 @@
+# name: test/sql/function/string/test_octet_length.test
+# description: OCTET_LENGTH test
+# group: [string]
+
+# test on scalars: empty, 1-byte ASCII, 2/3/4-byte UTF-8
+query IIIII
+select OCTET_LENGTH(''), OCTET_LENGTH('$'), OCTET_LENGTH('¢'), OCTET_LENGTH('€'), OCTET_LENGTH('𐍈')
+----
+0	1	2	3	4
+
+# NULL handling: typed NULL for each registered overload returns NULL
+query III
+select OCTET_LENGTH(NULL::VARCHAR), OCTET_LENGTH(NULL::BLOB), OCTET_LENGTH(NULL::BIT)
+----
+NULL	NULL	NULL
+
+# mixed ASCII + multi-byte
+query I
+select OCTET_LENGTH('café')
+----
+5
+
+# test on tables
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('', 'Zero'), ('$', NULL), ('¢','Two'), ('€', NULL), ('𐍈','Four')
+
+query I
+select OCTET_LENGTH(a) FROM strings
+----
+0
+1
+2
+3
+4
+
+query I
+select OCTET_LENGTH(b) FROM strings
+----
+4
+NULL
+3
+NULL
+4
+
+query I
+select OCTET_LENGTH(a) FROM strings WHERE b IS NOT NULL
+----
+0
+2
+4
+
+# regression: existing BLOB overload still works
+query I
+select OCTET_LENGTH('hello'::BLOB)
+----
+5
+
+# regression: existing BIT overload still works
+query I
+select OCTET_LENGTH('1101011'::BITSTRING)
+----
+1
+
+# test incorrect usage
+statement error
+select OCTET_LENGTH()
+----
+
+statement error
+select OCTET_LENGTH(1, 2)
+----
