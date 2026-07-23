@@ -1257,6 +1257,23 @@ SELECT COUNT(*) FROM cte_inline_t;
 statement ok
 DROP TABLE cte_inline_t;
 
+# EmptyResultPullup must retain a DML CTE when the outer query is empty.
+statement ok
+CREATE TABLE empty_consumer_t (i INTEGER);
+
+query I
+WITH ins AS (INSERT INTO empty_consumer_t VALUES (42) RETURNING i)
+SELECT 42 WHERE false;
+----
+
+query I
+SELECT * FROM empty_consumer_t;
+----
+42
+
+statement ok
+DROP TABLE empty_consumer_t;
+
 # Serialization: verify that views containing SELECT CTEs survive a DB restart
 # (exercises the v8 query_node field serialization path)
 load {TEST_DIR}/dml_cte_storage.db

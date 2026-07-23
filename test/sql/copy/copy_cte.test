@@ -69,6 +69,38 @@ SELECT lhs.Count, rhs.Count FROM copied lhs, copied rhs;
 ----
 3	3
 
+# Distinct COPY CTEs expose independent result bindings.
+query II
+WITH first_copy AS (
+    COPY copy_cte_source TO '{TEST_DIR}/copy_cte_first.csv' (FORMAT CSV)
+), second_copy AS (
+    COPY copy_cte_source TO '{TEST_DIR}/copy_cte_second.csv' (FORMAT CSV)
+)
+SELECT first_copy.Count, second_copy.Count
+FROM first_copy, second_copy;
+----
+3	3
+
+query II
+SELECT
+    (SELECT count(*) FROM glob('{TEST_DIR}/copy_cte_first.csv')),
+    (SELECT count(*) FROM glob('{TEST_DIR}/copy_cte_second.csv'));
+----
+1	1
+
+# EmptyResultPullup must retain a COPY CTE when the outer query is empty.
+query I
+WITH copied AS (
+    COPY copy_cte_source TO '{TEST_DIR}/copy_cte_empty_consumer.csv' (FORMAT CSV)
+)
+SELECT 42 WHERE false;
+----
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/copy_cte_empty_consumer.csv');
+----
+1
+
 # RETURN_FILES retains its existing two-column result shape inside a CTE.
 query II
 WITH copied AS (

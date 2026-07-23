@@ -454,7 +454,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 
 	// now create the copy information
-	auto copy = make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info));
+	auto copy =
+	    make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info), GenerateTableIndex());
 	copy->file_path = file_path;
 	copy->use_tmp_file = resolved_options.use_tmp_file;
 	copy->overwrite_mode = resolved_options.overwrite_mode;

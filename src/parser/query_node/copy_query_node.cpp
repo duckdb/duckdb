@@ -28,7 +28,7 @@ bool CopyQueryNode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 	auto &other = other_p->Cast<CopyQueryNode>();
-	return info->ToString() == other.info->ToString();
+	return info->Equals(*other.info);
 }
 
 unique_ptr<QueryNode> CopyQueryNode::Copy() const {
