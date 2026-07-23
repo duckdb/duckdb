@@ -546,8 +546,9 @@ void ParquetWriter::InitializeColumnWriters() {
 
 	auto &types = options.sql_types;
 
-	// V1 GeoParquet stores geometries as blobs, no logical type
-	auto allow_geometry = options.geoparquet_version != GeoParquetVersion::V1;
+	// V1 and V1_1 GeoParquet store geometries as blobs, no logical type
+	auto allow_geometry = options.geoparquet_version != GeoParquetVersion::V1 &&
+	                      options.geoparquet_version != GeoParquetVersion::V1_1;
 
 	// construct the column writers
 	column_writers.clear();
@@ -1400,6 +1401,10 @@ GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 		geoparquet_data = make_uniq<GeoParquetFileMetadata>(GetGeoParquetVersion());
 	}
 	return *geoparquet_data;
+}
+
+void ParquetWriter::RegisterBBoxCovering(const string &geom_column_name, const string &bbox_column_name) {
+	GetGeoParquetData().RegisterBBoxCovering(geom_column_name, bbox_column_name);
 }
 
 void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter) {
