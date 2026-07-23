@@ -3,6 +3,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/mark_join_row_comparison.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
 
 namespace duckdb {
@@ -39,6 +40,32 @@ static void TemplatedMarkJoin(const Vector &left, const Vector &right, idx_t lco
 
 static void MarkJoinNested(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
                            ExpressionType comparison_type, optional_ptr<bool> found_unknown) {
+	if (left.GetType().id() == LogicalTypeId::TUPLE &&
+	    (comparison_type == ExpressionType::COMPARE_EQUAL || comparison_type == ExpressionType::COMPARE_NOTEQUAL)) {
+		for (idx_t left_row = 0; left_row < lcount; left_row++) {
+			if (found_match[left_row]) {
+				continue;
+			}
+			bool equality_is_false[STANDARD_VECTOR_SIZE] = {false};
+			bool equality_is_unknown[STANDARD_VECTOR_SIZE] = {false};
+			MarkJoinRowComparison::CompareEquality(left, left_row, lcount, right, rcount, equality_is_false,
+			                                       equality_is_unknown);
+			for (idx_t right_row = 0; right_row < rcount; right_row++) {
+				const bool is_match = comparison_type == ExpressionType::COMPARE_EQUAL
+				                          ? !equality_is_false[right_row] && !equality_is_unknown[right_row]
+				                          : equality_is_false[right_row];
+				if (is_match) {
+					found_match[left_row] = true;
+					break;
+				}
+				if (found_unknown && equality_is_unknown[right_row]) {
+					found_unknown.get()[left_row] = true;
+				}
+			}
+		}
+		return;
+	}
+
 	Vector left_reference(left.GetType());
 	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {

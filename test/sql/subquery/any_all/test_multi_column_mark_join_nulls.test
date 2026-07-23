@@ -160,6 +160,21 @@ SELECT row(1, 2) = ANY (
 ----
 NULL
 
+# A tuple-valued condition must continue after UNKNOWN to find a later mismatch.
+query I
+SELECT row(NULL::INT, 3) = ANY (
+	SELECT s FROM (VALUES (row(1, 2))) rhs(s)
+)
+----
+false
+
+query I
+SELECT row(NULL::INT, 2) = ANY (
+	SELECT s FROM (VALUES (row(1, 2))) rhs(s)
+)
+----
+NULL
+
 # Exercise the specialized external empty-hash and nested refinement paths.
 statement ok
 SET debug_force_external=true;
@@ -209,5 +224,16 @@ SELECT a, row(a, b) IN (
     SELECT x, y FROM (VALUES (1, 1), (2, 2)) rhs(x, y) WHERE x = a
 )
 FROM (VALUES (1, 1), (2, 3)) lhs(a, b);
+----
+not yet supported
+
+# A single tuple-valued condition is still a correlated multi-column comparison.
+statement error
+SELECT row(a, b) = ANY (
+	SELECT s
+	FROM (VALUES (1, row(1, NULL::INT))) rhs(k, s)
+	WHERE k = lhs.a
+)
+FROM (VALUES (1, 1)) lhs(a, b)
 ----
 not yet supported

@@ -17,6 +17,29 @@ SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (1, NULL::INT), (1, 2)) t(x, y))
 ----
 NULL
 
+# A later mismatch must override an earlier UNKNOWN field comparison.
+query I
+SELECT (NULL::INT, 3) <> ANY (
+	SELECT * FROM (VALUES (1, 2)) rhs(a, b)
+)
+----
+true
+
+query I
+SELECT (3, NULL::INT) <> ANY (
+	SELECT * FROM (VALUES (2, 1)) rhs(a, b)
+)
+----
+true
+
+# Without a decisive mismatch the result remains UNKNOWN.
+query I
+SELECT (NULL::INT, 2) <> ANY (
+	SELECT * FROM (VALUES (1, 2)) rhs(a, b)
+)
+----
+NULL
+
 query I
 SELECT (1, NULL::INT) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y))
 ----
@@ -75,5 +98,15 @@ SELECT i, (union_value(num := 1)::UNION(num INT, str VARCHAR), 2) <> ANY (
 	WHERE rhs.k = outer_t.i
 )
 FROM (VALUES (1)) outer_t(i);
+----
+not yet supported
+
+statement error
+SELECT row(a, b) <> ANY (
+	SELECT s
+	FROM (VALUES (1, row(1, NULL::INT))) rhs(k, s)
+	WHERE k = lhs.a
+)
+FROM (VALUES (1, 1)) lhs(a, b)
 ----
 not yet supported

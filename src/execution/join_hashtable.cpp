@@ -9,6 +9,7 @@
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/mark_join_row_comparison.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
@@ -1924,25 +1925,8 @@ static bool MarkJoinChunkHasUnknown(DataChunk &left, idx_t left_row, DataChunk &
 	bool row_is_false[STANDARD_VECTOR_SIZE] = {false};
 	bool row_is_unknown[STANDARD_VECTOR_SIZE] = {false};
 	for (idx_t col_idx = 0; col_idx < left.ColumnCount(); col_idx++) {
-		Vector left_reference(left.data[col_idx].GetType());
-		ConstantVector::Reference(left_reference, count_t(right.size()), left.data[col_idx], left_row, left.size());
-		Vector comparison(LogicalType::BOOLEAN, right.size());
-		VectorOperations::Equals(left_reference, right.data[col_idx], comparison);
-
-		UnifiedVectorFormat comparison_format;
-		comparison.ToUnifiedFormat(comparison_format);
-		auto comparison_data = comparison_format.GetData<bool>();
-		for (idx_t right_row = 0; right_row < right.size(); right_row++) {
-			if (row_is_false[right_row]) {
-				continue;
-			}
-			auto comparison_idx = comparison_format.sel->get_index(right_row);
-			if (!comparison_format.validity.RowIsValid(comparison_idx)) {
-				row_is_unknown[right_row] = true;
-			} else if (!comparison_data[comparison_idx]) {
-				row_is_false[right_row] = true;
-			}
-		}
+		MarkJoinRowComparison::CompareEquality(left.data[col_idx], left_row, left.size(), right.data[col_idx],
+		                                       right.size(), row_is_false, row_is_unknown);
 	}
 	for (idx_t right_row = 0; right_row < right.size(); right_row++) {
 		if (!row_is_false[right_row] && row_is_unknown[right_row]) {
