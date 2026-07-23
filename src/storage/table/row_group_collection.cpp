@@ -964,7 +964,8 @@ struct IndexRemovalTargets {
 
 void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType removal_type,
                                             IndexRemovalTargets &targets) {
-	auto &main_index = entry.index->Cast<BoundIndex>();
+	const auto index = entry.GetSharedIndex();
+	const auto &main_index = index->Cast<BoundIndex>();
 
 	// create "removed_data_during_checkpoint" if it does not exist
 	if (!entry.removed_data_during_checkpoint) {
@@ -1014,19 +1015,15 @@ void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType 
 	}
 }
 void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, IndexRemovalTargets &targets,
-                            optional_idx active_checkpoint) {
-	auto &main_index = entry.index->Cast<BoundIndex>();
+                            const optional_idx active_checkpoint) {
+	const auto &index = entry.GetSharedIndex();
+	auto &main_index = index->Cast<BoundIndex>();
 
+	const auto supports_delta_indexes = main_index.SupportsDeltaIndexes();
 	// not all indexes require delta indexes - this is tracked through BoundIndex::RequiresTransactionality
 	// if an index does not require this we skip creating to and appending to "deleted_rows_in_use"
-	bool supports_delta_indexes = main_index.SupportsDeltaIndexes();
-	if (removal_type != IndexRemovalType::DELETED_ROWS_IN_USE && active_checkpoint.IsValid() &&
-	    supports_delta_indexes) {
-		// there's an ongoing checkpoint - check if we need to use delta indexes or if we can write to the main index
-		if (!entry.last_written_checkpoint.IsValid() ||
-		    entry.last_written_checkpoint.GetIndex() != active_checkpoint.GetIndex()) {
-			// there's an on-going checkpoint and we haven't flushed the index yet
-			// we can't modify the index in-place and need to modify the deltas - get the appropriate deltas to target
+	if (removal_type != IndexRemovalType::DELETED_ROWS_IN_USE) {
+		if (supports_delta_indexes && entry.ShouldUseDeltaIndexes(active_checkpoint)) {
 			GetIndexRemovalTargetsActiveCheckpoint(entry, removal_type, targets);
 			return;
 		}
@@ -1076,7 +1073,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	// Collect all Indexed columns on the table.
 	unordered_set<column_t> indexed_column_id_set;
 
-	for (auto &index : indexes.Indexes()) {
+	for (const auto &index : indexes.Indexes()) {
 		auto &set = index.GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
 	}
@@ -1121,10 +1118,9 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	}
 
 	for (auto &entry : indexes.IndexEntries()) {
-		auto &index = *entry.index;
+		lock_guard<mutex> guard(entry.lock);
+		auto &index = entry.GetIndexUnsafe();
 		if (index.IsBound()) {
-			lock_guard<mutex> guard(entry.lock);
-
 			// check which indexes we should append to or remove from
 			// note that this method might also involve appending to indexes
 			// the reason for that is that we have "delta" indexes that we must fill with data we are removing

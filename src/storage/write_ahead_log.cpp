@@ -397,7 +397,9 @@ void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, T
 		options["v1_0_0_storage"] = v1_0_0_storage;
 	}
 
-	for (auto &index : list.Indexes()) {
+	for (auto &entry : list.IndexEntries()) {
+		lock_guard<mutex> guard(entry.lock);
+		auto &index = entry.GetIndexUnsafe();
 		if (name == index.GetIndexName()) {
 			// We never write an unbound index to the WAL.
 			D_ASSERT(index.IsBound());

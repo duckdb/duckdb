@@ -815,7 +815,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	info->BindIndexes(context, ART::TYPE_NAME);
 	for (auto &entry : indexes.IndexEntries()) {
-		auto &index = *entry.index;
+		auto &index = entry.GetIndexUnsafe();
 		if (index.GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}

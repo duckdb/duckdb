@@ -23,15 +23,15 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	auto &collection = *row_groups->collection;
 	collection.InitializeEmpty();
 
-	for (auto &index : data_table_info->GetIndexes().Indexes()) {
-		auto constraint = index.GetConstraintType();
+	for (const auto &index : data_table_info->GetIndexes().Indexes()) {
+		const auto constraint = index.GetConstraintType();
 		if (constraint == IndexConstraintType::NONE) {
 			continue;
 		}
 		if (!index.IsBound()) {
 			continue;
 		}
-		auto &bound_index = index.Cast<BoundIndex>();
+		const auto &bound_index = index.Cast<BoundIndex>();
 		if (!bound_index.SupportsDeltaIndexes()) {
 			continue;
 		}

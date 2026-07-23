@@ -92,6 +92,15 @@ public:
 	DeltaIndexType delta_index_type = DeltaIndexType::NONE;
 
 public:
+	//! Cast a pinned index to a more specific type while preserving ownership of the original snapshot.
+	//! The returned pointer keeps the original index snapshot alive.
+	template <class TARGET, class SOURCE>
+	static shared_ptr<TARGET> MakeShared(const shared_ptr<SOURCE> &index) {
+		D_ASSERT(index);
+		auto &target = index->template Cast<TARGET>();
+		return shared_ptr<TARGET>(index, &target);
+	}
+
 	bool IsBound() const override {
 		return true;
 	}

@@ -18,7 +18,7 @@ public:
 	bool only_check_unique = true;
 
 public:
-	bool ConflictTargetMatches(Index &index) const;
+	bool ConflictTargetMatches(const Index &index) const;
 	//! True, if the conflict info references the column ids of a single index, else false.
 	bool SingleIndexTarget() const {
 		return !column_ids.empty();

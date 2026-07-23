@@ -25,20 +25,72 @@ class TableIndexIterationHelper;
 enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
 
 //! IndexEntry contains an atomic in addition to the index to ensure correct binding.
-struct IndexEntry {
+//! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
+class IndexEntry {
+public:
 	explicit IndexEntry(unique_ptr<Index> index);
 
+public:
 	atomic<IndexBindState> bind_state;
-	//! lock that should be used if access to "index" and "deleted_rows_in_use" at the same time is necessary
+	//! lock that should be used if access to "owned_index" and delta indexes at the same time is necessary
 	mutex lock;
-	unique_ptr<Index> index;
 	unique_ptr<BoundIndex> deleted_rows_in_use;
 	//! Data that was added to the index during the last checkpoint
 	unique_ptr<BoundIndex> added_data_during_checkpoint;
 	//! Data that was removed from the index during the last checkpoint
 	unique_ptr<BoundIndex> removed_data_during_checkpoint;
+
+public:
+	//! Returns whether changes should be written to delta indexes, which happens only when a checkpoint is active and
+	//! the delta indexes of the active checkpoint have yet to be merged into the main index.
+	bool ShouldUseDeltaIndexes(const optional_idx active_checkpoint) const {
+		if (!active_checkpoint.IsValid()) {
+			return false;
+		}
+		if (!last_written_checkpoint.IsValid()) {
+			return true;
+		}
+		if (active_checkpoint.GetIndex() != last_written_checkpoint.GetIndex()) {
+			return true;
+		}
+		return false;
+	}
+	//! Mark the index as written for this checkpoint.
+	void MarkWrittenForCheckpoint(const transaction_t checkpoint_id) {
+		last_written_checkpoint = checkpoint_id;
+	}
+	//! Return a reference of "owned_index". This reference is only stable when guarded by "lock" and should not be
+	//! kept alive outside its scope.
+	//! FIXME: Currently the "index_entries_lock" implicitly takes on the responsibilities of the entry lock, move to
+	//! per-entry locking.
+	Index &GetIndexUnsafe() const {
+		return *owned_index;
+	}
+	//! Give the caller a stable snapshot of the current Index
+	shared_ptr<Index> GetSharedIndex() const {
+		lock_guard<mutex> lock(index_pointer_lock);
+		return owned_index;
+	}
+	template <class TARGET>
+	shared_ptr<TARGET> GetSharedIndex() const {
+		lock_guard<mutex> lock(index_pointer_lock);
+		auto &target = owned_index->Cast<TARGET>();
+		return shared_ptr<TARGET>(owned_index, &target);
+	}
+
+	//! Replace the current snapshot with another
+	void ReplaceIndex(unique_ptr<Index> index) {
+		lock_guard<mutex> lock(index_pointer_lock);
+		owned_index = std::move(index);
+	}
+
+private:
 	//! The last checkpoint index that was written with this index
 	optional_idx last_written_checkpoint;
+	//! The owning pointer of the index
+	shared_ptr<Index> owned_index;
+	//! Lock held when accessing or modifying the owned_index pointer
+	mutable mutex index_pointer_lock;
 };
 
 struct IndexSerializationInfo {
@@ -65,14 +117,15 @@ class TableIndexList {
 public:
 	TableIndexIterationHelper<IndexEntry> IndexEntries() const;
 	TableIndexIterationHelper<Index> Indexes() const;
+	vector<shared_ptr<Index>> MakeShared() const;
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(const Identifier &name);
 	//! Returns true, if the index name does not exist.
-	bool NameIsUnique(const string &name);
+	bool NameIsUnique(const string &name) const;
 	//! Returns an optional pointer to the index matching the name.
-	optional_ptr<BoundIndex> Find(const Identifier &name);
+	shared_ptr<BoundIndex> Find(const Identifier &name) const;
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
 	//! Returns true, if there are no index entries.
@@ -97,7 +150,7 @@ public:
 		index_entries = std::move(other.index_entries);
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
-	void MergeCheckpointDeltas(transaction_t checkpoint_id);
+	void MergeCheckpointDeltas(transaction_t checkpoint_id) const;
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	optional_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
@@ -105,7 +158,7 @@ public:
 	void VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
 	//! Get the combined column ids of the indexes.
-	unordered_set<column_t> GetRequiredColumns();
+	unordered_set<column_t> GetRequiredColumns() const;
 	//! Serialize all indexes of the table.
 	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 
@@ -160,6 +213,7 @@ public:
 
 template <>
 IndexEntry &TableIndexIterationHelper<IndexEntry>::TableIndexIterator::operator*() const;
+
 template <>
 Index &TableIndexIterationHelper<Index>::TableIndexIterator::operator*() const;
 
