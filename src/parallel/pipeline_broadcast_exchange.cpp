@@ -749,14 +749,18 @@ SinkResultType PipelineBroadcastExchange::CompletePush(DataChunk &chunk, Pipelin
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkNextBatchType PipelineBroadcastExchange::NextBatch(const SourcePartitionInfo &partition_info,
+SinkNextBatchType PipelineBroadcastExchange::NextBatch(PipelineBroadcastExchangeLocalState &lstate,
+                                                       const SourcePartitionInfo &partition_info,
                                                        const InterruptState &interrupt_state) {
 	if (!SupportsBatchIndex()) {
 		return SinkNextBatchType::READY;
 	}
 	D_ASSERT(partition_info.min_batch_index.IsValid());
 	auto result = FlushReadyBatches(partition_info.min_batch_index.GetIndex(), interrupt_state);
-	return result == BufferedPushState::BLOCKED ? SinkNextBatchType::BLOCKED : SinkNextBatchType::READY;
+	if (result == BufferedPushState::BLOCKED) {
+		return SinkNextBatchType::BLOCKED;
+	}
+	return lstate.NextBatch(partition_info, interrupt_state);
 }
 
 SinkCombineResultType PipelineBroadcastExchange::FinishLocal(PipelineBroadcastExchangeLocalState &lstate,
@@ -777,32 +781,8 @@ SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const
 	if (direct_push_state != PipelineBroadcastExchangeDirectPushState::RESUMING) {
 		direct_idx = 0;
 	}
-	OperatorPartitionData source_partition_data(0);
-	optional_idx source_min_batch_index;
-	if (supports_batch_index) {
-		if (!partition_info.batch_index.IsValid() || !partition_info.min_batch_index.IsValid()) {
-			throw InternalException("Batch-indexed pipeline broadcast exchange received incomplete partition info");
-		}
-		auto batch_index = partition_info.batch_index.GetIndex();
-		auto producer_min_batch_index = partition_info.min_batch_index.GetIndex();
-		if (batch_index <= producer_base_batch_index) {
-			throw InternalException("Pipeline broadcast exchange received invalid producer batch index %llu",
-			                        batch_index);
-		}
-		if (producer_min_batch_index < producer_base_batch_index || producer_min_batch_index > batch_index) {
-			throw InternalException("Pipeline broadcast exchange received invalid producer minimum batch index %llu",
-			                        producer_min_batch_index);
-		}
-		source_partition_data.batch_index = batch_index - producer_base_batch_index - 1;
-		source_min_batch_index = producer_min_batch_index - producer_base_batch_index;
-		if (source_partition_data.batch_index >= PipelineBuildState::BATCH_INCREMENT - 2) {
-			throw InternalException("Pipeline broadcast exchange received producer batch index outside its pipeline");
-		}
-		if (source_min_batch_index.GetIndex() >= PipelineBuildState::BATCH_INCREMENT) {
-			throw InternalException("Pipeline broadcast exchange received producer minimum batch index outside its "
-			                        "pipeline");
-		}
-	}
+	auto source_partition_data = GetSourcePartitionData(partition_info);
+	auto source_min_batch_index = GetSourceMinBatchIndex(partition_info);
 	for (; direct_idx < direct_executors.size(); direct_idx++) {
 		auto &executor = *direct_executors[direct_idx];
 		executor.SetInterruptState(interrupt_state);
@@ -826,24 +806,40 @@ SinkResultType PipelineBroadcastExchangeLocalState::Push(DataChunk &chunk, const
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkCombineResultType PipelineBroadcastExchangeLocalState::Finish(const SourcePartitionInfo &partition_info,
-                                                                  const InterruptState &interrupt_state) {
-	optional_idx source_min_batch_index;
-	if (supports_batch_index) {
-		if (!partition_info.min_batch_index.IsValid()) {
-			throw InternalException("Batch-indexed pipeline broadcast exchange received no minimum batch index");
+SinkNextBatchType PipelineBroadcastExchangeLocalState::NextBatch(const SourcePartitionInfo &partition_info,
+                                                                 const InterruptState &interrupt_state) {
+	auto source_min_batch_index = GetSourceMinBatchIndex(partition_info);
+	if (!partition_info.batch_index.IsValid()) {
+		throw InternalException("Batch-indexed pipeline broadcast exchange received no batch index");
+	}
+	auto batch_index = partition_info.batch_index.GetIndex();
+	auto max_batch_index = producer_base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
+	const bool finalize = batch_index == max_batch_index;
+	OperatorPartitionData source_partition_data(0);
+	if (!finalize) {
+		source_partition_data = GetSourcePartitionData(partition_info);
+	}
+
+	for (; direct_next_batch_idx < direct_executors.size(); direct_next_batch_idx++) {
+		auto &executor = *direct_executors[direct_next_batch_idx];
+		executor.SetInterruptState(interrupt_state);
+		PipelineExecuteResult result;
+		if (finalize || executor.IsFinishedProcessing()) {
+			result = executor.FinishBatchExternal(source_min_batch_index);
+		} else {
+			result = executor.NextBatchExternal(source_partition_data, source_min_batch_index);
 		}
-		auto producer_min_batch_index = partition_info.min_batch_index.GetIndex();
-		if (producer_min_batch_index < producer_base_batch_index) {
-			throw InternalException("Pipeline broadcast exchange received invalid producer minimum batch index %llu",
-			                        producer_min_batch_index);
-		}
-		source_min_batch_index = producer_min_batch_index - producer_base_batch_index;
-		if (source_min_batch_index.GetIndex() >= PipelineBuildState::BATCH_INCREMENT) {
-			throw InternalException("Pipeline broadcast exchange received producer minimum batch index outside its "
-			                        "pipeline");
+		if (result == PipelineExecuteResult::INTERRUPTED) {
+			return SinkNextBatchType::BLOCKED;
 		}
 	}
+	direct_next_batch_idx = 0;
+	return SinkNextBatchType::READY;
+}
+
+SinkCombineResultType PipelineBroadcastExchangeLocalState::Finish(const SourcePartitionInfo &partition_info,
+                                                                  const InterruptState &interrupt_state) {
+	auto source_min_batch_index = GetSourceMinBatchIndex(partition_info);
 	for (; direct_finalize_idx < direct_executors.size(); direct_finalize_idx++) {
 		auto &executor = *direct_executors[direct_finalize_idx];
 		executor.SetInterruptState(interrupt_state);
@@ -856,6 +852,51 @@ SinkCombineResultType PipelineBroadcastExchangeLocalState::Finish(const SourcePa
 		}
 	}
 	return SinkCombineResultType::FINISHED;
+}
+
+OperatorPartitionData
+PipelineBroadcastExchangeLocalState::GetSourcePartitionData(const SourcePartitionInfo &partition_info) const {
+	OperatorPartitionData result(0);
+	if (!supports_batch_index) {
+		return result;
+	}
+	if (!partition_info.batch_index.IsValid()) {
+		throw InternalException("Batch-indexed pipeline broadcast exchange received no batch index");
+	}
+	auto batch_index = partition_info.batch_index.GetIndex();
+	if (batch_index <= producer_base_batch_index) {
+		throw InternalException("Pipeline broadcast exchange received invalid producer batch index %llu", batch_index);
+	}
+	result.batch_index = batch_index - producer_base_batch_index - 1;
+	if (result.batch_index >= PipelineBuildState::BATCH_INCREMENT - 2) {
+		throw InternalException("Pipeline broadcast exchange received producer batch index outside its pipeline");
+	}
+	return result;
+}
+
+optional_idx
+PipelineBroadcastExchangeLocalState::GetSourceMinBatchIndex(const SourcePartitionInfo &partition_info) const {
+	if (!supports_batch_index) {
+		return optional_idx();
+	}
+	if (!partition_info.min_batch_index.IsValid()) {
+		throw InternalException("Batch-indexed pipeline broadcast exchange received no minimum batch index");
+	}
+	auto producer_min_batch_index = partition_info.min_batch_index.GetIndex();
+	if (producer_min_batch_index < producer_base_batch_index) {
+		throw InternalException("Pipeline broadcast exchange received invalid producer minimum batch index %llu",
+		                        producer_min_batch_index);
+	}
+	if (partition_info.batch_index.IsValid() && producer_min_batch_index > partition_info.batch_index.GetIndex()) {
+		throw InternalException("Pipeline broadcast exchange received invalid producer minimum batch index %llu",
+		                        producer_min_batch_index);
+	}
+	auto result = producer_min_batch_index - producer_base_batch_index;
+	if (result >= PipelineBuildState::BATCH_INCREMENT) {
+		throw InternalException("Pipeline broadcast exchange received producer minimum batch index outside its "
+		                        "pipeline");
+	}
+	return optional_idx(result);
 }
 
 bool PipelineBroadcastExchangeLocalState::HasDirectConsumers() const {

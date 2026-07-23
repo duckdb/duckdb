@@ -406,13 +406,10 @@ PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input,
 		return PipelineExecuteResult::FINISHED;
 	}
 	if (required_partition_info.AnyRequired() && !remaining_sink_chunk) {
-		auto next_batch_result = NextBatch(ToPipelinePartitionData(source_partition_data), !external_batch_initialized,
-		                                   source_min_batch_index);
-		next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
-		if (next_batch_blocked) {
-			return PipelineExecuteResult::INTERRUPTED;
+		auto next_batch_result = NextBatchExternal(source_partition_data, source_min_batch_index);
+		if (next_batch_result != PipelineExecuteResult::NOT_FINISHED) {
+			return next_batch_result;
 		}
-		external_batch_initialized = true;
 	}
 	if (!remaining_sink_chunk && !next_batch_blocked) {
 		context.thread.profiler.StartOperator(pipeline.source.get());
@@ -423,7 +420,44 @@ PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input,
 	return PushInputChunk(input, chunk_budget, PipelineInputChunkMode::PUSH_INPUT);
 }
 
+PipelineExecuteResult PipelineExecutor::NextBatchExternal(const OperatorPartitionData &source_partition_data,
+                                                          optional_idx source_min_batch_index) {
+	D_ASSERT(pipeline.sink);
+	D_ASSERT(pipeline.IsExternalInput());
+	if (IsFinished()) {
+		return PipelineExecuteResult::FINISHED;
+	}
+	if (!required_partition_info.AnyRequired()) {
+		return PipelineExecuteResult::NOT_FINISHED;
+	}
+	auto next_batch_result =
+	    NextBatch(ToPipelinePartitionData(source_partition_data), !external_batch_initialized, source_min_batch_index);
+	next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
+	if (next_batch_blocked) {
+		return PipelineExecuteResult::INTERRUPTED;
+	}
+	external_batch_initialized = true;
+	return PipelineExecuteResult::NOT_FINISHED;
+}
+
 PipelineExecuteResult PipelineExecutor::FinishExternal(optional_idx source_min_batch_index) {
+	D_ASSERT(pipeline.sink);
+	D_ASSERT(pipeline.IsExternalInput());
+	if (finalized) {
+		return PipelineExecuteResult::FINISHED;
+	}
+	auto finish_batch_result = FinishBatchExternal(source_min_batch_index);
+	if (finish_batch_result == PipelineExecuteResult::INTERRUPTED) {
+		return finish_batch_result;
+	}
+
+	ExecutionBudget chunk_budget(NumericLimits<idx_t>::Maximum());
+	exhausted_source = true;
+	exhausted_pipeline = true;
+	return FlushAndFinalize(chunk_budget);
+}
+
+PipelineExecuteResult PipelineExecutor::FinishBatchExternal(optional_idx source_min_batch_index) {
 	D_ASSERT(pipeline.sink);
 	D_ASSERT(pipeline.IsExternalInput());
 	if (finalized) {
@@ -439,11 +473,7 @@ PipelineExecuteResult PipelineExecutor::FinishExternal(optional_idx source_min_b
 		}
 		external_batch_initialized = true;
 	}
-
-	ExecutionBudget chunk_budget(NumericLimits<idx_t>::Maximum());
-	exhausted_source = true;
-	exhausted_pipeline = true;
-	return FlushAndFinalize(chunk_budget);
+	return PipelineExecuteResult::NOT_FINISHED;
 }
 
 bool PipelineExecutor::IsFinishedProcessing() const {

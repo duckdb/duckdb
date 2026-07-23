@@ -56,13 +56,17 @@ private:
 	friend class PipelineBroadcastExchange;
 	SinkResultType Push(DataChunk &chunk, const SourcePartitionInfo &partition_info,
 	                    const InterruptState &interrupt_state);
+	SinkNextBatchType NextBatch(const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
 	SinkCombineResultType Finish(const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
 	bool HasDirectConsumers() const;
 	bool DirectConsumersFinished() const;
 	void ResetPush();
+	OperatorPartitionData GetSourcePartitionData(const SourcePartitionInfo &partition_info) const;
+	optional_idx GetSourceMinBatchIndex(const SourcePartitionInfo &partition_info) const;
 
 	vector<unique_ptr<PipelineExecutor>> direct_executors;
 	idx_t direct_idx = 0;
+	idx_t direct_next_batch_idx = 0;
 	idx_t direct_finalize_idx = 0;
 	idx_t producer_base_batch_index;
 	bool supports_batch_index;
@@ -112,7 +116,8 @@ public:
 
 	SinkResultType Push(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,
 	                    const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
-	SinkNextBatchType NextBatch(const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
+	SinkNextBatchType NextBatch(PipelineBroadcastExchangeLocalState &lstate, const SourcePartitionInfo &partition_info,
+	                            const InterruptState &interrupt_state);
 	SinkCombineResultType FinishLocal(PipelineBroadcastExchangeLocalState &lstate,
 	                                  const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
 	void Finish();

@@ -67,6 +67,11 @@ public:
 	//! Pushes a chunk from an external producer through this pipeline into the sink
 	PipelineExecuteResult PushExternal(DataChunk &input, const OperatorPartitionData &partition_data,
 	                                   optional_idx source_min_batch_index);
+	//! Advances an externally-fed pipeline to the producer's next batch
+	PipelineExecuteResult NextBatchExternal(const OperatorPartitionData &partition_data,
+	                                        optional_idx source_min_batch_index);
+	//! Completes the current batch of an externally-fed pipeline
+	PipelineExecuteResult FinishBatchExternal(optional_idx source_min_batch_index);
 	//! Finalizes an externally-fed pipeline executor after the producer is exhausted
 	PipelineExecuteResult FinishExternal(optional_idx source_min_batch_index);
 

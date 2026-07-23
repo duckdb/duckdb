@@ -307,7 +307,8 @@ SinkNextBatchType PhysicalCTE::NextBatch(ExecutionContext &context, OperatorSink
 		return SinkNextBatchType::READY;
 	}
 	D_ASSERT(gstate.exchange);
-	return gstate.exchange->NextBatch(lstate.partition_info, input.interrupt_state);
+	D_ASSERT(lstate.exchange_state);
+	return gstate.exchange->NextBatch(*lstate.exchange_state, lstate.partition_info, input.interrupt_state);
 }
 
 SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
