@@ -27,6 +27,10 @@
 
 namespace duckdb {
 
+#ifndef DUCKDB_NO_THREADS
+thread_local optional_ptr<TaskScheduler> TaskScheduler::current_worker_scheduler;
+#endif
+
 TaskScheduler::TaskScheduler(DatabaseInstance &db) : db(db) {
 	for (uint8_t i = 0; i < TASK_SCHEDULER_TYPE_COUNT; i++) {
 		pools[i] = make_uniq<TaskSchedulerPool>(db, static_cast<TaskSchedulerType>(i));
@@ -119,6 +123,21 @@ bool TaskScheduler::GetTaskInternal(shared_ptr<Task> &task, TaskSchedulerType po
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	ExecuteForever(marker, TaskSchedulerType::REGULAR);
 }
+
+#ifndef DUCKDB_NO_THREADS
+void TaskScheduler::ExecuteForeverOnInternalThread(atomic<bool> *marker, const TaskSchedulerType pool_type) {
+	auto previous_scheduler = current_worker_scheduler;
+	D_ASSERT(!previous_scheduler);
+	current_worker_scheduler = this;
+	try {
+		ExecuteForever(marker, pool_type);
+	} catch (...) {
+		current_worker_scheduler = previous_scheduler;
+		throw;
+	}
+	current_worker_scheduler = previous_scheduler;
+}
+#endif
 
 bool TaskScheduler::TryDequeueAndProcessTask(const DBConfig &config, TaskSchedulerQueue &queue,
                                              shared_ptr<Task> &task) {
@@ -396,6 +415,13 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 }
 
 void TaskScheduler::RelaunchThreads() {
+#ifndef DUCKDB_NO_THREADS
+	if (current_worker_scheduler == this) {
+		// A worker cannot wait for the relaunch lock: another thread can hold it while joining this worker.
+		// Defer the relaunch until query cleanup runs on a thread that is not owned by this scheduler.
+		return;
+	}
+#endif
 	lock_guard<mutex> t(thread_lock);
 	for (auto &pool : pools) {
 		pool->RelaunchThreads(*this, false);

@@ -1,12 +1,75 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/parallel/task.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/settings.hpp"
 
+#include <chrono>
+#include <condition_variable>
 #include <thread>
 
 using namespace duckdb;
+
+#ifndef DUCKDB_NO_THREADS
+struct SetThreadsTaskState {
+	mutex lock;
+	std::condition_variable cv;
+	bool finished = false;
+	string error;
+};
+
+struct SetThreadsTask : Task {
+	SetThreadsTask(DuckDB &db_p, shared_ptr<SetThreadsTaskState> state_p) : db(db_p), state(std::move(state_p)) {
+	}
+
+	TaskExecutionResult Execute(TaskExecutionMode) override {
+		string error;
+		try {
+			Connection con(db);
+			auto result = con.Query("SET threads=1");
+			if (result->HasError()) {
+				error = result->GetError();
+			}
+		} catch (std::exception &ex) {
+			error = ex.what();
+		}
+		{
+			lock_guard<mutex> guard(state->lock);
+			state->error = std::move(error);
+			state->finished = true;
+		}
+		state->cv.notify_one();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	DuckDB &db;
+	shared_ptr<SetThreadsTaskState> state;
+};
+
+TEST_CASE("Setting threads from a scheduler worker does not join the current thread", "[api]") {
+	DBConfig config;
+	config.options.maximum_threads = 2;
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	auto &scheduler = TaskScheduler::GetScheduler(*con.context);
+	auto producer = scheduler.CreateProducer();
+	auto state = make_shared_ptr<SetThreadsTaskState>();
+
+	scheduler.ScheduleTask(*producer, make_shared_ptr<SetThreadsTask>(db, state));
+	{
+		unique_lock<mutex> guard(state->lock);
+		REQUIRE(state->cv.wait_for(guard, std::chrono::seconds(5), [&] { return state->finished; }));
+		INFO(state->error);
+		REQUIRE(state->error.empty());
+	}
+
+	// The resize is deferred until query cleanup runs outside the scheduler pool.
+	REQUIRE(db.NumberOfThreads() == 2);
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+	REQUIRE(db.NumberOfThreads() == 1);
+}
+#endif
 
 void run_query_multiple_times(duckdb::unique_ptr<string> query, duckdb::unique_ptr<Connection> con) {
 	for (int i = 0; i < 10; ++i) {
