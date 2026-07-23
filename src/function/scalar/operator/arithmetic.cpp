@@ -94,7 +94,8 @@ template <class OP>
 static scalar_function_t GetMixedIntegerFunction(PhysicalType left, PhysicalType right) {
 #define DUCKDB_MIXED_ARITH_PAIR(LP, RP, TL, TR_, TRES)                                                                 \
 	if (left == PhysicalType::LP && right == PhysicalType::RP) {                                                       \
-		return &ScalarFunction::BinaryFunction<TL, TR_, TRES, OP>;                                                     \
+		scalar_function_t fn = &ScalarFunction::BinaryFunction<TL, TR_, TRES, OP>;                                     \
+		return fn;                                                                                                     \
 	}
 	DUCKDB_MIXED_ARITH_PAIR(INT16, INT8, int16_t, int8_t, int16_t)
 	DUCKDB_MIXED_ARITH_PAIR(INT8, INT16, int8_t, int16_t, int16_t)
