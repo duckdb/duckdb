@@ -818,7 +818,7 @@ char *FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t
 }
 
 static void ThrowInvalidFSSTSegment(const char *reason) {
-	throw IOException("Failed to read FSST string segment - %s. Database file appears to be corrupted.", reason);
+	throw DataCorruptionException("Failed to read FSST string segment - %s. Database file appears to be corrupted.", reason);
 }
 
 // Returns false if no symbol table was found. This means all strings are either empty or null

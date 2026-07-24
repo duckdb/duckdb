@@ -734,7 +734,7 @@ void SingleFileBlockManager::CheckChecksum(data_ptr_t start_ptr, uint64_t delta,
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		throw DataCorruptionException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
 		                  "at location %llu",
 		                  computed_checksum, stored_checksum, start_ptr);
 	}
@@ -757,7 +757,7 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		throw DataCorruptionException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
 		                  "at location %llu",
 		                  computed_checksum, stored_checksum, location);
 	}
