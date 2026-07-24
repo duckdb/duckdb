@@ -689,14 +689,22 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
+	auto &info = table.GetStorage().GetDataTableInfo();
 	// If there is a context available, bind indexes before serialization.
 	// This is necessary so that buffered index operations are replayed before we checkpoint, otherwise
 	// we would lose them if there was a restart after this.
 	if (context && context->transaction.HasActiveTransaction()) {
-		auto &info = table.GetStorage().GetDataTableInfo();
 		info->BindIndexes(*context);
+	} else {
+		for (auto &index : info->GetIndexes().Indexes()) {
+			if (!index.IsBound() && index.Cast<UnboundIndex>().HasBufferedReplays()) {
+				throw IOException(
+				    "Cannot checkpoint table \"%s\" without a client context because an index has buffered "
+				    "WAL operations",
+				    table.name);
+			}
+		}
 	}
-	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
 
 	// Write the table data
 	auto table_lock = table.GetStorage().GetCheckpointLock();
