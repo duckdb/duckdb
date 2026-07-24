@@ -606,6 +606,7 @@ private:
 	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
 	StarExpressionType FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root,
 	                                      bool in_columns);
+	void ExpandStructStarArguments(unique_ptr<ParsedExpression> &expr);
 	void ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr,
 	                                   vector<unique_ptr<ParsedExpression>> &replacements, StarExpression &star,
 	                                   optional_ptr<duckdb_re2::RE2> regex);
