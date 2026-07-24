@@ -111,6 +111,14 @@ public:
 	//! Serialize all indexes of the table.
 	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 
+public:
+	//! Initialize an index_chunk from a table.
+	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
+	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);
+	//! Reference the indexed columns of a table chunk.
+	static void ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
+	                                vector<StorageIndex> &mapped_column_ids);
+
 private:
 	//! A lock to prevent any concurrent changes to the index entries.
 	mutable mutex index_entries_lock;

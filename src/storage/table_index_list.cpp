@@ -399,4 +399,34 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 	}
 }
 
+void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
+                                          vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info) {
+	// table_chunk contains all table columns.
+	// We only reference the index columns in the index chunk.
+	auto &index_list = data_table_info.GetIndexes();
+	auto indexed_columns = index_list.GetRequiredColumns();
+
+	// Store the mapped_column_ids and index_types in sorted canonical form.
+	// First sort mapped_column_ids, then populate index_types according to the sorted order.
+	for (auto &col : indexed_columns) {
+		mapped_column_ids.emplace_back(col);
+	}
+	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
+
+	vector<LogicalType> index_types;
+	for (auto &col : mapped_column_ids) {
+		index_types.push_back(table_types[col.GetPrimaryIndex()]);
+	}
+
+	index_chunk.InitializeEmpty(index_types);
+}
+
+void TableIndexList::ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
+                                         vector<StorageIndex> &mapped_column_ids) {
+	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
+		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
+		index_chunk.data[i].Reference(table_chunk.data[col_id]);
+	}
+}
+
 } // namespace duckdb
