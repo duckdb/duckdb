@@ -11,6 +11,7 @@
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include "duckdb/storage/table/column_segment.hpp"
