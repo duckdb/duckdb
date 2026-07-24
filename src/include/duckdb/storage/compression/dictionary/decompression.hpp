@@ -25,6 +25,7 @@ public:
 private:
 	string_t FetchStringFromDict(int32_t dict_offset, uint16_t string_len);
 	uint16_t GetStringLength(sel_t index);
+	void ValidateDictionary(const SelectionVector &sel, idx_t scan_count) const;
 	void ValidateDictionaryIndex(sel_t index);
 	void ValidateDictionaryOffset(uint32_t dict_offset);
 

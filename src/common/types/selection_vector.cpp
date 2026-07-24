@@ -35,6 +35,17 @@ void SelectionVector::Sort(idx_t count) {
 	std::sort(sel_vector, sel_vector + count);
 }
 
+void SelectionVector::ShiftLeft(const idx_t offset, const idx_t count) {
+	D_ASSERT(sel_vector);
+	D_ASSERT(offset + count <= capacity);
+	if (offset == 0) {
+		return;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		sel_vector[i] = sel_vector[i + offset];
+	}
+}
+
 void SelectionVector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
 }
