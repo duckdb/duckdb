@@ -55,7 +55,10 @@ FOR_INSTANTIATE(uhugeint_t)
 // buffers are safe when processed back-to-front. Unsigned lanes are bit-identical to the signed widen.
 template <class S, class L>
 DUCKDB_AUTOVEC_TARGET static inline void WidenBlock8(const S *src, L *dst) {
-	using namespace duckdb_bitpacking::internal;
+	using duckdb_bitpacking::internal::duckdb_bp_u16x8;
+	using duckdb_bitpacking::internal::duckdb_bp_u32x8;
+	using duckdb_bitpacking::internal::duckdb_bp_u64x4;
+	using duckdb_bitpacking::internal::duckdb_bp_u8x8;
 	if constexpr (sizeof(S) == 1) {
 		duckdb_bp_u8x8 v;
 		std::memcpy(&v, src, 8);
@@ -90,25 +93,59 @@ DUCKDB_AUTOVEC_TARGET static inline void WidenBlock8(const S *src, L *dst) {
 }
 #endif
 
+//! Dense case: disjoint buffers, widen forward in 8-value blocks; returns the number of values handled
+//! (0 when the autovec block path is unavailable for this type pair, leaving everything to the caller).
+template <class STORED_T, class LOGICAL_T>
+static inline idx_t WidenDenseBlocks(const STORED_T *src, LOGICAL_T *dst, idx_t count) {
+	idx_t i = 0;
+#if DUCKDB_AUTOVEC
+	if constexpr (sizeof(LOGICAL_T) <= 8 && sizeof(STORED_T) < sizeof(LOGICAL_T)) {
+		using UL = typename MakeUnsigned<LOGICAL_T>::type;
+		auto udst = reinterpret_cast<UL *>(dst);
+		for (; i + 8 <= count; i += 8) {
+			WidenBlock8<STORED_T, UL>(src + i, udst + i);
+		}
+	}
+#else
+	(void)src;
+	(void)dst;
+	(void)count;
+#endif
+	return i;
+}
+
+//! In-place back-to-front widen in 8-value blocks (each block loads before it stores); returns false when
+//! the autovec block path is unavailable, leaving the payload untouched for the caller's fallback.
+template <class STORED_T, class LOGICAL_T>
+static inline bool WidenInPlaceBlocks(const STORED_T *src, LOGICAL_T *dst, idx_t count) {
+#if DUCKDB_AUTOVEC
+	if constexpr (sizeof(LOGICAL_T) <= 8) {
+		using UL = typename MakeUnsigned<LOGICAL_T>::type;
+		auto udst = reinterpret_cast<UL *>(dst);
+		idx_t i = count & ~idx_t(7);
+		for (idx_t k = count; k-- > i;) {
+			dst[k] = FORVector::WidenStored<LOGICAL_T>(src[k]);
+		}
+		while (i) {
+			i -= 8;
+			WidenBlock8<STORED_T, UL>(src + i, udst + i);
+		}
+		return true;
+	}
+#endif
+	(void)src;
+	(void)dst;
+	(void)count;
+	return false;
+}
+
 template <class LOGICAL_T>
 static void WidenFORPayload(PhysicalType stored_type, const_data_ptr_t source, data_ptr_t target,
                             const SelectionVector &sel, idx_t count) {
 	auto target_data = reinterpret_cast<LOGICAL_T *>(target);
 	FOR_SWITCH_STORED(stored_type, STORED_T, {
 		auto source_data = reinterpret_cast<const STORED_T *>(source);
-		idx_t i = 0;
-#if DUCKDB_AUTOVEC
-		if constexpr (sizeof(LOGICAL_T) <= 8 && sizeof(STORED_T) < sizeof(LOGICAL_T)) {
-			if (!sel.IsSet()) {
-				// dense case: disjoint buffers, widen forward in 8-value blocks
-				using UL = typename MakeUnsigned<LOGICAL_T>::type;
-				auto udst = reinterpret_cast<UL *>(target);
-				for (; i + 8 <= count; i += 8) {
-					WidenBlock8<STORED_T, UL>(source_data + i, udst + i);
-				}
-			}
-		}
-#endif
+		idx_t i = sel.IsSet() ? 0 : WidenDenseBlocks(source_data, target_data, count);
 		for (; i < count; i++) {
 			target_data[i] = FORVector::WidenStored<LOGICAL_T>(source_data[sel.get_index(i)]);
 		}
@@ -136,24 +173,7 @@ void FORVector::WidenInPlace(const LogicalType &type, VectorBuffer &buffer) {
 				(void)src;
 				(void)dst;
 			} else {
-				bool done = false;
-#if DUCKDB_AUTOVEC
-				if constexpr (sizeof(LOGICAL_T) <= 8) {
-					// widen back-to-front in 8-value blocks: each block loads before it stores
-					using UL = typename MakeUnsigned<LOGICAL_T>::type;
-					auto udst = reinterpret_cast<UL *>(data);
-					idx_t i = count & ~idx_t(7);
-					for (idx_t k = count; k-- > i;) {
-						dst[k] = WidenStored<LOGICAL_T>(src[k]);
-					}
-					while (i) {
-						i -= 8;
-						WidenBlock8<STORED_T, UL>(src + i, udst + i);
-					}
-					done = true;
-				}
-#endif
-				if (!done) {
+				if (!WidenInPlaceBlocks(src, dst, count)) {
 					// widen back-to-front in chunks via a stack copy so the loop has disjoint operands
 					STORED_T tmp[STANDARD_VECTOR_SIZE];
 					for (idx_t end = count; end > 0;) {
@@ -314,6 +334,9 @@ bool FORVector::TryCastType(Vector &source, Vector &result, idx_t count) {
 	auto buffer = make_buffer<StandardVectorBuffer>(GetData(source), count_t(count),
 	                                                GetTypeIdSize(result.GetType().InternalType()));
 	buffer->AddAuxiliaryData(make_uniq<VectorBufferHolder>(source.GetBufferRef()));
+	// the view aliases the payload: revoke the source's in-place widen permission, so a later flatten
+	// of the source copies out instead of mutating the data seen through this view
+	source.BufferMutable().cache_owned = false;
 	if (GetTypeIdSize(st) == GetTypeIdSize(result.GetType().InternalType())) {
 		// stored payload is already the target width bit-for-bit (all values in [0, max] fit the target),
 		// so the FOR label adds nothing: hand back a FLAT reinterpret. This is what compressed
