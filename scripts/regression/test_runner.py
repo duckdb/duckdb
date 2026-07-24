@@ -4,8 +4,7 @@ import functools
 import shutil
 from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
 from dataclasses import dataclass
-from typing import Optional, List, Union
-import subprocess
+from typing import Optional, List, Union, Dict
 from pathlib import Path
 
 print = functools.partial(print, flush=True)
@@ -78,6 +77,7 @@ no_summary = args.no_summary
 clear_benchmark_cache = args.clear_benchmark_cache
 keep_benchmark_data = args.keep_benchmark_data
 regression_threshold_seconds = args.regression_threshold_seconds
+timed_runs = args.timed_runs
 
 
 # how many times we will run the experiment, to be sure of the regression
@@ -86,6 +86,18 @@ NUMBER_REPETITIONS = 5
 REGRESSION_THRESHOLD_PERCENTAGE = 0.1
 # minimal seconds diff for something to be a regression (for very fast benchmarks)
 REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
+# hide benchmark changes that are below the noise floor in the final report
+DISPLAY_THRESHOLD_PERCENTAGE = 2.0
+
+ANSI_RED = "\033[31m"
+ANSI_GREEN = "\033[32m"
+ANSI_RESET = "\033[0m"
+
+BUCKET_UNCHANGED = "unchanged"
+BUCKET_FASTER = "faster"
+BUCKET_SLOWER = "slower"
+BUCKET_REGRESSION = "regression"
+BUCKET_FAILURE = "failure"
 
 
 def in_ci():
@@ -111,12 +123,28 @@ def format_seconds(value: Union[float, str]) -> str:
     return f"{value:.3f}s"
 
 
+def format_delta_seconds(delta: float) -> str:
+    if delta == 0:
+        return "0.000s"
+    if abs(delta) < 0.001:
+        if delta < 0:
+            return "-<0.001s"
+        return "<0.001s"
+    return f"{delta:+.3f}s"
+
+
+def format_percentage(value: float) -> str:
+    if math.isfinite(value):
+        return f"{value:+.1f}%"
+    return "+inf%"
+
+
 def regression_delta(old_value: float, new_value: float) -> str:
     delta_sec = new_value - old_value
     delta_pct = ((new_value / old_value) - 1.0) * 100.0 if old_value > 0 else math.inf
     if math.isfinite(delta_pct):
-        return f"+{delta_sec:.3f}s ({delta_pct:.2f}%)"
-    return f"+{delta_sec:.3f}s"
+        return f"{format_delta_seconds(delta_sec)} ({format_percentage(delta_pct)})"
+    return format_delta_seconds(delta_sec)
 
 
 def emit_github_error(title: str, message: str):
@@ -131,14 +159,10 @@ def benchmark_timing_summary(regression: "BenchmarkResult"):
 
 
 def report_regression(regression: "BenchmarkResult", summary: List[dict], summary_lines: List[str]):
-    print(f"{regression.benchmark}")
-    print(f"Old timing: {regression.old_result}")
-    print(f"New timing: {regression.new_result}")
     old_timing, new_timing = benchmark_timing_summary(regression)
     error_title = "Regression benchmark"
     if not isinstance(regression.old_result, str) and not isinstance(regression.new_result, str):
         delta = regression_delta(regression.old_result, regression.new_result)
-        print(f"Delta: {delta}")
         message = f"{suite_name()}: {regression.benchmark} regressed from {old_timing} to {new_timing} ({delta})"
         summary_delta = delta
     else:
@@ -153,7 +177,220 @@ def report_regression(regression: "BenchmarkResult", summary: List[dict], summar
             "new_failure": regression.new_failure,
         }
         summary.append(new_data)
+
+
+@dataclass
+class BenchmarkRow:
+    result: "BenchmarkResult"
+    display_name: str
+    old_timing: str
+    new_timing: str
+    delta: str
+    change: str
+    bucket: str
+    percentage: float = 0
+
+
+def benchmark_common_prefix(benchmarks: List[str]) -> str:
+    directories = [os.path.dirname(benchmark) for benchmark in benchmarks if os.path.dirname(benchmark)]
+    if not directories:
+        return ""
+    common_prefix = os.path.commonpath(directories)
+    if common_prefix in ("", "."):
+        return ""
+    return common_prefix + os.sep
+
+
+def benchmark_display_names(benchmarks: List[str]) -> Dict[str, str]:
+    common_prefix = benchmark_common_prefix(benchmarks)
+    display_names = {}
+    for benchmark in benchmarks:
+        display_name = benchmark
+        if common_prefix and benchmark.startswith(common_prefix):
+            display_name = benchmark[len(common_prefix) :]
+        if display_name.endswith(".benchmark"):
+            display_name = display_name[: -len(".benchmark")]
+        display_names[benchmark] = display_name
+    return display_names
+
+
+def is_regression(old_value: float, new_value: float) -> bool:
+    return (old_value + REGRESSION_THRESHOLD_SECONDS) * multiply_percentage < new_value
+
+
+def classify_result(result: "BenchmarkResult") -> str:
+    if isinstance(result.old_result, str) or isinstance(result.new_result, str):
+        return BUCKET_FAILURE
+    if is_regression(result.old_result, result.new_result):
+        return BUCKET_REGRESSION
+    if result.new_result > result.old_result:
+        return BUCKET_SLOWER
+    if result.new_result < result.old_result:
+        return BUCKET_FASTER
+    return BUCKET_UNCHANGED
+
+
+def benchmark_row(result: "BenchmarkResult", display_name: str) -> BenchmarkRow:
+    if isinstance(result.old_result, str) or isinstance(result.new_result, str):
+        return BenchmarkRow(
+            result=result,
+            display_name=display_name,
+            old_timing=format_seconds(result.old_result),
+            new_timing=format_seconds(result.new_result),
+            delta="failed",
+            change="failed",
+            bucket=BUCKET_FAILURE,
+        )
+    delta = result.new_result - result.old_result
+    percentage = ((result.new_result / result.old_result) - 1.0) * 100.0 if result.old_result > 0 else math.inf
+    return BenchmarkRow(
+        result=result,
+        display_name=display_name,
+        old_timing=format_seconds(result.old_result),
+        new_timing=format_seconds(result.new_result),
+        delta=format_delta_seconds(delta),
+        change=format_percentage(percentage),
+        bucket=classify_result(result),
+        percentage=percentage,
+    )
+
+
+def show_in_report(row: BenchmarkRow) -> bool:
+    if row.bucket in (BUCKET_REGRESSION, BUCKET_FAILURE):
+        return True
+    if not math.isfinite(row.percentage):
+        return True
+    return abs(row.percentage) >= DISPLAY_THRESHOLD_PERCENTAGE
+
+
+def color_change(row: BenchmarkRow, value: str) -> str:
+    if row.bucket in (BUCKET_REGRESSION, BUCKET_SLOWER, BUCKET_FAILURE):
+        return f"{ANSI_RED}{value}{ANSI_RESET}"
+    if row.bucket == BUCKET_FASTER:
+        return f"{ANSI_GREEN}{value}{ANSI_RESET}"
+    return value
+
+
+def row_sort_key(row: BenchmarkRow):
+    bucket_order = {
+        BUCKET_UNCHANGED: 0,
+        BUCKET_FASTER: 1,
+        BUCKET_SLOWER: 2,
+        BUCKET_REGRESSION: 3,
+        BUCKET_FAILURE: 4,
+    }
+    if row.bucket == BUCKET_FASTER:
+        bucket_value = -row.percentage
+    elif row.bucket in (BUCKET_SLOWER, BUCKET_REGRESSION):
+        bucket_value = row.percentage
+    else:
+        bucket_value = 0
+    return bucket_order[row.bucket], bucket_value, row.display_name
+
+
+def render_table(rows: List[BenchmarkRow]):
+    if len(rows) == 0:
+        return
+    headers = ["benchmark", "old", "new", "delta", "change"]
+    plain_rows = [[row.display_name, row.old_timing, row.new_timing, row.delta, row.change] for row in rows]
+    widths = [len(header) for header in headers]
+    for plain_row in plain_rows:
+        for index, value in enumerate(plain_row):
+            widths[index] = max(widths[index], len(value))
+
+    header = "  ".join(headers[index].ljust(widths[index]) for index in range(len(headers)))
+    separator = "  ".join("-" * widths[index] for index in range(len(headers)))
+    print(header)
+    print(separator)
+    for row, plain_row in zip(rows, plain_rows):
+        cells = []
+        for index, value in enumerate(plain_row):
+            padded = value.ljust(widths[index])
+            if headers[index] == "change":
+                padded = color_change(row, padded)
+            cells.append(padded)
+        print("  ".join(cells))
+
+
+def print_banner(title: str):
+    print("====================================================")
+    print(f"==============  {title.center(26)}  =============")
+    print("====================================================")
     print("")
+
+
+def print_aggregate_report(
+    rows: List[BenchmarkRow], common_prefix: str, result_text: str, total_count: int, hidden_noise_count: int
+):
+    print_banner("BENCHMARK QUERY AGGREGATES")
+    print(f"suite: {suite_name()}")
+    if common_prefix:
+        print(f"common prefix: {common_prefix}")
+    print(f"benchmarks: {total_count}")
+    if timed_runs:
+        print(f"timing: median of {timed_runs} timed runs")
+    else:
+        print("timing: median")
+    print(f"threshold: +{REGRESSION_THRESHOLD_PERCENTAGE * 100.0:.1f}% and +{REGRESSION_THRESHOLD_SECONDS:.3f}s")
+    print(f"display threshold: +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
+    print(f"hidden noise: {hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
+    print(f"result: {result_text}")
+    print("")
+    if len(rows) == 0:
+        print("0 benchmarks above display threshold")
+    else:
+        render_table(rows)
+
+
+def print_bucket(title: str, rows: List[BenchmarkRow], hidden_noise_count: int = 0):
+    print("")
+    print(title)
+    if title == "UNCHANGED / NOISE":
+        print(f"{hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
+        return
+    if len(rows) == 0:
+        print("0 benchmarks")
+        return
+    render_table(rows)
+
+
+def print_impact_bucket_summary(rows: List[BenchmarkRow], result_text: str, hidden_noise_count: int):
+    buckets = {
+        BUCKET_UNCHANGED: [row for row in rows if row.bucket == BUCKET_UNCHANGED],
+        BUCKET_FASTER: [row for row in rows if row.bucket == BUCKET_FASTER],
+        BUCKET_SLOWER: [row for row in rows if row.bucket == BUCKET_SLOWER],
+        BUCKET_REGRESSION: [row for row in rows if row.bucket == BUCKET_REGRESSION],
+        BUCKET_FAILURE: [row for row in rows if row.bucket == BUCKET_FAILURE],
+    }
+    print("")
+    print_banner("IMPACT BUCKETS SUMMARY")
+    print(f"result: {result_text}")
+    print_bucket("UNCHANGED / NOISE", buckets[BUCKET_UNCHANGED], hidden_noise_count)
+    print_bucket("FASTER", buckets[BUCKET_FASTER])
+    print_bucket("SLOWER BELOW THRESHOLD", buckets[BUCKET_SLOWER])
+    print_bucket("REGRESSIONS", buckets[BUCKET_REGRESSION])
+    if len(buckets[BUCKET_FAILURE]) > 0:
+        print_bucket("FAILURES", buckets[BUCKET_FAILURE])
+
+
+def print_geomean_summary(time_a: Union[float, str], time_b: Union[float, str]):
+    print("")
+    if isinstance(time_a, str) or isinstance(time_b, str):
+        print(f"geomean old: {time_a}")
+        print(f"geomean new: {time_b}")
+        return
+    delta_pct = ((time_b / time_a) - 1.0) * 100.0 if time_a > 0 else math.inf
+    row = BenchmarkRow(
+        result=BenchmarkResult("geomean", time_a, time_b),
+        display_name="geomean",
+        old_timing=format_seconds(time_a),
+        new_timing=format_seconds(time_b),
+        delta=format_delta_seconds(time_b - time_a),
+        change=format_percentage(delta_pct),
+        bucket=BUCKET_SLOWER if delta_pct > 0 else BUCKET_FASTER if delta_pct < 0 else BUCKET_UNCHANGED,
+        percentage=delta_pct,
+    )
+    print(f"geomean: {format_seconds(time_a)} -> {format_seconds(time_b)}  {color_change(row, row.change)}")
 
 
 if not os.path.isfile(old_runner_path):
@@ -177,8 +414,12 @@ if clear_benchmark_cache:
         pass
 
 config_dict = vars(args)
-old_runner = BenchmarkRunner(BenchmarkRunnerConfig.from_params(old_runner_path, benchmark_file, **config_dict))
-new_runner = BenchmarkRunner(BenchmarkRunnerConfig.from_params(new_runner_path, benchmark_file, **config_dict))
+old_runner = BenchmarkRunner(
+    BenchmarkRunnerConfig.from_params(old_runner_path, benchmark_file, runner_label="old", **config_dict)
+)
+new_runner = BenchmarkRunner(
+    BenchmarkRunnerConfig.from_params(new_runner_path, benchmark_file, runner_label="new", **config_dict)
+)
 
 benchmark_list = old_runner.benchmark_list
 
@@ -230,64 +471,44 @@ for i in range(NUMBER_REPETITIONS):
             other_results.append(BenchmarkResult(benchmark, old_res, new_res))
     benchmark_list = [res.benchmark for res in regression_list]
 
+final_regression_results = regression_list + error_list
+all_results = other_results + final_regression_results
+display_names = benchmark_display_names([result.benchmark for result in all_results])
+rows = [benchmark_row(result, display_names[result.benchmark]) for result in all_results]
+rows.sort(key=row_sort_key)
+visible_rows = [row for row in rows if show_in_report(row)]
+hidden_noise_count = len(rows) - len(visible_rows)
+
 exit_code = 0
-regression_list.extend(error_list)
 summary = []
-if len(regression_list) > 0:
+if len(final_regression_results) > 0:
     exit_code = 1
-    print(
-        '''====================================================
-==============  REGRESSIONS DETECTED   =============
-====================================================
-'''
-    )
     summary_lines = [
         f"## Regression Suite: `{suite_name()}`",
         "",
         "| Benchmark | Base | PR | Delta |",
         "| --- | --- | --- | --- |",
     ]
-    for regression in regression_list:
+    for regression in final_regression_results:
         report_regression(regression, summary, summary_lines)
     append_step_summary(summary_lines + [""])
-    print(
-        '''====================================================
-==============     OTHER TIMINGS       =============
-====================================================
-'''
-    )
-else:
-    print(
-        '''====================================================
-============== NO REGRESSIONS DETECTED  =============
-====================================================
-'''
-    )
 
-other_results.sort(key=lambda x: x.benchmark)
-for res in other_results:
-    print(f"{res.benchmark}")
-    print(f"Old timing: {res.old_result}")
-    print(f"New timing: {res.new_result}")
-    print("")
+has_failures = any(row.bucket == BUCKET_FAILURE for row in rows)
+has_regressions = any(row.bucket == BUCKET_REGRESSION for row in rows)
+if has_failures:
+    result_text = "benchmark failure detected"
+elif has_regressions:
+    result_text = "regression detected"
+else:
+    result_text = "no regressions detected"
+
+common_prefix = benchmark_common_prefix([result.benchmark for result in all_results])
+print_aggregate_report(visible_rows, common_prefix, result_text, len(rows), hidden_noise_count)
 
 time_a = geomean(old_runner.complete_timings)
 time_b = geomean(new_runner.complete_timings)
-
-
-print("")
-if isinstance(time_a, str) or isinstance(time_b, str):
-    print(f"Old: {time_a}")
-    print(f"New: {time_b}")
-elif time_a > time_b * 1.01:
-    print(f"Old timing geometric mean: {time_a}")
-    print(f"New timing geometric mean: {time_b}, roughly {int((time_a - time_b) * 100.0 / time_a)}% faster")
-elif time_b > time_a * 1.01:
-    print(f"Old timing geometric mean: {time_a}, roughly {int((time_b - time_a) * 100.0 / time_b)}% faster")
-    print(f"New timing geometric mean: {time_b}")
-else:
-    print(f"Old timing geometric mean: {time_a}")
-    print(f"New timing geometric mean: {time_b}")
+print_geomean_summary(time_a, time_b)
+print_impact_bucket_summary(visible_rows, result_text, hidden_noise_count)
 
 # nuke cached benchmark data between runs
 if not keep_benchmark_data:
