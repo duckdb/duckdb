@@ -1,0 +1,225 @@
+module: datetime_helpers
+functions:
+  from_date:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      date:
+        type: date
+        description: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
+    return_type: date_struct
+    description: |
+      Decompose a `duckdb_date` object into year, month and date (stored as `duckdb_date_struct`).
+    return_description: The `duckdb_date_struct` with the decomposed elements.
+  to_date:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      date:
+        type: date_struct
+        description: The year, month and date stored in a `duckdb_date_struct`.
+    return_type: date
+    description: |
+      Re-compose a `duckdb_date` from year, month and date (`duckdb_date_struct`).
+    return_description: The `duckdb_date` element.
+  is_finite_date:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      date:
+        type: date
+        description: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
+    return_type: bool
+    description: |
+      Test a `duckdb_date` to see if it is a finite value.
+    return_description: True if the date is finite, false if it is ±infinity.
+  from_time:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      time:
+        type: time
+        description: The time object, as obtained from a `DUCKDB_TYPE_TIME` column.
+    return_type: time_struct
+    description: |
+      Decompose a `duckdb_time` object into hour, minute, second and microsecond (stored as `duckdb_time_struct`).
+    return_description: The `duckdb_time_struct` with the decomposed elements.
+  create_time_tz:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      micros:
+        type: i64
+        description: The microsecond component of the time.
+      offset:
+        type: i32
+        description: The timezone offset component of the time.
+    return_type: time_tz
+    description: |
+      Create a `duckdb_time_tz` object from micros and a timezone offset.
+    return_description: The `duckdb_time_tz` element.
+  from_time_tz:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      micros:
+        type: time_tz
+        description: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
+    return_type: time_tz_struct
+    description: |
+      Decompose a TIME_TZ objects into micros and a timezone offset.
+
+      Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
+  to_time:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      time:
+        type: time_struct
+        description: The hour, minute, second and microsecond in a `duckdb_time_struct`.
+    return_type: time
+    description: |
+      Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).
+    return_description: The `duckdb_time` element.
+  from_timestamp:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      ts:
+        type: timestamp
+        description: The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
+    return_type: timestamp_struct
+    description: |
+      Decompose a `duckdb_timestamp` object into a `duckdb_timestamp_struct`.
+    return_description: The `duckdb_timestamp_struct` with the decomposed elements.
+  to_timestamp:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      ts:
+        type: timestamp_struct
+        description: The de-composed elements in a `duckdb_timestamp_struct`.
+    return_type: timestamp
+    description: |
+      Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
+    return_description: The `duckdb_timestamp` element.
+  is_finite_timestamp:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      ts:
+        type: timestamp
+        description: The duckdb_timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
+    return_type: bool
+    description: |
+      Test a `duckdb_timestamp` to see if it is a finite value.
+    return_description: True if the timestamp is finite, false if it is ±infinity.
+  is_finite_timestamp_s:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      ts:
+        type: timestamp_s
+        description: The duckdb_timestamp_s object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column.
+    return_type: bool
+    description: |
+      Test a `duckdb_timestamp_s` to see if it is a finite value.
+    return_description: True if the timestamp is finite, false if it is ±infinity.
+  is_finite_timestamp_ms:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      ts:
+        type: timestamp_ms
+        description: The duckdb_timestamp_ms object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column.
+    return_type: bool
+    description: |
+      Test a `duckdb_timestamp_ms` to see if it is a finite value.
+    return_description: True if the timestamp is finite, false if it is ±infinity.
+  is_finite_timestamp_ns:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      ts:
+        type: timestamp_ns
+        description: The duckdb_timestamp_ns object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column.
+    return_type: bool
+    description: |
+      Test a `duckdb_timestamp_ns` to see if it is a finite value.
+    return_description: True if the timestamp is finite, false if it is ±infinity.
+  hugeint_to_double:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: hugeint
+        description: The hugeint value.
+    return_type: f64
+    description: |
+      Converts a duckdb_hugeint object (as obtained from a `DUCKDB_TYPE_HUGEINT` column) into a double.
+    return_description: The converted `double` element.
+  double_to_hugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: f64
+        description: The double value.
+    return_type: hugeint
+    description: |
+      Converts a double value to a duckdb_hugeint object.
+
+      If the conversion fails because the double value is too big the result will be 0.
+    return_description: The converted `duckdb_hugeint` element.
+  uhugeint_to_double:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: uhugeint
+        description: The uhugeint value.
+    return_type: f64
+    description: |
+      Converts a duckdb_uhugeint object (as obtained from a `DUCKDB_TYPE_UHUGEINT` column) into a double.
+    return_description: The converted `double` element.
+  double_to_uhugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: f64
+        description: The double value.
+    return_type: uhugeint
+    description: |
+      Converts a double value to a duckdb_uhugeint object.
+
+      If the conversion fails because the double value is too big the result will be 0.
+    return_description: The converted `duckdb_uhugeint` element.
+  double_to_decimal:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: f64
+        description: The double value.
+      width:
+        type: u8
+      scale:
+        type: u8
+    return_type: decimal
+    description: |
+      Converts a double value to a duckdb_decimal object.
+
+      If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
+    return_description: The converted `duckdb_decimal` element.
+  decimal_to_double:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: decimal
+        description: The decimal value.
+    return_type: f64
+    description: |
+      Converts a duckdb_decimal object (as obtained from a `DUCKDB_TYPE_DECIMAL` column) into a double.
+    return_description: The converted `double` element.

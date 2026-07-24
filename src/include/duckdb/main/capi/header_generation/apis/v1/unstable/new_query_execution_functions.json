@@ -1,7 +1,0 @@
-{
-  "version": "unstable_new_query_execution_functions",
-  "description": "New query execution functions",
-  "entries": [
-    "duckdb_result_get_arrow_options"
-  ]
-}
