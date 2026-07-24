@@ -2,6 +2,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -130,15 +131,305 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 	}
 }
 
+static bool AllExpressionsNonVolatile(const vector<unique_ptr<Expression>> &expressions) {
+	for (auto &expr : expressions) {
+		if (expr->IsVolatile()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+//! Whether the result of this aggregation depends on duplicate rows in its input
+static AggregateDistinctDependent AggregateDistinctDependence(const LogicalAggregate &aggr) {
+	// a volatile group expression (e.g. GROUP BY random()) gives every duplicate input row its own group
+	if (!AllExpressionsNonVolatile(aggr.groups)) {
+		return AggregateDistinctDependent::DISTINCT_DEPENDENT;
+	}
+	for (auto &expr : aggr.expressions) {
+		// a volatile argument (e.g. min(x + random())) draws a new value for every duplicate input row
+		if (expr->IsVolatile()) {
+			return AggregateDistinctDependent::DISTINCT_DEPENDENT;
+		}
+		auto &aggregate = expr->Cast<BoundAggregateExpression>();
+		if (aggregate.IsDistinct()) {
+			continue;
+		}
+		if (aggregate.Function().GetDistinctDependent() == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT) {
+			continue;
+		}
+		return AggregateDistinctDependent::DISTINCT_DEPENDENT;
+	}
+	return AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
+}
+
+static bool GroupingMergesDistinguishableValues(const LogicalType &type) {
+	// grouping compares the physical representation with the hardcoded comparators in comparison_operators.hpp,
+	// so this is decided purely by the type id: extension types inherit the behavior of the id they alias.
+	// values that only merge when their physical representation is identical are never a problem: identical
+	// values cannot behave differently downstream. Non-canonical encodings (two representations of the same
+	// logical value) merely fail to merge, which is the harmless opposite direction. The problematic types are
+	// exactly the ones with a comparator that normalizes before comparing.
+	return TypeVisitor::Contains(type, [](const LogicalType &ty) {
+		switch (ty.id()) {
+		// fixed-width scalars compared by value: they only merge identical values
+		// (including TIME_TZ, whose comparison includes the offset, not just the instant)
+		case LogicalTypeId::BOOLEAN:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::UHUGEINT:
+		case LogicalTypeId::DECIMAL:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIME_TZ:
+		case LogicalTypeId::TIME_NS:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+		case LogicalTypeId::UUID:
+		case LogicalTypeId::ENUM:
+			return false;
+		// bytewise string_t equality (no unicode or other normalization): they only merge identical values
+		case LogicalTypeId::BLOB:
+		case LogicalTypeId::BIT:
+		case LogicalTypeId::BIGNUM:
+		case LogicalTypeId::GEOMETRY:
+		case LogicalTypeId::TYPE:
+			return false;
+		case LogicalTypeId::VARCHAR:
+			// bytewise equality, unless a collation is attached (e.g. NOCASE merges 'a' and 'A')
+			return !StringType::GetCollation(ty).empty();
+		// the only value is NULL
+		case LogicalTypeId::SQLNULL:
+			return false;
+		// element-wise equality, the child types are visited separately; MAP is key-order-sensitive and
+		// UNION is tag-sensitive, so the containers themselves only merge identical values
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE:
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::ARRAY:
+		case LogicalTypeId::MAP:
+		case LogicalTypeId::UNION:
+		case LogicalTypeId::VARIANT:
+			return false;
+		// normalizing comparator (EqualsFloat): -0.0 and 0.0 merge, as do all NaN bit patterns;
+		// a VARCHAR cast or signbit() tells both pairs apart ('0.0' vs '-0.0', 'nan' vs '-nan'),
+		// and 1/x additionally tells the zeros apart (inf vs -inf)
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE:
+			return true;
+		// normalizing comparator (Interval::Equals): 1 month = 30 days, but the values behave differently
+		// in date arithmetic and casts to VARCHAR
+		case LogicalTypeId::INTERVAL:
+			return true;
+		// internal and planning-only types that should not appear as the type of a bound group expression;
+		// conservatively assume they merge
+		case LogicalTypeId::INVALID:
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::ANY:
+		case LogicalTypeId::UNBOUND:
+		case LogicalTypeId::TEMPLATE:
+		case LogicalTypeId::CHAR:
+		case LogicalTypeId::STRING_LITERAL:
+		case LogicalTypeId::INTEGER_LITERAL:
+		case LogicalTypeId::POINTER:
+		case LogicalTypeId::VALIDITY:
+		case LogicalTypeId::TABLE:
+		case LogicalTypeId::LAMBDA:
+		case LogicalTypeId::LEGACY_AGGREGATE_STATE:
+			return true;
+		}
+		throw InternalException("Unhandled type in GroupingMergesDistinguishableValues");
+	});
+}
+
+//! Whether an aggregate that only performs duplicate elimination (no aggregate expressions) can be replaced by a
+//! projection of its groups, for a parent that ignores duplicate rows
+bool RemoveUnusedColumns::CanReplaceAggregateWithProjection(const LogicalAggregate &aggr) {
+	D_ASSERT(aggr.expressions.empty());
+	if (aggr.groups.empty()) {
+		// scalar aggregate, produces exactly one row instead of eliminating duplicates
+		return false;
+	}
+	if (aggr.grouping_sets.size() > 1 || !aggr.grouping_functions.empty()) {
+		// with multiple grouping sets (ROLLUP/CUBE) the aggregate is not just a duplicate eliminator: it outputs one
+		// batch of rows per grouping set (e.g. the subtotal and grand-total rows of a ROLLUP), which a projection of
+		// the input rows cannot produce; and GROUPING() reports which set a row belongs to, which has no projection
+		// equivalent either
+		return false;
+	}
+	if (!aggr.grouping_sets.empty() && aggr.grouping_sets[0].size() != aggr.groups.size()) {
+		// groups that are not part of the (single) grouping set are output as NULL instead of being grouped on,
+		// a projection would output their actual values
+		return false;
+	}
+	for (idx_t i = 0; i < aggr.groups.size(); i++) {
+		if (column_references.find(ColumnBinding(aggr.group_index, ProjectionIndex(i))) == column_references.end()) {
+			// unreferenced groups are not observable, so their values do not matter
+			continue;
+		}
+		if (GroupingMergesDistinguishableValues(aggr.groups[i]->GetReturnType())) {
+			// the grouping outputs one representative per group of equal-comparing values, a projection would
+			// expose all of them (e.g. both -0.0 and 0.0)
+			return false;
+		}
+	}
+	// volatile group expressions (e.g. GROUP BY random()) do not block the removal: grouping evaluates the group
+	// key once per input row (not per group), exactly like the replacement projection does
+	return true;
+}
+
+void RemoveUnusedColumns::RemoveUnusedGroups(LogicalAggregate &aggr) {
+	// removing a group changes which rows are duplicates of each other, so this is only called when the parent
+	// ignores duplicate rows and no aggregate expressions remain (their values would change when groups merge)
+	D_ASSERT(aggr.expressions.empty());
+	if (aggr.groups.empty()) {
+		// scalar aggregate, there are no groups to prune
+		return;
+	}
+	if (aggr.grouping_sets.size() > 1 || !aggr.grouping_functions.empty()) {
+		// grouping sets are defined as positions into the group list, so pruning a group would silently redefine
+		// which columns each set (and thus each ROLLUP/CUBE subtotal) covers; GROUPING() also refers to groups by
+		// index and would report the wrong sets after pruning
+		return;
+	}
+	if (!aggr.grouping_sets.empty() && aggr.grouping_sets[0].size() != aggr.groups.size()) {
+		// groups that are not part of the (single) grouping set are output as NULL instead of being grouped on,
+		// pruning would change which groups the set covers
+		return;
+	}
+	if (!aggr.group_stats.empty()) {
+		// group statistics are positional, they would have to be pruned in lockstep
+		return;
+	}
+	vector<idx_t> referenced_indexes;
+	for (idx_t i = 0; i < aggr.groups.size(); i++) {
+		if (column_references.find(ColumnBinding(aggr.group_index, ProjectionIndex(i))) == column_references.end()) {
+			continue;
+		}
+		referenced_indexes.push_back(i);
+		if (GroupingMergesDistinguishableValues(aggr.groups[i]->GetReturnType())) {
+			// pruning merges groups, which changes which value is output as the representative of a kept group
+			return;
+		}
+	}
+	if (referenced_indexes.empty()) {
+		// nothing references any of the groups: the only observable behavior this aggregate has left is that it
+		// emits no rows for empty input and at least one row otherwise. Pruning all groups would break exactly
+		// that: the LOGICAL_AGGREGATE_AND_GROUP_BY case in VisitOperator (our caller) turns an aggregate
+		// without groups and expressions into a scalar COUNT(*), and a scalar aggregate emits one row even for
+		// empty input. Keeping the groups is free instead: unreferenced groups never block
+		// CanReplaceAggregateWithProjection, so our caller removes the whole aggregate anyway, and the
+		// projection that replaces it preserves emptiness at no cost
+		return;
+	}
+	if (referenced_indexes.size() == aggr.groups.size()) {
+		// every group is referenced, so there is nothing to prune
+		return;
+	}
+	ClearUnusedExpressions(aggr.groups, aggr.group_index);
+	D_ASSERT(aggr.groups.size() == referenced_indexes.size());
+	// ClearUnusedExpressions rewrote the bindings inside the referencing expressions, but column_references is
+	// still keyed by the old bindings; re-key it so later lookups against this aggregate (like the group checks
+	// in CanReplaceAggregateWithProjection) still recognize the shifted groups as referenced
+	for (idx_t new_idx = 0; new_idx < referenced_indexes.size(); new_idx++) {
+		auto old_idx = referenced_indexes[new_idx];
+		if (old_idx == new_idx) {
+			continue;
+		}
+		// the new key is always free: it either belonged to a referenced group that was already moved down in an
+		// earlier iteration, or to a pruned (unreferenced) group that never had an entry
+		auto entry = column_references.find(ColumnBinding(aggr.group_index, ProjectionIndex(old_idx)));
+		D_ASSERT(entry != column_references.end());
+		auto column = std::move(entry->second);
+		column_references.erase(entry);
+		column_references.emplace(ColumnBinding(aggr.group_index, ProjectionIndex(new_idx)), std::move(column));
+	}
+	if (!aggr.grouping_sets.empty()) {
+		GroupingSet new_set;
+		for (auto group_idx : ProjectionIndex::GetIndexes(aggr.groups.size())) {
+			new_set.insert(group_idx);
+		}
+		aggr.grouping_sets[0] = std::move(new_set);
+	}
+}
+
+void RemoveUnusedColumns::VisitProjectionChildren(LogicalOperator &proj,
+                                                  AggregateDistinctDependent parent_distinct_dependent) {
+	RemoveUnusedColumns remove(*this, false);
+	// projections compute their expressions per-row, so duplicate rows stay duplicates and the
+	// not-distinct-dependent property propagates - unless an expression is volatile: eliminating
+	// duplicates below it would change how many values it draws
+	if (parent_distinct_dependent == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT &&
+	    AllExpressionsNonVolatile(proj.expressions)) {
+		remove.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
+		remove.not_distinct_dependent_path = not_distinct_dependent_path;
+		remove.not_distinct_dependent_path.push_back(proj);
+	}
+	remove.VisitOperatorExpressions(proj);
+	remove.VisitOperator(proj.children[0]);
+}
+
 void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	auto &op = *op_ref;
+	// only operators that pass rows through unmodified (or an explicit case below) preserve the
+	// not-distinct-dependent property of the parent - reset it by default
+	auto parent_distinct_dependent = distinct_dependent;
+	distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// aggregate
 		auto &aggr = op.Cast<LogicalAggregate>();
 		if (!everything_referenced) {
-			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
+			if (parent_distinct_dependent == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT &&
+			    aggr.expressions.empty()) {
+				RemoveUnusedGroups(aggr);
+				if (CanReplaceAggregateWithProjection(aggr)) {
+					// the parent ignores duplicate rows, so this aggregate only performs duplicate elimination
+					// replace it with a projection of its groups, which keeps the same column bindings
+					auto proj = make_uniq<LogicalProjection>(aggr.group_index, std::move(aggr.groups));
+					// groups that are unreferenced but could not be pruned (see RemoveUnusedGroups) only kept
+					// the aggregate's row count intact; without the aggregate they are dead expressions
+					ClearUnusedExpressions(proj->expressions, aggr.group_index);
+					if (proj->expressions.empty()) {
+						// nothing references any of the groups, but we cannot project nothing (see the
+						// LOGICAL_PROJECTION case): project a single constant
+						proj->expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
+					}
+					proj->children.push_back(std::move(op.children[0]));
+					// the operators between here and the not-distinct-dependent aggregate above were estimated based on
+					// this aggregate's deduplicated output, but now process all of its input rows instead. That is
+					// an upper bound for filters among them: their selectivity was estimated on the deduplicated
+					// stream, which can be arbitrarily different on the duplicated one (a 50% filter on two distinct
+					// values can match 99% of the raw rows), so there is nothing better to scale by
+					auto &aggr_input = *proj->children[0];
+					if (aggr_input.has_estimated_cardinality) {
+						proj->SetEstimatedCardinality(aggr_input.estimated_cardinality);
+						for (auto &ancestor : not_distinct_dependent_path) {
+							ancestor.get().SetEstimatedCardinality(aggr_input.estimated_cardinality);
+						}
+					}
+					// we cannot re-dispatch VisitOperator on the new projection: it would read the already-reset
+					// distinct_dependent member as its parent state instead of parent_distinct_dependent, cutting
+					// the propagation to aggregates further down, so we only perform its recursion step
+					VisitProjectionChildren(*proj, parent_distinct_dependent);
+					op_ref = std::move(proj);
+					return;
+				}
+			}
+			// FIXME: unreferenced groups that have to stay (see RemoveUnusedGroups for when they can be removed)
+			// still don't need to be part of the aggregate's output
 			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
@@ -153,9 +444,22 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		// The duplicate groups optimizer will be responsible for not breaking ROLLUP by skipping when
 		// multiple grouping sets are present
 		RemoveUnusedColumns remove(*this, everything_referenced);
+		remove.distinct_dependent = AggregateDistinctDependence(aggr);
+		// the path starts empty: this aggregate's output (and everything above) is unaffected by how many
+		// duplicate rows it receives
 		remove.VisitOperatorExpressions(op);
 		remove.VisitOperator(op.children[0]);
 		return;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		// filters evaluate their predicate per-row, so duplicate rows are filtered identically,
+		// unless the predicate is volatile
+		if (parent_distinct_dependent == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT &&
+		    AllExpressionsNonVolatile(op.expressions)) {
+			distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
+			not_distinct_dependent_path.push_back(op);
+		}
+		break;
 	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
@@ -294,9 +598,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			}
 		}
 		// then recurse into the children of this projection
-		RemoveUnusedColumns remove(*this, false);
-		remove.VisitOperatorExpressions(op);
-		remove.VisitOperator(op.children[0]);
+		VisitProjectionChildren(op, parent_distinct_dependent);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT:
