@@ -1,5 +1,5 @@
 # name: test/sql/storage/rowid_gaps/indexed_live_vacuum_no_rebuild.test
-# description: stable-rowid vacuum does not rebuild indexes for fully-live contiguous merges
+# description: rebuild-eligible vacuum does not rebuild indexes for fully-live contiguous merges
 # group: [rowid_gaps]
 
 require json
@@ -17,8 +17,10 @@ PRAGMA disable_checkpoint_on_shutdown;
 statement ok
 SET threads = 1;
 
+# v1.4.0 storage cannot persist rowid gaps, so remap is unavailable and the threshold selects the REBUILD strategy.
+
 statement ok
-ATTACH '{TEST_DIR}/rowid_gap_live_vacuum_no_rebuild.db' AS rowid_gap_live_vacuum (STORAGE_VERSION 'latest');
+ATTACH '{TEST_DIR}/rowid_gap_live_vacuum_no_rebuild.db' AS rowid_gap_live_vacuum (STORAGE_VERSION 'v1.4.0');
 
 statement ok
 SET max_vacuum_tasks = 0;

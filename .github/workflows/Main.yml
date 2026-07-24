@@ -895,7 +895,7 @@ jobs:
         fetch-depth: 0
         ref: ${{ needs.prepare.outputs.git_sha }}
 
-    - uses: julia-actions/setup-julia@v2
+    - uses: julia-actions/setup-julia@v3
       with:
         version: ${{ matrix.version }}
         arch: ${{ matrix.arch }}

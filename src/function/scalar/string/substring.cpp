@@ -1,14 +1,13 @@
-#include "duckdb/function/scalar/string_common.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
-
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-
+#include "duckdb/function/scalar/string_common.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc.hpp"
-#include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
 
@@ -302,11 +301,80 @@ void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
+struct SubstringStatsParameters {
+	// 0-based index of the first character of the substring.
+	idx_t start_character_index = 0;
+	optional_idx character_count;
+};
+
+bool TryGetConstantInt64(const Expression &expression, int64_t &result) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return false;
+	}
+	auto &value = expression.Cast<BoundConstantExpression>().GetValue();
+	if (value.IsNull()) {
+		return false;
+	}
+	result = value.GetValue<int64_t>();
+	return true;
+}
+
+bool TryGetSubstringStatsParameters(BoundFunctionExpression &expr, SubstringStatsParameters &result) {
+	auto &children = expr.GetChildren();
+	if (children.size() != 2 && children.size() != 3) {
+		return false;
+	}
+
+	int64_t offset = 0;
+	if (!TryGetConstantInt64(*children[1], offset)) {
+		return false;
+	}
+	if (children.size() == 3) {
+		int64_t length = 0;
+		if (!TryGetConstantInt64(*children[2], length) || length <= 0 || length > NumericLimits<uint32_t>::Maximum()) {
+			return false;
+		}
+		result.character_count = NumericCast<idx_t>(length);
+	}
+	// Normalize start offset to 1-based index.
+	if (offset == 0) {
+		if (!result.character_count.IsValid() || result.character_count.GetIndex() <= 1) {
+			return false;
+		}
+		offset = 1;
+		result.character_count = result.character_count.GetIndex() - 1;
+	}
+	// Reject negative offset.
+	if (offset < 1) {
+		return false;
+	}
+	result.start_character_index = NumericCast<idx_t>(offset - 1);
+	return true;
+}
+
+unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInput &input) {
+	auto &expr = input.expr;
+	SubstringStatsParameters parameters;
+	if (!TryGetSubstringStatsParameters(expr, parameters)) {
+		return nullptr;
+	}
+	return PropagateStringSliceStats(input, parameters.start_character_index, parameters.character_count);
+}
+
 unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	// can only propagate stats if the children have stats
 	// we only care about the stats of the first child (i.e. the string)
+	if (!StringStats::CanContainUnicode(child_stats[0])) {
+		expr.FunctionMutable().SetFunctionCallback(SubstringFunctionASCII);
+	}
+	return SubstringStatsFromSharedPrefix(input);
+}
+
+unique_ptr<BaseStatistics> SubstringGraphemePropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.FunctionMutable().SetFunctionCallback(SubstringFunctionASCII);
 	}
@@ -329,10 +397,10 @@ ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	ScalarFunctionSet substr_grapheme("substring_grapheme");
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, nullptr,
-	                                           SubstringPropagateStats));
+	                                           SubstringGraphemePropagateStats));
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                           SubstringFunction<SubstringGraphemeOp>, nullptr,
-	                                           SubstringPropagateStats));
+	                                           SubstringGraphemePropagateStats));
 	return (substr_grapheme);
 }
 
