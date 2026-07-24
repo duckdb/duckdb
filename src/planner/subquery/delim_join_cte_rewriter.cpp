@@ -1627,6 +1627,8 @@ idx_t GeneratedDedupRefEliminator::Remove() {
 	          [](const JoinWithGeneratedDedupRef &lhs, const JoinWithGeneratedDedupRef &rhs) {
 		          return lhs.depth > rhs.depth;
 	          });
+	const auto filter_cross_product_count = NumericCast<idx_t>(std::count_if(
+	    joins.begin(), joins.end(), [](const JoinWithGeneratedDedupRef &join) { return join.filter_cross_product; }));
 
 	for (auto &join : joins) {
 		if (preserve_selected_domain && (join.under_aggregate || join.under_evidence_side)) {
@@ -1640,6 +1642,11 @@ idx_t GeneratedDedupRefEliminator::Remove() {
 			continue;
 		}
 		if (join.filter_cross_product) {
+			// Removing multiple filter cross products can invalidate output bindings still used by another generated
+			// deduplication reference.
+			if (dedup_ref_count > 1 && filter_cross_product_count > 1) {
+				continue;
+			}
 			RemoveFilterCrossProduct(join.join.get());
 		} else {
 			RemoveJoin(join.join.get());
