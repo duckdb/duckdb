@@ -551,20 +551,9 @@ bool Executor::ResultCollectorIsBlocked() {
 	if (!HasStreamingResultCollector()) {
 		return false;
 	}
-	if (completed_pipelines + 1 != total_pipelines) {
-		// The result collector is always in the last pipeline
-		return false;
-	}
-	if (to_be_rescheduled_tasks.empty()) {
-		return false;
-	}
 	for (auto &kv : to_be_rescheduled_tasks) {
 		auto &task = kv.second;
 		if (task->TaskBlockedOnResult()) {
-			// At least one of the blocked tasks is connected to a result collector
-			// This task could be the only task that could unblock the other non-result-collector tasks
-			// To prevent a scenario where we halt indefinitely, we return here so it can be unblocked by a call to
-			// Fetch
 			return true;
 		}
 	}

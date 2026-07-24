@@ -58,9 +58,7 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 
-	OperatorPartitionInfo RequiredPartitionInfo() const override {
-		return OperatorPartitionInfo::BatchIndex();
-	}
+	OperatorPartitionInfo RequiredPartitionInfo() const override;
 
 	bool IsSink() const override {
 		return true;
@@ -68,6 +66,10 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
+	}
+
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
 	}
 
 public:

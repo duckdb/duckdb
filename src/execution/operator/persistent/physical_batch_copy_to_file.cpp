@@ -11,6 +11,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_type.hpp"
 
@@ -45,6 +46,10 @@ InsertionOrderPreservingMap<string> PhysicalBatchCopyToFile::ParamsToString() co
 	InsertionOrderPreservingMap<string> result;
 	result["FORMAT"] = StringUtil::Upper(function.name.GetIdentifierName());
 	return result;
+}
+
+OperatorPartitionInfo PhysicalBatchCopyToFile::RequiredPartitionInfo() const {
+	return OperatorPartitionInfo::BatchIndex(batch_size.IsValid() ? batch_size : optional_idx(DEFAULT_ROW_GROUP_SIZE));
 }
 
 //===--------------------------------------------------------------------===//
