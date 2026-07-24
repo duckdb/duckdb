@@ -1,0 +1,71 @@
+# name: test/sql/setops/union_all_preserve_insertion_order.test_slow
+# description: Ensure order is preserved when doing a multi-file UNION ALL BY NAME with preserve_insertion_order = false
+# group: [setops]
+
+require parquet
+
+statement ok
+COPY (SELECT range AS i FROM range(0, 500000)) TO '{TEST_DIR}/uaf0.parquet' (FORMAT parquet)
+
+statement ok
+COPY (SELECT range AS i FROM range(500000, 1000000)) TO '{TEST_DIR}/uaf1.parquet' (FORMAT parquet)
+
+statement ok
+COPY (SELECT range AS i FROM range(1000000, 1500000)) TO '{TEST_DIR}/uaf2.parquet' (FORMAT parquet)
+
+statement ok
+COPY (SELECT range AS i FROM range(1500000, 2000000)) TO '{TEST_DIR}/uaf3.parquet' (FORMAT parquet)
+
+statement ok
+CREATE OR REPLACE TABLE t AS
+    SELECT * FROM read_parquet('{TEST_DIR}/uaf0.parquet') UNION ALL BY NAME
+    SELECT * FROM read_parquet('{TEST_DIR}/uaf1.parquet') UNION ALL BY NAME
+    SELECT * FROM read_parquet('{TEST_DIR}/uaf2.parquet') UNION ALL BY NAME
+    SELECT * FROM read_parquet('{TEST_DIR}/uaf3.parquet')
+
+query I
+SELECT i FROM t LIMIT 4 OFFSET 499998
+----
+499998
+499999
+500000
+500001
+
+statement ok
+SET preserve_insertion_order=false
+
+statement ok
+CREATE OR REPLACE TABLE t AS
+    SELECT * FROM read_parquet('{TEST_DIR}/uaf0.parquet') UNION ALL BY NAME
+    SELECT * FROM read_parquet('{TEST_DIR}/uaf1.parquet') UNION ALL BY NAME
+    SELECT * FROM read_parquet('{TEST_DIR}/uaf2.parquet') UNION ALL BY NAME
+    SELECT * FROM read_parquet('{TEST_DIR}/uaf3.parquet')
+
+query I
+SELECT count(*) FROM t
+----
+2000000
+
+# Ensure that the fixed order needed for ORDER BY is honored even when preserve_insertion_order is off
+statement ok
+CREATE OR REPLACE TABLE agg AS
+    (SELECT i // 250000 AS k, count(*) AS c FROM read_parquet('{TEST_DIR}/uaf0.parquet') GROUP BY k ORDER BY k) UNION ALL BY NAME
+    (SELECT i // 250000 AS k, count(*) AS c FROM read_parquet('{TEST_DIR}/uaf1.parquet') GROUP BY k ORDER BY k) UNION ALL BY NAME
+    (SELECT i // 250000 AS k, count(*) AS c FROM read_parquet('{TEST_DIR}/uaf2.parquet') GROUP BY k ORDER BY k) UNION ALL BY NAME
+    (SELECT i // 250000 AS k, count(*) AS c FROM read_parquet('{TEST_DIR}/uaf3.parquet') GROUP BY k ORDER BY k)
+
+# read the result back in order and check every row
+statement ok
+SET preserve_insertion_order=true
+
+query II
+SELECT k, c FROM agg
+----
+0	250000
+1	250000
+2	250000
+3	250000
+4	250000
+5	250000
+6	250000
+7	250000
