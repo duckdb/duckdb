@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -18,7 +19,7 @@ CatalogSearchEntry::CatalogSearchEntry(Identifier catalog_p, Identifier schema_p
 }
 
 string CatalogSearchEntry::ToString() const {
-	if (catalog.empty()) {
+	if (catalog.empty() || (catalog == SYSTEM_CATALOG && DefaultSchemaGenerator::IsDefaultSchema(schema))) {
 		return WriteOptionallyQuoted(schema);
 	} else {
 		return WriteOptionallyQuoted(catalog) + "." + WriteOptionallyQuoted(schema);
@@ -172,7 +173,11 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 		if (schema_entry) {
 			// we are setting a schema - update the catalog and schema
 			if (path.GetCatalog().empty()) {
-				path.SetCatalog(GetDefault().GetCatalog());
+				if (DefaultSchemaGenerator::IsDefaultSchema(path.GetSchema())) {
+					path.SetCatalog(schema_entry->catalog.GetName());
+				} else {
+					path.SetCatalog(GetDefault().GetCatalog());
+				}
 			}
 			continue;
 		}
@@ -192,7 +197,9 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 		throw CatalogException("%s: No catalog + schema named \"%s\" found.", GetSetName(set_type), path.ToString());
 	}
 	if (set_type == CatalogSetPathType::SET_SCHEMA) {
-		if (new_paths[0].GetCatalog() == TEMP_CATALOG || new_paths[0].GetCatalog() == SYSTEM_CATALOG) {
+		if (new_paths[0].GetCatalog() == TEMP_CATALOG ||
+		    (new_paths[0].GetCatalog() == SYSTEM_CATALOG &&
+		     !DefaultSchemaGenerator::IsDefaultSchema(new_paths[0].GetSchema()))) {
 			throw CatalogException("%s cannot be set to internal schema \"%s\"", GetSetName(set_type),
 			                       new_paths[0].GetCatalog().GetIdentifierName());
 		}
