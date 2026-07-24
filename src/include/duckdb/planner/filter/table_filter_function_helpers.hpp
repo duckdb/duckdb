@@ -44,8 +44,10 @@ inline unique_ptr<FunctionLocalState> InitSelectivityTrackingLocalState(idx_t n_
 inline idx_t SetAllTrueSelection(idx_t count, optional_ptr<SelectionVector> true_sel,
                                  optional_ptr<SelectionVector> false_sel) {
 	if (true_sel) {
+		// hoist the optional_ptr dereference so the fill loop stays tight
+		auto &result = *true_sel;
 		for (idx_t i = 0; i < count; i++) {
-			true_sel->set_index(i, i);
+			result.set_index(i, i);
 		}
 	}
 	return count;
@@ -57,8 +59,10 @@ inline idx_t SetAllTrueSelection(idx_t count, optional_ptr<const SelectionVector
 		return SetAllTrueSelection(count, true_sel, false_sel);
 	}
 	if (true_sel) {
+		auto &result = *true_sel;
+		auto &source = *sel;
 		for (idx_t i = 0; i < count; i++) {
-			true_sel->set_index(i, sel->get_index(i));
+			result.set_index(i, source.get_index(i));
 		}
 	}
 	return count;
@@ -80,8 +84,9 @@ inline idx_t TranslateSelection(idx_t count, optional_ptr<const SelectionVector>
 	}
 	if (!input_sel) {
 		if (true_sel && true_sel.get() != &local_true_sel) {
+			auto &result = *true_sel;
 			for (idx_t i = 0; i < local_true_count; i++) {
-				true_sel->set_index(i, local_true_sel.get_index(i));
+				result.set_index(i, local_true_sel.get_index(i));
 			}
 		}
 		if (false_sel) {
@@ -89,12 +94,15 @@ inline idx_t TranslateSelection(idx_t count, optional_ptr<const SelectionVector>
 		}
 		return local_true_count;
 	}
+	auto &source = *input_sel;
 	if (true_sel) {
+		auto &result = *true_sel;
 		for (idx_t i = 0; i < local_true_count; i++) {
-			true_sel->set_index(i, input_sel->get_index(local_true_sel.get_index(i)));
+			result.set_index(i, source.get_index(local_true_sel.get_index(i)));
 		}
 	}
 	if (false_sel) {
+		auto &result = *false_sel;
 		idx_t false_count = 0;
 		idx_t true_offset = 0;
 		for (idx_t i = 0; i < count; i++) {
@@ -102,7 +110,7 @@ inline idx_t TranslateSelection(idx_t count, optional_ptr<const SelectionVector>
 				true_offset++;
 				continue;
 			}
-			false_sel->set_index(false_count++, input_sel->get_index(i));
+			result.set_index(false_count++, source.get_index(i));
 		}
 	}
 	return local_true_count;
