@@ -840,13 +840,10 @@ void WriteAheadLogDeserializer::BufferExistingRowsForIndex(ReplayState::ReplayIn
 
 	vector<StorageIndex> column_ids;
 	column_ids.reserve(table.GetColumns().PhysicalColumnCount() + 1);
-	vector<StorageIndex> mapped_column_ids;
-	mapped_column_ids.reserve(table.GetColumns().PhysicalColumnCount() + 1);
 	vector<LogicalType> scan_types;
 	scan_types.reserve(table.GetColumns().PhysicalColumnCount() + 1);
 	for (auto &col : table.GetColumns().Physical()) {
 		column_ids.emplace_back(col.StorageOid());
-		mapped_column_ids.emplace_back(col.StorageOid());
 		scan_types.emplace_back(col.Type());
 	}
 	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
@@ -875,7 +872,7 @@ void WriteAheadLogDeserializer::BufferExistingRowsForIndex(ReplayState::ReplayIn
 		}
 		table_chunk.CheckCardinality(scan_chunk.size());
 		auto &row_ids = scan_chunk.data[table_chunk.ColumnCount()];
-		unbound_index.BufferChunk(table_chunk, row_ids, mapped_column_ids, BufferedIndexReplay::INSERT_ENTRY);
+		unbound_index.BufferChunk(table_chunk, row_ids, BufferedIndexReplay::INSERT_ENTRY);
 	}
 }
 
