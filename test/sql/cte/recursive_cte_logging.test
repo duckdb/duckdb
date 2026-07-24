@@ -1,0 +1,216 @@
+# name: test/sql/cte/recursive_cte_logging.test
+# description: Structured PhysicalOperator logging for recursive CTE runtime metrics
+# group: [cte]
+
+statement ok
+SET threads=8;
+
+statement ok
+CALL disable_logging();
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+WITH RECURSIVE t(i) AS (
+	SELECT 1
+	UNION ALL
+	SELECT i + 1 FROM t WHERE i < 10
+)
+SELECT max(i) FROM t;
+----
+10
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE';
+----
+0
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# This broad CPU-heavy recursion uses multiple workers and promotes the distinct sink.
+query II
+WITH RECURSIVE t(i, digest, level) AS (
+	SELECT i, md5(i::VARCHAR), 0 FROM range(50000) r(i)
+	UNION
+	SELECT i, md5(md5(md5(md5(digest)))), level + 1 FROM t WHERE level < 7
+)
+SELECT count(*), max(level) FROM t;
+----
+400000	7
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+query IIII
+SELECT info.epochs::UBIGINT > 0,
+       info.scheduled_workers::UBIGINT > info.epochs::UBIGINT,
+       info.scheduled_tasks::UBIGINT >= info.epochs::UBIGINT,
+       info.hash_rows::UBIGINT >= 400000
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1	1	1
+
+query I
+SELECT count(*) = 1 FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'DistinctPromoted'
+  AND info.partitions::UBIGINT BETWEEN 2 AND 4
+  AND info.migrated_rows::UBIGINT > 0;
+----
+1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Broad UNION ALL recursion uses the available frontier parallelism.
+query III
+WITH RECURSIVE t(i, digest, level) AS (
+	SELECT i, md5(i::VARCHAR), 0 FROM range(50000) r(i)
+	UNION ALL
+	SELECT i, md5(md5(md5(md5(digest)))), level + 1 FROM t WHERE level < 7
+)
+SELECT count(*), max(level), sum(length(digest)) FROM t;
+----
+400000	7	12800000
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Two chunks do not amortize the event graph for a single recursive reference.
+query II
+WITH RECURSIVE t(i, level) AS (
+	SELECT i, 0 FROM range(current_setting('standard_vector_size')::BIGINT * 2) values(i)
+	UNION ALL
+	SELECT i, level + 1 FROM t WHERE level < 3
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT * 8, max(level) FROM t;
+----
+1	3
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT = info.epochs::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Growing frontiers must not be throttled by measurements from earlier, cheaper epochs.
+query II
+WITH RECURSIVE t(i, level) AS (
+	VALUES (0::BIGINT, 0)
+	UNION ALL
+	SELECT i * 2 + branch, level + 1
+	FROM t, range(2) branches(branch)
+	WHERE level < 17
+)
+SELECT count(*), max(level) FROM t;
+----
+262143	17
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0 FROM range(4096) r(i)
+	UNION ALL
+	SELECT n.k, r.v + 1
+	FROM t n JOIN recurring.t r USING (k)
+	WHERE n.v < 2
+)
+SELECT count(*), max(v) FROM t;
+----
+4096	2
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT info.direct_probe_rows::UBIGINT > 0,
+       info.recurring_scan_rows::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query III
+WITH RECURSIVE t(k1, k2, v) USING KEY (k1, k2) AS (
+	SELECT k1, k2, CASE WHEN k1 = 0 THEN 0 ELSE 10 END
+	FROM range(100) keys(k1), range(10) items(k2)
+	UNION ALL
+	SELECT n.k1 + 1, r.k2, n.v + 1
+	FROM t n JOIN recurring.t r ON r.k1 = n.k1
+	WHERE n.k2 = 0 AND n.v < 3
+)
+SELECT count(*), sum(v)::BIGINT, max(v) FROM t;
+----
+1000	9660	10
+
+statement ok
+CALL disable_logging();
+
+query IIII
+SELECT info.partial_index_rows::UBIGINT = 1000,
+       info.partial_index_bytes::UBIGINT > 0,
+       info.partial_probe_chain_visits::UBIGINT >= info.direct_probe_matches::UBIGINT,
+       info.recurring_scan_rows::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1	1	1

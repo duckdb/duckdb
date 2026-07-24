@@ -1,0 +1,89 @@
+# name: test/sql/optimizer/expression/test_row_comparison_simplification.test
+# description: Safely decompose row equality into scalar comparisons
+# group: [expression]
+
+statement ok
+CREATE TABLE rows(a INTEGER, b INTEGER, c INTEGER, d INTEGER);
+
+statement ok
+INSERT INTO rows VALUES
+	(1, 2, 1, 2),
+	(1, 2, 1, 3),
+	(NULL, 2, NULL, 2),
+	(NULL, 2, NULL, 3),
+	(NULL, 2, 1, 3),
+	(1, 2, NULL, 3),
+	(NULL, 2, 1, 2),
+	(1, NULL, 1, NULL);
+
+query I rowsort
+SELECT (a, b) = (c, d) FROM rows;
+----
+0
+1
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+# In predicate context FALSE and NULL are both rejected, so scalarization is equivalent.
+query I
+SELECT count(*) FROM rows WHERE (a, b) = (c, d);
+----
+1
+
+# Empty and expression-valued rows retain the original comparison implementation.
+query II
+SELECT row() = row(), row(a + 1, b) = row(c + 1, d) FROM rows WHERE a = 1 AND b = 2 AND d = 2;
+----
+1	1
+
+# Disabling the expression rewriter preserves identical results.
+statement ok
+SET disabled_optimizers='expression_rewriter';
+
+query I rowsort
+SELECT (a, b) = (c, d) FROM rows;
+----
+0
+1
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT count(*) FROM rows WHERE (a, b) = (c, d);
+----
+1
+
+statement ok
+RESET disabled_optimizers;
+
+# Scalarized key equality is visible before recursive physical planning.
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output='physical_only';
+
+query II
+EXPLAIN WITH RECURSIVE
+edges(here, there) AS (
+	VALUES (0, 1), (1, 0)
+),
+cc(node, comp) USING KEY (node) AS (
+	VALUES (0, 0), (1, 1)
+	UNION ALL
+	SELECT current.node, changed.comp
+	FROM cc changed, edges edge, recurring.cc current
+	WHERE (edge.here, edge.there) = (current.node, changed.node)
+	  AND changed.comp < current.comp
+)
+SELECT * FROM cc;
+----
+physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*

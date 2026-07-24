@@ -304,6 +304,8 @@ enum class LogMode : uint8_t;
 
 enum class LoggingTargetTable : uint8_t;
 
+enum class LogicalOperatorRepeatability : uint8_t;
+
 enum class LogicalOperatorType : uint8_t;
 
 enum class LogicalTypeId : uint8_t;
@@ -423,6 +425,8 @@ enum class QueryResultType : uint8_t;
 enum class RecoveryMode : uint8_t;
 
 enum class RecursiveCTEInlineStageType : uint8_t;
+
+enum class RecursiveCTEKeySourcePhase : uint8_t;
 
 enum class RecursiveProbeSidePreference : uint8_t;
 
@@ -998,6 +1002,9 @@ template<>
 const char* EnumUtil::ToChars<LoggingTargetTable>(LoggingTargetTable value);
 
 template<>
+const char* EnumUtil::ToChars<LogicalOperatorRepeatability>(LogicalOperatorRepeatability value);
+
+template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
 
 template<>
@@ -1176,6 +1183,9 @@ const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
 const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineStageType value);
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEKeySourcePhase>(RecursiveCTEKeySourcePhase value);
 
 template<>
 const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
@@ -1833,6 +1843,9 @@ template<>
 LoggingTargetTable EnumUtil::FromString<LoggingTargetTable>(const char *value);
 
 template<>
+LogicalOperatorRepeatability EnumUtil::FromString<LogicalOperatorRepeatability>(const char *value);
+
+template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
 
 template<>
@@ -2011,6 +2024,9 @@ RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
 RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(const char *value);
+
+template<>
+RecursiveCTEKeySourcePhase EnumUtil::FromString<RecursiveCTEKeySourcePhase>(const char *value);
 
 template<>
 RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);

@@ -1,0 +1,76 @@
+# name: test/sql/cte/recursive_cte_key_snapshot.test
+# description: USING KEY recurring scans observe a frozen hash-state snapshot
+# group: [cte]
+
+statement ok
+SET threads=8;
+
+# Reading and replacing the same key advances once per epoch, never within the active epoch.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT 1, 0
+	UNION ALL
+	SELECT n.k, r.v + 1
+	FROM t n
+	JOIN recurring.t r USING (k)
+	WHERE n.v < 3
+)
+SELECT k, v FROM t;
+----
+1	3
+
+# A broad state is scanned directly while updates remain pending until prepare-finalize.
+query IIII
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0 FROM range(8192) r(i)
+	UNION ALL
+	SELECT n.k, r.v + 1
+	FROM t n
+	JOIN recurring.t r USING (k)
+	WHERE n.v < 3
+)
+SELECT count(*), min(v), max(v), sum(v) FROM t;
+----
+8192	3	3	24576
+
+# NULL key state remains visible to a full recurring scan without acquiring equality semantics.
+query II rowsort
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT NULL::INTEGER, 10
+	UNION ALL
+	SELECT r.k, r.v + 1 FROM t n, recurring.t r WHERE false
+)
+SELECT k, v FROM t;
+----
+NULL	10
+
+# An empty update epoch commits nothing and retains the frozen state for final output.
+query II
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT 1, 10
+	UNION ALL
+	SELECT k, v + 1 FROM t WHERE false
+)
+SELECT k, v FROM t;
+----
+1	10
+
+# Correlated executions do not retain or cross-link physical state between invocations.
+query II
+SELECT i, result_v
+FROM range(1, 4) outer_q(i), LATERAL (
+	WITH RECURSIVE t(k, v) USING KEY (k) AS (
+		SELECT i, 0
+		UNION ALL
+		SELECT n.k, r.v + 1
+		FROM t n
+		JOIN recurring.t r USING (k)
+		WHERE n.v < i
+	)
+	SELECT v AS result_v FROM t
+) q
+ORDER BY i;
+----
+1	1
+2	2
+3	3

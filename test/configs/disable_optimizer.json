@@ -67,6 +67,7 @@
     {
       "reason": "Recursive CTE relies on short-circuiting optimization.",
       "paths": [
+        "test/sql/cte/recursive_cte_limit.test",
         "test/sql/cte/test_recursive_cte_union.test",
         "test/sql/cte/test_recursive_cte_union_all.test",
         "test/sql/cte/test_recursive_cte_tutorial.test"

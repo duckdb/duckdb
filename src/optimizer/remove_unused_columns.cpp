@@ -12,7 +12,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -21,6 +20,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
@@ -29,6 +29,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include <utility>
 
 namespace duckdb {
@@ -54,7 +55,7 @@ RemoveUnusedColumns::RemoveUnusedColumns(Optimizer &optimizer)
 
 RemoveUnusedColumns::RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root)
     : optimizer(parent.optimizer), binder(parent.binder), context(parent.context), everything_referenced(is_root),
-      root(parent.root) {
+      allow_missing_cte_references(parent.allow_missing_cte_references), root(parent.root) {
 }
 
 unordered_map<TableIndex, MaterializedCTEInfo> &RemoveUnusedColumns::GetCTEMap() {
@@ -66,6 +67,126 @@ unordered_map<TableIndex, MaterializedCTEInfo> &RemoveUnusedColumns::GetCTEMap()
 
 optional_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> RemoveUnusedColumns::TryGetCTEMap() {
 	return root.root_cte_map.get();
+}
+
+bool RemoveUnusedColumns::GatherRecursiveDependencies(LogicalOperator &bottom, TableIndex cte_index,
+                                                      const unordered_set<ProjectionIndex> &required_columns,
+                                                      unordered_set<ProjectionIndex> &recursive_dependencies) {
+	unique_ptr<LogicalOperator> analysis_plan;
+	try {
+		analysis_plan = bottom.Copy(context);
+	} catch (NotImplementedException &) {
+		return false;
+	}
+	analysis_plan->ResolveOperatorTypes();
+	auto bindings = analysis_plan->GetColumnBindings();
+
+	RemoveUnusedColumns analysis(optimizer);
+	analysis.everything_referenced = false;
+	analysis.allow_missing_cte_references = true;
+	analysis.GetCTEMap().insert({cte_index, MaterializedCTEInfo()});
+	for (auto column_idx : required_columns) {
+		if (column_idx.GetIndex() >= bindings.size()) {
+			throw InternalException("Recursive CTE liveness column is out of range");
+		}
+		analysis.column_references.emplace(bindings[column_idx.GetIndex()], ReferencedColumn());
+	}
+	analysis.VisitOperator(analysis_plan);
+
+	auto cte_map = analysis.TryGetCTEMap();
+	D_ASSERT(cte_map);
+	auto cte_entry = cte_map->find(cte_index);
+	D_ASSERT(cte_entry != cte_map->end());
+	for (auto &entry : cte_entry->second.column_references) {
+		recursive_dependencies.insert(entry.first.column_index);
+	}
+	return true;
+}
+
+bool RemoveUnusedColumns::ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &rec,
+                                                          unordered_set<ProjectionIndex> &required_columns) {
+	for (auto &entry : column_references) {
+		if (entry.first.table_index == rec.table_index) {
+			required_columns.insert(entry.first.column_index);
+		}
+	}
+	if (required_columns.empty()) {
+		required_columns.insert(ProjectionIndex(0));
+	}
+	while (true) {
+		unordered_set<ProjectionIndex> recursive_dependencies;
+		if (!GatherRecursiveDependencies(*rec.children[1], rec.table_index, required_columns, recursive_dependencies)) {
+			return false;
+		}
+		const auto old_count = required_columns.size();
+		required_columns.insert(recursive_dependencies.begin(), recursive_dependencies.end());
+		if (required_columns.size() == old_count) {
+			return required_columns.size() < rec.column_count;
+		}
+	}
+}
+
+void RemoveUnusedColumns::ApplyRecursiveProjections(LogicalRecursiveCTE &rec,
+                                                    const unordered_set<ProjectionIndex> &required_columns) {
+	for (auto column_idx : required_columns) {
+		column_references.emplace(ColumnBinding(rec.table_index, column_idx), ReferencedColumn());
+	}
+	vector<idx_t> entries;
+	for (idx_t i = 0; i < rec.column_count; i++) {
+		entries.push_back(i);
+	}
+	ClearUnusedExpressions(entries, rec.table_index);
+
+	for (auto &child : rec.children) {
+		child->ResolveOperatorTypes();
+		auto bindings = child->GetColumnBindings();
+		vector<unique_ptr<Expression>> expressions;
+		expressions.reserve(entries.size());
+		for (auto column_idx : entries) {
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
+		}
+		auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+		if (child->has_estimated_cardinality) {
+			projection->SetEstimatedCardinality(child->estimated_cardinality);
+		}
+		projection->children.push_back(std::move(child));
+		child = std::move(projection);
+	}
+	vector<LogicalType> internal_types;
+	internal_types.reserve(entries.size());
+	for (auto column_idx : entries) {
+		internal_types.push_back(rec.internal_types[column_idx]);
+	}
+	rec.internal_types = std::move(internal_types);
+	rec.column_count = entries.size();
+}
+
+void RemoveUnusedColumns::RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+                                                        const unordered_set<ProjectionIndex> &required_columns) {
+	CTERefPruner cte_ref_pruner(rec.table_index, required_columns);
+	cte_ref_pruner.VisitOperator(*rec.children[1]);
+	ColumnBindingReplacer column_binding_replacer;
+	column_binding_replacer.replacement_bindings = std::move(cte_ref_pruner.binding_replacements);
+	column_binding_replacer.VisitOperator(*rec.children[1]);
+}
+
+bool RemoveUnusedColumns::TryPruneRecursiveCTE(LogicalRecursiveCTE &rec) {
+	GetCTEMap().insert({rec.table_index, MaterializedCTEInfo()});
+	if (!rec.union_all || !rec.key_targets.empty() || everything_referenced ||
+	    !LogicalSubtreeIsRepeatable(*rec.children[0]) || !LogicalSubtreeIsRepeatable(*rec.children[1])) {
+		return false;
+	}
+	unordered_set<ProjectionIndex> required_columns;
+	if (!ComputeRecursiveRequiredColumns(rec, required_columns)) {
+		return false;
+	}
+	ApplyRecursiveProjections(rec, required_columns);
+	RewriteRecursiveCTEReferences(rec, required_columns);
+	for (auto &child : rec.children) {
+		RemoveUnusedColumns remove(*this, true);
+		remove.VisitOperator(child);
+	}
+	return true;
 }
 
 idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
@@ -339,14 +460,12 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		// We do not (yet) support pruning columns in recursive CTEs, so we mark everything as referenced and continue
-		// to the children. However, we still need to create the cte_info_map for the recursive CTE so that column
-		// references in the CTE body can find the correct CTE entry and mark columns as referenced.
-		auto &rec = op.Cast<LogicalCTE>();
-		auto &cte_info_map = GetCTEMap();
-		cte_info_map.insert({rec.table_index, MaterializedCTEInfo()});
-		everything_referenced = true;
-		break;
+		auto &rec = op.Cast<LogicalRecursiveCTE>();
+		if (!TryPruneRecursiveCTE(rec)) {
+			everything_referenced = true;
+			break;
+		}
+		return;
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 		auto &cte_map_ref = GetCTEMap();
@@ -445,6 +564,9 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		auto &cte_map_ref = *cte_info_map;
 		auto it = cte_map_ref.find(cte_ref.cte_index);
 		if (it == cte_map_ref.end()) {
+			if (allow_missing_cte_references) {
+				break;
+			}
 			throw InternalException("Could not find CTE definition for CTE reference");
 		}
 		auto &cte_entry = it->second;

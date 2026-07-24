@@ -204,6 +204,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
@@ -3204,6 +3205,25 @@ LoggingTargetTable EnumUtil::FromString<LoggingTargetTable>(const char *value) {
 	return static_cast<LoggingTargetTable>(StringUtil::StringToEnum(GetLoggingTargetTableValues(), 3, "LoggingTargetTable", value));
 }
 
+const StringUtil::EnumStringLiteral *GetLogicalOperatorRepeatabilityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalOperatorRepeatability::REPEATABLE), "REPEATABLE" },
+		{ static_cast<uint32_t>(LogicalOperatorRepeatability::NON_REPEATABLE), "NON_REPEATABLE" },
+		{ static_cast<uint32_t>(LogicalOperatorRepeatability::UNKNOWN), "UNKNOWN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalOperatorRepeatability>(LogicalOperatorRepeatability value) {
+	return StringUtil::EnumToString(GetLogicalOperatorRepeatabilityValues(), 3, "LogicalOperatorRepeatability", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalOperatorRepeatability EnumUtil::FromString<LogicalOperatorRepeatability>(const char *value) {
+	return static_cast<LogicalOperatorRepeatability>(StringUtil::StringToEnum(GetLogicalOperatorRepeatabilityValues(), 3, "LogicalOperatorRepeatability", value));
+}
+
 const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_INVALID), "LOGICAL_INVALID" },
@@ -4272,19 +4292,20 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(PhysicalOperatorType::UPDATE_EXTENSIONS), "UPDATE_EXTENSIONS" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::CONNECT), "CONNECT" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::DISCONNECT), "DISCONNECT" },
-		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_SECRET), "CREATE_SECRET" }
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_SECRET), "CREATE_SECRET" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_KEY_JOIN), "RECURSIVE_KEY_JOIN" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) {
-	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 86, "PhysicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 87, "PhysicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value) {
-	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 86, "PhysicalOperatorType", value));
+	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 87, "PhysicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalTableScanExecutionStrategyValues() {
@@ -4671,6 +4692,25 @@ const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineSta
 template<>
 RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(const char *value) {
 	return static_cast<RecursiveCTEInlineStageType>(StringUtil::StringToEnum(GetRecursiveCTEInlineStageTypeValues(), 3, "RecursiveCTEInlineStageType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRecursiveCTEKeySourcePhaseValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RecursiveCTEKeySourcePhase::RECURSING), "RECURSING" },
+		{ static_cast<uint32_t>(RecursiveCTEKeySourcePhase::DRAINING_FINAL_STATE), "DRAINING_FINAL_STATE" },
+		{ static_cast<uint32_t>(RecursiveCTEKeySourcePhase::FINISHED), "FINISHED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEKeySourcePhase>(RecursiveCTEKeySourcePhase value) {
+	return StringUtil::EnumToString(GetRecursiveCTEKeySourcePhaseValues(), 3, "RecursiveCTEKeySourcePhase", static_cast<uint32_t>(value));
+}
+
+template<>
+RecursiveCTEKeySourcePhase EnumUtil::FromString<RecursiveCTEKeySourcePhase>(const char *value) {
+	return static_cast<RecursiveCTEKeySourcePhase>(StringUtil::StringToEnum(GetRecursiveCTEKeySourcePhaseValues(), 3, "RecursiveCTEKeySourcePhase", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRecursiveProbeSidePreferenceValues() {

@@ -22,6 +22,7 @@ namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
+class LogicalRecursiveCTE;
 class Optimizer;
 
 struct ReferencedExtractComponent {
@@ -141,6 +142,7 @@ private:
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
+	bool allow_missing_cte_references = false;
 
 	RemoveUnusedColumns &root;
 	unique_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> root_cte_map;
@@ -151,6 +153,14 @@ private:
 	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
+	bool GatherRecursiveDependencies(LogicalOperator &bottom, TableIndex cte_index,
+	                                 const unordered_set<ProjectionIndex> &required_columns,
+	                                 unordered_set<ProjectionIndex> &recursive_dependencies);
+	bool ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &rec, unordered_set<ProjectionIndex> &required_columns);
+	void ApplyRecursiveProjections(LogicalRecursiveCTE &rec, const unordered_set<ProjectionIndex> &required_columns);
+	void RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+	                                   const unordered_set<ProjectionIndex> &required_columns);
+	bool TryPruneRecursiveCTE(LogicalRecursiveCTE &rec);
 	void WritePushdownExtractColumns(
 	    ReferencedColumn &col,
 	    const std::function<ProjectionIndex(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)>

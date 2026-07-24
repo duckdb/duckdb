@@ -211,6 +211,8 @@ OperatorCachingMode PhysicalOperator::SelectOperatorCachingMode(ExecutionContext
 		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline) {
 		return OperatorCachingMode::NONE;
+	} else if (context.pipeline->CanStopSourceEarly()) {
+		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline->GetSink()) {
 		return OperatorCachingMode::NONE;
 	} else {

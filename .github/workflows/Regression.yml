@@ -134,6 +134,10 @@ jobs:
             data_setup: |
               mkdir -p duckdb_benchmark_data
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
+          - name: Recursive CTE + AoC24
+            benchmarks: benchmark/recursive_cte/recursive_cte.csv benchmark/aoc24/aoc24.csv
+            timed_runs: 7
+            regression_threshold_seconds: 0.01
 
     steps:
       - uses: actions/checkout@v6
@@ -178,6 +182,12 @@ jobs:
             extra_args=(--clear-benchmark-cache)
             if [[ "$benchmark" == ".github/regression/realnest.csv" ]]; then
               extra_args=()
+            fi
+            if [[ -n "${{ matrix.timed_runs }}" ]]; then
+              extra_args+=(--timed-runs "${{ matrix.timed_runs }}")
+            fi
+            if [[ -n "${{ matrix.regression_threshold_seconds }}" ]]; then
+              extra_args+=(--regression-threshold-seconds "${{ matrix.regression_threshold_seconds }}")
             fi
 
             echo "::group::$(basename "$benchmark" .csv)"
