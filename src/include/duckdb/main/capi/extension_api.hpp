@@ -565,6 +565,10 @@ typedef struct {
 	duckdb_error_type (*duckdb_error_data_error_type)(duckdb_error_data error_data);
 	const char *(*duckdb_error_data_message)(duckdb_error_data error_data);
 	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
+	idx_t (*duckdb_error_data_extra_info_count)(duckdb_error_data error_data);
+	const char *(*duckdb_error_data_extra_info_key)(duckdb_error_data error_data, idx_t index);
+	const char *(*duckdb_error_data_extra_info_value)(duckdb_error_data error_data, idx_t index);
+	const char *(*duckdb_error_data_extra_info_get)(duckdb_error_data error_data, const char *key);
 	// API to create and manipulate expressions
 
 	void (*duckdb_destroy_expression)(duckdb_expression *expr);
@@ -623,6 +627,7 @@ typedef struct {
 	// New query execution functions
 
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
+	duckdb_error_data (*duckdb_result_error_data)(duckdb_result *result);
 	// New functions around scalar function binding
 
 	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
@@ -1159,6 +1164,10 @@ inline duckdb_ext_api_v1 CreateAPIv1(void) {
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;
 	result.duckdb_error_data_message = duckdb_error_data_message;
 	result.duckdb_error_data_has_error = duckdb_error_data_has_error;
+	result.duckdb_error_data_extra_info_count = duckdb_error_data_extra_info_count;
+	result.duckdb_error_data_extra_info_key = duckdb_error_data_extra_info_key;
+	result.duckdb_error_data_extra_info_value = duckdb_error_data_extra_info_value;
+	result.duckdb_error_data_extra_info_get = duckdb_error_data_extra_info_get;
 	result.duckdb_destroy_expression = duckdb_destroy_expression;
 	result.duckdb_expression_return_type = duckdb_expression_return_type;
 	result.duckdb_expression_is_foldable = duckdb_expression_is_foldable;
@@ -1197,6 +1206,7 @@ inline duckdb_ext_api_v1 CreateAPIv1(void) {
 	result.duckdb_prepared_statement_column_logical_type = duckdb_prepared_statement_column_logical_type;
 	result.duckdb_prepared_statement_column_type = duckdb_prepared_statement_column_type;
 	result.duckdb_result_get_arrow_options = duckdb_result_get_arrow_options;
+	result.duckdb_result_error_data = duckdb_result_error_data;
 	result.duckdb_scalar_function_set_bind = duckdb_scalar_function_set_bind;
 	result.duckdb_scalar_function_bind_set_error = duckdb_scalar_function_bind_set_error;
 	result.duckdb_scalar_function_get_client_context = duckdb_scalar_function_get_client_context;

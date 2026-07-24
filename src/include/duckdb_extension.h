@@ -644,6 +644,10 @@ typedef struct {
 	duckdb_error_type (*duckdb_error_data_error_type)(duckdb_error_data error_data);
 	const char *(*duckdb_error_data_message)(duckdb_error_data error_data);
 	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
+	idx_t (*duckdb_error_data_extra_info_count)(duckdb_error_data error_data);
+	const char *(*duckdb_error_data_extra_info_key)(duckdb_error_data error_data, idx_t index);
+	const char *(*duckdb_error_data_extra_info_value)(duckdb_error_data error_data, idx_t index);
+	const char *(*duckdb_error_data_extra_info_get)(duckdb_error_data error_data, const char *key);
 #endif
 
 // API to create and manipulate expressions
@@ -716,6 +720,7 @@ typedef struct {
 // New query execution functions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
+	duckdb_error_data (*duckdb_result_error_data)(duckdb_result *result);
 #endif
 
 // New functions around scalar function binding
@@ -1287,11 +1292,15 @@ typedef struct {
 	duckdb_ext_api.duckdb_table_function_bind_get_result_column_type
 
 // Version unstable_new_error_data_functions
-#define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data
-#define duckdb_destroy_error_data    duckdb_ext_api.duckdb_destroy_error_data
-#define duckdb_error_data_error_type duckdb_ext_api.duckdb_error_data_error_type
-#define duckdb_error_data_message    duckdb_ext_api.duckdb_error_data_message
-#define duckdb_error_data_has_error  duckdb_ext_api.duckdb_error_data_has_error
+#define duckdb_create_error_data           duckdb_ext_api.duckdb_create_error_data
+#define duckdb_destroy_error_data          duckdb_ext_api.duckdb_destroy_error_data
+#define duckdb_error_data_error_type       duckdb_ext_api.duckdb_error_data_error_type
+#define duckdb_error_data_message          duckdb_ext_api.duckdb_error_data_message
+#define duckdb_error_data_has_error        duckdb_ext_api.duckdb_error_data_has_error
+#define duckdb_error_data_extra_info_count duckdb_ext_api.duckdb_error_data_extra_info_count
+#define duckdb_error_data_extra_info_key   duckdb_ext_api.duckdb_error_data_extra_info_key
+#define duckdb_error_data_extra_info_value duckdb_ext_api.duckdb_error_data_extra_info_value
+#define duckdb_error_data_extra_info_get   duckdb_ext_api.duckdb_error_data_extra_info_get
 
 // Version unstable_new_expression_functions
 #define duckdb_destroy_expression     duckdb_ext_api.duckdb_destroy_expression
@@ -1344,6 +1353,7 @@ typedef struct {
 
 // Version unstable_new_query_execution_functions
 #define duckdb_result_get_arrow_options duckdb_ext_api.duckdb_result_get_arrow_options
+#define duckdb_result_error_data        duckdb_ext_api.duckdb_result_error_data
 
 // Version unstable_new_scalar_function_functions
 #define duckdb_scalar_function_set_bind                duckdb_ext_api.duckdb_scalar_function_set_bind

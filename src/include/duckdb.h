@@ -1200,6 +1200,44 @@ Returns whether the error data contains an error or not.
 */
 DUCKDB_C_API bool duckdb_error_data_has_error(duckdb_error_data error_data);
 
+/*!
+Returns the number of ExtraInfo key/value pairs attached to the error data.
+
+* @param error_data The error data.
+* @return The number of ExtraInfo entries, or 0 if error_data is NULL.
+*/
+DUCKDB_C_API idx_t duckdb_error_data_extra_info_count(duckdb_error_data error_data);
+
+/*!
+Returns the ExtraInfo key at the given index. Must not be freed.
+The returned pointer is invalidated by `duckdb_destroy_error_data`.
+
+* @param error_data The error data.
+* @param index The ExtraInfo entry index.
+* @return The key at the given index, or NULL if the index is out of range or error_data is NULL.
+*/
+DUCKDB_C_API const char *duckdb_error_data_extra_info_key(duckdb_error_data error_data, idx_t index);
+
+/*!
+Returns the ExtraInfo value at the given index. Must not be freed.
+The returned pointer is invalidated by `duckdb_destroy_error_data`.
+
+* @param error_data The error data.
+* @param index The ExtraInfo entry index.
+* @return The value at the given index, or NULL if the index is out of range or error_data is NULL.
+*/
+DUCKDB_C_API const char *duckdb_error_data_extra_info_value(duckdb_error_data error_data, idx_t index);
+
+/*!
+Returns the ExtraInfo value for the given key (for example "status_code"). Must not be freed.
+The returned pointer is invalidated by `duckdb_destroy_error_data`.
+
+* @param error_data The error data.
+* @param key The ExtraInfo key to look up.
+* @return The value for the key, or NULL if the key is absent or error_data/key is NULL.
+*/
+DUCKDB_C_API const char *duckdb_error_data_extra_info_get(duckdb_error_data error_data, const char *key);
+
 //----------------------------------------------------------------------------------------------------------------------
 // Query Execution
 //----------------------------------------------------------------------------------------------------------------------
@@ -1377,6 +1415,18 @@ Returns the result error type contained within the result. The error is only set
 * @return The error type of the result.
 */
 DUCKDB_C_API duckdb_error_type duckdb_result_error_type(duckdb_result *result);
+
+/*!
+Returns a copy of the full error data contained within the result, including ExtraInfo.
+The error is only set if `duckdb_query` returns `DuckDBError`.
+
+Must be destroyed with `duckdb_destroy_error_data`. Prefer this over `duckdb_result_error` /
+`duckdb_result_error_type` when structured error details are needed.
+
+* @param result The result object to fetch the error from.
+* @return An owned duckdb_error_data on error, or NULL if the result has no error.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_result_error_data(duckdb_result *result);
 
 #ifndef DUCKDB_API_NO_DEPRECATED
 /*!
