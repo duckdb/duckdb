@@ -67,8 +67,9 @@ unique_ptr<ColumnSegment> SuballocationBlock::CreateTransientSegment(DatabaseIns
 	D_ASSERT(&buffer_manager == &block_manager.buffer_manager);
 
 	//	Do we have enough room in the block?
-	if (!block || block->GetBlockAllocSize() < allocated + segment_size) {
-		block = buffer_manager.RegisterTransientMemory(block_manager.GetBlockSize(), block_manager);
+	if (!block || block->GetBlockSize() < allocated + segment_size) {
+		auto &temp_block_manger = buffer_manager.GetTemporaryBlockManager();
+		block = buffer_manager.RegisterTransientMemory(temp_block_manger.GetBlockSize(), temp_block_manger);
 		allocated = 0;
 		block_id = block->BlockId();
 	}

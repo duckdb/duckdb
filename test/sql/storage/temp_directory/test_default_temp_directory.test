@@ -1,6 +1,8 @@
 # name: test/sql/storage/temp_directory/test_default_temp_directory.test
 # group: [temp_directory]
 
+require vector_size 2048
+
 load {TEST_DIR}/test_default_temp_dir.db
 
 statement ok
