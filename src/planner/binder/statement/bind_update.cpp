@@ -206,6 +206,9 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		update->return_chunk = true;
 	}
 	update->capture_old_rows = capture_old_rows;
+	// UPDATE ... FROM can match a target row via multiple source rows; flag it so the operator deduplicates
+	// row-ids and updates each row at most once (first match wins).
+	update->update_from = node.from_table != nullptr;
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;

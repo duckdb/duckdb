@@ -38,6 +38,9 @@ public:
 	vector<unique_ptr<Expression>> bound_defaults;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	bool update_is_del_and_insert;
+	//! if set, the update source may match a target row more than once (UPDATE ... FROM), so the operator
+	//! deduplicates row-ids and updates each row at most once (first match wins)
+	bool update_from = false;
 
 public:
 	void Serialize(Serializer &serializer) const override;

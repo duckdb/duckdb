@@ -2,6 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/merge_query_node.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -119,6 +120,26 @@ public:
 	idx_t finalize_idx = 0;
 	vector<unique_ptr<GlobalSinkState>> sink_states;
 	atomic<idx_t> merged_count;
+	//! Target row-ids already matched by a WHEN MATCHED modifying action, to detect a second action on a row.
+	mutex match_lock;
+	unordered_set<row_t> matched_rows;
+
+	//! Record the matched target rows; throw if any row was already matched (cardinality violation). The matched
+	//! chunk is sliced from the input, so read the row-ids through a unified format rather than assuming flat.
+	void CheckMatchedRows(DataChunk &matched, idx_t row_id_index) {
+		UnifiedVectorFormat row_id_format;
+		matched.data[row_id_index].ToUnifiedFormat(row_id_format);
+		auto row_id_data = UnifiedVectorFormat::GetData<row_t>(row_id_format);
+		lock_guard<mutex> glock(match_lock);
+		for (idx_t i = 0; i < matched.size(); i++) {
+			auto row_id = row_id_data[row_id_format.sel->get_index(i)];
+			if (!matched_rows.insert(row_id).second) {
+				throw InvalidInputException(
+				    "MERGE INTO command cannot affect the same target row more than once. A target row matched more "
+				    "than one source row; ensure the source rows are deduplicated or the ON condition is unique.");
+			}
+		}
+	}
 
 	optional_ptr<DataChunk> ComputeActionInput(ClientContext &context, MergeIntoOperator &action, DataChunk &chunk,
 	                                           MergeIntoLocalState &local_state,
@@ -187,6 +208,15 @@ public:
 				if (!input_chunk) {
 					// no data for this action - move to next action
 					continue;
+				}
+				// A WHEN MATCHED update/delete must not affect the same target row twice (cardinality violation).
+				// Checked here, on the freshly condition-selected rows (which still carry the row-id column), so
+				// rows filtered out by the action condition are not counted - matching PostgreSQL. Runs once per
+				// input chunk: on a BLOCKED resume input_chunk is still set and we skip re-checking.
+				if (range.condition == MergeActionCondition::WHEN_MATCHED &&
+				    (action->action_type == MergeActionType::MERGE_UPDATE ||
+				     action->action_type == MergeActionType::MERGE_DELETE)) {
+					CheckMatchedRows(*input_chunk, op.row_id_index);
 				}
 			}
 			// process the action
