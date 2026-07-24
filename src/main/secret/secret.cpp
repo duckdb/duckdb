@@ -11,6 +11,25 @@
 
 namespace duckdb {
 
+static bool IsScopeSeparator(char c) {
+	// a scope prefix may only match a path at a URI component boundary
+	return c == '/' || c == ':' || c == '?' || c == '#';
+}
+
+static bool ScopeMatches(const string &path, const string &prefix) {
+	if (prefix.empty()) {
+		return true;
+	}
+	if (!StringUtil::StartsWith(path, prefix)) {
+		return false;
+	}
+	if (path.size() == prefix.size()) {
+		return true;
+	}
+	// a strict prefix must end on a component boundary (avoids 's3://trusted' matching 's3://trusted-evil')
+	return IsScopeSeparator(prefix.back()) || IsScopeSeparator(path[prefix.size()]);
+}
+
 int64_t BaseSecret::MatchScore(const string &path) const {
 	int64_t longest_match = NumericLimits<int64_t>::Minimum();
 
@@ -24,7 +43,7 @@ int64_t BaseSecret::MatchScore(const string &path) const {
 			longest_match = 0;
 			continue;
 		}
-		if (StringUtil::StartsWith(path, prefix)) {
+		if (ScopeMatches(path, prefix)) {
 			longest_match = MaxValue<int64_t>(NumericCast<int64_t>(prefix.length()), longest_match);
 		}
 	}
