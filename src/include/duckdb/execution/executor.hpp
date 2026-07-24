@@ -113,9 +113,7 @@ public:
 	void RegisterTask() {
 		executor_tasks++;
 	}
-	void UnregisterTask() {
-		executor_tasks--;
-	}
+	void UnregisterTask();
 
 	idx_t GetTotalPipelines() const {
 		return total_pipelines;

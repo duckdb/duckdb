@@ -507,6 +507,16 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 	task_reschedule.notify_one();
 }
 
+void Executor::UnregisterTask() {
+	{
+		// Wake any thread blocked in `WaitForTask`.
+		// A finished task may have scheduled follow-up tasks or completed the query.
+		lock_guard<mutex> l(executor_lock);
+		task_reschedule.notify_all();
+	}
+	executor_tasks--;
+}
+
 void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
@@ -514,7 +524,8 @@ void Executor::WaitForTask() {
 	std::unique_lock<mutex> l(executor_lock);
 	auto end = TimePoint::Tick();
 	auto blocked_micros = NumericCast<idx_t>(TimePoint::ElapsedMicros(begin, end));
-	if (to_be_rescheduled_tasks.empty()) {
+
+	if (ExecutionIsFinished()) {
 		blocked_thread_time += blocked_micros;
 		return;
 	}
@@ -523,7 +534,14 @@ void Executor::WaitForTask() {
 		blocked_thread_time += blocked_micros;
 		return;
 	}
-
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	if (scheduler.GetTaskCountForProducer(*producer) > 0) {
+		// A task is available for the calling thread, the next step will make progress without waiting
+		blocked_thread_time += blocked_micros;
+		return;
+	}
+	// Nothing to run on this thread, all remaining tasks are either running on other threads or descheduled.
+	// Wait (bounded), but wake up on task completion or reschedule.
 	blocked_thread_time += blocked_micros + WAIT_TIME_MS.count();
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
 #endif
