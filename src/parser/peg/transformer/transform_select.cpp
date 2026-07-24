@@ -735,6 +735,116 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformRegularJoinClause(PEGTransf
 	return std::move(result);
 }
 
+//! Shared builder for both NEAREST BY alternatives (aliased and bare target).
+static unique_ptr<TableRef> BuildNearestJoin(const optional<JoinType> &join_type, unique_ptr<TableRef> table_ref,
+                                             const optional<bool> &approx_or_exact,
+                                             optional<unique_ptr<ParsedExpression>> number_literal,
+                                             const OrderType &distance_or_similarity,
+                                             unique_ptr<ParsedExpression> expression) {
+	auto result = make_uniq<JoinRef>(JoinRefType::NEAREST);
+	result->type = join_type.value_or(JoinType::INNER);
+	if (result->type != JoinType::INNER && result->type != JoinType::LEFT) {
+		throw ParserException("NEAREST BY only supports INNER and LEFT OUTER joins, not %s",
+		                      EnumUtil::ToString(result->type));
+	}
+	if (number_literal) {
+		auto value = (*number_literal)->Cast<ConstantExpression>().GetValue();
+		auto literal_text = value.ToString();
+		int64_t count = 0;
+		if (!value.type().IsIntegral() || !value.DefaultTryCastAs(LogicalType::BIGINT) ||
+		    (count = value.GetValue<int64_t>()) < 1) {
+			throw ParserException("NEAREST expects a positive integer literal, got \"%s\"", literal_text);
+		}
+		result->nearest_count = NumericCast<idx_t>(count);
+	}
+	result->nearest_order_type = distance_or_similarity;
+	result->nearest_approx = approx_or_exact.value_or(true);
+	result->ranking_expression = std::move(expression);
+	result->right = std::move(table_ref);
+	return std::move(result);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestJoinAliased(
+    PEGTransformer &transformer, const optional<JoinType> &join_type, unique_ptr<TableRef> table_ref,
+    const optional<bool> &approx_or_exact, optional<unique_ptr<ParsedExpression>> number_literal,
+    const OrderType &distance_or_similarity, unique_ptr<ParsedExpression> expression) {
+	return BuildNearestJoin(join_type, std::move(table_ref), approx_or_exact, std::move(number_literal),
+	                        distance_or_similarity, std::move(expression));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestJoinBare(
+    PEGTransformer &transformer, const optional<JoinType> &join_type, unique_ptr<TableRef> nearest_bare_table_ref,
+    const optional<bool> &approx_or_exact, optional<unique_ptr<ParsedExpression>> number_literal,
+    const OrderType &distance_or_similarity, unique_ptr<ParsedExpression> expression) {
+	return BuildNearestJoin(join_type, std::move(nearest_bare_table_ref), approx_or_exact, std::move(number_literal),
+	                        distance_or_similarity, std::move(expression));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestValuesRef(PEGTransformer &transformer,
+                                                                      unique_ptr<SelectStatement> values_clause) {
+	return make_uniq<SubqueryRef>(std::move(values_clause));
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestTableFunction(
+    PEGTransformer &transformer, const optional<bool> &lateral, const QualifiedName &qualified_table_function,
+    vector<FunctionArgument> table_function_arguments, const optional<bool> &with_ordinality) {
+	auto result = make_uniq<TableFunctionRef>();
+	result->with_ordinality =
+	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
+	result->function = make_uniq<FunctionExpression>(qualified_table_function, std::move(table_function_arguments));
+	return std::move(result);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestTableSubquery(PEGTransformer &transformer,
+                                                                          const optional<bool> &lateral,
+                                                                          unique_ptr<TableRef> subquery_reference) {
+	return subquery_reference;
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformNearestBaseTableRef(
+    PEGTransformer &transformer, unique_ptr<BaseTableRef> base_table_name, optional<unique_ptr<AtClause>> at_clause,
+    optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (at_clause) {
+		base_table_name->at_clause = std::move(*at_clause);
+	}
+	if (sample_clause) {
+		base_table_name->sample = std::move(*sample_clause);
+	}
+	return std::move(base_table_name);
+}
+
+unique_ptr<TableRef>
+PEGTransformerFactory::TransformNearestParensTableRef(PEGTransformer &transformer, unique_ptr<TableRef> table_ref,
+                                                      optional<unique_ptr<SampleOptions>> sample_clause) {
+	if (!sample_clause) {
+		return table_ref;
+	}
+	auto select_statement = make_uniq<SelectStatement>();
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(table_ref);
+	select_statement->node = std::move(select_node);
+	auto subquery = make_uniq<SubqueryRef>(std::move(select_statement));
+	subquery->sample = std::move(*sample_clause);
+	return std::move(subquery);
+}
+
+bool PEGTransformerFactory::TransformNearestApprox(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformNearestExact(PEGTransformer &transformer) {
+	return false;
+}
+
+OrderType PEGTransformerFactory::TransformNearestDistance(PEGTransformer &transformer) {
+	return OrderType::ASCENDING;
+}
+
+OrderType PEGTransformerFactory::TransformNearestSimilarity(PEGTransformer &transformer) {
+	return OrderType::DESCENDING;
+}
+
 unique_ptr<TableRef> PEGTransformerFactory::TransformJoinByClause(PEGTransformer &transformer, const string &col_label,
                                                                   unique_ptr<TableRef> table_ref,
                                                                   JoinQualifier join_qualifier) {

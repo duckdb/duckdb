@@ -1,0 +1,57 @@
+# name: test/sql/join/nearest/nearest_errors.test
+# description: NEAREST BY join clause - error handling
+# group: [nearest]
+
+statement ok
+CREATE TABLE u(e FLOAT[3]);
+
+statement ok
+CREATE TABLE p(e FLOAT[3]);
+
+# Only INNER and LEFT [OUTER] are supported
+statement error
+SELECT 1 FROM u q RIGHT JOIN p t NEAREST 1 BY DISTANCE array_distance(q.e, t.e)
+----
+NEAREST BY only supports INNER and LEFT OUTER joins, not RIGHT
+
+statement error
+SELECT 1 FROM u q FULL OUTER JOIN p t NEAREST 1 BY DISTANCE array_distance(q.e, t.e)
+----
+NEAREST BY only supports INNER and LEFT OUTER joins, not FULL
+
+statement error
+SELECT 1 FROM u q SEMI JOIN p t NEAREST 1 BY DISTANCE array_distance(q.e, t.e)
+----
+NEAREST BY only supports INNER and LEFT OUTER joins, not SEMI
+
+statement error
+SELECT 1 FROM u q ANTI JOIN p t NEAREST 1 BY DISTANCE array_distance(q.e, t.e)
+----
+NEAREST BY only supports INNER and LEFT OUTER joins, not ANTI
+
+# num_results must be a positive integer literal
+statement error
+SELECT 1 FROM u q JOIN p t NEAREST 0 BY DISTANCE array_distance(q.e, t.e)
+----
+NEAREST expects a positive integer literal, got "0"
+
+statement error
+SELECT 1 FROM u q JOIN p t NEAREST 1.5 BY DISTANCE array_distance(q.e, t.e)
+----
+NEAREST expects a positive integer literal, got "1.5"
+
+statement error
+SELECT 1 FROM u q JOIN p t NEAREST -1 BY DISTANCE array_distance(q.e, t.e)
+----
+syntax error
+
+# BY and DISTANCE/SIMILARITY are mandatory
+statement error
+SELECT 1 FROM u q JOIN p t NEAREST 1 array_distance(q.e, t.e)
+----
+syntax error
+
+statement error
+SELECT 1 FROM u q JOIN p t NEAREST 1 BY array_distance(q.e, t.e)
+----
+syntax error

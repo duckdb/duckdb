@@ -97,6 +97,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("also");
 	unreserved_keyword_map.insert("alter");
 	unreserved_keyword_map.insert("always");
+	unreserved_keyword_map.insert("approx");
 	unreserved_keyword_map.insert("assertion");
 	unreserved_keyword_map.insert("assignment");
 	unreserved_keyword_map.insert("attach");
@@ -158,6 +159,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("disable");
 	unreserved_keyword_map.insert("discard");
 	unreserved_keyword_map.insert("disconnect");
+	unreserved_keyword_map.insert("distance");
 	unreserved_keyword_map.insert("document");
 	unreserved_keyword_map.insert("domain");
 	unreserved_keyword_map.insert("double");
@@ -170,6 +172,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("error");
 	unreserved_keyword_map.insert("escape");
 	unreserved_keyword_map.insert("event");
+	unreserved_keyword_map.insert("exact");
 	unreserved_keyword_map.insert("exclude");
 	unreserved_keyword_map.insert("excluding");
 	unreserved_keyword_map.insert("exclusive");
@@ -257,6 +260,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("move");
 	unreserved_keyword_map.insert("name");
 	unreserved_keyword_map.insert("names");
+	unreserved_keyword_map.insert("nearest");
 	unreserved_keyword_map.insert("new");
 	unreserved_keyword_map.insert("next");
 	unreserved_keyword_map.insert("no");
@@ -348,6 +352,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("set");
 	unreserved_keyword_map.insert("sets");
 	unreserved_keyword_map.insert("share");
+	unreserved_keyword_map.insert("similarity");
 	unreserved_keyword_map.insert("simple");
 	unreserved_keyword_map.insert("skip");
 	unreserved_keyword_map.insert("snapshot");

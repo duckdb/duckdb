@@ -395,6 +395,7 @@ UnreservedKeyword <- 'ABORT' /
 'ALSO' /
 'ALTER' /
 'ALWAYS' /
+'APPROX' /
 'ASSERTION' /
 'ASSIGNMENT' /
 'ATTACH' /
@@ -456,6 +457,7 @@ UnreservedKeyword <- 'ABORT' /
 'DISABLE' /
 'DISCARD' /
 'DISCONNECT' /
+'DISTANCE' /
 'DOCUMENT' /
 'DOMAIN' /
 'DOUBLE' /
@@ -468,6 +470,7 @@ UnreservedKeyword <- 'ABORT' /
 'ERROR' /
 'ESCAPE' /
 'EVENT' /
+'EXACT' /
 'EXCLUDE' /
 'EXCLUDING' /
 'EXCLUSIVE' /
@@ -555,6 +558,7 @@ UnreservedKeyword <- 'ABORT' /
 'MOVE' /
 'NAME' /
 'NAMES' /
+'NEAREST' /
 'NEW' /
 'NEXT' /
 'NO' /
@@ -646,6 +650,7 @@ UnreservedKeyword <- 'ABORT' /
 'SET' /
 'SETS' /
 'SHARE' /
+'SIMILARITY' /
 'SIMPLE' /
 'SKIP' /
 'SNAPSHOT' /
@@ -1729,7 +1734,25 @@ AtUnit <- VersionAtUnit / TimestampAtUnit
 VersionAtUnit <- 'VERSION'
 TimestampAtUnit <- 'TIMESTAMP'
 
-JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause
+JoinClause <- NearestJoinClause / JoinByClause / RegularJoinClause / JoinWithoutOnClause
+# NEAREST BY has two alternatives so PEG can backtrack: the bare form uses alias-less target mirrors (tried
+# first, so an unaliased target does not greedily consume NEAREST/APPROX/EXACT as an alias), and the aliased
+# form falls back to a full TableRef when a real alias identifier follows the target.
+NearestJoinClause <- NearestJoinBare / NearestJoinAliased
+NearestJoinAliased <- JoinType? 'JOIN' TableRef ApproxOrExact? 'NEAREST' NumberLiteral? 'BY' DistanceOrSimilarity Expression
+NearestJoinBare <- JoinType? 'JOIN' NearestBareTableRef ApproxOrExact? 'NEAREST' NumberLiteral? 'BY' DistanceOrSimilarity Expression
+NearestBareTableRef <- NearestValuesRef / NearestTableFunction / NearestTableSubquery / NearestBaseTableRef / NearestParensTableRef
+NearestValuesRef <- ValuesClause
+NearestTableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality?
+NearestTableSubquery <- Lateral? SubqueryReference
+NearestBaseTableRef <- BaseTableName AtClause? SampleClause?
+NearestParensTableRef <- Parens(TableRef) SampleClause?
+ApproxOrExact <- NearestApprox / NearestExact
+NearestApprox <- 'APPROX'
+NearestExact <- 'EXACT'
+DistanceOrSimilarity <- NearestDistance / NearestSimilarity
+NearestDistance <- 'DISTANCE'
+NearestSimilarity <- 'SIMILARITY'
 RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
 JoinByClause <- 'JOIN' 'BY' Parens('TYPE' ColLabel) TableRef JoinQualifier
 Asof <- 'ASOF'

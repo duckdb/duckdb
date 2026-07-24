@@ -1,4 +1,8 @@
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
@@ -6,6 +10,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -159,7 +164,55 @@ BoundStatement Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
 	return result;
 }
 
+//! The name under which the target of a NEAREST BY join remains visible to the outer query
+static Identifier GetNearestTargetAlias(const TableRef &target) {
+	if (!target.alias.empty()) {
+		return target.alias;
+	}
+	if (target.type == TableReferenceType::BASE_TABLE) {
+		return target.Cast<BaseTableRef>().Table();
+	}
+	return Identifier();
+}
+
+BoundStatement Binder::BindNearestJoin(JoinRef &ref) {
+	// NEAREST BY is sugar for a lateral join against the top-k rows of the target:
+	//   <left> JOIN (SELECT * FROM <target> WHERE <ranking> IS NOT NULL
+	//                ORDER BY <ranking> LIMIT <k>) <target_alias> ON TRUE
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	auto target_alias = GetNearestTargetAlias(*ref.right);
+	select_node->from_table = std::move(ref.right);
+
+	// Drop candidates whose ranking expression is NULL (they never rank)
+	select_node->where_clause =
+	    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, ref.ranking_expression->Copy());
+
+	auto order_modifier = make_uniq<OrderModifier>();
+	order_modifier->orders.emplace_back(ref.nearest_order_type, OrderByNullType::ORDER_DEFAULT,
+	                                    std::move(ref.ranking_expression));
+	select_node->modifiers.push_back(std::move(order_modifier));
+
+	auto limit_modifier = make_uniq<LimitModifier>();
+	limit_modifier->limit = make_uniq<ConstantExpression>(Value::BIGINT(NumericCast<int64_t>(ref.nearest_count)));
+	select_node->modifiers.push_back(std::move(limit_modifier));
+
+	auto select_statement = make_uniq<SelectStatement>();
+	select_statement->node = std::move(select_node);
+
+	auto lateral_join = make_uniq<JoinRef>(JoinRefType::REGULAR);
+	lateral_join->type = ref.type;
+	lateral_join->left = std::move(ref.left);
+	lateral_join->right = make_uniq<SubqueryRef>(std::move(select_statement), std::move(target_alias));
+	lateral_join->condition = make_uniq<ConstantExpression>(Value::BOOLEAN(true));
+	lateral_join->query_location = ref.query_location;
+	return Bind(*lateral_join);
+}
+
 BoundStatement Binder::Bind(JoinRef &ref) {
+	if (ref.ref_type == JoinRefType::NEAREST) {
+		return BindNearestJoin(ref);
+	}
 	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
@@ -283,6 +336,8 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	case JoinRefType::POSITIONAL:
 	case JoinRefType::DEPENDENT:
 		break;
+	case JoinRefType::NEAREST:
+		throw InternalException("NEAREST BY should have been rewritten by BindNearestJoin");
 	}
 	extra_using_columns = RemoveDuplicateUsingColumns(extra_using_columns);
 

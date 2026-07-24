@@ -142,6 +142,18 @@ void JoinRef::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V1_4_0)) {
 		serializer.WritePropertyWithDefault<bool>(208, "is_implicit", is_implicit, true);
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(209, "ranking_expression", ranking_expression);
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<idx_t>(210, "nearest_count", nearest_count, 1);
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<OrderType>(211, "nearest_order_type", nearest_order_type, OrderType::ASCENDING);
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<bool>(212, "nearest_approx", nearest_approx, true);
+	}
 }
 
 unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
@@ -155,6 +167,10 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(206, "delim_flipped", result->delim_flipped);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(208, "is_implicit", result->is_implicit, true);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(209, "ranking_expression", result->ranking_expression);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(210, "nearest_count", result->nearest_count, 1);
+	deserializer.ReadPropertyWithExplicitDefault<OrderType>(211, "nearest_order_type", result->nearest_order_type, OrderType::ASCENDING);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(212, "nearest_approx", result->nearest_approx, true);
 	return std::move(result);
 }
 

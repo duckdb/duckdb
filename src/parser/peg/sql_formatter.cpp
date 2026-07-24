@@ -162,25 +162,28 @@ bool SQLFormatter::IsClauseKeywordLine(const string &trimmed) {
 //! original casing is preserved.
 bool SQLFormatter::ShouldUppercase(const string &kw) {
 	static const std::unordered_set<string> uppercase_set = {
-	    "SELECT",     "DISTINCT",    "FROM",       "WHERE",       "HAVING",     "LIMIT",    "OFFSET",       "GROUP",
-	    "BY",         "ORDER",       "UNION",      "INTERSECT",   "EXCEPT",     "ALL",      "JOIN",         "INNER",
-	    "LEFT",       "RIGHT",       "FULL",       "OUTER",       "CROSS",      "NATURAL",  "ON",           "USING",
-	    "WITH",       "RECURSIVE",   "INSERT",     "INTO",        "UPDATE",     "DELETE",   "MERGE",        "MATCHED",
-	    "SET",        "VALUES",      "RETURNING",  "OVERRIDING",  "CREATE",     "DROP",     "ALTER",        "TRUNCATE",
-	    "TABLE",      "VIEW",        "INDEX",      "SCHEMA",      "DATABASE",   "SEQUENCE", "MATERIALIZED", "TEMP",
-	    "TEMPORARY",  "IF",          "NOT",        "EXISTS",      "OR",         "REPLACE",  "UNIQUE",       "PRIMARY",
-	    "KEY",        "FOREIGN",     "REFERENCES", "DEFAULT",     "CONSTRAINT", "CHECK",    "GENERATED",    "ALWAYS",
-	    "IDENTITY",   "STORED",      "VIRTUAL",    "COLUMN",      "ADD",        "RENAME",   "COPY",         "AND",
-	    "OR",         "NOT",         "IS",         "NULL",        "TRUE",       "FALSE",    "IN",           "LIKE",
-	    "ILIKE",      "GLOB",        "BETWEEN",    "SIMILAR",     "SOME",       "ANY",      "EXISTS",       "OVERLAPS",
-	    "CASE",       "WHEN",        "THEN",       "ELSE",        "END",        "AS",       "ASC",          "DESC",
-	    "NULLS",      "FIRST",       "LAST",       "OVER",        "PARTITION",  "ROWS",     "RANGE",        "GROUPS",
-	    "UNBOUNDED",  "PRECEDING",   "FOLLOWING",  "CURRENT",     "ROW",        "EXCLUDE",  "TIES",         "OTHERS",
-	    "CAST",       "TRY_CAST",    "QUALIFY",    "PIVOT",       "UNPIVOT",    "IN",       "BEGIN",        "COMMIT",
-	    "ROLLBACK",   "TRANSACTION", "SAVEPOINT",  "RELEASE",     "EXPLAIN",    "ANALYZE",  "DESCRIBE",     "SHOW",
-	    "PRAGMA",     "ATTACH",      "DETACH",     "CHECKPOINT",  "VACUUM",     "LOAD",     "INSTALL",      "FORCE",
-	    "POSITIONAL", "ASOF",        "LATERAL",    "TABLESAMPLE", "REPEATABLE", "USING",    "SYSTEM",       "BERNOULLI",
-	    "RESERVOIR"};
+	    "SELECT",     "DISTINCT",  "FROM",        "WHERE",      "HAVING",       "LIMIT",      "OFFSET",
+	    "GROUP",      "BY",        "ORDER",       "UNION",      "INTERSECT",    "EXCEPT",     "ALL",
+	    "JOIN",       "INNER",     "LEFT",        "RIGHT",      "FULL",         "OUTER",      "CROSS",
+	    "NATURAL",    "ON",        "USING",       "WITH",       "RECURSIVE",    "INSERT",     "INTO",
+	    "UPDATE",     "DELETE",    "MERGE",       "MATCHED",    "SET",          "VALUES",     "RETURNING",
+	    "OVERRIDING", "CREATE",    "DROP",        "ALTER",      "TRUNCATE",     "TABLE",      "VIEW",
+	    "INDEX",      "SCHEMA",    "DATABASE",    "SEQUENCE",   "MATERIALIZED", "TEMP",       "TEMPORARY",
+	    "IF",         "NOT",       "EXISTS",      "OR",         "REPLACE",      "UNIQUE",     "PRIMARY",
+	    "KEY",        "FOREIGN",   "REFERENCES",  "DEFAULT",    "CONSTRAINT",   "CHECK",      "GENERATED",
+	    "ALWAYS",     "IDENTITY",  "STORED",      "VIRTUAL",    "COLUMN",       "ADD",        "RENAME",
+	    "COPY",       "AND",       "OR",          "NOT",        "IS",           "NULL",       "TRUE",
+	    "FALSE",      "IN",        "LIKE",        "ILIKE",      "GLOB",         "BETWEEN",    "SIMILAR",
+	    "SOME",       "ANY",       "EXISTS",      "OVERLAPS",   "CASE",         "WHEN",       "THEN",
+	    "ELSE",       "END",       "AS",          "ASC",        "DESC",         "NULLS",      "FIRST",
+	    "LAST",       "OVER",      "PARTITION",   "ROWS",       "RANGE",        "GROUPS",     "UNBOUNDED",
+	    "PRECEDING",  "FOLLOWING", "CURRENT",     "ROW",        "EXCLUDE",      "TIES",       "OTHERS",
+	    "CAST",       "TRY_CAST",  "QUALIFY",     "PIVOT",      "UNPIVOT",      "IN",         "BEGIN",
+	    "COMMIT",     "ROLLBACK",  "TRANSACTION", "SAVEPOINT",  "RELEASE",      "EXPLAIN",    "ANALYZE",
+	    "DESCRIBE",   "SHOW",      "PRAGMA",      "ATTACH",     "DETACH",       "CHECKPOINT", "VACUUM",
+	    "LOAD",       "INSTALL",   "FORCE",       "POSITIONAL", "ASOF",         "LATERAL",    "TABLESAMPLE",
+	    "REPEATABLE", "USING",     "SYSTEM",      "BERNOULLI",  "RESERVOIR",    "NEAREST",    "APPROX",
+	    "EXACT",      "DISTANCE",  "SIMILARITY"};
 	return uppercase_set.count(kw) > 0;
 }
 
