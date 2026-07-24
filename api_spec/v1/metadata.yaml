@@ -1,0 +1,68 @@
+schema_version: "0.5"
+versions:
+  - "v1.2.0"
+  - "v1.3.0"
+  - "v1.4.0"
+  - "v1.5.0"
+  - "v1.5.4"
+prefix: "duckdb_"
+lifecycle_states:
+  frozen:
+    visibility: always
+  deprecated:
+    visibility: opt_out
+    guard: DUCKDB_API_NO_DEPRECATED
+  # Required by the extension_header adapter for gating appended members.
+  # No v1 construct is currently unstable.
+  unstable:
+    visibility: opt_in
+    guard: DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+suffixes:
+  handles: ""
+  callbacks: ""
+  aliases: ""
+primitives:
+  - name: void
+    c_type: void
+  - name: opaque
+    c_type: void
+  - name: char
+    c_type: char
+  - name: bool
+    c_type: bool
+  - name: i8
+    c_type: int8_t
+  - name: i16
+    c_type: int16_t
+  - name: i32
+    c_type: int32_t
+  - name: i64
+    c_type: int64_t
+  - name: u8
+    c_type: uint8_t
+  - name: u16
+    c_type: uint16_t
+  - name: u32
+    c_type: uint32_t
+  - name: u64
+    c_type: uint64_t
+  - name: f32
+    c_type: float
+  - name: f64
+    c_type: double
+  - name: idx
+    c_type: idx_t
+    underlying: uint64_t
+  - name: size
+    c_type: size_t
+  # Hand rolled types here; leverage primitive to materialize in the spec, but
+  # definition is hand-rolled in C.
+  - name: duckdb_string_t
+    c_type: duckdb_string_t
+  - name: state
+    c_type: duckdb_state
+  # Arrow external defs
+  - name: ArrowSchema
+    c_type: struct ArrowSchema
+  - name: ArrowArray
+    c_type: struct ArrowArray

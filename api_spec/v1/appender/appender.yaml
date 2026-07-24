@@ -1,0 +1,569 @@
+module: appender
+functions:
+  appender_create:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: appender
+    parameters:
+      connection:
+        type: connection
+        description: The connection context to create the appender in.
+      schema:
+        type: char
+        indirection: 1
+        const: true
+        description: The schema of the table to append to, or `nullptr` for the default schema.
+      table:
+        type: char
+        indirection: 1
+        const: true
+        description: The table name to append to.
+      out_appender:
+        type: appender
+        indirection: 1
+        kind: OUT
+        description: The resulting appender object.
+    return_type: state
+    description: |
+      Creates an appender object.
+
+      Note that the object must be destroyed with `duckdb_appender_destroy`.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_create_ext:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: appender
+    parameters:
+      connection:
+        type: connection
+        description: The connection context to create the appender in.
+      catalog:
+        type: char
+        indirection: 1
+        const: true
+        description: The catalog of the table to append to, or `nullptr` for the default catalog.
+      schema:
+        type: char
+        indirection: 1
+        const: true
+        description: The schema of the table to append to, or `nullptr` for the default schema.
+      table:
+        type: char
+        indirection: 1
+        const: true
+        description: The table name to append to.
+      out_appender:
+        type: appender
+        indirection: 1
+        kind: OUT
+        description: The resulting appender object.
+    return_type: state
+    description: |
+      Creates an appender object.
+
+      Note that the object must be destroyed with `duckdb_appender_destroy`.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_create_query:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: appender
+    parameters:
+      connection:
+        type: connection
+        description: The connection context to create the appender in.
+      query:
+        type: char
+        indirection: 1
+        const: true
+        description: The query to execute, can be an INSERT, DELETE, UPDATE or MERGE INTO statement.
+      column_count:
+        type: idx
+        description: The number of columns to append.
+      types:
+        type: logical_type
+        indirection: 1
+        description: The types of the columns to append.
+      table_name:
+        type: char
+        indirection: 1
+        const: true
+        description: (optionally) the table name used to refer to the appended data, defaults to "appended_data".
+      column_names:
+        type: char
+        indirection: 2
+        const: true
+        description: (optionally) the list of column names, defaults to "col1", "col2", ...
+      out_appender:
+        type: appender
+        indirection: 1
+        kind: OUT
+        description: The resulting appender object.
+    return_type: state
+    description: |
+      Creates an appender object that executes the given query with any data appended to it.
+
+      Note that the object must be destroyed with `duckdb_appender_destroy`.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_column_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to get the column count from.
+    return_type: idx
+    description: |
+      Returns the number of columns that belong to the appender.
+      If there is no active column list, then this equals the table's physical columns.
+    return_description: The number of columns in the data chunks.
+  appender_column_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to get the column type from.
+      col_idx:
+        type: idx
+        description: The index of the column to get the type of.
+    return_type: logical_type
+    description: |
+      Returns the type of the column at the specified index. This is either a type in the active column list, or the same type as a column in the receiving table.
+
+      Note: The resulting type must be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The `duckdb_logical_type` of the column.
+  appender_error_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to get the error data from.
+    return_type: error_data
+    description: |
+      Returns the error data associated with the appender.
+      Must be destroyed with duckdb_destroy_error_data.
+    return_description: The error data.
+  appender_flush:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to flush.
+    return_type: state
+    description: |
+      Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a
+      constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.
+      It is not possible to append more values. Call duckdb_appender_error_data to obtain the error data followed by
+      duckdb_appender_destroy to destroy the invalidated appender.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_clear:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to clear.
+    return_type: state
+    description: |
+      Clears all buffered data from the appender without flushing it to the table. This discards any data that has been appended but not yet written. The appender can continue to be used after clearing.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_close:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to flush and close.
+    return_type: state
+    description: |
+      Closes the appender by flushing all intermediate states and closing it for further appends. If flushing the data
+      triggers a constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.
+      Call duckdb_appender_error_data to obtain the error data followed by duckdb_appender_destroy to destroy the invalidated
+      appender.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_destroy:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: appender
+    parameters:
+      appender:
+        type: appender
+        indirection: 1
+        description: The appender to flush, close and destroy.
+    return_type: state
+    description: |
+      Closes the appender by flushing all intermediate states to the table and destroying it. By destroying it, this function
+      de-allocates all memory associated with the appender. If flushing the data triggers a constraint violation,
+      then all data is invalidated, and this function returns DuckDBError. Due to the destruction of the appender, it is no
+      longer possible to obtain the specific error message with duckdb_appender_error. Therefore, call duckdb_appender_close
+      before destroying the appender, if you need insights into the specific error.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_add_column:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to add the column to.
+      name:
+        type: char
+        indirection: 1
+        const: true
+    return_type: state
+    description: |
+      Appends a column to the active column list of the appender. Immediately flushes all previous data.
+
+      The active column list specifies all columns that are expected when flushing the data. Any non-active columns are filled with their default values, or NULL.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_clear_columns:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to clear the columns from.
+    return_type: state
+    description: |
+      Removes all columns from the active column list of the appender, resetting the appender to treat all columns as active. Immediately flushes all previous data.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_begin_row:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+    return_type: state
+    description: |
+      A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
+  appender_end_row:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender.
+    return_type: state
+    description: |
+      Finish the current row of appends. After end_row is called, the next row can be appended.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  append_default:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+    return_type: state
+    description: |
+      Append a DEFAULT value (NULL if DEFAULT not available for column) to the appender.
+  append_default_to_chunk:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to get the default value from.
+      chunk:
+        type: data_chunk
+        description: The data chunk to append the default value to.
+      col:
+        type: idx
+        description: The chunk column index to append the default value to.
+      row:
+        type: idx
+        description: The chunk row index to append the default value to.
+    return_type: state
+    description: |
+      Append a DEFAULT value, at the specified row and column, (NULL if DEFAULT not available for column) to the chunk created from the specified appender.
+      The default value of the column must be a constant value. Non-deterministic expressions like nextval('seq') or random() are not supported.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  append_bool:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: bool
+    return_type: state
+    description: |
+      Append a bool value to the appender.
+  append_int8:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: i8
+    return_type: state
+    description: |
+      Append an int8_t value to the appender.
+  append_int16:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: i16
+    return_type: state
+    description: |
+      Append an int16_t value to the appender.
+  append_int32:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: i32
+    return_type: state
+    description: |
+      Append an int32_t value to the appender.
+  append_int64:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: i64
+    return_type: state
+    description: |
+      Append an int64_t value to the appender.
+  append_hugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: hugeint
+    return_type: state
+    description: |
+      Append a duckdb_hugeint value to the appender.
+  append_uint8:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: u8
+    return_type: state
+    description: |
+      Append a uint8_t value to the appender.
+  append_uint16:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: u16
+    return_type: state
+    description: |
+      Append a uint16_t value to the appender.
+  append_uint32:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: u32
+    return_type: state
+    description: |
+      Append a uint32_t value to the appender.
+  append_uint64:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: u64
+    return_type: state
+    description: |
+      Append a uint64_t value to the appender.
+  append_uhugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: uhugeint
+    return_type: state
+    description: |
+      Append a duckdb_uhugeint value to the appender.
+  append_float:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: f32
+    return_type: state
+    description: |
+      Append a float value to the appender.
+  append_double:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: f64
+    return_type: state
+    description: |
+      Append a double value to the appender.
+  append_date:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: date
+    return_type: state
+    description: |
+      Append a duckdb_date value to the appender.
+  append_time:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: time
+    return_type: state
+    description: |
+      Append a duckdb_time value to the appender.
+  append_timestamp:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: timestamp
+    return_type: state
+    description: |
+      Append a duckdb_timestamp value to the appender.
+  append_interval:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: interval
+    return_type: state
+    description: |
+      Append a duckdb_interval value to the appender.
+  append_varchar:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      val:
+        type: char
+        indirection: 1
+        const: true
+    return_type: state
+    description: |
+      Append a varchar value to the appender.
+  append_varchar_length:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      val:
+        type: char
+        indirection: 1
+        const: true
+      length:
+        type: idx
+    return_type: state
+    description: |
+      Append a varchar value to the appender.
+  append_blob:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      data:
+        type: opaque
+        indirection: 1
+        const: true
+      length:
+        type: idx
+    return_type: state
+    description: |
+      Append a blob value to the appender.
+  append_null:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+    return_type: state
+    description: |
+      Append a NULL value to the appender (of any type).
+  append_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+      value:
+        type: value
+    return_type: state
+    description: |
+      Append a duckdb_value to the appender.
+  append_data_chunk:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to append to.
+      chunk:
+        type: data_chunk
+        description: The data chunk to append.
+    return_type: state
+    description: |
+      Appends a pre-filled data chunk to the specified appender.
+       Attempts casting, if the data chunk types do not match the active appender types.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  appender_error:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      appender:
+        type: appender
+        description: The appender to get the error from.
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+      Use duckdb_appender_error_data instead.
+
+      Returns the error message associated with the appender.
+      If the appender has no error message, this returns `nullptr` instead.
+
+      The error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.
+    return_description: The error message, or `nullptr` if there is none.
