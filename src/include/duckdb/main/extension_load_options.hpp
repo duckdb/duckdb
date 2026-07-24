@@ -21,6 +21,10 @@ struct ExtensionLoadOptions {
 
 	string extension_name;
 	Identifier alias;
+	//! Optional human-readable reason describing why this load was triggered
+	//! (e.g. explicit SQL, or autoload due to a missing function). Surfaced by the
+	//! ExtensionLoadInstall log type.
+	string reason;
 };
 
 } // namespace duckdb

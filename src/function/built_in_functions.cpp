@@ -118,7 +118,7 @@ static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput 
 		                      bound_function.GetName(), extension_name);
 	}
 	// auto-load the extension
-	ExtensionHelper::AutoLoadExtension(db, extension_name);
+	ExtensionHelper::AutoLoadExtension(db, extension_name, "autoload for function '" + bound_function.GetName() + "'");
 
 	// now find the function in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(db);

@@ -657,7 +657,8 @@ String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const Stri
 		auto extension_name =
 		    ExtensionHelper::FindExtensionInEntries(configuration_name.ToStdString(), EXTENSION_SETTINGS);
 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
-			ExtensionHelper::AutoLoadExtension(context, extension_name);
+			ExtensionHelper::AutoLoadExtension(context, extension_name,
+			                                   "autoload for setting '" + configuration_name.ToStdString() + "'");
 			return extension_name;
 		}
 	}
@@ -733,7 +734,8 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType 
 		}
 
 		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(extension_name)) {
-			ExtensionHelper::AutoLoadExtension(db, extension_name);
+			ExtensionHelper::AutoLoadExtension(db, extension_name,
+			                                   "autoload for " + CatalogTypeToString(type) + " '" + entry_name + "'");
 			return true;
 		}
 	}
