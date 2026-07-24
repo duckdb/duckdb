@@ -58,6 +58,96 @@ SELECT CASE WHEN a = 42 THEN 100 WHEN a = 43 THEN 200 END FROM exprtest
 NULL
 NULL
 
+# Use a sequence instead of random() so the volatile subject test is deterministic.
+statement ok
+CREATE SEQUENCE simple_case_subject_seq START 1
+
+query I
+SELECT count(*) FROM (
+	SELECT CASE nextval('simple_case_subject_seq') % 3
+		WHEN 0 THEN 'zero'
+		WHEN 1 THEN 'one'
+		WHEN 2 THEN 'two'
+		ELSE 'other'
+	END AS result
+	FROM range(10000)
+) WHERE result = 'other'
+----
+0
+
+statement ok
+CREATE SEQUENCE simple_case_filter_seq START 1
+
+query I
+SELECT count(*) FROM range(10000) tbl(i)
+WHERE i % 2 = 0 AND CASE nextval('simple_case_filter_seq') % 3
+	WHEN 0 THEN 'zero'
+	WHEN 1 THEN 'one'
+	WHEN 2 THEN 'two'
+	ELSE 'other'
+END = 'other'
+----
+0
+
+query T
+SELECT CASE NULL WHEN NULL THEN 'hit' ELSE 'miss' END
+----
+miss
+
+query T
+SELECT CASE 1 WHEN '1' THEN 'hit' ELSE 'miss' END
+----
+hit
+
+query T
+SELECT CASE 'ABC' COLLATE nocase WHEN 'abc' THEN 'hit' ELSE 'miss' END
+----
+hit
+
+query I
+SELECT CASE 1 WHEN 1 THEN (SELECT 2) ELSE 0 END
+----
+2
+
+query I
+SELECT CASE (SELECT 1) WHEN 1 THEN 2 ELSE 0 END
+----
+2
+
+query I
+SELECT CASE 1 WHEN 1 THEN unnest([2]) ELSE unnest([3]) END
+----
+2
+
+query I
+SELECT CASE 1 WHEN 1 THEN sum(i) ELSE 0 END FROM range(3) tbl(i)
+----
+3
+
+query I
+SELECT CASE 1 WHEN 1 THEN row_number() OVER () ELSE 0 END FROM range(3) tbl(i)
+----
+1
+2
+3
+
+query I
+SELECT CASE i WHEN 1 THEN __duckdb_simple_case_subject ELSE 0 END
+FROM (SELECT 1 i, 42 __duckdb_simple_case_subject) tbl
+----
+42
+
+statement ok
+CREATE VIEW simple_case_storage_compat_view AS
+SELECT CASE i WHEN 1 THEN 'one' ELSE 'other' END AS label
+FROM (VALUES (1), (2)) tbl(i)
+
+query T rowsort
+SELECT label FROM simple_case_storage_compat_view
+----
+one
+other
+
 # ABS
 query III
 SELECT ABS(1), ABS(-1), ABS(NULL)
@@ -198,4 +288,3 @@ query I
 SELECT a FROM strtest WHERE b >= 'h'
 ----
 2
-
