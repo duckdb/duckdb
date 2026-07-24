@@ -1,5 +1,5 @@
 diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
-index 6df47ed..c9f0ef9 100644
+index 6df47edc..c9f0ef96 100644
 --- a/src/storage/ducklake_catalog.cpp
 +++ b/src/storage/ducklake_catalog.cpp
 @@ -140,7 +140,7 @@ optional_ptr<CatalogEntry> DuckLakeCatalog::CreateSchema(CatalogTransaction tran
@@ -12,7 +12,7 @@ index 6df47ed..c9f0ef9 100644
  	}
  	auto &duck_transaction = transaction.transaction->Cast<DuckLakeTransaction>();
 diff --git a/src/storage/ducklake_schema_entry.cpp b/src/storage/ducklake_schema_entry.cpp
-index 7a828ff..69379a0 100644
+index 7a828ff1..69379a03 100644
 --- a/src/storage/ducklake_schema_entry.cpp
 +++ b/src/storage/ducklake_schema_entry.cpp
 @@ -51,7 +51,7 @@ bool DuckLakeSchemaEntry::HandleCreateConflict(CatalogTransaction transaction, C

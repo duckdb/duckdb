@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   add.cpp
   arithmetic.cpp
+  cast.cpp
   decimal_division.cpp
   multiply.cpp
   subtract.cpp)

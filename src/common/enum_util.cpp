@@ -163,6 +163,7 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
+#include "duckdb/optimizer/rule/like_optimizations.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -1712,19 +1713,20 @@ const StringUtil::EnumStringLiteral *GetDebugVerificationModeValues() {
 		{ static_cast<uint32_t>(DebugVerificationMode::NONE), "NONE" },
 		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_VECTORS), "VERIFY_VECTORS" },
 		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_SERIALIZATION), "VERIFY_SERIALIZATION" },
-		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_FUNCTIONS), "VERIFY_FUNCTIONS" }
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_FUNCTIONS), "VERIFY_FUNCTIONS" },
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_COMPRESSION), "VERIFY_COMPRESSION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DebugVerificationMode>(DebugVerificationMode value) {
-	return StringUtil::EnumToString(GetDebugVerificationModeValues(), 5, "DebugVerificationMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDebugVerificationModeValues(), 6, "DebugVerificationMode", static_cast<uint32_t>(value));
 }
 
 template<>
 DebugVerificationMode EnumUtil::FromString<DebugVerificationMode>(const char *value) {
-	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 5, "DebugVerificationMode", value));
+	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 6, "DebugVerificationMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDecimalBitWidthValues() {
@@ -2096,7 +2098,7 @@ const StringUtil::EnumStringLiteral *GetExpressionClassValues() {
 		{ static_cast<uint32_t>(ExpressionClass::TYPE), "TYPE" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_AGGREGATE), "BOUND_AGGREGATE" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_CASE), "BOUND_CASE" },
-		{ static_cast<uint32_t>(ExpressionClass::BOUND_CAST), "BOUND_CAST" },
+		{ static_cast<uint32_t>(ExpressionClass::LEGACY_BOUND_CAST), "LEGACY_BOUND_CAST" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_COLUMN_REF), "BOUND_COLUMN_REF" },
 		{ static_cast<uint32_t>(ExpressionClass::LEGACY_BOUND_COMPARISON), "LEGACY_BOUND_COMPARISON" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_CONJUNCTION), "BOUND_CONJUNCTION" },
@@ -4139,6 +4141,24 @@ const char* EnumUtil::ToChars<PartitionedTupleDataType>(PartitionedTupleDataType
 template<>
 PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const char *value) {
 	return static_cast<PartitionedTupleDataType>(StringUtil::StringToEnum(GetPartitionedTupleDataTypeValues(), 2, "PartitionedTupleDataType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPatternMatchTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PatternMatchType::LIKE), "LIKE" },
+		{ static_cast<uint32_t>(PatternMatchType::GLOB), "GLOB" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PatternMatchType>(PatternMatchType value) {
+	return StringUtil::EnumToString(GetPatternMatchTypeValues(), 2, "PatternMatchType", static_cast<uint32_t>(value));
+}
+
+template<>
+PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value) {
+	return static_cast<PatternMatchType>(StringUtil::StringToEnum(GetPatternMatchTypeValues(), 2, "PatternMatchType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPendingExecutionResultValues() {
@@ -6356,6 +6376,25 @@ const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value) {
 template<>
 VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value) {
 	return static_cast<VerifyExistenceType>(StringUtil::StringToEnum(GetVerifyExistenceTypeValues(), 3, "VerifyExistenceType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetVersionCompressionResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VersionCompressionResult::FULLY_COMPRESSED), "FULLY_COMPRESSED" },
+		{ static_cast<uint32_t>(VersionCompressionResult::PENDING), "PENDING" },
+		{ static_cast<uint32_t>(VersionCompressionResult::SETTLED), "SETTLED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VersionCompressionResult>(VersionCompressionResult value) {
+	return StringUtil::EnumToString(GetVersionCompressionResultValues(), 3, "VersionCompressionResult", static_cast<uint32_t>(value));
+}
+
+template<>
+VersionCompressionResult EnumUtil::FromString<VersionCompressionResult>(const char *value) {
+	return static_cast<VersionCompressionResult>(StringUtil::StringToEnum(GetVersionCompressionResultValues(), 3, "VersionCompressionResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVertexTypeValues() {

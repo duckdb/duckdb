@@ -20,7 +20,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<Logi
 		bool has_cast = false;
 		if (node->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 			for (auto &expression : node->expressions) {
-				if (expression->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
+				if (BoundCastExpression::IsCast(*expression)) {
 					has_cast = true;
 					break;
 				}

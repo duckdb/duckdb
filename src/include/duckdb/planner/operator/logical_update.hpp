@@ -28,8 +28,12 @@ public:
 	TableCatalogEntry &table;
 	//! projection index
 	TableIndex table_index;
-	//! if returning option is used, return the update chunk
+	//! if returning option is used, or transition tables are captured, return the update chunk
 	bool return_chunk;
+	//! if set, the operator also emits the pre-update (OLD) row image after the NEW image
+	bool capture_old_rows = false;
+	//! input-chunk index of each captured OLD physical column, in physical table order (only when capture_old_rows)
+	vector<idx_t> old_row_columns;
 	vector<PhysicalIndex> columns;
 	vector<unique_ptr<Expression>> bound_defaults;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;

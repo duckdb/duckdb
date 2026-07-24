@@ -1,16 +1,3 @@
-From 803a06018519ba63303813fb4bca49a0ff990f1e Mon Sep 17 00:00:00 2001
-From: duckdb <x@x>
-Date: Fri, 26 Jun 2026 11:34:19 +0200
-Subject: [PATCH] 0026-setqualifiedname-getentry.patch
-
----
- src/functions/ducklake_add_data_files.cpp     |  6 +++---
- src/functions/ducklake_flush_inlined_data.cpp | 16 +++++++++-------
- src/functions/ducklake_set_option.cpp         |  6 +++---
- src/storage/ducklake_catalog.cpp              | 12 ++++++++----
- src/storage/ducklake_insert.cpp               | 13 +++++++------
- 5 files changed, 30 insertions(+), 23 deletions(-)
-
 diff --git a/src/functions/ducklake_add_data_files.cpp b/src/functions/ducklake_add_data_files.cpp
 index 80770331..2abeaa68 100644
 --- a/src/functions/ducklake_add_data_files.cpp
@@ -175,6 +162,3 @@ index 46ad9092..ee219890 100644
  
  	DuckLakeCopyInput copy_input(context, duck_schema, columns, table_data_path);
  	auto &physical_copy = DuckLakeInsert::PlanCopyForInsert(context, planner, copy_input, root.get());
--- 
-2.39.5 (Apple Git-154)
-

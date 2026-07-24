@@ -498,9 +498,9 @@ void WriteAheadLog::WriteDropSchema(const SchemaCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 // DATA
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteSetTable(const Identifier &schema, const Identifier &table) {
+void WriteAheadLog::WriteSetTable(const QualifiedName &table) {
 	WriteAheadLogSerializer serializer(*this, WALType::USE_TABLE);
-	serializer.WriteEntry(WALUseTable {schema, table});
+	serializer.WriteEntry(WALUseTable(table));
 	serializer.End();
 }
 

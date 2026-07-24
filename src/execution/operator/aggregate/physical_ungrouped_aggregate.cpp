@@ -48,9 +48,10 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 		auto &aggregate = aggregate_expressions[i];
 		D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		auto state =
-		    make_unsafe_uniq_array_uninitialized<data_t>(aggr.Function().GetStateSizeCallback()(aggr.Function()));
-		aggr.Function().GetStateInitCallback()(aggr.Function(), state.get());
+		AggregateStateInput state_input(aggr.Function(), aggr.BindInfo().get());
+		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.Function().GetStateSizeCallback()(state_input));
+		data_ptr_t state_ptr = state.get();
+		aggr.Function().GetStateInitCallback()(state_input, &state_ptr, 1);
 		aggregate_data.push_back(std::move(state));
 		bind_data.push_back(aggr.BindInfo() ? aggr.BindInfo()->Copy() : nullptr);
 		functions.push_back(aggr.Function());
@@ -68,8 +69,10 @@ UngroupedAggregateState::UngroupedAggregateState(const UngroupedAggregateState &
 	counts = make_uniq_array<idx_t>(functions.size());
 	for (idx_t i = 0; i < functions.size(); i++) {
 		auto &func = functions[i];
-		auto state = make_unsafe_uniq_array_uninitialized<data_t>(func.GetStateSizeCallback()(func));
-		func.GetStateInitCallback()(func, state.get());
+		AggregateStateInput state_input(func, global_state.bind_data[i].get());
+		auto state = make_unsafe_uniq_array_uninitialized<data_t>(func.GetStateSizeCallback()(state_input));
+		data_ptr_t state_ptr = state.get();
+		func.GetStateInitCallback()(state_input, &state_ptr, 1);
 		aggregate_data.push_back(std::move(state));
 		bind_data.push_back(global_state.bind_data[i] ? global_state.bind_data[i]->Copy() : nullptr);
 		counts[i] = 0;

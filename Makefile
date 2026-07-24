@@ -520,6 +520,7 @@ TEST_CONFIGS := \
 	test/configs/verify_statement_explain.json \
 	test/configs/verify_statement_prepare.json \
 	test/configs/verify_serializer.json \
+	test/configs/verify_compression.json \
 	test/configs/verify_stats.json \
 	test/configs/verify_statement_serialization.json \
 	test/configs/force_storage.json \

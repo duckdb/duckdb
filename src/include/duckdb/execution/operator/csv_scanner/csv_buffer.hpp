@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/block_manager.hpp"
@@ -76,6 +77,8 @@ public:
 	//! Wrapper for the Pin Function, if it can seek, it means that the buffer might have been destroyed, hence we must
 	//! Scan it from the disk file again.
 	shared_ptr<CSVBufferHandle> Pin(CSVFileHandle &file_handle, bool &has_seeked);
+	//! Pins the buffer only if it is in memory and no load is in flight; never performs I/O and never blocks
+	bool TryPin(shared_ptr<CSVBufferHandle> &pinned);
 	//! Wrapper for unpin
 	void Unpin();
 	const char *Ptr() const {
@@ -96,7 +99,12 @@ public:
 	bool last_buffer = false;
 
 private:
+	shared_ptr<CSVBufferHandle> CreatePin();
+
+private:
 	ClientContext &context;
+	//! Serializes loading and pinning of this buffer, so concurrent loads read the byte range only once
+	mutex load_lock;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
 	idx_t actual_buffer_size;
 	idx_t requested_size;

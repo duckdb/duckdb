@@ -39,6 +39,13 @@ public:
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
 
+	//! Attempts to compress the per-row insert/delete ids of each vector into constants
+	//! This is possible when the ids behave identically for all transactions with a start time of at least
+	//! lowest_active_start (i.e. all active and future transactions)
+	//! Cheap when nothing can have changed: the pass only runs when version ids were modified since the
+	//! last pass, or when a previous pass left ids that can still compress once older transactions finish
+	void CompressVersionIds(transaction_t lowest_active_start);
+
 	vector<MetaBlockPointer> Checkpoint(RowGroupWriter &writer);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
@@ -50,15 +57,19 @@ public:
 private:
 	mutex version_lock;
 	FixedSizeAllocator allocator;
-	vector<unique_ptr<ChunkInfo>> vector_info;
+	vector<unique_ptr<ChunkVectorInfo>> vector_info;
 	optional_idx uncheckpointed_delete_commit;
 	vector<MetaBlockPointer> storage_pointers;
+	//! Whether a compression pass may achieve anything: set when version ids are modified, cleared when a
+	//! pass finds no ids that could still compress. For deserialized version info this is derived from the
+	//! deserialized content (with the current storage format checkpointed ids are always settled).
+	bool needs_compression_check = false;
 
 private:
 	FixedSizeAllocator &GetAllocator() {
 		return allocator;
 	}
-	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
+	optional_ptr<ChunkVectorInfo> GetChunkInfo(idx_t vector_idx);
 	ChunkVectorInfo &GetVectorInfo(idx_t vector_idx);
 	void FillVectorInfo(idx_t vector_idx);
 };

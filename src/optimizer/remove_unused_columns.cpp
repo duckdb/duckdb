@@ -1205,13 +1205,13 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 	if (expr->GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 		return false;
 	}
-	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_CAST);
-	auto &cast = expr->Cast<BoundCastExpression>();
-	if (cast.IsTryCast()) {
+	D_ASSERT(BoundCastExpression::IsCast(*expr));
+	auto &cast = expr->Cast<BoundFunctionExpression>();
+	if (BoundCastExpression::IsTryCast(cast)) {
 		return false;
 	}
 
-	child = cast.ChildMutable();
+	child = BoundCastExpression::ChildMutable(cast);
 	return true;
 }
 
