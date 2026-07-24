@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import argparse
 from typing import Optional, Union, Tuple, List
 import functools
+import os
 
 print = functools.partial(print, flush=True)
 
@@ -173,7 +174,12 @@ class BenchmarkRunner:
                 exit(0)
             return None, err
         if self.config.verbose:
-            print(err)
+            if os.getenv('CI') == 'true':
+                print(f"::group::raw benchmark output: {benchmark}")
+                print(err)
+                print("::endgroup::")
+            else:
+                print(err)
         # read the input CSV
         f = StringIO(err)
         csv_reader = csv.reader(f, delimiter='\t')
