@@ -35,7 +35,9 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
 			options.file_path = file.path;
 			CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache, false);
 			auto result = sniffer.AdaptiveSniff(file_schema);
-			SetNamesAndTypes(result.names, result.return_types);
+			if (!result.names.empty()) {
+				SetNamesAndTypes(result.names, result.return_types);
+			}
 		}
 	}
 	if (options.dialect_options.num_cols == 0) {

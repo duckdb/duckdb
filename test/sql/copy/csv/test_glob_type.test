@@ -45,3 +45,14 @@ query I
 SELECT typeof(bar) FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/2.csv','{DATA_DIR}/csv/17451/extra/3.csv'], files_to_sniff = -1) limit 1
 ----
 VARCHAR
+
+statement ok
+COPY (SELECT 'a,b' AS line UNION ALL SELECT '1,2') TO '{TEST_DIR}/skip_one_row_data.csv' (HEADER 0, QUOTE '')
+
+statement ok
+COPY (SELECT 'skip me' AS line) TO '{TEST_DIR}/skip_one_row_empty.csv' (HEADER 0, QUOTE '')
+
+query II
+SELECT * FROM read_csv(['{TEST_DIR}/skip_one_row_data.csv', '{TEST_DIR}/skip_one_row_empty.csv'], skip=1)
+----
+1	2
