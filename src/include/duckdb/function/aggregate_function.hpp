@@ -90,7 +90,8 @@ typedef void (*aggregate_finalize_t)(Vector &state, AggregateFinalizeInputData &
 typedef unique_ptr<FunctionLocalState> (*aggregate_init_local_state_finalize_t)(const BoundAggregateFunction &function,
                                                                                 optional_ptr<FunctionData> bind_data);
 //! The type used for propagating statistics in aggregate functions (optional)
-typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
+typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateFunction &function,
+                                                             bool is_distinct, vector<unique_ptr<Expression>> &children,
                                                              AggregateStatisticsInput &input);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BindAggregateFunctionInput &input);
