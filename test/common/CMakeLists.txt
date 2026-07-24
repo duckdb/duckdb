@@ -12,6 +12,7 @@ add_library_unity(
   test_parse_expression.cpp
   test_parse_logical_type.cpp
   test_utf.cpp
+  test_utf8_string_functions_oob.cpp
   test_allocator_debug_info.cpp
   test_storage_fuzz.cpp
   test_strftime.cpp
