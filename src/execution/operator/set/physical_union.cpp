@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
 
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -46,7 +47,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		order_matters = true;
 	}
 	if (sink) {
-		if (sink->SinkOrderDependent()) {
+		if (Settings::Get<PreserveInsertionOrderSetting>(current.GetClientContext()) && sink->SinkOrderDependent()) {
 			order_matters = true;
 		}
 		auto partition_info = sink->RequiredPartitionInfo();
