@@ -373,7 +373,7 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_c
 }
 
 void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &s_count, const TableFilter &filter,
+                        SelectionResult &sel, idx_t &s_count, const TableFilter &filter,
                         TableFilterState &filter_state) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 	FlatVector::SetSize(result, count_t(scan_count));

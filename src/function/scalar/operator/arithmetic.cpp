@@ -88,6 +88,42 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 	return function;
 }
 
+// mixed-width integer pairs compute at the wider operand's width via in-register argument promotion
+template <class OP>
+static scalar_function_t GetMixedIntegerFunction(PhysicalType left, PhysicalType right) {
+#define DUCKDB_MIXED_ARITH_PAIR(LP, RP, TL, TR_, TRES)                                                                 \
+	if (left == PhysicalType::LP && right == PhysicalType::RP) {                                                       \
+		scalar_function_t fn = &ScalarFunction::BinaryFunction<TL, TR_, TRES, OP>;                                     \
+		return fn;                                                                                                     \
+	}
+	DUCKDB_MIXED_ARITH_PAIR(INT16, INT8, int16_t, int8_t, int16_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT8, INT16, int8_t, int16_t, int16_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT32, INT8, int32_t, int8_t, int32_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT8, INT32, int8_t, int32_t, int32_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT32, INT16, int32_t, int16_t, int32_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT16, INT32, int16_t, int32_t, int32_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT64, INT8, int64_t, int8_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT8, INT64, int8_t, int64_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT64, INT16, int64_t, int16_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT16, INT64, int16_t, int64_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT64, INT32, int64_t, int32_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(INT32, INT64, int32_t, int64_t, int64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT16, UINT8, uint16_t, uint8_t, uint16_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT8, UINT16, uint8_t, uint16_t, uint16_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT32, UINT8, uint32_t, uint8_t, uint32_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT8, UINT32, uint8_t, uint32_t, uint32_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT32, UINT16, uint32_t, uint16_t, uint32_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT16, UINT32, uint16_t, uint32_t, uint32_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT64, UINT8, uint64_t, uint8_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT8, UINT64, uint8_t, uint64_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT64, UINT16, uint64_t, uint16_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT16, UINT64, uint16_t, uint64_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT64, UINT32, uint64_t, uint32_t, uint64_t)
+	DUCKDB_MIXED_ARITH_PAIR(UINT32, UINT64, uint32_t, uint64_t, uint64_t)
+#undef DUCKDB_MIXED_ARITH_PAIR
+	throw InternalException("Unsupported type pair for GetMixedIntegerFunction");
+}
+
 template <class T>
 static Value NumericStatsValue(const LogicalType &type, T value) {
 	D_ASSERT(type.IsNumeric());
@@ -229,8 +265,13 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.FunctionMutable().SetFunctionCallback(
-		    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		auto &func = expr.FunctionMutable();
+		const auto left_param = lstats.GetType().InternalType();
+		const auto right_param = rstats.GetType().InternalType();
+		func.SetFunctionCallback(left_param == right_param
+		                             ? GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType())
+		                             : GetMixedIntegerFunction<BASEOP>(left_param, right_param));
+		func.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);

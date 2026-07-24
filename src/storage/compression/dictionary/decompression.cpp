@@ -171,14 +171,18 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 
 	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, decompress_count, current_width);
 
+	auto sel_data = sel_vec->data();
 	if (start_offset != 0) {
 		for (idx_t i = 0; i < scan_count; i++) {
-			sel_vec->set_index(i, sel_vec->get_index(i + start_offset));
+			sel_data[i] = sel_data[i + start_offset];
 		}
 	}
+	// validate with a branch-free max-reduction so the loop auto-vectorizes
+	sel_t max_index = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
-		ValidateDictionaryIndex(sel_vec->get_index(i));
+		max_index = MaxValue<sel_t>(max_index, sel_data[i]);
 	}
+	ValidateDictionaryIndex(max_index);
 
 	result.Dictionary(dictionary, *sel_vec, scan_count);
 }

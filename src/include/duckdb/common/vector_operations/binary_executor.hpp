@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/autovec.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/optional.hpp"
@@ -91,12 +92,33 @@ struct BinaryLambdaWrapper {
 	}
 };
 
+//! Buffer-level operands for the binary executor: everything the loops need, no Vector objects.
+//! Constant sides point at a single value; both-constant shapes are the caller's job (ExecuteConstant).
+struct BinaryBufferArgs {
+	const_data_ptr_t ldata = nullptr;
+	const_data_ptr_t rdata = nullptr;
+	data_ptr_t result_data = nullptr;
+	//! rows to produce
+	idx_t count = 0;
+	//! per-side selection over the payload (nullptr = dense); ignored for constant sides
+	const SelectionVector *lsel = nullptr;
+	const SelectionVector *rsel = nullptr;
+	bool lconstant = false;
+	bool rconstant = false;
+	//! per-side validity (nullptr = all valid); a constant side must not be NULL
+	const ValidityMask *lvalidity = nullptr;
+	const ValidityMask *rvalidity = nullptr;
+	//! caller-owned result mask, never sharing an input mask's buffer
+	ValidityMask *result_validity = nullptr;
+};
+
 struct BinaryExecutor {
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static void ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                            RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
+	DUCKDB_AUTOVEC_TARGET static void
+	ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+	                RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
 		if (!LEFT_CONSTANT) {
 			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 		}
@@ -186,36 +208,93 @@ struct BinaryExecutor {
 			FlatVector::SetSize(result, count);
 		}
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		auto &result_validity = FlatVector::ValidityMutable(result);
-		if (LEFT_CONSTANT) {
-			if (OPWRAPPER::AddsNulls()) {
-				result_validity.Copy(FlatVector::Validity(right), count);
-			} else {
-				FlatVector::SetValidity(result, FlatVector::Validity(right));
-			}
-		} else if (RIGHT_CONSTANT) {
-			if (OPWRAPPER::AddsNulls()) {
-				result_validity.Copy(FlatVector::Validity(left), count);
-			} else {
-				FlatVector::SetValidity(result, FlatVector::Validity(left));
-			}
-		} else {
-			if (OPWRAPPER::AddsNulls()) {
-				result_validity.Copy(FlatVector::Validity(left), count);
-				if (result_validity.CannotHaveNull()) {
-					result_validity.Copy(FlatVector::Validity(right), count);
-				} else {
-					result_validity.Combine(FlatVector::Validity(right), count);
-				}
-			} else {
-				FlatVector::SetValidity(result, FlatVector::Validity(left));
-				result_validity.Combine(FlatVector::Validity(right), count);
-			}
-		}
-		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
-		    ldata, rdata, result_data, count, result_validity, fun);
+		BinaryBufferArgs args;
+		args.ldata = const_data_ptr_cast(ldata);
+		args.rdata = const_data_ptr_cast(rdata);
+		args.result_data = data_ptr_cast(result_data);
+		args.count = count;
+		args.lconstant = LEFT_CONSTANT;
+		args.rconstant = RIGHT_CONSTANT;
+		args.lvalidity = LEFT_CONSTANT ? nullptr : &FlatVector::Validity(left);
+		args.rvalidity = RIGHT_CONSTANT ? nullptr : &FlatVector::Validity(right);
+		args.result_validity = &FlatVector::ValidityMutable(result);
+		ExecuteBuffers<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(args, fun);
 	}
 #endif
+
+	//! Buffer-level entry the Vector-level paths below traverse on their way to the loops; callers
+	//! with raw payloads (FOR vectors) invoke it directly, so both share one set of instantiations.
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
+	static void ExecuteBuffers(const BinaryBufferArgs &args, FUNC fun) {
+		auto ldata = reinterpret_cast<const LEFT_TYPE *>(args.ldata);
+		auto rdata = reinterpret_cast<const RIGHT_TYPE *>(args.rdata);
+		auto result_data = reinterpret_cast<RESULT_TYPE *>(args.result_data);
+		auto &result_validity = *args.result_validity;
+		const ValidityMask all_valid;
+		auto &lmask = !args.lconstant && args.lvalidity ? *args.lvalidity : all_valid;
+		auto &rmask = !args.rconstant && args.rvalidity ? *args.rvalidity : all_valid;
+#ifndef DUCKDB_SMALLER_BINARY
+		const bool dense = !args.lsel &&
+		                   !args.rsel
+#if DUCKDB_AUTOVEC && defined(__x86_64__)
+		                   // the flat loop carries the widened-ISA target: pre-AVX2 CPUs gather instead
+		                   && CpuBenefitsFromAutoVec()
+#endif
+		    ;
+		if (dense) {
+			if (args.lconstant) {
+				if (OPWRAPPER::AddsNulls()) {
+					result_validity.Copy(rmask, args.count);
+				} else {
+					result_validity.Initialize(rmask);
+				}
+				ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, true, false>(
+				    ldata, rdata, result_data, args.count, result_validity, fun);
+			} else if (args.rconstant) {
+				if (OPWRAPPER::AddsNulls()) {
+					result_validity.Copy(lmask, args.count);
+				} else {
+					result_validity.Initialize(lmask);
+				}
+				ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, true>(
+				    ldata, rdata, result_data, args.count, result_validity, fun);
+			} else {
+				if (OPWRAPPER::AddsNulls()) {
+					result_validity.Copy(lmask, args.count);
+					if (result_validity.CannotHaveNull()) {
+						result_validity.Copy(rmask, args.count);
+					} else {
+						result_validity.Combine(rmask, args.count);
+					}
+				} else {
+					result_validity.Initialize(lmask);
+					result_validity.Combine(rmask, args.count);
+				}
+				ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, false>(
+				    ldata, rdata, result_data, args.count, result_validity, fun);
+			}
+			return;
+		}
+#endif
+		// selective shapes (and pre-AVX2 x86): the generic gather loop, with identity/zero selections
+		SelectionVector owned_lzero;
+		SelectionVector owned_rzero;
+		auto lsel = args.lconstant ? ConstantVector::ZeroSelectionVector(args.count, owned_lzero)
+		            : args.lsel    ? args.lsel
+		                           : FlatVector::IncrementalSelectionVector();
+		auto rsel = args.rconstant ? ConstantVector::ZeroSelectionVector(args.count, owned_rzero)
+		            : args.rsel    ? args.rsel
+		                           : FlatVector::IncrementalSelectionVector();
+		result_validity.Reset(args.count);
+		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
+		    ldata, rdata, result_data, lsel, rsel, args.count, lmask, rmask, result_validity, fun);
+	}
+
+	//! Address-taking convenience mirroring ExecuteStandard
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
+	static void ExecuteBuffersStandard(const BinaryBufferArgs &args) {
+		ExecuteBuffers<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(args, false);
+	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static void ExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
@@ -256,11 +335,17 @@ struct BinaryExecutor {
 		if (result.size() != count) {
 			FlatVector::SetSize(result, count);
 		}
-		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
-		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
-		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity,
-		    FlatVector::ValidityMutable(result), fun);
+		BinaryBufferArgs args;
+		args.ldata = const_data_ptr_cast(UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata));
+		args.rdata = const_data_ptr_cast(UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata));
+		args.result_data = data_ptr_cast(FlatVector::GetDataMutable<RESULT_TYPE>(result));
+		args.count = count;
+		args.lsel = ldata.sel;
+		args.rsel = rdata.sel;
+		args.lvalidity = &ldata.validity;
+		args.rvalidity = &rdata.validity;
+		args.result_validity = &FlatVector::ValidityMutable(result);
+		ExecuteBuffers<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(args, fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>

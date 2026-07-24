@@ -60,12 +60,9 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 	return count;
 }
 
-void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             SelectionVector &sel, idx_t &count, const TableFilter &filter,
-                             TableFilterState &filter_state) {
-	auto row_start = GetRowStart(state);
+static void RowIdFilter(idx_t row_start, idx_t max_count, ColumnScanState &state, Vector &result, SelectionResult &sel,
+                        idx_t &count, const TableFilter &filter, TableFilterState &filter_state) {
 	auto current_row = row_start + state.offset_in_column;
-	auto max_count = GetVectorCount(vector_index);
 	state.offset_in_column += max_count;
 	// We do another quick statistics scan for row ids here
 	const auto rowid_start = current_row;
@@ -77,16 +74,13 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 		return;
 	}
 
-	// Generate row ids
-	// Create sequence for row ids
+	// Generate row ids: fill the full vector densely, so the bitmap fast path (which evaluates the whole
+	// vector before intersecting with `sel`) never reads uninitialized positions
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::ScatterWriter<row_t>(result);
-	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
-		result_data[sel.get_index(sel_idx)] = UnsafeNumericCast<int64_t>(current_row + sel.get_index(sel_idx));
+	for (idx_t i = 0; i < max_count; i++) {
+		result_data[i] = UnsafeNumericCast<row_t>(current_row + i);
 	}
-	// the writes above scatter into positions sel[0..count) which can be anywhere in [0, max_count),
-	// so the vector's logical size must cover the full max_count - using `count` would leave any
-	// sel index >= count looking out-of-bounds when later slices read through sel
 	FlatVector::SetSize(result, count_t(max_count));
 
 	// Was this filter always true? If so, we dont need to apply it
@@ -94,8 +88,14 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 		return;
 	}
 
-	// Now apply the filter
-	ColumnSegment::FilterSelection(sel, result, filter_state, count, count);
+	// Now apply the filter over the full vector domain; `sel` (count entries) narrows it
+	ColumnSegment::FilterSelection(sel, result, filter_state, max_count, count);
+}
+
+void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             SelectionResult &sel, idx_t &count, const TableFilter &filter,
+                             TableFilterState &filter_state) {
+	RowIdFilter(GetRowStart(state), GetVectorCount(vector_index), state, result, sel, count, filter, filter_state);
 }
 
 void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
