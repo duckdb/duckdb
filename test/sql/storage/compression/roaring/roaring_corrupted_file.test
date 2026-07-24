@@ -1,0 +1,21 @@
+# name: test/sql/storage/compression/roaring/roaring_corrupted_file.test
+# group: [roaring]
+
+require vector_size 2048
+
+# Test that a crafted .duckdb file with an inflated tuple_count and
+# roaring compression type triggers the bounds check in RoaringScanState,
+# rather than causing a heap buffer over-read.
+
+unzip data/storage/roaring_corrupt.db.gz {TEST_DIR}/roaring_corrupt.db
+
+statement ok
+ATTACH '{TEST_DIR}/roaring_corrupt.db' AS db2
+
+statement ok
+USE db2;
+
+statement error
+SELECT * FROM t LIMIT 1;
+----
+Corrupted Roaring segment
