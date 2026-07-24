@@ -879,12 +879,37 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 	}
 }
 
+// Independent flat copy carrying patched_validity, so SetValidity does not mutate child's possibly-shared buffer.
+static unique_ptr<Vector> PatchedListChildCopy(const Vector &child, const ValidityMask &patched_validity) {
+	auto count = child.size();
+	// a set (non-identity-optimized) selection forces a dictionary that Flatten materializes into a private buffer
+	SelectionVector identity(idx_t(0), count);
+	auto copy = make_uniq<Vector>(child, identity, count);
+	copy->Flatten();
+	FlatVector::SetValidity(*copy, patched_validity);
+	return copy;
+}
+
 void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                           idx_t offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
 
 	// copy the NULL values for the main struct vector
 	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
+
+	// check if the copied range contains any NULL rows, children must not claim valid entries under them
+	auto &parent_validity = source_data.validity;
+	const bool parent_flat = !source_data.sel->IsSet();
+	bool parent_has_nulls = false;
+	if (parent_validity.IsMaskSet()) {
+		if (parent_flat) {
+			parent_has_nulls = !parent_validity.CheckAllValid(offset + copy_count, offset);
+		} else {
+			for (idx_t i = 0; i < copy_count && !parent_has_nulls; i++) {
+				parent_has_nulls = !parent_validity.RowIsValidUnsafe(source_data.sel->get_index(offset + i));
+			}
+		}
+	}
 
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	// now copy all the child vectors
@@ -898,7 +923,45 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 		UnifiedVectorFormat child_data;
 		child_vectors[child_idx].ToUnifiedFormat(child_data);
 
-		child_function.function(child_meta_data, child_data, child_vectors[child_idx], offset, copy_count);
+		// patched_child (if built below) must outlive the child_function call, hence the outer scope
+		reference<Vector> child_source = child_vectors[child_idx];
+		unique_ptr<Vector> patched_child;
+
+		if (parent_has_nulls) {
+			D_ASSERT(!child_data.sel->IsSet());
+			// only rows violating the child-NULL invariant need a patched validity mask
+			bool children_correctly_masked = true;
+			if (parent_flat) {
+				// parent and child validity are at identical positions
+				children_correctly_masked =
+				    !AnyChildValidUnderNullParent(parent_validity, child_data.validity, offset, copy_count);
+			} else {
+				for (idx_t i = 0; i < copy_count && children_correctly_masked; i++) {
+					auto source_idx = source_data.sel->get_index(offset + i);
+					children_correctly_masked =
+					    parent_validity.RowIsValidUnsafe(source_idx) && child_data.validity.RowIsValid(offset + i);
+				}
+			}
+			if (!children_correctly_masked) {
+				// requires a copy of the validity mask: we cannot modify the input validity
+				child_data.validity = ValidityMask(child_data.validity, child_data.validity.Capacity());
+				child_data.validity.EnsureWritable();
+				for (idx_t i = 0; i < copy_count; i++) {
+					auto source_idx = source_data.sel->get_index(offset + i);
+					if (!parent_validity.RowIsValidUnsafe(source_idx)) {
+						child_data.validity.SetInvalidUnsafe(offset + i);
+					}
+				}
+				// only a flat LIST child reads validity off the Vector (GetConsecutiveChildListInfo). Patch a copy
+				if (child_vectors[child_idx].GetType().InternalType() == PhysicalType::LIST &&
+				    child_vectors[child_idx].GetVectorType() == VectorType::FLAT_VECTOR) {
+					patched_child = PatchedListChildCopy(child_vectors[child_idx], child_data.validity);
+					child_source = *patched_child;
+				}
+			}
+		}
+
+		child_function.function(child_meta_data, child_data, child_source.get(), offset, copy_count);
 	}
 }
 
@@ -931,17 +994,33 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 	child_vector.ToUnifiedFormat(child_vector_data);
 
+	// patched_child (if built below) must outlive the child_function call, hence the outer scope
+	reference<Vector> array_child_source = child_vector;
+	unique_ptr<Vector> patched_child;
+
 	// Broadcast and sync the validity of the array vector to the child vector
 	// This requires creating a copy of the validity mask: we cannot modify the input validity
 	child_vector_data.validity = ValidityMask(child_vector_data.validity, child_vector_data.validity.Capacity());
 	if (source_data.validity.IsMaskSet()) {
+		child_vector_data.validity.EnsureWritable();
+		D_ASSERT(!child_vector_data.sel->IsSet());
+		// a child slot still valid under a NULL array row is unreflected
+		bool has_unreflected_child = false;
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
 			if (!source_data.validity.RowIsValid(source_idx)) {
 				for (idx_t j = 0; j < array_size; j++) {
-					child_vector_data.validity.SetInvalid(source_idx * array_size + j);
+					auto slot = source_idx * array_size + j;
+					has_unreflected_child |= child_vector_data.validity.RowIsValid(slot);
+					child_vector_data.validity.SetInvalidUnsafe(slot);
 				}
 			}
+		}
+		// only a flat LIST child reads validity off the Vector (GetConsecutiveChildListInfo). Patch a copy
+		if (has_unreflected_child && child_vector.GetType().InternalType() == PhysicalType::LIST &&
+		    child_vector.GetVectorType() == VectorType::FLAT_VECTOR) {
+			patched_child = PatchedListChildCopy(child_vector, child_vector_data.validity);
+			array_child_source = *patched_child;
 		}
 	}
 
@@ -949,10 +1028,10 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	// If the array is constant, we need to copy the child vector n times
 	if (is_constant) {
 		for (idx_t i = 0; i < copy_count; i++) {
-			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
+			child_function.function(child_meta_data, child_vector_data, array_child_source.get(), 0, array_size);
 		}
 	} else {
-		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+		child_function.function(child_meta_data, child_vector_data, array_child_source.get(), offset * array_size,
 		                        copy_count * array_size);
 	}
 }
