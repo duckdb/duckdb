@@ -10,6 +10,15 @@
 
 namespace duckdb {
 
+static idx_t RowsReadAfterSniffing(const CSVSniffer &sniffer, const CSVReaderOptions &options) {
+	auto lines_sniffed = sniffer.LinesSniffed();
+	auto header_rows = options.dialect_options.header.GetValue() ? 1 : 0;
+	auto skipped_rows =
+	    options.dialect_options.skip_rows.IsSetByUser() ? 0 : options.dialect_options.skip_rows.GetValue();
+	auto non_data_rows = skipped_rows + header_rows;
+	return lines_sniffed > non_data_rows ? lines_sniffed - non_data_rows : 0;
+}
+
 unique_ptr<MultiFileReaderInterface> CSVMultiFileInfo::CreateInterface(ClientContext &context) {
 	return make_uniq<CSVMultiFileInfo>();
 }
@@ -83,8 +92,7 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	{
 		CSVSniffer sniffer(options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
-		idx_t rows_read = sniffer.LinesSniffed() -
-		                  (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
+		idx_t rows_read = RowsReadAfterSniffing(sniffer, options);
 
 		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0].path, rows_read,
 		                     buffer_manager->GetBuffer(0)->actual_size == 0);
@@ -108,8 +116,7 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 		// reader
 		CSVSniffer sniffer(option_copy, file_options, file_buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
-		idx_t rows_read = sniffer.LinesSniffed() - (option_copy.dialect_options.skip_rows.GetValue() +
-		                                            option_copy.dialect_options.header.GetValue());
+		idx_t rows_read = RowsReadAfterSniffing(sniffer, option_copy);
 		if (file_buffer_manager->GetBuffer(0)->actual_size == 0) {
 			schemas.emplace_back(true);
 		} else {

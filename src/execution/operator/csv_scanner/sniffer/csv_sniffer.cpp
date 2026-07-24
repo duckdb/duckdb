@@ -90,7 +90,13 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 
 	auto state_machine =
 	    make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options, state_machine_cache);
-	ColumnCountScanner count_scanner(buffer_manager, state_machine, error_handler, result_size);
+	CSVIterator first_iterator;
+	if (options.dialect_options.skip_rows.IsSetByUser()) {
+		state_machine->dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+		first_iterator =
+		    BaseScanner::SkipCSVRows(buffer_manager, state_machine, options.dialect_options.skip_rows.GetValue());
+	}
+	ColumnCountScanner count_scanner(buffer_manager, state_machine, error_handler, result_size, first_iterator);
 	auto &sniffed_column_counts = count_scanner.ParseChunk();
 	if (sniffed_column_counts.result_position == 0) {
 		// The file is an empty file, we just return
@@ -105,6 +111,9 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	scanner->error_handler->SetIgnoreErrors(true);
 	// Parse chunk and read csv with info candidate
 	auto &data_chunk = scanner->ParseChunk().ToChunk();
+	if (data_chunk.size() == 0) {
+		return {{}, {}, false};
+	}
 	idx_t start_row = 0;
 	if (sniffed_column_counts.result_position == 2) {
 		// If equal to two, we will only use the second row for type checking
@@ -145,6 +154,9 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 
 SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	auto min_sniff_res = MinimalSniff();
+	if (min_sniff_res.names.empty()) {
+		return min_sniff_res.ToSnifferResult();
+	}
 	bool run_full = error_handler->AnyErrors() || detection_error_handler->AnyErrors();
 	// Check if we are happy with the result or if we need to do more sniffing
 	if (!error_handler->AnyErrors() && !detection_error_handler->AnyErrors()) {
