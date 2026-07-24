@@ -125,6 +125,8 @@ private:
 	ExpressionPushdownResult AnalyzeExpression(const ColumnRefExpression &expr);
 	//! Bind and evaluate an expression locally, replacing it with the resulting constant
 	ConstantFoldResult TryConstantFold(unique_ptr<ParsedExpression> &expr);
+	//! Rewrite a table function argument, keeping it positional if it was not written as name => value
+	CatalogPushdownResult RewriteTableFunctionArgument(unique_ptr<ParsedExpression> &arg);
 
 	CatalogPushdownResult CheckCatalogQualification(const ParsedExpression &expr, const Identifier &catalog_name,
 	                                                const Identifier &schema_name);

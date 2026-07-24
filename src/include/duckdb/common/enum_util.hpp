@@ -380,6 +380,8 @@ enum class PartitionedColumnDataType : uint8_t;
 
 enum class PartitionedTupleDataType : uint8_t;
 
+enum class PatternMatchType : uint8_t;
+
 enum class PendingExecutionResult : uint8_t;
 
 enum class PhysicalOperatorType : uint8_t;
@@ -558,6 +560,8 @@ enum class UndoFlags : uint32_t;
 
 enum class UnionInvalidReason : uint8_t;
 
+enum class VacuumIndexStrategy : uint8_t;
+
 enum class VariantChildLookupMode : uint8_t;
 
 enum class VariantLogicalType : uint8_t;
@@ -569,6 +573,8 @@ enum class VectorBufferType : uint8_t;
 enum class VectorType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
+
+enum class VersionCompressionResult : uint8_t;
 
 enum class VertexType : uint8_t;
 
@@ -1106,6 +1112,9 @@ template<>
 const char* EnumUtil::ToChars<PartitionedTupleDataType>(PartitionedTupleDataType value);
 
 template<>
+const char* EnumUtil::ToChars<PatternMatchType>(PatternMatchType value);
+
+template<>
 const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult value);
 
 template<>
@@ -1373,6 +1382,9 @@ template<>
 const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value);
 
 template<>
+const char* EnumUtil::ToChars<VacuumIndexStrategy>(VacuumIndexStrategy value);
+
+template<>
 const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode value);
 
 template<>
@@ -1389,6 +1401,9 @@ const char* EnumUtil::ToChars<VectorType>(VectorType value);
 
 template<>
 const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value);
+
+template<>
+const char* EnumUtil::ToChars<VersionCompressionResult>(VersionCompressionResult value);
 
 template<>
 const char* EnumUtil::ToChars<VertexType>(VertexType value);
@@ -1932,6 +1947,9 @@ template<>
 PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const char *value);
 
 template<>
+PatternMatchType EnumUtil::FromString<PatternMatchType>(const char *value);
+
+template<>
 PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value);
 
 template<>
@@ -2199,6 +2217,9 @@ template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value);
 
 template<>
+VacuumIndexStrategy EnumUtil::FromString<VacuumIndexStrategy>(const char *value);
+
+template<>
 VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value);
 
 template<>
@@ -2215,6 +2236,9 @@ VectorType EnumUtil::FromString<VectorType>(const char *value);
 
 template<>
 VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value);
+
+template<>
+VersionCompressionResult EnumUtil::FromString<VersionCompressionResult>(const char *value);
 
 template<>
 VertexType EnumUtil::FromString<VertexType>(const char *value);

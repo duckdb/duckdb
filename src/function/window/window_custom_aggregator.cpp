@@ -72,10 +72,12 @@ public:
 WindowCustomAggregatorLocalState::WindowCustomAggregatorLocalState(ExecutionContext &context,
                                                                    const AggregateObject &aggr,
                                                                    const WindowExcludeMode exclude_mode)
-    : WindowAggregatorLocalState(context), aggr(aggr), state(aggr.function.GetStateSizeCallback()(aggr.function)),
+    : WindowAggregatorLocalState(context), aggr(aggr), state(aggr.function.GetStateSize(aggr.GetFunctionData())),
       statef(Value::POINTER(CastPointerToValue(state.data())), count_t(1)), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
-	aggr.function.GetStateInitCallback()(aggr.function, state.data());
+	AggregateStateInput state_input(aggr.function, aggr.GetFunctionData());
+	data_ptr_t state_ptr = state.data();
+	aggr.function.GetStateInitCallback()(state_input, &state_ptr, 1);
 
 	InitSubFrames(frames, exclude_mode);
 }

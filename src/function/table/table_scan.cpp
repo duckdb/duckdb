@@ -6,6 +6,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -128,8 +129,7 @@ public:
 	bool started_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
-	//! Synchronize <ART version, SegmentTree<RowGroup>> when vacuum_rebuild_indexes is enabled (since
-	//! ART indexes are rebuilt during vacuuming with this setting).
+	//! Keep ART rowids and row-group trees paired while rowid-shifting index vacuum can run.
 	unique_ptr<StorageLockKey> vacuum_lock;
 
 public:
@@ -802,18 +802,18 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	bool index_scan = false;
 	set<row_t> row_ids;
 
-	// If vacuum_rebuild_indexes is enabled, grab a shared vacuum lock before
-	// scanning the index. This prevents the checkpoint from rebuilding the index and swapping
-	// row groups while we hold row IDs from the ART, ensuring we always see a consistent
-	// <ART index, SegmentTree<RowGroup> pairing.
+	info->BindIndexes(context, ART::TYPE_NAME);
+
+	// Exclude rowid-shifting vacuum from the ART probe until the index scan finishes: collected rowids must be
+	// fetched against the matching row-group tree. Falling back to a table scan releases the lock on return.
 	unique_ptr<StorageLockKey> vacuum_lock;
-	const auto &attached = storage.GetAttached();
-	if (attached.GetVacuumRebuildIndexThreshold() > 0) {
-		auto &transaction_manager = DuckTransactionManager::Get(storage.GetAttached());
-		vacuum_lock = transaction_manager.SharedVacuumLock();
+	auto &attached = storage.GetAttached();
+	const bool indexed_vacuum_may_move_rowids = attached.GetVacuumRebuildIndexThreshold() > 0 ||
+	                                            StorageCompatibility::FromDatabase(attached).CanPersistRowIdGaps();
+	if (indexed_vacuum_may_move_rowids) {
+		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
-	info->BindIndexes(context, ART::TYPE_NAME);
 	for (auto &entry : indexes.IndexEntries()) {
 		auto &index = *entry.index;
 		if (index.GetIndexType() != ART::TYPE_NAME) {
@@ -915,9 +915,8 @@ void TableScanGetMetrics(TableFunctionGetMetricsInput &input) {
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
 	InsertionOrderPreservingMap<string> result;
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	result["Table"] =
-	    QualifiedName(bind_data.table.schema.catalog.GetName(), bind_data.table.schema.name, bind_data.table.name)
-	        .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	result["Table"] = bind_data.table.schema.GetQualifiedName(bind_data.table.name)
+	                      .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result["Type"] = bind_data.is_index_scan ? "Index Scan" : "Sequential Scan";
 	return result;
 }
@@ -925,27 +924,38 @@ InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput
 static void TableScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	// the catalog/schema/name are only the innermost qualification - "qualified_name" carries the full (possibly
+	// nested) schema path
 	serializer.WriteProperty(100, "catalog", bind_data.table.schema.catalog.GetName());
 	serializer.WriteProperty(101, "schema", bind_data.table.schema.name);
 	serializer.WriteProperty(102, "table", bind_data.table.name);
 	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
 	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
 	serializer.WritePropertyWithDefault(105, "result_ids", unsafe_vector<row_t>());
+	serializer.WritePropertyWithDefault<QualifiedName>(
+	    106, "qualified_name", bind_data.table.schema.GetQualifiedName(bind_data.table.name), QualifiedName());
 }
 
 static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
 	auto catalog = deserializer.ReadProperty<Identifier>(100, "catalog");
 	auto schema = deserializer.ReadProperty<Identifier>(101, "schema");
 	auto table = deserializer.ReadProperty<Identifier>(102, "table");
-	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(),
-	                                                           QualifiedName(catalog, schema, table));
+	auto is_index_scan = deserializer.ReadProperty<bool>(103, "is_index_scan");
+	auto is_create_index = deserializer.ReadProperty<bool>(104, "is_create_index");
+	deserializer.ReadDeletedProperty<unsafe_vector<row_t>>(105, "result_ids");
+	// plans written before nested schema support only have the innermost qualification
+	auto qualified_name =
+	    deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(106, "qualified_name", QualifiedName());
+	if (qualified_name.Path().empty()) {
+		qualified_name = QualifiedName(catalog, schema, table);
+	}
+	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), qualified_name);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}
 	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
-	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
-	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
-	deserializer.ReadDeletedProperty<unsafe_vector<row_t>>(105, "result_ids");
+	result->is_index_scan = is_index_scan;
+	result->is_create_index = is_create_index;
 	return std::move(result);
 }
 
@@ -956,10 +966,7 @@ static bool TableSupportsPushdownExtract(const FunctionData &bind_data_ref, cons
 		return false;
 	}
 	auto column_type = column.GetType();
-	if (column_type.id() != LogicalTypeId::STRUCT && column_type.id() != LogicalTypeId::VARIANT) {
-		return false;
-	}
-	return true;
+	return column_type.id() == LogicalTypeId::STRUCT || column_type.id() == LogicalTypeId::VARIANT;
 }
 
 bool TableScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {

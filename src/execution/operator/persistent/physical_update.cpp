@@ -22,11 +22,12 @@ PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> 
                                vector<unique_ptr<Expression>> expressions,
                                vector<unique_ptr<Expression>> bound_defaults,
                                vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality,
-                               bool return_chunk)
+                               bool return_chunk, bool capture_old_rows, vector<idx_t> old_row_columns)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::UPDATE, std::move(types), estimated_cardinality),
       tableref(tableref), table(table), columns(std::move(columns)), expressions(std::move(expressions)),
       bound_defaults(std::move(bound_defaults)), bound_constraints(std::move(bound_constraints)),
-      return_chunk(return_chunk), index_update(false) {
+      return_chunk(return_chunk), capture_old_rows(capture_old_rows), old_row_columns(std::move(old_row_columns)),
+      index_update(false) {
 	auto &indexes = table.GetDataTableInfo().get()->GetIndexes();
 	auto index_columns = indexes.GetRequiredColumns();
 
@@ -66,7 +67,7 @@ class UpdateLocalState : public LocalSinkState {
 public:
 	UpdateLocalState(ClientContext &context, const vector<unique_ptr<Expression>> &expressions,
 	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints)
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool capture_old_rows)
 	    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
 		// Initialize the update chunk.
 		auto &allocator = Allocator::Get(context);
@@ -80,11 +81,19 @@ public:
 		// Initialize the mock and delete chunk.
 		mock_chunk.Initialize(allocator, table_types);
 		delete_chunk.Initialize(allocator, table_types);
+
+		// When capturing OLD rows, the return chunk holds the NEW image followed by the OLD image.
+		if (capture_old_rows) {
+			vector<LogicalType> combined_types(table_types);
+			combined_types.insert(combined_types.end(), table_types.begin(), table_types.end());
+			combined_chunk.Initialize(allocator, combined_types);
+		}
 	}
 
 	DataChunk update_chunk;
 	DataChunk mock_chunk;
 	DataChunk delete_chunk;
+	DataChunk combined_chunk;
 	ExpressionExecutor default_executor;
 	unique_ptr<TableDeleteState> delete_state;
 	unique_ptr<TableUpdateState> update_state;
@@ -104,6 +113,27 @@ public:
 		return *update_state;
 	}
 };
+
+// Append one return-chunk row set: the NEW image (already arranged in table order) followed by the OLD image,
+// sourced from the captured OLD columns of the input chunk. old_row_columns[c] is the input-chunk index of the
+// c-th physical column's captured OLD value. When a selection vector is given (del+insert dedup), it is applied
+// to the OLD columns so their cardinality matches the NEW image.
+static void AppendReturnRows(ColumnDataCollection &collection, DataChunk &combined, DataChunk &new_image,
+                             DataChunk &input, idx_t new_col_count, const vector<idx_t> &old_row_columns, idx_t count,
+                             optional_ptr<const SelectionVector> sel) {
+	combined.Reset();
+	for (idx_t c = 0; c < new_col_count; c++) {
+		combined.data[c].Reference(new_image.data[c]);
+		auto &old_source = input.data[old_row_columns[c]];
+		if (sel) {
+			combined.data[new_col_count + c].Slice(old_source, *sel, count);
+		} else {
+			combined.data[new_col_count + c].Reference(old_source);
+		}
+	}
+	combined.CheckCardinality(count);
+	collection.Append(combined);
+}
 
 SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &g_state = input.global_state.Cast<UpdateGlobalState>();
@@ -145,7 +175,13 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 		if (return_chunk) {
 			lock_guard<mutex> glock(g_state.lock);
-			g_state.return_collection.Append(mock_chunk);
+			if (capture_old_rows) {
+				// In-place update: every input row is affected, so no selection vector is needed.
+				AppendReturnRows(g_state.return_collection, l_state.combined_chunk, mock_chunk, chunk,
+				                 mock_chunk.ColumnCount(), old_row_columns, update_chunk.size(), nullptr);
+			} else {
+				g_state.return_collection.Append(mock_chunk);
+			}
 		}
 		g_state.updated_count += chunk.size();
 		return SinkResultType::NEED_MORE_INPUT;
@@ -202,7 +238,13 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	table.LocalAppend(tableref, context.client, mock_chunk, bound_constraints, del_row_ids, delete_chunk);
 	if (return_chunk) {
-		g_state.return_collection.Append(mock_chunk);
+		if (capture_old_rows) {
+			// Apply the dedup/del+insert selection vector to the OLD columns so they line up with the NEW image.
+			AppendReturnRows(g_state.return_collection, l_state.combined_chunk, mock_chunk, chunk,
+			                 mock_chunk.ColumnCount(), old_row_columns, update_count, &sel);
+		} else {
+			g_state.return_collection.Append(mock_chunk);
+		}
 	}
 
 	g_state.updated_count += chunk.size();
@@ -214,8 +256,8 @@ unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults,
-	                                   bound_constraints);
+	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults, bound_constraints,
+	                                   capture_old_rows);
 }
 
 SinkCombineResultType PhysicalUpdate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {

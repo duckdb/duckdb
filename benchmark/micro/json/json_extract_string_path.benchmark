@@ -1,0 +1,19 @@
+# name: benchmark/micro/json/json_extract_string_path.benchmark
+# description: Extract a nested string value from small JSON documents
+# group: [json]
+
+name JSON extract string path
+group json
+
+require json
+
+load
+CREATE TABLE docs AS
+SELECT json_object('id', i, 'user', json_object('name', 'user_' || i, 'tags', json_array(i % 10, i % 7)), 'ts', i * 1000) AS j
+FROM range(0, 5000000) t(i);
+
+run
+SELECT count(j->>'$.user.name') FROM docs
+
+result I
+5000000

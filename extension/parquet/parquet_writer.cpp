@@ -141,6 +141,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		parquet_type = Type::BYTE_ARRAY;
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 		parquet_type = Type::INT64;
 		break;
@@ -269,6 +270,12 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.__isset.TIME = true;
 		schema_ele.logicalType.TIME.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIME_TZ);
 		schema_ele.logicalType.TIME.unit.__isset.MICROS = true;
+		break;
+	case LogicalTypeId::TIME_NS:
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIME = true;
+		schema_ele.logicalType.TIME.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIME.unit.__isset.NANOS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:

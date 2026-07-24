@@ -3,7 +3,7 @@
 namespace duckdb {
 
 WindowAggregateStates::WindowAggregateStates(ClientContext &client, const AggregateObject &aggr)
-    : client(client), aggr(aggr), state_size(aggr.function.GetStateSizeCallback()(aggr.function)),
+    : client(client), aggr(aggr), state_size(aggr.function.GetStateSize(aggr.GetFunctionData())),
       allocator(Allocator::Get(client)) {
 }
 
@@ -16,9 +16,10 @@ void WindowAggregateStates::Initialize(idx_t count) {
 
 	statef = make_uniq<Vector>(LogicalType::POINTER, count);
 	auto state_f_data = FlatVector::Writer<data_ptr_t>(*statef, count);
+	AggregateStateInput state_input(aggr.function, aggr.GetFunctionData());
 	for (idx_t i = 0; i < count; ++i, state_ptr += state_size) {
 		state_f_data.WriteValue(state_ptr);
-		aggr.function.GetStateInitCallback()(aggr.function, state_ptr);
+		aggr.function.GetStateInitCallback()(state_input, &state_ptr, 1);
 	}
 
 	// Prevent conversion of results to constants

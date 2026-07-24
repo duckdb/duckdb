@@ -68,8 +68,8 @@ unique_ptr<FunctionData> CAPIAggregateBind(BindAggregateFunctionInput &input) {
 	return make_uniq<CAggregateFunctionBindData>(info);
 }
 
-idx_t CAPIAggregateStateSize(const BoundAggregateFunction &function) {
-	auto &function_info = function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
+idx_t CAPIAggregateStateSize(AggregateStateInput &input) {
+	auto &function_info = input.function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
 	CAggregateExecuteInfo exec_info(function_info);
 	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
 	auto result = function_info.state_size(c_function_info);
@@ -79,13 +79,16 @@ idx_t CAPIAggregateStateSize(const BoundAggregateFunction &function) {
 	return result;
 }
 
-void CAPIAggregateStateInit(const BoundAggregateFunction &function, data_ptr_t state) {
-	auto &function_info = function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
+void CAPIAggregateStateInit(AggregateStateInput &input, data_ptr_t *states, idx_t count) {
+	auto &function_info = input.function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
 	CAggregateExecuteInfo exec_info(function_info);
 	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
-	function_info.state_init(c_function_info, reinterpret_cast<duckdb_aggregate_state>(state));
-	if (!exec_info.success) {
-		throw InvalidInputException(exec_info.error);
+	// the V1 C init callback is single-state; drive it once per requested state
+	for (idx_t i = 0; i < count; i++) {
+		function_info.state_init(c_function_info, reinterpret_cast<duckdb_aggregate_state>(states[i]));
+		if (!exec_info.success) {
+			throw InvalidInputException(exec_info.error);
+		}
 	}
 }
 

@@ -11,4 +11,4 @@ INSERT INTO tbl VALUES (42);
 statement error
 SELECT bitstring_agg(v, CAST(v AS UBIGINT), CAST(v AS UBIGINT)) FROM tbl;
 ----
-bitstring_agg requires a constant min and max argument
+must be a constant expression

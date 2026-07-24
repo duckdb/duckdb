@@ -193,15 +193,21 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 				}
 			}
 			if (lower_index.IsValid() && upper_index.IsValid()) {
-				// found both lower and upper index, create a BETWEEN expression
-				auto lower_constant =
-				    make_uniq<BoundConstantExpression>(constant_list[lower_index.GetIndex()].constant);
-				auto upper_constant =
-				    make_uniq<BoundConstantExpression>(constant_list[upper_index.GetIndex()].constant);
-				auto between =
-				    BoundBetweenExpression::Create(entries[i].get().Copy(), std::move(lower_constant),
-				                                   std::move(upper_constant), lower_inclusive, upper_inclusive);
-				callback(std::move(between));
+				auto &lower_value = constant_list[lower_index.GetIndex()].constant;
+				auto &upper_value = constant_list[upper_index.GetIndex()].constant;
+				if (lower_inclusive && upper_inclusive && lower_value == upper_value) {
+					auto constant = make_uniq<BoundConstantExpression>(lower_value);
+					auto comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+					                                                    entries[i].get().Copy(), std::move(constant));
+					callback(std::move(comparison));
+				} else {
+					auto lower_constant = make_uniq<BoundConstantExpression>(lower_value);
+					auto upper_constant = make_uniq<BoundConstantExpression>(upper_value);
+					auto between =
+					    BoundBetweenExpression::Create(entries[i].get().Copy(), std::move(lower_constant),
+					                                   std::move(upper_constant), lower_inclusive, upper_inclusive);
+					callback(std::move(between));
+				}
 			} else if (lower_index.IsValid()) {
 				// only lower index found, create simple comparison expression
 				auto constant = make_uniq<BoundConstantExpression>(constant_list[lower_index.GetIndex()].constant);
@@ -821,17 +827,17 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 
 	// identify which side is CAST(col) and which is the scalar constant
 	bool invert = false;
-	if (left.GetExpressionClass() == ExpressionClass::BOUND_CAST && right.IsFoldable()) {
+	if (BoundCastExpression::IsCast(left) && right.IsFoldable()) {
 		// cast on left, constant on right
-	} else if (right.GetExpressionClass() == ExpressionClass::BOUND_CAST && left.IsFoldable()) {
+	} else if (BoundCastExpression::IsCast(right) && left.IsFoldable()) {
 		invert = true;
 	} else {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &cast_side = invert ? right : left;
 	auto &const_side = invert ? left : right;
-	auto &cast_expr = cast_side.Cast<BoundCastExpression>();
-	auto source_type = cast_expr.source_type();
+	auto &cast_expr = cast_side.Cast<BoundFunctionExpression>();
+	auto source_type = BoundCastExpression::SourceType(cast_expr);
 	auto &target_type = cast_expr.GetReturnType();
 	int64_t margin = GetTemporalCastMargin(source_type.id(), target_type.id());
 	if (margin < 0) {
@@ -840,7 +846,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 
 	// the child of the cast must resolve to a column ref
 	ProjectionIndex proj_index;
-	if (!TryGetProjectionIndex(cast_expr.Child(), proj_index)) {
+	if (!TryGetProjectionIndex(BoundCastExpression::Child(cast_expr), proj_index)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 
@@ -858,7 +864,8 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	auto push_optional = [&](ExpressionType filter_type, Value filter_val) {
-		auto filter_expr = CreateComparisonExpression(cast_expr.Child(), filter_type, std::move(filter_val));
+		auto filter_expr =
+		    CreateComparisonExpression(BoundCastExpression::Child(cast_expr), filter_type, std::move(filter_val));
 		table_filters.PushFilter(proj_index, CreateOptionalExpressionFilter(std::move(filter_expr), source_type));
 	};
 
@@ -1176,15 +1183,15 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundFunctionExpression &compa
 		if (right_node.get().GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 			break;
 		}
-		auto &bound_cast_expr = right_node.get().Cast<BoundCastExpression>();
-		if (bound_cast_expr.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		auto &bound_cast_expr = right_node.get().Cast<BoundFunctionExpression>();
+		if (BoundCastExpression::Child(bound_cast_expr).GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			break;
 		}
-		auto &col_ref = bound_cast_expr.Child().Cast<BoundColumnRefExpression>();
+		auto &col_ref = BoundCastExpression::Child(bound_cast_expr).Cast<BoundColumnRefExpression>();
 		for (auto &stored_exp : stored_expressions) {
 			const_reference<Expression> expr = stored_exp.first;
 			if (expr.get().GetExpressionType() == ExpressionType::OPERATOR_CAST) {
-				expr = right_node.get().Cast<BoundCastExpression>().Child();
+				expr = BoundCastExpression::Child(right_node.get().Cast<BoundFunctionExpression>());
 			}
 			if (expr.get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				continue;
@@ -1196,8 +1203,8 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundFunctionExpression &compa
 			if (bound_cast_expr.GetReturnType() != stored_exp.second->GetReturnType()) {
 				continue;
 			}
-			bound_cast_expr.ChildMutable() = stored_exp.second->Copy();
-			right_node = GetNode(*bound_cast_expr.ChildMutable());
+			BoundCastExpression::ChildMutable(bound_cast_expr) = stored_exp.second->Copy();
+			right_node = GetNode(*BoundCastExpression::ChildMutable(bound_cast_expr));
 			break;
 		}
 	} while (false);

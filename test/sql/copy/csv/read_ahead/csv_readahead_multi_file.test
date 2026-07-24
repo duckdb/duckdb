@@ -1,0 +1,49 @@
+# name: test/sql/copy/csv/read_ahead/csv_readahead_multi_file.test
+# description: CSV scans through the read-ahead queue preserve insertion order across files
+# group: [read_ahead]
+
+statement ok
+SET threads=8
+
+statement ok
+COPY (SELECT range AS i FROM range(0, 100000)) TO '{TEST_DIR}/csv_ra_0.csv' (FORMAT csv)
+
+statement ok
+COPY (SELECT range AS i FROM range(100000, 200000)) TO '{TEST_DIR}/csv_ra_1.csv' (FORMAT csv)
+
+statement ok
+COPY (SELECT range AS i FROM range(200000, 300000)) TO '{TEST_DIR}/csv_ra_2.csv' (FORMAT csv)
+
+statement ok
+COPY (SELECT range AS i FROM range(300000, 400000)) TO '{TEST_DIR}/csv_ra_3.csv' (FORMAT csv)
+
+foreach depth -1 3 1 0
+
+statement ok
+SET read_ahead_depth={depth}
+
+loop x 0 3
+
+query I
+SELECT count(*) FROM (
+    SELECT i, row_number() OVER () AS rn
+    FROM read_csv(['{TEST_DIR}/csv_ra_0.csv', '{TEST_DIR}/csv_ra_1.csv', '{TEST_DIR}/csv_ra_2.csv', '{TEST_DIR}/csv_ra_3.csv'])
+) WHERE i + 1 <> rn
+----
+0
+
+endloop
+
+endloop
+
+statement ok
+RESET read_ahead_depth
+
+# union_by_name goes through the union reader path
+statement ok
+COPY (SELECT range AS i, range * 2 AS j FROM range(0, 1000)) TO '{TEST_DIR}/csv_ra_union.csv' (FORMAT csv)
+
+query II
+SELECT count(*), sum(j) FROM read_csv(['{TEST_DIR}/csv_ra_0.csv', '{TEST_DIR}/csv_ra_union.csv'], union_by_name=true)
+----
+101000	999000

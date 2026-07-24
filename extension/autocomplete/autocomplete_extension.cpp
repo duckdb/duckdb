@@ -602,16 +602,8 @@ struct FormatSQLBindData : public FunctionData {
 
 //! Parse the MAP(VARCHAR, VARCHAR) config argument and populate FormatterConfig.
 //! Recognised keys: "indent_size", "inline_threshold", "keyword_case".
-static FormatterConfig ParseFormatterConfig(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
+static FormatterConfig ParseFormatterConfig(const Value &map_val) {
 	FormatterConfig config;
-	if (arguments.size() < 2) {
-		return config;
-	}
-	auto &map_expr = *arguments[1];
-	if (!map_expr.IsFoldable()) {
-		throw InvalidInputException("duckdb_format_sql: config map must be a constant expression");
-	}
-	Value map_val = ExpressionExecutor::EvaluateScalar(context, map_expr);
 	if (map_val.IsNull()) {
 		return config;
 	}
@@ -643,11 +635,12 @@ static FormatterConfig ParseFormatterConfig(ClientContext &context, vector<uniqu
 }
 
 static unique_ptr<FunctionData> FormatSQLBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
 
 	auto bind_data = make_uniq<FormatSQLBindData>();
-	bind_data->config = ParseFormatterConfig(context, arguments);
+	if (arguments.size() >= 2) {
+		bind_data->config = ParseFormatterConfig(input.GetConstant(1));
+	}
 	return std::move(bind_data);
 }
 
@@ -680,10 +673,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	ScalarFunctionSet format_sql_set("duckdb_format_sql");
 	// duckdb_format_sql(sql)
 	format_sql_set.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	    ScalarFunction({{"sql", LogicalType::VARCHAR}}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
 	// duckdb_format_sql(sql, config => MAP {'indent_size':'4', 'inline_threshold':'60'})
-	format_sql_set.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, map_config_type}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	format_sql_set.AddFunction(ScalarFunction({{"sql", LogicalType::VARCHAR}, {"config", map_config_type}},
+	                                          LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
 	loader.RegisterFunction(format_sql_set);
 }
 

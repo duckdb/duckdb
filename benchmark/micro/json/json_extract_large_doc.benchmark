@@ -1,0 +1,24 @@
+# name: benchmark/micro/json/json_extract_large_doc.benchmark
+# description: Extract one path from larger JSON documents with many keys
+# group: [json]
+
+name JSON extract large doc
+group json
+
+require json
+
+load
+CREATE TABLE docs AS
+SELECT json_object(
+    'k00', i, 'k01', 'v' || i, 'k02', i % 100, 'k03', 'w' || i, 'k04', i * 2,
+    'k05', 'x' || i, 'k06', i % 7, 'k07', 'y' || i, 'k08', i * 3, 'k09', 'z' || i,
+    'payload', json_object('name', 'user_' || i, 'tags', json_array(i % 10, i % 7, i % 5, i % 3), 'meta', json_object('a', i, 'b', i + 1, 'c', i + 2)),
+    'k10', i, 'k11', 'v' || i, 'k12', i % 100, 'k13', 'w' || i, 'k14', i * 2,
+    'k15', 'x' || i, 'k16', i % 7, 'k17', 'y' || i, 'k18', i * 3, 'k19', 'z' || i) AS j
+FROM range(0, 2000000) t(i);
+
+run
+SELECT count(j->>'$.payload.name') FROM docs
+
+result I
+2000000
