@@ -37,6 +37,10 @@ public:
 	yyjson_doc *doc = nullptr;
 };
 
+static inline string_t GetString(yyjson_val *val) {
+	return string_t(unsafe_yyjson_get_str(val), NumericCast<uint32_t>(unsafe_yyjson_get_len(val)));
+}
+
 } // namespace
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
@@ -86,6 +90,28 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 	yyjson_obj_iter iter;
 	yyjson_obj_iter_init(obj, &iter);
 
+	struct JSONObjectEntry {
+		yyjson_val *key;
+		yyjson_val *value;
+	};
+
+	// Maps object keys to their entry index.
+	string_map_t<idx_t> key_to_entry;
+	vector<JSONObjectEntry> entries;
+	key_to_entry.reserve(iter.max);
+	entries.reserve(iter.max);
+
+	while (auto key = yyjson_obj_iter_next(&iter)) {
+		auto key_string = GetString(key);
+		auto inserted_entry = key_to_entry.emplace(key_string, entries.size());
+		auto val = yyjson_obj_iter_get_val(key);
+		if (inserted_entry.second) {
+			entries.push_back({key, val});
+		} else {
+			entries[inserted_entry.first->second].value = val;
+		}
+	}
+
 	auto keys_offset_data = OffsetData::GetKeys(result.offsets);
 	auto children_offset_data = OffsetData::GetChildren(result.offsets);
 	auto values_offset_data = OffsetData::GetValues(result.offsets);
@@ -97,7 +123,7 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 	auto &variant = result.variant;
 	auto &children_list_entry = variant.children_data[result_index];
 	auto &keys_list_entry = variant.keys_data[result_index];
-	uint32_t count = NumericCast<uint32_t>(iter.max);
+	uint32_t count = NumericCast<uint32_t>(entries.size());
 	auto start_child_index = children_list_entry.offset + children_offset_data[result_index];
 	WriteContainerData<WRITE_DATA>(result.variant, result_index, blob_offset_data[result_index], count,
 	                               children_offset_data[result_index]);
@@ -108,15 +134,12 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 	keys_offset_data[result_index] += count;
 
 	//! Iterate over all the children in the Object
-	yyjson_val *key, *val;
-	while ((key = yyjson_obj_iter_next(&iter))) {
-		auto key_string = yyjson_get_str(key);
-		uint32_t key_string_len = NumericCast<uint32_t>(unsafe_yyjson_get_len(key));
+	for (const auto &entry : entries) {
+		auto key_string = GetString(entry.key);
 
 		if (WRITE_DATA) {
-			auto str = string_t(key_string, key_string_len);
 			auto keys_index = start_key_index++;
-			auto dictionary_index = result.GetOrCreateIndex(str);
+			auto dictionary_index = result.GetOrCreateIndex(key_string);
 
 			//! Set the keys_index
 			variant.keys_index_data[start_child_index] = keys_index;
@@ -125,21 +148,13 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 			result.keys_selvec.set_index(keys_list_entry.offset + keys_index, dictionary_index);
 		}
 
-		val = yyjson_obj_iter_get_val(key);
+		auto val = entry.value;
 		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(val, result, result_index, false)) {
 			return false;
 		}
 	}
 	return true;
 }
-
-namespace {
-
-static inline string_t GetString(yyjson_val *val) {
-	return string_t(unsafe_yyjson_get_str(val), NumericCast<uint32_t>(unsafe_yyjson_get_len(val)));
-}
-
-} // namespace
 
 template <bool WRITE_DATA>
 static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {

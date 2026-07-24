@@ -1,4 +1,5 @@
 # name: test/sql/types/variant/json_cast.test
+# description: Test casts between JSON and VARIANT
 # group: [variant]
 
 require json
@@ -29,6 +30,40 @@ SELECT
 FROM src;
 ----
 1.2345678901234568e+29	DOUBLE
+
+# Duplicate object keys use the last value
+query III
+SELECT (v).a, variant_keys(v), v::JSON
+FROM (SELECT '{"a":1,"a":2}'::JSON::VARIANT AS v);
+----
+2	[a]	{"a":2}
+
+query III
+SELECT (v.outer).a, variant_keys(v, 'outer'), v::JSON
+FROM (SELECT '{"outer":{"a":1,"b":2,"a":3}}'::JSON::VARIANT AS v);
+----
+3	[a, b]	{"outer":{"a":3,"b":2}}
+
+query III
+SELECT (v).a, variant_keys(v), v::JSON
+FROM (
+	VALUES
+		('{"a":null,"a":[1,2]}'::JSON::VARIANT),
+		('{"a":[1,2],"a":null}'::JSON::VARIANT)
+) t(v);
+----
+[1, 2]	[a]	{"a":[1,2]}
+NULL	[a]	{"a":null}
+
+query II
+SELECT (v).a, variant_keys(v)
+FROM (
+	SELECT j::VARIANT AS v
+	FROM (VALUES ('{"a":1,"a":2}'::JSON), ('{"a":3,"b":4,"a":5}'::JSON)) t(j)
+);
+----
+2	[a]
+5	[a, b]
 
 # ---------- VARIANT -> JSON ----------
 
