@@ -385,8 +385,7 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 	}
 }
 
-void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes,
-                         bool combine_only) {
+void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes, bool combine_only) {
 	if (count == keys.size()) {
 		// no null values are filtered: use regular hash functions
 		if (!combine_only) {

@@ -88,9 +88,9 @@ bool TryFORDecimalScaleUp(Vector &source, Vector &result, idx_t count, buffer_pt
 		mul *= 10;
 	}
 	bool ok = false;
-	FOR_SWITCH_LOGICAL(dst_type.InternalType(), DST_T,
-	                   { ok = TryFORScaleUp<DST_T>(source, result, count, DecimalType::GetWidth(dst_type), mul,
-	                                               dict_cache); });
+	FOR_SWITCH_LOGICAL(dst_type.InternalType(), DST_T, {
+		ok = TryFORScaleUp<DST_T>(source, result, count, DecimalType::GetWidth(dst_type), mul, dict_cache);
+	});
 	return ok;
 }
 

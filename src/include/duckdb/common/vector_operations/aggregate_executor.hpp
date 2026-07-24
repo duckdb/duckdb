@@ -427,7 +427,8 @@ public:
 	                                                const ValidityMask &mask, const sel_t *sel = nullptr,
 	                                                const SelectionVector *isel = nullptr) {
 		if (OP::IgnoreNull() && mask.CanHaveNull()) {
-			return UpdateUnaryClusteredOpt<true, LOCAL_TYPE, INPUT_TYPE, OP, READ_T>(vals, local, count, mask, sel, isel);
+			return UpdateUnaryClusteredOpt<true, LOCAL_TYPE, INPUT_TYPE, OP, READ_T>(vals, local, count, mask, sel,
+			                                                                         isel);
 		}
 		return UpdateUnaryClusteredOpt<false, LOCAL_TYPE, INPUT_TYPE, OP, READ_T>(vals, local, count, mask, sel, isel);
 	}

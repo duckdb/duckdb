@@ -242,7 +242,8 @@ DUCKDB_AUTOVEC_TARGET static inline void ShuffleUnpackIter(const uint8_t *DUCKDB
 		if constexpr (sizeof(OUT_T) == 2) {
 			std::memcpy(out, &v, 16);
 		} else {
-			duckdb_bp_u8x8 o = __builtin_shufflevector((duckdb_bp_u8x16)v, (duckdb_bp_u8x16)v, 0, 2, 4, 6, 8, 10, 12, 14);
+			duckdb_bp_u8x8 o =
+			    __builtin_shufflevector((duckdb_bp_u8x16)v, (duckdb_bp_u8x16)v, 0, 2, 4, 6, 8, 10, 12, 14);
 			std::memcpy(out, &o, 8);
 		}
 	} else if constexpr (sizeof(OUT_T) <= 2 || (sizeof(OUT_T) == 8 && WIDTH <= 13)) {
