@@ -145,7 +145,7 @@ bool MultiFileReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_sched
 
 void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
 	// beyond its scheduled I/O a job carries scan-state overhead (row-group sized decode buffers)
-	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
+	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 1ULL * 1024 * 1024;
 	auto completion = make_shared_ptr<ReadAheadJobCompletion>(io_tasks.size());
 	job->io_completion = completion;
 	for (auto &task : io_tasks) {
