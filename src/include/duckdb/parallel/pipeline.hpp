@@ -19,6 +19,7 @@
 
 namespace duckdb {
 
+class DynamicTableFilterSet;
 class Executor;
 class Event;
 class MetaPipeline;
@@ -65,6 +66,10 @@ public:
 	reference_map_t<const PhysicalOperator, reference<Pipeline>> delim_join_dependencies;
 	//! Materialized CTE scan dependencies
 	reference_map_t<const PhysicalOperator, reference<Pipeline>> cte_dependencies;
+	//! Join builds that publish dynamic filter sets during their Finalize, by filter set identity
+	reference_map_t<DynamicTableFilterSet, vector<reference<MetaPipeline>>> filter_set_producers;
+	//! JOIN_BUILD meta pipelines enclosing the operator currently being built
+	vector<reference<MetaPipeline>> join_build_stack;
 
 public:
 	void SetPipelineSource(Pipeline &pipeline, PhysicalOperator &op);

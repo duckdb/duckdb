@@ -1,0 +1,226 @@
+# name: test/optimizer/pushdown/join_filter_pushdown_nested_build.test
+# description: Join filter pushdown to scans on nested join build sides
+# group: [pushdown]
+
+require json
+
+# fix the plan shape: (small_probe JOIN fact) JOIN dim
+# fact sits on the build side of the nested join, dim produces the dynamic filter
+statement ok
+SET disabled_optimizers TO 'join_order,build_side_probe_side,compressed_materialization';
+
+statement ok
+CREATE TABLE small_probe AS SELECT range AS pk FROM range(100);
+
+statement ok
+CREATE TABLE fact AS SELECT range % 100 AS probe_key, range // 2500 AS dim_key FROM range(500000);
+
+statement ok
+CREATE TABLE dim AS SELECT range AS id, 'val_' || range AS val FROM range(200);
+
+statement ok
+CREATE TABLE mid AS SELECT range AS mk FROM range(100);
+
+query I
+SELECT count(*) FROM small_probe
+JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim ON fact.dim_key = dim.id
+WHERE dim.val = 'val_150';
+----
+2500
+
+# the dynamic filter on dim_key must be wired into the fact scan
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM small_probe
+JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim ON fact.dim_key = dim.id
+WHERE dim.val = 'val_150';
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters: dim_key.*
+
+# deep consumer: the filter target sits two build levels down
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM small_probe
+JOIN (SELECT fact.dim_key, fact.probe_key FROM mid JOIN fact ON mid.mk = fact.probe_key) sub
+    ON small_probe.pk = sub.probe_key
+JOIN dim ON sub.dim_key = dim.id
+WHERE dim.val = 'val_150';
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters: dim_key.*
+
+query I
+SELECT count(*) FROM small_probe
+JOIN (SELECT fact.dim_key, fact.probe_key FROM mid JOIN fact ON mid.mk = fact.probe_key) sub
+    ON small_probe.pk = sub.probe_key
+JOIN dim ON sub.dim_key = dim.id
+WHERE dim.val = 'val_150';
+----
+2500
+
+# the filter must also arrive before the fact scan runs: dim_key is clustered,
+# so a timely filter prunes all but one row group of the 500k-row fact table
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/nested_build_profiling.json';
+
+statement ok
+SET tracked_metrics = ['query.total_rows_scanned'];
+
+statement ok
+SELECT count(*) FROM small_probe
+JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim ON fact.dim_key = dim.id
+WHERE dim.val = 'val_150';
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+RESET enable_profiling;
+
+statement ok
+RESET profiling_output;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/nested_build_profiling.json';
+
+query I
+SELECT CASE WHEN query.total_rows_scanned < 300000 THEN 'true' ELSE 'false' END FROM metrics_output;
+----
+true
+
+# correctness with the filter wired: same result as a fresh connection without pushdown
+query I
+SELECT count(*) FROM small_probe
+JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim ON fact.dim_key = dim.id
+WHERE dim.val = 'val_199';
+----
+2500
+
+# nested LEFT join: the null-rejecting join condition above converts this to INNER
+# upstream, so pushdown remains valid - results must stay correct either way
+query I
+SELECT count(*) FROM small_probe
+LEFT JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim ON fact.dim_key = dim.id
+WHERE dim.val = 'val_150';
+----
+2500
+
+# three sibling builds: the producer's barrier exemption must not deadlock through
+# the third sibling's barrier edges (regression test for a transitive event cycle)
+query I
+SELECT count(*) FROM small_probe
+JOIN mid ON small_probe.pk = mid.mk
+JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim ON fact.dim_key = dim.id
+WHERE dim.val = 'val_150';
+----
+2500
+
+# natural shape: build/probe side optimizer swaps fact onto the nested build side itself
+statement ok
+SET disabled_optimizers TO 'join_order,compressed_materialization';
+
+statement ok
+CREATE TABLE huge_probe AS SELECT range AS hk FROM range(2000000);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM fact
+JOIN huge_probe ON fact.probe_key = huge_probe.hk
+JOIN dim ON fact.dim_key = dim.id
+WHERE dim.val = 'val_150';
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters: dim_key.*
+
+query I
+SELECT count(*) FROM fact
+JOIN huge_probe ON fact.probe_key = huge_probe.hk
+JOIN dim ON fact.dim_key = dim.id
+WHERE dim.val = 'val_150';
+----
+2500
+
+# non-hash producer: all comparison joins publish their filters at Finalize, so a
+# piecewise merge join must give its nested consumer the same ordering guarantee
+statement ok
+SET disabled_optimizers TO 'join_order,build_side_probe_side,compressed_materialization';
+
+statement ok
+CREATE TABLE dim_range AS SELECT range AS id FROM range(10);
+
+query II
+EXPLAIN SELECT count(*) FROM small_probe
+JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim_range ON fact.dim_key < dim_range.id;
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM small_probe
+JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim_range ON fact.dim_key < dim_range.id;
+----
+analyzed_plan	<REGEX>:.*optional: \(dim_key <= 9\).*
+
+# the range filter must arrive before the fact scan runs
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/nested_build_profiling_pwmj.json';
+
+statement ok
+SET tracked_metrics = ['query.total_rows_scanned'];
+
+statement ok
+SELECT count(*) FROM small_probe
+JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim_range ON fact.dim_key < dim_range.id;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+RESET enable_profiling;
+
+statement ok
+RESET profiling_output;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/nested_build_profiling_pwmj.json';
+
+query I
+SELECT CASE WHEN query.total_rows_scanned < 300000 THEN 'true' ELSE 'false' END FROM metrics_output;
+----
+true
+
+query I
+SELECT count(*) FROM small_probe
+JOIN fact ON small_probe.pk = fact.probe_key
+JOIN dim_range ON fact.dim_key < dim_range.id;
+----
+112500
+
+# nested shape inside a recursive CTE: the recursive scheduler replicates the sibling
+# build barrier without the eager-finalize exemption, so consumers there must not
+# order behind producers (regression test for an unschedulable dependency cycle)
+query I
+WITH RECURSIVE r(lvl) AS (
+  SELECT 0
+  UNION ALL
+  SELECT lvl + 1
+  FROM r
+  JOIN fact ON fact.probe_key = r.lvl
+  JOIN dim ON fact.dim_key = dim.id
+  WHERE dim.val = 'val_150' AND lvl < 2
+)
+SELECT count(*) FROM r;
+----
+651

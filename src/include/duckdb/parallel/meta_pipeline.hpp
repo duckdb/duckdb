@@ -60,6 +60,11 @@ public:
 	const reference_map_t<Pipeline, vector<reference<Pipeline>>> &GetDependencies() const;
 	//! Whether the sink of this pipeline is a join build
 	MetaPipelineType Type() const;
+	//! Whether this build should Finalize before sibling builds scan (it publishes filters they consume) -
+	//! exempts it from the waiting side of the TemporaryMemoryManager barrier
+	bool HasEagerBuildFinalize() const;
+	//! Mark this join build as eager-finalize
+	void SetEagerBuildFinalize();
 	//! Whether this MetaPipeline has a recursive CTE
 	bool HasRecursiveCTE() const;
 	//! Set the flag that this MetaPipeline is a recursive CTE pipeline
@@ -113,6 +118,8 @@ private:
 	optional_ptr<PhysicalOperator> sink;
 	//! The type of this MetaPipeline (regular, join build)
 	MetaPipelineType type;
+	//! Whether this join build must be able to Finalize before sibling builds scan
+	bool build_eager_finalize = false;
 	//! Whether this MetaPipeline is a the recursive pipeline of a recursive CTE
 	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink

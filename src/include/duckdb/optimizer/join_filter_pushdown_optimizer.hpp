@@ -25,7 +25,8 @@ public:
 public:
 	void VisitOperator(LogicalOperator &op) override;
 	static void GetPushdownFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
-	                                     vector<PushdownFilterTarget> &targets);
+	                                     vector<PushdownFilterTarget> &targets,
+	                                     bool include_nested_build_targets = false);
 
 	static bool IsFiltering(const unique_ptr<LogicalOperator> &op);
 
