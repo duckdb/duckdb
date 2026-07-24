@@ -112,19 +112,19 @@ struct FORStandardExecutor {
 			D_ASSERT(lw == res);
 			switch (res) {
 			case PhysicalType::UINT8:
-				return BinaryExecutor::ExecuteBuffersStandard<uint8_t, uint8_t, uint8_t, OP>;
+				return &BinaryExecutor::ExecuteBuffersStandard<uint8_t, uint8_t, uint8_t, OP>;
 			case PhysicalType::UINT16:
-				return BinaryExecutor::ExecuteBuffersStandard<uint16_t, uint16_t, uint16_t, OP>;
+				return &BinaryExecutor::ExecuteBuffersStandard<uint16_t, uint16_t, uint16_t, OP>;
 			case PhysicalType::UINT32:
-				return BinaryExecutor::ExecuteBuffersStandard<uint32_t, uint32_t, uint32_t, OP>;
+				return &BinaryExecutor::ExecuteBuffersStandard<uint32_t, uint32_t, uint32_t, OP>;
 			default:
-				return BinaryExecutor::ExecuteBuffersStandard<uint64_t, uint64_t, uint64_t, OP>;
+				return &BinaryExecutor::ExecuteBuffersStandard<uint64_t, uint64_t, uint64_t, OP>;
 			}
 		}
 		D_ASSERT(res == MaxStored(lw, rw));
 #define DUCKDB_FOR_MIXED_PAIR(LP, RP, TL, TR_, TRES)                                                                   \
 	if (lw == PhysicalType::LP && rw == PhysicalType::RP) {                                                            \
-		return BinaryExecutor::ExecuteBuffersStandard<TL, TR_, TRES, OP>;                                              \
+		return &BinaryExecutor::ExecuteBuffersStandard<TL, TR_, TRES, OP>;                                              \
 	}
 		DUCKDB_FOR_MIXED_PAIR(UINT16, UINT8, uint16_t, uint8_t, uint16_t)
 		DUCKDB_FOR_MIXED_PAIR(UINT8, UINT16, uint8_t, uint16_t, uint16_t)
