@@ -228,6 +228,16 @@ jobs:
         timeout-minutes: 10
         run: python3 scripts/ci/retry.py --timeout 2m -- make -j4 format_tools
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install C API header generation tools
+        run: |
+          python3 -m pip install -U pip
+          python3 -m pip install --group api_spec/pyproject.toml:generate
+          python3 -m pip install cxxheaderparser pcpp
+
       - name: Check format
         run: |
           make format-check-silent enum-integrity-check extension-patch-check -j -Otarget

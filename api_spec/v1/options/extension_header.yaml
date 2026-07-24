@@ -1,0 +1,6 @@
+# Function assigning every member in the derived engine-side header.
+create_method: CreateAPIv1
+# Prefix of the engine-side version define macros.
+version_macro_prefix: DUCKDB_EXTENSION_API_VERSION
+# Header the engine-side output includes.
+internal_include: duckdb.h
