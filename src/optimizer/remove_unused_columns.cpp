@@ -561,9 +561,6 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 
 static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &context, unique_ptr<Expression> target,
                                                              const ColumnIndex &path) {
-	auto extract_function = GetKeyExtractFunction();
-	auto bind_callback = extract_function.GetBindCallback();
-
 	auto &struct_type = target->return_type;
 	D_ASSERT(struct_type.id() == LogicalTypeId::STRUCT);
 	reference<const LogicalType> type_iter(struct_type);
@@ -572,14 +569,19 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		auto child_index = path_iter.get().GetPrimaryIndex();
 		auto &child_types = StructType::GetChildTypes(type_iter.get());
 		D_ASSERT(child_index < child_types.size());
-		auto &key = child_types[child_index].first;
+		auto is_unnamed = StructType::IsUnnamed(type_iter.get());
+		auto function = is_unnamed ? GetIndexExtractFunction() : GetKeyExtractFunction();
+
 		type_iter = child_types[child_index].second;
 
-		auto function = extract_function;
 		vector<unique_ptr<Expression>> arguments(2);
 		arguments[0] = (std::move(target));
-		arguments[1] = (make_uniq<BoundConstantExpression>(Value(key)));
-		auto bind_info = bind_callback(context, function, arguments);
+		if (is_unnamed) {
+			arguments[1] = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_index + 1)));
+		} else {
+			arguments[1] = make_uniq<BoundConstantExpression>(Value(child_types[child_index].first));
+		}
+		auto bind_info = function.GetBindCallback()(context, function, arguments);
 		auto return_type = function.GetReturnType();
 		target = make_uniq<BoundFunctionExpression>(return_type, std::move(function), std::move(arguments),
 		                                            std::move(bind_info));
