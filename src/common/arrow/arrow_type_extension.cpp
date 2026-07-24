@@ -2,12 +2,17 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/function/table/arrow/arrow_type_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/json_document.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -509,6 +514,177 @@ struct ArrowGeometry {
 	}
 };
 
+struct ArrowVariant {
+	//! VARIANT travels as the canonical `arrow.parquet.variant` extension: the Variant spec's binary
+	//! encoding in a struct<metadata: binary, value: binary> storage type. The value conversions are the
+	//! parquet extension's `variant_to_parquet_variant` / `variant_bytes_to_variant` functions, resolved
+	//! by name at conversion time (both are autoloadable catalog entries).
+
+	static LogicalType StorageType() {
+		child_list_t<LogicalType> children;
+		children.emplace_back("metadata", LogicalType::BLOB);
+		children.emplace_back("value", LogicalType::BLOB);
+		return LogicalType::STRUCT(std::move(children));
+	}
+
+	//! Declares the storage schema: struct<metadata: binary, value: binary>, tagged with the canonical
+	//! extension name.
+	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
+	                           ClientContext &context, const ArrowTypeExtension &extension) {
+		const auto schema_metadata = ArrowSchemaMetadata::ArrowCanonicalType(extension.GetInfo().GetExtensionName());
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		schema.metadata = root_holder.metadata_info.back().get();
+
+		auto release_child = [](ArrowSchema *child) {
+			child->release = nullptr;
+		};
+
+		schema.format = "+s";
+		schema.n_children = 2;
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(2);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[1]);
+		schema.children = root_holder.nested_children_ptr.back().data();
+
+		const char *child_names[] = {"metadata", "value"};
+		for (idx_t i = 0; i < 2; i++) {
+			auto &child = *schema.children[i];
+			child.format = "z";
+			child.name = child_names[i];
+			child.flags = ARROW_FLAG_NULLABLE;
+			child.release = release_child;
+		}
+	}
+
+	//! Maps a tagged schema back: the VARIANT logical type, with type info describing the storage struct
+	//! for the reader's buffer walk (children parsed from the actual schema, so binary/large binary/view
+	//! layouts from foreign writers are all accepted).
+	static unique_ptr<ArrowType> GetType(ClientContext &context, const ArrowSchema &schema,
+	                                     const ArrowSchemaMetadata &schema_metadata) {
+		if (schema.n_children != 2) {
+			throw InvalidInputException(
+			    "arrow.parquet.variant column must have a struct<metadata, value> storage type, got %lld children",
+			    schema.n_children);
+		}
+		vector<shared_ptr<ArrowType>> children;
+		for (idx_t i = 0; i < 2; i++) {
+			children.push_back(ArrowType::GetTypeFromSchema(context, *schema.children[i]));
+		}
+		return make_uniq<ArrowType>(LogicalType::VARIANT(), make_uniq<ArrowStructInfo>(std::move(children)));
+	}
+
+	//! Binds one of the parquet extension's variant conversion functions by name (triggering an extension
+	//! autoload where enabled) and runs it over `input` into `result`.
+	static void ExecuteConversion(ClientContext &context, const char *function_name, Vector &input, idx_t count,
+	                              Vector &result) {
+		vector<unique_ptr<Expression>> args;
+		args.push_back(make_uniq<BoundReferenceExpression>(input.GetType(), 0ULL));
+		FunctionBinder binder(context);
+		ErrorData error;
+		auto bound = binder.BindScalarFunction(DEFAULT_SCHEMA, function_name, std::move(args), error);
+		if (!bound) {
+			throw InvalidInputException(
+			    "VARIANT over the Arrow interface requires the parquet extension (resolving '%s' failed: %s)",
+			    function_name, error.Message());
+		}
+
+		DataChunk chunk;
+		chunk.InitializeEmpty({input.GetType()});
+		chunk.data[0].Reference(input);
+		chunk.SetCardinalityUnsafe(count);
+
+		ExpressionExecutor executor(context, *bound);
+		Vector transformed(bound->GetReturnType(), count);
+		executor.ExecuteExpression(chunk, transformed);
+		transformed.Flatten();
+		// Reinterpret, not Reference: the bound function's return type and `result`'s type have the same
+		// physical layout but can differ in the ALIAS (VARIANT / the parquet variant struct both carry one),
+		// and LogicalType equality compares the alias — Reference would trip its type assertion in an
+		// assertion-enabled build.
+		result.Reinterpret(transformed);
+	}
+
+	//! DuckDB -> Arrow: convert VARIANT values into the storage struct via `variant_to_parquet_variant`
+	//! (bound without a shredding argument, so the result is the unshredded struct<metadata, value>).
+	static void DuckToArrow(ClientContext &context, const Vector &source, Vector &result, idx_t count) {
+		Vector input(source.GetType());
+		input.Reference(source);
+		Vector transformed(StorageType(), count);
+		ExecuteConversion(context, "variant_to_parquet_variant", input, count, transformed);
+
+		// The transform's return type carries its own alias; move the data over child-wise so `result`
+		// keeps the extension's declared storage type.
+		auto &result_entries = StructVector::GetEntries(result);
+		auto &transformed_entries = StructVector::GetEntries(transformed);
+		result_entries[0].Reference(transformed_entries[0]);
+		result_entries[1].Reference(transformed_entries[1]);
+
+		// The transform encodes a SQL NULL as a Variant-null VALUE (the parquet writer's convention, where
+		// nullability lives at the column level) — over Arrow the SQL NULL must stay a top-level null, so
+		// the mask comes from the SOURCE's validity.
+		UnifiedVectorFormat source_format;
+		source.ToUnifiedFormat(source_format);
+		for (idx_t i = 0; i < count; i++) {
+			if (!source_format.validity.RowIsValid(source_format.sel->get_index(i)) ||
+			    FlatVector::IsNull(transformed, i)) {
+				FlatVector::SetNull(result, i, true);
+			}
+		}
+	}
+
+	//! Arrow -> DuckDB: concatenate each row's metadata and value bytes (the self-delimiting Variant
+	//! binary form) and decode through `variant_bytes_to_variant`.
+	static void ArrowToDuck(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+		source.Flatten();
+		auto &entries = StructVector::GetEntries(source);
+		Vector &metadata = entries[0];
+		Vector &value = entries[1];
+		metadata.Flatten();
+		value.Flatten();
+
+		// The binary decoder does not consult validity, so NULL rows are substituted with the minimal
+		// valid encoding (metadata v1 with an empty dictionary + a Variant null value) and the SQL NULL
+		// is re-applied on the result afterwards.
+		static constexpr const char MINIMAL_NULL_VARIANT[] = "\x01\x00\x00\x00";
+
+		Vector blob(LogicalType::BLOB, count);
+		auto blob_data = FlatVector::GetDataMutable<string_t>(blob);
+		auto metadata_data = FlatVector::GetData<string_t>(metadata);
+		auto value_data = FlatVector::GetData<string_t>(value);
+		vector<bool> is_null(count, false);
+		bool has_nulls = false;
+		for (idx_t i = 0; i < count; i++) {
+			if (FlatVector::IsNull(source, i) || FlatVector::IsNull(metadata, i) || FlatVector::IsNull(value, i)) {
+				blob_data[i] = string_t(MINIMAL_NULL_VARIANT, 4);
+				is_null[i] = true;
+				has_nulls = true;
+				continue;
+			}
+			auto &metadata_bytes = metadata_data[i];
+			auto &value_bytes = value_data[i];
+			auto total_size = metadata_bytes.GetSize() + value_bytes.GetSize();
+			auto target = StringVector::EmptyString(blob, total_size);
+			auto target_ptr = target.GetDataWriteable();
+			memcpy(target_ptr, metadata_bytes.GetData(), metadata_bytes.GetSize());
+			memcpy(target_ptr + metadata_bytes.GetSize(), value_bytes.GetData(), value_bytes.GetSize());
+			target.Finalize();
+			blob_data[i] = target;
+		}
+
+		ExecuteConversion(context, "variant_bytes_to_variant", blob, count, result);
+		if (has_nulls) {
+			result.Flatten();
+			for (idx_t i = 0; i < count; i++) {
+				if (is_null[i]) {
+					FlatVector::SetNull(result, i, true);
+				}
+			}
+		}
+	}
+};
+
 void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 	// Types that are 1:1
 	config.RegisterArrowExtension({"arrow.uuid", "w:16", make_shared_ptr<ArrowTypeExtensionData>(LogicalType::UUID)});
@@ -538,5 +714,10 @@ void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 
 	config.RegisterArrowExtension({"DuckDB", "bignum", &ArrowBignum::PopulateSchema, &ArrowBignum::GetType,
 	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::BIGNUM), nullptr, nullptr});
+
+	config.RegisterArrowExtension(
+	    {"arrow.parquet.variant", &ArrowVariant::PopulateSchema, &ArrowVariant::GetType,
+	     make_shared_ptr<ArrowTypeExtensionData>(LogicalType::VARIANT(), ArrowVariant::StorageType(),
+	                                             ArrowVariant::ArrowToDuck, ArrowVariant::DuckToArrow)});
 }
 } // namespace duckdb
