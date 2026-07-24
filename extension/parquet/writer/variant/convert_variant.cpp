@@ -924,6 +924,34 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
 }
 
+//! Parquet VariantShredding.md: object field groups and list element groups under typed_value must be REQUIRED.
+//! Walk the shredding subtree rooted at the Variant's typed_value writer and mark those groups required.
+//! typed_value itself stays OPTIONAL; value/typed_value children inside field/element groups stay OPTIONAL.
+static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value) {
+	auto type_id = typed_value.Type().id();
+	if (StructType::IsStruct(type_id)) {
+		//! Object shredding: each named field group is required
+		for (auto &field : typed_value.ChildWriters()) {
+			field->MarkRepetitionRequired();
+			for (auto &child : field->ChildWriters()) {
+				if (child->Schema().name == "typed_value") {
+					MarkTypedValueShreddingGroupsRequired(*child);
+				}
+			}
+		}
+	} else if (type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::ARRAY) {
+		//! Array shredding: the list element group is required
+		D_ASSERT(typed_value.ChildWriters().size() == 1);
+		auto &element = *typed_value.ChildWriters()[0];
+		element.MarkRepetitionRequired();
+		for (auto &child : element.ChildWriters()) {
+			if (child->Schema().name == "typed_value") {
+				MarkTypedValueShreddingGroupsRequired(*child);
+			}
+		}
+	}
+}
+
 idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
@@ -933,6 +961,14 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	auto &repetition_type = schema.repetition_type;
 	auto &name = schema.name;
 	auto &field_id = schema.field_id;
+
+	//! After AnalyzeSchemaFinalize (auto-shredding) or explicit SHREDDING, child writers are final.
+	//! Mark shredded field/element groups REQUIRED before emitting SchemaElements / writing data.
+	for (auto &child_writer : child_writers) {
+		if (child_writer->Schema().name == "typed_value") {
+			MarkTypedValueShreddingGroupsRequired(*child_writer);
+		}
+	}
 
 	// variant group
 	duckdb_parquet::SchemaElement top_element;

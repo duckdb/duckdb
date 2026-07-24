@@ -85,3 +85,28 @@ query I
 SELECT v FROM '{TEST_DIR}/variant_required_missing_field.parquet';
 ----
 {'a': 1}
+
+# Ordinary STRUCT columns named value/typed_value must not be forced REQUIRED
+statement ok
+COPY (
+	SELECT {
+		'inner': CASE WHEN i = 0 THEN NULL ELSE {'value': 'x'::BLOB, 'typed_value': 1} END
+	} AS s
+	FROM range(2) t(i)
+) TO '{TEST_DIR}/non_variant_value_typed_value.parquet';
+
+query II
+SELECT name, repetition_type
+FROM parquet_schema('{TEST_DIR}/non_variant_value_typed_value.parquet')
+WHERE name IN ('inner', 'value', 'typed_value')
+ORDER BY column_id;
+----
+inner	OPTIONAL
+value	OPTIONAL
+typed_value	OPTIONAL
+
+query I
+SELECT s.inner.typed_value FROM '{TEST_DIR}/non_variant_value_typed_value.parquet' ORDER BY 1 NULLS FIRST;
+----
+NULL
+1

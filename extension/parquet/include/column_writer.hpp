@@ -162,6 +162,13 @@ public:
 	const vector<unique_ptr<ColumnWriter>> &ChildWriters() const {
 		return child_writers;
 	}
+	vector<unique_ptr<ColumnWriter>> &ChildWriters() {
+		return child_writers;
+	}
+
+	//! Flip OPTIONAL → REQUIRED and decrement max_define for this writer and all descendants.
+	//! Used when Variant shredding schema finalization requires field/element groups to be required.
+	void MarkRepetitionRequired();
 
 	virtual void AnalyzeSchema(ParquetAnalyzeSchemaState &state, Vector &input, idx_t count) {
 		throw NotImplementedException("Writer doesn't require an AnalyzeSchema pass");
