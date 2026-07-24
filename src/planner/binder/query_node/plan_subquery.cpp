@@ -8,6 +8,8 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -52,6 +54,119 @@ static bool PlanReturnsExactlyOneRow(const LogicalOperator &op) {
 	default:
 		return false;
 	}
+}
+
+static bool IsExtremumRewriteValid(const BoundSubqueryExpression &expr) {
+	if (expr.GetChildren().size() != 1 || expr.GetChildTypes().size() != 1) {
+		return false;
+	}
+	auto cmp_type = expr.ComparisonType();
+	return cmp_type == ExpressionType::COMPARE_GREATERTHAN ||
+	       cmp_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO || cmp_type == ExpressionType::COMPARE_LESSTHAN ||
+	       cmp_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
+}
+
+static unique_ptr<Expression> PlanExtremumRewrite(Binder &binder, BoundSubqueryExpression &expr,
+                                                  unique_ptr<LogicalOperator> &plan) {
+	auto &child_type = expr.GetChildTypes()[0];
+	auto plan_columns = plan->GetColumnBindings();
+	D_ASSERT(plan_columns.size() == 1);
+	auto plan_column = plan_columns[0];
+
+	vector<unique_ptr<Expression>> aggregate_list;
+
+	auto bound_colref = make_uniq<BoundColumnRefExpression>(child_type, plan_column);
+
+	FunctionBinder function_binder(binder);
+	// 1. MIN or MAX
+	auto cmp_type = expr.ComparisonType();
+	bool is_min =
+	    (cmp_type == ExpressionType::COMPARE_GREATERTHAN || cmp_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+
+	vector<unique_ptr<Expression>> min_max_children;
+	min_max_children.push_back(bound_colref->Copy());
+
+	auto extremum_aggr =
+	    function_binder.BindAggregateFunction(is_min ? MinFunction::GetFunction() : MaxFunction::GetFunction(),
+	                                          std::move(min_max_children), nullptr, AggregateType::NON_DISTINCT);
+	aggregate_list.push_back(std::move(extremum_aggr));
+
+	// 2. count_star = COUNT(*)
+	auto count_star_aggr =
+	    function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr, AggregateType::NON_DISTINCT);
+	aggregate_list.push_back(std::move(count_star_aggr));
+
+	// 3. count_child = COUNT(child)
+	vector<unique_ptr<Expression>> count_child_children;
+	count_child_children.push_back(bound_colref->Copy());
+	auto count_child_aggr = function_binder.BindAggregateFunction(
+	    CountFunctionBase::GetFunction(), std::move(count_child_children), nullptr, AggregateType::NON_DISTINCT);
+	aggregate_list.push_back(std::move(count_child_aggr));
+
+	auto aggr_index = binder.GenerateTableIndex();
+	auto aggregate = make_uniq<LogicalAggregate>(binder.GenerateTableIndex(), aggr_index, std::move(aggregate_list));
+	aggregate->AddChild(std::move(plan));
+	plan = std::move(aggregate);
+
+	auto count_star_ref =
+	    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(aggr_index, ProjectionIndex(1)));
+	auto count_child_ref =
+	    make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(aggr_index, ProjectionIndex(2)));
+	auto extremum_ref = make_uniq<BoundColumnRefExpression>(child_type, ColumnBinding(aggr_index, ProjectionIndex(0)));
+
+	auto &x_expr = *expr.GetChildrenMutable()[0];
+
+	auto false_val = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+	auto null_val = make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+	auto true_val = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+
+	// 5. ELSE FALSE
+	unique_ptr<Expression> current_else = false_val->Copy();
+
+	// 4. WHEN count_star > count_child THEN NULL
+	unique_ptr<Expression> count_star_gt_count_child = BoundComparisonExpression::Create(
+	    ExpressionType::COMPARE_GREATERTHAN, count_star_ref->Copy(), count_child_ref->Copy());
+	current_else =
+	    make_uniq<BoundCaseExpression>(std::move(count_star_gt_count_child), null_val->Copy(), std::move(current_else));
+
+	// 3. WHEN X > MIN(Y) THEN TRUE
+	auto &compare_type = expr.GetChildTargets()[0];
+	auto x_cast = BoundCastExpression::AddDefaultCastToType(x_expr.Copy(), compare_type);
+	auto extremum_cast = BoundCastExpression::AddDefaultCastToType(std::move(extremum_ref), compare_type);
+	unique_ptr<Expression> x_op_min =
+	    BoundComparisonExpression::Create(cmp_type, std::move(x_cast), std::move(extremum_cast));
+
+	// Push collations for the comparison
+	ExpressionBinder::PushCollation(binder.context,
+	                                BoundComparisonExpression::LeftMutable(x_op_min->Cast<BoundFunctionExpression>()),
+	                                compare_type);
+	ExpressionBinder::PushCollation(binder.context,
+	                                BoundComparisonExpression::RightMutable(x_op_min->Cast<BoundFunctionExpression>()),
+	                                compare_type);
+
+	current_else = make_uniq<BoundCaseExpression>(std::move(x_op_min), true_val->Copy(), std::move(current_else));
+
+	// 2. WHEN X IS NULL THEN NULL
+	unique_ptr<Expression> x_is_null =
+	    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+	x_is_null->Cast<BoundOperatorExpression>().GetChildrenMutable().push_back(x_expr.Copy());
+	current_else = make_uniq<BoundCaseExpression>(std::move(x_is_null), null_val->Copy(), std::move(current_else));
+
+	// 1. WHEN count_star == 0 THEN FALSE
+	auto zero_val = make_uniq<BoundConstantExpression>(Value::BIGINT(0));
+	unique_ptr<Expression> count_star_is_zero =
+	    BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, count_star_ref->Copy(), std::move(zero_val));
+	current_else =
+	    make_uniq<BoundCaseExpression>(std::move(count_star_is_zero), false_val->Copy(), std::move(current_else));
+
+	// 0. WHEN count_star IS NULL THEN FALSE (for correlated empty groups)
+	unique_ptr<Expression> count_star_is_null =
+	    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+	count_star_is_null->Cast<BoundOperatorExpression>().GetChildrenMutable().push_back(count_star_ref->Copy());
+	current_else =
+	    make_uniq<BoundCaseExpression>(std::move(count_star_is_null), false_val->Copy(), std::move(current_else));
+
+	return current_else;
 }
 
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
@@ -189,6 +304,12 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 	}
 	default: {
 		D_ASSERT(expr.GetSubqueryType() == SubqueryType::ANY);
+		if (IsExtremumRewriteValid(expr)) {
+			auto result = PlanExtremumRewrite(binder, expr, plan);
+			root = LogicalCrossProduct::Create(std::move(root), std::move(plan));
+			return result;
+		}
+
 		// we generate a MARK join that results in either (TRUE, FALSE or NULL)
 		// subquery has NULL values -> result is (TRUE or NULL)
 		// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
@@ -367,6 +488,20 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	}
 	default: {
 		D_ASSERT(expr.GetSubqueryType() == SubqueryType::ANY);
+
+		if (IsExtremumRewriteValid(expr)) {
+			auto result = PlanExtremumRewrite(binder, expr, plan);
+			// For the extremum rewrite, we treat the correlated subquery just like a SCALAR query.
+			// It produces a single aggregated result per RHS execution.
+			auto delim_join =
+			    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE, std::move(root), perform_delim);
+			delim_join->subquery_type = SubqueryType::SCALAR;
+			delim_join->any_join = false;
+			delim_join->AddChild(std::move(plan));
+			root = std::move(delim_join);
+			return result;
+		}
+
 		// correlated ANY query
 		// this query is similar to the correlated SCALAR query
 		// however, in this case we push a correlated MARK join

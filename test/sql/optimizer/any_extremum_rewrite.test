@@ -1,0 +1,117 @@
+# name: test/sql/optimizer/any_extremum_rewrite.test
+# description: Test ANY extremum rewrite for both correlated and uncorrelated subqueries
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1(id INTEGER, x INTEGER);
+
+statement ok
+CREATE TABLE t2(id INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO t1 VALUES (1, 5), (2, 0), (3, NULL), (4, 10), (99, 100);
+
+statement ok
+INSERT INTO t2 VALUES (1, 1), (1, NULL), (2, 10), (2, 20), (3, 1), (4, NULL);
+
+# ---------------------------------------------------------
+# UNCORRELATED SUBQUERIES
+# ---------------------------------------------------------
+
+# 1. Empty Subquery (Should be FALSE)
+query I
+SELECT x > ANY(SELECT y FROM t2 WHERE 1=0) FROM t1 ORDER BY id;
+----
+False
+False
+False
+False
+False
+
+# 2. Subquery with NULLs, match (x > MIN(Y))
+# MIN(y) is 1. For id=1 (x=5), 5 > 1 is True. For id=4 (x=10), 10 > 1 is True.
+# For id=2 (x=0), 0 > 1 is False, but since there are NULLs, 0 > NULL is NULL.
+query I
+SELECT x > ANY(SELECT y FROM t2) FROM t1 ORDER BY id;
+----
+True
+NULL
+NULL
+True
+True
+
+# 3. Subquery without NULLs, no match (Should be False, not NULL)
+query I
+SELECT x > ANY(SELECT y FROM t2 WHERE y IS NOT NULL) FROM t1 ORDER BY id;
+----
+True
+False
+NULL
+True
+True
+
+# ---------------------------------------------------------
+# CORRELATED SUBQUERIES
+# ---------------------------------------------------------
+
+# 1. Empty Correlated Group (id=99 has no match in t2)
+# Expected: FALSE (subquery is empty for this row)
+query I
+SELECT x > ANY(SELECT y FROM t2 WHERE t2.id = t1.id) FROM t1 WHERE id = 99;
+----
+False
+
+# 2. Match with NULLs in the correlated group (id=1, y={1, NULL})
+# x=5, MIN(y)=1. 5 > 1 is True.
+query I
+SELECT x > ANY(SELECT y FROM t2 WHERE t2.id = t1.id) FROM t1 WHERE id = 1;
+----
+True
+
+# 3. No match with NULLs in the correlated group (id=4, y={NULL})
+# x=10, MIN(y)=NULL. Subquery only has NULLs. 10 > NULL is NULL.
+query I
+SELECT x > ANY(SELECT y FROM t2 WHERE t2.id = t1.id) FROM t1 WHERE id = 4;
+----
+NULL
+
+# 4. No match without NULLs in the correlated group (id=2, y={10, 20})
+# x=0, MIN(y)=10. 0 > 10 is False. Group has no NULLs. Result is False.
+query I
+SELECT x > ANY(SELECT y FROM t2 WHERE t2.id = t1.id) FROM t1 WHERE id = 2;
+----
+False
+
+# 5. Outer value is NULL (id=3, x=NULL)
+# Expected: NULL
+query I
+SELECT x > ANY(SELECT y FROM t2 WHERE t2.id = t1.id) FROM t1 WHERE id = 3;
+----
+NULL
+
+# ---------------------------------------------------------
+# DIFFERENT INEQUALITIES
+# ---------------------------------------------------------
+
+query I
+SELECT 0 < ANY(SELECT y FROM t2)
+----
+True
+
+query I
+SELECT 100 < ANY(SELECT y FROM t2)
+----
+NULL
+
+query I
+SELECT 0 >= ANY(SELECT y FROM t2 WHERE y IS NOT NULL)
+----
+False
+
+query I
+SELECT 1 <= ANY(SELECT y FROM t2 WHERE y IS NOT NULL)
+----
+True
