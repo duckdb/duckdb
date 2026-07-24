@@ -1337,15 +1337,38 @@ private:
 // Vacuum
 //===--------------------------------------------------------------------===//
 
+static void InitializeVacuumIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
+                                       vector<StorageIndex> &mapped_column_ids, DataTableInfo &table_info) {
+	auto indexed_columns = table_info.GetIndexes().GetRequiredColumns();
+	for (auto &col : indexed_columns) {
+		mapped_column_ids.emplace_back(col);
+	}
+	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
+
+	vector<LogicalType> index_types;
+	for (auto &col : mapped_column_ids) {
+		index_types.push_back(table_types[col.GetPrimaryIndex()]);
+	}
+	index_chunk.InitializeEmpty(index_types);
+}
+
+static void ReferenceVacuumIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
+                                      const vector<StorageIndex> &mapped_column_ids) {
+	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
+		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
+		index_chunk.data[i].Reference(table_chunk.data[col_id]);
+	}
+}
+
 //! Per-task remap execution: buffers the shifted rows of a vacuum merge, then applies them to each index.
 //! The buffer holds the indexed key columns in the sorted canonical order of
-//! TableIndexList::InitializeIndexChunk, followed by the old and new rowid.
+//! InitializeVacuumIndexChunk, followed by the old and new rowid.
 class VacuumIndexRemapper {
 public:
 	VacuumIndexRemapper(const vector<reference<BoundIndex>> &indexes, RowGroupCollection &collection)
 	    : indexes(indexes), table_types(collection.GetTypes()) {
 		DataChunk index_chunk;
-		TableIndexList::InitializeIndexChunk(index_chunk, table_types, mapped_column_ids, collection.GetTableInfo());
+		InitializeVacuumIndexChunk(index_chunk, table_types, mapped_column_ids, collection.GetTableInfo());
 		old_rowid_idx = mapped_column_ids.size();
 		new_rowid_idx = old_rowid_idx + 1;
 
@@ -1444,7 +1467,7 @@ private:
 		new_rowids.Sequence(UnsafeNumericCast<int64_t>(new_rowid_start), 1, count);
 
 		buffer_chunk.Reset();
-		TableIndexList::ReferenceIndexChunk(scan_chunk, buffer_chunk, mapped_column_ids);
+		ReferenceVacuumIndexChunk(scan_chunk, buffer_chunk, mapped_column_ids);
 		buffer_chunk.data[old_rowid_idx].Reference(scan_chunk.data[rowid_column_index]);
 		buffer_chunk.data[new_rowid_idx].Reference(new_rowids);
 		buffer_chunk.Slice(shifted_sel, shifted_count);
