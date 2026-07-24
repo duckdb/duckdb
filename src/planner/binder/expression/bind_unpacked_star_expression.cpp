@@ -75,21 +75,34 @@ static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_lis
                               optional_ptr<duckdb_re2::RE2> regex) {
 	auto &operator_expr = expr->Cast<OperatorExpression>();
 
-	vector<ExpressionType> allowed_types({
-	    ExpressionType::OPERATOR_COALESCE,
-	    ExpressionType::COMPARE_IN,
-	    ExpressionType::COMPARE_NOT_IN,
-	});
-	bool allowed = false;
-	for (idx_t i = 0; i < allowed_types.size() && !allowed; i++) {
-		auto &type = allowed_types[i];
-		if (operator_expr.GetExpressionType() == type) {
-			allowed = true;
+	// Only enforce the allowlist when *COLUMNS() is a direct child of this operator.
+	// Operators that appear as ancestors of a function containing *COLUMNS() (e.g.
+	// COALESCE(*COLUMNS(*)) IS NOT NULL) must not be rejected — the expansion happens
+	// inside the function, not inside this operator.
+	bool has_unpacked_child = false;
+	for (auto &child : operator_expr.GetChildren()) {
+		if (StarExpression::IsColumnsUnpacked(*child)) {
+			has_unpacked_child = true;
+			break;
 		}
 	}
-	if (!allowed) {
-		throw BinderException("*COLUMNS() can not be used together with the '%s' operator",
-		                      EnumUtil::ToString(operator_expr.GetExpressionType()));
+	if (has_unpacked_child) {
+		vector<ExpressionType> allowed_types({
+		    ExpressionType::OPERATOR_COALESCE,
+		    ExpressionType::COMPARE_IN,
+		    ExpressionType::COMPARE_NOT_IN,
+		});
+		bool allowed = false;
+		for (idx_t i = 0; i < allowed_types.size() && !allowed; i++) {
+			auto &type = allowed_types[i];
+			if (operator_expr.GetExpressionType() == type) {
+				allowed = true;
+			}
+		}
+		if (!allowed) {
+			throw BinderException("*COLUMNS() can not be used together with the '%s' operator",
+			                      EnumUtil::ToString(operator_expr.GetExpressionType()));
+		}
 	}
 
 	// Replace children
