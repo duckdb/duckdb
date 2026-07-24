@@ -24,7 +24,6 @@ on:
       - '!**.md'
       - '!tools/**'
       - 'tools/shell/**'
-      - 'tools/juliapkg/**'
       - '!.github/patches/duckdb-wasm/**'
       - '!.github/workflows/**'
       - '.github/workflows/Main.yml'
@@ -40,7 +39,6 @@ on:
       - '!**.md'
       - '!tools/**'
       - 'tools/shell/**'
-      - 'tools/juliapkg/**'
       - '!.github/patches/duckdb-wasm/**'
       - '!.github/workflows/**'
       - '.github/workflows/Main.yml'
@@ -147,13 +145,6 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
-            capi:
-              - src/include/duckdb.h
-              - src/common/types.cpp
-              - src/include/duckdb/common/types.hpp
-              - src/function/table/system/test_all_types.cpp
-            julia:
-              - tools/juliapkg/**
 
       - name: Lint CI
         if: steps.changed.outputs.github_any_changed == 'true'
@@ -873,68 +864,6 @@ jobs:
           build/release/duckdb -c \"COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)\" | cat
         "
 
- main_julia:
-    name: Julia ${{ matrix.version }}
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'main_julia') }}
-    needs:
-      - prepare
-      - linux-release-cli
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - '1.10'
-          - '1'
-        arch:
-          - x64
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - uses: julia-actions/setup-julia@v3
-      with:
-        version: ${{ matrix.version }}
-        arch: ${{ matrix.arch }}
-
-    - uses: actions/download-artifact@v8
-      with:
-        name: duckdb-binaries-linux-amd64
-        path: linux-release-artifacts
-
-    - name: Extract DuckDB Linux release artifacts
-      shell: bash
-      run: |
-        mkdir -p build/release/src
-        unzip -j linux-release-artifacts/duckdb_cli-linux-amd64.zip "duckdb" -d build/release
-        chmod +x build/release/duckdb
-        unzip -j linux-release-artifacts/libduckdb-linux-amd64.zip "libduckdb.so*" -d build/release/src
-        ls -lah build/release/duckdb
-        ls -lah build/release/src/libduckdb.so*
-
-    - name: Run Tests
-      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      shell: bash
-      run: |
-        JULIA_DUCKDB_LIBRARY="$(pwd)/build/release/src/libduckdb.so"
-        export JULIA_DUCKDB_LIBRARY
-        export JULIA_NUM_THREADS=2
-        export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
-        ls "$JULIA_DUCKDB_LIBRARY"
-        cd tools/juliapkg
-        julia --project -e "import Pkg; Pkg.test()"
-
-    - name: Format Check
-      if: ${{ always() && matrix.version == '1.10' }}
-      shell: bash
-      run: |
-        cd tools/juliapkg
-        julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
-        ./format_check.sh
-
  swift:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
     uses: ./.github/workflows/Swift.yml
@@ -1425,7 +1354,6 @@ jobs:
       - linux-release-cli
       - staged-extension-install
       - linux-musl-release-cli
-      - main_julia
       - swift
       - windows
       - osx
