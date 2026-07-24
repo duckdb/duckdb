@@ -751,8 +751,10 @@ static unique_ptr<TableRef> BuildNearestJoin(const optional<JoinType> &join_type
 		auto value = (*number_literal)->Cast<ConstantExpression>().GetValue();
 		auto literal_text = value.ToString();
 		int64_t count = 0;
-		if (!value.type().IsIntegral() || !value.DefaultTryCastAs(LogicalType::BIGINT) ||
-		    (count = value.GetValue<int64_t>()) < 1) {
+		if (value.type().IsIntegral() && value.DefaultTryCastAs(LogicalType::BIGINT)) {
+			count = value.GetValue<int64_t>();
+		}
+		if (count < 1) {
 			throw ParserException("NEAREST expects a positive integer literal, got \"%s\"", literal_text);
 		}
 		result->nearest_count = NumericCast<idx_t>(count);
