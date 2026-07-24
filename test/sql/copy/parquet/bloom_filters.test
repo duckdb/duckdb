@@ -651,3 +651,33 @@ FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
 WHERE x IS NOT DISTINCT FROM -0.0;
 ----
 2048
+
+statement ok
+COPY (
+	SELECT CASE
+		WHEN i < 2048 THEN '-NaN'::DOUBLE
+		WHEN i % 2 = 0 THEN -1.0::DOUBLE
+		ELSE 1.0::DOUBLE
+	END AS x
+	FROM range(4096) t(i)
+	ORDER BY i
+) TO '{TEST_DIR}/bloom_nan.parquet' (
+	FORMAT PARQUET,
+	ROW_GROUP_SIZE 2048,
+	WRITE_BLOOM_FILTER TRUE,
+	DICTIONARY_SIZE_LIMIT 1000
+);
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_nan.parquet')
+WHERE x = 'NaN'::DOUBLE;
+----
+2048
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_nan.parquet')
+WHERE x IS NOT DISTINCT FROM 'NaN'::DOUBLE;
+----
+2048

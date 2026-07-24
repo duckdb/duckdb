@@ -877,19 +877,30 @@ static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnS
 static bool BloomFilterExcludes(const Value &constant, ParquetBloomFilter &bloom_filter,
                                 const ParquetColumnSchema &schema) {
 	// Floating-point equality treats positive and negative zero as equal, but Parquet hashes their bit patterns.
+	// Likewise, all NaN payloads compare equal, so no single hash can rule out a row group containing one.
 	switch (constant.type().InternalType()) {
-	case PhysicalType::FLOAT:
-		if (constant.GetValue<float>() == 0.0f) {
+	case PhysicalType::FLOAT: {
+		auto float_value = constant.GetValue<float>();
+		if (Value::IsNan(float_value)) {
+			return false;
+		}
+		if (float_value == 0.0f) {
 			return !bloom_filter.FilterCheck(ValueXH64FixedWidth(0.0f)) &&
 			       !bloom_filter.FilterCheck(ValueXH64FixedWidth(-0.0f));
 		}
 		break;
-	case PhysicalType::DOUBLE:
-		if (constant.GetValue<double>() == 0.0) {
+	}
+	case PhysicalType::DOUBLE: {
+		auto double_value = constant.GetValue<double>();
+		if (Value::IsNan(double_value)) {
+			return false;
+		}
+		if (double_value == 0.0) {
 			return !bloom_filter.FilterCheck(ValueXH64FixedWidth(0.0)) &&
 			       !bloom_filter.FilterCheck(ValueXH64FixedWidth(-0.0));
 		}
 		break;
+	}
 	default:
 		break;
 	}
