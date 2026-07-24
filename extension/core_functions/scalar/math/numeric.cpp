@@ -646,21 +646,10 @@ void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vect
 
 template <typename NEGOP, typename POSOP>
 unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto &decimal_type = arguments[0]->GetReturnType();
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	auto fname = StringUtil::Upper(bound_function.GetName().GetIdentifierName());
-	if (!arguments[1]->IsFoldable()) {
-		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
-	}
-	Value val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]).DefaultCastAs(LogicalType::INTEGER);
-	if (val.IsNull()) {
-		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
-	}
+	auto val = input.GetNonNullConstant(1).DefaultCastAs(LogicalType::INTEGER);
 	// our new precision becomes the round value
 	// e.g. ROUND(DECIMAL(18,3), 1) -> DECIMAL(18,1)
 	// but ONLY if the round value is positive
@@ -1072,8 +1061,9 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			}
 			throw InternalException("Unimplemented numeric type for function \"round\"");
 		}
-		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));
-		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, bind_prec_func));
+		round.AddFunction(ScalarFunction({{"x", type}}, type, round_func, bind_func));
+		round.AddFunction(
+		    ScalarFunction({{"x", type}, {"precision", LogicalType::INTEGER}}, type, round_prec_func, bind_prec_func));
 	}
 	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;
@@ -1096,7 +1086,7 @@ struct ExpOperator {
 ScalarFunction ExpFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, ExpOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1214,7 +1204,7 @@ ScalarFunction SqrtFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<SqrtOperator, IEEESqrtOperator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1235,7 +1225,7 @@ struct CbRtOperator {
 ScalarFunction CbrtFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1269,7 +1259,7 @@ ScalarFunction LnFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<LnOperator, IEEELnOperator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1304,7 +1294,7 @@ ScalarFunction Log10Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1337,9 +1327,9 @@ ScalarFunctionSet LogFun::GetFunctions() {
 	ScalarFunctionSet funcs;
 	ScalarFunction log10({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                     BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
-	// single-argument log is base-10: strictly increasing. the two-arg log(base, x) is only
+	// single-argument log is base-10: non-decreasing. the two-arg log(base, x) is only
 	// monotone in x for a fixed base, and decreasing for base < 1, so it is left unannotated.
-	log10.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	log10.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	funcs.AddFunction(std::move(log10));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                                 BindIEEEFloatingBinary<LogBaseOperator, IEEELogBaseOperator>));
@@ -1378,7 +1368,7 @@ ScalarFunction Log2Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<Log2Operator, IEEELog2Operator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1410,7 +1400,7 @@ struct DegreesOperator {
 ScalarFunction DegreesFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, DegreesOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1429,7 +1419,7 @@ struct RadiansOperator {
 ScalarFunction RadiansFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, RadiansOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 

@@ -67,7 +67,7 @@ struct CastCollect final : LogicalOperatorVisitor {
 	CastCollect(Analyses &analyses, const Projections &projections);
 	void VisitOperator(LogicalOperator &op) override;
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *ptr) override;
-	unique_ptr<Expression> VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *ptr) override;
+	unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *ptr) override;
 };
 
 /*
@@ -81,7 +81,7 @@ struct CastReplace final : LogicalOperatorVisitor {
 
 	CastReplace(Analyses &analyses, const Projections &aliases);
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *ptr) override;
-	unique_ptr<Expression> VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *ptr) override;
+	unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *ptr) override;
 };
 
 void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections &aliases);

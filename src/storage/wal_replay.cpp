@@ -1169,8 +1169,13 @@ void WriteAheadLogDeserializer::ReplayUseTable() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	state.current_table = &catalog.GetEntry<DuckTableEntry>(
-	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.table)));
+	// the qualified name holds the (possibly nested) schema path followed by the table name - prepend the catalog
+	auto path = entry.qualified_name.Path();
+	auto table_name = std::move(path.back());
+	path.pop_back();
+	path.insert(path.begin(), catalog.GetName());
+	state.current_table =
+	    &catalog.GetEntry<DuckTableEntry>(context, QualifiedName(std::move(path), std::move(table_name)));
 }
 
 void WriteAheadLogDeserializer::ReplayInsert() {

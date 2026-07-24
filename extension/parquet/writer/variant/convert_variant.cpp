@@ -1023,13 +1023,7 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 			                      "'STRUCT(my_field BOOLEAN)', found type: '%s' instead",
 			                      expr_return_type);
 		}
-		if (!shredding.IsFoldable()) {
-			throw BinderException("Optional second argument 'shredding' has to be a constant expression");
-		}
-		Value type_str = ExpressionExecutor::EvaluateScalar(context, shredding);
-		if (type_str.IsNull()) {
-			throw BinderException("Optional second argument 'shredding' can not be NULL");
-		}
+		auto type_str = input.GetNonNullConstant(1);
 		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>(), context);
 		bound_function.SetReturnType(GetParquetVariantType(shredded_type));
 	} else {
@@ -1040,8 +1034,8 @@ static unique_ptr<FunctionData> BindTransform(BindScalarFunctionInput &input) {
 }
 
 ScalarFunction VariantColumnWriter::GetTransformFunction() {
-	ScalarFunction transform("variant_to_parquet_variant", {LogicalType::VARIANT()}, LogicalType::ANY, ToParquetVariant,
-	                         BindTransform);
+	ScalarFunction transform("variant_to_parquet_variant", {{"variant", LogicalType::VARIANT()}}, LogicalType::ANY,
+	                         ToParquetVariant, BindTransform);
 	transform.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return transform;
 }

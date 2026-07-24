@@ -54,33 +54,28 @@ struct WindowPartitionInput {
 	InterruptState &interrupt_state;
 };
 
-class BindAggregateFunctionInput {
+class BindAggregateFunctionInput : public BindFunctionInput {
 public:
+	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundAggregateFunction.
 	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
-	                           vector<unique_ptr<Expression>> &arguments_p)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p) {
-	}
+	                           vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p);
 
-	ClientContext &GetClientContext() const {
-		return context;
-	}
+	//! Construct without argument names - looking arguments up by name is not available in this case.
+	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
+	                           vector<unique_ptr<Expression>> &arguments_p);
+
 	BoundAggregateFunction &GetBoundFunction() const {
 		return bound_function;
 	}
-	vector<unique_ptr<Expression>> &GetArguments() const {
-		return arguments;
-	}
 
 private:
-	ClientContext &context;
 	BoundAggregateFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
 };
 
 //! The type used for sizing hashed aggregate function states
-typedef idx_t (*aggregate_size_t)(const BoundAggregateFunction &function);
-//! The type used for initializing hashed aggregate function states
-typedef void (*aggregate_initialize_t)(const BoundAggregateFunction &function, data_ptr_t state);
+typedef idx_t (*aggregate_size_t)(AggregateStateInput &input);
+//! The type used for initializing hashed aggregate function states (batched: initializes `count` states)
+typedef void (*aggregate_initialize_t)(AggregateStateInput &input, data_ptr_t *states, idx_t count);
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                    Vector &state, idx_t count);
@@ -638,7 +633,7 @@ public:
 	static void WireStructStateType(AggregateFunction &result);
 
 	template <class STATE>
-	static idx_t StateSize(const BoundAggregateFunction &) {
+	static idx_t StateSize(AggregateStateInput &) {
 		return sizeof(STATE);
 	}
 
@@ -662,18 +657,20 @@ public:
 	};
 
 	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
-	static void StateInitialize(const BoundAggregateFunction &, data_ptr_t state) {
+	static void StateInitialize(AggregateStateInput &, data_ptr_t *states, idx_t count) {
 		// FIXME: we should remove the "destructor_type" option in the future
 #if !defined(__GNUC__) || (__GNUC__ >= 5)
 		static_assert(std::is_trivially_move_constructible<STATE>::value ||
 		                  destructor_type == AggregateDestructorType::LEGACY,
 		              "Aggregate state must be trivially move constructible");
 #endif
-		if constexpr (OperationHasInitialize<STATE, OP>::value) {
-			OP::Initialize(*reinterpret_cast<STATE *>(state));
-		} else {
-			// if the operation does not define an Initialize method - initialize the state by zero-initializing it
-			memset(state, 0, sizeof(STATE));
+		for (idx_t i = 0; i < count; i++) {
+			if constexpr (OperationHasInitialize<STATE, OP>::value) {
+				OP::Initialize(*reinterpret_cast<STATE *>(states[i]));
+			} else {
+				// if the operation does not define an Initialize method - initialize the state by zero-initializing it
+				memset(states[i], 0, sizeof(STATE));
+			}
 		}
 	}
 
@@ -770,6 +767,13 @@ public:
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
 		return callbacks.get_state_type(input);
+	}
+
+	//! Sizes an aggregate state by constructing an AggregateStateInput and invoking the state-size callback
+	idx_t GetStateSize(optional_ptr<const FunctionData> bind_data) const {
+		D_ASSERT(callbacks.state_size);
+		AggregateStateInput input(*this, bind_data);
+		return callbacks.state_size(input);
 	}
 };
 

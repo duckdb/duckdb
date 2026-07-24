@@ -1,0 +1,60 @@
+# name: test/sql/delete/full_vector_delete_rollback.test
+# description: Verify rollback and re-delete of full-vector deletes
+# group: [delete]
+
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(4096) t(i);
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok con1
+BEGIN
+
+query I con1
+DELETE FROM tbl
+----
+4096
+
+# the deleting transaction sees its own delete
+query I con1
+SELECT COUNT(*) FROM tbl
+----
+0
+
+# other transactions still see all rows while the delete is uncommitted
+query I con2
+SELECT COUNT(*) FROM tbl
+----
+4096
+
+# other transactions conflict on the uncommitted full-vector delete
+statement error con2
+DELETE FROM tbl WHERE i < 100
+----
+Conflict on tuple deletion
+
+statement ok con1
+ROLLBACK
+
+# rollback restores all rows
+query I
+SELECT COUNT(*) FROM tbl
+----
+4096
+
+# rows can be deleted again after the rollback
+query I
+DELETE FROM tbl WHERE i < 2048
+----
+2048
+
+query I
+DELETE FROM tbl
+----
+2048
+
+query I
+SELECT COUNT(*) FROM tbl
+----
+0

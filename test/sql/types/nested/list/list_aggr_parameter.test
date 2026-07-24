@@ -44,4 +44,4 @@ SELECT list_aggr(list(i), 'quantile', 0.5, 0.3, 0.5) FROM range(10) tbl(i);
 statement error
 SELECT list_aggr(list(i), 'quantile', i) FROM range(10) tbl(i);
 ----
-<REGEX>:.*Binder Error.*can only take constant parameters.*
+<REGEX>:.*Binder Error.*must be a constant expression.*

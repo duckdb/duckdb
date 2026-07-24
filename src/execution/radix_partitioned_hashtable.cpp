@@ -1073,9 +1073,11 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			for (idx_t i = 0; i < op.aggregates.size(); i++) {
 				D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
-				auto aggr_state = make_unsafe_uniq_array_uninitialized<data_t>(
-				    aggr.Function().GetStateSizeCallback()(aggr.Function()));
-				aggr.Function().GetStateInitCallback()(aggr.Function(), aggr_state.get());
+				AggregateStateInput state_input(aggr.Function(), aggr.BindInfo().get());
+				auto aggr_state =
+				    make_unsafe_uniq_array_uninitialized<data_t>(aggr.Function().GetStateSizeCallback()(state_input));
+				data_ptr_t state_ptr = aggr_state.get();
+				aggr.Function().GetStateInitCallback()(state_input, &state_ptr, 1);
 
 				AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())), count_t(1));

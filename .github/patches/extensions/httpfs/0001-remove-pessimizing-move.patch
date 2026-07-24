@@ -1,0 +1,19 @@
+diff --git a/src/httpfs_curl_client.cpp b/src/httpfs_curl_client.cpp
+--- a/src/httpfs_curl_client.cpp
++++ b/src/httpfs_curl_client.cpp
+@@ -645,3 +645,3 @@ private:
+ 		}
+-		return std::move(curl_headers);
++		return curl_headers;
+ 	}
+diff --git a/test/sql/connection_caching_default.test b/test/sql/connection_caching_default.test
+--- a/test/sql/connection_caching_default.test
++++ b/test/sql/connection_caching_default.test
+@@ -7,3 +7,6 @@
+ require parquet
+-
++
++statement ok
++LOAD httpfs;
++
+ # override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues

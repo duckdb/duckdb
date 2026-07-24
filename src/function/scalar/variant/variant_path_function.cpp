@@ -7,21 +7,25 @@ ScalarFunctionSet VariantPathFunction::CreateFunctionSet(const Identifier &name,
 	ScalarFunctionSet fun_set(name);
 
 	if (path_optional) {
-		fun_set.AddFunction(ScalarFunction {
-		    {LogicalType::VARIANT()}, return_type, function, VariantBindUtils::VariantPathBind, nullptr});
+		fun_set.AddFunction(ScalarFunction {{{"input_variant", LogicalType::VARIANT()}},
+		                                    return_type,
+		                                    function,
+		                                    VariantBindUtils::VariantPathBind,
+		                                    nullptr});
 	}
 
-	fun_set.AddFunction(ScalarFunction {{LogicalType::VARIANT(), LogicalType::VARCHAR},
+	fun_set.AddFunction(ScalarFunction {{{"input_variant", LogicalType::VARIANT()}, {"path", LogicalType::VARCHAR}},
 	                                    return_type,
 	                                    function,
 	                                    VariantBindUtils::VariantPathBind,
 	                                    nullptr});
 
-	fun_set.AddFunction(ScalarFunction {{LogicalType::VARIANT(), LogicalType::LIST(LogicalType::VARCHAR)},
-	                                    LogicalType::LIST(return_type),
-	                                    function,
-	                                    VariantBindUtils::VariantPathBind,
-	                                    nullptr});
+	fun_set.AddFunction(
+	    ScalarFunction {{{"input_variant", LogicalType::VARIANT()}, {"path", LogicalType::LIST(LogicalType::VARCHAR)}},
+	                    LogicalType::LIST(return_type),
+	                    function,
+	                    VariantBindUtils::VariantPathBind,
+	                    nullptr});
 
 	return fun_set;
 }
