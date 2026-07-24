@@ -114,6 +114,7 @@ struct QualifiedColumnName {
 	static QualifiedColumnName Parse(string &input);
 
 	string ToString() const;
+	string ToDisplayString() const;
 
 	void Serialize(Serializer &serializer) const;
 	static QualifiedColumnName Deserialize(Deserializer &deserializer);

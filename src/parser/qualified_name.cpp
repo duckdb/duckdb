@@ -180,6 +180,21 @@ string QualifiedColumnName::ToString() const {
 	return result;
 }
 
+string QualifiedColumnName::ToDisplayString() const {
+	string result;
+	if (!catalog.empty()) {
+		result += catalog.GetIdentifierName() + ".";
+	}
+	if (!schema.empty()) {
+		result += schema.GetIdentifierName() + ".";
+	}
+	if (!table.empty()) {
+		result += table.GetIdentifierName() + ".";
+	}
+	result += column.GetIdentifierName();
+	return result;
+}
+
 bool QualifiedColumnName::IsQualified() const {
 	return !catalog.empty() || !schema.empty() || !table.empty();
 }
