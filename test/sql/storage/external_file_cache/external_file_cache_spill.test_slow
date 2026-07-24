@@ -1,0 +1,140 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_spill.test_slow
+# description: External file cache blocks spill to the temporary directory instead of being dropped
+# group: [external_file_cache]
+
+require parquet
+
+require skip_reload
+
+statement ok
+SET cache_local_files=true;
+
+statement ok
+SET external_file_cache_local_block_size=2097152;
+
+statement ok
+SET memory_limit='200MB';
+
+statement ok
+SET temp_directory='__TEST_DIR__/external_file_cache_spill';
+
+statement ok
+SET preserve_insertion_order=false;
+
+# roughly 290MB of incompressible data, well above the memory limit
+statement ok
+COPY (SELECT hash(i) a, hash(i * 2) b, hash(i * 3) c FROM range(12000000) t(i))
+TO '__TEST_DIR__/efc_spill.parquet' (FORMAT parquet);
+
+# by default, evicted cache blocks are dropped, nothing is written to the temporary directory
+query I
+SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('__TEST_DIR__/efc_spill.parquet');
+----
+0
+
+query I
+SELECT temporary_storage_bytes FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_external_file_cache() WHERE spilled;
+----
+0
+
+statement ok
+SET external_file_cache_spill=true;
+
+# when the temporary directory cannot hold the blocks, the cache still drops them instead of failing
+statement ok
+SET max_temp_directory_size='1MB';
+
+query I
+SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('__TEST_DIR__/efc_spill.parquet');
+----
+0
+
+statement ok
+RESET max_temp_directory_size;
+
+# the cache exceeds the memory limit, so evicted blocks now spill to the temporary directory
+query I
+SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('__TEST_DIR__/efc_spill.parquet');
+----
+0
+
+query I
+SELECT temporary_storage_bytes > 0 FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+true
+
+# the cache listing shows which blocks are in memory and which sit in the temporary directory
+query I
+SELECT count(*) > 0 FROM duckdb_external_file_cache() WHERE NOT loaded AND spilled;
+----
+true
+
+query I
+SELECT count(*) FROM duckdb_external_file_cache() WHERE loaded AND spilled;
+----
+0
+
+# reads must reassemble the same data through the spilled blocks
+query II
+SELECT sum(b) - (SELECT sum(hash(i * 2)) FROM range(12000000) t(i)),
+       sum(c) - (SELECT sum(hash(i * 3)) FROM range(12000000) t(i))
+FROM read_parquet('__TEST_DIR__/efc_spill.parquet');
+----
+0	0
+
+# changing the cache block size re-indexes the cache, dropping the spilled blocks,
+# and reads still reassemble the correct content afterwards.
+# blocks below the block allocation size are also never spilled: with tiny cache blocks
+# the cache drops them under pressure instead
+statement ok
+SET external_file_cache_local_block_size=16384;
+
+query I
+SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('__TEST_DIR__/efc_spill.parquet');
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_external_file_cache() WHERE spilled;
+----
+0
+
+query I
+SELECT temporary_storage_bytes FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+0
+
+# spill again with large blocks, then disabling the cache must also delete the spilled blocks
+statement ok
+SET external_file_cache_local_block_size=2097152;
+
+query I
+SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('__TEST_DIR__/efc_spill.parquet');
+----
+0
+
+query I
+SELECT temporary_storage_bytes > 0 FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+true
+
+statement ok
+SET enable_external_file_cache=false;
+
+query I
+SELECT count(*) FROM duckdb_external_file_cache();
+----
+0
+
+query I
+SELECT temporary_storage_bytes FROM duckdb_memory() WHERE tag = 'EXTERNAL_FILE_CACHE';
+----
+0
+
+statement ok
+SET enable_external_file_cache=true;

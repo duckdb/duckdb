@@ -25,6 +25,9 @@ static unique_ptr<FunctionData> DuckDBExternalFileCacheBind(ClientContext &conte
 	names.emplace_back("loaded");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("spilled");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
 	return nullptr;
 }
 
@@ -53,6 +56,8 @@ void DuckDBExternalFileCacheFunction(ClientContext &context, TableFunctionInput 
 	auto &location = output.data[2];
 	// loaded, BOOLEAN
 	auto &loaded = output.data[3];
+	// spilled, BOOLEAN
+	auto &spilled = output.data[4];
 
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
@@ -60,6 +65,7 @@ void DuckDBExternalFileCacheFunction(ClientContext &context, TableFunctionInput 
 		nr_bytes.Append(Value::BIGINT(NumericCast<int64_t>(entry.nr_bytes)));
 		location.Append(Value::BIGINT(NumericCast<int64_t>(entry.location)));
 		loaded.Append(Value::BOOLEAN(entry.loaded));
+		spilled.Append(Value::BOOLEAN(entry.spilled));
 		count++;
 	}
 }

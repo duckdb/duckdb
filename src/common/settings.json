@@ -775,6 +775,13 @@
         ]
     },
     {
+        "name": "external_file_cache_spill",
+        "description": "Whether evicted external file cache blocks spill to the temporary directory instead of being dropped, so that they are re-read from there rather than from the source",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",

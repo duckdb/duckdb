@@ -150,6 +150,11 @@ public:
 	bool MustWriteToTemporaryFile() const {
 		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
 	}
+	//! Returns true, if unloading the buffer writes it to a temporary file.
+	bool WritesToTemporaryFile() const {
+		const auto destroy_upon = destroy_buffer_upon.load();
+		return destroy_upon == DestroyBufferUpon::BLOCK || destroy_upon == DestroyBufferUpon::EVICTION_UNLESS_SPILLED;
+	}
 	//! Returns the memory usage.
 	idx_t GetMemoryUsage() const {
 		return memory_usage;
@@ -208,6 +213,8 @@ public:
 	bool CanUnload() const;
 	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l, QueryContext context = QueryContext());
 	void Unload(BlockLock &l, QueryContext context = QueryContext());
+	//! Try to write the buffer to a temporary file, returns false if it cannot be written
+	bool TrySpill(QueryContext context);
 
 private:
 	//! A reference to the buffer manager.

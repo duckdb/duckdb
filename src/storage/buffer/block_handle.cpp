@@ -106,6 +106,19 @@ void BlockMemory::ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_heade
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
+bool BlockMemory::TrySpill(QueryContext context) {
+	if (!GetBufferManager().HasTemporaryDirectory()) {
+		return false;
+	}
+	try {
+		buffer_manager.WriteTemporaryBuffer(context, GetMemoryTag(), BlockId(), *GetBuffer());
+		return true;
+	} catch (std::exception &) {
+		// The temporary directory is full or cannot be written to
+		return false;
+	}
+}
+
 bool BlockMemory::CanUnload() const {
 	if (GetState() == BlockState::BLOCK_UNLOADED) {
 		// The block has already been unloaded.
@@ -134,10 +147,16 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, QueryContex
 	D_ASSERT(IsSwizzled());
 	D_ASSERT(CanUnload());
 
-	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
-		// This is a temporary block that cannot be destroyed upon evict/unpin.
-		// Thus, we write to it to a temporary file.
-		buffer_manager.WriteTemporaryBuffer(context, GetMemoryTag(), BlockId(), *GetBuffer());
+	if (BlockId() >= MAXIMUM_BLOCK && WritesToTemporaryFile()) {
+		if (MustWriteToTemporaryFile()) {
+			// This is a temporary block that cannot be destroyed upon evict/unpin.
+			// Thus, we write to it to a temporary file.
+			buffer_manager.WriteTemporaryBuffer(context, GetMemoryTag(), BlockId(), *GetBuffer());
+		} else if (!TrySpill(context)) {
+			// The buffer could not be written to a temporary file, destroy it instead.
+			// Loads of this block now return an invalid handle, like any destroyed buffer.
+			SetDestroyBufferUpon(DestroyBufferUpon::EVICTION);
+		}
 	}
 	memory_charge.Resize(0);
 	SetState(BlockState::BLOCK_UNLOADED);
@@ -229,7 +248,7 @@ BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reus
 		block_manager.Read(context, *block);
 		memory.GetBuffer() = std::move(block);
 	} else {
-		if (!memory.MustWriteToTemporaryFile()) {
+		if (!memory.WritesToTemporaryFile()) {
 			// The buffer was destroyed upon unpin/evict, so there is no temporary buffer to read.
 			return BufferHandle();
 		}
