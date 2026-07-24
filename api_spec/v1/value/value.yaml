@@ -1,0 +1,1324 @@
+module: value
+functions:
+  destroy_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: value
+    parameters:
+      value:
+        type: value
+        indirection: 1
+        description: The value to destroy.
+    return_type: opaque
+    description: |
+      Destroys the value and de-allocates all memory allocated for that type.
+  create_varchar:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: value
+    parameters:
+      text:
+        type: char
+        indirection: 1
+        const: true
+        description: The null-terminated string
+    return_type: value
+    description: |
+      Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8 or other invalid input.
+
+      Superseded by `duckdb_create_varchar_length`.
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_varchar_length:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: value
+    parameters:
+      text:
+        type: char
+        indirection: 1
+        const: true
+        description: The text
+      length:
+        type: idx
+        description: The length of the text
+    return_type: value
+    description: |
+      Creates a value from a string. Returns nullptr if the string is not valid UTF-8 or other invalid input.
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_bool:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: bool
+        description: The boolean value
+    return_type: value
+    description: |
+      Creates a value from a boolean
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_int8:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: i8
+        description: The tinyint value
+    return_type: value
+    description: |
+      Creates a value from an int8_t (a tinyint)
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_uint8:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: u8
+        description: The utinyint value
+    return_type: value
+    description: |
+      Creates a value from a uint8_t (a utinyint)
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_int16:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: i16
+        description: The smallint value
+    return_type: value
+    description: |
+      Creates a value from an int16_t (a smallint)
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_uint16:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: u16
+        description: The usmallint value
+    return_type: value
+    description: |
+      Creates a value from a uint16_t (a usmallint)
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_int32:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: i32
+        description: The integer value
+    return_type: value
+    description: |
+      Creates a value from an int32_t (an integer)
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_uint32:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: u32
+        description: The uinteger value
+    return_type: value
+    description: |
+      Creates a value from a uint32_t (a uinteger)
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_uint64:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: u64
+        description: The ubigint value
+    return_type: value
+    description: |
+      Creates a value from a uint64_t (a ubigint)
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_int64:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: i64
+    return_type: value
+    description: |
+      Creates a value from an int64
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_hugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: hugeint
+        description: The hugeint value
+    return_type: value
+    description: |
+      Creates a value from a hugeint
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_uhugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: uhugeint
+        description: The uhugeint value
+    return_type: value
+    description: |
+      Creates a value from a uhugeint
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_bignum:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: bignum
+        description: The duckdb_bignum value
+    return_type: value
+    description: |
+      Creates a BIGNUM value from a duckdb_bignum
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_decimal:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: decimal
+        description: The duckdb_decimal value
+    return_type: value
+    description: |
+      Creates a DECIMAL value from a duckdb_decimal
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_float:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: f32
+        description: The float value
+    return_type: value
+    description: |
+      Creates a value from a float
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_double:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: f64
+        description: The double value
+    return_type: value
+    description: |
+      Creates a value from a double
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_date:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: date
+        description: The date value
+    return_type: value
+    description: |
+      Creates a value from a date
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_time:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: time
+        description: The time value
+    return_type: value
+    description: |
+      Creates a value from a time
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_time_ns:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: time_ns
+        description: The time value
+    return_type: value
+    description: |
+      Creates a value from a time_ns
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_time_tz_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: time_tz
+        description: The time_tz value
+    return_type: value
+    description: |
+      Creates a value from a time_tz.
+      Not to be confused with `duckdb_create_time_tz`, which creates a duckdb_time_tz_t.
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_timestamp:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: timestamp
+        description: The duckdb_timestamp value
+    return_type: value
+    description: |
+      Creates a TIMESTAMP value from a duckdb_timestamp
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_timestamp_tz:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: timestamp
+        description: The duckdb_timestamp value
+    return_type: value
+    description: |
+      Creates a TIMESTAMP_TZ value from a duckdb_timestamp
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_timestamp_s:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: timestamp_s
+        description: The duckdb_timestamp_s value
+    return_type: value
+    description: |
+      Creates a TIMESTAMP_S value from a duckdb_timestamp_s
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_timestamp_ms:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: timestamp_ms
+        description: The duckdb_timestamp_ms value
+    return_type: value
+    description: |
+      Creates a TIMESTAMP_MS value from a duckdb_timestamp_ms
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_timestamp_ns:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: timestamp_ns
+        description: The duckdb_timestamp_ns value
+    return_type: value
+    description: |
+      Creates a TIMESTAMP_NS value from a duckdb_timestamp_ns
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_interval:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: interval
+        description: The interval value
+    return_type: value
+    description: |
+      Creates a value from an interval
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_blob:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      data:
+        type: u8
+        indirection: 1
+        const: true
+        description: The blob data
+      length:
+        type: idx
+        description: The length of the blob data
+    return_type: value
+    description: |
+      Creates a value from a blob
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_bit:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: bit
+        description: The duckdb_bit value
+    return_type: value
+    description: |
+      Creates a BIT value from a duckdb_bit
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  create_uuid:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      input:
+        type: uhugeint
+        description: The duckdb_uhugeint containing the UUID
+    return_type: value
+    description: |
+      Creates a UUID value from a uhugeint
+    return_description: The value. This must be destroyed with `duckdb_destroy_value`.
+  get_bool:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a boolean
+    return_type: bool
+    description: |
+      Returns the boolean value of the given value.
+    return_description: A boolean, or false if the value cannot be converted
+  get_int8:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a tinyint
+    return_type: i8
+    description: |
+      Returns the int8_t value of the given value.
+    return_description: A int8_t, or MinValue<int8> if the value cannot be converted
+  get_uint8:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a utinyint
+    return_type: u8
+    description: |
+      Returns the uint8_t value of the given value.
+    return_description: A uint8_t, or MinValue<uint8> if the value cannot be converted
+  get_int16:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a smallint
+    return_type: i16
+    description: |
+      Returns the int16_t value of the given value.
+    return_description: A int16_t, or MinValue<int16> if the value cannot be converted
+  get_uint16:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a usmallint
+    return_type: u16
+    description: |
+      Returns the uint16_t value of the given value.
+    return_description: A uint16_t, or MinValue<uint16> if the value cannot be converted
+  get_int32:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing an integer
+    return_type: i32
+    description: |
+      Returns the int32_t value of the given value.
+    return_description: A int32_t, or MinValue<int32> if the value cannot be converted
+  get_uint32:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a uinteger
+    return_type: u32
+    description: |
+      Returns the uint32_t value of the given value.
+    return_description: A uint32_t, or MinValue<uint32> if the value cannot be converted
+  get_int64:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a bigint
+    return_type: i64
+    description: |
+      Returns the int64_t value of the given value.
+    return_description: A int64_t, or MinValue<int64> if the value cannot be converted
+  get_uint64:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a ubigint
+    return_type: u64
+    description: |
+      Returns the uint64_t value of the given value.
+    return_description: A uint64_t, or MinValue<uint64> if the value cannot be converted
+  get_hugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a hugeint
+    return_type: hugeint
+    description: |
+      Returns the hugeint value of the given value.
+    return_description: A duckdb_hugeint, or MinValue<hugeint> if the value cannot be converted
+  get_uhugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a uhugeint
+    return_type: uhugeint
+    description: |
+      Returns the uhugeint value of the given value.
+    return_description: A duckdb_uhugeint, or MinValue<uhugeint> if the value cannot be converted
+  get_bignum:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a BIGNUM
+    return_type: bignum
+    description: |
+      Returns the duckdb_bignum value of the given value.
+      The `data` field must be destroyed with `duckdb_free`.
+    return_description: A duckdb_bignum. The `data` field must be destroyed with `duckdb_free`.
+  get_decimal:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a DECIMAL
+    return_type: decimal
+    description: |
+      Returns the duckdb_decimal value of the given value.
+    return_description: A duckdb_decimal, or MinValue<decimal> if the value cannot be converted
+  get_float:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a float
+    return_type: f32
+    description: |
+      Returns the float value of the given value.
+    return_description: A float, or NAN if the value cannot be converted
+  get_double:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a double
+    return_type: f64
+    description: |
+      Returns the double value of the given value.
+    return_description: A double, or NAN if the value cannot be converted
+  get_date:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a date
+    return_type: date
+    description: |
+      Returns the date value of the given value.
+    return_description: A duckdb_date, or MinValue<date> if the value cannot be converted
+  get_time:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a time
+    return_type: time
+    description: |
+      Returns the time value of the given value.
+    return_description: A duckdb_time, or MinValue<time> if the value cannot be converted
+  get_time_ns:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a time_ns
+    return_type: time_ns
+    description: |
+      Returns the time_ns value of the given value.
+    return_description: A duckdb_time_ns, or MinValue<time_ns> if the value cannot be converted
+  get_time_tz:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a time_tz
+    return_type: time_tz
+    description: |
+      Returns the time_tz value of the given value.
+    return_description: A duckdb_time_tz, or MinValue<time_tz> if the value cannot be converted
+  get_timestamp:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a TIMESTAMP
+    return_type: timestamp
+    description: |
+      Returns the TIMESTAMP value of the given value.
+    return_description: A duckdb_timestamp, or MinValue<timestamp> if the value cannot be converted
+  get_timestamp_tz:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a TIMESTAMP_TZ
+    return_type: timestamp
+    description: |
+      Returns the TIMESTAMP_TZ value of the given value.
+    return_description: A duckdb_timestamp, or MinValue<timestamp_tz> if the value cannot be converted
+  get_timestamp_s:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a TIMESTAMP_S
+    return_type: timestamp_s
+    description: |
+      Returns the duckdb_timestamp_s value of the given value.
+    return_description: A duckdb_timestamp_s, or MinValue<timestamp_s> if the value cannot be converted
+  get_timestamp_ms:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a TIMESTAMP_MS
+    return_type: timestamp_ms
+    description: |
+      Returns the duckdb_timestamp_ms value of the given value.
+    return_description: A duckdb_timestamp_ms, or MinValue<timestamp_ms> if the value cannot be converted
+  get_timestamp_ns:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a TIMESTAMP_NS
+    return_type: timestamp_ns
+    description: |
+      Returns the duckdb_timestamp_ns value of the given value.
+    return_description: A duckdb_timestamp_ns, or MinValue<timestamp_ns> if the value cannot be converted
+  get_interval:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a interval
+    return_type: interval
+    description: |
+      Returns the interval value of the given value.
+    return_description: A duckdb_interval, or MinValue<interval> if the value cannot be converted
+  get_value_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value
+    return_type: logical_type
+    description: |
+      Returns the type of the given value. The type is valid as long as the value is not destroyed.
+      The type itself must not be destroyed.
+    return_description: A duckdb_logical_type.
+  get_blob:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a blob
+    return_type: blob
+    description: |
+      Returns the blob value of the given value.
+    return_description: A duckdb_blob
+  get_bit:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a BIT
+    return_type: bit
+    description: |
+      Returns the duckdb_bit value of the given value.
+      The `data` field must be destroyed with `duckdb_free`.
+    return_description: A duckdb_bit
+  get_uuid:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      val:
+        type: value
+        description: A duckdb_value containing a UUID
+    return_type: uhugeint
+    description: |
+      Returns a duckdb_uhugeint representing the UUID value of the given value.
+    return_description: A duckdb_uhugeint representing the UUID value
+  get_varchar:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: The value
+    return_type: char
+    return_pointer: 1
+    description: |
+      Obtains a string representation of the given value.
+      The result must be destroyed with `duckdb_free`.
+    return_description: The string value. This must be destroyed with `duckdb_free`.
+  create_struct_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The type of the struct
+      values:
+        type: value
+        indirection: 1
+        description: The values for the struct fields
+    return_type: value
+    description: |
+      Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.
+    return_description: The struct value, or nullptr, if any child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
+  create_list_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The type of the list
+      values:
+        type: value
+        indirection: 1
+        description: The values for the list
+      value_count:
+        type: idx
+        description: The number of values in the list
+    return_type: value
+    description: |
+      Creates a list value from a child (element) type and an array of values of length `value_count`.
+      Must be destroyed with `duckdb_destroy_value`.
+    return_description: The list value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
+  create_array_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The type of the array
+      values:
+        type: value
+        indirection: 1
+        description: The values for the array
+      value_count:
+        type: idx
+        description: The number of values in the array
+    return_type: value
+    description: |
+      Creates an array value from a child (element) type and an array of values of length `value_count`.
+      Must be destroyed with `duckdb_destroy_value`.
+    return_description: The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
+  create_map_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      map_type:
+        type: logical_type
+        description: The map type
+      keys:
+        type: value
+        indirection: 1
+        description: The keys of the map
+      values:
+        type: value
+        indirection: 1
+        description: The values of the map
+      entry_count:
+        type: idx
+        description: The number of entries (key-value pairs) in the map
+    return_type: value
+    description: |
+      Creates a map value from a map type and two arrays, one for the keys and one for the values, each of length `entry_count`.
+      Must be destroyed with `duckdb_destroy_value`.
+    return_description: The map value, or nullptr, if the parameters are invalid.
+  create_union_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      union_type:
+        type: logical_type
+        description: The union type
+      tag_index:
+        type: idx
+        description: The index of the tag of the union
+      value:
+        type: value
+        description: The value of the union for that tag
+    return_type: value
+    description: |
+      Creates a union value from a union type, a tag index, and a value.
+      Must be destroyed with `duckdb_destroy_value`.
+    return_description: The union value, or nullptr, if the parameters are invalid.
+  get_map_size:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: The MAP value.
+    return_type: idx
+    description: |
+      Returns the number of elements in a MAP value.
+    return_description: The number of elements in the map.
+  get_map_key:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: The MAP value.
+      index:
+        type: idx
+        description: The index of the key.
+    return_type: value
+    description: |
+      Returns the MAP key at index as a duckdb_value.
+    return_description: The key as a duckdb_value.
+  get_map_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: The MAP value.
+      index:
+        type: idx
+        description: The index of the value.
+    return_type: value
+    description: |
+      Returns the MAP value at index as a duckdb_value.
+    return_description: The value as a duckdb_value.
+  is_null_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: The value to check.
+    return_type: bool
+    description: |
+      Returns whether the value's type is SQLNULL or not.
+    return_description: True, if the value's type is SQLNULL, otherwise false.
+  create_null_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters: {}
+    return_type: value
+    description: |
+      Creates a value of type SQLNULL.
+    return_description: The duckdb_value representing SQLNULL. This must be destroyed with `duckdb_destroy_value`.
+  get_list_size:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: The LIST value.
+    return_type: idx
+    description: |
+      Returns the number of elements in a LIST value.
+    return_description: The number of elements in the list.
+  get_list_child:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: The LIST value.
+      index:
+        type: idx
+        description: The index of the child.
+    return_type: value
+    description: |
+      Returns the LIST child at index as a duckdb_value.
+    return_description: The child as a duckdb_value.
+  create_enum_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The type of the enum
+      value:
+        type: u64
+        description: The value for the enum
+    return_type: value
+    description: |
+      Creates an enum value from a type and a value. Must be destroyed with `duckdb_destroy_value`.
+    return_description: The enum value, or nullptr.
+  get_enum_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: A duckdb_value containing an enum
+    return_type: u64
+    description: |
+      Returns the enum value of the given value.
+    return_description: A uint64_t, or MinValue<uint64> if the value cannot be converted
+  get_struct_child:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: The STRUCT value.
+      index:
+        type: idx
+        description: The index of the child.
+    return_type: value
+    description: |
+      Returns the STRUCT child at index as a duckdb_value.
+    return_description: The child as a duckdb_value.
+  value_to_string:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      value:
+        type: value
+        description: A duckdb_value.
+    return_type: char
+    return_pointer: 1
+    description: |
+      Returns the SQL string representation of the given value.
+    return_description: The SQL string representation as a null-terminated string. The result must be freed with `duckdb_free`.
+  value_boolean:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: bool
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The boolean value at the specified location, or false if the value cannot be converted.
+  value_int8:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: i8
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The int8_t value at the specified location, or 0 if the value cannot be converted.
+  value_int16:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: i16
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The int16_t value at the specified location, or 0 if the value cannot be converted.
+  value_int32:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: i32
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The int32_t value at the specified location, or 0 if the value cannot be converted.
+  value_int64:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: i64
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The int64_t value at the specified location, or 0 if the value cannot be converted.
+  value_hugeint:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: hugeint
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The duckdb_hugeint value at the specified location, or 0 if the value cannot be converted.
+  value_uhugeint:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: uhugeint
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted.
+  value_decimal:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: decimal
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The duckdb_decimal value at the specified location, or 0 if the value cannot be converted.
+  value_uint8:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: u8
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The uint8_t value at the specified location, or 0 if the value cannot be converted.
+  value_uint16:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: u16
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The uint16_t value at the specified location, or 0 if the value cannot be converted.
+  value_uint32:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: u32
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The uint32_t value at the specified location, or 0 if the value cannot be converted.
+  value_uint64:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: u64
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The uint64_t value at the specified location, or 0 if the value cannot be converted.
+  value_float:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: f32
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The float value at the specified location, or 0 if the value cannot be converted.
+  value_double:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: f64
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The double value at the specified location, or 0 if the value cannot be converted.
+  value_date:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: date
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The duckdb_date value at the specified location, or 0 if the value cannot be converted.
+  value_time:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: time
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The duckdb_time value at the specified location, or 0 if the value cannot be converted.
+  value_timestamp:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: timestamp
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The duckdb_timestamp value at the specified location, or 0 if the value cannot be converted.
+  value_interval:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: interval
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The duckdb_interval value at the specified location, or 0 if the value cannot be converted.
+  value_varchar:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: char
+    return_pointer: 1
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: |-
+      The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
+      converted. The result must be freed with `duckdb_free`.
+  value_string:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: string
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: The string value at the specified location. Attempts to cast the result value to string.
+  value_varchar_internal:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: char
+    return_pointer: 1
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: |-
+      The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
+      If the column is NOT a VARCHAR column this function will return NULL.
+
+      The result must NOT be freed.
+  value_string_internal:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: string
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: |-
+      The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
+      If the column is NOT a VARCHAR column this function will return NULL.
+
+      The result must NOT be freed.
+  value_blob:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: blob
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: |-
+      The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the
+      value cannot be converted. The resulting field "blob.data" must be freed with `duckdb_free.`
+  value_is_null:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        indirection: 1
+      col:
+        type: idx
+      row:
+        type: idx
+    return_type: bool
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+    return_description: Returns true if the value at the specified index is NULL, and false otherwise.

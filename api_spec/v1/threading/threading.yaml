@@ -1,0 +1,111 @@
+module: threading
+functions:
+  execute_tasks:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      database:
+        type: database
+        description: The database object to execute tasks for
+      max_tasks:
+        type: idx
+        description: The maximum amount of tasks to execute
+    return_type: opaque
+    description: |
+      Execute DuckDB tasks on this thread.
+
+      Will return after `max_tasks` have been executed, or if there are no more tasks present.
+  create_task_state:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: task_state
+    parameters:
+      database:
+        type: database
+        description: The database object to create the task state for
+    return_type: task_state
+    description: |
+      Creates a task state that can be used with duckdb_execute_tasks_state to execute tasks until
+      `duckdb_finish_execution` is called on the state.
+
+      `duckdb_destroy_state` must be called on the result.
+    return_description: The task state that can be used with duckdb_execute_tasks_state.
+  execute_tasks_state:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      state:
+        type: task_state
+        description: The task state of the executor
+    return_type: opaque
+    description: |
+      Execute DuckDB tasks on this thread.
+
+      The thread will keep on executing tasks forever, until duckdb_finish_execution is called on the state.
+      Multiple threads can share the same duckdb_task_state.
+  execute_n_tasks_state:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      state:
+        type: task_state
+        description: The task state of the executor
+      max_tasks:
+        type: idx
+        description: The maximum amount of tasks to execute
+    return_type: idx
+    description: |
+      Execute DuckDB tasks on this thread.
+
+      The thread will keep on executing tasks until either duckdb_finish_execution is called on the state,
+      max_tasks tasks have been executed or there are no more tasks to be executed.
+
+      Multiple threads can share the same duckdb_task_state.
+    return_description: The amount of tasks that have actually been executed
+  finish_execution:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      state:
+        type: task_state
+        description: The task state to finish execution
+    return_type: opaque
+    description: |
+      Finish execution on a specific task.
+  task_state_is_finished:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      state:
+        type: task_state
+        description: The task state to inspect
+    return_type: bool
+    description: |
+      Check if the provided duckdb_task_state has finished execution
+    return_description: Whether or not duckdb_finish_execution has been called on the task state
+  destroy_task_state:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: task_state
+    parameters:
+      state:
+        type: task_state
+        description: The task state to clean up
+    return_type: opaque
+    description: |
+      Destroys the task state returned from duckdb_create_task_state.
+
+      Note that this should not be called while there is an active duckdb_execute_tasks_state running
+      on the task state.
+  execution_is_finished:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      con:
+        type: connection
+        description: The connection on which to check
+    return_type: bool
+    description: |
+      Returns true if the execution of the current query is finished.

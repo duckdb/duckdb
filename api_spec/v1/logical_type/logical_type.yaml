@@ -1,0 +1,439 @@
+module: logical_type
+functions:
+  create_logical_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: logical_type
+    parameters:
+      type:
+        type: type
+        description: The primitive type to create.
+    return_type: logical_type
+    description: |
+      Creates a `duckdb_logical_type` from a primitive type.
+      The resulting logical type must be destroyed with `duckdb_destroy_logical_type`.
+
+      Returns an invalid logical type, if type is: `DUCKDB_TYPE_INVALID`, `DUCKDB_TYPE_DECIMAL`, `DUCKDB_TYPE_ENUM`,
+      `DUCKDB_TYPE_LIST`, `DUCKDB_TYPE_STRUCT`, `DUCKDB_TYPE_MAP`, `DUCKDB_TYPE_ARRAY`, or `DUCKDB_TYPE_UNION`.
+    return_description: The logical type.
+  logical_type_get_alias:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type
+    return_type: char
+    return_pointer: 1
+    description: |
+      Returns the alias of a duckdb_logical_type, if set, else `nullptr`.
+      The result must be destroyed with `duckdb_free`.
+    return_description: The alias or `nullptr`
+  logical_type_set_alias:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type
+      alias:
+        type: char
+        indirection: 1
+        const: true
+        description: The alias to set
+    return_type: opaque
+    description: |
+      Sets the alias of a duckdb_logical_type.
+  create_list_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The child type of the list
+    return_type: logical_type
+    description: |
+      Creates a LIST type from its child type.
+      The return type must be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The logical type.
+  create_array_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The child type of the array.
+      array_size:
+        type: idx
+        description: The number of elements in the array.
+    return_type: logical_type
+    description: |
+      Creates an ARRAY type from its child type.
+      The return type must be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The logical type.
+  create_map_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      key_type:
+        type: logical_type
+        description: The map's key type.
+      value_type:
+        type: logical_type
+        description: The map's value type.
+    return_type: logical_type
+    description: |
+      Creates a MAP type from its key type and value type.
+      The return type must be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The logical type.
+  create_union_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      member_types:
+        type: logical_type
+        indirection: 1
+        description: The array of union member types.
+      member_names:
+        type: char
+        indirection: 2
+        const: true
+        description: The union member names.
+      member_count:
+        type: idx
+        description: The number of union members.
+    return_type: logical_type
+    description: |
+      Creates a UNION type from the passed arrays.
+      The return type must be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The logical type.
+  create_struct_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      member_types:
+        type: logical_type
+        indirection: 1
+        description: The array of types of the struct members.
+      member_names:
+        type: char
+        indirection: 2
+        const: true
+        description: The array of names of the struct members.
+      member_count:
+        type: idx
+        description: The number of members of the struct.
+    return_type: logical_type
+    description: |
+      Creates a STRUCT type based on the member types and names.
+      The resulting type must be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The logical type.
+  create_enum_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      member_names:
+        type: char
+        indirection: 2
+        const: true
+        description: The array of names that the enum should consist of.
+      member_count:
+        type: idx
+        description: The number of elements that were specified in the array.
+    return_type: logical_type
+    description: |
+      Creates an ENUM type from the passed member name array.
+      The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The logical type.
+  create_decimal_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      width:
+        type: u8
+        description: The width of the decimal type
+      scale:
+        type: u8
+        description: The scale of the decimal type
+    return_type: logical_type
+    description: |
+      Creates a DECIMAL type with the specified width and scale.
+      The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The logical type.
+  get_type_id:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type.
+    return_type: type
+    description: |
+      Retrieves the enum `duckdb_type` of a `duckdb_logical_type`.
+    return_description: The `duckdb_type` id.
+  decimal_width:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+    return_type: u8
+    description: |
+      Retrieves the width of a decimal type.
+    return_description: The width of the decimal type
+  decimal_scale:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+    return_type: u8
+    description: |
+      Retrieves the scale of a decimal type.
+    return_description: The scale of the decimal type
+  decimal_internal_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+    return_type: type
+    description: |
+      Retrieves the internal storage type of a decimal type.
+    return_description: The internal type of the decimal type
+  enum_internal_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+    return_type: type
+    description: |
+      Retrieves the internal storage type of an enum type.
+    return_description: The internal type of the enum type
+  enum_dictionary_size:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+    return_type: u32
+    description: |
+      Retrieves the dictionary size of the enum type.
+    return_description: The dictionary size of the enum type
+  enum_dictionary_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+      index:
+        type: idx
+        description: The index in the dictionary
+    return_type: char
+    return_pointer: 1
+    description: |
+      Retrieves the dictionary value at the specified position from the enum.
+
+      The result must be freed with `duckdb_free`.
+    return_description: The string value of the enum type. Must be freed with `duckdb_free`.
+  list_type_child_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type, either LIST or MAP.
+    return_type: logical_type
+    description: |
+      Retrieves the child type of the given LIST type. Also accepts MAP types.
+      The result must be freed with `duckdb_destroy_logical_type`.
+    return_description: The child type of the LIST or MAP type.
+  array_type_child_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type. Must be ARRAY.
+    return_type: logical_type
+    description: |
+      Retrieves the child type of the given ARRAY type.
+
+      The result must be freed with `duckdb_destroy_logical_type`.
+    return_description: The child type of the ARRAY type.
+  array_type_array_size:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+    return_type: idx
+    description: |
+      Retrieves the array size of the given array type.
+    return_description: The fixed number of elements the values of this array type can store.
+  map_type_key_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+    return_type: logical_type
+    description: |
+      Retrieves the key type of the given map type.
+
+      The result must be freed with `duckdb_destroy_logical_type`.
+    return_description: The key type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
+  map_type_value_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+    return_type: logical_type
+    description: |
+      Retrieves the value type of the given map type.
+
+      The result must be freed with `duckdb_destroy_logical_type`.
+    return_description: The value type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
+  struct_type_child_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+    return_type: idx
+    description: |
+      Returns the number of children of a struct type.
+    return_description: The number of children of a struct type.
+  struct_type_child_name:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+      index:
+        type: idx
+        description: The child index
+    return_type: char
+    return_pointer: 1
+    description: |
+      Retrieves the name of the struct child.
+
+      The result must be freed with `duckdb_free`.
+    return_description: The name of the struct type. Must be freed with `duckdb_free`.
+  struct_type_child_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+      index:
+        type: idx
+        description: The child index
+    return_type: logical_type
+    description: |
+      Retrieves the child type of the given struct type at the specified index.
+
+      The result must be freed with `duckdb_destroy_logical_type`.
+    return_description: The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
+  union_type_member_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type (union) object
+    return_type: idx
+    description: |
+      Returns the number of members that the union type has.
+    return_description: The number of members of a union type.
+  union_type_member_name:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+      index:
+        type: idx
+        description: The child index
+    return_type: char
+    return_pointer: 1
+    description: |
+      Retrieves the name of the union member.
+
+      The result must be freed with `duckdb_free`.
+    return_description: The name of the union member. Must be freed with `duckdb_free`.
+  union_type_member_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The logical type object
+      index:
+        type: idx
+        description: The child index
+    return_type: logical_type
+    description: |
+      Retrieves the child type of the given union member at the specified index.
+
+      The result must be freed with `duckdb_destroy_logical_type`.
+    return_description: The child type of the union member. Must be destroyed with `duckdb_destroy_logical_type`.
+  destroy_logical_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: logical_type
+    parameters:
+      type:
+        type: logical_type
+        indirection: 1
+        description: The logical type to destroy.
+    return_type: opaque
+    description: |
+      Destroys the logical type and de-allocates all memory allocated for that type.
+  register_logical_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      con:
+        type: connection
+        description: The connection to use
+      type:
+        type: logical_type
+        description: The custom type to register
+      info:
+        type: create_type_info
+    return_type: state
+    description: |
+      Registers a custom type within the given connection.
+      The type must have an alias
+    return_description: Whether or not the registration was successful.
+  geometry_type_get_crs:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      type:
+        type: logical_type
+        description: The GEOMETRY type.
+    return_type: char
+    return_pointer: 1
+    description: |
+      Gets the CRS (Coordinate Reference System) of a GEOMETRY type.
+      Result must be freed with `duckdb_free`.
+    return_description: The CRS of the GEOMETRY type, or NULL if the type is not a GEOMETRY type.
