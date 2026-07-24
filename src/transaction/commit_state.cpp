@@ -131,8 +131,9 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 // CommitState
 //===--------------------------------------------------------------------===//
 CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
-                         ActiveTransactionState transaction_state, CommitMode commit_mode)
-    : transaction(transaction_p), commit_id(commit_id),
+                         ActiveTransactionState transaction_state, CommitMode commit_mode,
+                         optional_ptr<LocalStorageCommitState> local_commit_state_p)
+    : transaction(transaction_p), commit_id(commit_id), local_commit_state(local_commit_state_p),
       index_data_remover(transaction, *transaction.context.lock(),
                          GetIndexRemovalType(transaction_state, commit_mode)) {
 }
@@ -272,15 +273,6 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 		D_ASSERT(catalog.IsDuckCatalog());
 
 		auto &new_entry = old_entry.Parent();
-		if (old_entry.type == CatalogType::TABLE_ENTRY && new_entry.type == CatalogType::TABLE_ENTRY) {
-			auto &old_storage = old_entry.Cast<DuckTableEntry>().GetStorage();
-			auto &new_storage = new_entry.Cast<DuckTableEntry>().GetStorage();
-			if (!RefersToSameObject(old_storage, new_storage) && old_storage.IsMainTable()) {
-				throw TransactionException("Failed to alter table \"%s\" because the underlying table state was "
-				                           "reverted by a concurrent transaction",
-				                           old_entry.name);
-			}
-		}
 		if (new_entry.type == CatalogType::DEPENDENCY_ENTRY) {
 			auto &dep = new_entry.Cast<DependencyEntry>();
 			if (dep.Side() == DependencyEntryType::SUBJECT) {
@@ -310,7 +302,11 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 			                           table_name, table_modification);
 		}
 		// mark the tuples as committed
-		info->table->CommitAppend(commit_id, info->start_row, info->count);
+		optional_ptr<TableAppendState> append_state;
+		if (local_commit_state) {
+			append_state = local_commit_state->GetAppendState(*info->table);
+		}
+		info->table->CommitAppend(commit_id, info->start_row, info->count, append_state);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
@@ -369,7 +365,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert this append
-		info->table->RevertAppend(transaction, info->start_row, info->count);
+		auto append_state =
+		    local_commit_state ? local_commit_state->GetAppendState(*info->table) : optional_ptr<TableAppendState>();
+		info->table->RevertAppend(transaction, info->start_row, info->count, append_state);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {

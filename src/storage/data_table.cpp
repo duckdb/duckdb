@@ -1301,8 +1301,14 @@ void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx
 	ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }
 
-void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
-	lock_guard<mutex> lock(append_lock);
+void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count,
+                             optional_ptr<TableAppendState> append_state) {
+	unique_lock<mutex> lock;
+	if (append_state) {
+		D_ASSERT(append_state->append_lock.owns_lock());
+	} else {
+		lock = unique_lock<mutex>(append_lock);
+	}
 	row_groups->CommitAppend(commit_id, row_start, count);
 }
 
@@ -1312,9 +1318,17 @@ void DataTable::RevertAppendInternal(idx_t start_row) {
 	row_groups->RevertAppendInternal(start_row);
 }
 
-void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count) {
-	lock_guard<mutex> lock(append_lock);
-	auto table_lock = transaction.SharedLockTable(*info);
+void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count,
+                             optional_ptr<TableAppendState> append_state) {
+	unique_lock<mutex> lock;
+	shared_ptr<CheckpointLock> table_lock;
+	if (append_state) {
+		D_ASSERT(append_state->append_lock.owns_lock());
+		D_ASSERT(append_state->table_lock);
+	} else {
+		lock = unique_lock<mutex>(append_lock);
+		table_lock = transaction.SharedLockTable(*info);
+	}
 
 	// revert any appends to indexes
 	if (!info->indexes.Empty()) {
@@ -1354,12 +1368,6 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 	}
 #endif
 
-	if (!IsMainTable()) {
-		//! The table was altered by another transaction since we staged our commit, revert it
-		//! Causing the commit of the other transaction to fail
-		version = DataTableVersion::MAIN_TABLE;
-	}
-	// revert the data table append
 	RevertAppendInternal(start_row);
 }
 
