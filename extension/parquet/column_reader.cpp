@@ -161,6 +161,24 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vect
 	return Schema().Stats(*reader.GetFileMetadata(), reader.parquet_options, row_group_idx_p, columns);
 }
 
+void ColumnReader::ValidateColumnMetadata(idx_t row_group_num_rows, const ColumnChunk &column) {
+	if (!column.__isset.meta_data) {
+		return;
+	}
+	auto &metadata = column.meta_data;
+	if (metadata.num_values < 0) {
+		throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+		                            "number of values (%lld)",
+		                            Reader().GetFileName(), metadata.num_values);
+	}
+	if (IsRoot() && !Type().IsNested() && MaxRepeat() == 0 &&
+	    NumericCast<idx_t>(metadata.num_values) != row_group_num_rows) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": metadata is corrupt. Column has %lld values but row group has %lld rows",
+		    Reader().GetFileName(), metadata.num_values, NumericCast<int64_t>(row_group_num_rows));
+	}
+}
+
 uint64_t ColumnReader::TotalCompressedSize() {
 	if (IsSkipped()) {
 		return 0;
@@ -240,7 +258,8 @@ void ColumnReader::PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t
 	throw NotImplementedException("PlainSelect not implemented");
 }
 
-void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
+                                  TProtocol &protocol_p) {
 	D_ASSERT(ColumnIndex() < columns.size());
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
@@ -263,7 +282,8 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 		// this assumes the data pages follow the dict pages directly.
 		chunk_read_offset = NumericCast<idx_t>(chunk->meta_data.dictionary_page_offset);
 	}
-	group_rows_available = chunk->meta_data.num_values;
+	ValidateColumnMetadata(row_group_num_rows, *chunk);
+	group_rows_available = NumericCast<idx_t>(chunk->meta_data.num_values);
 }
 
 bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const TableFilter> filter) {

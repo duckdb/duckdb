@@ -109,7 +109,8 @@ public:
 
 public:
 	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
-	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
+	virtual void InitializeRead(idx_t row_group_index, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
+	                            TProtocol &protocol_p);
 	virtual idx_t Read(ColumnReaderInput &input, Vector &result);
 	virtual void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
 	                    idx_t approved_tuple_count);
@@ -173,6 +174,7 @@ public:
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
 	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
+	void ValidateColumnMetadata(idx_t row_group_num_rows, const ColumnChunk &column);
 
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES>
 	void PlainTemplatedDefines(ByteBuffer &plain_data, const uint8_t *defines, uint64_t num_values, idx_t result_offset,

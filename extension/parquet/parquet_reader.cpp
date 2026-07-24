@@ -1498,11 +1498,17 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 		                                       GetGroup(state).ordinal);
 	}
 
+	if (group.num_rows < 0) {
+		throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Row group has invalid "
+		                            "number of rows (%lld)",
+		                            GetFileName(), group.num_rows);
+	}
+	auto row_group_num_rows = NumericCast<idx_t>(group.num_rows);
+
 	if (filters) {
-		auto stats = column_reader.Stats(state.group_index, group.columns);
 		// filters contain output chunk index, not file col idx!
 		auto filter_entry = filters->TryGetFilterByColumnIndex(col_idx);
-		if (stats && filter_entry) {
+		if (filter_entry) {
 			auto &filter = *filter_entry;
 
 			auto schema_column_index = column_reader.ColumnIndex();
@@ -1510,46 +1516,52 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 			bool is_generated_column = schema_column_index >= group.columns.size();
 			bool is_column = column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN;
 			bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
-			bool has_min_max = false;
-			if (!is_generated_column) {
-				has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
-				              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
+			if (is_column && !is_generated_column) {
+				column_reader.ValidateColumnMetadata(row_group_num_rows, group.columns[schema_column_index]);
 			}
-			if (is_expression) {
-				// no pruning possible for expressions
-				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			} else if (!is_generated_column && has_min_max &&
-			           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
-			            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
-			           parquet_options.can_have_nan) {
-				// floating point columns can have NaN values in addition to the min/max bounds defined in the file
-				// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
-				// based on nan
-				prune_result = CheckParquetFloatFilter(context, column_reader,
-				                                       group.columns[schema_column_index].meta_data.statistics, filter);
-			} else {
-				auto &expr_filter =
-				    ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::PrepareRowGroupBuffer");
-				prune_result = expr_filter.CheckStatistics(context, *stats);
-			}
-			// check the bloom filter if present
-			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
-			    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Schema()) &&
-			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[schema_column_index].meta_data,
-			                                                *state.thrift_file_proto, allocator,
-			                                                column_reader.Schema())) {
-				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			}
+			auto stats = column_reader.Stats(state.group_index, group.columns);
+			if (stats) {
+				bool has_min_max = false;
+				if (!is_generated_column) {
+					has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
+					              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
+				}
+				if (is_expression) {
+					// no pruning possible for expressions
+					prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+				} else if (!is_generated_column && has_min_max &&
+				           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
+				            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
+				           parquet_options.can_have_nan) {
+					// floating point columns can have NaN values in addition to the min/max bounds defined in the file
+					// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
+					// based on nan
+					prune_result = CheckParquetFloatFilter(
+					    context, column_reader, group.columns[schema_column_index].meta_data.statistics, filter);
+				} else {
+					auto &expr_filter =
+					    ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::PrepareRowGroupBuffer");
+					prune_result = expr_filter.CheckStatistics(context, *stats);
+				}
+				// check the bloom filter if present
+				if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
+				    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Schema()) &&
+				    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[schema_column_index].meta_data,
+				                                                *state.thrift_file_proto, allocator,
+				                                                column_reader.Schema())) {
+					prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+				}
 
-			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				// this effectively will skip this chunk
-				state.offset_in_group = group.num_rows;
-				return;
+				if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+					// this effectively will skip this chunk
+					state.offset_in_group = group.num_rows;
+					return;
+				}
 			}
 		}
 	}
 
-	column_reader.InitializeRead(state.group_index, group.columns, *state.thrift_file_proto);
+	column_reader.InitializeRead(state.group_index, row_group_num_rows, group.columns, *state.thrift_file_proto);
 }
 
 idx_t ParquetReader::NumRows() const {
