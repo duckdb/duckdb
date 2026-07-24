@@ -1,0 +1,26 @@
+# name: test/sql/types/variant/variant_corrupt_byte_offset.test
+# description: Reading a VARIANT with an out-of-range value byte offset must error, not read out of bounds
+# group: [variant]
+
+require no_alternative_verify
+
+# the database is written with a vector size of 2048
+require vector_size 2048
+
+# corrupt_variant_byte_offset.db holds a single VARIANT value ['AAAAAAAA','BBBBBBBB']
+# whose second value has its stored byte offset patched to 1000000 (data blob is 20 bytes)
+unzip data/storage/corrupt_variant_byte_offset.db.gz {TEST_DIR}/corrupt_variant_byte_offset.db
+
+statement ok
+ATTACH '{TEST_DIR}/corrupt_variant_byte_offset.db' (READ_ONLY)
+
+# the row is readable as a variant, only the decode of the out-of-range value must be rejected
+query I
+SELECT count(*) FROM corrupt_variant_byte_offset.t
+----
+1
+
+statement error
+SELECT v::VARCHAR FROM corrupt_variant_byte_offset.t
+----
+Corrupt VARIANT: value byte offset (1000000) is out of range for the variant data of size 20
