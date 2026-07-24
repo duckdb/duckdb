@@ -1,0 +1,24 @@
+# name: benchmark/micro/aggregate/first_wide_payload.benchmark
+# description: DISTINCT ON retaining a wide VARCHAR payload for every group, spilling under a memory limit
+# group: [aggregate]
+
+name First wide payload
+group aggregate
+
+cache first_wide_payload.duckdb
+
+load
+CREATE TABLE docs AS
+SELECT i AS k, repeat(md5(i::VARCHAR), 25) AS wide
+FROM range(0, 8000000) t(i);
+
+init
+set temp_directory='${BENCHMARK_DIR}/first_wide_payload.duckdb.tmp';
+set memory_limit='4GB';
+set preserve_insertion_order=false;
+
+run
+SELECT count(wide) FROM (SELECT DISTINCT ON (k) k, wide FROM docs) s
+
+result I
+8000000

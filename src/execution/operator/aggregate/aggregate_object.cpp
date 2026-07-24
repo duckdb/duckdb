@@ -18,6 +18,7 @@ AggregateObject::AggregateObject(BoundAggregateExpression &aggr)
     : AggregateObject(aggr.Function(), aggr.BindInfoMutable().get(), aggr.GetChildren().size(),
                       AlignValue(aggr.Function().GetStateSize(aggr.BindInfoMutable().get())), aggr.GetAggregateType(),
                       aggr.GetReturnType().InternalType(), aggr.GetFilter().get()) {
+	state_export_mode = aggr.StateExportMode();
 }
 
 AggregateObject::AggregateObject(BoundAggregateExpression *aggr) : AggregateObject(*aggr) {

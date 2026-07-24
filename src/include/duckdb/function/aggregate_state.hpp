@@ -18,6 +18,7 @@
 
 namespace duckdb {
 class BoundAggregateFunction;
+class AggregatePayloadHeap;
 struct AggregateObject;
 
 enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
@@ -49,6 +50,8 @@ struct AggregateInputData {
 	AggregateCombineType combine_type;
 	optional_ptr<const ClusteredAggr> clustered;
 	optional_ptr<const Vector> combine_multiplicities;
+	//! Spillable heap for state-owned string payloads (set by the hash aggregate)
+	optional_ptr<AggregatePayloadHeap> payload_heap;
 };
 
 //! Input to the get_state_type callback - bundles the bound aggregate function with its bind data so that the
