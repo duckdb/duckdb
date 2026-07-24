@@ -1,0 +1,39 @@
+# name: test/sql/index/art/scan/test_not_distinct_index_scan.test
+# description: Test using an index scan for IS NOT DISTINCT FROM filter pushdown.
+# group: [scan]
+
+statement ok
+CREATE TABLE tbl AS SELECT range AS i FROM range(500000);
+
+statement ok
+CREATE INDEX idx_i ON tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM 499995;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM 499995;
+----
+1
+
+query I
+SELECT i FROM tbl WHERE i IS NOT DISTINCT FROM 499995;
+----
+499995
+
+# IS NOT DISTINCT FROM NULL matches NULL values, which are not indexed by the ART.
+
+statement ok
+INSERT INTO tbl VALUES (NULL);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM NULL;
+----
+analyzed_plan	<REGEX>:.*Sequential Scan.*
+
+query I
+SELECT count(*) FROM tbl WHERE i IS NOT DISTINCT FROM NULL;
+----
+1
