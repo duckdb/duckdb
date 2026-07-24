@@ -508,12 +508,14 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 }
 
 void Executor::UnregisterTask() {
+#ifndef DUCKDB_NO_THREADS
 	{
 		// Wake any thread blocked in `WaitForTask`.
 		// A finished task may have scheduled follow-up tasks or completed the query.
 		lock_guard<mutex> l(executor_lock);
 		task_reschedule.notify_all();
 	}
+#endif
 	executor_tasks--;
 }
 
