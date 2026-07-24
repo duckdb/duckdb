@@ -29,7 +29,7 @@ SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='Dictionary'
 statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
-IO Error: Failed to scan dictionary string - dictionary offset was out of range. Database file appears to be corrupted.
+Data Corruption Error: Failed to scan dictionary string - dictionary offset was out of range. Database file appears to be corrupted.
 
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_index.db' AS index_db
@@ -45,7 +45,7 @@ SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='Dictionary'
 statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
-IO Error: Failed to scan dictionary string - dictionary index was out of range. Database file appears to be corrupted.
+Data Corruption Error: Failed to scan dictionary string - dictionary index was out of range. Database file appears to be corrupted.
 
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_dict_end.db' AS dict_end_db
@@ -61,7 +61,7 @@ SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='Dictionary'
 statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
-IO Error: Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.
+Data Corruption Error: Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.
 
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_bitpacking_width.db' AS bitpacking_width_db
@@ -77,7 +77,7 @@ SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='Dictionary'
 statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
-IO Error: Failed to scan dictionary string - bitpacking width was invalid. Database file appears to be corrupted.
+Data Corruption Error: Failed to scan dictionary string - bitpacking width was invalid. Database file appears to be corrupted.
 
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_selection_buffer.db' AS selection_buffer_db
@@ -93,7 +93,7 @@ SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='Dictionary'
 statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
-IO Error: Failed to scan dictionary string - selection buffer was out of range. Database file appears to be corrupted.
+Data Corruption Error: Failed to scan dictionary string - selection buffer was out of range. Database file appears to be corrupted.
 
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_segment_end.db' AS segment_end_db
@@ -109,4 +109,4 @@ SELECT block_offset FROM pragma_storage_info('tbl') WHERE compression='Dictionar
 statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
-IO Error: Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.
+Data Corruption Error: Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.
