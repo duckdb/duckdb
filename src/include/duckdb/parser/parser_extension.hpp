@@ -61,7 +61,7 @@ struct ParserExtensionInfo {
 enum class ParserExtensionResultType : uint8_t { PARSE_SUCCESSFUL, DISPLAY_ORIGINAL_ERROR, DISPLAY_EXTENSION_ERROR };
 
 //! The ParserExtensionParseData holds the result of a successful parse step
-//! It will be passed along to the subsequent plan function
+//! It will be passed along to the subsequent preprocess or plan function
 struct ParserExtensionParseData {
 	virtual ~ParserExtensionParseData() {
 	}
@@ -126,6 +126,12 @@ typedef ParserExtensionPlanResult (*plan_function_t)(ParserExtensionInfo *info, 
                                                      unique_ptr<ParserExtensionParseData> parse_data);
 
 //===--------------------------------------------------------------------===//
+// Preprocess
+//===--------------------------------------------------------------------===//
+typedef vector<unique_ptr<SQLStatement>> (*preprocess_function_t)(ParserExtensionInfo *info, ClientContext &context,
+                                                                  unique_ptr<ParserExtensionParseData> parse_data);
+
+//===--------------------------------------------------------------------===//
 // Parser override
 //===--------------------------------------------------------------------===//
 struct ParserOverrideResult {
@@ -157,6 +163,12 @@ public:
 	//! The plan function of the parser extension
 	//! Takes as input the result of the parse_function, and outputs various properties of the resulting plan
 	plan_function_t plan_function = nullptr;
+
+	//! The preprocess function of the parser extension
+	//! Takes as input the result of the parse_function, and replaces the ExtensionStatement with one or more
+	//! already-preprocessed statements. This is a one-shot rewrite: the returned vector must be non-empty, and must not
+	//! contain NULL statements, transaction statements, pragma statements, multi statements, or extension statements.
+	preprocess_function_t preprocess_function = nullptr;
 
 	//! Override the current parser with a new parser and return a vector of SQL statements
 	parser_override_function_t parser_override = nullptr;
