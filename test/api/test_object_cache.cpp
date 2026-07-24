@@ -85,8 +85,7 @@ TEST_CASE("Test ObjectCache", "[api][object_cache]") {
 	REQUIRE(cache.GetOrCreate<AnotherTestObject>(database_id, "test", 13) == nullptr);
 }
 
-TEST_CASE("Database instances share isolated memory managers and object cache",
-          "[api][object_cache][buffer_pool]") {
+TEST_CASE("Database instances share isolated memory managers and object cache", "[api][object_cache][buffer_pool]") {
 	auto first = make_uniq<DuckDB>();
 	DBConfig second_config;
 	second_config.ShareMemoryWith(*first->instance);
@@ -106,7 +105,7 @@ TEST_CASE("Database instances share isolated memory managers and object cache",
 	}
 
 	first->instance->GetObjectCache().Put(first->instance->GetDatabaseId(), "first-only",
-	                                     make_shared_ptr<TestObject>(42));
+	                                      make_shared_ptr<TestObject>(42));
 	REQUIRE(second.instance->GetObjectCache().Get<TestObject>(second.instance->GetDatabaseId(), "first-only") ==
 	        nullptr);
 
@@ -114,9 +113,9 @@ TEST_CASE("Database instances share isolated memory managers and object cache",
 	const auto initial_memory = shared_pool.GetUsedMemory();
 	constexpr idx_t cache_entry_size = 1024 * 1024;
 	first->instance->GetObjectCache().Put(first->instance->GetDatabaseId(), "first-memory",
-	                                     make_shared_ptr<EvictableTestObject>(1, cache_entry_size));
+	                                      make_shared_ptr<EvictableTestObject>(1, cache_entry_size));
 	second.instance->GetObjectCache().Put(second.instance->GetDatabaseId(), "second-memory",
-	                                    make_shared_ptr<EvictableTestObject>(2, cache_entry_size));
+	                                      make_shared_ptr<EvictableTestObject>(2, cache_entry_size));
 	REQUIRE(shared_pool.GetUsedMemory() == initial_memory + cache_entry_size * 2);
 
 	first.reset();

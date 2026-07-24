@@ -616,8 +616,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		if (!config.block_allocator) {
 			auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
 			config.block_allocator = make_shared_ptr<BlockAllocator>(
-			    config.allocator, default_block_size,
-			    DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10, config.options.block_allocator_size);
+			    config.allocator, default_block_size, DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
+			    config.options.block_allocator_size);
 		}
 	}
 	config.replacement_scans = std::move(new_config.replacement_scans);
@@ -668,8 +668,7 @@ void DBConfig::ShareMemoryWith(DatabaseInstance &db) {
 	options.maximum_memory = source.options.maximum_memory;
 	options.block_allocator_size = source.options.block_allocator_size;
 	options.buffer_manager_track_eviction_timestamps = source.options.buffer_manager_track_eviction_timestamps;
-	options.allocator_bulk_deallocation_flush_threshold =
-	    source.options.allocator_bulk_deallocation_flush_threshold;
+	options.allocator_bulk_deallocation_flush_threshold = source.options.allocator_bulk_deallocation_flush_threshold;
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
