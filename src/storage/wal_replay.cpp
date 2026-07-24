@@ -61,13 +61,24 @@ public:
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const Identifier &table_schema,
-		                const Identifier &table_name)
-		    : index_list(index_list), index(std::move(index)), table_schema(table_schema), table_name(table_name) {};
+		                const Identifier &table_name, bool rebuild_existing_rows = false)
+		    : index_list(index_list), table(nullptr), index(std::move(index)), table_schema(table_schema),
+		      table_name(table_name), rebuild_existing_rows(rebuild_existing_rows) {
+		}
+
+		ReplayIndexInfo(TableIndexList &index_list, DuckTableEntry &table, unique_ptr<Index> index,
+		                const Identifier &table_schema, const Identifier &table_name,
+		                bool rebuild_existing_rows = false)
+		    : index_list(index_list), table(table), index(std::move(index)), table_schema(table_schema),
+		      table_name(table_name), rebuild_existing_rows(rebuild_existing_rows) {
+		}
 
 		reference<TableIndexList> index_list;
+		optional_ptr<DuckTableEntry> table;
 		unique_ptr<Index> index;
 		Identifier table_schema;
 		Identifier table_name;
+		bool rebuild_existing_rows;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -220,6 +231,8 @@ public:
 	}
 
 	static void ThrowVersionError(idx_t checkpoint_iteration, idx_t expected_checkpoint_iteration);
+
+	void BufferExistingRowsForIndex(ReplayState::ReplayIndexInfo &info);
 
 protected:
 	void ReplayEntry(WALType wal_type);
@@ -531,6 +544,9 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
+					if (info.rebuild_existing_rows) {
+						deserializer.BufferExistingRowsForIndex(info);
+					}
 					info.index_list.get().AddIndex(std::move(info.index));
 				}
 				state.replay_index_infos.clear();
@@ -787,6 +803,13 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 
 		// Read the data into buffer handles and convert them to blocks on disk.
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
+			if (db.IsReadOnly()) {
+				auto buffer = make_unsafe_uniq_array_uninitialized<data_t>(data_info.allocation_sizes[j]);
+				data_ptr_t data_ptr = buffer.get();
+				list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
+				continue;
+			}
+
 			// Read the data into a buffer handle.
 			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.get(), false);
 			auto block_handle = buffer_handle.GetBlockHandle();
@@ -803,6 +826,53 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			}
 		}
 	});
+}
+
+void WriteAheadLogDeserializer::BufferExistingRowsForIndex(ReplayState::ReplayIndexInfo &info) {
+	D_ASSERT(info.table);
+	auto &table = *info.table;
+	auto &storage = table.GetStorage();
+	auto &row_groups = *storage.GetRowGroupCollection();
+
+	vector<StorageIndex> column_ids;
+	column_ids.reserve(table.GetColumns().PhysicalColumnCount() + 1);
+	vector<StorageIndex> mapped_column_ids;
+	mapped_column_ids.reserve(table.GetColumns().PhysicalColumnCount() + 1);
+	vector<LogicalType> scan_types;
+	scan_types.reserve(table.GetColumns().PhysicalColumnCount() + 1);
+	for (auto &col : table.GetColumns().Physical()) {
+		column_ids.emplace_back(col.StorageOid());
+		mapped_column_ids.emplace_back(col.StorageOid());
+		scan_types.emplace_back(col.Type());
+	}
+	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+	scan_types.emplace_back(LogicalType::ROW_TYPE);
+
+	CreateIndexScanState state;
+	state.Initialize(column_ids, nullptr);
+	QueryContext query_context;
+	row_groups.InitializeScan(query_context, state.table_state, column_ids, nullptr);
+	row_groups.InitializeCreateIndexScan(state);
+
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(Allocator::Get(db), scan_types);
+
+	DataChunk table_chunk;
+	table_chunk.InitializeEmpty(storage.GetTypes());
+
+	auto &unbound_index = info.index->Cast<UnboundIndex>();
+	while (true) {
+		scan_chunk.Reset();
+		if (!storage.CreateIndexScan(state, scan_chunk)) {
+			break;
+		}
+		for (idx_t col_idx = 0; col_idx < table_chunk.ColumnCount(); col_idx++) {
+			table_chunk.data[col_idx].Reference(scan_chunk.data[col_idx]);
+		}
+		table_chunk.CheckCardinality(scan_chunk.size());
+		auto &row_ids = scan_chunk.data[table_chunk.ColumnCount()];
+		unbound_index.BufferChunk(table_chunk, row_ids, mapped_column_ids, BufferedIndexReplay::INSERT_ENTRY);
+	}
 }
 
 void WriteAheadLogDeserializer::ReplayAlter() {
@@ -1114,6 +1184,12 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	if (DeserializeOnly()) {
 		return;
 	}
+	auto rebuild_existing_rows = db.IsReadOnly();
+	if (rebuild_existing_rows) {
+		IndexStorageInfo empty_index_info(index_info.name);
+		empty_index_info.options = std::move(index_info.options);
+		index_info = std::move(empty_index_info);
+	}
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// Ensure that the index type exists.
@@ -1137,7 +1213,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), schema_name, table_name);
+	state.replay_index_infos.emplace_back(table_index_list, table, std::move(unbound_index), schema_name, table_name,
+	                                      rebuild_existing_rows);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

@@ -25,3 +25,32 @@ ATTACH '{TEST_DIR}/read_only_wal_replay.db' AS db (READ_ONLY)
 
 statement ok
 DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/read_only_wal_replay_index.db' AS db;
+
+statement ok
+CREATE TABLE db.index_tbl(id INTEGER PRIMARY KEY, grp INTEGER);
+
+statement ok
+INSERT INTO db.index_tbl VALUES (1, 10), (2, 20), (3, 10);
+
+statement ok
+CREATE INDEX idx_grp ON db.index_tbl(grp);
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/read_only_wal_replay_index.db' AS db (READ_ONLY);
+
+query I
+SELECT count(*) FROM db.index_tbl;
+----
+3
+
+query I
+SELECT id FROM db.index_tbl WHERE grp = 10 ORDER BY id;
+----
+1
+3
