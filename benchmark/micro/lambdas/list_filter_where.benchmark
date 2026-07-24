@@ -10,4 +10,4 @@ CREATE TABLE tbl (l INTEGER[], where_l BOOLEAN[]);
 INSERT INTO tbl VALUES (range(100000), [x % 13 != 0 for x in range(100000)]);
 
 run
-SELECT list_filter(l, lamda x, x_i: where_l[x_i]) FROM tbl;
+SELECT list_filter(l, lambda x, x_i: where_l[x_i]) FROM tbl;

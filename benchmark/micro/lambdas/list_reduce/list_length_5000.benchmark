@@ -10,4 +10,4 @@ load
 CREATE TABLE t2 AS SELECT range(5000) as l FROM range(10000);
 
 run
-SELECT list_reduce(l, lamda x, y: x + y) FROM t2;
+SELECT list_reduce(l, lambda x, y: x + y) FROM t2;

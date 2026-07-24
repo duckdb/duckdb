@@ -7,7 +7,7 @@ group micro
 subgroup list
 
 load
-CREATE TABLE t1 as SELECT list_transform(range(0,1000), lamda x: {'foo': x, 'bar': (-x)::VARCHAR}) as l
+CREATE TABLE t1 as SELECT list_transform(range(0,1000), lambda x: {'foo': x, 'bar': (-x)::VARCHAR}) as l
 FROM range(0,10000) as r(e);
 
 run

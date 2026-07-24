@@ -10,4 +10,4 @@ CREATE TABLE tbl (l INTEGER[], zip VARCHAR[]);
 INSERT INTO tbl VALUES (range(100000), [x::VARCHAR || (x + 1)::VARCHAR for x in range(100000)]);
 
 run
-SELECT list_transform(l, lamda x, x_i: (x, zip[x_i])) FROM tbl;
+SELECT list_transform(l, lambda x, x_i: (x, zip[x_i])) FROM tbl;
