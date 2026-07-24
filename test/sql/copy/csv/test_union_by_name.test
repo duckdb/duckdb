@@ -38,18 +38,12 @@ COPY ubn2 TO '{TEMP_DIR}/ubn2.csv' WITH (DELIMITER ',');
 statement ok
 COPY ubn3 TO '{TEMP_DIR}/ubn3.csv' WITH (DELIMITER ',');
 
-# Read from them (the order matters)
+# Read from them
 
-query I
+statement error
 SELECT * FROM read_csv_auto(['{TEMP_DIR}/ubn1.csv', '{TEMP_DIR}/ubn2.csv', '{TEMP_DIR}/ubn3.csv']);
 ----
-1
-2
-9223372036854775807
-3
-5
-100
-102
+Schema mismatch between globbed files.
 
 query III
 SELECT a, b, c
@@ -234,4 +228,3 @@ query IIII
 from read_csv('{DATA_DIR}/csv/union_by_name_2/*.csv', union_by_name=True, parallel = false);
 ----
 1	1	1	NULL
-

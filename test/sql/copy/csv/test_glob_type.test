@@ -45,3 +45,20 @@ query I
 SELECT typeof(bar) FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/2.csv','{DATA_DIR}/csv/17451/extra/3.csv'], files_to_sniff = -1) limit 1
 ----
 VARCHAR
+
+statement ok
+COPY (SELECT 'col1,col2' AS line UNION ALL SELECT '1,hello') TO '{TEST_DIR}/glob_two_columns.csv' (HEADER 0, QUOTE '')
+
+statement ok
+COPY (SELECT 'col1,col2,col3' AS line UNION ALL SELECT '2,world,extra') TO '{TEST_DIR}/glob_three_columns.csv' (HEADER 0, QUOTE '')
+
+statement error
+SELECT * FROM read_csv_auto(['{TEST_DIR}/glob_two_columns.csv', '{TEST_DIR}/glob_three_columns.csv'], header=true)
+----
+Schema mismatch between globbed files.
+
+query III
+SELECT * FROM read_csv_auto(['{TEST_DIR}/glob_two_columns.csv', '{TEST_DIR}/glob_three_columns.csv'], header=true, union_by_name=true) ORDER BY col1
+----
+1	hello	NULL
+2	world	extra

@@ -85,6 +85,24 @@ void CSVSchema::MergeSchemas(CSVSchema &other, bool null_padding) {
 			columns.push_back({name, type});
 			name_idx_map[name] = i;
 		}
+	} else if (other.columns.size() > columns.size()) {
+		std::ostringstream error;
+		error << "Schema mismatch between globbed files."
+		      << "\n";
+		error << "Main file schema: " << file_path << "\n";
+		error << "Current file: " << other.file_path << "\n";
+		for (idx_t i = columns.size(); i < other.columns.size(); i++) {
+			error << "Column with name: \"" << other.columns[i].name.GetIdentifierName()
+			      << "\" is missing from the main file schema"
+			      << "\n";
+		}
+		error << "Potential Fixes "
+		      << "\n";
+		error << "* Consider setting union_by_name=true."
+		      << "\n";
+		error << "* Consider setting files_to_sniff to a higher value (e.g., files_to_sniff = -1)"
+		      << "\n";
+		throw InvalidInputException(error.str());
 	}
 }
 
