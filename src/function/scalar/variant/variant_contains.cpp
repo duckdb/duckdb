@@ -1,89 +1,14 @@
+#include "duckdb/common/radix.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
+#include "duckdb/common/types/variant_comparison.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
 
 namespace duckdb {
 
-enum class VariantComparisonType : data_t {
-	BOOLEAN = 1,
-	NUMBER,
-	REAL,
-	VARCHAR,
-	BLOB,
-	UUID,
-	TIMESTAMP,    // DATE and all non-tz TIMESTAMP precisions, compared as nanoseconds since the epoch
-	TIMESTAMP_TZ, // TIMESTAMP WITH TIME ZONE (all precisions), compared as nanoseconds since the epoch (UTC)
-	TIME,         // TIME (all precisions), compared as nanoseconds since midnight
-	TIME_TZ,      // TIME WITH TIME ZONE
-	INTERVAL,
-	GEOMETRY,
-	BITSTRING,
-	ARRAY,
-	OBJECT,
-	NULL_VALUE
-};
+static bool IsEqual(const VariantNode &haystack, const VariantNode &needle);
 
-static VariantComparisonType GetComparisonType(const VariantLogicalType &type) {
-	switch (type) {
-	case VariantLogicalType::ARRAY:
-		return VariantComparisonType::ARRAY;
-	case VariantLogicalType::VARIANT_NULL:
-		return VariantComparisonType::NULL_VALUE;
-	case VariantLogicalType::BOOL_TRUE:
-	case VariantLogicalType::BOOL_FALSE:
-		return VariantComparisonType::BOOLEAN;
-	case VariantLogicalType::INT8:
-	case VariantLogicalType::INT16:
-	case VariantLogicalType::INT32:
-	case VariantLogicalType::INT64:
-	case VariantLogicalType::INT128:
-	case VariantLogicalType::UINT8:
-	case VariantLogicalType::UINT16:
-	case VariantLogicalType::UINT32:
-	case VariantLogicalType::UINT64:
-	case VariantLogicalType::UINT128:
-	case VariantLogicalType::DECIMAL:
-	case VariantLogicalType::BIGNUM:
-		return VariantComparisonType::NUMBER;
-	case VariantLogicalType::FLOAT:
-	case VariantLogicalType::DOUBLE:
-		return VariantComparisonType::REAL;
-	case VariantLogicalType::VARCHAR:
-		return VariantComparisonType::VARCHAR;
-	case VariantLogicalType::BLOB:
-		return VariantComparisonType::BLOB;
-	case VariantLogicalType::UUID:
-		return VariantComparisonType::UUID;
-	case VariantLogicalType::TIME_MICROS:
-	case VariantLogicalType::TIME_NANOS:
-		return VariantComparisonType::TIME;
-	case VariantLogicalType::DATE:
-	case VariantLogicalType::TIMESTAMP_SEC:
-	case VariantLogicalType::TIMESTAMP_MILIS:
-	case VariantLogicalType::TIMESTAMP_MICROS:
-	case VariantLogicalType::TIMESTAMP_NANOS:
-		return VariantComparisonType::TIMESTAMP;
-	case VariantLogicalType::TIME_MICROS_TZ:
-		return VariantComparisonType::TIME_TZ;
-	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
-	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-		return VariantComparisonType::TIMESTAMP_TZ;
-	case VariantLogicalType::INTERVAL:
-		return VariantComparisonType::INTERVAL;
-	case VariantLogicalType::OBJECT:
-		return VariantComparisonType::OBJECT;
-	case VariantLogicalType::BITSTRING:
-		return VariantComparisonType::BITSTRING;
-	case VariantLogicalType::GEOMETRY:
-		return VariantComparisonType::GEOMETRY;
-	default:
-		throw NotImplementedException("Variant type %s is not supported in variant_contains", EnumUtil::ToString(type));
-	}
-}
-
-static bool IsContainedAt(const VariantNode &haystack, const VariantNode &needle);
-
-static bool IsContainedObject(const VariantNode &haystack, const VariantNode &needle) {
+static bool IsObjectEqual(const VariantNode &haystack, const VariantNode &needle) {
 	// for every needle we need to find an occurrence in the haystack
 	// elements in the haystack are not consumed, so multiple needles can be satisfied by one haystack element
 	for (const auto &needle_child : needle.GetObjectChildren()) {
@@ -92,7 +17,7 @@ static bool IsContainedObject(const VariantNode &haystack, const VariantNode &ne
 			if (needle_child.key != haystack_child.key) {
 				continue;
 			}
-			if (IsContainedAt(haystack_child.value, needle_child.value)) {
+			if (IsEqual(haystack_child.value, needle_child.value)) {
 				found = true;
 				break;
 			}
@@ -104,11 +29,11 @@ static bool IsContainedObject(const VariantNode &haystack, const VariantNode &ne
 	return true;
 }
 
-static bool IsContainedArray(const VariantNode &haystack, const VariantNode &needle) {
+static bool IsArrayEqual(const VariantNode &haystack, const VariantNode &needle) {
 	for (const auto &needle_child : needle.GetArrayChildren()) {
 		auto found = false;
 		for (const auto &haystack_child : haystack.GetArrayChildren()) {
-			if (IsContainedAt(haystack_child, needle_child)) {
+			if (IsEqual(haystack_child, needle_child)) {
 				found = true;
 				break;
 			}
@@ -120,18 +45,19 @@ static bool IsContainedArray(const VariantNode &haystack, const VariantNode &nee
 	return true;
 }
 
-static bool IsContainedAt(const VariantNode &haystack, const VariantNode &needle) {
-	const auto &haystack_type = GetComparisonType(haystack.GetTypeId());
-	const auto &needle_type = GetComparisonType(needle.GetTypeId());
-	if (haystack_type != needle_type) {
+static bool IsEqual(const VariantNode &haystack, const VariantNode &needle) {
+	const auto haystack_type = haystack.GetTypeId();
+	const auto needle_type = needle.GetTypeId();
+	const auto haystack_category = GetVariantComparisonType(haystack_type);
+	if (haystack_category != GetVariantComparisonType(needle_type)) {
 		return false;
 	}
 
-	switch (haystack_type) {
+	switch (haystack_category) {
 	case VariantComparisonType::ARRAY:
-		return IsContainedArray(haystack, needle);
+		return IsArrayEqual(haystack, needle);
 	case VariantComparisonType::OBJECT:
-		return IsContainedObject(haystack, needle);
+		return IsObjectEqual(haystack, needle);
 	case VariantComparisonType::NULL_VALUE:
 		return true;
 	case VariantComparisonType::BOOLEAN:
@@ -139,17 +65,19 @@ static bool IsContainedAt(const VariantNode &haystack, const VariantNode &needle
 	case VariantComparisonType::UUID:
 		return haystack.GetData<hugeint_t>() == needle.GetData<hugeint_t>();
 	case VariantComparisonType::REAL:
-		break;
+		// we need to encode so NaN == NaN, -0.0 == 0.0, and infinity == infinity
+		return Radix::EncodeDouble(VariantGetRealValue(haystack_type, haystack)) ==
+		       Radix::EncodeDouble(VariantGetRealValue(needle_type, needle));
 	case VariantComparisonType::NUMBER:
-		break;
+		return VariantGetNumberKey(haystack_type, haystack) == VariantGetNumberKey(needle_type, needle);
 	case VariantComparisonType::TIME:
-		break;
+		return VariantGetTimeValue(haystack_type, haystack) == VariantGetTimeValue(needle_type, needle);
 	case VariantComparisonType::TIME_TZ:
-		break;
+		return haystack.GetData<dtime_tz_t>() == needle.GetData<dtime_tz_t>();
 	case VariantComparisonType::TIMESTAMP:
-		break;
+		return VariantGetTimestampValue(haystack_type, haystack) == VariantGetTimestampValue(needle_type, needle);
 	case VariantComparisonType::TIMESTAMP_TZ:
-		break;
+		return VariantGetTimestampTZValue(haystack_type, haystack) == VariantGetTimestampTZValue(needle_type, needle);
 	case VariantComparisonType::INTERVAL:
 		return haystack.GetData<interval_t>() == needle.GetData<interval_t>();
 	case VariantComparisonType::BLOB:
@@ -158,24 +86,26 @@ static bool IsContainedAt(const VariantNode &haystack, const VariantNode &needle
 	case VariantComparisonType::VARCHAR:
 		return haystack.GetString() == needle.GetString();
 	}
+
+	return false;
 }
 
-static bool RecursiveContainSearch(const VariantNode &haystack, const VariantNode &needle) {
-	if (IsContainedAt(haystack, needle)) {
+static bool RecursiveHaystackWalk(const VariantNode &haystack, const VariantNode &needle) {
+	if (IsEqual(haystack, needle)) {
 		return true;
 	}
 
 	switch (haystack.GetTypeId()) {
 	case VariantLogicalType::ARRAY:
 		for (const auto &child : haystack.GetArrayChildren()) {
-			if (RecursiveContainSearch(child, needle)) {
+			if (RecursiveHaystackWalk(child, needle)) {
 				return true;
 			}
 		}
 		break;
 	case VariantLogicalType::OBJECT:
 		for (const auto &child : haystack.GetObjectChildren()) {
-			if (RecursiveContainSearch(child.value, needle)) {
+			if (RecursiveHaystackWalk(child.value, needle)) {
 				return true;
 			}
 		}
@@ -203,7 +133,7 @@ static void VariantContainsFunction(DataChunk &input, ExpressionState &state, Ve
 			result_writer.WriteNull();
 			continue;
 		}
-		result_writer.WriteValue(RecursiveContainSearch(haystacks[row_idx], needles[row_idx]));
+		result_writer.WriteValue(RecursiveHaystackWalk(haystacks[row_idx], needles[row_idx]));
 	}
 }
 
