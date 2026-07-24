@@ -10,9 +10,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
@@ -102,33 +100,6 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const Bin
 	}
 }
 
-static bool HasLateralCorrelatedColumns(const Expression &root_expr, Binder &binder) {
-	if (binder.IsInsideSubquery()) {
-		return false;
-	}
-	unordered_set<TableIndex> lateral_bindings;
-	for (auto &active_binder_ref : binder.GetActiveBinders()) {
-		auto &active_binder = active_binder_ref.get();
-		if (!active_binder.IsLateralBinder()) {
-			continue;
-		}
-		for (auto &binding : active_binder.GetBinder().bind_context.GetBindingsList()) {
-			lateral_bindings.insert(binding->GetIndex());
-		}
-	}
-	if (lateral_bindings.empty()) {
-		return false;
-	}
-	bool has_lateral_correlated_columns = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &colref) {
-		    if (colref.Depth() > 0 && lateral_bindings.find(colref.Binding().table_index) != lateral_bindings.end()) {
-			    has_lateral_correlated_columns = true;
-		    }
-	    });
-	return has_lateral_correlated_columns;
-}
-
 BindingAlias Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
                                           const Identifier &using_column, const string &join_side) {
 	BindingAlias binding;
@@ -206,7 +177,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		result->lateral = is_lateral;
 		if (result->lateral) {
 			// lateral join: can only be an INNER or LEFT join
-			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
+			if (result->type != JoinType::INNER && result->type != JoinType::LEFT) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
 			}
 		}
@@ -327,18 +298,29 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 
 			AddUsingBindings(*set, left_using_binding, left_binding);
 			AddUsingBindings(*set, right_using_binding, right_binding);
-			SetPrimaryBinding(*set, ref.type, left_binding, right_binding);
+			SetPrimaryBinding(*set, result->type, left_binding, right_binding);
 			bind_context.TransferUsingBinding(left_binder.bind_context, left_using_binding, *set, using_column);
 			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, *set, using_column);
 			AddUsingBindingSet(std::move(set));
 		}
 	}
 
+	for (auto &condition : extra_conditions) {
+		if (ref.condition) {
+			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
+			                                                 std::move(condition));
+		} else {
+			ref.condition = std::move(condition);
+		}
+	}
 	auto right_bindings = right_binder.bind_context.GetBindingAliases();
 	auto left_bindings = left_binder.bind_context.GetBindingAliases();
-
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
+	if (ref.condition) {
+		WhereBinder condition_binder(*this, context);
+		result->condition = condition_binder.Bind(ref.condition);
+	}
 
 	// Update the correlated columns for the parent binder
 	// For the left binder, depth >= 1 indicates correlations from the parent binder
@@ -354,23 +336,6 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 			// Decrement the depth to account for the effect of the lateral binder
 			col.depth--;
 			AddCorrelatedColumn(col);
-		}
-	}
-
-	for (auto &condition : extra_conditions) {
-		if (ref.condition) {
-			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
-			                                                 std::move(condition));
-		} else {
-			ref.condition = std::move(condition);
-		}
-	}
-	if (ref.condition) {
-		WhereBinder binder(*this, context);
-		result->condition = binder.Bind(ref.condition);
-		if (result->type != JoinType::INNER && result->type != JoinType::LEFT &&
-		    HasLateralCorrelatedColumns(*result->condition, *this)) {
-			throw NotImplementedException("Non-inner join on correlated columns not supported");
 		}
 	}
 

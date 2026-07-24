@@ -47,6 +47,8 @@ public:
 	//! All filters transitively connected by equality (a=b, b=c -> a=c all share the same index).
 	//! Used by cardinality estimation to skip redundant transitive conditions.
 	optional_idx edge_equivalence_index;
+	//! Original binary operator that supplied this costing predicate, if any.
+	optional_idx source_operator_index;
 };
 
 } // namespace duckdb

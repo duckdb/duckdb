@@ -12,6 +12,10 @@
 
 namespace duckdb {
 
+class BoundColumnRefExpression;
+class BoundSubqueryExpression;
+class ColumnBindingReplacer;
+
 struct ReplacementBinding {
 public:
 	ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding);
@@ -25,23 +29,76 @@ public:
 	LogicalType new_type;
 };
 
+//! A validated graph of binding replacements. Resolution is transitive and independent of insertion order.
+class BindingReplacementMap {
+public:
+	ColumnBinding Resolve(ColumnBinding binding) const;
+	bool TryAdd(const ReplacementBinding &replacement);
+	void Add(ColumnBinding old_binding, ColumnBinding new_binding);
+	void Add(const ReplacementBinding &replacement);
+	void Merge(const BindingReplacementMap &replacements);
+	void AddTo(ColumnBindingReplacer &replacer) const;
+
+	bool Empty() const {
+		return replacement_bindings.empty();
+	}
+	vector<ReplacementBinding>::const_iterator begin() const {
+		return replacement_bindings.begin();
+	}
+	vector<ReplacementBinding>::const_iterator end() const {
+		return replacement_bindings.end();
+	}
+
+private:
+	ReplacementBinding ResolveReplacement(ColumnBinding binding) const;
+	vector<ReplacementBinding> replacement_bindings;
+};
+
 //! The ColumnBindingReplacer updates column bindings (e.g., after changing the operator plan), utility for optimizers
-class ColumnBindingReplacer : LogicalOperatorVisitor {
+class ColumnBindingReplacer : public LogicalOperatorVisitor {
 public:
 	ColumnBindingReplacer();
 
 public:
 	//! Update each operator of the plan
 	void VisitOperator(LogicalOperator &op) override;
-	//! Visit an expression and update its column bindings
-	void VisitExpression(unique_ptr<Expression> *expression) override;
+	//! Update bindings owned by this operator without visiting its children
+	virtual void VisitOperatorBindings(LogicalOperator &op);
+	//! Add binding replacements by position
+	void AddReplacements(const vector<ColumnBinding> &old_bindings, const vector<ColumnBinding> &new_bindings);
+
+protected:
+	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 public:
-	//! Contains all bindings that need to be updated
-	vector<ReplacementBinding> replacement_bindings;
-
 	//! Do not recurse further than this operator (optional)
 	optional_ptr<LogicalOperator> stop_operator;
+
+	//! Contains all bindings that need to be updated
+	vector<ReplacementBinding> replacement_bindings;
+};
+
+//! Like ColumnBindingReplacer, but also updates correlated-column metadata and nested subquery plans.
+class CorrelatedColumnBindingReplacer : public ColumnBindingReplacer {
+public:
+	void VisitOperatorBindings(LogicalOperator &op) override;
+
+protected:
+	using ColumnBindingReplacer::VisitReplace;
+	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
+};
+
+//! Applies binding replacements together with their projection-layout invariants.
+class ColumnBindingRewrite {
+public:
+	static void ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
+	                         vector<ColumnBinding> old_child_bindings, const BindingReplacementMap &replacements);
+	static void ApplyToOperatorBindings(LogicalOperator &op, const BindingReplacementMap &replacements);
+
+private:
+	static void RemapProjectionMapStrict(vector<ProjectionIndex> &projection_map,
+	                                     const vector<ColumnBinding> &child_bindings_before,
+	                                     const vector<ColumnBinding> &child_bindings_after);
 };
 
 } // namespace duckdb

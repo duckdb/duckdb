@@ -202,10 +202,6 @@ BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) 
 	auto root = make_uniq<LogicalMaterializedCTE>(bound_cte.ctename, bound_cte.setop_index, result.types.size(),
 	                                              std::move(cte_query), std::move(cte_child), bound_cte.materialized);
 
-	// check if there are any unplanned subqueries left in either child
-	has_unplanned_dependent_joins = has_unplanned_dependent_joins ||
-	                                bound_cte.child_binder->has_unplanned_dependent_joins ||
-	                                bind_state.query_binder->has_unplanned_dependent_joins;
 	result.plan = std::move(root);
 	return result;
 }

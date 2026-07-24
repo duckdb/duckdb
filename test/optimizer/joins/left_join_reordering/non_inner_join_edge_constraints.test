@@ -1,0 +1,135 @@
+# name: test/optimizer/joins/left_join_reordering/non_inner_join_edge_constraints.test
+# description: Preserve non-inner join semantics during exact and greedy join enumeration
+# group: [left_join_reordering]
+
+foreach threshold 0 30
+
+statement ok
+SET approximate_join_order_threshold={threshold};
+
+# An INNER residual that depends on the nullable side of the preceding LEFT join must remain a filter.
+query I
+WITH a(k,v) AS (VALUES (-1,0)),
+     b(k) AS (VALUES (-1)),
+     c(k,v) AS (VALUES (-1,NULL::INTEGER)),
+     d(k) AS (VALUES (-1))
+SELECT count(*)
+FROM a
+INNER JOIN b ON b.k = a.k
+LEFT JOIN c ON c.k = b.k AND (c.v IS NULL OR c.v <> a.v)
+INNER JOIN d ON d.k = a.k AND (c.k IS NULL OR d.k > c.k);
+----
+0
+
+# Enumeration must not combine portions of both semantic sides before the non-inner edge can be formed.
+query I
+WITH a(k) AS (VALUES (NULL::INTEGER)),
+     b(k) AS (VALUES (-1)),
+     c(k) AS (VALUES (4)),
+     d(k) AS (VALUES (3)),
+     e(k) AS (VALUES (0))
+SELECT count(*)
+FROM a
+SEMI JOIN b ON b.k IS NOT DISTINCT FROM a.k
+LEFT JOIN c ON c.k = a.k
+JOIN d ON d.k IS NOT DISTINCT FROM c.k
+ANTI JOIN e ON e.k = a.k AND d.k BETWEEN -1 AND 2;
+----
+0
+
+# The same constraint applies when the left side of an ANTI edge spans several relations.
+query I
+WITH a(k) AS (VALUES (NULL::INTEGER)),
+     b(k) AS (VALUES (-1)),
+     c(k) AS (VALUES (4)),
+     d(k) AS (VALUES (3)),
+     e(k) AS (VALUES (0))
+SELECT count(*)
+FROM a
+JOIN b ON b.k = a.k
+LEFT JOIN c ON c.k = a.k
+JOIN d ON d.k IS NOT DISTINCT FROM c.k
+ANTI JOIN e ON e.k = a.k AND d.k BETWEEN -1 AND 2;
+----
+0
+
+# Explicit CROSS JOIN scopes must remain available when sibling LEFT joins share both inputs.
+query I
+WITH a(k) AS (VALUES (0)),
+     q(k) AS (VALUES (0)),
+     b(k) AS (VALUES (0)),
+     c(k) AS (VALUES (0))
+SELECT count(*)
+FROM a
+CROSS JOIN q
+LEFT JOIN b ON b.k = a.k AND q.k = b.k
+LEFT JOIN c ON c.k = a.k AND q.k = c.k;
+----
+1
+
+# A bushy plan must apply both LEFT joins before the multi-relation ANTI join consumes their payloads.
+query I
+WITH a(k) AS (VALUES (1)),
+     b(k) AS (VALUES (0)),
+     c(k) AS (VALUES (0)),
+     d(k) AS (VALUES (0)),
+     e(k) AS (VALUES (0)),
+     f(k) AS (VALUES (0))
+SELECT count(*)
+FROM (((a LEFT JOIN b ON b.k = a.k)
+       INNER JOIN (c LEFT JOIN d ON d.k = c.k) ON d.k IS NOT DISTINCT FROM a.k)
+      INNER JOIN e ON e.k IS NOT DISTINCT FROM d.k)
+ANTI JOIN f ON f.k = c.k AND f.k = a.k;
+----
+0
+
+# Figure 14 from Moerkotte et al. (SIGMOD 2013): applying the ANTI join above the LEFT join is invalid.
+query I
+WITH r0(a) AS (VALUES (1)),
+     r1(a,b) AS (VALUES (1,1)),
+     r2(b,c) AS (VALUES (1,1)),
+     r3(c) AS (VALUES (1))
+SELECT count(*)
+FROM r0
+LEFT JOIN (
+  r1
+  INNER JOIN (r2 ANTI JOIN r3 ON r2.c = r3.c)
+    ON r1.b = r2.b
+) ON r0.a = r1.a;
+----
+1
+
+# A constrained INNER occurrence must be applied before a generated cross product closes its two inputs.
+query I
+WITH r0(k) AS (VALUES (0)),
+     r2(k) AS (VALUES (0)),
+     r4(k) AS (VALUES (NULL::INTEGER), (NULL::INTEGER)),
+     r5(k) AS (VALUES (NULL::INTEGER))
+SELECT count(*)
+FROM r0
+INNER JOIN (
+	(r2 LEFT JOIN r5 ON r2.k = r5.k)
+	INNER JOIN r4 ON r5.k IS NOT DISTINCT FROM r4.k
+) ON r0.k = r2.k;
+----
+2
+
+# An explicit CROSS JOIN must not let an INNER predicate observe a NULL-extended row from the wrong input.
+query I
+WITH r0(k) AS (VALUES (0)),
+     r1(k) AS (VALUES (NULL::INTEGER)),
+     r2(k) AS (VALUES (0)),
+     r3(k) AS (VALUES (0))
+SELECT count(*)
+FROM r3
+INNER JOIN (
+	(r0 LEFT JOIN r1 ON r0.k = r1.k)
+	CROSS JOIN r2
+) ON coalesce(r3.k, -9) = coalesce(r1.k, -9);
+----
+0
+
+endloop
+
+statement ok
+RESET approximate_join_order_threshold;

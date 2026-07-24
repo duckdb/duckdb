@@ -8,12 +8,16 @@
 
 #pragma once
 
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 
 class Binder;
+class JoinSide;
 class LogicalJoin;
 
 /*
@@ -21,16 +25,24 @@ class LogicalJoin;
  */
 class RecursiveDependentJoinPlanner : public LogicalOperatorVisitor {
 public:
-	static void Plan(Binder &binder, LogicalOperator &op);
-	static void PlanJoinConditionSubqueries(Binder &binder, LogicalOperator &op);
+	static void Plan(Binder &binder, unique_ptr<LogicalOperator> &op);
 
 private:
 	explicit RecursiveDependentJoinPlanner(Binder &binder) : binder(binder) {
 	}
-	void VisitOperator(LogicalOperator &op) override;
+	static bool TryRewritePairDependentJoinCondition(Binder &binder, unique_ptr<LogicalOperator> &op,
+	                                                 BindingReplacementMap &replacements);
+	static bool CanRewritePairDependentJoinCondition(LogicalOperator &op);
+	static unique_ptr<LogicalOperator> PlanPairDependentLateralJoin(Binder &binder, unique_ptr<LogicalOperator> left,
+	                                                                unique_ptr<LogicalOperator> right,
+	                                                                unique_ptr<Expression> condition,
+	                                                                const unordered_set<TableIndex> &left_bindings,
+	                                                                JoinType join_type);
+	BindingReplacementMap PlanOperator(unique_ptr<LogicalOperator> &op);
+	BindingReplacementMap PlanAnyJoinCondition(unique_ptr<LogicalOperator> &op);
 	void PlanJoinChildFilters(LogicalOperator &op);
 	void PlanJoinExpressions(LogicalOperator &op);
-	void PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr);
+	void PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr, JoinSide uncorrelated_side);
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 	unique_ptr<LogicalOperator> root;

@@ -7,8 +7,8 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
@@ -28,11 +28,15 @@ void RewriteCorrelatedExpressions::RegisterCorrelatedBinding(const ColumnBinding
 	auto source_entry = correlated_aliases.find(source_binding);
 	D_ASSERT(source_entry != correlated_aliases.end());
 	auto result = correlated_aliases.emplace(target_binding, source_entry->second);
-	D_ASSERT(result.second || result.first->second == source_entry->second);
+	if (!result.second) {
+		D_ASSERT(result.first->second == source_entry->second);
+	}
 }
 
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
-	VisitOperatorChildren(op);
+	if (op.type != LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		VisitOperatorChildren(op);
+	}
 	// update the bindings in the correlated columns of the dependent join
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 		auto &plan = op.Cast<LogicalDependentJoin>();
@@ -62,10 +66,15 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	auto current_entry = current_binding_map.find(alias_entry->second);
 	D_ASSERT(current_entry != current_binding_map.end());
 	auto original_binding = expr.Binding();
+	if (original_binding == current_entry->second) {
+		expr.DepthMutable() = 0;
+		return nullptr;
+	}
 	expr.BindingMutable() = current_entry->second;
 	RegisterCorrelatedBinding(original_binding, expr.Binding());
-	D_ASSERT(expr.Depth() > 0);
-	expr.DepthMutable()--;
+	// The current representative is produced inside the converted algebra. Once a
+	// reference points at it, it is local regardless of the original binder depth.
+	expr.DepthMutable() = 0;
 	return nullptr;
 }
 

@@ -324,6 +324,37 @@ INNER JOIN orders o ON l.l_orderkey = o.o_orderkey
 ----
 5
 
+# Empty build side with residual predicates should project only output columns
+# without reusing the wider probe-column chunk.
+statement ok
+CREATE TABLE residual_empty_probe(a INTEGER, payload INTEGER);
+
+statement ok
+CREATE TABLE residual_empty_build(a INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO residual_empty_probe VALUES (1, 10), (2, -1);
+
+statement ok
+SET disabled_optimizers TO 'build_side_probe_side';
+
+query II
+EXPLAIN SELECT p.a, b.c
+FROM residual_empty_probe p
+LEFT JOIN residual_empty_build b ON p.a = b.a AND p.payload > 0
+ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*Join Type: LEFT.*
+
+query II
+SELECT p.a, b.c
+FROM residual_empty_probe p
+LEFT JOIN residual_empty_build b ON p.a = b.a AND p.payload > 0
+ORDER BY ALL;
+----
+1	NULL
+2	NULL
+
 statement ok
 CREATE TABLE l(k INTEGER, v INTEGER);
 

@@ -7,3 +7,15 @@ SET order_by_non_integer_literal=true;
 
 statement ok
 SELECT DISTINCT ON ( 'string' ) 'string', GROUP BY CUBE ( 'string', ), 'string' IN ( SELECT 'string' ), HAVING 'string' IN ( SELECT 'string');
+
+# A marker consumed by a parent join condition must not be converted to a SEMI join.
+query II
+WITH vals(x) AS (VALUES (1))
+SELECT l.a, r.b
+FROM (VALUES (1), (2)) l(a)
+LEFT JOIN (VALUES (1), (3)) r(b)
+  ON l.a = r.b AND r.b IN (SELECT x FROM vals)
+ORDER BY ALL;
+----
+1	1
+2	NULL

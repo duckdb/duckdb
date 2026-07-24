@@ -1,5 +1,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/planner/expression_iterator.hpp"
+
 #include "duckdb/original/std/sstream.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/printer.hpp"
@@ -103,6 +105,24 @@ bool LogicalOperator::HasSideEffects() const {
 	}
 	for (auto &child : children) {
 		if (child && child->HasSideEffects()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool LogicalOperator::HasVolatileExpressions() const {
+	bool is_volatile = false;
+	LogicalOperatorVisitor::EnumerateExpressions(*this, [&](const unique_ptr<Expression> *expression) {
+		if ((*expression)->IsVolatile()) {
+			is_volatile = true;
+		}
+	});
+	if (is_volatile) {
+		return true;
+	}
+	for (auto &child : children) {
+		if (child && child->HasVolatileExpressions()) {
 			return true;
 		}
 	}

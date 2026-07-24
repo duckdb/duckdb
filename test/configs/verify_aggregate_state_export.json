@@ -53,9 +53,10 @@
       ]
     },
     {
-      "reason": "FIXME: aggregate functions missing state type callback (approx_count_distinct, sum over VARINT, test_named_agg_inspect)",
+      "reason": "FIXME: aggregate functions missing state type callback (approx_count_distinct, sum over VARINT, test_named_agg_inspect, test_volatile_aggregate)",
       "paths": [
         "test/extension/test_function_named_args.test",
+        "test/extension/volatile_aggregate.test",
         "test/sql/aggregate/aggregates/test_approximate_distinct_count.test",
         "test/sql/aggregate/aggregates/test_stddev.test",
         "test/sql/cte/cte_describe.test",
