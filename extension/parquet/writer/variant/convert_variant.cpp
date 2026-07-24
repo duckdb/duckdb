@@ -924,19 +924,16 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
 }
 
-//! Fixed child order of the Parquet Variant shredding layout (see ParquetVariantShredding and
-//! TransformTypedValueRecursive): the untyped "value" precedes the typed "typed_value".
+//! Shredding group layout: value, then optional typed_value
 static constexpr idx_t SHRED_VALUE_INDEX = 0;
 static constexpr idx_t SHRED_TYPED_VALUE_INDEX = 1;
-//! The Variant group is metadata / value / [typed_value]; typed_value (when shredded) is the last child.
+//! Variant group layout: metadata, value, optional typed_value
 static constexpr idx_t VARIANT_METADATA_INDEX = 0;
 static constexpr idx_t VARIANT_VALUE_INDEX = 1;
 static constexpr idx_t VARIANT_TYPED_VALUE_INDEX = 2;
 
 static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value);
 
-//! A shredded field/element is written as a group STRUCT(value, [typed_value]). The group itself is REQUIRED;
-//! its 'value'/'typed_value' children stay OPTIONAL. Descend (by position) into a nested typed_value.
 static void MarkShreddedGroupRequired(ColumnWriter &group) {
 	D_ASSERT(StructType::IsStruct(group.Type().id()));
 	group.MarkRepetitionRequired();
@@ -948,18 +945,14 @@ static void MarkShreddedGroupRequired(ColumnWriter &group) {
 	}
 }
 
-//! Parquet VariantShredding.md: object field groups and list element groups under typed_value must be REQUIRED.
-//! 'typed_value' is an object (STRUCT of field groups), an array (LIST of one element group) or a primitive leaf.
-//! We identify field/element groups structurally (by position), never by matching user-facing field names.
+//! Field/element groups under typed_value must be REQUIRED (VariantShredding.md)
 static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value) {
 	auto type_id = typed_value.Type().id();
 	if (StructType::IsStruct(type_id)) {
-		//! Object shredding: every field group is REQUIRED, whatever the field is named
 		for (auto &field_group : typed_value.ChildWriters()) {
 			MarkShreddedGroupRequired(*field_group);
 		}
 	} else if (type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::ARRAY) {
-		//! Array shredding: the single list element group is REQUIRED
 		D_ASSERT(typed_value.ChildWriters().size() == 1);
 		MarkShreddedGroupRequired(*typed_value.ChildWriters()[0]);
 	}
@@ -975,9 +968,6 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	auto &name = schema.name;
 	auto &field_id = schema.field_id;
 
-	//! After AnalyzeSchemaFinalize (auto-shredding) or explicit SHREDDING, child writers are final.
-	//! When shredded, the typed_value is the last child; mark its field/element groups REQUIRED before
-	//! emitting SchemaElements / writing data. typed_value itself stays OPTIONAL.
 	if (child_writers.size() > VARIANT_TYPED_VALUE_INDEX) {
 		D_ASSERT(child_writers[VARIANT_METADATA_INDEX]->Schema().name == "metadata");
 		D_ASSERT(child_writers[VARIANT_VALUE_INDEX]->Schema().name == "value");
