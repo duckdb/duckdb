@@ -99,28 +99,9 @@ public:
 			                  width, sizeof(T) * BITPACK_DLEN);
 		}
 
-		if (cast_pointer_to_uint64(src.ptr) % sizeof(T) == 0) {
-			// Fast path: aligned
-			BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(dst), src.ptr, count, width);
-			src.unsafe_inc(count * width / BITPACK_DLEN);
-			return;
-		}
-
-		for (idx_t i = 0; i < count; i += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
-			const auto next_read = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * width / BITPACK_DLEN;
-
-			// Buffer for alignment
-			T aligned_data[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
-
-			// Copy over to aligned buffer
-			FastMemcpy(aligned_data, src.ptr, next_read);
-
-			// Unpack
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(dst), data_ptr_cast(aligned_data), width, true);
-
-			src.unsafe_inc(next_read);
-			dst += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-		}
+		// the bitpacking kernels read via unaligned loads, so the packed bytes are consumed in place in one pass
+		BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(dst), src.ptr, count, width);
+		src.unsafe_inc(count * width / BITPACK_DLEN);
 	}
 
 	template <class T>
