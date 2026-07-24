@@ -1,0 +1,17 @@
+# name: test/sql/copy/parquet/parquet_column_metadata_corruption.test
+# description: Test reading a Parquet file with inconsistent column metadata
+# group: [parquet]
+
+require parquet
+
+query III
+SELECT num_values, row_group_num_rows, stats_null_count
+FROM parquet_metadata('{DATA_DIR}/parquet-testing/parquet_column_num_values_mismatch.parquet')
+WHERE path_in_schema = 'x'
+----
+0	8	0
+
+statement error
+SELECT count(*) FROM read_parquet('{DATA_DIR}/parquet-testing/parquet_column_num_values_mismatch.parquet') WHERE x = 3
+----
+metadata is corrupt. Column has 0 values but row group has 8 rows
