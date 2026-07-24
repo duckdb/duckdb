@@ -1,0 +1,23 @@
+# name: test/sql/storage/compression/fsst/invalid_fsst_metadata.test
+# group: [fsst]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+unzip data/storage/fsst_invalid_dict_end.db.gz {TEST_DIR}/fsst_invalid_dict_end.db
+
+statement ok
+ATTACH '{TEST_DIR}/fsst_invalid_dict_end.db' AS fsst_dict_end
+
+statement ok
+USE fsst_dict_end
+
+query I
+SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='FSST'
+----
+13
+
+statement error
+SELECT sum(length(street)) FROM tbl
+----
+<REGEX>:.*Failed to scan .*string segment - dictionary offset was out of range. Database file appears to be corrupted.*

@@ -238,8 +238,19 @@ public:
 
 	inline static string_t FetchStringFromDict(ColumnSegment &segment, uint32_t dict_end_offset, Vector &result,
 	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
-		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockSize()));
+		auto block_size = segment.GetBlockSize();
+		if (dict_end_offset > block_size) {
+			throw IOException(
+			    "Failed to scan string segment - dictionary was out of range. Database file appears to be "
+			    "corrupted.");
+		}
 		if (DUCKDB_LIKELY(dict_offset >= 0)) {
+			if (UnsafeNumericCast<uint32_t>(dict_offset) > dict_end_offset ||
+			    string_length > UnsafeNumericCast<uint32_t>(dict_offset)) {
+				throw IOException(
+				    "Failed to scan string segment - dictionary offset was out of range. Database file appears "
+				    "to be corrupted.");
+			}
 			// regular string - fetch from dictionary
 			auto dict_end = base_ptr + dict_end_offset;
 			auto dict_pos = dict_end - dict_offset;
@@ -250,7 +261,13 @@ public:
 			// read overflow string
 			block_id_t block_id;
 			int32_t offset;
-			ReadStringMarker(base_ptr + dict_end_offset - AbsValue<int32_t>(dict_offset), block_id, offset);
+			auto abs_offset = UnsafeNumericCast<uint32_t>(AbsValue<int32_t>(dict_offset));
+			if (abs_offset > dict_end_offset || BIG_STRING_MARKER_SIZE > abs_offset) {
+				throw IOException(
+				    "Failed to scan string segment - dictionary offset was out of range. Database file appears "
+				    "to be corrupted.");
+			}
+			ReadStringMarker(base_ptr + dict_end_offset - abs_offset, block_id, offset);
 
 			return ReadOverflowString(segment, result, block_id, offset);
 		}
