@@ -10,4 +10,4 @@ load
 CREATE TABLE tbl AS SELECT range(i, i + 1) || range(i + 1, i + 2) AS l FROM range(5000000) t(i); 
 
 run
-SELECT list_reduce(l, (x, y) -> x + y) FROM tbl;
+SELECT list_reduce(l, lambda x, y: x + y) FROM tbl;
