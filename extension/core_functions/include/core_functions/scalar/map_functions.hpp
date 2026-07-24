@@ -121,4 +121,24 @@ struct SwitchFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct MapElementFun {
+	static constexpr const char *Name = "element";
+	static constexpr const char *Parameters = "map,key";
+	static constexpr const char *Description = "Returns the value for a given key or NULL if the key is not contained in the map.";
+	static constexpr const char *Example = "element(map(['key'], ['val']), 'key')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct MapFieldFun {
+	static constexpr const char *Name = "field";
+	static constexpr const char *Parameters = "map,key";
+	static constexpr const char *Description = "Returns the value for a given key or NULL if the key is not contained in the map.";
+	static constexpr const char *Example = "field(map(['key'], ['val']), 'key')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

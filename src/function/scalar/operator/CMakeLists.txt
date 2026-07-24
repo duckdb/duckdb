@@ -5,6 +5,7 @@ add_library_unity(
   arithmetic.cpp
   cast.cpp
   decimal_division.cpp
+  extract.cpp
   multiply.cpp
   subtract.cpp)
 set(ALL_OBJECT_FILES
