@@ -698,11 +698,14 @@ static idx_t IntersectSelections(const SelectionVector &left, idx_t left_count, 
 }
 
 FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
+	if (end_row <= beg_row) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
 	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
 	dummy_stats.SetHasNoNullFast();
 	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
-	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row));
+	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row - 1));
 
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
 	return expr_filter.CheckStatistics(dummy_stats);
