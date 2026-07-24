@@ -41,6 +41,29 @@ static void create_dummy_file(string fname) {
 	outfile.close();
 }
 
+class OpenFlagsRecordingFileSystem : public LocalFileSystem {
+public:
+	vector<FileOpenFlags> open_flags;
+
+	string GetName() const override {
+		return "OpenFlagsRecordingFileSystem";
+	}
+
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                optional_ptr<FileOpener> opener = nullptr) override {
+		open_flags.push_back(flags);
+		return LocalFileSystem::OpenFile(path, flags, opener);
+	}
+
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, TestDirectoryPath());
+	}
+
+	bool CanSeek() override {
+		return true;
+	}
+};
+
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto dname = fs->JoinPath(fs->GetWorkingDirectory(), TestCreatePath("TEST_DIR"));
@@ -274,6 +297,43 @@ TEST_CASE("re-register subsystem", "[file_system]") {
 	// Re-register an already registered subfilesystem should throw.
 	auto second_local_filesystem = FileSystem::CreateLocal();
 	REQUIRE_THROWS(vfs.RegisterSubSystem(std::move(second_local_filesystem)));
+}
+
+TEST_CASE("VirtualFileSystem marks upstream compression wrapper", "[file_system]") {
+	duckdb::VirtualFileSystem vfs;
+	auto recording_filesystem = make_uniq<OpenFlagsRecordingFileSystem>();
+	auto *recording_filesystem_ptr = recording_filesystem.get();
+	vfs.RegisterSubSystem(std::move(recording_filesystem));
+
+	auto local_filesystem = FileSystem::CreateLocal();
+	auto run_case = [&](const string &filename, FileCompressionType compression, bool expect_wrapper) {
+		const auto path = TestCreatePath(filename);
+		if (local_filesystem->FileExists(path)) {
+			local_filesystem->RemoveFile(path);
+		}
+
+		FileOpenFlags flags(FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		flags.SetCompression(compression);
+
+		const auto open_count = recording_filesystem_ptr->open_flags.size();
+		auto handle = vfs.OpenFile(path, flags);
+		REQUIRE(handle);
+		REQUIRE(recording_filesystem_ptr->open_flags.size() == open_count + 1);
+
+		auto observed_flags = recording_filesystem_ptr->open_flags.back();
+		REQUIRE(observed_flags.Compression() == FileCompressionType::UNCOMPRESSED);
+		REQUIRE(observed_flags.HasUpstreamCompressionWrapper() == expect_wrapper);
+
+		handle.reset();
+		if (local_filesystem->FileExists(path)) {
+			local_filesystem->RemoveFile(path);
+		}
+	};
+
+	run_case("vfs_explicit_gzip", FileCompressionType::GZIP, true);
+	run_case("vfs_auto_detect_gzip.gz", FileCompressionType::AUTO_DETECT, true);
+	run_case("vfs_auto_detect_uncompressed.csv", FileCompressionType::AUTO_DETECT, false);
+	run_case("vfs_explicit_uncompressed.gz", FileCompressionType::UNCOMPRESSED, false);
 }
 
 struct CanonicalizationTest {

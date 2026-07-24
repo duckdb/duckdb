@@ -183,13 +183,20 @@ public:
 	}
 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
 		auto headers = TransformHeaders(info.headers, info.params);
+		// this client cannot decode encoded responses: always request identity
+		if (headers.find("Accept-Encoding") == headers.end()) {
+			headers.emplace("Accept-Encoding", "identity");
+		}
 		if (!info.response_handler && !info.content_handler) {
-			return TransformResult(client->Get(info.path, headers));
+			auto result = TransformResult(client->Get(info.path, headers));
+			WarnIfEncoded(info, *result);
+			return result;
 		} else {
 			return TransformResult(client->Get(
 			    info.path, headers,
 			    [&](const duckdb_httplib::Response &response) {
 				    auto http_response = TransformResponse(response);
+				    WarnIfEncoded(info, *http_response);
 				    return info.response_handler(*http_response);
 			    },
 			    [&](const char *data, size_t data_length) {
@@ -220,6 +227,26 @@ public:
 	unique_ptr<duckdb_httplib::Client> client;
 
 private:
+	void WarnIfEncoded(const GetRequestInfo &info, const HTTPResponse &response) {
+		if (info.response_content_encoding == ResponseContentEncodingMode::IDENTITY_NO_DECODE) {
+			return;
+		}
+		if (!info.params.logger || !response.HasHeader("Content-Encoding")) {
+			return;
+		}
+		const auto encoding = StringUtil::Lower(response.GetHeaderValue("Content-Encoding"));
+		if (encoding.empty() || encoding == "identity") {
+			return;
+		}
+		auto &logger = *info.params.logger;
+		if (logger.ShouldLog(DefaultLogType::NAME, LogLevel::LOG_WARNING)) {
+			logger.WriteLog(
+			    DefaultLogType::NAME, LogLevel::LOG_WARNING,
+			    "HTTP GET to '%s' returned Content-Encoding \"%s\" despite requesting an identity transfer.", info.url,
+			    encoding);
+		}
+	}
+
 	duckdb_httplib::Headers TransformHeaders(const HTTPHeaders &header_map, const HTTPParams &params) {
 		duckdb_httplib::Headers headers;
 		for (auto &entry : header_map) {

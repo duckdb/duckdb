@@ -4814,6 +4814,25 @@ RequestType EnumUtil::FromString<RequestType>(const char *value) {
 	return static_cast<RequestType>(StringUtil::StringToEnum(GetRequestTypeValues(), 6, "RequestType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetResponseContentEncodingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ResponseContentEncodingMode::IDENTITY_DECODE_FALLBACK), "IDENTITY_DECODE_FALLBACK" },
+		{ static_cast<uint32_t>(ResponseContentEncodingMode::IDENTITY_NO_DECODE), "IDENTITY_NO_DECODE" },
+		{ static_cast<uint32_t>(ResponseContentEncodingMode::NEGOTIATE), "NEGOTIATE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ResponseContentEncodingMode>(ResponseContentEncodingMode value) {
+	return StringUtil::EnumToString(GetResponseContentEncodingModeValues(), 3, "ResponseContentEncodingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ResponseContentEncodingMode EnumUtil::FromString<ResponseContentEncodingMode>(const char *value) {
+	return static_cast<ResponseContentEncodingMode>(StringUtil::StringToEnum(GetResponseContentEncodingModeValues(), 3, "ResponseContentEncodingMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetResultModifierTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ResultModifierType::LIMIT_MODIFIER), "LIMIT_MODIFIER" },
