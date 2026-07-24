@@ -1,0 +1,31 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_for_compare_vector_type.test
+# description: Test FOR vector physical representation for FOR comparison inputs
+# group: [bitpacking]
+
+require no_vector_verification
+
+require block_size 262144
+
+load {TEST_DIR}/bitpacking_for_compare_vector_type.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+PRAGMA force_bitpacking_mode='for'
+
+statement ok
+CREATE TABLE t AS
+SELECT i::INTEGER AS id,
+       (1000 + (i % 200))::INTEGER AS a,
+       (1000 + (i % 5000))::INTEGER AS b,
+       (1000 + (i % 150))::BIGINT AS c
+FROM range(500000) t(i)
+
+statement ok
+CHECKPOINT
+
+query TTT
+SELECT vector_type(a), vector_type(b), vector_type(c) FROM t GROUP BY 1, 2, 3 ORDER BY count(*) DESC LIMIT 1
+----
+FOR_VECTOR	FOR_VECTOR	FOR_VECTOR

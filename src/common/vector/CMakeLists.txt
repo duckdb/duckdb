@@ -5,11 +5,13 @@ add_library_unity(
   constant_vector.cpp
   dictionary_vector.cpp
   flat_vector.cpp
+  for_vector.cpp
   fsst_vector.cpp
   list_vector.cpp
   map_vector.cpp
   sequence_vector.cpp
   shredded_vector.cpp
+  for_view.cpp
   string_vector.cpp
   struct_vector.cpp
   unified_vector_format.cpp

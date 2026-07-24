@@ -31,6 +31,7 @@ struct ColumnAppendState;
 struct ColumnFetchState;
 struct ColumnScanState;
 struct PrefetchState;
+struct SelectionResult;
 struct TableFilterState;
 
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
@@ -71,9 +72,11 @@ public:
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
-	[[deprecated("UnifiedVectorFormat parameter is ignored")]] static idx_t
+	[[deprecated("UnifiedVectorFormat and TableFilter parameters are ignored")]] static idx_t
 	FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata, const TableFilter &filter,
 	                TableFilterState &filter_state, idx_t scan_count, idx_t &approved_tuple_count);
+	static idx_t FilterSelection(SelectionResult &sel, Vector &vector, TableFilterState &filter_state, idx_t scan_count,
+	                             idx_t &approved_tuple_count);
 	static idx_t FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state, idx_t scan_count,
 	                             idx_t &approved_tuple_count);
 

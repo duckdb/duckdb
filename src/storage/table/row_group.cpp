@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
@@ -886,7 +887,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		} else {
 			// partial scan: we have deletions or table filters
 			idx_t approved_tuple_count = count;
-			SelectionVector sel;
+			SelectionResult sel;
 			SelectionVector intersect_sel(STANDARD_VECTOR_SIZE);
 			if (has_sample_selection && count != max_count) {
 				approved_tuple_count =
@@ -933,11 +934,13 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
 					                approved_tuple_count, filter.filter, table_filter_state);
 				}
+				// materialize a bitmap selection once here so all column slices share one index array
+				auto &flat_sel = sel.Flattened();
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
 						continue;
 					}
-					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
+					result.data[table_filter.scan_column_index].Slice(flat_sel, approved_tuple_count);
 				}
 			}
 			if (approved_tuple_count == 0) {
@@ -966,7 +969,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
 				state.column_scans[i].update_scan_type = options.update_type;
-				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
+				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel.Flattened(),
 				                approved_tuple_count);
 			}
 			filter_info.EndFilter(filter_state);

@@ -18,7 +18,8 @@ enum class VectorType : uint8_t {
 	CONSTANT_VECTOR,   // Constant vector represents a single constant
 	DICTIONARY_VECTOR, // Dictionary vector represents a selection vector on top of another vector
 	SEQUENCE_VECTOR,   // Sequence vector represents a sequence with a start point and an increment
-	SHREDDED_VECTOR    // Shredded variant vector
+	SHREDDED_VECTOR,   // Shredded variant vector
+	FOR_VECTOR         // Frame-of-Reference compressed: stores values in a smaller integer payload plus metadata
 };
 
 string VectorTypeToString(VectorType type);

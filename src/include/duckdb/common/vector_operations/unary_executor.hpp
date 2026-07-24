@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/autovec.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -97,9 +98,9 @@ private:
 
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
-	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data,
-	                               bool adds_nulls) {
+	DUCKDB_AUTOVEC_TARGET static inline void
+	ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	            const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (mask.CanHaveNull()) {
@@ -148,7 +149,14 @@ private:
 	static inline void ExecuteStandard(const Vector &input, Vector &result, idx_t count, DATA_TYPE &data,
 	                                   bool adds_nulls,
 	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-		switch (input.GetVectorType()) {
+		auto dispatch_type = input.GetVectorType();
+#if DUCKDB_AUTOVEC && defined(__x86_64__)
+		// ExecuteFlat carries the widened-ISA target: pre-AVX2 CPUs take the generic gather path (default case)
+		if (!CpuBenefitsFromAutoVec() && dispatch_type != VectorType::CONSTANT_VECTOR) {
+			dispatch_type = VectorType::SEQUENCE_VECTOR;
+		}
+#endif
+		switch (dispatch_type) {
 		case VectorType::CONSTANT_VECTOR: {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			if (result.size() != count) {

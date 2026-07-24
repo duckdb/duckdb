@@ -3,8 +3,34 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/types/bitmap_selection_vector.hpp"
 
 namespace duckdb {
+
+void SelectionVector::Flatten() const {
+	if (sel_vector || !selection_data || !selection_data->is_bitmap) {
+		return;
+	}
+	auto keep = selection_data;
+	auto bm = reinterpret_cast<const validity_t *>(keep->bitmap_data.get());
+	if (!keep->indices_cached) {
+		// materialize into the spare index buffer next to the bitmap: sharers of this bitmap then flatten
+		// for free, and reused scratches ping-pong between the representations with no allocation
+		auto shared = keep;
+		SelectionVector target(std::move(shared));
+		BitmapToSelectionVector(bm, keep->row_span, target);
+		if (target.selection_data.get() != keep.get()) {
+			// the spare buffer was missing/too small: adopt the freshly allocated index array instead
+			selection_data = std::move(target.selection_data);
+			sel_vector = target.sel_vector;
+			capacity = target.capacity;
+			return;
+		}
+		keep->indices_cached = true;
+	}
+	sel_vector = reinterpret_cast<sel_t *>(keep->owned_data.get());
+	capacity = keep->owned_data.GetSize() / sizeof(sel_t);
+}
 
 SelectionData::SelectionData(idx_t count) {
 	owned_data = Allocator::DefaultAllocator().Allocate(MaxValue<idx_t>(count, 1) * sizeof(sel_t));
@@ -32,7 +58,7 @@ string SelectionVector::ToString(idx_t count) const {
 }
 
 void SelectionVector::Sort(idx_t count) {
-	std::sort(sel_vector, sel_vector + count);
+	std::sort(data(), data() + count);
 }
 
 void SelectionVector::Print(idx_t count) const {

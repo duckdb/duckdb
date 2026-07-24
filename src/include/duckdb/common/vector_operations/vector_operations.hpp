@@ -160,6 +160,8 @@ struct VectorOperations {
 	// hashes = HASH(input)
 	// FIXME: this "count" needs to go
 	static void Hash(const Vector &input, Vector &hashes, idx_t count);
+	//! Fused widen+hash for cache-owned FOR inputs; leaves the input flat and returns true if hashes were written
+	static bool TryFusedHash(const Vector &input, Vector &hashes, idx_t count);
 	static void Hash(const Vector &input, Vector &hashes, const SelectionVector &rsel, idx_t count);
 	//! Convenience overload without explicit count - count is derived from input.size()
 	static void Hash(const Vector &input, Vector &hashes);

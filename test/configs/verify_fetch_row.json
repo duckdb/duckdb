@@ -8,7 +8,9 @@
     {
       "reason": "Vector type changes due to fetch row",
       "paths": [
-        "test/sql/storage/compression/rle/rle_constant.test"
+        "test/sql/storage/compression/rle/rle_constant.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_for_vector_type.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_for_compare_vector_type.test"
       ]
     },
     {

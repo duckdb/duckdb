@@ -22,6 +22,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/vector/for_vector.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
@@ -134,8 +135,36 @@ public:
 		return bit & in_range;
 	}
 
+	// FOR payloads probe the bitmap straight from the narrow values: widening is a register zero-extend
+	template <typename T, typename CONVERTER>
+	idx_t LookupKeysNarrow(Vector &keys, const SelectionVector *sel, SelectionVector &result_sel, idx_t count) const {
+		idx_t found_count = 0;
+		FOR_SWITCH_STORED(FORVector::GetStoredType(keys), S, {
+			auto data = reinterpret_cast<const S *>(FORVector::GetData(keys));
+			for (idx_t i = 0; i < count; i++) {
+				const auto idx = sel ? sel->get_index_unsafe(i) : i;
+				const U y = CONVERTER::Convert(static_cast<T>(data[idx])) - min;
+				const U bit_idx = y >> shift;
+				const uint8_t in_range = y <= span;
+				const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
+				const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
+				result_sel.set_index(found_count, idx);
+				found_count += bit & in_range;
+			}
+		});
+		return found_count;
+	}
+
+	template <typename T, typename CONVERTER>
+	static bool UseNarrowLookup(const Vector &keys) {
+		return keys.GetVectorType() == VectorType::FOR_VECTOR && !FORVector::Validity(keys).CanHaveNull();
+	}
+
 	template <typename T, typename CONVERTER>
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const {
+		if (UseNarrowLookup<T, CONVERTER>(keys)) {
+			return LookupKeysNarrow<T, CONVERTER>(keys, nullptr, result_sel, count);
+		}
 		idx_t found_count = 0;
 		for (const auto &entry : keys.template ValidValues<T>()) {
 			const U comparable = CONVERTER::Convert(entry.GetValue());
@@ -153,6 +182,9 @@ public:
 
 	template <typename T, typename CONVERTER>
 	idx_t LookupKeys(Vector &keys, const SelectionVector &sel, SelectionVector &result_sel, idx_t count) const {
+		if (UseNarrowLookup<T, CONVERTER>(keys)) {
+			return LookupKeysNarrow<T, CONVERTER>(keys, &sel, result_sel, count);
+		}
 		UnifiedVectorFormat key_data;
 		keys.ToUnifiedFormat(key_data);
 

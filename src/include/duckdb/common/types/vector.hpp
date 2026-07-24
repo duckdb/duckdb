@@ -33,6 +33,9 @@ enum class VectorDataInitialization { UNINITIALIZED, ZERO_INITIALIZE };
 
 //! Vector of values of a specified PhysicalType.
 class Vector {
+	// FORVector needs raw buffer access for in-place narrow data + metadata writes
+	friend struct FORVector;
+
 public:
 	//! Create a vector that slices another vector
 	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);
@@ -114,6 +117,8 @@ public:
 	//! While Flatten mutates the buffers / vector type, it does not change the *logical* representation of a vector
 	//! As such, it can be used on constant vectors.
 	DUCKDB_API void Flatten() const;
+	//! FOR vectors: widen in place and compute the row hashes in the same pass; false when not applicable
+	DUCKDB_API bool TryFlattenWithHashes(hash_t *hashes, idx_t hash_count, hash_t null_hash) const;
 	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count) const;
 
 	[[deprecated("ToUnifiedFormat no longer requires a count - use ToUnifiedFormat(data) instead")]] DUCKDB_API void

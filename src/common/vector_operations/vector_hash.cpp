@@ -81,6 +81,10 @@ void TemplatedLoopHash(const Vector &input, Vector &result, const SelectionVecto
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		FlatVector::SetSize(result, count_t(count));
 
+		if (!HAS_RSEL && !INPUT_IS_ALREADY_HASH &&
+		    input.TryFlattenWithHashes(FlatVector::GetDataMutable<hash_t>(result), count, HashOp::NULL_HASH)) {
+			return; // fused FOR path: widened in place and hashed in one pass
+		}
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(idata);
 
@@ -498,6 +502,15 @@ void CombineHashTypeSwitch(Vector &hashes, const Vector &input, const SelectionV
 }
 
 } // namespace
+
+bool VectorOperations::TryFusedHash(const Vector &input, Vector &result, idx_t count) {
+	if (input.GetVectorType() != VectorType::FOR_VECTOR) {
+		return false;
+	}
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(result, count_t(count));
+	return input.TryFlattenWithHashes(FlatVector::GetDataMutable<hash_t>(result), count, HashOp::NULL_HASH);
+}
 
 void VectorOperations::Hash(const Vector &input, Vector &result, idx_t count) {
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR && DictionaryVector::CanCacheHashes(input)) {
