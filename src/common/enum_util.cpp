@@ -244,42 +244,22 @@ ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
 	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 2, "ARTConflictType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetARTHandlingResultValues() {
+const StringUtil::EnumStringLiteral *GetARTScanNodeResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ARTHandlingResult::CONTINUE), "CONTINUE" },
-		{ static_cast<uint32_t>(ARTHandlingResult::SKIP), "SKIP" },
-		{ static_cast<uint32_t>(ARTHandlingResult::YIELD), "YIELD" },
-		{ static_cast<uint32_t>(ARTHandlingResult::NONE), "NONE" }
+		{ static_cast<uint32_t>(ARTScanNodeResult::SCAN_CHILDREN), "SCAN_CHILDREN" },
+		{ static_cast<uint32_t>(ARTScanNodeResult::SKIP), "SKIP" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value) {
-	return StringUtil::EnumToString(GetARTHandlingResultValues(), 4, "ARTHandlingResult", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<ARTScanNodeResult>(ARTScanNodeResult value) {
+	return StringUtil::EnumToString(GetARTScanNodeResultValues(), 2, "ARTScanNodeResult", static_cast<uint32_t>(value));
 }
 
 template<>
-ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value) {
-	return static_cast<ARTHandlingResult>(StringUtil::StringToEnum(GetARTHandlingResultValues(), 4, "ARTHandlingResult", value));
-}
-
-const StringUtil::EnumStringLiteral *GetARTScanHandlingValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ARTScanHandling::EMPLACE), "EMPLACE" },
-		{ static_cast<uint32_t>(ARTScanHandling::POP), "POP" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value) {
-	return StringUtil::EnumToString(GetARTScanHandlingValues(), 2, "ARTScanHandling", static_cast<uint32_t>(value));
-}
-
-template<>
-ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value) {
-	return static_cast<ARTScanHandling>(StringUtil::StringToEnum(GetARTScanHandlingValues(), 2, "ARTScanHandling", value));
+ARTScanNodeResult EnumUtil::FromString<ARTScanNodeResult>(const char *value) {
+	return static_cast<ARTScanNodeResult>(StringUtil::StringToEnum(GetARTScanNodeResultValues(), 2, "ARTScanNodeResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetARTScanResultValues() {

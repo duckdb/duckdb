@@ -161,34 +161,34 @@ void Leaf::DeprecatedFree(ART &art, Node &node) {
 bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, const idx_t max_count) {
 	D_ASSERT(node.GetType() == LEAF);
 
-	reference<const Node> ref(node);
-	while (ref.get().HasMetadata()) {
-		ConstNodeHandle<Leaf> handle(art, ref);
-		auto &leaf = handle.Get();
+	Node current = node;
+	while (current.HasMetadata()) {
+		ConstNodeHandle handle(art, current);
+		auto &leaf = handle.Get<Leaf>();
 		if (row_ids.size() + leaf.count > max_count) {
 			return false;
 		}
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			row_ids.insert(leaf.row_ids[i]);
 		}
-		ref = leaf.ptr;
+		current = leaf.ptr;
 	}
 	return true;
 }
 
-void Leaf::DeprecatedVacuum(ART &art, Node &node) {
+void Leaf::DeprecatedVacuum(ART &art, Node node) {
 	D_ASSERT(node.HasMetadata());
 	D_ASSERT(node.GetType() == LEAF);
 
 	auto &allocator = Node::GetAllocator(art, LEAF);
-	reference<Node> ref(node);
-	while (ref.get().HasMetadata()) {
-		if (allocator.NeedsVacuum(ref)) {
-			ref.get() = allocator.VacuumPointer(ref);
-			ref.get().SetMetadata(static_cast<uint8_t>(LEAF));
+	while (node.HasMetadata()) {
+		NodeHandle handle(art, node);
+		auto &leaf = handle.Get<Leaf>();
+		if (leaf.ptr.HasMetadata() && allocator.NeedsVacuum(leaf.ptr)) {
+			leaf.ptr = allocator.VacuumPointer(leaf.ptr);
+			leaf.ptr.SetMetadata(static_cast<uint8_t>(LEAF));
 		}
-		auto &leaf = Node::Ref<Leaf>(art, ref, LEAF);
-		ref = leaf.ptr;
+		node = leaf.ptr;
 	}
 }
 
@@ -218,26 +218,27 @@ string Leaf::DeprecatedToString(ART &art, const Node &node, const ToStringOption
 void Leaf::DeprecatedVerify(ART &art, const Node &node) {
 	D_ASSERT(node.GetType() == LEAF);
 
-	reference<const Node> ref(node);
-
-	while (ref.get().HasMetadata()) {
-		ConstNodeHandle<Leaf> handle(art, ref);
-		auto &leaf = handle.Get();
+	Node current = node;
+	while (current.HasMetadata()) {
+		ConstNodeHandle handle(art, current);
+		auto &leaf = handle.Get<Leaf>();
 		D_ASSERT(leaf.count <= LEAF_SIZE);
-		ref = leaf.ptr;
+		current = leaf.ptr;
 	}
 }
 
-void Leaf::DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
-	auto idx = Node::GetAllocatorIdx(LEAF);
-	node_counts[idx]++;
+void Leaf::DeprecatedVerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t, idx_t> &node_counts) {
+	D_ASSERT(node.GetType() == LEAF);
 
-	reference<const Node> ref(ptr);
-	while (ref.get().HasMetadata()) {
-		ConstNodeHandle<Leaf> handle(art, ref);
-		auto &leaf = handle.Get();
+	auto idx = Node::GetAllocatorIdx(LEAF);
+
+	Node current = node;
+	while (current.HasMetadata()) {
 		node_counts[idx]++;
-		ref = leaf.ptr;
+
+		ConstNodeHandle handle(art, current);
+		auto &leaf = handle.Get<Leaf>();
+		current = leaf.ptr;
 	}
 }
 

@@ -7,6 +7,7 @@
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 
 namespace duckdb {
 
@@ -21,13 +22,13 @@ Prefix::Prefix(const ART &art, const Node ptr_p, const bool is_mutable, const bo
 			return;
 		}
 	}
-	ptr = reinterpret_cast<Node *>(data + art.PrefixCount() + 1);
+	ptr = &PrefixHandle::ChildRefWithCount(data, art.PrefixCount());
 	in_memory = true;
 }
 
 Prefix::Prefix(FixedSizeAllocator &allocator, const Node ptr_p, const idx_t count) {
 	data = allocator.Get(ptr_p, true);
-	ptr = reinterpret_cast<Node *>(data + count + 1);
+	ptr = &PrefixHandle::ChildRefWithCount(data, count);
 	in_memory = true;
 }
 

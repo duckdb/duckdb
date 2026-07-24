@@ -23,6 +23,7 @@ namespace duckdb {
 class Leaf {
 public:
 	static constexpr NType LEAF = NType::LEAF;
+	static constexpr NType TYPE = NType::LEAF;
 	static constexpr NType INLINED = NType::LEAF_INLINED;
 
 	static constexpr uint8_t LEAF_SIZE = 4; // Deprecated.
@@ -55,13 +56,14 @@ public:
 	//! Fills the row_ids vector with the row IDs of this linked list of leaves.
 	//! Never pushes more than max_count row IDs.
 	static bool DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, const idx_t max_count);
-	//! Vacuums the linked list of leaves.
-	static void DeprecatedVacuum(ART &art, Node &node);
+	//! Vacuums the internal links in the deprecated leaf list pointed to by node.
+	//! The caller is responsible for vacuuming the slot that points to the list head.
+	static void DeprecatedVacuum(ART &art, Node node);
 
 	//! Traverses and verifies the linked list of leaves.
 	static void DeprecatedVerify(ART &art, const Node &node);
 	//! Count the number of leaves.
-	void DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
+	static void DeprecatedVerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t, idx_t> &node_counts);
 
 	//! Return string representation of the linked list of leaves.
 	//! If print_deprecated_leaves is false, returns "[deprecated leaves]" with proper indentation.
