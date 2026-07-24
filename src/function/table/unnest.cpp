@@ -45,11 +45,14 @@ struct UnnestLocalState : public LocalTableFunctionState {
 static unique_ptr<FunctionData> UnnestBind(ClientContext &context, TableFunctionBindInput &input,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	if (input.input_table_types.size() != 1 || (input.input_table_types[0].id() != LogicalTypeId::LIST &&
-	                                            input.input_table_types[0].id() != LogicalTypeId::ARRAY)) {
+	                                            input.input_table_types[0].id() != LogicalTypeId::ARRAY &&
+	                                            input.input_table_types[0].id() != LogicalTypeId::VARIANT)) {
 		throw BinderException("UNNEST requires a single list or array as input");
 	}
 	auto &input_type = input.input_table_types[0];
-	if (input_type.id() == LogicalTypeId::LIST) {
+	if (input_type.id() == LogicalTypeId::VARIANT) {
+		return_types.push_back(LogicalType::VARIANT());
+	} else if (input_type.id() == LogicalTypeId::LIST) {
 		return_types.push_back(ListType::GetChildType(input_type));
 	} else {
 		return_types.push_back(ArrayType::GetChildType(input_type));
@@ -76,7 +79,13 @@ static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, T
 		child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
 	}
 
-	auto bound_unnest = make_uniq<BoundUnnestExpression>(ListType::GetChildType(child->GetReturnType()));
+	LogicalType child_type;
+	if (child->GetReturnType().id() == LogicalTypeId::VARIANT) {
+		child_type = LogicalType::VARIANT();
+	} else {
+		child_type = ListType::GetChildType(child->GetReturnType());
+	}
+	auto bound_unnest = make_uniq<BoundUnnestExpression>(child_type);
 	bound_unnest->ChildMutable() = std::move(child);
 	result->select_list.push_back(std::move(bound_unnest));
 	return std::move(result);
