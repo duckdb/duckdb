@@ -834,6 +834,9 @@ void WriteAheadLogDeserializer::BufferExistingRowsForIndex(ReplayState::ReplayIn
 	auto &table = *info.table;
 	auto &storage = table.GetStorage();
 	auto &row_groups = *storage.GetRowGroupCollection();
+	if (row_groups.GetTotalRows() == 0) {
+		return;
+	}
 
 	vector<StorageIndex> column_ids;
 	column_ids.reserve(table.GetColumns().PhysicalColumnCount() + 1);
