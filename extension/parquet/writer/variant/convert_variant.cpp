@@ -924,6 +924,40 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
 }
 
+//! Shredding group layout: value, then optional typed_value
+static constexpr idx_t SHRED_VALUE_INDEX = 0;
+static constexpr idx_t SHRED_TYPED_VALUE_INDEX = 1;
+//! Variant group layout: metadata, value, optional typed_value
+static constexpr idx_t VARIANT_METADATA_INDEX = 0;
+static constexpr idx_t VARIANT_VALUE_INDEX = 1;
+static constexpr idx_t VARIANT_TYPED_VALUE_INDEX = 2;
+
+static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value);
+
+static void MarkShreddedGroupRequired(ColumnWriter &group) {
+	D_ASSERT(StructType::IsStruct(group.Type().id()));
+	group.MarkRepetitionRequired();
+	auto &children = group.ChildWriters();
+	D_ASSERT(children[SHRED_VALUE_INDEX]->Schema().name == "value");
+	if (children.size() > SHRED_TYPED_VALUE_INDEX) {
+		D_ASSERT(children[SHRED_TYPED_VALUE_INDEX]->Schema().name == "typed_value");
+		MarkTypedValueShreddingGroupsRequired(*children[SHRED_TYPED_VALUE_INDEX]);
+	}
+}
+
+//! Field/element groups under typed_value must be REQUIRED (VariantShredding.md)
+static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value) {
+	auto type_id = typed_value.Type().id();
+	if (StructType::IsStruct(type_id)) {
+		for (auto &field_group : typed_value.ChildWriters()) {
+			MarkShreddedGroupRequired(*field_group);
+		}
+	} else if (type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::ARRAY) {
+		D_ASSERT(typed_value.ChildWriters().size() == 1);
+		MarkShreddedGroupRequired(*typed_value.ChildWriters()[0]);
+	}
+}
+
 idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
@@ -933,6 +967,14 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	auto &repetition_type = schema.repetition_type;
 	auto &name = schema.name;
 	auto &field_id = schema.field_id;
+
+	if (child_writers.size() > VARIANT_TYPED_VALUE_INDEX) {
+		D_ASSERT(child_writers[VARIANT_METADATA_INDEX]->Schema().name == "metadata");
+		D_ASSERT(child_writers[VARIANT_VALUE_INDEX]->Schema().name == "value");
+		auto &typed_value = *child_writers[VARIANT_TYPED_VALUE_INDEX];
+		D_ASSERT(typed_value.Schema().name == "typed_value");
+		MarkTypedValueShreddingGroupsRequired(typed_value);
+	}
 
 	// variant group
 	duckdb_parquet::SchemaElement top_element;

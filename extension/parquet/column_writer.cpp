@@ -125,6 +125,25 @@ ColumnWriter::ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_s
 ColumnWriter::~ColumnWriter() {
 }
 
+static void DecrementMaxDefineRecursive(ColumnWriter &writer) {
+	D_ASSERT(writer.Schema().max_define > 0);
+	writer.Schema().max_define--;
+	for (auto &child : writer.ChildWriters()) {
+		DecrementMaxDefineRecursive(*child);
+	}
+}
+
+void ColumnWriter::MarkRepetitionRequired() {
+	if (column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::REQUIRED) {
+		return;
+	}
+	D_ASSERT(column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::OPTIONAL);
+	D_ASSERT(can_have_nulls);
+	column_schema.repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
+	can_have_nulls = false;
+	DecrementMaxDefineRecursive(*this);
+}
+
 bool ColumnWriter::TryExportPreparedShreddingType(ShreddingType &result) const {
 	bool has_shredding = false;
 	auto writer_shredding_type = ShreddingType(Type());
