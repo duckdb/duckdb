@@ -45,6 +45,16 @@ struct VariantExtractFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct VariantExtractStringFun {
+	static constexpr const char *Name = "variant_extract_string";
+	static constexpr const char *Parameters = "input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns the stringified representation at `path` from the `input_variant`.\001Returns the stringified representation for each `path` from the `input_variant`.";
+	static constexpr const char *Example = "variant_extract_string({'a': 42, 'b': [1,2,3])::VARIANT, 'b')\001variant_extract_string({'a': 42, 'b': [1,2,3])::VARIANT, ['a', 'b'])";
+	static constexpr const char *Categories = "variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct VariantNormalizeFun {
 	static constexpr const char *Name = "variant_normalize";
 	static constexpr const char *Parameters = "input_variant";
