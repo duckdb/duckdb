@@ -42,6 +42,7 @@ struct TransactionData;
 struct PersistentColumnData;
 class ValidityColumnData;
 struct ColumnDataFinalizeAppendState;
+struct SuballocationBlock;
 
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
@@ -228,7 +229,8 @@ public:
 
 protected:
 	//! Append a transient segment
-	void AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment);
+	void AppendTransientSegment(SegmentLock &l, optional_ptr<SuballocationBlock> transient,
+	                            optional_ptr<ColumnSegment> prev_segment);
 	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
 	void BeginScanVectorInternal(ColumnScanState &state);
