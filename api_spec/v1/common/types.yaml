@@ -1,0 +1,241 @@
+module: common_types
+structs:
+  date:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "DATE is stored as days since 1970-01-01."
+    fields:
+      - name: days
+        type: i32
+  date_struct:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Decomposed date components."
+    fields:
+      - name: year
+        type: i32
+      - name: month
+        type: i8
+      - name: day
+        type: i8
+  time:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "TIME is stored as microseconds since 00:00:00."
+    fields:
+      - name: micros
+        type: i64
+  time_struct:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Decomposed time components."
+    fields:
+      - name: hour
+        type: i8
+      - name: min
+        type: i8
+      - name: sec
+        type: i8
+      - name: micros
+        type: i32
+  time_ns:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "TIME_NS is stored as nanoseconds since 00:00:00."
+    fields:
+      - name: nanos
+        type: i64
+  time_tz:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "TIME_TZ stored as 40 bits for microseconds and 24 bits for offset."
+    fields:
+      - name: bits
+        type: u64
+  time_tz_struct:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Decomposed TIME_TZ components."
+    fields:
+      - name: time
+        type: time_struct
+      - name: offset
+        type: i32
+  timestamp:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "TIMESTAMP is stored as microseconds since 1970-01-01."
+    fields:
+      - name: micros
+        type: i64
+  timestamp_struct:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Decomposed timestamp components."
+    fields:
+      - name: date
+        type: date_struct
+      - name: time
+        type: time_struct
+  timestamp_s:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "TIMESTAMP_S is stored as seconds since 1970-01-01."
+    fields:
+      - name: seconds
+        type: i64
+  timestamp_ms:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "TIMESTAMP_MS is stored as milliseconds since 1970-01-01."
+    fields:
+      - name: millis
+        type: i64
+  timestamp_ns:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "TIMESTAMP_NS is stored as nanoseconds since 1970-01-01."
+    fields:
+      - name: nanos
+        type: i64
+  interval:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "INTERVAL is stored in months, days, and micros."
+    fields:
+      - name: months
+        type: i32
+      - name: days
+        type: i32
+      - name: micros
+        type: i64
+  hugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "HUGEINT is composed of a lower and upper component. Value is upper * 2^64 + lower."
+    fields:
+      - name: lower
+        type: u64
+      - name: upper
+        type: i64
+  uhugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "UHUGEINT is composed of a lower and upper component. Value is upper * 2^64 + lower."
+    fields:
+      - name: lower
+        type: u64
+      - name: upper
+        type: u64
+  decimal:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "DECIMAL is composed of a width and a scale. Value is stored in a HUGEINT."
+    fields:
+      - name: width
+        type: u8
+      - name: scale
+        type: u8
+      - name: value
+        type: hugeint
+  query_progress_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A type holding information about the query execution progress."
+    fields:
+      - name: percentage
+        type: f64
+      - name: rows_processed
+        type: u64
+      - name: total_rows_to_process
+        type: u64
+  list_entry:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Internal representation of a LIST metadata entry."
+    fields:
+      - name: offset
+        type: u64
+      - name: length
+        type: u64
+  column:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A column in a result. Use accessor functions rather than accessing fields directly."
+    fields:
+      - name: deprecated_data
+        type: opaque
+        pointer: 1
+      - name: deprecated_nullmask
+        type: bool
+        pointer: 1
+      - name: deprecated_type
+        type: type
+      - name: deprecated_name
+        type: char
+        pointer: 1
+      - name: internal_data
+        type: opaque
+        pointer: 1
+  string:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A DuckDB string (char* + size). Free data with duckdb_free."
+    fields:
+      - name: data
+        type: char
+        pointer: 1
+      - name: size
+        type: idx
+  blob:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A DuckDB BLOB (void* + size). Free data with duckdb_free."
+    fields:
+      - name: data
+        type: opaque
+        pointer: 1
+      - name: size
+        type: idx
+  bit:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A DuckDB BIT (uint8_t* + size). Free data with duckdb_free."
+    fields:
+      - name: data
+        type: u8
+        pointer: 1
+      - name: size
+        type: idx
+  bignum:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A DuckDB BIGNUM (uint8_t* + size + is_negative). The absolute value is stored in data in big endian format. Free data with duckdb_free."
+    fields:
+      - name: data
+        type: u8
+        pointer: 1
+      - name: size
+        type: idx
+      - name: is_negative
+        type: bool
+  result:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A query result. Must be freed with duckdb_destroy_result."
+    fields:
+      - name: deprecated_column_count
+        type: idx
+      - name: deprecated_row_count
+        type: idx
+      - name: deprecated_rows_changed
+        type: idx
+      - name: deprecated_columns
+        type: column
+        pointer: 1
+      - name: deprecated_error_message
+        type: char
+        pointer: 1
+      - name: internal_data
+        type: opaque
+        pointer: 1
