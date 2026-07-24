@@ -114,9 +114,10 @@ public:
 			// compute and verify the checksum
 			auto computed_checksum = Checksum(buffer.get(), size);
 			if (stored_checksum != computed_checksum) {
-				throw DataCorruptionException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
-				                  "stored checksum %llu",
-				                  offset, computed_checksum, stored_checksum);
+				throw DataCorruptionException(
+				    "Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+				    "stored checksum %llu",
+				    offset, computed_checksum, stored_checksum);
 			}
 
 			return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
@@ -191,9 +192,10 @@ public:
 			// compute and verify the checksum
 			auto computed_checksum = Checksum(out_buffer.get(), size);
 			if (stored_checksum != computed_checksum) {
-				throw DataCorruptionException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
-				                  "stored checksum %llu",
-				                  offset, computed_checksum, stored_checksum);
+				throw DataCorruptionException(
+				    "Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+				    "stored checksum %llu",
+				    offset, computed_checksum, stored_checksum);
 			}
 
 			return WriteAheadLogDeserializer(state_p, std::move(out_buffer), size, deserialize_only);

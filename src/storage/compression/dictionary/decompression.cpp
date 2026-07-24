@@ -6,8 +6,9 @@ namespace duckdb {
 
 void CompressedStringScanState::ValidateDictionaryIndex(sel_t index) {
 	if (index >= index_buffer_count) {
-		throw DataCorruptionException("Failed to scan dictionary string - dictionary index was out of range. Database file appears "
-		                  "to be corrupted.");
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 }
 
@@ -29,13 +30,15 @@ uint16_t CompressedStringScanState::GetStringLength(sel_t index) {
 		ValidateDictionaryOffset(dict_offset);
 		ValidateDictionaryOffset(previous_dict_offset);
 		if (dict_offset < previous_dict_offset) {
-			throw DataCorruptionException("Failed to scan dictionary string - dictionary offset was out of range. Database file "
-			                  "appears to be corrupted.");
+			throw DataCorruptionException(
+			    "Failed to scan dictionary string - dictionary offset was out of range. Database file "
+			    "appears to be corrupted.");
 		}
 		auto string_length = dict_offset - previous_dict_offset;
 		if (string_length > NumericLimits<uint16_t>::Maximum()) {
-			throw DataCorruptionException("Failed to scan dictionary string - dictionary offset was out of range. Database file "
-			                  "appears to be corrupted.");
+			throw DataCorruptionException(
+			    "Failed to scan dictionary string - dictionary offset was out of range. Database file "
+			    "appears to be corrupted.");
 		}
 		return UnsafeNumericCast<uint16_t>(string_length);
 	}
@@ -89,8 +92,9 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	auto selection_buffer_size = BitpackingPrimitives::GetRequiredSize(segment.count.load(), current_width);
 	auto expected_index_buffer_offset = DictionaryCompression::DICTIONARY_HEADER_SIZE + selection_buffer_size;
 	if (index_buffer_offset != expected_index_buffer_offset) {
-		throw DataCorruptionException("Failed to scan dictionary string - selection buffer was out of range. Database file appears "
-		                  "to be corrupted.");
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - selection buffer was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 	if (index_buffer_offset > segment_capacity ||
 	    index_buffer_count > (segment_capacity - index_buffer_offset) / sizeof(uint32_t)) {

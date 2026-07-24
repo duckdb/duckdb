@@ -104,7 +104,8 @@ public:
 		segment_data = handle.GetDataMutable() + segment.GetBlockOffset();
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		if (segment.GetBlockOffset() + metadata_offset > segment.GetBlockSize()) {
-			throw DataCorruptionException("Corrupted Patas segment: metadata_offset reaches outside of the blocks memory");
+			throw DataCorruptionException(
+			    "Corrupted Patas segment: metadata_offset reaches outside of the blocks memory");
 		}
 		metadata_ptr = segment_data + metadata_offset;
 	}
@@ -166,7 +167,8 @@ public:
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
 		if (segment.GetBlockOffset() + data_byte_offset >= segment.GetBlockSize()) {
-			throw DataCorruptionException("Corrupted Patas segment: data_byte_offset would reach outside of the blocks memory");
+			throw DataCorruptionException(
+			    "Corrupted Patas segment: data_byte_offset would reach outside of the blocks memory");
 		}
 
 		// Initialize the byte_reader with the data values for the group

@@ -192,9 +192,10 @@ public:
 				const idx_t value_buffer_copy_size = sizeof(T) * vector_size;
 				if (vector_ptr + value_buffer_copy_size > segment_data + block_size) {
 					const auto bytes_remaining_in_block = (segment_data + block_size) - vector_ptr;
-					throw DataCorruptionException("Corrupted ALPRD segment: stored vector_size is invalid, to-copy bytes "
-					                  "(%d) would exceed bytes remaining in the block (%d)",
-					                  value_buffer_copy_size, bytes_remaining_in_block);
+					throw DataCorruptionException(
+					    "Corrupted ALPRD segment: stored vector_size is invalid, to-copy bytes "
+					    "(%d) would exceed bytes remaining in the block (%d)",
+					    value_buffer_copy_size, bytes_remaining_in_block);
 				}
 				memcpy(value_buffer, vector_ptr, value_buffer_copy_size);
 			}

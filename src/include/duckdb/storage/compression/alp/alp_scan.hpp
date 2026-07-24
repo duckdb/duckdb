@@ -147,9 +147,10 @@ public:
 				const idx_t value_buffer_copy_size = sizeof(T) * vector_size;
 				if (vector_ptr + value_buffer_copy_size > segment_data + block_size) {
 					const auto bytes_remaining_in_block = (segment_data + block_size) - vector_ptr;
-					throw DataCorruptionException("Corrupted ALP segment: stored vector_size is invalid, to-copy bytes (%d) "
-					                  "would exceed bytes remaining in the block (%d)",
-					                  value_buffer_copy_size, bytes_remaining_in_block);
+					throw DataCorruptionException(
+					    "Corrupted ALP segment: stored vector_size is invalid, to-copy bytes (%d) "
+					    "would exceed bytes remaining in the block (%d)",
+					    value_buffer_copy_size, bytes_remaining_in_block);
 				}
 				memcpy(value_buffer, vector_ptr, value_buffer_copy_size);
 			}
@@ -169,14 +170,15 @@ public:
 
 		if (vector_state.exceptions_count > vector_size) {
 			throw DataCorruptionException("Corrupted ALP segment: exceptions_count (%d) exceeds vector_size (%d)",
-			                  vector_state.exceptions_count, vector_size);
+			                              vector_state.exceptions_count, vector_size);
 		}
 		if (vector_state.v_factor > vector_state.v_exponent) {
-			throw DataCorruptionException("Corrupted ALP segment: v_factor (%d) exceeds v_exponent (%d)", vector_state.v_factor,
-			                  vector_state.v_exponent);
+			throw DataCorruptionException("Corrupted ALP segment: v_factor (%d) exceeds v_exponent (%d)",
+			                              vector_state.v_factor, vector_state.v_exponent);
 		}
 		if (vector_state.bit_width > sizeof(uint64_t) * 8) {
-			throw DataCorruptionException("Corrupted ALP segment: Invalid bit_width encountered: %d", vector_state.bit_width);
+			throw DataCorruptionException("Corrupted ALP segment: Invalid bit_width encountered: %d",
+			                              vector_state.bit_width);
 		}
 
 		idx_t read_bytes = 0;

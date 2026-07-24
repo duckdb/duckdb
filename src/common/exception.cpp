@@ -312,8 +312,7 @@ IOException::IOException(const unordered_map<string, string> &extra_info, const 
     : Exception(extra_info, ExceptionType::IO, msg) {
 }
 
-DataCorruptionException::DataCorruptionException(const string &msg)
-    : Exception(ExceptionType::DATA_CORRUPTION, msg) {
+DataCorruptionException::DataCorruptionException(const string &msg) : Exception(ExceptionType::DATA_CORRUPTION, msg) {
 }
 
 NotImplementedException::NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg)
