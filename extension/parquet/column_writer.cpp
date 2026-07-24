@@ -239,7 +239,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 			} else {
 				//! Produce a null define
 				if (!can_have_nulls) {
-					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
+					throw IOException("Parquet writer: required column is not allowed to contain NULL values");
 				}
 				state.null_count++;
 				state.definition_levels.push_back(null_value);
@@ -263,13 +263,40 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 		}
 	}
 	if (!can_have_nulls && state.null_count != 0) {
-		throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
+		throw IOException("Parquet writer: required column is not allowed to contain NULL values");
 	}
 }
 
 //===--------------------------------------------------------------------===//
 // Create Column Writer
 //===--------------------------------------------------------------------===//
+
+//! Parquet Variant shredding represents object fields / list elements as groups containing optional "value"
+//! and/or "typed_value" children. Those groups must be REQUIRED in the schema (see VariantShredding.md).
+static bool IsParquetVariantShreddedGroup(const LogicalType &type) {
+	if (!StructType::IsStruct(type.id())) {
+		return false;
+	}
+	auto &children = StructType::GetChildTypes(type);
+	if (children.empty() || children.size() > 2) {
+		return false;
+	}
+	bool has_value = false;
+	bool has_typed_value = false;
+	for (auto &child : children) {
+		if (child.first == "value") {
+			if (child.second.id() != LogicalTypeId::BLOB) {
+				return false;
+			}
+			has_value = true;
+		} else if (child.first == "typed_value") {
+			has_typed_value = true;
+		} else {
+			return false;
+		}
+	}
+	return has_value || has_typed_value;
+}
 
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
                                                              vector<Identifier> path_in_schema, const LogicalType &type,
@@ -372,9 +399,11 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 			auto &child_name = child_types[child_idx].first;
 			auto &child_type = child_types[child_idx].second;
+			//! Shredded Variant object fields must be required groups
+			const bool child_can_have_nulls = !IsParquetVariantShreddedGroup(child_type);
 			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
 			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
-			                                              max_define + 1, true));
+			                                              max_define + 1, child_can_have_nulls));
 		}
 		return make_uniq<StructColumnWriter>(writer, std::move(struct_column), path_in_schema,
 		                                     std::move(child_writers));
@@ -385,9 +414,11 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		auto &child_type = is_list ? ListType::GetChildType(type) : ArrayType::GetChildType(type);
 
 		path_in_schema.push_back("list");
-		auto child_writer =
-		    CreateWriterRecursive(context, writer, path_in_schema, child_type, "element", allow_geometry,
-		                          child_field_ids, shredding_type, max_repeat + 1, max_define + 2, true);
+		//! Shredded Variant array elements must be required groups
+		const bool element_can_have_nulls = !IsParquetVariantShreddedGroup(child_type);
+		auto child_writer = CreateWriterRecursive(context, writer, path_in_schema, child_type, "element",
+		                                          allow_geometry, child_field_ids, shredding_type, max_repeat + 1,
+		                                          max_define + 2, element_can_have_nulls);
 
 		auto list_column =
 		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
