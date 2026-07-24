@@ -50,6 +50,33 @@ statement ok
 SET SEARCH_PATH = 'test,test2';
 
 statement ok
+SET SEARCH_PATH = 'test, test2';
+
+query I
+SELECT MAIN.CURRENT_SETTING('search_path');
+----
+test,test2
+
+statement ok
+SET SEARCH_PATH = ' test , test2 ';
+
+query I
+SELECT MAIN.CURRENT_SETTING('search_path');
+----
+test,test2
+
+statement ok
+CREATE SCHEMA " test_space";
+
+statement ok
+SET SEARCH_PATH = 'test, " test_space"';
+
+query I
+SELECT MAIN.CURRENT_SETTING('search_path');
+----
+test," test_space"
+
+statement ok
 SET SEARCH_PATH = '"test","test2"';
 
 statement ok
