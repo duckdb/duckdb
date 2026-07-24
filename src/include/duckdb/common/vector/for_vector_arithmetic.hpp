@@ -124,7 +124,7 @@ struct FORStandardExecutor {
 		D_ASSERT(res == MaxStored(lw, rw));
 #define DUCKDB_FOR_MIXED_PAIR(LP, RP, TL, TR_, TRES)                                                                   \
 	if (lw == PhysicalType::LP && rw == PhysicalType::RP) {                                                            \
-		return &BinaryExecutor::ExecuteBuffersStandard<TL, TR_, TRES, OP>;                                              \
+		return &BinaryExecutor::ExecuteBuffersStandard<TL, TR_, TRES, OP>;                                             \
 	}
 		DUCKDB_FOR_MIXED_PAIR(UINT16, UINT8, uint16_t, uint8_t, uint16_t)
 		DUCKDB_FOR_MIXED_PAIR(UINT8, UINT16, uint8_t, uint16_t, uint16_t)
