@@ -247,6 +247,8 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, Bu
 
 			SelectionVector sel(offset_in_chunk, rows_to_process);
 
+			// Buffered chunks are in mapped_column_ids layout (plus a trailing rowid column).
+			D_ASSERT(state.current_chunk.ColumnCount() == mapped_column_ids.size() + 1);
 			for (idx_t col_idx = 0; col_idx < state.current_chunk.ColumnCount() - 1; col_idx++) {
 				const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
 				table_chunk.data[col_id].Reference(state.current_chunk.data[col_idx]);

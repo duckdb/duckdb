@@ -1241,7 +1241,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			for (auto &index : indexes.Indexes()) {
 				if (!index.IsBound()) {
 					auto &unbound_index = index.Cast<UnboundIndex>();
-					unbound_index.BufferChunk(chunk, row_id_vector, column_ids, BufferedIndexReplay::INSERT_ENTRY);
+					unbound_index.BufferChunk(chunk, row_id_vector, BufferedIndexReplay::INSERT_ENTRY);
 					continue;
 				}
 				auto &bound_index = index.Cast<BoundIndex>();

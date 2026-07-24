@@ -406,8 +406,7 @@ void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<L
 	auto &index_list = data_table_info.GetIndexes();
 	auto indexed_columns = index_list.GetRequiredColumns();
 
-	// Store the mapped_column_ids and index_types in sorted canonical form, needed for
-	// buffering WAL index operations during replay (see notes in unbound_index.hpp).
+	// Store the mapped_column_ids and index_types in sorted canonical form.
 	// First sort mapped_column_ids, then populate index_types according to the sorted order.
 	for (auto &col : indexed_columns) {
 		mapped_column_ids.emplace_back(col);

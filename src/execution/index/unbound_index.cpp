@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
@@ -21,6 +22,13 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
 			}
 		}
 	}
+
+	// Create the stable per-index layout used by buffered replay chunks.
+	mapped_column_ids.reserve(column_id_set.size());
+	for (auto &col : column_id_set) {
+		mapped_column_ids.emplace_back(col);
+	}
+	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
 }
 
 void UnboundIndex::ResetStorage() {
@@ -34,29 +42,32 @@ void UnboundIndex::ResetStorage() {
 	}
 }
 
-void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
-                               const vector<StorageIndex> &mapped_column_ids_p, const BufferedIndexReplay replay_type) {
+void UnboundIndex::BufferChunk(DataChunk &table_chunk, Vector &row_ids, const BufferedIndexReplay replay_type) {
 	D_ASSERT(!column_ids.empty());
-	auto types = index_column_chunk.GetTypes(); // column types
+
+	// table_chunk is in physical table layout: data[j] holds the data of physical column j.
+	// Reference this index's own columns directly by their physical offset.
+	vector<LogicalType> types;
+	types.reserve(mapped_column_ids.size() + 1);
+	for (auto &col : mapped_column_ids) {
+		if (col.GetPrimaryIndex() >= table_chunk.ColumnCount()) {
+			throw InternalException("UnboundIndex::BufferChunk: indexed column %llu of index %s is out of range for "
+			                        "the table chunk",
+			                        col.GetPrimaryIndex(), GetIndexName());
+		}
+		types.push_back(table_chunk.data[col.GetPrimaryIndex()].GetType());
+	}
 	types.push_back(LogicalType::ROW_TYPE);
 
-	auto &allocator = Allocator::Get(db);
-
-	//! First time we are buffering data, canonical column_id mapping is stored.
-	//! This should be a sorted list of all the physical offsets of Indexed columns on this table.
-	if (mapped_column_ids.empty()) {
-		mapped_column_ids = mapped_column_ids_p;
-	}
-	D_ASSERT(mapped_column_ids == mapped_column_ids_p);
-
-	// combined_chunk has all the indexed columns according to mapped_column_ids ordering, as well as a rowid column.
+	// combined_chunk has this index's columns in mapped_column_ids ordering, as well as a rowid column.
 	DataChunk combined_chunk;
 	combined_chunk.InitializeEmpty(types);
-	for (idx_t i = 0; i < index_column_chunk.ColumnCount(); i++) {
-		combined_chunk.data[i].Reference(index_column_chunk.data[i]);
+	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
+		combined_chunk.data[i].Reference(table_chunk.data[mapped_column_ids[i].GetPrimaryIndex()]);
 	}
 	combined_chunk.data.back().Reference(row_ids);
 
+	auto &allocator = Allocator::Get(db);
 	auto &buffer = buffered_replays.GetBuffer(replay_type);
 	if (buffer == nullptr) {
 		buffer = make_uniq<ColumnDataCollection>(allocator, types);
