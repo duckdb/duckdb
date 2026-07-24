@@ -92,7 +92,7 @@ fileprivate struct VectorElementDataDecoder: Decoder {
   
   func unkeyedContainer() throws -> UnkeyedDecodingContainer {
     switch element.dataType {
-    case .list:
+    case .list, .array:
       return try UnkeyedValueContainer.createListContainer(decoder: self, element: element)
     default:
       let columnType = element.dataType
@@ -540,15 +540,15 @@ fileprivate extension VectorElementDataDecoder.UnkeyedValueContainer {
       )
       throw DecodingError.valueNotFound(Self.self, context)
     }
-    guard dataType == .list else {
+    guard dataType == .list || dataType == .array else {
       let context = DecodingError.Context(
         codingPath: codingPath,
-        debugDescription: "Expected list column type, found \(dataType) column type instead."
+        debugDescription: "Expected list or array column type, found \(dataType) column type instead."
       )
       throw DecodingError.typeMismatch(Self.self, context)
     }
     guard let childVector = element.childVector else {
-      fatalError("Internal consistency error. Expected list content in vector.")
+      fatalError("Internal consistency error. Expected list/array content in vector.")
     }
     return Self(decoder: decoder, codingPath: codingPath, vector: childVector)
   }

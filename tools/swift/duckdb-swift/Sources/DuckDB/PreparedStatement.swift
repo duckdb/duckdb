@@ -433,6 +433,88 @@ public extension PreparedStatement {
       }
     }
   }
+
+  /// Binds a `FLOAT[]` array value at the specified parameter index.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the array of floats to bind (or `nil` to bind NULL)
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  func bind(_ value: [Float]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds an `INTEGER[]` array value at the specified parameter index.
+  func bind(_ value: [Int32]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `DOUBLE[]` array value at the specified parameter index.
+  func bind(_ value: [Double]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `BOOLEAN[]` array value at the specified parameter index.
+  func bind(_ value: [Bool]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `VARCHAR[]` array value at the specified parameter index.
+  func bind(_ value: [String]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `TINYINT[]` array value at the specified parameter index.
+  func bind(_ value: [Int8]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `SMALLINT[]` array value at the specified parameter index.
+  func bind(_ value: [Int16]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `BIGINT[]` array value at the specified parameter index.
+  func bind(_ value: [Int64]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `UTINYINT[]` array value at the specified parameter index.
+  func bind(_ value: [UInt8]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `USMALLINT[]` array value at the specified parameter index.
+  func bind(_ value: [UInt16]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `UINTEGER[]` array value at the specified parameter index.
+  func bind(_ value: [UInt32]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `UBIGINT[]` array value at the specified parameter index.
+  func bind(_ value: [UInt64]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a UUID value at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind (or `nil` to bind NULL)
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
+  func bind(_ value: UUID?, at index: Int) throws {
+    guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
+    var uuidValue: duckdb_value? = duckdb_create_uuid(duckdb_uhugeint(uuid: value))
+    defer { duckdb_destroy_value(&uuidValue) }
+    try withThrowingCommand { duckdb_bind_value(ptr.pointee, .init(index), uuidValue) }
+  }
 }
 
 private extension PreparedStatement {
@@ -458,5 +540,26 @@ private extension PreparedStatement {
   
   func preparedStatementError() -> String? {
     duckdb_prepare_error(ptr.pointee).map(String.init(cString:))
+  }
+}
+
+extension PreparedStatement {
+
+  /// Internal generic implementation for binding an array value.
+  func _bindArray<T: DuckDBArrayElement>(_ value: [T]?, at index: Int) throws {
+    guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
+    let elemType = duckdb_create_logical_type(T.duckdbType)
+    var elemTypePtr: duckdb_logical_type? = elemType
+    defer { duckdb_destroy_logical_type(&elemTypePtr) }
+
+    var children: [duckdb_value?] = value.map { $0.createDuckDBValue() }
+    defer { for i in children.indices { duckdb_destroy_value(&children[i]) } }
+
+    var arrayValue: duckdb_value? = children.withUnsafeMutableBufferPointer { buf in
+      duckdb_create_array_value(elemType, buf.baseAddress, .init(value.count))
+    }
+    defer { duckdb_destroy_value(&arrayValue) }
+
+    try withThrowingCommand { duckdb_bind_value(ptr.pointee, .init(index), arrayValue) }
   }
 }
