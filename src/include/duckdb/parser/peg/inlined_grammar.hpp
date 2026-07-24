@@ -1579,7 +1579,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"AtUnit <- VersionAtUnit / TimestampAtUnit\n"
 	"VersionAtUnit <- 'VERSION'\n"
 	"TimestampAtUnit <- 'TIMESTAMP'\n"
-	"JoinClause <- NearestJoinClause / JoinByClause / RegularJoinClause / JoinWithoutOnClause\n"
+	"JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause / NearestJoinClause\n"
 	"# NEAREST BY has two alternatives so PEG can backtrack: the bare form uses alias-less target mirrors (tried\n"
 	"# first, so an unaliased target does not greedily consume NEAREST/APPROX/EXACT as an alias), and the aliased\n"
 	"# form falls back to a full TableRef when a real alias identifier follows the target.\n"
