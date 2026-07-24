@@ -15,7 +15,12 @@
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -171,8 +176,21 @@ static void EvictOldVersions(ClientContext &context, DuckTableEntry &table, idx_
 	column_ids.emplace_back(version_column_index);
 	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 
+	// Row groups whose version range is entirely above the cutoff have nothing to evict. REFRESH
+	// appends one version per call, so row groups are already naturally version-ordered as a side
+	// effect of insertion order; pushing this filter lets the storage layer's existing per-row-group
+	// zonemap (min/max) statistics skip those row groups without scanning them. The exact per-row
+	// check below is unchanged and still runs on every row that is scanned, since a row group can
+	// straddle a version boundary if an earlier append didn't fill it exactly.
+	TableFilterSet filters;
+	auto version_ref = make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, storage_t(0));
+	auto cutoff_value = make_uniq<BoundConstantExpression>(Value::BIGINT(cutoff));
+	auto version_filter = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+	                                                        std::move(version_ref), std::move(cutoff_value));
+	filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(version_filter)));
+
 	TableScanState scan_state;
-	storage.InitializeScan(context, transaction, scan_state, column_ids);
+	storage.InitializeScan(context, transaction, scan_state, column_ids, &filters);
 
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(Allocator::Get(context), vector<LogicalType> {LogicalType::BIGINT, LogicalType::ROW_TYPE});
