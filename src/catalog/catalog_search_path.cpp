@@ -28,7 +28,8 @@ string CatalogSearchEntry::ToString() const {
 string CatalogSearchEntry::WriteOptionallyQuoted(const Identifier &input) {
 	auto &name = input.GetIdentifierName();
 	for (idx_t i = 0; i < name.size(); i++) {
-		if (name[i] == '.' || name[i] == ',' || name[i] == '"') {
+		if (name[i] == '.' || name[i] == ',' || name[i] == '"' ||
+		    ((i == 0 || i + 1 == name.size()) && StringUtil::CharacterIsSpace(name[i]))) {
 			return "\"" + StringUtil::Replace(name, "\"", "\"\"") + "\"";
 		}
 	}
@@ -46,11 +47,19 @@ string CatalogSearchEntry::ListToString(const vector<CatalogSearchEntry> &input)
 	return result;
 }
 
+static void SkipUnquotedWhitespace(const string &input, idx_t &idx) {
+	while (idx < input.size() && StringUtil::CharacterIsSpace(input[idx])) {
+		idx++;
+	}
+}
+
 CatalogSearchEntry CatalogSearchEntry::ParseInternal(const string &input, idx_t &idx) {
 	string catalog;
 	string schema;
 	string entry;
+	idx_t entry_end = 0;
 	bool finished = false;
+	SkipUnquotedWhitespace(input, idx);
 normal:
 	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
@@ -63,6 +72,9 @@ normal:
 			goto separator;
 		}
 		entry += input[idx];
+		if (!StringUtil::CharacterIsSpace(input[idx])) {
+			entry_end = entry.size();
+		}
 	}
 	finished = true;
 	goto separator;
@@ -75,14 +87,17 @@ quoted:
 			if (idx < input.size() && input[idx] == '"') {
 				// escaped quote
 				entry += input[idx];
+				entry_end = entry.size();
 				continue;
 			}
 			goto normal;
 		}
 		entry += input[idx];
+		entry_end = entry.size();
 	}
 	throw ParserException("Unterminated quote in qualified name!");
 separator:
+	entry.resize(entry_end);
 	if (entry.empty()) {
 		throw ParserException("Unexpected dot - empty CatalogSearchEntry");
 	}
@@ -97,10 +112,12 @@ separator:
 		throw ParserException("Too many dots - expected [schema] or [catalog.schema] for CatalogSearchEntry");
 	}
 	entry = "";
+	entry_end = 0;
 	idx++;
 	if (finished) {
 		goto final;
 	}
+	SkipUnquotedWhitespace(input, idx);
 	goto normal;
 final:
 	if (schema.empty()) {
