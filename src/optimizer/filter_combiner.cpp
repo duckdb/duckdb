@@ -19,6 +19,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -464,7 +465,9 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (func.Function().GetName() != "~~") {
+	auto &function_name = func.Function().GetName();
+	const bool case_insensitive = function_name == "~~*";
+	if (function_name != "~~" && !case_insensitive) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (func.GetChildren()[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
@@ -500,12 +503,42 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 		}
 		prefix += c;
 	}
-	if (equality) {
+	if (equality && !case_insensitive) {
 		//! If the LIKE has no special characters we can turn it into an equality and push that down
 		auto equal_filter =
 		    CreateComparisonExpression(*func.GetChildren()[0], ExpressionType::COMPARE_EQUAL, Value(prefix));
 		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(equal_filter)));
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+	}
+	if (case_insensitive) {
+		// ASCII case variants fall between the uppercase prefix and the successor of the lowercase prefix.
+		string lower_bound_prefix;
+		string upper_bound_prefix;
+		lower_bound_prefix.reserve(prefix.size());
+		upper_bound_prefix.reserve(prefix.size());
+		for (auto c : prefix) {
+			auto ascii_byte = static_cast<uint8_t>(c);
+			if (ascii_byte & 0x80) {
+				return FilterPushdownResult::NO_PUSHDOWN;
+			}
+			auto lower_ascii_byte = StringUtil::ASCII_TO_LOWER_MAP[ascii_byte];
+			// U+0130 and U+212A lowercase to ASCII i and k, so ASCII bounds are not safe for these characters.
+			if (lower_ascii_byte == 'i' || lower_ascii_byte == 'k') {
+				return FilterPushdownResult::NO_PUSHDOWN;
+			}
+			lower_bound_prefix.push_back(UnsafeNumericCast<char>(StringUtil::ASCII_TO_UPPER_MAP[ascii_byte]));
+			upper_bound_prefix.push_back(UnsafeNumericCast<char>(lower_ascii_byte));
+		}
+		if (lower_bound_prefix.empty() || !Utf8Proc::FindNextLegalUTF8(upper_bound_prefix)) {
+			return FilterPushdownResult::NO_PUSHDOWN;
+		}
+		auto lower_bound = CreateComparisonExpression(
+		    *func.GetChildren()[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(std::move(lower_bound_prefix)));
+		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(lower_bound)));
+		auto upper_bound = CreateComparisonExpression(*func.GetChildren()[0], ExpressionType::COMPARE_LESSTHAN,
+		                                              Value(std::move(upper_bound_prefix)));
+		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
+		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}
 
 	//! We have a prefix - we can push down the prefix using a bound (x >= PREFIX AND x < next_prefix)
