@@ -15,9 +15,7 @@ LogicalUpdate::LogicalUpdate(TableCatalogEntry &table)
 
 LogicalUpdate::LogicalUpdate(ClientContext &context, const unique_ptr<CreateInfo> &table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE),
-      table(Catalog::GetEntry<TableCatalogEntry>(
-          context, QualifiedName(table_info->GetQualifiedName().Catalog(), table_info->GetQualifiedName().Schema(),
-                                 table_info->Cast<CreateTableInfo>().GetTableName()))) {
+      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->GetQualifiedName())) {
 	auto binder = Binder::CreateBinder(context);
 	bound_constraints = binder->BindConstraints(table);
 }

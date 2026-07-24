@@ -9,6 +9,7 @@
         "test/sql/catalog/nested_schema/create_nested_schema.test",
         "test/sql/catalog/nested_schema/drop_nested_schema.test",
         "test/sql/catalog/nested_schema/nested_table.test",
+        "test/sql/catalog/nested_schema/nested_table_dml.test",
         "test/sql/show_select/test_describe_all.test",
         "test/sql/catalog/function/attached_macro.test",
         "test/sql/catalog/test_temporary.test",
