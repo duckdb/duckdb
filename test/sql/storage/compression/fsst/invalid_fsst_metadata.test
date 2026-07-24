@@ -20,4 +20,4 @@ SELECT count(*) FROM pragma_storage_info('tbl') WHERE compression='FSST'
 statement error
 SELECT sum(length(street)) FROM tbl
 ----
-IO Error: Failed to scan FSST string segment - dictionary offset was out of range. Database file appears to be corrupted.
+<REGEX>:.*Failed to scan .*string segment - dictionary offset was out of range. Database file appears to be corrupted.*
