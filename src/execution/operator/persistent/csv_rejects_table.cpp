@@ -42,7 +42,7 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	auto key = StringUtil::Format("CSV_REJECTS_TABLE_CACHE_ENTRY_%s_%s", StringUtil::Upper(rejects_scan),
 	                              StringUtil::Upper(rejects_error));
 	auto &cache = ObjectCache::GetObjectCache(context);
-	auto database_id = DatabaseInstance::GetDatabase(context).GetDatabaseId();
+	auto memory_context_id = DatabaseInstance::GetDatabase(context).GetMemoryContextId();
 	auto &catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
 	auto rejects_scan_exist =
 	    catalog.GetEntry<TableCatalogEntry>(
@@ -52,7 +52,7 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	    catalog.GetEntry<TableCatalogEntry>(
 	        context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier(rejects_error)),
 	        OnEntryNotFound::RETURN_NULL) != nullptr;
-	if ((rejects_scan_exist || rejects_error_exist) && !cache.Get<CSVRejectsTable>(database_id, key)) {
+	if ((rejects_scan_exist || rejects_error_exist) && !cache.Get<CSVRejectsTable>(memory_context_id, key)) {
 		std::ostringstream error;
 		if (rejects_scan_exist) {
 			error << "Reject Scan Table name \"" << rejects_scan << "\" is already in use. ";
@@ -64,7 +64,7 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 		throw BinderException(error.str());
 	}
 
-	return cache.GetOrCreate<CSVRejectsTable>(database_id, key, rejects_scan, rejects_error);
+	return cache.GetOrCreate<CSVRejectsTable>(memory_context_id, key, rejects_scan, rejects_error);
 }
 
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {

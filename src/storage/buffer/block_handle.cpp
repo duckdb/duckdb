@@ -13,7 +13,7 @@ namespace duckdb {
 
 BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p,
                          idx_t block_alloc_size_p)
-    : buffer_manager(buffer_manager), database_id(buffer_manager.GetDatabase().GetDatabaseId()), block_id(block_id_p),
+    : buffer_manager(buffer_manager), memory_context_id(buffer_manager.GetDatabase().GetMemoryContextId()), block_id(block_id_p),
       state(BlockState::BLOCK_UNLOADED), readers(0), tag(tag_p), buffer_type(FileBufferType::BLOCK), buffer(nullptr),
       eviction_seq_num(0), has_queue_entry(false), lru_timestamp_msec(), destroy_buffer_upon(DestroyBufferUpon::BLOCK),
       memory_usage(block_alloc_size_p), memory_charge(tag, buffer_manager.GetBufferPool()), unswizzled(nullptr),
@@ -23,7 +23,7 @@ BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, M
 BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p,
                          unique_ptr<FileBuffer> buffer_p, DestroyBufferUpon destroy_buffer_upon_p, idx_t size_p,
                          BufferPoolReservation &&reservation)
-    : buffer_manager(buffer_manager), database_id(buffer_manager.GetDatabase().GetDatabaseId()), block_id(block_id_p),
+    : buffer_manager(buffer_manager), memory_context_id(buffer_manager.GetDatabase().GetMemoryContextId()), block_id(block_id_p),
       state(BlockState::BLOCK_LOADED), readers(0), tag(tag_p), buffer_type(buffer_p->GetBufferType()),
       buffer(std::move(buffer_p)), eviction_seq_num(0), has_queue_entry(false), lru_timestamp_msec(),
       destroy_buffer_upon(destroy_buffer_upon_p), memory_usage(size_p),

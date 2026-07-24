@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/memory_context.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database_memory_manager.hpp"
@@ -54,7 +55,7 @@ public:
 public:
 	BufferPool &GetBufferPool() const;
 	DUCKDB_API const shared_ptr<DatabaseMemoryManager> &GetMemoryManager() const;
-	DUCKDB_API idx_t GetDatabaseId() const;
+	DUCKDB_API MemoryContextId GetMemoryContextId() const;
 	DUCKDB_API SecretManager &GetSecretManager();
 	DUCKDB_API BufferManager &GetBufferManager();
 	DUCKDB_API const BufferManager &GetBufferManager() const;
@@ -99,7 +100,7 @@ private:
 	void Configure(DBConfig &config, const char *path);
 
 private:
-	const idx_t database_id;
+	const MemoryContextId memory_context_id;
 	shared_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<ExternalResourceTypeRegistry> external_resource_type_registry;

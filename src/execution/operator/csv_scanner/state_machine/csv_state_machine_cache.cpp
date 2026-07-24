@@ -497,7 +497,7 @@ const StateMachine &CSVStateMachineCache::Get(const CSVStateMachineOptions &stat
 
 CSVStateMachineCache &CSVStateMachineCache::Get(ClientContext &context) {
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return *cache.GetOrCreate<CSVStateMachineCache>(DatabaseInstance::GetDatabase(context).GetDatabaseId(),
+	return *cache.GetOrCreate<CSVStateMachineCache>(DatabaseInstance::GetDatabase(context).GetMemoryContextId(),
 	                                                CSVStateMachineCache::ObjectType());
 }
 

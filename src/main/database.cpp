@@ -113,7 +113,7 @@ const shared_ptr<ObjectCache> &DatabaseMemoryManager::GetObjectCacheHandle() con
 	return object_cache;
 }
 
-static atomic<idx_t> next_database_id {0};
+static atomic<idx_t> next_memory_context_id {0};
 
 DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
@@ -143,7 +143,7 @@ DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_o
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() : database_id(next_database_id.fetch_add(1)), db_validity(*this) {
+DatabaseInstance::DatabaseInstance() : memory_context_id(MemoryContextId(next_memory_context_id.fetch_add(1))), db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
@@ -161,7 +161,7 @@ DatabaseInstance::~DatabaseInstance() {
 	// destroy child elements
 	connection_manager.reset();
 	if (config.object_cache) {
-		config.object_cache->EraseDatabase(database_id);
+		config.object_cache->EraseDatabase(memory_context_id);
 	}
 	scheduler.reset();
 	db_manager.reset();
@@ -469,8 +469,8 @@ const shared_ptr<DatabaseMemoryManager> &DatabaseInstance::GetMemoryManager() co
 	return config.memory_manager;
 }
 
-idx_t DatabaseInstance::GetDatabaseId() const {
-	return database_id;
+MemoryContextId DatabaseInstance::GetMemoryContextId() const {
+	return memory_context_id;
 }
 
 DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {

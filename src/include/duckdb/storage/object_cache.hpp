@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/lru_cache.hpp"
+#include "duckdb/common/memory_context.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -68,9 +69,9 @@ public:
 	    : lru_cache(max_memory), buffer_pool(std::move(buffer_pool_p)) {
 	}
 
-	shared_ptr<ObjectCacheEntry> GetObject(idx_t database_id, const string &key) {
+	shared_ptr<ObjectCacheEntry> GetObject(MemoryContextId context_id, const string &key) {
 		const lock_guard<mutex> lock(lock_mutex);
-		auto cache_key = MakeCacheKey(database_id, key);
+		auto cache_key = MakeCacheKey(context_id, key);
 		auto non_evictable_it = non_evictable_entries.find(cache_key);
 		if (non_evictable_it != non_evictable_entries.end()) {
 			return non_evictable_it->second;
@@ -79,8 +80,8 @@ public:
 	}
 
 	template <class T>
-	shared_ptr<T> Get(idx_t database_id, const string &key) {
-		shared_ptr<ObjectCacheEntry> object = GetObject(database_id, key);
+	shared_ptr<T> Get(MemoryContextId context_id, const string &key) {
+		shared_ptr<ObjectCacheEntry> object = GetObject(context_id, key);
 		if (!object || object->GetObjectType() != T::ObjectType()) {
 			return nullptr;
 		}
@@ -88,9 +89,9 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(idx_t database_id, const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreate(MemoryContextId context_id, const string &key, ARGS &&... args) {
 		const lock_guard<mutex> lock(lock_mutex);
-		auto cache_key = MakeCacheKey(database_id, key);
+		auto cache_key = MakeCacheKey(context_id, key);
 
 		// Check non-evictable entries first
 		auto non_evictable_it = non_evictable_entries.find(cache_key);
@@ -126,13 +127,13 @@ public:
 		return value;
 	}
 
-	void Put(idx_t database_id, string key, shared_ptr<ObjectCacheEntry> value) {
+	void Put(MemoryContextId context_id, string key, shared_ptr<ObjectCacheEntry> value) {
 		if (!value) {
 			return;
 		}
 
 		const lock_guard<mutex> lock(lock_mutex);
-		auto cache_key = MakeCacheKey(database_id, key);
+		auto cache_key = MakeCacheKey(context_id, key);
 		const auto estimated_memory = value->GetEstimatedCacheMemory();
 		const bool is_evictable = estimated_memory.IsValid();
 		if (!is_evictable) {
@@ -145,9 +146,9 @@ public:
 		lru_cache.Put(std::move(cache_key), std::move(value), std::move(reservation));
 	}
 
-	void Delete(idx_t database_id, const string &key) {
+	void Delete(MemoryContextId context_id, const string &key) {
 		const lock_guard<mutex> lock(lock_mutex);
-		auto cache_key = MakeCacheKey(database_id, key);
+		auto cache_key = MakeCacheKey(context_id, key);
 		auto iter = non_evictable_entries.find(cache_key);
 		if (iter != non_evictable_entries.end()) {
 			non_evictable_entries.erase(iter);
@@ -156,9 +157,9 @@ public:
 		lru_cache.Delete(cache_key);
 	}
 
-	void EraseDatabase(idx_t database_id) {
+	void EraseDatabase(MemoryContextId context_id) {
 		const lock_guard<mutex> lock(lock_mutex);
-		auto prefix = StringUtil::Format("%llu-", database_id);
+		auto prefix = StringUtil::Format("%s-", context_id.ToString());
 		for (auto entry = non_evictable_entries.begin(); entry != non_evictable_entries.end();) {
 			if (!StringUtil::StartsWith(entry->first, prefix)) {
 				entry++;
@@ -173,24 +174,24 @@ public:
 	//! ObjectType so that callers can pass a natural key (e.g. a file path) without having to build a unique
 	//! cache key themselves.
 	template <class T>
-	shared_ptr<T> GetWithTypePrefix(idx_t database_id, const string &key) {
-		return Get<T>(database_id, MakeTypedCacheKey<T>(key));
+	shared_ptr<T> GetWithTypePrefix(MemoryContextId context_id, const string &key) {
+		return Get<T>(context_id, MakeTypedCacheKey<T>(key));
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(idx_t database_id, const string &key, ARGS &&... args) {
-		return GetOrCreate<T>(database_id, MakeTypedCacheKey<T>(key), std::forward<ARGS>(args)...);
+	shared_ptr<T> GetOrCreateWithTypePrefix(MemoryContextId context_id, const string &key, ARGS &&... args) {
+		return GetOrCreate<T>(context_id, MakeTypedCacheKey<T>(key), std::forward<ARGS>(args)...);
 	}
 
 	template <class T>
-	void PutWithTypePrefix(idx_t database_id, const string &key,
+	void PutWithTypePrefix(MemoryContextId context_id, const string &key,
 	                       shared_ptr<ObjectCacheEntry> value) { // NOLINT(performance-unnecessary-value-param)
-		Put(database_id, MakeTypedCacheKey<T>(key), std::move(value));
+		Put(context_id, MakeTypedCacheKey<T>(key), std::move(value));
 	}
 
 	template <class T>
-	void DeleteWithTypePrefix(idx_t database_id, const string &key) {
-		Delete(database_id, MakeTypedCacheKey<T>(key));
+	void DeleteWithTypePrefix(MemoryContextId context_id, const string &key) {
+		Delete(context_id, MakeTypedCacheKey<T>(key));
 	}
 
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);
@@ -224,8 +225,8 @@ private:
 	static string MakeTypedCacheKey(const string &key) {
 		return StringUtil::Format("%s-%s", T::ObjectType(), key);
 	}
-	static string MakeCacheKey(idx_t database_id, const string &key) {
-		return StringUtil::Format("%llu-%s", database_id, key);
+	static string MakeCacheKey(MemoryContextId context_id, const string &key) {
+		return StringUtil::Format("%s-%s", context_id.ToString(), key);
 	}
 
 private:

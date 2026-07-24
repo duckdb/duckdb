@@ -48,7 +48,7 @@ private:
 
 class EncryptionKeyManager : public ObjectCacheEntry {
 public:
-	static EncryptionKeyManager &GetInternal(ObjectCache &cache, idx_t database_id);
+	static EncryptionKeyManager &GetInternal(ObjectCache &cache, MemoryContextId context_id);
 	static EncryptionKeyManager &Get(ClientContext &context);
 	static EncryptionKeyManager &Get(DatabaseInstance &db);
 

@@ -38,7 +38,7 @@ namespace duckdb {
 
 ParquetKeys &ParquetKeys::Get(ClientContext &context) {
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return *cache.GetOrCreate<ParquetKeys>(DatabaseInstance::GetDatabase(context).GetDatabaseId(),
+	return *cache.GetOrCreate<ParquetKeys>(DatabaseInstance::GetDatabase(context).GetMemoryContextId(),
 	                                       ParquetKeys::ObjectType());
 }
 

@@ -69,7 +69,7 @@ void StandardBufferManager::SetTemporaryDirectory(const string &new_dir) {
 }
 
 StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
-    : BufferManager(), db(db), database_id(db.GetDatabaseId()),
+    : BufferManager(), db(db), memory_context_id(db.GetMemoryContextId()),
       buffer_pool(db.GetMemoryManager()->GetBufferPoolHandle()), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_uniq<BufferAllocatorData>(*this)) {
@@ -343,7 +343,7 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 
 	idx_t required_memory;
 	auto &block_memory = handle->GetMemory();
-	if (block_memory.GetDatabaseId() != database_id) {
+	if (block_memory.GetMemoryContextId() != memory_context_id) {
 		throw InternalException("Cannot pin a block owned by another database instance");
 	}
 	{
@@ -431,7 +431,7 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	bool purge = false;
 	auto &block_memory = handle->GetMemory();
-	if (block_memory.GetDatabaseId() != database_id) {
+	if (block_memory.GetMemoryContextId() != memory_context_id) {
 		throw InternalException("Cannot unpin a block owned by another database instance");
 	}
 	{

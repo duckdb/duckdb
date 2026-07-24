@@ -19,7 +19,7 @@ static QueryContext GetBlockOwnerContext(QueryContext context, const BlockMemory
 		return context;
 	}
 	auto client_context = context.GetClientContext();
-	if (DatabaseInstance::GetDatabase(*client_context).GetDatabaseId() != memory.GetDatabaseId()) {
+	if (DatabaseInstance::GetDatabase(*client_context).GetMemoryContextId() != memory.GetMemoryContextId()) {
 		return QueryContext();
 	}
 	return context;

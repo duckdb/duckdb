@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/memory_context.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
@@ -45,8 +46,8 @@ public:
 	BufferManager &GetBufferManager() {
 		return buffer_manager;
 	}
-	idx_t GetDatabaseId() const {
-		return database_id;
+	MemoryContextId GetMemoryContextId() const {
+		return memory_context_id;
 	}
 	//! Returns the block ID.
 	block_id_t BlockId() const {
@@ -216,7 +217,7 @@ private:
 	//! A reference to the buffer manager.
 	BufferManager &buffer_manager;
 	//! Database instance that owns this block.
-	const idx_t database_id;
+	const MemoryContextId memory_context_id;
 	//! The block id of the block.
 	const block_id_t block_id;
 	//! The block-level lock.
