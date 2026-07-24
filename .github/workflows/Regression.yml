@@ -18,38 +18,12 @@ on:
       runner_linux_small:
         default: ubuntu-latest
         type: string
-      save_cache:
-        default: false
-        type: boolean
-  workflow_dispatch:
-    inputs:
-      git_ref:
-        description: 'Git ref to test for current release'
-        type: string
-      base_hash:
-        description: 'Base hash'
-        type: string
-      build_current_release:
-        description: 'Build and upload linux-release-build in this workflow'
-        default: true
-        type: boolean
-      run_slow_tests:
-        description: 'Run slow tests when applicable'
-        default: false
-        type: boolean
-      runner_linux_x64:
-        description: 'Optional x64 runner label override'
-        default: ubuntu-latest
-        type: string
-      runner_linux_small:
-        description: 'Optional small runner label override'
-        default: ubuntu-latest
+      runner_provider:
+        required: true
         type: string
       save_cache:
         default: false
         type: boolean
-  repository_dispatch:
-
 concurrency:
   group: regression-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
@@ -68,9 +42,11 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          fetch-depth: 0
+          runner_provider: ${{ inputs.runner_provider }}
+          fetch_depth: 0
           ref: ${{ env.GIT_REF }}
 
       - name: Install tools
@@ -237,8 +213,10 @@ jobs:
             benchmarks: .github/regression/tpcds_sf3.csv
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: namespace
           ref: ${{ env.GIT_REF }}
 
       - name: Install
@@ -380,8 +358,10 @@ jobs:
       EXTENSION_STATIC_BUILD: 1
 
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
+          runner_provider: ${{ inputs.runner_provider }}
           ref: ${{ env.GIT_REF }}
 
       - name: Install

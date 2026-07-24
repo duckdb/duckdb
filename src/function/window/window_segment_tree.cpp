@@ -156,7 +156,7 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
                                              unique_ptr<WindowCursor> cursor_p, const ValidityArray &filter_mask)
     : allocator(allocator), aggr(aggr),
       order_insensitive(aggr.function.GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT),
-      filter_mask(filter_mask), state_size(aggr.function.GetStateSizeCallback()(aggr.function)),
+      filter_mask(filter_mask), state_size(aggr.function.GetStateSize(aggr.GetFunctionData())),
       state(state_size * STANDARD_VECTOR_SIZE), cursor(std::move(cursor_p)), statep(LogicalType::POINTER),
       statel(LogicalType::POINTER), statef(LogicalType::POINTER), flush_count(0) {
 	auto &inputs = cursor->chunk;
@@ -456,10 +456,8 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTreeGlobalState &tree, c
 
 void WindowSegmentTreePart::Initialize(idx_t count) {
 	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
-	for (idx_t rid = 0; rid < count; ++rid) {
-		auto state_ptr = fdata[rid];
-		aggr.function.GetStateInitCallback()(aggr.function, state_ptr);
-	}
+	AggregateStateInput state_input(aggr.function, aggr.GetFunctionData());
+	aggr.function.GetStateInitCallback()(state_input, fdata, count);
 }
 
 void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTreeGlobalState &tree, const idx_t *begins,

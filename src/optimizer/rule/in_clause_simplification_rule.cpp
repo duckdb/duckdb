@@ -19,18 +19,18 @@ InClauseSimplificationRule::InClauseSimplificationRule(ExpressionRewriter &rewri
 unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                          bool &changes_made, bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundOperatorExpression>();
-	if (expr.GetChildrenMutable()[0]->GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+	if (!BoundCastExpression::IsCast(*expr.GetChildrenMutable()[0])) {
 		return nullptr;
 	}
-	auto &cast_expression = expr.GetChildrenMutable()[0]->Cast<BoundCastExpression>();
-	if (cast_expression.Child().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+	auto &cast_expression = expr.GetChildrenMutable()[0]->Cast<BoundFunctionExpression>();
+	if (BoundCastExpression::Child(cast_expression).GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
 	//! The goal here is to remove the cast from the probe expression
 	//! and apply a cast to the constant expressions. We can only do this
 	//! if the semantics do not change, which only happens when BOTH casts
 	//! are invertible.
-	auto target_type = cast_expression.source_type();
+	auto target_type = BoundCastExpression::SourceType(cast_expression);
 	if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType())) {
 		return nullptr;
 	}
@@ -60,7 +60,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 		//		expr->children[i] = std::move(new_constant_expr);
 	}
 	//! We can cast the full list, so we move the column
-	expr.GetChildrenMutable()[0] = std::move(cast_expression.ChildMutable());
+	expr.GetChildrenMutable()[0] = std::move(BoundCastExpression::ChildMutable(cast_expression));
 	return nullptr;
 }
 
@@ -87,8 +87,8 @@ unique_ptr<Expression> InEnumSimplificationRule::Apply(LogicalOperator &op, vect
                                                        bool &changes_made, bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundOperatorExpression>();
 	auto &children = expr.GetChildrenMutable();
-	auto &cast_expr = children[0]->Cast<BoundCastExpression>();
-	auto &enum_expr = cast_expr.Child();
+	auto &cast_expr = children[0]->Cast<BoundFunctionExpression>();
+	auto &enum_expr = BoundCastExpression::Child(cast_expr);
 	auto &enum_type = enum_expr.GetReturnType();
 
 	// Look up the domain for the original ENUM
@@ -165,19 +165,19 @@ unique_ptr<Expression> EnumCompareSimplificationRule::Apply(LogicalOperator &op,
                                                             bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundFunctionExpression>();
 
-	optional_ptr<BoundCastExpression> cast_expr;
+	optional_ptr<BoundFunctionExpression> cast_expr;
 	optional_ptr<BoundConstantExpression> const_expr;
 	idx_t cast_idx = 0;
 	if (BoundComparisonExpression::Left(expr).GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		cast_expr = BoundComparisonExpression::RightMutable(expr)->Cast<BoundCastExpression>();
+		cast_expr = BoundComparisonExpression::RightMutable(expr)->Cast<BoundFunctionExpression>();
 		const_expr = BoundComparisonExpression::LeftMutable(expr)->Cast<BoundConstantExpression>();
 		cast_idx = 1;
 	} else {
-		cast_expr = BoundComparisonExpression::LeftMutable(expr)->Cast<BoundCastExpression>();
+		cast_expr = BoundComparisonExpression::LeftMutable(expr)->Cast<BoundFunctionExpression>();
 		const_expr = BoundComparisonExpression::RightMutable(expr)->Cast<BoundConstantExpression>();
 	}
 
-	auto &enum_expr = cast_expr->Child();
+	auto &enum_expr = BoundCastExpression::Child(*cast_expr);
 	auto &enum_type = enum_expr.GetReturnType();
 
 	vector<unique_ptr<Expression>> cmp_children;

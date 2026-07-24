@@ -915,9 +915,8 @@ void TableScanGetMetrics(TableFunctionGetMetricsInput &input) {
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
 	InsertionOrderPreservingMap<string> result;
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	result["Table"] =
-	    QualifiedName(bind_data.table.schema.catalog.GetName(), bind_data.table.schema.name, bind_data.table.name)
-	        .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	result["Table"] = bind_data.table.schema.GetQualifiedName(bind_data.table.name)
+	                      .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result["Type"] = bind_data.is_index_scan ? "Index Scan" : "Sequential Scan";
 	return result;
 }
@@ -925,27 +924,38 @@ InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput
 static void TableScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	// the catalog/schema/name are only the innermost qualification - "qualified_name" carries the full (possibly
+	// nested) schema path
 	serializer.WriteProperty(100, "catalog", bind_data.table.schema.catalog.GetName());
 	serializer.WriteProperty(101, "schema", bind_data.table.schema.name);
 	serializer.WriteProperty(102, "table", bind_data.table.name);
 	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
 	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
 	serializer.WritePropertyWithDefault(105, "result_ids", unsafe_vector<row_t>());
+	serializer.WritePropertyWithDefault<QualifiedName>(
+	    106, "qualified_name", bind_data.table.schema.GetQualifiedName(bind_data.table.name), QualifiedName());
 }
 
 static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
 	auto catalog = deserializer.ReadProperty<Identifier>(100, "catalog");
 	auto schema = deserializer.ReadProperty<Identifier>(101, "schema");
 	auto table = deserializer.ReadProperty<Identifier>(102, "table");
-	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(),
-	                                                           QualifiedName(catalog, schema, table));
+	auto is_index_scan = deserializer.ReadProperty<bool>(103, "is_index_scan");
+	auto is_create_index = deserializer.ReadProperty<bool>(104, "is_create_index");
+	deserializer.ReadDeletedProperty<unsafe_vector<row_t>>(105, "result_ids");
+	// plans written before nested schema support only have the innermost qualification
+	auto qualified_name =
+	    deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(106, "qualified_name", QualifiedName());
+	if (qualified_name.Path().empty()) {
+		qualified_name = QualifiedName(catalog, schema, table);
+	}
+	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), qualified_name);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}
 	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
-	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
-	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
-	deserializer.ReadDeletedProperty<unsafe_vector<row_t>>(105, "result_ids");
+	result->is_index_scan = is_index_scan;
+	result->is_create_index = is_create_index;
 	return std::move(result);
 }
 

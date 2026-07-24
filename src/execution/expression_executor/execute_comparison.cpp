@@ -1,9 +1,5 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -102,11 +98,11 @@ static bool TryPrimitiveSelectOperation(const Vector &left, const Vector &right,
 
 template <class PREDICATE>
 static idx_t ComparatorSelectOperation(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
-                                       idx_t count, optional_ptr<SelectionVector> true_sel,
+                                       idx_t count, const bool inequality, optional_ptr<SelectionVector> true_sel,
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask,
                                        PREDICATE predicate) {
 	Vector comparator_result(LogicalType::TINYINT, count);
-	VectorOperations::ComparatorFill(left, right, comparator_result, count);
+	VectorOperations::ComparatorFill(left, right, comparator_result, count, inequality);
 	auto cmp_data = comparator_result.Values<int8_t>();
 
 	if (!sel) {
@@ -148,7 +144,7 @@ idx_t VectorOperations::Equals(const Vector &left, const Vector &right, optional
 	if (TryPrimitiveSelectOperation<duckdb::Equals>(left, right, sel, count, true_sel, false_sel, null_mask, result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true_sel, false_sel, null_mask,
+	return ComparatorSelectOperation(left, right, sel, count, false, true_sel, false_sel, null_mask,
 	                                 [](int8_t v) { return v == Comparator::VALUES_ARE_EQUAL; });
 }
 
@@ -160,7 +156,7 @@ idx_t VectorOperations::NotEquals(const Vector &left, const Vector &right, optio
 	                                                   result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true_sel, false_sel, null_mask,
+	return ComparatorSelectOperation(left, right, sel, count, false, true_sel, false_sel, null_mask,
 	                                 [](int8_t v) { return v != Comparator::VALUES_ARE_EQUAL; });
 }
 
@@ -172,7 +168,7 @@ idx_t VectorOperations::GreaterThan(const Vector &left, const Vector &right, opt
 	                                                     result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true_sel, false_sel, null_mask,
+	return ComparatorSelectOperation(left, right, sel, count, true, true_sel, false_sel, null_mask,
 	                                 [](int8_t v) { return v > 0; });
 }
 
@@ -186,7 +182,7 @@ idx_t VectorOperations::GreaterThanEquals(const Vector &left, const Vector &righ
 	                                                           result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true_sel, false_sel, null_mask,
+	return ComparatorSelectOperation(left, right, sel, count, true, true_sel, false_sel, null_mask,
 	                                 [](int8_t v) { return v >= 0; });
 }
 
@@ -198,7 +194,7 @@ idx_t VectorOperations::LessThan(const Vector &left, const Vector &right, option
 	                                                     result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true_sel, false_sel, null_mask,
+	return ComparatorSelectOperation(left, right, sel, count, true, true_sel, false_sel, null_mask,
 	                                 [](int8_t v) { return v < 0; });
 }
 
@@ -210,7 +206,7 @@ idx_t VectorOperations::LessThanEquals(const Vector &left, const Vector &right, 
 	                                                           result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true_sel, false_sel, null_mask,
+	return ComparatorSelectOperation(left, right, sel, count, true, true_sel, false_sel, null_mask,
 	                                 [](int8_t v) { return v <= 0; });
 }
 

@@ -40,9 +40,11 @@
 
 namespace duckdb {
 
-DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, Identifier schema,
-                             Identifier table)
-    : db(db), table_io_manager(std::move(table_io_manager_p)), schema(std::move(schema)), table(std::move(table)) {
+DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p,
+                             vector<Identifier> schema_path, Identifier table)
+    : db(db), table_io_manager(std::move(table_io_manager_p)), schema_path(std::move(schema_path)),
+      table(std::move(table)) {
+	D_ASSERT(!this->schema_path.empty());
 }
 
 void DataTableInfo::BindIndexes(ClientContext &context, const char *index_type) {
@@ -65,11 +67,11 @@ IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const Identifier &name) 
 	                        name.GetIdentifierName());
 }
 
-DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
-                     const string &table, vector<ColumnDefinition> column_definitions_p,
+DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p,
+                     vector<Identifier> schema_path, Identifier table, vector<ColumnDefinition> column_definitions_p,
                      unique_ptr<PersistentTableData> data)
     : db(db),
-      info(make_shared_ptr<DataTableInfo>(db, std::move(table_io_manager_p), Identifier(schema), Identifier(table))),
+      info(make_shared_ptr<DataTableInfo>(db, std::move(table_io_manager_p), std::move(schema_path), std::move(table))),
       column_definitions(std::move(column_definitions_p)), version(DataTableVersion::MAIN_TABLE) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
@@ -454,7 +456,11 @@ bool DataTable::IndexNameIsUnique(const string &name) {
 }
 
 Identifier DataTableInfo::GetSchemaName() {
-	return schema;
+	return schema_path.back();
+}
+
+const vector<Identifier> &DataTableInfo::GetSchemaPath() const {
+	return schema_path;
 }
 
 Identifier DataTableInfo::GetTableName() {
@@ -1274,7 +1280,7 @@ void DataTable::MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommi
 
 void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
                            optional_ptr<StorageCommitState> commit_state) {
-	log.WriteSetTable(info->schema, info->table);
+	log.WriteSetTable(QualifiedName(info->GetSchemaPath(), info->GetTableName()));
 	if (!commit_state) {
 		ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 		return;
