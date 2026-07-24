@@ -1,6 +1,18 @@
 #include "catch.hpp"
 
 #include "arrow/arrow_test_helper.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/arrow/arrow_type_extension.hpp"
+#include "duckdb/common/arrow/schema_metadata.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/function/table/arrow/arrow_type_info.hpp"
+
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+
+#include <atomic>
 
 using namespace duckdb;
 
@@ -414,4 +426,194 @@ TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {
 	for (auto &parquet_path : data) {
 		TestParquetRoundtrip(parquet_path);
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Registered extension type with a NESTED (struct) storage type
+//===--------------------------------------------------------------------===//
+// A synthetic extension whose Arrow STORAGE type is a struct with a DIFFERENT child count than the
+// logical type: logical = STRUCT(a BIGINT, b BIGINT) registered under the alias "arrow_test_pair",
+// storage = STRUCT(packed STRUCT(a BIGINT, b BIGINT)) — a single wrapping child. This mirrors the shape
+// of e.g. the canonical arrow.parquet.variant extension (a logical VARIANT over struct<metadata, value>
+// storage). The appender initializes and appends with the extension's INTERNAL (storage) type, so it
+// must also FINALIZE with it: before the fix, FinalizeChild handed the finalizer the LOGICAL type, and
+// the struct finalizer walked the logical child count over the storage-built child_data — out of bounds.
+
+namespace {
+
+//! Engagement counters: the roundtrip silently degrades to a plain-struct roundtrip (values still
+//! compare equal!) if the extension is not picked up — assert every stage actually ran.
+static std::atomic<int> pair_populate_calls {0};
+static std::atomic<int> pair_get_type_calls {0};
+static std::atomic<int> pair_duck_to_arrow_calls {0};
+static std::atomic<int> pair_arrow_to_duck_calls {0};
+
+LogicalType PairStorageMemberType() {
+	return LogicalType::STRUCT({{"a", LogicalType::BIGINT}, {"b", LogicalType::BIGINT}});
+}
+
+LogicalType PairLogicalType() {
+	// The extension registry keys on (alias, type id), and the schema conversion consults it for
+	// alias-carrying types — the logical pair type therefore carries an alias. (A SQL cast to a
+	// CREATE TYPE alias resolves the alias away, so the test produces values through a registered
+	// scalar function whose RETURN type carries it — the same way extension-defined types do.)
+	auto type = PairStorageMemberType();
+	type.SetAlias("arrow_test_pair");
+	return type;
+}
+
+// pair_typed(STRUCT(a, b)) -> the alias-carrying logical pair type (children pass through).
+void PairTypedFunction(DataChunk &args, ExpressionState &, Vector &result) {
+	auto &in = args.data[0];
+	in.Flatten();
+	auto &in_entries = StructVector::GetEntries(in);
+	auto &out_entries = StructVector::GetEntries(result);
+	out_entries[0].Reference(in_entries[0]);
+	out_entries[1].Reference(in_entries[1]);
+	for (idx_t i = 0; i < args.size(); i++) {
+		if (FlatVector::IsNull(in, i)) {
+			FlatVector::SetNull(result, i, true);
+		}
+	}
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+}
+
+LogicalType PairStorageType() {
+	return LogicalType::STRUCT({{"packed", PairStorageMemberType()}});
+}
+
+// DuckDB -> Arrow: wrap the logical pair rows in the single storage child (buffers shared, no copy).
+void PairDuckToArrow(ClientContext &, const Vector &source, Vector &result, idx_t count) {
+	++pair_duck_to_arrow_calls;
+	source.Flatten();
+	auto &packed = StructVector::GetEntries(result)[0];
+	// Reinterpret, not Reference: the storage child and the logical pair type have the same physical layout
+	// but differ in the ALIAS, which LogicalType equality compares - so Reference would trip its type
+	// assertion in an assertion-enabled build.
+	packed.Reinterpret(source);
+	for (idx_t i = 0; i < count; i++) {
+		if (FlatVector::IsNull(source, i)) {
+			FlatVector::SetNull(result, i, true);
+		}
+	}
+}
+
+// Arrow -> DuckDB: unwrap the storage child back into the logical pair rows.
+void PairArrowToDuck(ClientContext &, Vector &source, Vector &result, idx_t count) {
+	++pair_arrow_to_duck_calls;
+	source.Flatten();
+	auto &packed = StructVector::GetEntries(source)[0];
+	packed.Flatten();
+	auto &packed_entries = StructVector::GetEntries(packed);
+	auto &result_entries = StructVector::GetEntries(result);
+	result_entries[0].Reference(packed_entries[0]);
+	result_entries[1].Reference(packed_entries[1]);
+	for (idx_t i = 0; i < count; i++) {
+		if (FlatVector::IsNull(source, i) || FlatVector::IsNull(packed, i)) {
+			FlatVector::SetNull(result, i, true);
+		}
+	}
+}
+
+// Declares the STORAGE schema (struct<packed: struct<a, b>>) tagged with the extension name. All names
+// and formats are string literals (static storage), so no ownership registration is needed.
+void PairPopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &, ClientContext &,
+                        const ArrowTypeExtension &extension) {
+	++pair_populate_calls;
+	const auto metadata = ArrowSchemaMetadata::ArrowCanonicalType(extension.GetInfo().GetExtensionName());
+	root_holder.metadata_info.emplace_back(metadata.SerializeMetadata());
+	schema.metadata = root_holder.metadata_info.back().get();
+
+	auto release_child = [](ArrowSchema *child) {
+		child->release = nullptr;
+	};
+
+	schema.format = "+s";
+	schema.n_children = 1;
+	root_holder.nested_children.emplace_back();
+	root_holder.nested_children.back().resize(1);
+	root_holder.nested_children_ptr.emplace_back();
+	root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+	schema.children = root_holder.nested_children_ptr.back().data();
+
+	auto &packed = *schema.children[0];
+	packed.format = "+s";
+	packed.name = "packed";
+	packed.flags = ARROW_FLAG_NULLABLE;
+	packed.release = release_child;
+	packed.n_children = 2;
+	root_holder.nested_children.emplace_back();
+	root_holder.nested_children.back().resize(2);
+	root_holder.nested_children_ptr.emplace_back();
+	root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+	root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[1]);
+	packed.children = root_holder.nested_children_ptr.back().data();
+
+	const char *member_names[] = {"a", "b"};
+	for (idx_t i = 0; i < 2; i++) {
+		auto &member = *packed.children[i];
+		member.format = "l";
+		member.name = member_names[i];
+		member.flags = ARROW_FLAG_NULLABLE;
+		member.release = release_child;
+	}
+}
+
+// Maps the tagged schema back: the LOGICAL type for the result, with type info describing the STORAGE
+// tree for the reader's buffer walk.
+unique_ptr<ArrowType> PairGetType(ClientContext &, const ArrowSchema &, const ArrowSchemaMetadata &) {
+	++pair_get_type_calls;
+	vector<shared_ptr<ArrowType>> members;
+	members.push_back(make_shared_ptr<ArrowType>(LogicalType::BIGINT));
+	members.push_back(make_shared_ptr<ArrowType>(LogicalType::BIGINT));
+	auto packed = make_shared_ptr<ArrowType>(PairStorageMemberType(), make_uniq<ArrowStructInfo>(std::move(members)));
+	vector<shared_ptr<ArrowType>> children;
+	children.push_back(std::move(packed));
+	return make_uniq<ArrowType>(PairLogicalType(), make_uniq<ArrowStructInfo>(std::move(children)));
+}
+
+} // namespace
+
+TEST_CASE("Test Arrow extension type with nested storage", "[arrow]") {
+	DuckDB db(nullptr, nullptr);
+	// register on the INSTANCE's config — the extension registry is not carried over from a user config
+	DBConfig::GetConfig(*db.instance)
+	    .RegisterArrowExtension({"arrow_test.pair", &PairPopulateSchema, &PairGetType,
+	                             make_shared_ptr<ArrowTypeExtensionData>(PairLogicalType(), PairStorageType(),
+	                                                                     PairArrowToDuck, PairDuckToArrow)});
+	Connection con(db);
+
+	// values reach the boundary through a function whose RETURN type carries the registered alias
+	ScalarFunction fn("pair_typed", {PairStorageMemberType()}, PairLogicalType(), PairTypedFunction);
+	CreateScalarFunctionInfo fn_info(fn);
+	con.context->RunFunctionInTransaction(
+	    [&]() { Catalog::GetSystemCatalog(*con.context).CreateFunction(*con.context, fn_info); });
+
+	// plain values (multiple vectors' worth) + NULL rows + NULL members
+	REQUIRE(
+	    ArrowTestHelper::RunArrowComparison(con, "SELECT pair_typed({'a': i, 'b': i + 1}) AS p FROM range(3000) t(i)"));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(
+	    con, "SELECT pair_typed(CASE WHEN i % 3 = 0 THEN NULL WHEN i % 3 = 1 THEN {'a': i, 'b': NULL} "
+	         "ELSE {'a': NULL, 'b': i} END) AS p FROM range(100) t(i)"));
+
+	// the roundtrip must have gone THROUGH the extension (schema declared, values converted both ways) —
+	// otherwise the comparison above passes vacuously on a plain-struct roundtrip
+	REQUIRE(pair_populate_calls.load() > 0);
+	REQUIRE(pair_duck_to_arrow_calls.load() > 0);
+	REQUIRE(pair_get_type_calls.load() > 0);
+	REQUIRE(pair_arrow_to_duck_calls.load() > 0);
+}
+
+TEST_CASE("Test Arrow VARIANT roundtrip", "[arrow]") {
+	// VARIANT travels as the canonical arrow.parquet.variant extension type (registered by the parquet
+	// extension, statically linked here): struct<metadata: binary, value: binary> storage carrying the
+	// Variant spec's binary encoding.
+	TestArrowRoundtrip("SELECT 42::VARIANT AS v");
+	TestArrowRoundtrip("SELECT {'a': i, 'b': 'x' || i::VARCHAR}::VARIANT AS v FROM range(3000) t(i)");
+	TestArrowRoundtrip("SELECT [i, i + 1, NULL]::VARIANT AS v FROM range(100) t(i)");
+	TestArrowRoundtrip("SELECT CASE WHEN i % 2 = 0 THEN i::VARIANT ELSE ('s' || i::VARCHAR)::VARIANT END "
+	                   "AS v FROM range(10) t(i)"); // mixed types, no NULLs
+	TestArrowRoundtrip("SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE i::VARIANT END AS v FROM range(10) t(i)");
+	TestArrowRoundtrip("SELECT CASE WHEN i % 3 = 0 THEN NULL WHEN i % 3 = 1 THEN i::VARIANT "
+	                   "ELSE ('s' || i::VARCHAR)::VARIANT END AS v FROM range(100) t(i)");
 }
