@@ -32,7 +32,8 @@ public:
 	                  unique_ptr<FunctionData> bind_data, vector<LogicalType> returned_types,
 	                  vector<ColumnIndex> column_ids, vector<idx_t> projection_ids, vector<string> names,
 	                  unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality,
-	                  ExtraOperatorInfo extra_info, vector<Value> parameters, virtual_column_map_t virtual_columns);
+	                  ExtraOperatorInfo extra_info, vector<Value> parameters, virtual_column_map_t virtual_columns,
+	                  optional_idx limit = optional_idx());
 
 	//! The table function
 	TableFunction function;
@@ -57,6 +58,8 @@ public:
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! Virtual columns
 	virtual_column_map_t virtual_columns;
+	//! Optional upper bound on rows needed from this scan.
+	optional_idx limit;
 
 public:
 	string GetName() const override;

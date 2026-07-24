@@ -20,13 +20,14 @@ PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<Logical
                                      vector<ColumnIndex> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
                                      idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
-                                     vector<Value> parameters_p, virtual_column_map_t virtual_columns_p)
+                                     vector<Value> parameters_p, virtual_column_map_t virtual_columns_p,
+                                     optional_idx limit_p)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
 
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
       table_filters(std::move(table_filters_p)), extra_info(std::move(extra_info)), parameters(std::move(parameters_p)),
-      virtual_columns(std::move(virtual_columns_p)) {
+      virtual_columns(std::move(virtual_columns_p)), limit(limit_p) {
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {
@@ -41,7 +42,7 @@ public:
 		if (op.function.init_global) {
 			auto filters = table_filters ? *table_filters : GetTableFilters(op);
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
-			                             op.extra_info.sample_options, &op);
+			                             op.extra_info.sample_options, &op, op.limit);
 
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
@@ -85,7 +86,7 @@ public:
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
-			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
+			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op, op.limit);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
@@ -407,6 +408,9 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 		return false;
 	}
 	if (!FunctionData::Equals(bind_data.get(), other.bind_data.get())) {
+		return false;
+	}
+	if (limit != other.limit) {
 		return false;
 	}
 	return true;
