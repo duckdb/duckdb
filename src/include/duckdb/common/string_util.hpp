@@ -128,6 +128,9 @@ public:
 	//! Returns true if the target string ends with the given suffix
 	DUCKDB_API static bool EndsWith(const string &str, const string &suffix);
 
+	//! Returns the size in bytes of the longest common prefix
+	DUCKDB_API static idx_t GetCommonPrefixSize(const string &left, const string &right);
+
 	//! Repeat a string multiple times
 	DUCKDB_API static string Repeat(const string &str, const idx_t n);
 
