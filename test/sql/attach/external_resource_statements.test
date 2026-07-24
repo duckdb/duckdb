@@ -1,0 +1,51 @@
+# name: test/sql/attach/external_resource_statements.test
+# description: CREATE/REGISTER/DESTROY/SHOW EXTERNAL RESOURCE — parse + bind behavior (no recipe needed)
+# group: [attach]
+
+# CREATE / REGISTER of an unregistered type parse and bind, then fail at provisioning with a clear error.
+statement error
+CREATE EXTERNAL RESOURCE 'aws:ec2:quack' AS x (SPOT, REGION 'eu-west-1');
+----
+<REGEX>:.*unknown resource type.*
+
+statement error
+REGISTER EXTERNAL RESOURCE 'aws:ec2:quack' AS x FROM {'id': 'i-123'};
+----
+<REGEX>:.*unknown resource type.*
+
+# DESTROY of an unregistered name errors.
+statement error
+DESTROY EXTERNAL RESOURCE nope;
+----
+<REGEX>:.*not registered.*
+
+# SHOW lists the (locally registered) resources — empty here, so it just succeeds.
+statement ok
+SHOW EXTERNAL RESOURCES;
+
+# SHOW ALL (the discovery union) desugars to duckdb_external_resources(discover := true); the discover
+# parameter and the list-callback union land in the external-resource discovery part, so skip it here.
+mode skip "discover not yet landed"
+
+statement ok
+SHOW ALL EXTERNAL RESOURCES;
+
+mode unskip
+
+# The grammar requires the pieces: DESTROY needs a name, REGISTER needs a handle. These are parser errors.
+statement error
+DESTROY EXTERNAL RESOURCE;
+----
+<REGEX>:.*(syntax error|Parser).*
+
+statement error
+REGISTER EXTERNAL RESOURCE 'aws:ec2:quack' AS x;
+----
+<REGEX>:.*(syntax error|Parser).*
+
+# Regression: the new SHOW form does not shadow existing SHOW ALL TABLES.
+statement ok
+CREATE TABLE t(i INTEGER);
+
+statement ok
+SHOW ALL TABLES;

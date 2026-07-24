@@ -7,8 +7,10 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
@@ -148,6 +150,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Ide
 	ephemeral = options.ephemeral;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 	original_path = options.original_path;
+	deleter_function = options.deleter_function;
+	deleter_payload = options.deleter_payload;
+	deleter_resource_type = options.deleter_resource_type;
+	deleter_resource_name = options.deleter_resource_name;
 
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
@@ -172,6 +178,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	ephemeral = options.ephemeral;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 	original_path = options.original_path;
+	deleter_function = options.deleter_function;
+	deleter_payload = options.deleter_payload;
+	deleter_resource_type = options.deleter_resource_type;
+	deleter_resource_name = options.deleter_resource_name;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name.GetIdentifierName(), info, options);
@@ -346,6 +356,16 @@ void AttachedDatabase::OnDetach(ClientContext &context) {
 	if (stored_database_path && visibility != AttachVisibility::HIDDEN) {
 		stored_database_path->OnDetach();
 	}
+}
+
+unique_ptr<ResourceDeleter> AttachedDatabase::ExtractDeleter() {
+	if (deleter_function.empty()) {
+		return nullptr;
+	}
+	auto result = make_uniq<ResourceDeleter>(db, std::move(deleter_function), std::move(deleter_payload),
+	                                         std::move(deleter_resource_type), std::move(deleter_resource_name));
+	deleter_function.clear();
+	return result;
 }
 
 void AttachedDatabase::Close(const DatabaseCloseAction action) {

@@ -44,6 +44,7 @@ class BoundResultModifier;
 class BoundSelectNode;
 class ClientContext;
 class ExpressionBinder;
+struct ExternalResourceOptions;
 class LimitModifier;
 class OrderBinder;
 class TableCatalogEntry;
@@ -463,6 +464,10 @@ private:
 	BoundStatement Bind(MergeIntoStatement &stmt);
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
+	BoundStatement Bind(ExternalResourceStatement &stmt);
+	//! Bind a `ATTACH/CONNECT TO EXTERNAL RESOURCE ...` clause: resolve its type + create params to bound values.
+	//! Shared by ATTACH and CONNECT.
+	void BindExternalResource(ExternalResourceOptions &external_resource);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.

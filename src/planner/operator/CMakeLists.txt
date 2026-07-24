@@ -43,6 +43,7 @@ add_library_unity(
   logical_alter.cpp
   logical_attach.cpp
   logical_connect.cpp
+  logical_external_resource.cpp
   logical_detach.cpp
   logical_disconnect.cpp
   logical_drop.cpp

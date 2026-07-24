@@ -40,6 +40,7 @@ add_library_unity(
   plan_alter.cpp
   plan_attach.cpp
   plan_connect.cpp
+  plan_external_resource.cpp
   plan_detach.cpp
   plan_disconnect.cpp
   plan_drop.cpp

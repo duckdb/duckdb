@@ -21,6 +21,7 @@ class StorageManager;
 class TransactionManager;
 class StorageExtension;
 class DatabaseManager;
+class ResourceDeleter;
 
 struct AttachInfo;
 struct StoredDatabasePath;
@@ -90,6 +91,14 @@ struct AttachOptions {
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
 	optional_idx vacuum_rebuild_indexes_threshold;
+	//! Deleter binding (from ATTACH/CONNECT TO EXTERNAL RESOURCE): on detach, `<deleter_function>(<deleter_payload>)`
+	//! runs to tear down the external resource the attachment owns.
+	string deleter_function;
+	Value deleter_payload;
+	//! Resource type (provider) and name (the `AS r` alias) of the owned resource, carried for teardown
+	//! logging only. resource_name is empty for an anonymous resource.
+	string deleter_resource_type;
+	string deleter_resource_name;
 	//! Header prefetched during file-type detection, reused when opening the file. Empty for non-DuckDB files.
 	PrefetchedFileData prefetched;
 };
@@ -137,6 +146,10 @@ public:
 	void SetName(const Identifier &new_name) {
 		name = new_name;
 	}
+	//! Move the deleter binding (if any) out of this attachment: the returned object owns the
+	//! teardown of the external resource. Call after removing the attachment from the databases map,
+	//! while holding it exclusively; run the deleter only once no lock is held (it executes SQL).
+	unique_ptr<ResourceDeleter> ExtractDeleter();
 	bool IsSystem() const;
 	bool IsTemporary() const;
 	bool IsReadOnly() const;
@@ -190,6 +203,11 @@ private:
 	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
 	optional<string> original_path;
+	//! Deleter binding (from ATTACH/CONNECT TO EXTERNAL RESOURCE): moved out via ExtractDeleter on detach.
+	string deleter_function;
+	Value deleter_payload;
+	string deleter_resource_type;
+	string deleter_resource_name;
 
 private:
 	//! Clean any (shared) resources held by the database.

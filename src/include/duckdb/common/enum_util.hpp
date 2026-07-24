@@ -222,6 +222,8 @@ enum class ExtensionLoadResult : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
 
+enum class ExternalResourceOperation : uint8_t;
+
 enum class ExtraDropInfoType : uint8_t;
 
 enum class ExtraPersistentColumnDataType : uint8_t;
@@ -873,6 +875,9 @@ const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
+
+template<>
+const char* EnumUtil::ToChars<ExternalResourceOperation>(ExternalResourceOperation value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
@@ -1708,6 +1713,9 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 
 template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
+
+template<>
+ExternalResourceOperation EnumUtil::FromString<ExternalResourceOperation>(const char *value);
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);

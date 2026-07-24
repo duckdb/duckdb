@@ -12,6 +12,7 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
@@ -48,7 +49,18 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::ATTACHED_DATABASE: {
 		auto db = Load<AttachedDatabase *>(data);
 		auto &db_manager = DatabaseManager::Get(db->GetDatabase());
-		db_manager.DetachInternal(db->name);
+		auto attached_db = db_manager.DetachInternal(db->name);
+		if (attached_db) {
+			// The attachment may own an external resource (ATTACH/CONNECT TO EXTERNAL RESOURCE). Its teardown runs
+			// SQL, which is impossible here: rollback executes under the transaction lock, and the
+			// teardown query would need to start a transaction on the same manager (self-deadlock) —
+			// nor may rollback fail. So extract the deleter (a plain field move, safe under the lock)
+			// and queue it; the DatabaseManager drains the queue best-effort after rollback completes.
+			auto deleter = attached_db->ExtractDeleter();
+			if (deleter) {
+				db_manager.AddPendingTeardown(std::move(deleter));
+			}
+		}
 		break;
 	}
 	case UndoFlags::SEQUENCE_VALUE:

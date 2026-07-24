@@ -102,6 +102,13 @@ SQLStatement:
     - UseStatement
     - VacuumStatement
     - PragmaAssignOrFunction
+    - AttachToExternalResource
+    - ConnectToExternalResource
+    - ExternalResourceStatement
+    - CreateExternalResourceStmt
+    - RegisterExternalResourceStmt
+    - DestroyExternalResourceStmt
+    - ShowExternalResourcesStmt
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -692,11 +699,20 @@ StringList:
     - UnpivotHeaderSingle
     - UnpivotHeaderList
 
+ExternalResourceOptionsPtr:
+  type: "unique_ptr<ExternalResourceOptions>"
+  by_value: true
+  rules:
+    - ExternalResourceSource
+    - ExternalResourceCreateClause
+    - ExternalResourceReferenceClause
+
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
   by_value: false
   rules:
     - AttachOptions
+    - ExternalResourceOptions
     - GenericCopyOptionList
     - CopyOptions
     - CopyOptionList
@@ -1115,6 +1131,7 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - ShowAllModifier
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword
     - FunctionTypeFunction

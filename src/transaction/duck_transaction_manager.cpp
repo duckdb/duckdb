@@ -490,6 +490,10 @@ void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 
 	CleanupTransactions();
 
+	// Run external-resource teardowns the rollback queued (see RollbackState): they execute SQL, so
+	// they can only run here, after the transaction lock is released.
+	DatabaseManager::Get(db.GetDatabase()).DrainPendingTeardowns();
+
 	if (error.HasError()) {
 		throw FatalException("Failed to rollback transaction. Cannot continue operation.\nError: %s", error.Message());
 	}

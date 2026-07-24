@@ -461,6 +461,11 @@
         "name": "on_conflict",
         "type": "OnCreateConflict",
         "default": "OnCreateConflict::ERROR_ON_CONFLICT"
+      },
+      {
+        "id": 204,
+        "name": "external_resource",
+        "type": "unique_ptr<ExternalResourceOptions>"
       }
     ]
   },
@@ -601,6 +606,11 @@
         "id": 203,
         "name": "options",
         "type": "unordered_map<string, Value>"
+      },
+      {
+        "id": 204,
+        "name": "external_resource",
+        "type": "unique_ptr<ExternalResourceOptions>"
       }
     ]
   },

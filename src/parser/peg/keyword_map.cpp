@@ -319,6 +319,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("replace");
 	unreserved_keyword_map.insert("replica");
 	unreserved_keyword_map.insert("reset");
+	unreserved_keyword_map.insert("resource");
 	unreserved_keyword_map.insert("respect");
 	unreserved_keyword_map.insert("restart");
 	unreserved_keyword_map.insert("restrict");

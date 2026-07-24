@@ -43,6 +43,7 @@
 #include "duckdb/planner/operator/logical_alter.hpp"
 #include "duckdb/planner/operator/logical_attach.hpp"
 #include "duckdb/planner/operator/logical_connect.hpp"
+#include "duckdb/planner/operator/logical_external_resource.hpp"
 #include "duckdb/planner/operator/logical_detach.hpp"
 #include "duckdb/planner/operator/logical_disconnect.hpp"
 #include "duckdb/planner/operator/logical_drop.hpp"

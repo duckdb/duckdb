@@ -1960,6 +1960,24 @@ static const TransformFrameOps EXTRACT_STRING_ARGUMENT_OPS = {
 static const TransformFrameOps EXTRACT_DATE_PART_OPS = {"ExtractDatePart",
                                                         &PEGTransformerFactory::InitializeExtractDatePartTrampoline,
                                                         &PEGTransformerFactory::FinalizeExtractDatePartTrampoline};
+static const TransformFrameOps EXTERNAL_RESOURCE_STATEMENT_OPS = {
+    "ExternalResourceStatement", &PEGTransformerFactory::InitializeExternalResourceStatementTrampoline,
+    &PEGTransformerFactory::FinalizeExternalResourceStatementTrampoline};
+static const TransformFrameOps CREATE_EXTERNAL_RESOURCE_STMT_OPS = {
+    "CreateExternalResourceStmt", &PEGTransformerFactory::InitializeCreateExternalResourceStmtTrampoline,
+    &PEGTransformerFactory::FinalizeCreateExternalResourceStmtTrampoline};
+static const TransformFrameOps REGISTER_EXTERNAL_RESOURCE_STMT_OPS = {
+    "RegisterExternalResourceStmt", &PEGTransformerFactory::InitializeRegisterExternalResourceStmtTrampoline,
+    &PEGTransformerFactory::FinalizeRegisterExternalResourceStmtTrampoline};
+static const TransformFrameOps DESTROY_EXTERNAL_RESOURCE_STMT_OPS = {
+    "DestroyExternalResourceStmt", &PEGTransformerFactory::InitializeDestroyExternalResourceStmtTrampoline,
+    &PEGTransformerFactory::FinalizeDestroyExternalResourceStmtTrampoline};
+static const TransformFrameOps SHOW_EXTERNAL_RESOURCES_STMT_OPS = {
+    "ShowExternalResourcesStmt", &PEGTransformerFactory::InitializeShowExternalResourcesStmtTrampoline,
+    &PEGTransformerFactory::FinalizeShowExternalResourcesStmtTrampoline};
+static const TransformFrameOps SHOW_ALL_MODIFIER_OPS = {"ShowAllModifier",
+                                                        &PEGTransformerFactory::InitializeShowAllModifierTrampoline,
+                                                        &PEGTransformerFactory::FinalizeShowAllModifierTrampoline};
 static const TransformFrameOps INSERT_STATEMENT_OPS = {"InsertStatement",
                                                        &PEGTransformerFactory::InitializeInsertStatementTrampoline,
                                                        &PEGTransformerFactory::FinalizeInsertStatementTrampoline};
@@ -2788,6 +2806,24 @@ static const TransformFrameOps OPT_VERBOSE_OPS = {"OptVerbose", &PEGTransformerF
                                                   &PEGTransformerFactory::FinalizeOptVerboseTrampoline};
 static const TransformFrameOps NAME_LIST_OPS = {"NameList", &PEGTransformerFactory::InitializeNameListTrampoline,
                                                 &PEGTransformerFactory::FinalizeNameListTrampoline};
+static const TransformFrameOps ATTACH_TO_EXTERNAL_RESOURCE_OPS = {
+    "AttachToExternalResource", &PEGTransformerFactory::InitializeAttachToExternalResourceTrampoline,
+    &PEGTransformerFactory::FinalizeAttachToExternalResourceTrampoline};
+static const TransformFrameOps CONNECT_TO_EXTERNAL_RESOURCE_OPS = {
+    "ConnectToExternalResource", &PEGTransformerFactory::InitializeConnectToExternalResourceTrampoline,
+    &PEGTransformerFactory::FinalizeConnectToExternalResourceTrampoline};
+static const TransformFrameOps EXTERNAL_RESOURCE_SOURCE_OPS = {
+    "ExternalResourceSource", &PEGTransformerFactory::InitializeExternalResourceSourceTrampoline,
+    &PEGTransformerFactory::FinalizeExternalResourceSourceTrampoline};
+static const TransformFrameOps EXTERNAL_RESOURCE_CREATE_CLAUSE_OPS = {
+    "ExternalResourceCreateClause", &PEGTransformerFactory::InitializeExternalResourceCreateClauseTrampoline,
+    &PEGTransformerFactory::FinalizeExternalResourceCreateClauseTrampoline};
+static const TransformFrameOps EXTERNAL_RESOURCE_REFERENCE_CLAUSE_OPS = {
+    "ExternalResourceReferenceClause", &PEGTransformerFactory::InitializeExternalResourceReferenceClauseTrampoline,
+    &PEGTransformerFactory::FinalizeExternalResourceReferenceClauseTrampoline};
+static const TransformFrameOps EXTERNAL_RESOURCE_OPTIONS_OPS = {
+    "ExternalResourceOptions", &PEGTransformerFactory::InitializeExternalResourceOptionsTrampoline,
+    &PEGTransformerFactory::FinalizeExternalResourceOptionsTrampoline};
 
 const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::GeneratedTrampolineOps() {
 	static const case_insensitive_map_t<const TransformFrameOps *> result = {
@@ -3477,6 +3513,12 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ExtractIdentifierArgument", &EXTRACT_IDENTIFIER_ARGUMENT_OPS},
 	    {"ExtractStringArgument", &EXTRACT_STRING_ARGUMENT_OPS},
 	    {"ExtractDatePart", &EXTRACT_DATE_PART_OPS},
+	    {"ExternalResourceStatement", &EXTERNAL_RESOURCE_STATEMENT_OPS},
+	    {"CreateExternalResourceStmt", &CREATE_EXTERNAL_RESOURCE_STMT_OPS},
+	    {"RegisterExternalResourceStmt", &REGISTER_EXTERNAL_RESOURCE_STMT_OPS},
+	    {"DestroyExternalResourceStmt", &DESTROY_EXTERNAL_RESOURCE_STMT_OPS},
+	    {"ShowExternalResourcesStmt", &SHOW_EXTERNAL_RESOURCES_STMT_OPS},
+	    {"ShowAllModifier", &SHOW_ALL_MODIFIER_OPS},
 	    {"InsertStatement", &INSERT_STATEMENT_OPS},
 	    {"OrAction", &OR_ACTION_OPS},
 	    {"InsertOrReplace", &INSERT_OR_REPLACE_OPS},
@@ -3773,6 +3815,12 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"OptFreeze", &OPT_FREEZE_OPS},
 	    {"OptVerbose", &OPT_VERBOSE_OPS},
 	    {"NameList", &NAME_LIST_OPS},
+	    {"AttachToExternalResource", &ATTACH_TO_EXTERNAL_RESOURCE_OPS},
+	    {"ConnectToExternalResource", &CONNECT_TO_EXTERNAL_RESOURCE_OPS},
+	    {"ExternalResourceSource", &EXTERNAL_RESOURCE_SOURCE_OPS},
+	    {"ExternalResourceCreateClause", &EXTERNAL_RESOURCE_CREATE_CLAUSE_OPS},
+	    {"ExternalResourceReferenceClause", &EXTERNAL_RESOURCE_REFERENCE_CLAUSE_OPS},
+	    {"ExternalResourceOptions", &EXTERNAL_RESOURCE_OPTIONS_OPS},
 	};
 	return result;
 }
@@ -17937,6 +17985,140 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExtractDatePartT
 	return make_uniq<TypedTransformResult<DatePartSpecifier>>(result);
 }
 
+void PEGTransformerFactory::InitializeExternalResourceStatementTrampoline(PEGTransformer &transformer,
+                                                                          TransformStack &stack,
+                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeExternalResourceStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<SQLStatement>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCreateExternalResourceStmtTrampoline(PEGTransformer &transformer,
+                                                                           TransformStack &stack,
+                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	auto &attach_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (attach_options_opt.HasResult()) {
+		stack.PushFrame(attach_options_opt.GetResult(), ATTACH_OPTIONS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (attach_alias_opt.HasResult()) {
+		stack.PushFrame(attach_alias_opt.GetResult(), ATTACH_ALIAS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCreateExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
+	optional<Identifier> attach_alias {};
+	if (frame.child_results[0]) {
+		attach_alias = frame.TakeResult<Identifier>(0);
+	}
+	optional<vector<GenericCopyOption>> attach_options {};
+	if (frame.child_results[1]) {
+		attach_options = frame.TakeResult<vector<GenericCopyOption>>(1);
+	}
+	auto result = TransformCreateExternalResourceStmt(transformer, string_literal, attach_alias, attach_options);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeRegisterExternalResourceStmtTrampoline(PEGTransformer &transformer,
+                                                                             TransformStack &stack,
+                                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	stack.PushFrame(list_pr.GetChild(6), EXPRESSION_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (attach_alias_opt.HasResult()) {
+		stack.PushFrame(attach_alias_opt.GetResult(), ATTACH_ALIAS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeRegisterExternalResourceStmtTrampoline(
+    PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
+	optional<Identifier> attach_alias {};
+	if (frame.child_results[0]) {
+		attach_alias = frame.TakeResult<Identifier>(0);
+	}
+	auto expression = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result =
+	    TransformRegisterExternalResourceStmt(transformer, string_literal, attach_alias, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer,
+                                                                            TransformStack &stack,
+                                                                            TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(3), COL_ID_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	auto col_id = frame.TakeResult<Identifier>(0);
+	auto result = TransformDestroyExternalResourceStmt(transformer, col_id);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer,
+                                                                          TransformStack &stack,
+                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &show_all_modifier_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (show_all_modifier_opt.HasResult()) {
+		stack.PushFrame(show_all_modifier_opt.GetResult(), SHOW_ALL_MODIFIER_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	optional<bool> show_all_modifier {};
+	if (frame.child_results[0]) {
+		show_all_modifier = frame.TakeResult<bool>(0);
+	}
+	auto result = TransformShowExternalResourcesStmt(transformer, show_all_modifier);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeShowAllModifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeShowAllModifierTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto result = TransformShowAllModifier(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
 void PEGTransformerFactory::InitializeInsertStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                 TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -23952,6 +24134,145 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNameListTrampoli
 	}
 	auto result = TransformNameList(transformer, col_id);
 	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+void PEGTransformerFactory::InitializeAttachToExternalResourceTrampoline(PEGTransformer &transformer,
+                                                                         TransformStack &stack,
+                                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(3);
+	auto &attach_options_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (attach_options_opt.HasResult()) {
+		stack.PushFrame(attach_options_opt.GetResult(), ATTACH_OPTIONS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 2));
+	}
+	auto &attach_alias_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (attach_alias_opt.HasResult()) {
+		stack.PushFrame(attach_alias_opt.GetResult(), ATTACH_ALIAS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	stack.PushFrame(list_pr.GetChild(2), EXTERNAL_RESOURCE_SOURCE_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeAttachToExternalResourceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	auto external_resource_source = frame.TakeResult<unique_ptr<ExternalResourceOptions>>(0);
+	optional<Identifier> attach_alias {};
+	if (frame.child_results[1]) {
+		attach_alias = frame.TakeResult<Identifier>(1);
+	}
+	optional<vector<GenericCopyOption>> attach_options {};
+	if (frame.child_results[2]) {
+		attach_options = frame.TakeResult<vector<GenericCopyOption>>(2);
+	}
+	auto result = TransformAttachToExternalResource(transformer, std::move(external_resource_source), attach_alias,
+	                                                attach_options);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeConnectToExternalResourceTrampoline(PEGTransformer &transformer,
+                                                                          TransformStack &stack,
+                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	auto &attach_options_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (attach_options_opt.HasResult()) {
+		stack.PushFrame(attach_options_opt.GetResult(), ATTACH_OPTIONS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	stack.PushFrame(list_pr.GetChild(2), EXTERNAL_RESOURCE_SOURCE_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeConnectToExternalResourceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	auto external_resource_source = frame.TakeResult<unique_ptr<ExternalResourceOptions>>(0);
+	optional<vector<GenericCopyOption>> attach_options {};
+	if (frame.child_results[1]) {
+		attach_options = frame.TakeResult<vector<GenericCopyOption>>(1);
+	}
+	auto result = TransformConnectToExternalResource(transformer, std::move(external_resource_source), attach_options);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeExternalResourceSourceTrampoline(PEGTransformer &transformer,
+                                                                       TransformStack &stack,
+                                                                       TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeExternalResourceSourceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<ExternalResourceOptions>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeExternalResourceCreateClauseTrampoline(PEGTransformer &transformer,
+                                                                             TransformStack &stack,
+                                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &external_resource_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (external_resource_options_opt.HasResult()) {
+		stack.PushFrame(external_resource_options_opt.GetResult(), EXTERNAL_RESOURCE_OPTIONS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExternalResourceCreateClauseTrampoline(
+    PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(4));
+	optional<vector<GenericCopyOption>> external_resource_options {};
+	if (frame.child_results[0]) {
+		external_resource_options = frame.TakeResult<vector<GenericCopyOption>>(0);
+	}
+	auto result = TransformExternalResourceCreateClause(transformer, string_literal, external_resource_options);
+	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeExternalResourceReferenceClauseTrampoline(PEGTransformer &transformer,
+                                                                                TransformStack &stack,
+                                                                                TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(2), COL_ID_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExternalResourceReferenceClauseTrampoline(
+    PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame) {
+	auto col_id = frame.TakeResult<Identifier>(0);
+	auto result = TransformExternalResourceReferenceClause(transformer, col_id);
+	return make_uniq<TypedTransformResult<unique_ptr<ExternalResourceOptions>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeExternalResourceOptionsTrampoline(PEGTransformer &transformer,
+                                                                        TransformStack &stack,
+                                                                        TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), GENERIC_COPY_OPTION_LIST_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeExternalResourceOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto result = frame.TakeResult<vector<GenericCopyOption>>(0);
+	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
 }
 
 } // namespace duckdb
