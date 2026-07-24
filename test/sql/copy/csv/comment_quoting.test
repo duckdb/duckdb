@@ -1,0 +1,53 @@
+# name: test/sql/copy/csv/comment_quoting.test
+# description: CSV writer quotes the comment character, honoring the comment option (#17744, #20095)
+# group: [csv]
+
+# by default '#' is quoted so the values are not read back as comments (#17744)
+statement ok
+COPY (SELECT 'a#b' AS x, 'p!q' AS y, 'plain' AS z)
+TO '{TEST_DIR}/comment_default.csv' (FORMAT CSV, HEADER false);
+
+query I
+SELECT rtrim(content, chr(10)) FROM read_text('{TEST_DIR}/comment_default.csv');
+----
+"a#b",p!q,plain
+
+# comment '' gives RFC 4180 minimal quoting: '#' is no longer special (#20095)
+statement ok
+COPY (SELECT 'a#b' AS x, 'p!q' AS y, 'plain' AS z)
+TO '{TEST_DIR}/comment_none.csv' (FORMAT CSV, HEADER false, comment '');
+
+query I
+SELECT rtrim(content, chr(10)) FROM read_text('{TEST_DIR}/comment_none.csv');
+----
+a#b,p!q,plain
+
+# an explicit comment character is the one that gets quoted (not a hardcoded '#')
+statement ok
+COPY (SELECT 'a#b' AS x, 'p!q' AS y, 'plain' AS z)
+TO '{TEST_DIR}/comment_bang.csv' (FORMAT CSV, HEADER false, comment '!');
+
+query I
+SELECT rtrim(content, chr(10)) FROM read_text('{TEST_DIR}/comment_bang.csv');
+----
+a#b,"p!q",plain
+
+# delimiter, quote and newline still trigger quoting with comment ''
+statement ok
+COPY (SELECT 'a,b' AS x, 'c"d' AS y)
+TO '{TEST_DIR}/comment_special.csv' (FORMAT CSV, HEADER false, comment '');
+
+query I
+SELECT rtrim(content, chr(10)) FROM read_text('{TEST_DIR}/comment_special.csv');
+----
+"a,b","c""d"
+
+# '#' values written with comment '' are still read back intact
+statement ok
+COPY (SELECT '#hash' AS x, 1 AS y UNION ALL SELECT 'ok', 2 UNION ALL SELECT 'end #', 3)
+TO '{TEST_DIR}/comment_roundtrip.csv' (FORMAT CSV, HEADER 1, comment '');
+
+query I
+SELECT count(*) FROM read_csv('{TEST_DIR}/comment_roundtrip.csv');
+----
+3
