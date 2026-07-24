@@ -290,7 +290,8 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	auto &object_cache = database.GetObjectCache();
 	vector<CachedFileInformation> result;
 	for (const auto &key : keys) {
-		auto entry = object_cache.GetWithTypePrefix<ExternalFileCacheObjectCacheEntry>(database.GetMemoryContextId(), key);
+		auto entry =
+		    object_cache.GetWithTypePrefix<ExternalFileCacheObjectCacheEntry>(database.GetMemoryContextId(), key);
 		if (!entry) {
 			continue;
 		}

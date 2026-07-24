@@ -143,7 +143,8 @@ DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_o
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() : memory_context_id(MemoryContextId(next_memory_context_id.fetch_add(1))), db_validity(*this) {
+DatabaseInstance::DatabaseInstance()
+    : memory_context_id(MemoryContextId(next_memory_context_id.fetch_add(1))), db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
 	parser_cache = make_uniq<ParserCache>();

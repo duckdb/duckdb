@@ -71,7 +71,8 @@ TEST_CASE("Test buffer pool eviction: pages before object cache", "[storage][buf
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_objects; ++idx) {
-		cache.Put(memory_context_id, StringUtil::Format("obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
+		cache.Put(memory_context_id, StringUtil::Format("obj%llu", idx),
+		          make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
 	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_objects_memory == initial_memory + num_objects * obj_size);
@@ -122,7 +123,8 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_objects; ++idx) {
-		cache.Put(memory_context_id, StringUtil::Format("obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
+		cache.Put(memory_context_id, StringUtil::Format("obj%llu", idx),
+		          make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
 	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_objects_memory == initial_memory + num_objects * obj_size);
