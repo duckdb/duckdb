@@ -24,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+#include "duckdb/common/arena_containers/arena_vector.hpp"
+
 #ifdef min
 #undef min
 #endif
@@ -74,10 +76,10 @@ private:
 };
 
 struct CentroidList {
-	explicit CentroidList(const std::vector<Centroid> &s) : iter(s.cbegin()), end(s.cend()) {
+	explicit CentroidList(const duckdb::arena_vector<Centroid> &s) : iter(s.cbegin()), end(s.cend()) {
 	}
-	std::vector<Centroid>::const_iterator iter;
-	std::vector<Centroid>::const_iterator end;
+	duckdb::arena_vector<Centroid>::const_iterator iter;
+	duckdb::arena_vector<Centroid>::const_iterator end;
 
 	bool advance() {
 		return ++iter != end;
@@ -116,25 +118,24 @@ class TDigest {
 	using TDigestQueue = std::priority_queue<const TDigest *, std::vector<const TDigest *>, TDigestComparator>;
 
 public:
-	TDigest() : TDigest(1000) {
+	explicit TDigest(duckdb::ArenaAllocator &allocator, Value compression = 1000) : TDigest(allocator, compression, 0) {
 	}
 
-	explicit TDigest(Value compression) : TDigest(compression, 0) {
+	TDigest(duckdb::ArenaAllocator &allocator, Value compression, Index bufferSize)
+	    : TDigest(allocator, compression, bufferSize, 0) {
 	}
 
-	TDigest(Value compression, Index bufferSize) : TDigest(compression, bufferSize, 0) {
-	}
-
-	TDigest(Value compression, Index unmergedSize, Index mergedSize)
+	TDigest(duckdb::ArenaAllocator &allocator, Value compression, Index unmergedSize, Index mergedSize)
 	    : compression_(compression), maxProcessed_(processedSize(mergedSize, compression)),
-	      maxUnprocessed_(unprocessedSize(unmergedSize, compression)) {
+	      maxUnprocessed_(unprocessedSize(unmergedSize, compression)), processed_(allocator), unprocessed_(allocator),
+	      cumulative_(allocator) {
 		processed_.reserve(maxProcessed_);
 		unprocessed_.reserve(maxUnprocessed_ + 1);
 	}
 
-	TDigest(std::vector<Centroid> &&processed, std::vector<Centroid> &&unprocessed, Value compression,
+	TDigest(duckdb::arena_vector<Centroid> &&processed, duckdb::arena_vector<Centroid> &&unprocessed, Value compression,
 	        Index unmergedSize, Index mergedSize)
-	    : TDigest(compression, unmergedSize, mergedSize) {
+	    : TDigest(processed.get_allocator().GetAllocator(), compression, unmergedSize, mergedSize) {
 		processed_ = std::move(processed);
 		unprocessed_ = std::move(unprocessed);
 
@@ -147,7 +148,7 @@ public:
 		updateCumulative();
 	}
 
-	static Weight weight(std::vector<Centroid> &centroids) noexcept {
+	static Weight weight(duckdb::arena_vector<Centroid> &centroids) noexcept {
 		Weight w = 0.0;
 		for (auto centroid : centroids) {
 			w += centroid.weight();
@@ -188,11 +189,11 @@ public:
 		add(others.cbegin(), others.cend());
 	}
 
-	const std::vector<Centroid> &processed() const {
+	const duckdb::arena_vector<Centroid> &processed() const {
 		return processed_;
 	}
 
-	const std::vector<Centroid> &unprocessed() const {
+	const duckdb::arena_vector<Centroid> &unprocessed() const {
 		return unprocessed_;
 	}
 
@@ -418,7 +419,7 @@ public:
 		return true;
 	}
 
-	inline void add(std::vector<Centroid>::const_iterator iter, std::vector<Centroid>::const_iterator end) {
+	inline void add(duckdb::arena_vector<Centroid>::const_iterator iter, duckdb::arena_vector<Centroid>::const_iterator end) {
 		while (iter != end) {
 			const size_t diff = size_t(std::distance(iter, end));
 			const size_t room = maxUnprocessed_ - unprocessed_.size();
@@ -447,11 +448,11 @@ private:
 
 	Value unprocessedWeight_ = 0.0;
 
-	std::vector<Centroid> processed_;
+	duckdb::arena_vector<Centroid> processed_;
 
-	std::vector<Centroid> unprocessed_;
+	duckdb::arena_vector<Centroid> unprocessed_;
 
-	std::vector<Weight> cumulative_;
+	duckdb::arena_vector<Weight> cumulative_;
 
 	// return mean of i-th centroid
 	inline Value mean(size_t i) const noexcept {
@@ -507,7 +508,7 @@ private:
 			total += processed_.size();
 		}
 
-		std::vector<Centroid> sorted;
+		duckdb::arena_vector<Centroid> sorted(processed_.get_allocator());
 		sorted.reserve(total);
 
 		while (!pq.empty()) {
@@ -586,7 +587,7 @@ private:
 		return checkWeights(processed_, processedWeight_);
 	}
 
-	size_t checkWeights(const std::vector<Centroid> &sorted, Value total) {
+	size_t checkWeights(const duckdb::arena_vector<Centroid> &sorted, Value total) {
 		size_t badWeight = 0;
 		auto k1 = 0.0;
 		auto q = 0.0;

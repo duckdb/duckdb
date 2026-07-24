@@ -310,3 +310,27 @@ query I
 SELECT RESERVOIR_QUANTILE(0., 0.9, 1000);
 ----
 0
+
+# Test fix for APPROX_QUANTILE memory not being tracked
+statement ok
+SET memory_limit='80MB';
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE OR REPLACE TABLE tdigest_memory_test AS
+    SELECT i AS grp, random() AS r
+    FROM range(100000) g(i)
+    CROSS JOIN range(4) h(j);
+
+statement error
+SELECT grp, APPROX_QUANTILE(r, 0.5) FROM tdigest_memory_test GROUP BY grp;
+----
+Out of Memory
+
+statement ok
+RESET memory_limit;
+
+statement ok
+RESET threads;
