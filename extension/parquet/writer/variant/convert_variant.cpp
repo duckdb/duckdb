@@ -924,31 +924,44 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
 }
 
+//! Fixed child order of the Parquet Variant shredding layout (see ParquetVariantShredding and
+//! TransformTypedValueRecursive): the untyped "value" precedes the typed "typed_value".
+static constexpr idx_t SHRED_VALUE_INDEX = 0;
+static constexpr idx_t SHRED_TYPED_VALUE_INDEX = 1;
+//! The Variant group is metadata / value / [typed_value]; typed_value (when shredded) is the last child.
+static constexpr idx_t VARIANT_METADATA_INDEX = 0;
+static constexpr idx_t VARIANT_VALUE_INDEX = 1;
+static constexpr idx_t VARIANT_TYPED_VALUE_INDEX = 2;
+
+static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value);
+
+//! A shredded field/element is written as a group STRUCT(value, [typed_value]). The group itself is REQUIRED;
+//! its 'value'/'typed_value' children stay OPTIONAL. Descend (by position) into a nested typed_value.
+static void MarkShreddedGroupRequired(ColumnWriter &group) {
+	D_ASSERT(StructType::IsStruct(group.Type().id()));
+	group.MarkRepetitionRequired();
+	auto &children = group.ChildWriters();
+	D_ASSERT(children[SHRED_VALUE_INDEX]->Schema().name == "value");
+	if (children.size() > SHRED_TYPED_VALUE_INDEX) {
+		D_ASSERT(children[SHRED_TYPED_VALUE_INDEX]->Schema().name == "typed_value");
+		MarkTypedValueShreddingGroupsRequired(*children[SHRED_TYPED_VALUE_INDEX]);
+	}
+}
+
 //! Parquet VariantShredding.md: object field groups and list element groups under typed_value must be REQUIRED.
-//! Walk the shredding subtree rooted at the Variant's typed_value writer and mark those groups required.
-//! typed_value itself stays OPTIONAL; value/typed_value children inside field/element groups stay OPTIONAL.
+//! 'typed_value' is an object (STRUCT of field groups), an array (LIST of one element group) or a primitive leaf.
+//! We identify field/element groups structurally (by position), never by matching user-facing field names.
 static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value) {
 	auto type_id = typed_value.Type().id();
 	if (StructType::IsStruct(type_id)) {
-		//! Object shredding: each named field group is required
-		for (auto &field : typed_value.ChildWriters()) {
-			field->MarkRepetitionRequired();
-			for (auto &child : field->ChildWriters()) {
-				if (child->Schema().name == "typed_value") {
-					MarkTypedValueShreddingGroupsRequired(*child);
-				}
-			}
+		//! Object shredding: every field group is REQUIRED, whatever the field is named
+		for (auto &field_group : typed_value.ChildWriters()) {
+			MarkShreddedGroupRequired(*field_group);
 		}
 	} else if (type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::ARRAY) {
-		//! Array shredding: the list element group is required
+		//! Array shredding: the single list element group is REQUIRED
 		D_ASSERT(typed_value.ChildWriters().size() == 1);
-		auto &element = *typed_value.ChildWriters()[0];
-		element.MarkRepetitionRequired();
-		for (auto &child : element.ChildWriters()) {
-			if (child->Schema().name == "typed_value") {
-				MarkTypedValueShreddingGroupsRequired(*child);
-			}
-		}
+		MarkShreddedGroupRequired(*typed_value.ChildWriters()[0]);
 	}
 }
 
@@ -963,11 +976,14 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	auto &field_id = schema.field_id;
 
 	//! After AnalyzeSchemaFinalize (auto-shredding) or explicit SHREDDING, child writers are final.
-	//! Mark shredded field/element groups REQUIRED before emitting SchemaElements / writing data.
-	for (auto &child_writer : child_writers) {
-		if (child_writer->Schema().name == "typed_value") {
-			MarkTypedValueShreddingGroupsRequired(*child_writer);
-		}
+	//! When shredded, the typed_value is the last child; mark its field/element groups REQUIRED before
+	//! emitting SchemaElements / writing data. typed_value itself stays OPTIONAL.
+	if (child_writers.size() > VARIANT_TYPED_VALUE_INDEX) {
+		D_ASSERT(child_writers[VARIANT_METADATA_INDEX]->Schema().name == "metadata");
+		D_ASSERT(child_writers[VARIANT_VALUE_INDEX]->Schema().name == "value");
+		auto &typed_value = *child_writers[VARIANT_TYPED_VALUE_INDEX];
+		D_ASSERT(typed_value.Schema().name == "typed_value");
+		MarkTypedValueShreddingGroupsRequired(typed_value);
 	}
 
 	// variant group
