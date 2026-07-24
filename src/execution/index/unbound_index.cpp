@@ -23,8 +23,8 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
 		}
 	}
 
-	// The canonical layout of buffered replay chunks: this index's own physical columns,
-	// deduplicated and sorted. BufferChunk projects incoming chunks onto this layout.
+	// Create the stable per-index layout used by buffered replay chunks.
+	mapped_column_ids.reserve(column_id_set.size());
 	for (auto &col : column_id_set) {
 		mapped_column_ids.emplace_back(col);
 	}
@@ -45,7 +45,7 @@ void UnboundIndex::ResetStorage() {
 void UnboundIndex::BufferChunk(DataChunk &table_chunk, Vector &row_ids, const BufferedIndexReplay replay_type) {
 	D_ASSERT(!column_ids.empty());
 
-	// table_chunk is in table layout: data[j] holds the data of the table's physical column j.
+	// table_chunk is in physical table layout: data[j] holds the data of physical column j.
 	// Reference this index's own columns directly by their physical offset.
 	vector<LogicalType> types;
 	types.reserve(mapped_column_ids.size() + 1);
