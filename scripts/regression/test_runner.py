@@ -86,6 +86,8 @@ NUMBER_REPETITIONS = 5
 REGRESSION_THRESHOLD_PERCENTAGE = 0.1
 # minimal seconds diff for something to be a regression (for very fast benchmarks)
 REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
+# hide benchmark changes that are below the noise floor in the final report
+DISPLAY_THRESHOLD_PERCENTAGE = 2.0
 
 ANSI_RED = "\033[31m"
 ANSI_GREEN = "\033[32m"
@@ -253,6 +255,14 @@ def benchmark_row(result: "BenchmarkResult", display_name: str) -> BenchmarkRow:
     )
 
 
+def show_in_report(row: BenchmarkRow) -> bool:
+    if row.bucket in (BUCKET_REGRESSION, BUCKET_FAILURE):
+        return True
+    if not math.isfinite(row.percentage):
+        return True
+    return abs(row.percentage) >= DISPLAY_THRESHOLD_PERCENTAGE
+
+
 def color_change(row: BenchmarkRow, value: str) -> str:
     if row.bucket in (BUCKET_REGRESSION, BUCKET_SLOWER, BUCKET_FAILURE):
         return f"{ANSI_RED}{value}{ANSI_RESET}"
@@ -309,27 +319,34 @@ def print_banner(title: str):
     print("")
 
 
-def print_aggregate_report(rows: List[BenchmarkRow], common_prefix: str, result_text: str):
+def print_aggregate_report(
+    rows: List[BenchmarkRow], common_prefix: str, result_text: str, total_count: int, hidden_noise_count: int
+):
     print_banner("BENCHMARK QUERY AGGREGATES")
     print(f"suite: {suite_name()}")
     if common_prefix:
         print(f"common prefix: {common_prefix}")
-    print(f"benchmarks: {len(rows)}")
+    print(f"benchmarks: {total_count}")
     if timed_runs:
         print(f"timing: median of {timed_runs} timed runs")
     else:
         print("timing: median")
     print(f"threshold: +{REGRESSION_THRESHOLD_PERCENTAGE * 100.0:.1f}% and +{REGRESSION_THRESHOLD_SECONDS:.3f}s")
+    print(f"display threshold: +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
+    print(f"hidden noise: {hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
     print(f"result: {result_text}")
     print("")
-    render_table(rows)
+    if len(rows) == 0:
+        print("0 benchmarks above display threshold")
+    else:
+        render_table(rows)
 
 
-def print_bucket(title: str, rows: List[BenchmarkRow]):
+def print_bucket(title: str, rows: List[BenchmarkRow], hidden_noise_count: int = 0):
     print("")
     print(title)
-    if title == "UNCHANGED":
-        print(f"{len(rows)} benchmarks unchanged")
+    if title == "UNCHANGED / NOISE":
+        print(f"{hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
         return
     if len(rows) == 0:
         print("0 benchmarks")
@@ -337,7 +354,7 @@ def print_bucket(title: str, rows: List[BenchmarkRow]):
     render_table(rows)
 
 
-def print_impact_bucket_summary(rows: List[BenchmarkRow], result_text: str):
+def print_impact_bucket_summary(rows: List[BenchmarkRow], result_text: str, hidden_noise_count: int):
     buckets = {
         BUCKET_UNCHANGED: [row for row in rows if row.bucket == BUCKET_UNCHANGED],
         BUCKET_FASTER: [row for row in rows if row.bucket == BUCKET_FASTER],
@@ -348,7 +365,7 @@ def print_impact_bucket_summary(rows: List[BenchmarkRow], result_text: str):
     print("")
     print_banner("IMPACT BUCKETS SUMMARY")
     print(f"result: {result_text}")
-    print_bucket("UNCHANGED", buckets[BUCKET_UNCHANGED])
+    print_bucket("UNCHANGED / NOISE", buckets[BUCKET_UNCHANGED], hidden_noise_count)
     print_bucket("FASTER", buckets[BUCKET_FASTER])
     print_bucket("SLOWER BELOW THRESHOLD", buckets[BUCKET_SLOWER])
     print_bucket("REGRESSIONS", buckets[BUCKET_REGRESSION])
@@ -397,8 +414,12 @@ if clear_benchmark_cache:
         pass
 
 config_dict = vars(args)
-old_runner = BenchmarkRunner(BenchmarkRunnerConfig.from_params(old_runner_path, benchmark_file, **config_dict))
-new_runner = BenchmarkRunner(BenchmarkRunnerConfig.from_params(new_runner_path, benchmark_file, **config_dict))
+old_runner = BenchmarkRunner(
+    BenchmarkRunnerConfig.from_params(old_runner_path, benchmark_file, runner_label="old", **config_dict)
+)
+new_runner = BenchmarkRunner(
+    BenchmarkRunnerConfig.from_params(new_runner_path, benchmark_file, runner_label="new", **config_dict)
+)
 
 benchmark_list = old_runner.benchmark_list
 
@@ -455,6 +476,8 @@ all_results = other_results + final_regression_results
 display_names = benchmark_display_names([result.benchmark for result in all_results])
 rows = [benchmark_row(result, display_names[result.benchmark]) for result in all_results]
 rows.sort(key=row_sort_key)
+visible_rows = [row for row in rows if show_in_report(row)]
+hidden_noise_count = len(rows) - len(visible_rows)
 
 exit_code = 0
 summary = []
@@ -480,12 +503,12 @@ else:
     result_text = "no regressions detected"
 
 common_prefix = benchmark_common_prefix([result.benchmark for result in all_results])
-print_aggregate_report(rows, common_prefix, result_text)
+print_aggregate_report(visible_rows, common_prefix, result_text, len(rows), hidden_noise_count)
 
 time_a = geomean(old_runner.complete_timings)
 time_b = geomean(new_runner.complete_timings)
 print_geomean_summary(time_a, time_b)
-print_impact_bucket_summary(rows, result_text)
+print_impact_bucket_summary(visible_rows, result_text, hidden_noise_count)
 
 # nuke cached benchmark data between runs
 if not keep_benchmark_data:

@@ -39,6 +39,7 @@ class BenchmarkRunnerConfig:
     root_dir: str = ""
     no_summary: bool = False
     timed_runs: Optional[int] = None
+    runner_label: str = "benchmark"
 
     @classmethod
     def from_params(cls, benchmark_runner, benchmark_file, **kwargs) -> "BenchmarkRunnerConfig":
@@ -50,6 +51,7 @@ class BenchmarkRunnerConfig:
         root_dir = kwargs.get("root_dir", "")
         no_summary = kwargs.get("no_summary", False)
         timed_runs = kwargs.get("timed_runs", None)
+        runner_label = kwargs.get("runner_label", "benchmark")
 
         config = cls(
             benchmark_runner=benchmark_runner,
@@ -62,6 +64,7 @@ class BenchmarkRunnerConfig:
             root_dir=root_dir,
             no_summary=no_summary,
             timed_runs=timed_runs,
+            runner_label=runner_label,
         )
         return config
 
@@ -175,7 +178,7 @@ class BenchmarkRunner:
             return None, err
         if self.config.verbose:
             if os.getenv('CI') == 'true':
-                print(f"::group::raw benchmark output: {benchmark}")
+                print(f"::group::raw output: {self.config.runner_label} {benchmark}")
                 print(err)
                 print("::endgroup::")
             else:
