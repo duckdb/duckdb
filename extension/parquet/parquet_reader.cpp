@@ -1392,6 +1392,24 @@ static bool TryGetListBloomFilterLeaf(ColumnReader &column_reader, const Express
 	return false;
 }
 
+static optional_ptr<ColumnReader> TryGetBloomFilterSource(ColumnReader &column_reader) {
+	if (column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN) {
+		return column_reader;
+	}
+	if (column_reader.Schema().schema_type != ParquetColumnSchemaType::EXPRESSION) {
+		return nullptr;
+	}
+	auto &expr_reader = column_reader.Cast<ExpressionColumnReader>();
+	if (expr_reader.child_readers.size() != 1 || !expr_reader.expr ||
+	    expr_reader.expr->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+		return nullptr;
+	}
+	if (expr_reader.expr->Cast<BoundReferenceExpression>().Index() != 0) {
+		return nullptr;
+	}
+	return TryGetBloomFilterSource(*expr_reader.child_readers[0]);
+}
+
 static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter &filter,
                                   optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::TryGetBloomFilterLeaf");
@@ -1449,20 +1467,21 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 		auto stats = column_reader.Stats(state.group_index, group.columns);
 		// filters contain output chunk index, not file col idx!
 		auto filter_entry = filters->TryGetFilterByColumnIndex(col_idx);
-		if (stats && filter_entry) {
+		if (filter_entry) {
 			auto &filter = *filter_entry;
 
 			auto schema_column_index = column_reader.ColumnIndex();
-			FilterPropagateResult prune_result;
+			auto prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			bool is_generated_column = schema_column_index >= group.columns.size();
-			bool is_column = column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN;
 			bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
 			bool has_min_max = false;
 			if (!is_generated_column) {
 				has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
 				              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
 			}
-			if (is_expression) {
+			if (!stats) {
+				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			} else if (is_expression) {
 				// no pruning possible for expressions
 				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			} else if (!is_generated_column && has_min_max &&
@@ -1480,18 +1499,21 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				prune_result = expr_filter.CheckStatistics(context, *stats);
 			}
 			// check the bloom filter if present
-			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && is_column) {
-				optional_ptr<ColumnReader> bloom_reader = &column_reader;
+			auto bloom_source = TryGetBloomFilterSource(column_reader);
+			if (bloom_source) {
+				optional_ptr<ColumnReader> bloom_reader = bloom_source;
 				optional_ptr<const TableFilter> bloom_filter = &filter;
 				unique_ptr<TableFilter> leaf_filter;
-				if (column_reader.Type().IsNested()) {
-					if (!TryGetBloomFilterLeaf(column_reader, filter, bloom_reader, leaf_filter)) {
+				auto check_bloom_filter = prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE;
+				if (bloom_source->Type().IsNested()) {
+					if (!TryGetBloomFilterLeaf(*bloom_source, filter, bloom_reader, leaf_filter)) {
 						bloom_reader = nullptr;
 					} else {
 						bloom_filter = leaf_filter.get();
+						check_bloom_filter = prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
 					}
 				}
-				if (bloom_reader && bloom_filter &&
+				if (check_bloom_filter && bloom_reader && bloom_filter &&
 				    bloom_reader->Schema().schema_type == ParquetColumnSchemaType::COLUMN &&
 				    bloom_reader->ColumnIndex() < group.columns.size() &&
 				    ParquetStatisticsUtils::BloomFilterSupported(bloom_reader->Schema()) &&
