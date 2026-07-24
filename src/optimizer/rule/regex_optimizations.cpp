@@ -5,6 +5,7 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
@@ -17,7 +18,7 @@ namespace duckdb {
 
 RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();
-	func->function = make_uniq<SpecificFunctionMatcher>("regexp_matches");
+	func->function = make_uniq<ManyFunctionMatcher>(identifier_set_t {"regexp_matches", "regexp_full_match"});
 	func->policy = SetMatcher::Policy::SOME_ORDERED;
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
@@ -174,6 +175,29 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	duckdb_re2::RE2 pattern(patt_str, parsed_options);
 	if (!pattern.ok()) {
 		return nullptr; // this should fail somewhere else
+	}
+
+	// if the regex is a simple literal string, we can just convert it to an equality check
+	if (root.Function().GetName() == "regexp_full_match") {
+		if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
+		    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral ||
+		    pattern.Regexp()->op() == duckdb_re2::kRegexpEmptyMatch) {
+			string exact_string = "";
+			if (pattern.Regexp()->op() != duckdb_re2::kRegexpEmptyMatch) {
+				// contains=true extracts the unescaped literal string and permits % and _
+				LikeString escaped_like_string = GetLikeStringEscaped(pattern.Regexp(), true);
+				if (!escaped_like_string.exists) {
+					// bail out if the regex has unsupported options (e.g., case insensitivity)
+					return nullptr;
+				}
+				exact_string = escaped_like_string.like_string;
+			}
+			auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(exact_string)));
+			return BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+			                                         std::move(root.GetChildrenMutable()[0]), std::move(parameter));
+		}
+		// if it's a full match but not a literal, we can't optimize it into a contains/like
+		return nullptr;
 	}
 
 	LikeString like_string;
