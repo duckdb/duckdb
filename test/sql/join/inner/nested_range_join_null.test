@@ -1,0 +1,123 @@
+# name: test/sql/join/inner/nested_range_join_null.test
+# description: Range joins on nested types with NULL elements (issue #23955)
+# group: [inner]
+
+# A nested comparison can be NULL even when neither operand is top-level NULL, e.g. a list
+# containing a NULL element. Sort-based range joins (piecewise merge / IE join) cannot represent
+# this, so range joins on nested types must fall back to a nested loop join.
+
+# Force the sort-based join path (if it were still eligible) so this test guards the fix
+# regardless of the default thresholds.
+statement ok
+SET nested_loop_join_threshold=1;
+
+statement ok
+SET merge_join_threshold=1;
+
+statement ok
+CREATE TABLE l(a INT[]);
+
+statement ok
+INSERT INTO l VALUES (NULL), (NULL), (NULL), ([NULL]), ([881693051]);
+
+statement ok
+CREATE TABLE r(i INT);
+
+statement ok
+INSERT INTO r VALUES (1), (2), (3), (NULL), (NULL);
+
+# Ground truth: the projection of the comparison yields 3 TRUE and 22 NULL over the 25-row product.
+query II
+SELECT p, count(*) FROM (
+    SELECT (a < (CASE i WHEN i THEN [-768214738, -1891806940, 281316894] END)) AS p FROM l, r
+) GROUP BY p ORDER BY p
+----
+false	3
+NULL	22
+
+# issue #23955: NOT applied to the LIST comparison must keep exactly the 3 false rows
+query I
+SELECT count(*) FROM l, r
+WHERE NOT (a < (CASE i WHEN i THEN [-768214738, -1891806940, 281316894] END))
+----
+3
+
+# the direct comparison (no NOT rewrite) must be correct too - this is the true root cause
+query I
+SELECT count(*) FROM l, r
+WHERE a >= (CASE i WHEN i THEN [-768214738, -1891806940, 281316894] END)
+----
+3
+
+# full operator table - NULL comparison results must never match
+# [881693051] vs [5,6,7]: >=T >T <F <=F =F !=T ; [NULL] vs [5,6,7]: NULL ; NULL list: NULL
+query I
+SELECT count(*) FROM l, r WHERE a >= (CASE i WHEN i THEN [5,6,7] END)
+----
+3
+
+query I
+SELECT count(*) FROM l, r WHERE a > (CASE i WHEN i THEN [5,6,7] END)
+----
+3
+
+query I
+SELECT count(*) FROM l, r WHERE a < (CASE i WHEN i THEN [5,6,7] END)
+----
+0
+
+query I
+SELECT count(*) FROM l, r WHERE a <= (CASE i WHEN i THEN [5,6,7] END)
+----
+0
+
+# exactly which rows survive the range join - only the non-NULL comparison
+query I
+SELECT a FROM l, r WHERE a >= [5,6,7] ORDER BY a
+----
+[881693051]
+[881693051]
+[881693051]
+[881693051]
+[881693051]
+
+# structs behave the same way
+statement ok
+CREATE TABLE ls(a STRUCT(x INT));
+
+statement ok
+INSERT INTO ls VALUES (NULL), ({'x': NULL}), ({'x': 5});
+
+query I
+SELECT a FROM ls, r WHERE a >= {'x': 1} ORDER BY a
+----
+{'x': 5}
+{'x': 5}
+{'x': 5}
+{'x': 5}
+{'x': 5}
+
+# fixed-size arrays too
+statement ok
+CREATE TABLE la(a INT[2]);
+
+statement ok
+INSERT INTO la VALUES (NULL), ([NULL, NULL]), ([5, 6]);
+
+query I
+SELECT a FROM la, r WHERE a >= [1, 2]::INT[2] ORDER BY a
+----
+[5, 6]
+[5, 6]
+[5, 6]
+[5, 6]
+[5, 6]
+
+# nested range comparison must not select a sort-based join
+statement ok
+PRAGMA explain_output='PHYSICAL_ONLY';
+
+query II
+EXPLAIN SELECT count(*) FROM l, r WHERE a >= (CASE i WHEN i THEN [5,6,7] END)
+----
+physical_plan	<!REGEX>:.*(Piecewise Merge Join|IE Join).*
