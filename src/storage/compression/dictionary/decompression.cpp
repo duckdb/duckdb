@@ -14,7 +14,7 @@ void CompressedStringScanState::ValidateDictionaryIndex(sel_t index) {
 
 void CompressedStringScanState::ValidateDictionaryOffset(uint32_t dict_offset) {
 	if (dict_offset > dict.size) {
-		throw IOException(
+		throw DataCorruptionException(
 		    "Failed to scan dictionary string - dictionary offset was out of range. Database file appears "
 		    "to be corrupted.");
 	}
