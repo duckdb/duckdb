@@ -255,7 +255,7 @@ jobs:
             --clear-benchmark-cache \
             --disable-timeout \
             --max-timeout 3600 \
-            --timed-runs 20
+            --timed-runs 30
 
   regression-bench-fivetran:
     name: Bench Fivetran
