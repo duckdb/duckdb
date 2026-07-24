@@ -1,0 +1,76 @@
+# name: test/sql/storage/compression/dict_fsst/invalid_layout_metadata.test
+# group: [dict_fsst]
+
+require vector_size 2048
+
+unzip data/storage/dict_fsst_invalid_dictionary_indices_width.db.gz {TEST_DIR}/dict_fsst_invalid_dictionary_indices_width.db
+
+unzip data/storage/dict_fsst_invalid_string_lengths_width.db.gz {TEST_DIR}/dict_fsst_invalid_string_lengths_width.db
+
+unzip data/storage/dict_fsst_invalid_dictionary_count.db.gz {TEST_DIR}/dict_fsst_invalid_dictionary_count.db
+
+unzip data/storage/dict_fsst_invalid_nonzero_offset_layout.db.gz {TEST_DIR}/dict_fsst_invalid_nonzero_offset_layout.db
+
+statement ok
+ATTACH '{TEST_DIR}/dict_fsst_invalid_dictionary_indices_width.db' AS invalid_indices_width
+
+statement ok
+USE invalid_indices_width
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE compression='DICT_FSST' LIMIT 1
+----
+DICT_FSST
+
+statement error
+SELECT sum(length(s)) FROM t
+----
+IO Error: Failed to scan DICT_FSST string segment: dictionary indices width was invalid. Database file appears to be corrupted.
+
+statement ok
+ATTACH '{TEST_DIR}/dict_fsst_invalid_string_lengths_width.db' AS invalid_string_lengths_width
+
+statement ok
+USE invalid_string_lengths_width
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE compression='DICT_FSST' LIMIT 1
+----
+DICT_FSST
+
+statement error
+SELECT sum(length(s)) FROM t
+----
+IO Error: Failed to scan DICT_FSST string segment: string lengths were invalid. Database file appears to be corrupted.
+
+statement ok
+ATTACH '{TEST_DIR}/dict_fsst_invalid_dictionary_count.db' AS invalid_dictionary_count
+
+statement ok
+USE invalid_dictionary_count
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE compression='DICT_FSST' LIMIT 1
+----
+DICT_FSST
+
+statement error
+SELECT sum(length(s)) FROM t
+----
+IO Error: Failed to scan DICT_FSST string segment: dictionary count was invalid. Database file appears to be corrupted.
+
+statement ok
+ATTACH '{TEST_DIR}/dict_fsst_invalid_nonzero_offset_layout.db' AS invalid_nonzero_offset_layout
+
+statement ok
+USE invalid_nonzero_offset_layout
+
+query I
+SELECT block_offset FROM pragma_storage_info('t') WHERE column_name='s' AND compression='DICT_FSST' LIMIT 1
+----
+24
+
+statement error
+SELECT sum(length(s)) FROM t
+----
+IO Error: Failed to scan DICT_FSST string segment: index was out of range. Database file appears to be corrupted.
