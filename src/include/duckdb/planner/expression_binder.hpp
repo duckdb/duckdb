@@ -45,7 +45,7 @@ struct SelectBindState;
 
 struct BoundColumnReferenceInfo {
 	Identifier name;
-	optional_idx query_location;
+	Span query_location;
 };
 
 struct BindResult {

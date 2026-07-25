@@ -107,7 +107,7 @@ void UnpackMultiStatement(MultiStatement &multi_statement, const CurrentTransact
 vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_ptr<SQLStatement> statement) const {
 	// Try reparsing
 	const auto info = statement->Cast<PragmaStatement>().info->Copy();
-	QueryErrorContext error_context(statement->stmt_location);
+	QueryErrorContext error_context(statement->stmt_span);
 	const auto binder = Binder::CreateBinder(context);
 	const auto bound_info = binder->BindPragma(*info, error_context);
 	if (bound_info->function.query) {

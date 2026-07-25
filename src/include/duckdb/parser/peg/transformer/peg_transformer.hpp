@@ -230,14 +230,14 @@ public:
 			auto bridged = TryBridgeTransformResult<T>(*base_result);
 			if (bridged) {
 				auto bridged_result = std::move(bridged->value);
-				SetResultLocation(bridged_result, parse_result.offset);
+				SetResultLocation(bridged_result, parse_result.GetSpan());
 				return bridged_result;
 			}
 			throw InternalException("Transformer for rule '" + parse_result.name + "' returned an unexpected type.");
 		}
 
 		auto result = std::move(typed_result_ptr->value);
-		SetResultLocation(result, parse_result.offset);
+		SetResultLocation(result, parse_result.GetSpan());
 		return result;
 	}
 
@@ -281,27 +281,27 @@ public:
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 	bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end);
 	unique_ptr<WindowExpression> GetWindowClause(const Identifier &window_name);
-	void SetQueryLocation(ParsedExpression &expr, optional_idx query_location);
-	void SetQueryLocation(TableRef &ref, optional_idx query_location);
+	void SetQueryLocation(ParsedExpression &expr, Span query_location);
+	void SetQueryLocation(TableRef &ref, Span query_location);
 
 private:
 	template <typename T>
-	void SetResultLocation(T &, optional_idx) {
+	void SetResultLocation(T &, Span) {
 	}
-	void SetResultLocation(unique_ptr<ParsedExpression> &expr, optional_idx offset) {
+	void SetResultLocation(unique_ptr<ParsedExpression> &expr, Span span) {
 		if (!expr) {
 			return;
 		}
-		if (offset.IsValid() && !expr->GetQueryLocation().IsValid()) {
-			SetQueryLocation(*expr, offset);
+		if (span.IsValid() && !expr->HasQueryLocation()) {
+			SetQueryLocation(*expr, span);
 		}
 	}
-	void SetResultLocation(unique_ptr<TableRef> &ref, optional_idx offset) {
+	void SetResultLocation(unique_ptr<TableRef> &ref, Span span) {
 		if (!ref) {
 			return;
 		}
-		if (offset.IsValid() && !ref->query_location.IsValid()) {
-			SetQueryLocation(*ref, offset.GetIndex());
+		if (span.IsValid() && !ref->query_location.IsValid()) {
+			SetQueryLocation(*ref, span);
 		}
 	}
 

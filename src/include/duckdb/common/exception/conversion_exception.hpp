@@ -10,13 +10,14 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/span.hpp"
 
 namespace duckdb {
 class ConversionException : public Exception {
 public:
 	DUCKDB_API explicit ConversionException(const string &msg);
 
-	DUCKDB_API explicit ConversionException(optional_idx error_location, const string &msg);
+	DUCKDB_API explicit ConversionException(Span error_location, const string &msg);
 
 	DUCKDB_API ConversionException(const PhysicalType orig_type, const PhysicalType new_type);
 
@@ -28,7 +29,7 @@ public:
 	}
 
 	template <typename... ARGS>
-	explicit ConversionException(optional_idx error_location, const string &msg, ARGS &&...params)
+	explicit ConversionException(Span error_location, const string &msg, ARGS &&...params)
 	    : ConversionException(error_location, ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 };

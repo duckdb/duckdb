@@ -27,7 +27,7 @@ struct GetCastFunctionInput {
 	}
 
 	optional_ptr<ClientContext> context;
-	optional_idx query_location;
+	Span query_location;
 };
 
 struct BindCastFunction {

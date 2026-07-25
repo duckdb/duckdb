@@ -287,13 +287,14 @@ void Parser::ParseQuery(const string &query_p) {
 
 	if (!statements.empty()) {
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			statements[i]->stmt_length = statements[i + 1]->stmt_location - statements[i]->stmt_location;
+			auto start = statements[i]->stmt_span.offset;
+			statements[i]->stmt_span = Span(start, statements[i + 1]->stmt_span.offset - start);
 		}
-		statements.back()->stmt_length = query.size() - statements.back()->stmt_location;
+		statements.back()->stmt_span =
+		    Span(statements.back()->stmt_span.offset, query.size() - statements.back()->stmt_span.offset);
 		for (auto &statement : statements) {
-			statement->query = query.substr(statement->stmt_location, statement->stmt_length);
-			statement->stmt_location = 0;
-			statement->stmt_length = statement->query.size();
+			statement->query = query.substr(statement->stmt_span.offset, statement->stmt_span.length);
+			statement->stmt_span = Span(0, statement->query.size());
 			if (statement->type == StatementType::CREATE_STATEMENT) {
 				auto &create = statement->Cast<CreateStatement>();
 				create.info->sql = statement->query;
@@ -340,8 +341,7 @@ unique_ptr<SQLStatement> Parser::TryParseExtensionStatement(vector<MatcherToken>
 		auto &last_token = tokens[token_cursor + consumed - 1];
 		const idx_t span_end_byte = last_token.offset + last_token.length;
 		auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-		estmt->stmt_location = failure_byte;
-		estmt->stmt_length = span_end_byte - failure_byte;
+		estmt->stmt_span = Span(failure_byte, span_end_byte - failure_byte);
 		token_cursor += consumed;
 		return std::move(estmt);
 	}
