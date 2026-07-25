@@ -421,6 +421,147 @@ JOIN '{TEST_DIR}/bloom_blob.parquet' rhs ON lhs.b = rhs.b;
 ----
 100
 
+# A list stores all of its elements in a single leaf column chunk, so the leaf bloom filter covers every position
+statement ok
+COPY (
+    SELECT
+        [v, v + 2] AS list_value,
+        [[[v, v + 2]]] AS deep_list,
+        i::BIGINT AS payload
+    FROM (
+        SELECT i, ((i % 100) * 2)::INTEGER AS v
+        FROM range(20480) t(i)
+    ) data
+) TO '{TEST_DIR}/bloom_list.parquet' (
+    FORMAT PARQUET,
+    ROW_GROUP_SIZE 2048,
+    DICTIONARY_SIZE_LIMIT 1000,
+    WRITE_BLOOM_FILTER TRUE
+);
+
+# odd values never occur as a list element, but they do fall within the min/max of every row group
+query II
+EXPLAIN ANALYZE
+SELECT list_value, payload FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE list_value[1] = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE list_value[1] = 101;
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT deep_list, payload FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE deep_list[1][1][1] = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE
+SELECT payload FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_value[1] = 101 OR list_value[2] = 103;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# list_extract spelled out and negative indexing reach the same leaf
+query II
+EXPLAIN ANALYZE
+SELECT payload FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE list_extract(list_value, 2) = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE
+SELECT payload FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE list_value[-1] = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# the bloom filter covers the element domain, not the position - 200 only ever occurs at position 2
+query II
+EXPLAIN ANALYZE
+SELECT payload FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE list_value[1] = 200;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 10 / 10.*
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE list_value[1] = 200;
+----
+0
+
+# matching values must not be pruned away
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE list_value[1] = 100;
+----
+205
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE list_value[2] = 100;
+----
+205
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE deep_list[1][1][2] = 102;
+----
+205
+
+# a partially extracted list is not an element lookup
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE deep_list[1][1] = [100, 102];
+----
+205
+
+# min/max pruning reaches the list elements as well
+statement ok
+COPY (SELECT [i::INTEGER, (i + 1)::INTEGER] AS l FROM range(20480) t(i))
+TO '{TEST_DIR}/bloom_list_sorted.parquet' (
+    FORMAT PARQUET, ROW_GROUP_SIZE 2048, DICTIONARY_SIZE_LIMIT 100000, WRITE_BLOOM_FILTER TRUE
+);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list_sorted.parquet') WHERE l[1] = 5000;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 10.*
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list_sorted.parquet') WHERE l[1] = 5000;
+----
+1
+
+# lists of strings
+statement ok
+COPY (SELECT ['string_' || ((i % 100) * 2)::VARCHAR] AS s FROM range(20480) t(i))
+TO '{TEST_DIR}/bloom_list_string.parquet' (
+    FORMAT PARQUET, ROW_GROUP_SIZE 2048, DICTIONARY_SIZE_LIMIT 1000, WRITE_BLOOM_FILTER TRUE
+);
+
+query II
+EXPLAIN ANALYZE SELECT s FROM read_parquet('{TEST_DIR}/bloom_list_string.parquet') WHERE s[1] = 'string_101';
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list_string.parquet') WHERE s[1] = 'string_100';
+----
+205
+
+# lists of structs have more than one leaf - no pruning, but results must stay correct
+statement ok
+COPY (SELECT [{'a': ((i % 100) * 2)::INTEGER}] AS l FROM range(20480) t(i))
+TO '{TEST_DIR}/bloom_list_struct.parquet' (
+    FORMAT PARQUET, ROW_GROUP_SIZE 2048, DICTIONARY_SIZE_LIMIT 1000, WRITE_BLOOM_FILTER TRUE
+);
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list_struct.parquet') WHERE l[1].a = 101;
+----
+0
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list_struct.parquet') WHERE l[1].a = 100;
+----
+205
+
 # some tests for dictionary_size_limit
 
 # no bloom filter, dict limit too low

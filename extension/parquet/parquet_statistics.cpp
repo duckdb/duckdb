@@ -674,7 +674,33 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	return row_group_stats;
 }
 
-static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const Expression &expr) {
+//! Whether the expression reads the leaf column that owns the bloom filter - for a leaf that sits below list_depth
+//! LIST levels this means unwrapping that many list extracts first
+static bool IsBloomFilterColumnRef(const Expression &expr, idx_t list_depth) {
+	reference<const Expression> current(expr);
+	for (idx_t i = 0; i < list_depth; i++) {
+		auto &child = current.get();
+		if (child.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+			return false;
+		}
+		auto &func = child.Cast<BoundFunctionExpression>();
+		auto &function_name = func.Function().GetName();
+		if (function_name != "list_extract" && function_name != "array_extract") {
+			return false;
+		}
+		auto &children = func.GetChildren();
+		if (children.size() != 2 || children[0]->GetReturnType().id() != LogicalTypeId::LIST ||
+		    children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+			return false;
+		}
+		current = *children[0];
+	}
+	auto &base = current.get();
+	return base.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	       base.Cast<BoundReferenceExpression>().Index() == 0;
+}
+
+static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const Expression &expr, idx_t list_depth) {
 	if (!BoundComparisonExpression::IsComparison(expr)) {
 		return nullptr;
 	}
@@ -687,27 +713,25 @@ static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const 
 	auto &right = BoundComparisonExpression::Right(comp);
 	optional_ptr<const Expression> column;
 	optional_ptr<const BoundConstantExpression> constant;
-	if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
-	    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+	if (right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsBloomFilterColumnRef(left, list_depth)) {
 		column = left;
 		constant = right.Cast<BoundConstantExpression>();
-	} else if (right.GetExpressionClass() == ExpressionClass::BOUND_REF &&
-	           left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+	} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	           IsBloomFilterColumnRef(right, list_depth)) {
 		column = right;
 		constant = left.Cast<BoundConstantExpression>();
 	} else {
 		return nullptr;
 	}
-	if (column->Cast<BoundReferenceExpression>().Index() != 0 || constant->GetValue().IsNull() ||
-	    column->GetReturnType() != constant->GetValue().type()) {
+	if (constant->GetValue().IsNull() || column->GetReturnType() != constant->GetValue().type()) {
 		return nullptr;
 	}
 	return constant;
 }
 
-static bool HasFilterConstants(const Expression &expr) {
+static bool HasFilterConstants(const Expression &expr, idx_t list_depth) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
-		return GetBloomFilterConstant(expr) != nullptr;
+		return GetBloomFilterConstant(expr, list_depth) != nullptr;
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
@@ -715,15 +739,15 @@ static bool HasFilterConstants(const Expression &expr) {
 	bool child_has_constant = false;
 	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
 		if (!child_has_constant) {
-			child_has_constant = HasFilterConstants(child);
+			child_has_constant = HasFilterConstants(child, list_depth);
 		}
 	});
 	return child_has_constant;
 }
 
-static bool HasFilterConstants(const TableFilter &duckdb_filter) {
+static bool HasFilterConstants(const TableFilter &duckdb_filter, idx_t list_depth) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
-	return HasFilterConstants(*expr_filter.expr);
+	return HasFilterConstants(*expr_filter.expr, list_depth);
 }
 
 template <class T>
@@ -899,9 +923,9 @@ static bool BloomFilterExcludes(const Value &constant, ParquetBloomFilter &bloom
 }
 
 static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_filter,
-                             const ParquetColumnSchema &schema) {
+                             const ParquetColumnSchema &schema, idx_t list_depth) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
-		auto constant = GetBloomFilterConstant(expr);
+		auto constant = GetBloomFilterConstant(expr, list_depth);
 		if (!constant) {
 			return false;
 		}
@@ -913,14 +937,16 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::CONJUNCTION_AND: {
 		bool any_children_true = false;
-		ExpressionIterator::EnumerateChildren(
-		    expr, [&](const Expression &child) { any_children_true |= ApplyBloomFilter(child, bloom_filter, schema); });
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			any_children_true |= ApplyBloomFilter(child, bloom_filter, schema, list_depth);
+		});
 		return any_children_true;
 	}
 	case ExpressionType::CONJUNCTION_OR: {
 		bool all_children_true = true;
-		ExpressionIterator::EnumerateChildren(
-		    expr, [&](const Expression &child) { all_children_true &= ApplyBloomFilter(child, bloom_filter, schema); });
+		ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+			all_children_true &= ApplyBloomFilter(child, bloom_filter, schema, list_depth);
+		});
 		return all_children_true;
 	}
 	default:
@@ -929,9 +955,9 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 }
 
 static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilter &bloom_filter,
-                             const ParquetColumnSchema &schema) {
+                             const ParquetColumnSchema &schema, idx_t list_depth) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::ApplyBloomFilter");
-	return ApplyBloomFilter(*expr_filter.expr, bloom_filter, schema);
+	return ApplyBloomFilter(*expr_filter.expr, bloom_filter, schema, list_depth);
 }
 
 bool ParquetStatisticsUtils::BloomFilterSupported(const ParquetColumnSchema &schema) {
@@ -997,8 +1023,8 @@ bool ParquetStatisticsUtils::BloomFilterSupported(const ParquetColumnSchema &sch
 bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filter,
                                                  const duckdb_parquet::ColumnMetaData &column_meta_data,
                                                  TProtocol &file_proto, Allocator &allocator,
-                                                 const ParquetColumnSchema &schema) {
-	if (!HasFilterConstants(duckdb_filter) || !column_meta_data.__isset.bloom_filter_offset ||
+                                                 const ParquetColumnSchema &schema, idx_t list_depth) {
+	if (!HasFilterConstants(duckdb_filter, list_depth) || !column_meta_data.__isset.bloom_filter_offset ||
 	    column_meta_data.bloom_filter_offset <= 0) {
 		return false;
 	}
@@ -1055,7 +1081,7 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, bloom_filter_data_size);
 	transport.read(new_buffer->ptr, UnsafeNumericCast<uint32_t>(bloom_filter_data_size));
 	ParquetBloomFilter bloom_filter(std::move(new_buffer));
-	return ApplyBloomFilter(duckdb_filter, bloom_filter, schema);
+	return ApplyBloomFilter(duckdb_filter, bloom_filter, schema, list_depth);
 }
 
 ParquetBloomFilter::ParquetBloomFilter(idx_t num_entries, double bloom_filter_false_positive_ratio) {
