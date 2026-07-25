@@ -70,6 +70,8 @@ DatabaseMemoryManager::DatabaseMemoryManager(unique_ptr<Allocator> allocator_p,
 
 DatabaseMemoryManager::~DatabaseMemoryManager() {
 	buffer_pool->UnregisterObjectCache(*object_cache);
+	block_allocator->FlushAll();
+	Allocator::SetBackgroundThreads(false);
 }
 
 Allocator &DatabaseMemoryManager::GetAllocator() const {
@@ -155,13 +157,6 @@ DatabaseInstance::~DatabaseInstance() {
 		config.memory_manager->GetBufferPool().UnloadBlocks(memory_context_id);
 	}
 	buffer_manager.reset();
-
-	const bool last_memory_manager_owner = config.memory_manager && config.memory_manager.use_count() == 1;
-	if (last_memory_manager_owner) {
-		// flush allocations and disable the background thread
-		config.memory_manager->GetBlockAllocator().FlushAll();
-		Allocator::SetBackgroundThreads(false);
-	}
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
 }
