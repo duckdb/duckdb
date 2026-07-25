@@ -74,6 +74,24 @@ DatabaseMemoryManager::~DatabaseMemoryManager() {
 	Allocator::SetBackgroundThreads(false);
 }
 
+shared_ptr<DatabaseMemoryManager> DatabaseMemoryManager::Create(unique_ptr<Allocator> allocator,
+                                                                unique_ptr<BlockAllocator> block_allocator,
+                                                                DBConfig &config) {
+	if (!allocator) {
+		allocator = make_uniq<Allocator>();
+	}
+	if (!block_allocator) {
+		auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
+		block_allocator = make_uniq<BlockAllocator>(*allocator, default_block_size,
+		                                            DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
+		                                            config.options.block_allocator_size);
+	}
+	return make_shared_ptr<DatabaseMemoryManager>(std::move(allocator), std::move(block_allocator),
+	                                              config.options.maximum_memory,
+	                                              config.options.buffer_manager_track_eviction_timestamps,
+	                                              config.options.allocator_bulk_deallocation_flush_threshold);
+}
+
 Allocator &DatabaseMemoryManager::GetAllocator() const {
 	return *allocator;
 }
@@ -595,21 +613,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.error_manager = make_uniq<ErrorManager>();
 	}
 	if (!config.memory_manager) {
-		auto allocator = std::move(new_config.allocator);
-		if (!allocator) {
-			allocator = make_uniq<Allocator>();
-		}
-		auto block_allocator = std::move(new_config.block_allocator);
-		if (!block_allocator) {
-			auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
-			block_allocator = make_uniq<BlockAllocator>(
-			    *allocator, default_block_size, DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
-			    config.options.block_allocator_size);
-		}
-		config.memory_manager = make_shared_ptr<DatabaseMemoryManager>(
-		    std::move(allocator), std::move(block_allocator), config.options.maximum_memory,
-		    config.options.buffer_manager_track_eviction_timestamps,
-		    config.options.allocator_bulk_deallocation_flush_threshold);
+		config.memory_manager = DatabaseMemoryManager::Create(std::move(new_config.allocator),
+		                                                      std::move(new_config.block_allocator), config);
 	}
 	config.db_cache_entry = std::move(new_config.db_cache_entry);
 	config.path_manager = std::move(new_config.path_manager);

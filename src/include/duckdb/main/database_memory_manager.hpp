@@ -18,6 +18,7 @@ namespace duckdb {
 class Allocator;
 class BlockAllocator;
 class BufferPool;
+struct DBConfig;
 class TemporaryMemoryManager;
 class ObjectCache;
 
@@ -28,6 +29,9 @@ public:
 	                      idx_t maximum_memory, bool track_eviction_timestamps,
 	                      idx_t allocator_bulk_deallocation_flush_threshold);
 	~DatabaseMemoryManager();
+
+	DUCKDB_API static shared_ptr<DatabaseMemoryManager>
+	Create(unique_ptr<Allocator> allocator, unique_ptr<BlockAllocator> block_allocator, DBConfig &config);
 
 	DUCKDB_API Allocator &GetAllocator() const;
 	DUCKDB_API BlockAllocator &GetBlockAllocator() const;
