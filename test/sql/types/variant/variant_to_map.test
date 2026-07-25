@@ -1,0 +1,93 @@
+# name: test/sql/types/variant/variant_to_map.test
+# description: Test casting VARIANT(OBJECT) to MAP
+# group: [variant]
+
+# A variant OBJECT converts to MAP directly. This used to fall through to the row-at-a-time
+# Value fallback in CastVariant, which was ~40x slower than the equivalent STRUCT cast.
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT ('{"b":2,"a":1}')::JSON::VARIANT::MAP(VARCHAR,VARCHAR);
+----
+{b=2, a=1}
+
+query I
+SELECT ('{"host.name":"h1","state":"user"}')::JSON::VARIANT::MAP(VARCHAR,VARCHAR);
+----
+{host.name=h1, state=user}
+
+# nested values are rendered into the target value type
+query I
+SELECT ('{"a":{"x":1},"b":[1,2]}')::JSON::VARIANT::MAP(VARCHAR,VARCHAR);
+----
+{a='{\'x\': 1}', b='[1, 2]'}
+
+# non-VARCHAR value types are cast
+query I
+SELECT ('{"a":1,"b":2}')::JSON::VARIANT::MAP(VARCHAR,INTEGER);
+----
+{a=1, b=2}
+
+# NULL variant stays NULL
+query I
+SELECT (NULL::JSON)::VARIANT::MAP(VARCHAR,VARCHAR);
+----
+NULL
+
+# empty object
+query I
+SELECT ('{}')::JSON::VARIANT::MAP(VARCHAR,VARCHAR);
+----
+{}
+
+# a NULL value inside the object
+query I
+SELECT ('{"a":null}')::JSON::VARIANT::MAP(VARCHAR,VARCHAR);
+----
+{a=NULL}
+
+# a non-OBJECT variant cannot become a MAP
+statement error
+SELECT ('[1,2,3]')::JSON::VARIANT::MAP(VARCHAR,VARCHAR);
+----
+Expected to find VARIANT(OBJECT)
+
+# multiple rows, mixed key sets, exercised through a flat vector
+query II
+SELECT i, ('{"k":"v' || (i%3) || '","j":' || i || '}')::JSON::VARIANT::MAP(VARCHAR,VARCHAR)
+FROM range(4) t(i) ORDER BY i;
+----
+0	{k=v0, j=0}
+1	{k=v1, j=1}
+2	{k=v2, j=2}
+3	{k=v0, j=3}
+
+# NULLs interleaved with values keep row alignment
+query I
+SELECT CASE WHEN i%2=0 THEN ('{"a":"' || i || '"}')::JSON::VARIANT ELSE NULL END::MAP(VARCHAR,VARCHAR)
+FROM range(4) t(i) ORDER BY i;
+----
+{a=0}
+NULL
+{a=2}
+NULL
+
+# A VARIANT built from a MAP is stored as an ARRAY of key/value structs rather than an
+# OBJECT, so it must keep going through the LIST conversion.
+query III
+SELECT variant_typeof(MAP{}::VARIANT), variant_typeof(MAP{'a':'1'}::VARIANT),
+       variant_typeof(('{"a":1}')::JSON::VARIANT);
+----
+ARRAY(0)	ARRAY(1)	OBJECT(a)
+
+query I
+SELECT MAP{}::VARIANT::MAP(VARCHAR,VARCHAR);
+----
+{}
+
+query I
+SELECT MAP{'a':'1','b':'2'}::VARIANT::MAP(VARCHAR,VARCHAR);
+----
+{a=1, b=2}
