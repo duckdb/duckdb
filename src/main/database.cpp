@@ -175,11 +175,17 @@ DatabaseInstance::~DatabaseInstance() {
 	external_file_cache.reset();
 	result_set_manager.reset();
 
+	if (config.buffer_pool) {
+		config.buffer_pool->UnloadBlocks(memory_context_id);
+	}
 	buffer_manager.reset();
 
-	// flush allocations and disable the background thread
-	config.block_allocator->FlushAll();
-	Allocator::SetBackgroundThreads(false);
+	const bool last_memory_manager_owner = config.memory_manager && config.memory_manager.use_count() == 1;
+	if (last_memory_manager_owner) {
+		// flush allocations and disable the background thread
+		config.block_allocator->FlushAll();
+		Allocator::SetBackgroundThreads(false);
+	}
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
 }

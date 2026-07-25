@@ -90,6 +90,7 @@ public:
 	void Purge();
 	template <typename FN>
 	void IterateUnloadableBlocks(FN fn);
+	idx_t UnloadBlocks(MemoryContextId memory_context_id);
 
 	//! Increment the dead node counter in the purge queue.
 	inline void IncrementDeadNodes() {
@@ -263,6 +264,40 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	}
 }
 
+idx_t EvictionQueue::UnloadBlocks(MemoryContextId memory_context_id) {
+	lock_guard<mutex> guard(purge_lock);
+	idx_t unloaded_blocks = 0;
+	vector<BufferEvictionNode> retained_nodes;
+	BufferEvictionNode node;
+	while (q.try_dequeue(node)) {
+		auto handle = node.memory_p.lock();
+		if (!handle) {
+			DecrementDeadNodes();
+			continue;
+		}
+
+		auto lock = handle->GetLock();
+		if (node.handle_sequence_number != handle->GetEvictionSequenceNumber()) {
+			DecrementDeadNodes();
+			continue;
+		}
+		if (handle->GetMemoryContextId() != memory_context_id) {
+			retained_nodes.push_back(std::move(node));
+			continue;
+		}
+
+		handle->SetHasLiveQueueEntry(lock, false);
+		if (handle->CanUnload()) {
+			handle->Unload(lock);
+			unloaded_blocks++;
+		}
+	}
+	for (auto &retained_node : retained_nodes) {
+		q.enqueue(std::move(retained_node));
+	}
+	return unloaded_blocks;
+}
+
 BufferPool::BufferPool(shared_ptr<BlockAllocator> block_allocator_p,
                        shared_ptr<TemporaryMemoryManager> temporary_memory_manager_p, idx_t maximum_memory,
                        bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold)
@@ -354,6 +389,12 @@ idx_t BufferPool::GetOperatorMemoryLimit() const {
 
 TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 	return *temporary_memory_manager;
+}
+
+void BufferPool::UnloadBlocks(MemoryContextId memory_context_id) {
+	for (auto &queue : queues) {
+		queue->UnloadBlocks(memory_context_id);
+	}
 }
 
 void BufferPool::RegisterObjectCache(const shared_ptr<ObjectCache> &object_cache) {
