@@ -31,6 +31,8 @@ SELECT sum(length(STREET)) FROM tbl
 ----
 Data Corruption Error: Failed to scan dictionary string - dictionary offset was out of range. Database file appears to be corrupted.
 
+restart
+
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_index.db' AS index_db
 
@@ -46,6 +48,8 @@ statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
 Data Corruption Error: Failed to scan dictionary string - dictionary index was out of range. Database file appears to be corrupted.
+
+restart
 
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_dict_end.db' AS dict_end_db
@@ -63,6 +67,8 @@ SELECT sum(length(STREET)) FROM tbl
 ----
 Data Corruption Error: Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.
 
+restart
+
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_bitpacking_width.db' AS bitpacking_width_db
 
@@ -79,6 +85,8 @@ SELECT sum(length(STREET)) FROM tbl
 ----
 Data Corruption Error: Failed to scan dictionary string - bitpacking width was invalid. Database file appears to be corrupted.
 
+restart
+
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_selection_buffer.db' AS selection_buffer_db
 
@@ -94,6 +102,8 @@ statement error
 SELECT sum(length(STREET)) FROM tbl
 ----
 Data Corruption Error: Failed to scan dictionary string - selection buffer was out of range. Database file appears to be corrupted.
+
+restart
 
 statement ok
 ATTACH '{TEST_DIR}/dictionary_invalid_segment_end.db' AS segment_end_db
