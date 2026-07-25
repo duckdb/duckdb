@@ -27,10 +27,8 @@ ParserCache &Parser::GetCache() {
 	if (options.parser_cache) {
 		return *options.parser_cache;
 	}
-	if (!local_cache) {
-		local_cache = make_uniq<ParserCache>();
-	}
-	return *local_cache;
+	static ParserCache shared_cache;
+	return shared_cache;
 }
 
 static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {
