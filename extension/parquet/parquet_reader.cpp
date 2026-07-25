@@ -1487,6 +1487,26 @@ ColumnReader &ParquetReaderScanState::GetColumnReader(idx_t i) {
 	return *column_readers[i];
 }
 
+//! The leaf column chunk of a LIST holds every element of every list in the row group, so a constant that its bloom
+//! filter excludes cannot occur at any position of any list - descend to that leaf and report how many LIST levels
+//! separate it from the column itself
+static optional_ptr<const ParquetColumnSchema> GetListLeafSchema(const ParquetColumnSchema &schema, idx_t &list_depth) {
+	reference<const ParquetColumnSchema> current(schema);
+	list_depth = 0;
+	while (current.get().type.id() == LogicalTypeId::LIST) {
+		if (current.get().schema_type != ParquetColumnSchemaType::COLUMN || current.get().children.size() != 1) {
+			return nullptr;
+		}
+		current = current.get().children[0];
+		list_depth++;
+	}
+	auto &leaf = current.get();
+	if (list_depth == 0 || leaf.schema_type != ParquetColumnSchemaType::COLUMN || leaf.type.IsNested()) {
+		return nullptr;
+	}
+	return leaf;
+}
+
 void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderScanState &state, idx_t i) {
 	auto &group = GetGroup(state);
 	auto col_idx = MultiFileLocalIndex(i);
@@ -1533,12 +1553,21 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				prune_result = expr_filter.CheckStatistics(context, *stats);
 			}
 			// check the bloom filter if present
-			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
-			    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Schema()) &&
-			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[schema_column_index].meta_data,
-			                                                *state.thrift_file_proto, allocator,
-			                                                column_reader.Schema())) {
-				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+				idx_t list_depth = 0;
+				optional_ptr<const ParquetColumnSchema> bloom_schema;
+				if (is_column && !is_generated_column && !column_reader.Type().IsNested()) {
+					bloom_schema = column_reader.Schema();
+				} else if (is_column) {
+					bloom_schema = GetListLeafSchema(column_reader.Schema(), list_depth);
+				}
+				if (bloom_schema && bloom_schema->column_index < group.columns.size() &&
+				    ParquetStatisticsUtils::BloomFilterSupported(*bloom_schema) &&
+				    ParquetStatisticsUtils::BloomFilterExcludes(
+				        filter, group.columns[bloom_schema->column_index].meta_data, *state.thrift_file_proto,
+				        allocator, *bloom_schema, list_depth)) {
+					prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+				}
 			}
 
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
