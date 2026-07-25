@@ -21,6 +21,7 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -32,6 +33,12 @@
 namespace duckdb {
 
 namespace {
+
+struct MinMaxColumnInfo {
+	ColumnBinding binding;
+	LogicalType input_type;
+	LogicalType result_type;
+};
 
 struct ValueComparator {
 	virtual ~ValueComparator() = default;
@@ -77,8 +84,45 @@ unique_ptr<ValueComparator> GetComparator(const Identifier &fun_name, const Logi
 	return nullptr;
 }
 
+bool IsSafeMinMaxCast(const LogicalType &source, const LogicalType &target) {
+	if (source == target) {
+		return true;
+	}
+	if (!source.IsIntegral() || !target.IsIntegral()) {
+		return false;
+	}
+	LogicalType max_type;
+	return LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(source, target, max_type) && max_type == target;
+}
+
+bool TryGetMinMaxColumnInfo(const Expression &expr, MinMaxColumnInfo &info) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		const auto &col_ref = expr.Cast<BoundColumnRefExpression>();
+		info.binding = col_ref.Binding();
+		info.input_type = col_ref.GetReturnType();
+		info.result_type = col_ref.GetReturnType();
+		return true;
+	}
+	if (!BoundCastExpression::IsCast(expr)) {
+		return false;
+	}
+	const auto &cast = expr.Cast<BoundFunctionExpression>();
+	const auto &cast_child = BoundCastExpression::Child(cast);
+	if (cast_child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return false;
+	}
+	const auto &col_ref = cast_child.Cast<BoundColumnRefExpression>();
+	if (!IsSafeMinMaxCast(col_ref.GetReturnType(), BoundCastExpression::TargetType(cast))) {
+		return false;
+	}
+	info.binding = col_ref.Binding();
+	info.input_type = col_ref.GetReturnType();
+	info.result_type = BoundCastExpression::TargetType(cast);
+	return true;
+}
+
 bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &storage_index,
-                          const ValueComparator &comparator, Value &result) {
+                          const ValueComparator &comparator, const LogicalType &result_type, Value &result) {
 	if (!stats.partition_row_group) {
 		return false;
 	}
@@ -106,6 +150,9 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		}
 	}
 	result = comparator.GetVal(*column_stats);
+	if (result.type() != result_type && !result.DefaultTryCastAs(result_type)) {
+		return false;
+	}
 	return true;
 }
 
@@ -131,7 +178,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	}
 	// check if all aggregates are COUNT(*), MIN or MAX
 	vector<idx_t> count_star_idxs;
-	vector<ColumnBinding> min_max_bindings;
+	vector<MinMaxColumnInfo> min_max_columns;
 	vector<unique_ptr<ValueComparator>> comparators;
 
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
@@ -151,13 +198,15 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		}
 		auto &fun_name = aggr_expr.Function().GetName();
 		if (fun_name == "min" || fun_name == "max") {
-			if (aggr_expr.GetChildren().size() != 1 ||
-			    aggr_expr.GetChildren()[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			if (aggr_expr.GetChildren().size() != 1) {
 				return;
 			}
-			const auto &col_ref = aggr_expr.GetChildren()[0]->Cast<BoundColumnRefExpression>();
-			min_max_bindings.push_back(col_ref.Binding());
-			auto comparator = GetComparator(fun_name, col_ref.GetReturnType());
+			MinMaxColumnInfo column_info;
+			if (!TryGetMinMaxColumnInfo(*aggr_expr.GetChildren()[0], column_info)) {
+				return;
+			}
+			min_max_columns.push_back(column_info);
+			auto comparator = GetComparator(fun_name, column_info.input_type);
 			if (!comparator) {
 				// Type has no min max statistics
 				return;
@@ -174,13 +223,18 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	// skip any projections
 	reference<LogicalOperator> child_ref = *aggr.children[0];
 	while (child_ref.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		for (auto &binding : min_max_bindings) {
+		for (auto &column_info : min_max_columns) {
 			auto &proj = child_ref.get().Cast<LogicalProjection>();
-			auto &expr = proj.GetExpression(binding);
-			if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			auto &expr = proj.GetExpression(column_info.binding);
+			MinMaxColumnInfo projection_info;
+			if (!TryGetMinMaxColumnInfo(expr, projection_info)) {
 				return;
 			}
-			binding = expr.Cast<BoundColumnRefExpression>().Binding();
+			if (!IsSafeMinMaxCast(projection_info.result_type, column_info.input_type)) {
+				return;
+			}
+			column_info.binding = projection_info.binding;
+			column_info.input_type = projection_info.input_type;
 		}
 		child_ref = *child_ref.get().children[0];
 	}
@@ -207,9 +261,9 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		return;
 	}
 
-	vector<StorageIndex> min_max_storage_indexes(min_max_bindings.size());
-	for (idx_t i = 0; i < min_max_bindings.size(); i++) {
-		auto &binding = min_max_bindings[i];
+	vector<StorageIndex> min_max_storage_indexes(min_max_columns.size());
+	for (idx_t i = 0; i < min_max_columns.size(); i++) {
+		auto &binding = min_max_columns[i].binding;
 		auto &column_index = get.GetColumnIndex(binding);
 		if (!get.TryGetStorageIndex(column_index, min_max_storage_indexes[i])) {
 			//! Can't get a storage index for this column, so it doesn't have stats we can use
@@ -288,19 +342,21 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		partition_stats = std::move(precomputed_partition_stats);
 	}
 
-	if (!min_max_bindings.empty()) {
+	if (!min_max_columns.empty()) {
 		// Execute min/max aggregates on partition statistics
 		for (idx_t agg_idx = 0; agg_idx < min_max_storage_indexes.size(); agg_idx++) {
 			const auto &storage_index = min_max_storage_indexes[agg_idx];
+			const auto &result_type = min_max_columns[agg_idx].result_type;
 			auto &comparator = comparators[agg_idx];
 
 			Value agg_result;
-			if (!TryGetValueFromStats(partition_stats[0], storage_index, *comparator, agg_result)) {
+			if (!TryGetValueFromStats(partition_stats[0], storage_index, *comparator, result_type, agg_result)) {
 				return;
 			}
 			for (idx_t partition_idx = 1; partition_idx < partition_stats.size(); partition_idx++) {
 				Value rhs;
-				if (!TryGetValueFromStats(partition_stats[partition_idx], storage_index, *comparator, rhs)) {
+				if (!TryGetValueFromStats(partition_stats[partition_idx], storage_index, *comparator, result_type,
+				                          rhs)) {
 					return;
 				}
 				if (!comparator->Compare(agg_result, rhs)) {

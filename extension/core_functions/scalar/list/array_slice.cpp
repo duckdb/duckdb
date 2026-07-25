@@ -372,11 +372,51 @@ unique_ptr<FunctionData> ArraySliceBind(BindScalarFunctionInput &input) {
 	return make_uniq<ListSliceBindData>(bound_function.GetReturnType(), begin_is_empty, end_is_empty);
 }
 
+bool TryGetConstantSliceIndex(const Expression &expression, int64_t &result) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return false;
+	}
+	auto &value = expression.Cast<BoundConstantExpression>().GetValue();
+	if (value.IsNull()) {
+		return false;
+	}
+	result = value.GetValue<int64_t>();
+	return true;
+}
+
+unique_ptr<BaseStatistics> ArraySlicePropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &expr = input.expr;
+	auto &children = expr.GetChildren();
+	if (expr.GetReturnType().id() != LogicalTypeId::VARCHAR || children.size() != 3 || !input.bind_data) {
+		return nullptr;
+	}
+
+	auto &bind_data = input.bind_data->Cast<ListSliceBindData>();
+	int64_t begin = 0;
+	if (!bind_data.begin_is_empty && (!TryGetConstantSliceIndex(*children[1], begin) || begin < 0)) {
+		return nullptr;
+	}
+	idx_t start_character_index = begin > 0 ? NumericCast<idx_t>(begin - 1) : 0;
+
+	optional_idx character_count;
+	if (!bind_data.end_is_empty) {
+		int64_t end = 0;
+		if (!TryGetConstantSliceIndex(*children[2], end) || end < 0) {
+			return nullptr;
+		}
+		auto end_character_count = NumericCast<idx_t>(end);
+		character_count =
+		    end_character_count > start_character_index ? (end_character_count - start_character_index) : 0;
+	}
+	return PropagateStringSliceStats(input, start_character_index, character_count);
+}
+
 } // namespace
 ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ArraySliceFunction,
 	                   ArraySliceBind);
+	fun.SetStatisticsCallback(ArraySlicePropagateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();
 	ScalarFunctionSet set;

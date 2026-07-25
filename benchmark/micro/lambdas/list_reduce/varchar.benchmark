@@ -16,4 +16,4 @@ CREATE TEMPORARY TABLE concat_strings_tmp AS SELECT 'a' || s1 || repeat(s2, s2::
 CREATE TABLE tbl AS SELECT string_split(l, '1') || string_split(l, '0') || string_split(l, '2') AS l FROM concat_strings_tmp;
 
 run
-SELECT list_reduce(l, (a, b) -> a || b) FROM tbl;
+SELECT list_reduce(l, lambda a, b: a || b) FROM tbl;
