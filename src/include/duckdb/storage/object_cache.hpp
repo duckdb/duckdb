@@ -157,19 +157,6 @@ public:
 		lru_cache.Delete(cache_key);
 	}
 
-	void EraseDatabase(MemoryContextId context_id) {
-		const lock_guard<mutex> lock(lock_mutex);
-		auto prefix = StringUtil::Format("%s-", context_id.ToString());
-		for (auto entry = non_evictable_entries.begin(); entry != non_evictable_entries.end();) {
-			if (!StringUtil::StartsWith(entry->first, prefix)) {
-				entry++;
-				continue;
-			}
-			entry = non_evictable_entries.erase(entry);
-		}
-		lru_cache.DeleteMatching([&](const string &key) { return StringUtil::StartsWith(key, prefix); });
-	}
-
 	//! Type-prefixed variants of the methods above. These namespace the caller-provided key with the entry's
 	//! ObjectType so that callers can pass a natural key (e.g. a file path) without having to build a unique
 	//! cache key themselves.

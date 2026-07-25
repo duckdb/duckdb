@@ -87,18 +87,6 @@ public:
 		return true;
 	}
 
-	template <class PREDICATE>
-	void DeleteMatching(PREDICATE predicate) {
-		for (auto entry = entry_map.begin(); entry != entry_map.end();) {
-			if (!predicate(entry->first)) {
-				entry++;
-				continue;
-			}
-			auto delete_entry = entry++;
-			DeleteImpl(delete_entry);
-		}
-	}
-
 	// Look up the entry with key `key`. Return nullptr if not found.
 	shared_ptr<Val> Get(const Key &key) {
 		auto entry_map_iter = entry_map.find(key);

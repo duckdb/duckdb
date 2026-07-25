@@ -163,9 +163,6 @@ DatabaseInstance::~DatabaseInstance() {
 	}
 	// destroy child elements
 	connection_manager.reset();
-	if (config.object_cache) {
-		config.object_cache->EraseDatabase(memory_context_id);
-	}
 	scheduler.reset();
 	db_manager.reset();
 
