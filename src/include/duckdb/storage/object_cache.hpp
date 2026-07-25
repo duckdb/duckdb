@@ -61,12 +61,10 @@ public:
 	//! Default max memory 8GiB for non-evictable cache entries.
 	static constexpr idx_t DEFAULT_MAX_MEMORY = 8ULL * 1024 * 1024 * 1024;
 
-	explicit ObjectCache(shared_ptr<BufferPool> buffer_pool_p)
-	    : ObjectCache(DEFAULT_MAX_MEMORY, std::move(buffer_pool_p)) {
+	explicit ObjectCache(BufferPool &buffer_pool_p) : ObjectCache(DEFAULT_MAX_MEMORY, buffer_pool_p) {
 	}
 
-	ObjectCache(idx_t max_memory, shared_ptr<BufferPool> buffer_pool_p)
-	    : lru_cache(max_memory), buffer_pool(std::move(buffer_pool_p)) {
+	ObjectCache(idx_t max_memory, BufferPool &buffer_pool_p) : lru_cache(max_memory), buffer_pool(buffer_pool_p) {
 	}
 
 	shared_ptr<ObjectCacheEntry> GetObject(MemoryContextId context_id, const string &key) {
@@ -122,7 +120,7 @@ public:
 		}
 
 		auto reservation =
-		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, *buffer_pool, estimated_memory.GetIndex());
+		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
 		lru_cache.Put(std::move(cache_key), value, std::move(reservation));
 		return value;
 	}
@@ -142,7 +140,7 @@ public:
 		}
 
 		auto reservation =
-		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, *buffer_pool, estimated_memory.GetIndex());
+		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
 		lru_cache.Put(std::move(cache_key), std::move(value), std::move(reservation));
 	}
 
@@ -224,7 +222,7 @@ private:
 	//! Separate storage for non-evictable entries (i.e., encryption keys)
 	unordered_map<string, shared_ptr<ObjectCacheEntry>> non_evictable_entries;
 	//! Used to create buffer pool reservation on entries creation.
-	shared_ptr<BufferPool> buffer_pool;
+	BufferPool &buffer_pool;
 };
 
 } // namespace duckdb

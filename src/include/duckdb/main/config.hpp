@@ -179,22 +179,16 @@ public:
 	unique_ptr<FileSystem> file_system;
 	//! Secret manager
 	unique_ptr<SecretManager> secret_manager;
-	//! The allocator used by the system
-	shared_ptr<Allocator> allocator;
-	//! The block allocator used by the system
-	shared_ptr<BlockAllocator> block_allocator;
+	//! Optional allocator transferred to the memory manager during initialization
+	unique_ptr<Allocator> allocator;
+	//! Optional block allocator transferred to the memory manager during initialization
+	unique_ptr<BlockAllocator> block_allocator;
 	//! Database configuration options
 	DBConfigOptions options;
 	//! Error manager
 	unique_ptr<ErrorManager> error_manager;
-	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
-	shared_ptr<Allocator> default_allocator;
-	//! A buffer pool can be shared across multiple databases (if desired).
-	shared_ptr<BufferPool> buffer_pool;
-	//! The shared owner of the allocator, block allocator and buffer pool.
+	//! The shared owner of all memory-management components.
 	shared_ptr<DatabaseMemoryManager> memory_manager;
-	//! The object cache shared by all databases in the memory domain.
-	shared_ptr<ObjectCache> object_cache;
 	//! Provide a custom buffer manager implementation (if desired).
 	shared_ptr<BufferManager> buffer_manager;
 	//! Encryption Util for OpenSSL and MbedTLS

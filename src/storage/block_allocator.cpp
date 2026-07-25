@@ -121,7 +121,7 @@ public:
 		}
 
 		// We have also run out of global blocks, use fallback allocator
-		return block_allocator->allocator->AllocateData(block_allocator->block_size);
+		return block_allocator->allocator.AllocateData(block_allocator->block_size);
 	}
 
 	void Free(const data_ptr_t pointer) {
@@ -217,13 +217,7 @@ BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAll
 //===--------------------------------------------------------------------===//
 BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p, const idx_t virtual_memory_size_p,
                                const idx_t physical_memory_size_p)
-    : BlockAllocator(shared_ptr<Allocator>(&allocator_p, [](Allocator *) {}), block_size_p, virtual_memory_size_p,
-                     physical_memory_size_p) {
-}
-
-BlockAllocator::BlockAllocator(shared_ptr<Allocator> allocator_p, const idx_t block_size_p,
-                               const idx_t virtual_memory_size_p, const idx_t physical_memory_size_p)
-    : uuid(UUID::GenerateRandomUUID()), allocator(std::move(allocator_p)), block_size(block_size_p),
+    : uuid(UUID::GenerateRandomUUID()), allocator(allocator_p), block_size(block_size_p),
       block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)), virtual_memory_space(nullptr),
       physical_memory_size(0), untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()),
@@ -329,14 +323,14 @@ data_ptr_t BlockAllocator::GetPointer(const uint32_t block_id) const {
 
 data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 	if (!IsActive() || !IsEnabled() || size != block_size) {
-		return allocator->AllocateData(size);
+		return allocator.AllocateData(size);
 	}
 	return GetBlockAllocatorThreadLocalState(*this).Allocate();
 }
 
 void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const {
 	if (!IsActive() || !IsInPool(pointer)) {
-		return allocator->FreeData(pointer, size);
+		return allocator.FreeData(pointer, size);
 	}
 	D_ASSERT(size == block_size);
 	GetBlockAllocatorThreadLocalState(*this).Free(pointer);
@@ -349,7 +343,7 @@ data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t 
 
 	// If both the old and new allocation are not (or cannot be) in the pool, immediately use the fallback allocator
 	if (!IsActive() || (!IsInPool(pointer) && new_size != block_size)) {
-		return allocator->ReallocateData(pointer, old_size, new_size);
+		return allocator.ReallocateData(pointer, old_size, new_size);
 	}
 
 	// Either old or new can be in the pool: allocate, copy, and free

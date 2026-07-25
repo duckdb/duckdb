@@ -298,14 +298,14 @@ idx_t EvictionQueue::UnloadBlocks(MemoryContextId memory_context_id) {
 	return unloaded_blocks;
 }
 
-BufferPool::BufferPool(shared_ptr<BlockAllocator> block_allocator_p,
-                       shared_ptr<TemporaryMemoryManager> temporary_memory_manager_p, idx_t maximum_memory,
-                       bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold)
+BufferPool::BufferPool(BlockAllocator &block_allocator_p, TemporaryMemoryManager &temporary_memory_manager_p,
+                       idx_t maximum_memory, bool track_eviction_timestamps,
+                       idx_t allocator_bulk_deallocation_flush_threshold)
     : eviction_queue_sizes({BLOCK_AND_EXTERNAL_FILE_QUEUE_SIZE, MANAGED_BUFFER_QUEUE_SIZE, TINY_BUFFER_QUEUE_SIZE}),
       maximum_memory(maximum_memory),
       allocator_bulk_deallocation_flush_threshold(allocator_bulk_deallocation_flush_threshold),
-      track_eviction_timestamps(track_eviction_timestamps),
-      temporary_memory_manager(std::move(temporary_memory_manager_p)), block_allocator(std::move(block_allocator_p)) {
+      track_eviction_timestamps(track_eviction_timestamps), temporary_memory_manager(temporary_memory_manager_p),
+      block_allocator(block_allocator_p) {
 	for (idx_t queue_type_idx = 0; queue_type_idx < EVICTION_QUEUE_TYPES; queue_type_idx++) {
 		const auto types = EvictionQueueTypeIdxToFileBufferTypes(queue_type_idx);
 		const auto &type_queue_size = eviction_queue_sizes[queue_type_idx];
@@ -388,7 +388,7 @@ idx_t BufferPool::GetOperatorMemoryLimit() const {
 }
 
 TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
-	return *temporary_memory_manager;
+	return temporary_memory_manager;
 }
 
 void BufferPool::UnloadBlocks(MemoryContextId memory_context_id) {
@@ -397,20 +397,16 @@ void BufferPool::UnloadBlocks(MemoryContextId memory_context_id) {
 	}
 }
 
-void BufferPool::RegisterObjectCache(const shared_ptr<ObjectCache> &object_cache) {
-	lock_guard<mutex> lock(object_caches_lock);
-	object_caches.emplace_back(object_cache);
+void BufferPool::RegisterObjectCache(ObjectCache &object_cache_p) {
+	lock_guard<mutex> lock(object_cache_lock);
+	D_ASSERT(!object_cache);
+	object_cache = object_cache_p;
 }
 
-void BufferPool::UnregisterObjectCache(ObjectCache &object_cache) {
-	lock_guard<mutex> lock(object_caches_lock);
-	for (auto cache = object_caches.begin(); cache != object_caches.end();) {
-		auto active_cache = cache->lock();
-		if (!active_cache || active_cache.get() == &object_cache) {
-			cache = object_caches.erase(cache);
-		} else {
-			cache++;
-		}
+void BufferPool::UnregisterObjectCache(ObjectCache &object_cache_p) {
+	lock_guard<mutex> lock(object_cache_lock);
+	if (object_cache.get() == &object_cache_p) {
+		object_cache = nullptr;
 	}
 }
 
@@ -419,20 +415,15 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-			block_allocator->FlushAll(extra_memory);
+			block_allocator.FlushAll(extra_memory);
 		}
 		return {true, std::move(r)};
 	}
 
 	bool success = false;
 	{
-		lock_guard<mutex> lock(object_caches_lock);
-		for (auto cache = object_caches.begin(); cache != object_caches.end();) {
-			auto object_cache = cache->lock();
-			if (!object_cache) {
-				cache = object_caches.erase(cache);
-				continue;
-			}
+		lock_guard<mutex> lock(object_cache_lock);
+		if (object_cache) {
 			while (!object_cache->IsEmpty()) {
 				const auto used_memory = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
 				const idx_t memory_to_free = used_memory > memory_limit ? used_memory - memory_limit : 0;
@@ -445,17 +436,13 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 					break;
 				}
 			}
-			if (success) {
-				break;
-			}
-			cache++;
 		}
 	}
 	success = success || memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit;
 	if (!success) {
 		r.Resize(0);
 	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-		block_allocator->FlushAll(extra_memory);
+		block_allocator.FlushAll(extra_memory);
 	}
 
 	return {success, std::move(r)};
@@ -483,7 +470,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context,
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-			block_allocator->FlushAll(extra_memory);
+			block_allocator.FlushAll(extra_memory);
 		}
 		return {true, std::move(r)};
 	}
@@ -513,7 +500,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context,
 	if (!found) {
 		r.Resize(0);
 	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-		block_allocator->FlushAll(extra_memory);
+		block_allocator.FlushAll(extra_memory);
 	}
 
 	return {found, std::move(r)};
@@ -626,7 +613,7 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
 	}
-	block_allocator->FlushAll();
+	block_allocator.FlushAll();
 }
 
 void BufferPool::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {

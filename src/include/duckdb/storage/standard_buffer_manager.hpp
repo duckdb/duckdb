@@ -193,7 +193,7 @@ protected:
 	//! The database identity used to validate block ownership.
 	const MemoryContextId memory_context_id;
 	//! The buffer pool
-	shared_ptr<BufferPool> buffer_pool;
+	BufferPool &buffer_pool;
 	//! The variables related to temporary file management
 	TemporaryFileData temporary_directory;
 	//! The temporary id used for managed buffers

@@ -70,7 +70,7 @@ void StandardBufferManager::SetTemporaryDirectory(const string &new_dir) {
 
 StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
     : BufferManager(), db(db), memory_context_id(db.GetMemoryContextId()),
-      buffer_pool(db.GetMemoryManager()->GetBufferPoolHandle()), temporary_id(MAXIMUM_BLOCK),
+      buffer_pool(db.GetMemoryManager()->GetBufferPool()), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_uniq<BufferAllocatorData>(*this)) {
 	temp_block_manager =
@@ -85,18 +85,18 @@ StandardBufferManager::~StandardBufferManager() {
 }
 
 BufferPool &StandardBufferManager::GetBufferPool() const {
-	return *buffer_pool;
+	return buffer_pool;
 }
 
 TemporaryMemoryManager &StandardBufferManager::GetTemporaryMemoryManager() {
-	return buffer_pool->GetTemporaryMemoryManager();
+	return buffer_pool.GetTemporaryMemoryManager();
 }
 
 idx_t StandardBufferManager::GetUsedMemory() const {
-	return buffer_pool->GetUsedMemory();
+	return buffer_pool.GetUsedMemory();
 }
 idx_t StandardBufferManager::GetMaxMemory() const {
-	return buffer_pool->GetMaxMemory();
+	return buffer_pool.GetMaxMemory();
 }
 
 idx_t StandardBufferManager::GetUsedSwap() const {
@@ -127,7 +127,7 @@ template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(QueryContext context, MemoryTag tag,
                                                                     idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
                                                                     ARGS... args) {
-	auto r = buffer_pool->EvictBlocks(context, tag, memory_delta, buffer_pool->maximum_memory, buffer);
+	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, buffer_pool.maximum_memory, buffer);
 	if (!r.success) {
 		string extra_text = StringUtil::Format(" (%s/%s used)", StringUtil::BytesToHumanReadableString(GetUsedMemory()),
 		                                       StringUtil::BytesToHumanReadableString(GetMaxMemory()));
@@ -400,12 +400,12 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 }
 
 void StandardBufferManager::PurgeQueue(const BlockHandle &handle) {
-	buffer_pool->PurgeQueue(handle);
+	buffer_pool.PurgeQueue(handle);
 }
 
 void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	auto lock = handle->GetMemory().GetLock();
-	buffer_pool->AddToEvictionQueue(lock, handle);
+	buffer_pool.AddToEvictionQueue(lock, handle);
 }
 
 void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
@@ -444,7 +444,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 		if (new_readers == 0) {
 			VerifyZeroReaders(lock, handle);
 			if (block_memory.MustAddToEvictionQueue()) {
-				purge = buffer_pool->AddToEvictionQueue(lock, handle);
+				purge = buffer_pool.AddToEvictionQueue(lock, handle);
 			} else {
 				block_memory.Unload(lock);
 			}
@@ -458,7 +458,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 }
 
 void StandardBufferManager::SetMemoryLimit(idx_t limit) {
-	buffer_pool->SetLimit(limit, InMemoryWarning());
+	buffer_pool.SetLimit(limit, InMemoryWarning());
 }
 
 void StandardBufferManager::SetSwapLimit(optional_idx limit) {
@@ -475,7 +475,7 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 	for (idx_t k = 0; k < MEMORY_TAG_COUNT; k++) {
 		MemoryInformation info;
 		info.tag = MemoryTag(k);
-		info.size = buffer_pool->memory_usage.GetUsedMemory(MemoryTag(k), BufferPool::MemoryUsageCaches::FLUSH);
+		info.size = buffer_pool.memory_usage.GetUsedMemory(MemoryTag(k), BufferPool::MemoryUsageCaches::FLUSH);
 		info.evicted_data = evicted_data_per_tag[k].load();
 		result.push_back(info);
 	}
@@ -733,7 +733,7 @@ void StandardBufferManager::FreeReservedMemory(idx_t size) {
 	if (size == 0) {
 		return;
 	}
-	buffer_pool->memory_usage.UpdateUsedMemory(MemoryTag::EXTENSION, -(int64_t)size);
+	buffer_pool.memory_usage.UpdateUsedMemory(MemoryTag::EXTENSION, -(int64_t)size);
 }
 
 //===--------------------------------------------------------------------===//
