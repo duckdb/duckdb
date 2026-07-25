@@ -114,8 +114,8 @@ const shared_ptr<ObjectCache> &DatabaseMemoryManager::GetObjectCacheHandle() con
 }
 
 static MemoryContextId NextMemoryContextId() {
-	static atomic<idx_t> next_memory_context_id {0};
-	return MemoryContextId(next_memory_context_id.fetch_add(1));
+	static atomic<idx_t> next_database_id {0};
+	return MemoryContextId(next_database_id.fetch_add(1));
 }
 
 DBConfig::DBConfig() {

@@ -17,27 +17,27 @@ namespace duckdb {
 //! Identifies an owner within a shared memory-management domain.
 class MemoryContextId {
 public:
-	constexpr explicit MemoryContextId(idx_t id_p) : id(id_p) {
+	constexpr explicit MemoryContextId(idx_t database_id_p) : database_id(database_id_p) {
 	}
 
-	idx_t GetIndex() const {
-		return id;
+	idx_t GetDatabaseId() const {
+		return database_id;
 	}
 
 	string ToString() const {
-		return StringUtil::Format("%llu", id);
+		return StringUtil::Format("%llu", database_id);
 	}
 
 	bool operator==(const MemoryContextId &other) const {
-		return id == other.id;
+		return database_id == other.database_id;
 	}
 
 	bool operator!=(const MemoryContextId &other) const {
-		return id != other.id;
+		return database_id != other.database_id;
 	}
 
 private:
-	idx_t id;
+	idx_t database_id;
 };
 
 } // namespace duckdb
