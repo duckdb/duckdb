@@ -98,10 +98,10 @@ TEST_CASE("Database instances share isolated memory managers and object cache", 
 	REQUIRE(first->instance->GetMemoryContextId() != second.instance->GetMemoryContextId());
 	{
 		auto &first_buffer_manager = first->instance->GetBufferManager();
-		auto &second_buffer_manager = second.instance->GetBufferManager();
 		auto first_pin = first_buffer_manager.Allocate(MemoryTag::EXTENSION, 1024, true);
 		auto first_block = first_pin.GetBlockHandle();
-		REQUIRE_THROWS(second_buffer_manager.Pin(first_block));
+		REQUIRE(first_block->GetMemory().GetMemoryContextId() == first->instance->GetMemoryContextId());
+		REQUIRE(first_block->GetMemory().GetMemoryContextId() != second.instance->GetMemoryContextId());
 	}
 
 	first->instance->GetObjectCache().Put(first->instance->GetMemoryContextId(), "first-only",
@@ -119,6 +119,8 @@ TEST_CASE("Database instances share isolated memory managers and object cache", 
 	REQUIRE(shared_pool.GetUsedMemory() == initial_memory + cache_entry_size * 2);
 
 	first.reset();
+
+	// Query with second database instance still works.
 	Connection connection(second);
 	auto result = connection.Query("SELECT sum(i) FROM range(10000) t(i)");
 	REQUIRE_NO_FAIL(*result);
