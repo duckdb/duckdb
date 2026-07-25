@@ -500,6 +500,23 @@ SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list.parquet') WHERE deep_li
 ----
 205
 
+# min/max pruning reaches the list elements as well
+statement ok
+COPY (SELECT [i::INTEGER, (i + 1)::INTEGER] AS l FROM range(20480) t(i))
+TO '{TEST_DIR}/bloom_list_sorted.parquet' (
+    FORMAT PARQUET, ROW_GROUP_SIZE 2048, DICTIONARY_SIZE_LIMIT 100000, WRITE_BLOOM_FILTER TRUE
+);
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list_sorted.parquet') WHERE l[1] = 5000;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 10.*
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/bloom_list_sorted.parquet') WHERE l[1] = 5000;
+----
+1
+
 # lists of strings
 statement ok
 COPY (SELECT ['string_' || ((i % 100) * 2)::VARCHAR] AS s FROM range(20480) t(i))

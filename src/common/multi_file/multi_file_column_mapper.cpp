@@ -214,6 +214,12 @@ static bool IsTriviallyMappable(const MultiFileColumnDefinition &global_column,
 	if (local_column.type != global_column.type) {
 		return false;
 	}
+	if (global_column.children.empty()) {
+		// the global column does not describe any children - MultiFileColumnDefinition only expands them for structs,
+		// while readers also expand list/map elements. the identical type already guarantees the nested layout
+		// matches, so there is nothing left that could map non-trivially
+		return true;
+	}
 	if (local_column.children.size() != global_column.children.size()) {
 		// child count difference - cannot map trivially
 		return false;
