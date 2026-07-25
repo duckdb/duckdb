@@ -44,6 +44,9 @@ struct FeatureSnapshotParameters {
 	interval_t window_interval;
 	//! The snapshot timestamp: events in [feature_ts - window, feature_ts) are aggregated.
 	timestamp_t feature_ts;
+	//! True when the entity key columns are provably unique in the entity table (a PRIMARY KEY covers them),
+	//! so the entity spine's DISTINCT is a no-op and can be dropped. Defaults to false (keep DISTINCT).
+	bool entity_key_is_unique = false;
 };
 
 bool FeatureColumnListContains(const vector<string> &columns, const string &column_name);

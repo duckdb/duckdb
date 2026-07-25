@@ -192,7 +192,10 @@ DROPS = [
     "DROP FEATURE IF EXISTS f3",
 ]
 
-_ANCHOR = datetime.date(2016, 1, 1)  # timestamp of the most recent refresh snapshot
+# ClickBench `hits` EventTime spans July 2013, so anchor the timed REFRESH inside that range: a 1 DAY
+# window then captures ~one day of events, 30 DAYS ~the month, 3650 DAYS everything. Anchoring outside the
+# data (e.g. 2016) makes the 1d/30d windows match zero rows, hiding the window-width -> scan-cost effect.
+_ANCHOR = datetime.date(2013, 7, 31)  # timestamp of the most recent refresh snapshot
 _STEP_DAYS = 30
 
 
@@ -476,6 +479,8 @@ PAIRWISE_FAMILIES = {
         "slug": refresh_slug,
         "setup": build_refresh_setup,
         "run": build_refresh_run,
+        # REFRESH cost is what source clustering targets, so emit every scenario clustered + unclustered.
+        "cluster_ab": True,
     },
 }
 
@@ -484,7 +489,26 @@ def repo_root():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def stub_text(subdir, prefix, tmpl_rel, bench_name, name, pc, setup, run, seed, desc):
+# Source-layout doubling axis (NOT a pairwise dimension): every clustered-aware scenario is emitted twice --
+# once with `hits` loaded sorted by EventTime so the WINDOW filter prunes row groups, once unsorted (control).
+# `tag` also keys the cached source db (feature_src_<scale>_<tag>.db) so the two layouts never collide.
+CLUSTER_VARIANTS = [("clu", "ORDER BY EventTime"), ("unc", "")]
+
+
+def stub_text(
+    subdir,
+    prefix,
+    tmpl_rel,
+    bench_name,
+    name,
+    pc,
+    setup,
+    run,
+    seed,
+    desc,
+    cluster_tag="clu",
+    cluster_by="ORDER BY EventTime",
+):
     header_path = "benchmark/feature/clickstream/{}/{}{}.benchmark".format(subdir, prefix, name)
     return (
         "# name: {path}\n"
@@ -494,6 +518,8 @@ def stub_text(subdir, prefix, tmpl_rel, bench_name, name, pc, setup, run, seed, 
         "template {tmpl}\n"
         "BENCH_NAME={bench}\n"
         "PARQUET_COUNT={pc}\n"
+        "CLUSTER_TAG={cluster_tag}\n"
+        "CLUSTER_BY={cluster_by}\n"
         "SETUP_SQL={setup}\n"
         "RUN_QUERY={run}\n"
     ).format(
@@ -504,6 +530,8 @@ def stub_text(subdir, prefix, tmpl_rel, bench_name, name, pc, setup, run, seed, 
         tmpl=tmpl_rel,
         bench=bench_name,
         pc=pc,
+        cluster_tag=cluster_tag,
+        cluster_by=cluster_by,
         setup=setup,
         run=run,
     )
@@ -538,22 +566,29 @@ def emit_pairwise_family(root, fam, cfg, seed, strategy, count):
     tmpl_rel = "benchmark/feature/clickstream/{sd}/{sd}.benchmark.in".format(sd=subdir)
     os.makedirs(out_dir, exist_ok=True)
     clean_generated(out_dir, cfg["prefix"])
+    # Families that opt in with cluster_ab emit each vector twice (clustered + unclustered, suffixed _clu/_unc);
+    # others emit a single clustered variant (no suffix, no behaviour change).
+    variants = CLUSTER_VARIANTS if cfg.get("cluster_ab") else [("clu", "ORDER BY EventTime")]
     for vec in vectors:
-        name = cfg["slug"](vec)
-        text = stub_text(
-            subdir,
-            cfg["prefix"],
-            tmpl_rel,
-            cfg["bench_prefix"] + name,
-            name,
-            vec["PARQUET_COUNT"],
-            cfg["setup"](vec),
-            cfg["run"](vec),
-            seed,
-            cfg["desc"].format(name=name),
-        )
-        with open(os.path.join(out_dir, "{}{}.benchmark".format(cfg["prefix"], name)), "w") as f:
-            f.write(text)
+        base_name = cfg["slug"](vec)
+        for tag, cluster_by in variants:
+            name = "{}_{}".format(base_name, tag) if cfg.get("cluster_ab") else base_name
+            text = stub_text(
+                subdir,
+                cfg["prefix"],
+                tmpl_rel,
+                cfg["bench_prefix"] + name,
+                name,
+                vec["PARQUET_COUNT"],
+                cfg["setup"](vec),
+                cfg["run"](vec),
+                seed,
+                cfg["desc"].format(name=name),
+                cluster_tag=tag,
+                cluster_by=cluster_by,
+            )
+            with open(os.path.join(out_dir, "{}{}.benchmark".format(cfg["prefix"], name)), "w") as f:
+                f.write(text)
     return {
         "family": fam,
         "strategy": strategy,
@@ -569,21 +604,26 @@ def emit_cases_family(root, seed):
     os.makedirs(out_dir, exist_ok=True)
     clean_generated(out_dir, "case_")
     cases = build_cases()
+    # Cases exercise REFRESH, so each is emitted clustered + unclustered (suffixed _clu/_unc).
     for c in cases:
-        text = stub_text(
-            "cases",
-            "case_",
-            tmpl_rel,
-            "Case_" + c["name"],
-            c["name"],
-            c["pc"],
-            c["setup"],
-            c["run"],
-            seed,
-            c["desc"],
-        )
-        with open(os.path.join(out_dir, "case_{}.benchmark".format(c["name"])), "w") as f:
-            f.write(text)
+        for tag, cluster_by in CLUSTER_VARIANTS:
+            name = "{}_{}".format(c["name"], tag)
+            text = stub_text(
+                "cases",
+                "case_",
+                tmpl_rel,
+                "Case_" + name,
+                name,
+                c["pc"],
+                c["setup"],
+                c["run"],
+                seed,
+                c["desc"],
+                cluster_tag=tag,
+                cluster_by=cluster_by,
+            )
+            with open(os.path.join(out_dir, "case_{}.benchmark".format(name)), "w") as f:
+                f.write(text)
     return {"family": "cases", "strategy": "curated", "cases": cases}
 
 

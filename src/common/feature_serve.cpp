@@ -16,6 +16,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -245,9 +246,50 @@ static void AddFeatureProjections(vector<unique_ptr<ParsedExpression>> &select_l
 	}
 }
 
+//! The store side of the ASOF join. In time-travel mode we wrap the store table so the scan only reads
+//! snapshots that could satisfy the ASOF inequality: any row whose __feature_timestamp exceeds the greatest
+//! spine as-of time can never be a match (the join condition is spine.ts >= store.__feature_timestamp), so
+//! dropping it is result-preserving. Because the store is physically clustered by __feature_timestamp — each
+//! REFRESH appends one snapshot at a strictly later timestamp — this upper bound lets the store scan skip whole
+//! row groups via zonemaps. The bound is a scalar subquery over the spine, so it costs one extra spine
+//! aggregation and prunes to exactly the versions at or before the latest request:
+//!   (SELECT * FROM <store> WHERE __feature_timestamp <= (SELECT max(<spine_asof>) FROM <spine>)) AS <alias>
+//! Latest mode probes with +infinity (no upper bound prunes anything), so it reads the store table directly.
+static unique_ptr<TableRef> ServeStoreTableRef(const string &store_table, const string &feature_alias,
+                                               const string &spine_table, const string &spine_asof_column,
+                                               bool latest_mode) {
+	if (latest_mode) {
+		return BaseTable(store_table, feature_alias);
+	}
+
+	// (SELECT max(<spine_asof_column>) FROM <spine_table>)
+	auto max_node = make_uniq<SelectNode>();
+	vector<unique_ptr<ParsedExpression>> max_children;
+	max_children.push_back(make_uniq<ColumnRefExpression>(spine_asof_column));
+	max_node->select_list.push_back(make_uniq<FunctionExpression>("max", std::move(max_children)));
+	max_node->from_table = BaseTable(spine_table, string());
+	auto max_stmt = make_uniq<SelectStatement>();
+	max_stmt->node = std::move(max_node);
+	auto max_subquery = make_uniq<SubqueryExpression>();
+	max_subquery->subquery_type = SubqueryType::SCALAR;
+	max_subquery->subquery = std::move(max_stmt);
+
+	auto inner = make_uniq<SelectNode>();
+	inner->select_list.push_back(make_uniq<StarExpression>());
+	inner->from_table = BaseTable(store_table, string());
+	inner->where_clause = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+	                                                      make_uniq<ColumnRefExpression>(FEATURE_TIMESTAMP_COLUMN),
+	                                                      std::move(max_subquery));
+
+	auto stmt = make_uniq<SelectStatement>();
+	stmt->node = std::move(inner);
+	return make_uniq<SubqueryRef>(std::move(stmt), feature_alias);
+}
+
 static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatalogEntry &feat,
                             const string &feature_alias, const vector<FeatureServeEntityMapping> &feature_mappings,
-                            const string &spine_entity_override, const string &spine_ts) {
+                            const string &spine_entity_override, const string &spine_ts, const string &spine_table,
+                            const string &spine_asof_column, bool latest_mode) {
 	// Serve from the denormalized store table via an ASOF join: every retained version is present, and the
 	// join resolves each spine row to the entity's latest snapshot at or before the spine's as-of time (in
 	// latest mode the as-of time is the +infinity probe, so this resolves to the entity's newest snapshot).
@@ -257,7 +299,7 @@ static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatal
 	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
 	join->type = JoinType::LEFT;
 	join->left = std::move(from_table);
-	join->right = BaseTable(store_table, feature_alias);
+	join->right = ServeStoreTableRef(store_table, feature_alias, spine_table, spine_asof_column, latest_mode);
 	join->condition = ServeJoinCondition(feature_alias, entity_mappings, spine_ts);
 	from_table = std::move(join);
 }
@@ -323,7 +365,8 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		auto alias = features.size() == 1 ? string("f") : "f" + duckdb::to_string(i);
 
 		AddFeatureProjections(select->select_list, context, feat, alias, spine_ts, latest_mode);
-		AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override, spine_ts);
+		AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override, spine_ts,
+		                spine_table, spine_asof_column, latest_mode);
 	}
 
 	auto result = make_uniq<SelectStatement>();

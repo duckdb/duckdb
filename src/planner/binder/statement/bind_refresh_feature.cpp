@@ -1,14 +1,57 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/feature_refresh.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/statement/refresh_feature_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_refresh_feature.hpp"
 
 namespace duckdb {
+
+//! True when the feature's entity key columns are provably unique in the entity table, i.e. a PRIMARY KEY (NOT
+//! NULL + unique) is fully contained in them. Then the entity spine's DISTINCT removes nothing and can be
+//! dropped. Only PRIMARY KEY qualifies -- a nullable UNIQUE constraint could still have several NULL-key rows
+//! that DISTINCT collapses, so it is left alone.
+static bool EntityKeyIsUnique(const TableCatalogEntry &entity, const vector<string> &key_columns) {
+	if (key_columns.empty()) {
+		return false;
+	}
+	auto key_contains = [&](const string &column) {
+		for (auto &key : key_columns) {
+			if (key == column) {
+				return true;
+			}
+		}
+		return false;
+	};
+	for (auto &constraint : entity.GetConstraints()) {
+		if (constraint->type != ConstraintType::UNIQUE) {
+			continue;
+		}
+		auto &unique = constraint->Cast<UniqueConstraint>();
+		if (!unique.IsPrimaryKey()) {
+			continue;
+		}
+		vector<string> pk_columns = unique.HasIndex()
+		                                ? vector<string> {entity.GetColumns().GetColumn(unique.GetIndex()).Name()}
+		                                : unique.GetColumnNames();
+		bool covers = true;
+		for (auto &pk_column : pk_columns) {
+			if (!key_contains(pk_column)) {
+				covers = false;
+				break;
+			}
+		}
+		if (covers) {
+			return true;
+		}
+	}
+	return false;
+}
 
 BoundStatement Binder::Bind(RefreshFeatureStatement &stmt) {
 	BoundStatement result;
@@ -36,10 +79,19 @@ BoundStatement Binder::Bind(RefreshFeatureStatement &stmt) {
 	timestamp_t feature_ts =
 	    stmt.at_timestamp.empty() ? Timestamp::GetCurrentTimestamp() : Timestamp::FromString(stmt.at_timestamp, false);
 
-	// Build and bind the query that produces the full contents of the next denormalized store table: the
-	// new snapshot UNION ALL the still-retained rows from the previous store. Its result schema defines the
-	// new store table; the plan becomes the child of the refresh operator.
-	auto refresh_query = BuildFeatureRefreshQuery(feat, feature_ts, feat.current_version + 1);
+	// If the entity table's PRIMARY KEY covers the feature's entity keys, the entity spine is already unique and
+	// its DISTINCT (a full hash-aggregate over the entity table on every refresh) can be dropped. Look the entity
+	// table up in the feature's own catalog/schema; if it can't be resolved, keep the DISTINCT (correct default).
+	bool entity_key_is_unique = false;
+	auto entity_entry = feat.ParentCatalog().GetEntry<TableCatalogEntry>(
+	    context, feat.ParentSchema().name, feat.entity_table, OnEntryNotFound::RETURN_NULL);
+	if (entity_entry) {
+		entity_key_is_unique = EntityKeyIsUnique(*entity_entry, feat.entity_key_columns);
+	}
+
+	// Build and bind the query that produces the new snapshot (one row per entity at feature_ts, tagged with the
+	// new version and timestamp). Its result schema defines the store table; the plan becomes the refresh child.
+	auto refresh_query = BuildFeatureRefreshQuery(feat, feature_ts, feat.current_version + 1, entity_key_is_unique);
 	auto query_binder = Binder::CreateBinder(context, this);
 	auto query_obj = query_binder->Bind(*refresh_query);
 	D_ASSERT(query_obj.names.size() >= 1);

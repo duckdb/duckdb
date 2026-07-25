@@ -435,12 +435,15 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 				if (line.empty()) {
 					break;
 				}
-				auto parameters = StringUtil::Split(line, '=');
-				if (parameters.size() != 2) {
+				// Split on the FIRST '=' only, so a value may be empty (X=) or itself contain '=' (X=a=b).
+				// This lets a template carry a conditional clause and its empty counterpart under one key,
+				// e.g. CLUSTER_BY=ORDER BY EventTime vs CLUSTER_BY= for the unclustered variant.
+				auto eq_pos = line.find('=');
+				if (eq_pos == string::npos) {
 					throw std::runtime_error(
 					    reader.FormatException("Expected a template parameter in the form of X=Y"));
 				}
-				replacement_mapping[parameters[0]] = parameters[1];
+				replacement_mapping[line.substr(0, eq_pos)] = line.substr(eq_pos + 1);
 			}
 			// restart the load from the template file
 			LoadBenchmark();
