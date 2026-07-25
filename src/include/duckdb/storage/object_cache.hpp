@@ -127,7 +127,7 @@ public:
 		return value;
 	}
 
-	void Put(MemoryContextId context_id, string key, shared_ptr<ObjectCacheEntry> value) {
+	void Put(MemoryContextId context_id, const string &key, shared_ptr<ObjectCacheEntry> value) {
 		if (!value) {
 			return;
 		}
