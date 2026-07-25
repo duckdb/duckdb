@@ -243,6 +243,64 @@ def generate_registration(rule_name):
     return f'\t{{"{rule_name}", &PEGTransformerFactory::Transform{rule_name}Internal}},\n'
 
 
+INTERNAL_DEFINITION_PREFIX = "unique_ptr<TransformResultValue> PEGTransformerFactory::"
+INTERNAL_SIGNATURE = "(\n    PEGTransformer &transformer, ParseResult &parse_result) {\n"
+
+
+def fold_duplicate_implementations(implementations, registrations, declarations):
+    """Fold byte-identical Internal wrappers onto one shared wrapper.
+
+    Distinct grammar rules routinely produce the same wrapper body (e.g. the 27 choice rules that
+    just forward a `unique_ptr<ParsedExpression>` child), and each duplicate is a separately
+    compiled, separately exported function.
+    """
+    bodies = {}
+    for implementation in implementations:
+        if not implementation.startswith(INTERNAL_DEFINITION_PREFIX):
+            continue
+        name, _, rest = implementation[len(INTERNAL_DEFINITION_PREFIX) :].partition(INTERNAL_SIGNATURE)
+        if not rest:
+            continue
+        bodies.setdefault(rest, []).append(name)
+
+    shared = []
+    replacements = {}
+    for body, names in bodies.items():
+        if len(names) < 2:
+            continue
+        shared_name = f"SharedTransformInternal{len(shared) + 1}"
+        shared.append(f"{INTERNAL_DEFINITION_PREFIX}{shared_name}{INTERNAL_SIGNATURE}{body}")
+        for name in names:
+            replacements[name] = shared_name
+
+    folded_declarations_to_drop = {
+        f"\tstatic unique_ptr<TransformResultValue> {name}"
+        f"(PEGTransformer &transformer, ParseResult &parse_result);\n"
+        for name in replacements
+    }
+
+    folded_implementations = shared + [
+        implementation
+        for implementation in implementations
+        if not (
+            implementation.startswith(INTERNAL_DEFINITION_PREFIX)
+            and implementation[len(INTERNAL_DEFINITION_PREFIX) :].partition(INTERNAL_SIGNATURE)[0] in replacements
+        )
+    ]
+    folded_declarations = [
+        f"\tstatic unique_ptr<TransformResultValue> {name}(PEGTransformer &transformer, ParseResult &parse_result);\n"
+        for _, name in sorted((int(n[len("SharedTransformInternal") :]), n) for n in set(replacements.values()))
+    ] + [declaration for declaration in declarations if declaration not in folded_declarations_to_drop]
+    folded_registrations = []
+    for registration in registrations:
+        for name, shared_name in replacements.items():
+            registration = registration.replace(
+                f"&PEGTransformerFactory::{name}}},", f"&PEGTransformerFactory::{shared_name}}},"
+            )
+        folded_registrations.append(registration)
+    return folded_implementations, folded_registrations, folded_declarations
+
+
 # ---------------------------------------------------------------------------
 # Choice-rule helpers
 # ---------------------------------------------------------------------------
@@ -1518,9 +1576,12 @@ def main():
 
     if args.write:
         all_declarations = [d for r in results for d in r.declarations]
-        write_hpp(all_declarations)
         all_implementations = [impl for r in results for impl in r.implementations]
         all_registrations = [reg for r in results for reg in r.registrations]
+        all_implementations, all_registrations, all_declarations = fold_duplicate_implementations(
+            all_implementations, all_registrations, all_declarations
+        )
+        write_hpp(all_declarations)
         write_cpp(all_implementations, all_registrations)
         write_matcher_rule_overrides(matcher_overrides)
         write_packrat_memoized_rules(packrat_memoized_rules)

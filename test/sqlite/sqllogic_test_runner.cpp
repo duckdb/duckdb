@@ -2,6 +2,7 @@
 #include "sqllogic_test_runner.hpp"
 
 #include "catch.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -587,6 +588,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 
 	if (param == "no_alternative_verify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "trampoline_transformer") {
+#if DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;

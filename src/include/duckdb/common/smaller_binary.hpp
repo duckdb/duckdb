@@ -167,3 +167,14 @@
 #ifndef DUCKDB_SB_FEATURE_mad_window
 #define DUCKDB_SB_FEATURE_mad_window DUCKDB_SB_DEFAULT // group: window_specialization
 #endif
+
+// --- parser_alternatives: second implementations of a parser stage kept for development ---------
+// Trimming these leaves only the implementation the parser uses by default.
+
+// The trampoline-style transformer is a full stack-machine implementation of every grammar rule,
+// alongside the recursive one, and is reachable only through debug_transformer_trampoline_style.
+// Trimming it makes that setting inert. Covers the generated hooks, the TransformStack machinery
+// and the hand-written trampoline hooks, which must all go together.
+#ifndef DUCKDB_SB_FEATURE_peg_trampoline_transformer
+#define DUCKDB_SB_FEATURE_peg_trampoline_transformer DUCKDB_SB_DEFAULT // group: parser_alternatives
+#endif

@@ -4,6 +4,8 @@
 
 require skip_reload
 
+require trampoline_transformer
+
 statement ok
 ATTACH ':memory:' AS trampoline_use_catalog
 

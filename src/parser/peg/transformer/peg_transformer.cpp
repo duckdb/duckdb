@@ -1,3 +1,4 @@
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -8,6 +9,7 @@
 
 namespace duckdb {
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 TransformFrameResultTarget::TransformFrameResultTarget(transform_frame_index_t frame_index_p, idx_t slot_p)
     : frame_index(frame_index_p), slot(slot_p) {
 }
@@ -181,6 +183,7 @@ string TransformStack::FormatStack() const {
 	}
 	return result.str();
 }
+#endif
 
 void PEGTransformer::ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type) {
 	// Mixing positional/auto-increment and named parameters is not supported
