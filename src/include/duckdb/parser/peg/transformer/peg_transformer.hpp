@@ -127,21 +127,25 @@ struct TransformStackFrame {
 	void ReserveChildSlots(idx_t count);
 	void SetChildResult(idx_t slot, unique_ptr<TransformResultValue> result);
 
+	//! These are instantiated once per rule x result type, so the error paths are kept out of line:
+	//! a formatted throw inlines its argument marshalling and string construction at every call site.
+	[[noreturn]] static void ThrowMissingResult(idx_t slot, const char *rule_name);
+	[[noreturn]] static void ThrowUnexpectedResultType(idx_t slot, const char *rule_name);
+
 	template <class T>
 	T TakeResult(idx_t slot) {
 		if (slot >= child_results.size() || !child_results[slot]) {
-			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
+			ThrowMissingResult(slot, ops.name);
 		}
 		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
 		if (!typed_result) {
 			auto bridged = TryBridgeTransformResultValue<T>(*child_results[slot]);
-			if (bridged) {
-				auto bridged_result = std::move(bridged->value);
-				child_results[slot].reset();
-				return bridged_result;
+			if (!bridged) {
+				ThrowUnexpectedResultType(slot, ops.name);
 			}
-			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
-			                        ops.name);
+			auto bridged_result = std::move(bridged->value);
+			child_results[slot].reset();
+			return bridged_result;
 		}
 		auto result = std::move(typed_result->value);
 		child_results[slot].reset();
@@ -151,12 +155,11 @@ struct TransformStackFrame {
 	template <class T>
 	T &GetResult(idx_t slot) {
 		if (slot >= child_results.size() || !child_results[slot]) {
-			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
+			ThrowMissingResult(slot, ops.name);
 		}
 		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
 		if (!typed_result) {
-			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
-			                        ops.name);
+			ThrowUnexpectedResultType(slot, ops.name);
 		}
 		return typed_result->value;
 	}
@@ -177,12 +180,14 @@ public:
 	transform_frame_index_t PushFrame(ParseResult &parse_result, const TransformFrameOps &ops,
 	                                  optional<TransformFrameResultTarget> result_target);
 
+	[[noreturn]] static void ThrowUnexpectedRootResultType(const char *rule_name);
+
 	template <class T>
 	T Execute(ParseResult &parse_result, const TransformFrameOps &ops) {
 		auto base_result = ExecuteInternal(parse_result, ops);
 		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
 		if (!typed_result) {
-			throw InternalException("Unexpected trampoline transformer result type for root rule '%s'", ops.name);
+			ThrowUnexpectedRootResultType(ops.name);
 		}
 		return std::move(typed_result->value);
 	}
@@ -218,29 +223,27 @@ public:
 	}
 
 public:
+	//! Transform<T> is inlined at ~950 generated call sites, so everything that is not the fast path
+	//! is kept out of line - a formatted throw emits its argument marshalling and string construction
+	//! at each one.
+	[[noreturn]] static void ThrowMissingTransformFunction(const string &rule_name);
+	[[noreturn]] static void ThrowNullTransformResult(const string &rule_name);
+	[[noreturn]] static void ThrowUnexpectedTransformResultType(const string &rule_name);
+	unique_ptr<TransformResultValue> RunTransformFunction(ParseResult &parse_result);
+
 	template <typename T>
 	T Transform(ParseResult &parse_result) {
-		auto it = transform_functions.find(parse_result.name);
-		if (it == transform_functions.end()) {
-			throw NotImplementedException("No transformer function found for rule '%s'", parse_result.name);
-		}
-		auto &func = it->second;
-
-		unique_ptr<TransformResultValue> base_result = func(*this, parse_result);
-		if (!base_result) {
-			throw InternalException("Transformer for rule '%s' returned a nullptr.", parse_result.name);
-		}
-
+		unique_ptr<TransformResultValue> base_result = RunTransformFunction(parse_result);
 		auto *typed_result_ptr = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
 		if (!typed_result_ptr) {
 			// allow transparent bridging between string-typed and Identifier-typed rules
 			auto bridged = TryBridgeTransformResult<T>(*base_result);
-			if (bridged) {
-				auto bridged_result = std::move(bridged->value);
-				SetResultLocation(bridged_result, parse_result.GetLocation());
-				return bridged_result;
+			if (!bridged) {
+				ThrowUnexpectedTransformResultType(parse_result.name);
 			}
-			throw InternalException("Transformer for rule '" + parse_result.name + "' returned an unexpected type.");
+			auto bridged_result = std::move(bridged->value);
+			SetResultLocation(bridged_result, parse_result.GetLocation());
+			return bridged_result;
 		}
 
 		auto result = std::move(typed_result_ptr->value);
