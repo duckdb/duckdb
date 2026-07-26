@@ -216,7 +216,7 @@ public:
 private:
 	//! A reference to the buffer manager.
 	BufferManager &buffer_manager;
-	//! Database instance that owns this block.
+	//! Indicates the owner of the block memory.
 	const MemoryContextId memory_context_id;
 	//! The block id of the block.
 	const block_id_t block_id;

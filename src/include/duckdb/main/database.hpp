@@ -12,7 +12,6 @@
 #include "duckdb/common/memory_context.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/database_memory_manager.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -42,6 +41,7 @@ class MetricsManager;
 class ExternalFileCache;
 class ResultSetManager;
 struct ParserCache;
+class DatabaseMemoryManager;
 
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;

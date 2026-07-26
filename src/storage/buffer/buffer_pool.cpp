@@ -357,13 +357,13 @@ TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 }
 
 void BufferPool::RegisterObjectCache(ObjectCache &object_cache_p) {
-	lock_guard<mutex> lock(object_cache_lock);
+	const annotated_lock_guard<annotated_mutex> lock(object_cache_lock);
 	D_ASSERT(!object_cache);
 	object_cache = object_cache_p;
 }
 
 void BufferPool::UnregisterObjectCache(ObjectCache &object_cache_p) {
-	lock_guard<mutex> lock(object_cache_lock);
+	const annotated_lock_guard<annotated_mutex> lock(object_cache_lock);
 	if (object_cache.get() == &object_cache_p) {
 		object_cache = nullptr;
 	}
@@ -381,7 +381,7 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 
 	bool success = false;
 	{
-		lock_guard<mutex> lock(object_cache_lock);
+		const annotated_lock_guard<annotated_mutex> lock(object_cache_lock);
 		if (object_cache) {
 			while (!object_cache->IsEmpty()) {
 				const auto used_memory = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);

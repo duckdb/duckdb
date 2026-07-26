@@ -14,6 +14,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
@@ -183,8 +184,8 @@ protected:
 	//! The block allocator
 	BlockAllocator &block_allocator;
 	//! The object cache participating in this pool's eviction domain.
-	mutex object_cache_lock;
-	optional_ptr<ObjectCache> object_cache;
+	annotated_mutex object_cache_lock;
+	optional_ptr<ObjectCache> object_cache DUCKDB_GUARDED_BY(object_cache_lock);
 };
 
 } // namespace duckdb
