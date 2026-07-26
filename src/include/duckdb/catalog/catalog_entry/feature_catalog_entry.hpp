@@ -44,6 +44,11 @@ public:
 	unique_ptr<SelectStatement> query;
 	//! Current version number (incremented on each REFRESH)
 	int64_t current_version;
+	//! Versions currently retained in the store, aligned with retained_version_timestamps_micros
+	vector<int64_t> retained_version_numbers;
+	//! Snapshot timestamp of each retained version, as microseconds since epoch, aligned with
+	//! retained_version_numbers
+	vector<int64_t> retained_version_timestamps_micros;
 	//! Timestamp of last refresh (set at creation, derived from backing table at runtime)
 	timestamp_t last_refresh_timestamp;
 	//! Whether an automatic refresh schedule is attached to this feature

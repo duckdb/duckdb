@@ -12,9 +12,10 @@ FeatureCatalogEntry::FeatureCatalogEntry(Catalog &catalog, SchemaCatalogEntry &s
       entity_columns(info.entity_columns), entity_key_columns(info.entity_key_columns),
       timestamp_column(info.timestamp_column), timestamp_table(info.timestamp_table),
       window_interval(info.window_interval), ttl_interval(info.ttl_interval), retain_versions(info.retain_versions),
-      current_version(info.current_version), last_refresh_timestamp(Timestamp::GetCurrentTimestamp()),
-      has_schedule(info.has_schedule), schedule_interval(info.schedule_interval),
-      schedule_enabled(info.schedule_enabled) {
+      current_version(info.current_version), retained_version_numbers(info.retained_version_numbers),
+      retained_version_timestamps_micros(info.retained_version_timestamps_micros),
+      last_refresh_timestamp(Timestamp::GetCurrentTimestamp()), has_schedule(info.has_schedule),
+      schedule_interval(info.schedule_interval), schedule_enabled(info.schedule_enabled) {
 	if (info.query) {
 		query = unique_ptr_cast<SQLStatement, SelectStatement>(info.query->Copy());
 	}
@@ -86,6 +87,8 @@ unique_ptr<CreateInfo> FeatureCatalogEntry::GetInfo() const {
 	info->ttl_interval = ttl_interval;
 	info->retain_versions = retain_versions;
 	info->current_version = current_version;
+	info->retained_version_numbers = retained_version_numbers;
+	info->retained_version_timestamps_micros = retained_version_timestamps_micros;
 	info->has_schedule = has_schedule;
 	info->schedule_interval = schedule_interval;
 	info->schedule_enabled = schedule_enabled;

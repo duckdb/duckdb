@@ -42,6 +42,13 @@ struct CreateFeatureInfo : public CreateInfo {
 	int64_t retain_versions;
 	//! Current version number (incremented on each REFRESH); persisted so it survives restarts
 	int64_t current_version;
+	//! Versions currently retained in the store, aligned with retained_version_timestamps_micros. Maintained
+	//! by REFRESH: the new version is appended and versions evicted by GC are pruned. Empty for features that
+	//! predate this field, which makes SERVE fall back to the ASOF path.
+	vector<int64_t> retained_version_numbers;
+	//! Snapshot timestamp of each retained version, as microseconds since epoch (timestamp_t::value), aligned
+	//! with retained_version_numbers. Stored as raw micros because vector<int64_t> is directly serializable.
+	vector<int64_t> retained_version_timestamps_micros;
 	//! Whether an automatic refresh schedule is attached to this feature
 	bool has_schedule;
 	//! The interval between automatic refreshes (valid when has_schedule is true)

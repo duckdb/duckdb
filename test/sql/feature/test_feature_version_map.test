@@ -1,0 +1,30 @@
+# name: test/sql/feature/test_feature_version_map.test
+# description: Catalog records the retained (version, timestamp) map used by SERVE
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE cards (card_no VARCHAR);
+
+statement ok
+INSERT INTO cards VALUES ('C001'), ('C002');
+
+statement ok
+CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO transactions VALUES
+    ('C001', 100.00, '2024-01-01 10:00:00'),
+    ('C002', 75.00, '2024-01-01 11:00:00');
+
+statement ok
+CREATE FEATURE vmap ENTITY cards TIMESTAMP event_time WINDOW 7 DAYS RETAIN 2 AS (SELECT card_no, SUM(amount) AS total_amount FROM transactions GROUP BY card_no);
+
+# Before any REFRESH the map is empty.
+query TT
+SELECT retained_versions, retained_version_timestamps FROM duckdb_features() WHERE feature_name = 'vmap';
+----
+(empty)	(empty)
