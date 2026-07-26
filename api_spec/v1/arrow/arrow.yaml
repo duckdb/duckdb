@@ -1,0 +1,386 @@
+module: arrow
+functions:
+  to_arrow_schema:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      arrow_options:
+        type: arrow_options
+        description: The Arrow settings used to produce arrow.
+      types:
+        type: logical_type
+        indirection: 1
+        description: The DuckDB logical types for each column in the schema.
+      names:
+        type: char
+        indirection: 2
+        const: true
+        description: The names for each column in the schema.
+      column_count:
+        type: idx
+        description: The number of columns that exist in the schema.
+      out_schema:
+        type: ArrowSchema
+        indirection: 1
+        kind: OUT
+        description: The resulting arrow schema. Must be destroyed with `out_schema->release(out_schema)`.
+    return_type: error_data
+    description: |
+      Transforms a DuckDB Schema into an Arrow Schema
+    return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
+  data_chunk_to_arrow:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      arrow_options:
+        type: arrow_options
+        description: The Arrow settings used to produce arrow.
+      chunk:
+        type: data_chunk
+        description: The DuckDB data chunk to convert.
+      out_arrow_array:
+        type: ArrowArray
+        indirection: 1
+        kind: OUT
+        description: The output Arrow structure that will hold the converted data. Must be released with `out_arrow_array->release(out_arrow_array)`
+    return_type: error_data
+    description: |
+      Transforms a DuckDB data chunk into an Arrow array.
+    return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
+  schema_from_arrow:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection to get the transformation settings from.
+      schema:
+        type: ArrowSchema
+        indirection: 1
+        description: The input Arrow schema. Must be released with `schema->release(schema)`.
+      out_types:
+        type: arrow_converted_schema
+        indirection: 1
+        kind: OUT
+        description: The Arrow converted schema with extra information about the arrow types. Must be destroyed with `duckdb_destroy_arrow_converted_schema`.
+    return_type: error_data
+    description: |
+      Transforms an Arrow Schema into a DuckDB Schema.
+    return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
+  data_chunk_from_arrow:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection to get the transformation settings from.
+      arrow_array:
+        type: ArrowArray
+        indirection: 1
+        description: The input Arrow array. Data ownership is passed on to DuckDB's DataChunk, the underlying object does not need to be released and won't have ownership of the data.
+      converted_schema:
+        type: arrow_converted_schema
+        description: The Arrow converted schema with extra information about the arrow types.
+      out_chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: The resulting DuckDB data chunk. Must be destroyed by duckdb_destroy_data_chunk.
+    return_type: error_data
+    description: |
+      Transforms an Arrow array into a DuckDB data chunk. The data chunk will retain ownership of the underlying Arrow data.
+    return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
+  destroy_arrow_converted_schema:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: arrow_converted_schema
+    parameters:
+      arrow_converted_schema:
+        type: arrow_converted_schema
+        indirection: 1
+        description: The arrow converted schema to destroy.
+    return_type: opaque
+    description: |
+      Destroys the arrow converted schema and de-allocates all memory allocated for that arrow converted schema.
+  query_arrow:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection to perform the query in.
+      query:
+        type: char
+        indirection: 1
+        const: true
+        description: The SQL query to run.
+      out_result:
+        type: arrow
+        indirection: 1
+        kind: OUT
+        description: The query result.
+    return_type: state
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Executes a SQL query within a connection and stores the full (materialized) result in an arrow structure.
+      If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling
+      `duckdb_query_arrow_error`.
+
+      Note that after running `duckdb_query_arrow`, `duckdb_destroy_arrow` must be called on the result object even if the
+      query fails, otherwise the error stored within the result will not be freed correctly.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  query_arrow_schema:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: arrow
+        description: The result to fetch the schema from.
+      out_schema:
+        type: arrow_schema
+        indirection: 1
+        kind: OUT
+        description: The output schema.
+    return_type: state
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Fetch the internal arrow schema from the arrow result. Remember to call release on the respective
+      ArrowSchema object.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  prepared_arrow_schema:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared:
+        type: prepared_statement
+        description: The prepared statement to fetch the schema from.
+      out_schema:
+        type: arrow_schema
+        indirection: 1
+        kind: OUT
+        description: The output schema.
+    return_type: state
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Fetch the internal arrow schema from the prepared statement. Remember to call release on the respective
+      ArrowSchema object.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  result_arrow_array:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: result
+        description: The result object the data chunk have been fetched from.
+      chunk:
+        type: data_chunk
+        description: The data chunk to convert.
+      out_array:
+        type: arrow_array
+        indirection: 1
+        kind: OUT
+        description: The output array.
+    return_type: opaque
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Convert a data chunk into an arrow struct array. Remember to call release on the respective
+      ArrowArray object.
+  query_arrow_array:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: arrow
+        description: The result to fetch the array from.
+      out_array:
+        type: arrow_array
+        indirection: 1
+        kind: OUT
+        description: The output array.
+    return_type: state
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Fetch an internal arrow struct array from the arrow result. Remember to call release on the respective
+      ArrowArray object.
+
+      This function can be called multiple time to get next chunks, which will free the previous out_array.
+      So consume the out_array before calling this function again.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  arrow_column_count:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: arrow
+        description: The result object.
+    return_type: idx
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Returns the number of columns present in the arrow result object.
+    return_description: The number of columns present in the result object.
+  arrow_row_count:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: arrow
+        description: The result object.
+    return_type: idx
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Returns the number of rows present in the arrow result object.
+    return_description: The number of rows present in the result object.
+  arrow_rows_changed:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: arrow
+        description: The result object.
+    return_type: idx
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Returns the number of rows changed by the query stored in the arrow result. This is relevant only for
+      INSERT/UPDATE/DELETE queries. For other queries the rows_changed will be 0.
+    return_description: The number of rows changed.
+  query_arrow_error:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      result:
+        type: arrow
+        description: The result object to fetch the error from.
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+       Returns the error message contained within the result. The error is only set if `duckdb_query_arrow` returns
+      `DuckDBError`.
+
+      The error message should not be freed. It will be de-allocated when `duckdb_destroy_arrow` is called.
+    return_description: The error of the result.
+  destroy_arrow:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: arrow
+    parameters:
+      result:
+        type: arrow
+        indirection: 1
+        description: The result to destroy.
+    return_type: opaque
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Closes the result and de-allocates all memory allocated for the arrow result.
+  destroy_arrow_stream:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: arrow_stream
+    parameters:
+      stream_p:
+        type: arrow_stream
+        indirection: 1
+        description: The arrow array stream to destroy.
+    return_type: opaque
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Releases the arrow array stream and de-allocates its memory.
+  execute_prepared_arrow:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement to execute.
+      out_result:
+        type: arrow
+        indirection: 1
+        kind: OUT
+        description: The query result.
+    return_type: state
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Executes the prepared statement with the given bound parameters, and returns an arrow query result.
+      Note that after running `duckdb_execute_prepared_arrow`, `duckdb_destroy_arrow` must be called on the result object.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  arrow_scan:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection on which to execute the scan.
+      table_name:
+        type: char
+        indirection: 1
+        const: true
+        description: Name of the temporary view to create.
+      arrow:
+        type: arrow_stream
+        description: Arrow stream wrapper.
+    return_type: state
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Scans the Arrow stream and creates a view with the given name.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  arrow_array_scan:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection on which to execute the scan.
+      table_name:
+        type: char
+        indirection: 1
+        const: true
+        description: Name of the temporary view to create.
+      arrow_schema:
+        type: arrow_schema
+        description: Arrow schema wrapper.
+      arrow_array:
+        type: arrow_array
+        description: Arrow array wrapper.
+      out_stream:
+        type: arrow_stream
+        indirection: 1
+        kind: OUT
+        description: Output array stream that wraps around the passed schema, for releasing/deleting once done.
+    return_type: state
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Scans the Arrow array and creates a view with the given name.
+      Note that after running `duckdb_arrow_array_scan`, `duckdb_destroy_arrow_stream` must be called on the out stream.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'

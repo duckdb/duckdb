@@ -159,6 +159,9 @@ ProgressData PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceS
 	res.SetInvalid();
 	return res;
 }
+
+void PhysicalOperator::SourceFinished(ClientContext &context, GlobalSourceState &gstate) const {
+}
 // LCOV_EXCL_STOP
 
 //===--------------------------------------------------------------------===//
@@ -417,9 +420,14 @@ SelectExecutionMode(const DataChunk &chunk, const OperatorResultType child_resul
 	return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 }
 
-//! Empty-id dicts (e.g. slice-of-flat) mint a fresh entry per slice, so their sels must not be accumulated.
+//! Only global dictionaries may be accumulated: the cache holds the entry by reference across child Execute calls and
+//! materializes its strings lazily (on rotation/flush), so the child data must outlive the producing chunk. A global
+//! dictionary is wrapped by the producer for its whole lifetime; a non-global (per-chunk) dict points into storage that
+//! is recycled once its chunk is done, so accumulating it by reference would read freed data - fall back to flat
+//! caching. Empty-id dicts (e.g. slice-of-flat) mint a fresh entry per slice and are never global.
 static inline bool IsAccumulableDictionary(const Vector &vector) {
-	return vector.GetVectorType() == VectorType::DICTIONARY_VECTOR && !DictionaryVector::DictionaryId(vector).empty();
+	return vector.GetVectorType() == VectorType::DICTIONARY_VECTOR && !DictionaryVector::DictionaryId(vector).empty() &&
+	       DictionaryVector::IsGlobalDictionary(vector);
 }
 
 static bool ChunkHasAccumulableDictionary(const DataChunk &chunk) {

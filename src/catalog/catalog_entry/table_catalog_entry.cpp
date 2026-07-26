@@ -96,7 +96,8 @@ vector<LogicalType> TableCatalogEntry::GetTypes() const {
 
 unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTableInfo>();
-	result->SetQualifiedName(QualifiedName(catalog.GetName(), schema.name, name));
+	// carry the full (possibly nested) schema path: [catalog, schema_path..., name]
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->columns = columns.Copy();
 	result->constraints.reserve(constraints.size());
 	result->dependencies = dependencies;

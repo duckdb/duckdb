@@ -520,6 +520,7 @@ TEST_CONFIGS := \
 	test/configs/verify_statement_explain.json \
 	test/configs/verify_statement_prepare.json \
 	test/configs/verify_serializer.json \
+	test/configs/verify_compression.json \
 	test/configs/verify_stats.json \
 	test/configs/verify_statement_serialization.json \
 	test/configs/force_storage.json \
@@ -853,10 +854,12 @@ coverage-check:
 	./scripts/coverage_check.sh
 
 generate-files-deps:
-	pip install cxxheaderparser pcpp
+	$(PYTHON) -m pip install -U pip
+	$(PYTHON) -m pip install --group api_spec/pyproject.toml:generate
+	$(PYTHON) -m pip install cxxheaderparser pcpp
 
 generate-files:
-	$(PYTHON) scripts/generate_c_api.py
+	./scripts/capi_v1_regen.sh
 	$(PYTHON) scripts/generate_functions.py
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py

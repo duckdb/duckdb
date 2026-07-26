@@ -69,9 +69,12 @@ struct VectorOperations {
 	static void LessThanEquals(const Vector &left, const Vector &right, Vector &result);
 
 	// result = -1 if left < right, 0 if left == right, 1 if left > right (stored in int8_t TINYINT result vector)
-	static void Comparator(const Vector &left, const Vector &right, Vector &result);
+	// if inequality is set, then scalars inside nested types will be compared with NULLS LAST semantics.
+	static void Comparator(const Vector &left, const Vector &right, Vector &result, const bool inequality);
 	// result = -1 if left < right, 0 if left == right, 1 if left > right; fills exactly count rows (for select paths)
-	static void ComparatorFill(const Vector &left, const Vector &right, Vector &result, idx_t count);
+	// if inequality is set, then scalars inside nested types will be compared with NULLS LAST semantics.
+	static void ComparatorFill(const Vector &left, const Vector &right, Vector &result, idx_t count,
+	                           const bool inequality);
 
 	// result = A != B with nulls being equal
 	static void DistinctFrom(const Vector &left, const Vector &right, Vector &result);
@@ -322,7 +325,7 @@ struct VectorOperations {
 		if (count != left.size()) {
 			throw InternalException("Comparator: count (%llu) does not match vector size (%llu)", count, left.size());
 		}
-		Comparator(left, right, result);
+		Comparator(left, right, result, false);
 	}
 	[[deprecated("count parameter is deprecated; call DistinctFrom without count instead")]] static void
 	DistinctFrom(const Vector &left, const Vector &right, Vector &result, idx_t count) {

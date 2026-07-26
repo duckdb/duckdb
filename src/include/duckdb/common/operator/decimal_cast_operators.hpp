@@ -569,7 +569,7 @@ struct DecimalCastOperation {
 				auto mod = state.result % 10;
 				round_up = NEGATIVE ? mod <= -5 : mod >= 5;
 				state.result /= 10;
-				if (state.result == 0) {
+				if (state.result == 0 && mod == 0) {
 					break;
 				}
 			}

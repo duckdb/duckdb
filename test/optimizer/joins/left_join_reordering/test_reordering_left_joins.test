@@ -47,6 +47,77 @@ order by all;
 2	0	NULL	NULL
 2	1	NULL	NULL
 
+# A post-LEFT filter can naturally reference exactly the same two relations as the join.
+# Its relation set must still act as an ordering barrier rather than becoming an ON condition.
+query II
+select l.id, r.id
+from lj_pin_l l
+left join lj_pin_r r on l.id = r.id
+where r.v is distinct from l.v
+order by all;
+----
+2	NULL
+
+# Check the inverse NULL-aware comparison and the opposite expression orientation.
+query II
+select l.id, r.id
+from lj_pin_l l
+left join lj_pin_r r on l.id = r.id
+where l.v is not distinct from r.v
+order by all;
+----
+1	1
+
+# A NULL-aware comparison that references both sides must also remain above the LEFT join.
+statement ok
+create table lj_indistinct_l(id integer, v integer);
+
+statement ok
+insert into lj_indistinct_l values (1, NULL), (2, 2), (3, 3);
+
+statement ok
+create table lj_indistinct_r(id integer, v integer);
+
+statement ok
+insert into lj_indistinct_r values (2, 2), (3, 99), (4, NULL);
+
+query I
+select count(*)
+from lj_indistinct_l l
+left join lj_indistinct_r r on l.id = r.id
+where l.v is not distinct from r.v;
+----
+2
+
+# A higher LEFT join condition must stay above the nullable side of a lower LEFT join.
+statement ok
+create table lj_nested_a(id integer);
+
+statement ok
+insert into lj_nested_a values (1), (2);
+
+statement ok
+create table lj_nested_b(id integer);
+
+statement ok
+insert into lj_nested_b values (1);
+
+statement ok
+create table lj_nested_c(id integer, marker integer);
+
+statement ok
+insert into lj_nested_c values (NULL, 7);
+
+query IIII
+select *
+from lj_nested_a a
+left join lj_nested_b b on a.id = b.id
+left join lj_nested_c c on b.id is not distinct from c.id
+order by all;
+----
+1	1	NULL	NULL
+2	NULL	NULL	7
+
 
 # filters (a ⟕ (b ⨝ c))
 query III

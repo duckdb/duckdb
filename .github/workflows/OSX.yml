@@ -10,18 +10,6 @@ on:
         type: boolean
       run_all:
         type: boolean
-  workflow_dispatch:
-    inputs:
-      override_git_describe:
-        type: string
-      git_ref:
-        type: string
-      skip_tests:
-        type: boolean
-        default: false
-      run_all:
-        type: boolean
-        default: true
   push:
     branches-ignore:
       - 'main'

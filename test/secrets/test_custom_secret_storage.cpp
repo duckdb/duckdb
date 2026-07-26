@@ -7,6 +7,7 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 using namespace duckdb;
 
@@ -342,4 +343,108 @@ TEST_CASE("Secret storage name collision: manager loaded after", "[secret][.]") 
 
 	// This now fails with a name collision warning
 	REQUIRE_FAIL(con.Query("FROM duckdb_secrets();"));
+}
+
+static CreateSecretInput TransactionSecretInput(const string &name, const string &scope,
+                                                OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT) {
+	CreateSecretInput result;
+	result.type = "transaction_secret_type";
+	result.provider = "config";
+	result.name = Identifier(name);
+	result.scope = {scope};
+	result.on_conflict = on_conflict;
+	result.persist_type = SecretPersistType::TRANSACTION;
+	return result;
+}
+
+TEST_CASE("Transaction secrets are isolated and cleaned up", "[secret]") {
+	DuckDB db(nullptr);
+	Connection owner(db);
+	Connection other(db);
+	DemoSecretType::RegisterDemoSecret(*db.instance, "transaction_secret_type");
+
+	REQUIRE_NO_FAIL(owner.Query("CREATE SECRET global_secret (TYPE transaction_secret_type, SCOPE 's3://bucket')"));
+	auto &secret_manager = SecretManager::Get(*db.instance);
+
+	REQUIRE_NO_FAIL(owner.Query("BEGIN TRANSACTION READ ONLY"));
+	auto input = TransactionSecretInput("transaction_secret", "s3://bucket");
+	auto created_secret = secret_manager.CreateSecret(*owner.context, input);
+	REQUIRE(created_secret);
+	REQUIRE(created_secret->persist_type == SecretPersistType::TRANSACTION);
+	REQUIRE(created_secret->storage_mode == SecretManager::TRANSACTION_STORAGE_NAME);
+
+	auto owner_transaction = CatalogTransaction::GetSystemCatalogTransaction(*owner.context);
+	auto owner_match =
+	    secret_manager.LookupSecret(owner_transaction, "s3://bucket/data.parquet", "transaction_secret_type");
+	REQUIRE(owner_match.HasMatch());
+	REQUIRE(owner_match.GetSecret().GetName() == "transaction_secret");
+	REQUIRE(secret_manager.GetSecretByName(owner_transaction, "transaction_secret"));
+
+	auto all_secrets = secret_manager.AllSecrets(owner_transaction);
+	REQUIRE(std::any_of(all_secrets.begin(), all_secrets.end(),
+	                    [](const SecretEntry &entry) { return entry.secret->GetName() == "transaction_secret"; }));
+
+	other.BeginTransaction();
+	auto other_transaction = CatalogTransaction::GetSystemCatalogTransaction(*other.context);
+	REQUIRE(!secret_manager.GetSecretByName(other_transaction, "transaction_secret"));
+	auto other_match =
+	    secret_manager.LookupSecret(other_transaction, "s3://bucket/data.parquet", "transaction_secret_type");
+	REQUIRE(other_match.HasMatch());
+	REQUIRE(other_match.GetSecret().GetName() == "global_secret");
+	other.Rollback();
+
+	owner.Commit();
+	owner.BeginTransaction();
+	owner_transaction = CatalogTransaction::GetSystemCatalogTransaction(*owner.context);
+	REQUIRE(!secret_manager.GetSecretByName(owner_transaction, "transaction_secret"));
+	owner_match = secret_manager.LookupSecret(owner_transaction, "s3://bucket/data.parquet", "transaction_secret_type");
+	REQUIRE(owner_match.HasMatch());
+	REQUIRE(owner_match.GetSecret().GetName() == "global_secret");
+
+	auto rollback_input = TransactionSecretInput("rollback_secret", "s3://rollback");
+	REQUIRE(secret_manager.CreateSecret(*owner.context, rollback_input));
+	owner.Rollback();
+	owner.BeginTransaction();
+	owner_transaction = CatalogTransaction::GetSystemCatalogTransaction(*owner.context);
+	REQUIRE(!secret_manager.GetSecretByName(owner_transaction, "rollback_secret"));
+	owner.Rollback();
+}
+
+TEST_CASE("Transaction secret validation and conflicts", "[secret]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	DemoSecretType::RegisterDemoSecret(*db.instance, "transaction_secret_type");
+	auto &secret_manager = SecretManager::Get(*db.instance);
+
+	con.BeginTransaction();
+	auto input = TransactionSecretInput("conflicting_secret", "s3://original");
+	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*con.context);
+	REQUIRE_THROWS(secret_manager.BindCreateSecret(transaction, input));
+	REQUIRE(secret_manager.CreateSecret(*con.context, input));
+	REQUIRE_THROWS(secret_manager.CreateSecret(*con.context, input));
+
+	input.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	REQUIRE(!secret_manager.CreateSecret(*con.context, input));
+
+	input.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+	input.scope = {"s3://replacement"};
+	REQUIRE(secret_manager.CreateSecret(*con.context, input));
+	auto stored_secret = secret_manager.GetSecretByName(transaction, "conflicting_secret");
+	REQUIRE(stored_secret);
+	REQUIRE(stored_secret->secret->GetScope()[0] == "s3://replacement");
+
+	secret_manager.DropSecretByName(transaction, "conflicting_secret", OnEntryNotFound::THROW_EXCEPTION,
+	                                SecretPersistType::TRANSACTION);
+	REQUIRE(!secret_manager.GetSecretByName(transaction, "conflicting_secret"));
+
+	input.name = "explicit_storage";
+	input.storage_type = SecretManager::TEMPORARY_STORAGE_NAME;
+	REQUIRE_THROWS(secret_manager.CreateSecret(*con.context, input));
+	con.Rollback();
+
+	input.storage_type = "";
+	auto secret = DemoSecretType::CreateDemoSecret(*con.context, input);
+	auto system_transaction = CatalogTransaction::GetSystemTransaction(*db.instance);
+	REQUIRE_THROWS(secret_manager.RegisterSecret(system_transaction, std::move(secret),
+	                                             OnCreateConflict::ERROR_ON_CONFLICT, SecretPersistType::TRANSACTION));
 }

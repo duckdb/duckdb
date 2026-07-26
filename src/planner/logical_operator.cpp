@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"

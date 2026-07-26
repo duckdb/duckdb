@@ -20,6 +20,8 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 class String;
@@ -662,9 +664,13 @@ template <>
 DUCKDB_API interval_t Value::GetValueUnsafe() const;
 
 template <>
-DUCKDB_API bool Value::IsNan(float input);
+inline bool Value::IsNan(float input) {
+	return std::isnan(input);
+}
 template <>
-DUCKDB_API bool Value::IsNan(double input);
+inline bool Value::IsNan(double input) {
+	return std::isnan(input);
+}
 
 template <>
 DUCKDB_API bool Value::IsFinite(float input);

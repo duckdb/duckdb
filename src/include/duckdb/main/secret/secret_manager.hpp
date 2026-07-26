@@ -33,7 +33,7 @@ public:
 	      secret((other.secret != nullptr) ? other.secret->Clone() : nullptr) {
 	}
 
-	//! Whether the secret is persistent
+	//! Lifetime of the secret
 	SecretPersistType persist_type;
 	//! The storage backend of the secret
 	string storage_mode;
@@ -87,7 +87,7 @@ struct SecretManagerConfig {
 	bool allow_persistent_secrets = DEFAULT_ALLOW_PERSISTENT_SECRETS;
 };
 
-//! The Secret Manager for DuckDB. Can handle both temporary and persistent secrets
+//! The Secret Manager for DuckDB. Handles transaction, temporary and persistent secrets
 class SecretManager {
 	friend struct SecretEntry;
 
@@ -98,6 +98,7 @@ public:
 	//! The default storage backends
 	static constexpr const char *TEMPORARY_STORAGE_NAME = "memory";
 	static constexpr const char *LOCAL_FILE_STORAGE_NAME = "local_file";
+	static constexpr const char *TRANSACTION_STORAGE_NAME = "transaction";
 
 	//! Static Helper Functions
 	DUCKDB_API static SecretManager &Get(ClientContext &context);
@@ -191,6 +192,8 @@ private:
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();
 	optional_ptr<SecretStorage> GetSecretStorage(const Identifier &name);
+	optional_ptr<SecretStorage> GetTransactionSecretStorage(CatalogTransaction transaction);
+	SecretStorage &GetOrCreateTransactionSecretStorage(CatalogTransaction transaction);
 
 	//! Throw an exception if the secret manager is initialized
 	void ThrowOnSettingChangeIfInitialized();

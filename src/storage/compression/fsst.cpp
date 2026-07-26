@@ -62,7 +62,8 @@ struct FSSTStorage {
 	static char *FetchStringPointer(StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset);
 	static bp_delta_offsets_t CalculateBpDeltaOffsets(int64_t last_known_row, idx_t start, idx_t scan_count);
 	static bool ParseFSSTSegmentHeader(data_ptr_t base_ptr, duckdb_fsst_decoder_t *decoder_out,
-	                                   bitpacking_width_t *width_out, const idx_t block_size);
+	                                   bitpacking_width_t *width_out, const idx_t segment_capacity,
+	                                   const idx_t segment_count);
 	static bp_delta_offsets_t StartScan(FSSTScanState &scan_state, data_ptr_t base_data, idx_t start,
 	                                    idx_t vector_count);
 	static void EndScan(FSSTScanState &scan_state, bp_delta_offsets_t &offsets, idx_t start, idx_t scan_count);
@@ -556,15 +557,22 @@ struct FSSTScanState : public StringScanState {
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto block_size = segment.GetBlockSize();
+	auto block_offset = segment.GetBlockOffset();
+	if (block_offset > block_size) {
+		throw IOException("Failed to read FSST string segment - header was out of range. Database file appears to be "
+		                  "corrupted.");
+	}
+	auto segment_capacity = block_size - block_offset;
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	state->handle = buffer_manager.Pin(segment.GetBlockHandle());
-	auto base_ptr = state->handle.GetDataMutable() + segment.GetBlockOffset();
+	auto base_ptr = state->handle.GetDataMutable() + block_offset;
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
 	auto decoder = reinterpret_cast<duckdb_fsst_decoder_t *>(state->duckdb_fsst_decoder.get());
-	auto retval = ParseFSSTSegmentHeader(base_ptr, decoder, &state->current_width, block_size);
+	auto retval =
+	    ParseFSSTSegmentHeader(base_ptr, decoder, &state->current_width, segment_capacity, segment.count.load());
 	if (!retval) {
 		state->duckdb_fsst_decoder = nullptr;
 	}
@@ -720,14 +728,20 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
                                  idx_t result_idx) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
-	auto base_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
+	auto block_size = segment.GetBlockSize();
+	auto block_offset = segment.GetBlockOffset();
+	if (block_offset > block_size) {
+		throw IOException("Failed to read FSST string segment - header was out of range. Database file appears to be "
+		                  "corrupted.");
+	}
+	auto segment_capacity = block_size - block_offset;
+	auto base_ptr = handle.GetDataMutable() + block_offset;
 	auto base_data = data_ptr_cast(base_ptr + sizeof(fsst_compression_header_t));
 	auto dict = GetDictionary(segment, handle);
 
 	duckdb_fsst_decoder_t decoder;
 	bitpacking_width_t width;
-	auto block_size = segment.GetBlockSize();
-	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width, block_size);
+	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width, segment_capacity, segment.count.load());
 
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 	if (!have_symbol_table) {
@@ -803,15 +817,45 @@ char *FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t
 	return char_ptr_cast(dict_pos);
 }
 
+static void ThrowInvalidFSSTSegment(const char *reason) {
+	throw IOException("Failed to read FSST string segment - %s. Database file appears to be corrupted.", reason);
+}
+
 // Returns false if no symbol table was found. This means all strings are either empty or null
 bool FSSTStorage::ParseFSSTSegmentHeader(data_ptr_t base_ptr, duckdb_fsst_decoder_t *decoder_out,
-                                         bitpacking_width_t *width_out, const idx_t block_size) {
+                                         bitpacking_width_t *width_out, const idx_t segment_capacity,
+                                         const idx_t segment_count) {
+	if (sizeof(fsst_compression_header_t) > segment_capacity) {
+		ThrowInvalidFSSTSegment("header was out of range");
+	}
 	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(base_ptr);
 	auto fsst_symbol_table_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->fsst_symbol_table_offset));
-	if (fsst_symbol_table_offset > block_size) {
-		throw InternalException("invalid fsst_symbol_table_offset in FSSTStorage::ParseFSSTSegmentHeader");
+	auto stored_width = Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width));
+	if (stored_width > sizeof(uint32_t) * 8) {
+		ThrowInvalidFSSTSegment("bitpacking width was invalid");
 	}
-	*width_out = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
+	auto width = UnsafeNumericCast<bitpacking_width_t>(stored_width);
+	auto compressed_index_buffer_size = BitpackingPrimitives::GetRequiredSize(segment_count, width);
+	if (compressed_index_buffer_size > segment_capacity - sizeof(fsst_compression_header_t)) {
+		ThrowInvalidFSSTSegment("bitpacking buffer was out of range");
+	}
+	auto expected_symbol_table_offset = sizeof(fsst_compression_header_t) + compressed_index_buffer_size;
+	if (fsst_symbol_table_offset != expected_symbol_table_offset) {
+		ThrowInvalidFSSTSegment("bitpacking width did not match the stored layout");
+	}
+	if (sizeof(duckdb_fsst_decoder_t) > segment_capacity - fsst_symbol_table_offset) {
+		ThrowInvalidFSSTSegment("symbol table was out of range");
+	}
+
+	StringDictionaryContainer container;
+	container.size = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_size));
+	container.end = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_end));
+	if (container.end > segment_capacity || container.size > container.end ||
+	    container.end - container.size < fsst_symbol_table_offset) {
+		ThrowInvalidFSSTSegment("dictionary was out of range");
+	}
+
+	*width_out = width;
 	return duckdb_fsst_import(decoder_out, base_ptr + fsst_symbol_table_offset);
 }
 

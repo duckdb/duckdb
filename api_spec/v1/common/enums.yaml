@@ -1,0 +1,198 @@
+module: common_enums
+aliases:
+  type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    underlying: TYPE
+    description: "Alias for the DUCKDB_TYPE enum."
+enums:
+  TYPE:
+    description: "An enum over DuckDB's internal types."
+    values:
+      TYPE_INVALID: {value: 0}
+      TYPE_BOOLEAN: {value: 1, description: bool}
+      TYPE_TINYINT: {value: 2, description: int8_t}
+      TYPE_SMALLINT: {value: 3, description: int16_t}
+      TYPE_INTEGER: {value: 4, description: int32_t}
+      TYPE_BIGINT: {value: 5, description: int64_t}
+      TYPE_UTINYINT: {value: 6, description: uint8_t}
+      TYPE_USMALLINT: {value: 7, description: uint16_t}
+      TYPE_UINTEGER: {value: 8, description: uint32_t}
+      TYPE_UBIGINT: {value: 9, description: uint64_t}
+      TYPE_FLOAT: {value: 10, description: float}
+      TYPE_DOUBLE: {value: 11, description: double}
+      TYPE_TIMESTAMP: {value: 12, description: "duckdb_timestamp (microseconds)"}
+      TYPE_DATE: {value: 13, description: duckdb_date}
+      TYPE_TIME: {value: 14, description: duckdb_time}
+      TYPE_INTERVAL: {value: 15, description: duckdb_interval}
+      TYPE_HUGEINT: {value: 16, description: duckdb_hugeint}
+      TYPE_VARCHAR: {value: 17, description: "const char*"}
+      TYPE_BLOB: {value: 18, description: duckdb_blob}
+      TYPE_DECIMAL: {value: 19, description: duckdb_decimal}
+      TYPE_TIMESTAMP_S: {value: 20, description: "duckdb_timestamp_s (seconds)"}
+      TYPE_TIMESTAMP_MS: {value: 21, description: "duckdb_timestamp_ms (milliseconds)"}
+      TYPE_TIMESTAMP_NS: {value: 22, description: "duckdb_timestamp_ns (nanoseconds)"}
+      TYPE_ENUM: {value: 23, description: "enum type, only useful as logical type"}
+      TYPE_LIST: {value: 24, description: "list type, only useful as logical type"}
+      TYPE_STRUCT: {value: 25, description: "struct type, only useful as logical type"}
+      TYPE_MAP: {value: 26, description: "map type, only useful as logical type"}
+      TYPE_UUID: {value: 27, description: duckdb_hugeint}
+      TYPE_UNION: {value: 28, description: "union type, only useful as logical type"}
+      TYPE_BIT: {value: 29, description: duckdb_bit}
+      TYPE_TIME_TZ: {value: 30, description: duckdb_time_tz}
+      TYPE_TIMESTAMP_TZ: {value: 31, description: "duckdb_timestamp (microseconds)"}
+      TYPE_UHUGEINT: {value: 32, description: duckdb_uhugeint}
+      TYPE_ARRAY: {value: 33, description: "duckdb_array, only useful as logical type"}
+      TYPE_ANY: {value: 34, description: "enum type, only useful as logical type"}
+      TYPE_BIGNUM: {value: 35, description: duckdb_bignum}
+      TYPE_SQLNULL: {value: 36, description: "enum type, only useful as logical type"}
+      TYPE_STRING_LITERAL: {value: 37, description: "enum type, only useful as logical type"}
+      TYPE_INTEGER_LITERAL: {value: 38, description: "enum type, only useful as logical type"}
+      TYPE_TIME_NS: {value: 39, description: "duckdb_time_ns (nanoseconds)"}
+      TYPE_GEOMETRY: {value: 40, description: "GEOMETRY type, WKB blob"}
+      TYPE_VARIANT: {value: 41, description: "VARIANT type"}
+      TYPE_TIMESTAMP_TZ_NS: {value: 42, description: "duckdb_timestamp (nanoseconds)"}
+  pending_state:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An enum over the pending state of a pending query result."
+    values:
+      PENDING_RESULT_READY: {value: 0}
+      PENDING_RESULT_NOT_READY: {value: 1}
+      PENDING_ERROR: {value: 2}
+      PENDING_NO_TASKS_AVAILABLE: {value: 3}
+  result_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An enum over DuckDB's different result types."
+    values:
+      RESULT_TYPE_INVALID: {value: 0}
+      RESULT_TYPE_CHANGED_ROWS: {value: 1}
+      RESULT_TYPE_NOTHING: {value: 2}
+      RESULT_TYPE_QUERY_RESULT: {value: 3}
+  statement_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An enum over DuckDB's different statement types."
+    values:
+      STATEMENT_TYPE_INVALID: {value: 0}
+      STATEMENT_TYPE_SELECT: {value: 1}
+      STATEMENT_TYPE_INSERT: {value: 2}
+      STATEMENT_TYPE_UPDATE: {value: 3}
+      STATEMENT_TYPE_EXPLAIN: {value: 4}
+      STATEMENT_TYPE_DELETE: {value: 5}
+      STATEMENT_TYPE_PREPARE: {value: 6}
+      STATEMENT_TYPE_CREATE: {value: 7}
+      STATEMENT_TYPE_EXECUTE: {value: 8}
+      STATEMENT_TYPE_ALTER: {value: 9}
+      STATEMENT_TYPE_TRANSACTION: {value: 10}
+      STATEMENT_TYPE_COPY: {value: 11}
+      STATEMENT_TYPE_ANALYZE: {value: 12}
+      STATEMENT_TYPE_VARIABLE_SET: {value: 13}
+      STATEMENT_TYPE_CREATE_FUNC: {value: 14}
+      STATEMENT_TYPE_DROP: {value: 15}
+      STATEMENT_TYPE_EXPORT: {value: 16}
+      STATEMENT_TYPE_PRAGMA: {value: 17}
+      STATEMENT_TYPE_VACUUM: {value: 18}
+      STATEMENT_TYPE_CALL: {value: 19}
+      STATEMENT_TYPE_SET: {value: 20}
+      STATEMENT_TYPE_LOAD: {value: 21}
+      STATEMENT_TYPE_RELATION: {value: 22}
+      STATEMENT_TYPE_EXTENSION: {value: 23}
+      STATEMENT_TYPE_LOGICAL_PLAN: {value: 24}
+      STATEMENT_TYPE_ATTACH: {value: 25}
+      STATEMENT_TYPE_DETACH: {value: 26}
+      STATEMENT_TYPE_MULTI: {value: 27}
+      STATEMENT_TYPE_COPY_DATABASE: {value: 28}
+      STATEMENT_TYPE_UPDATE_EXTENSIONS: {value: 29}
+      STATEMENT_TYPE_MERGE_INTO: {value: 30}
+  error_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An enum over DuckDB's different error types."
+    values:
+      ERROR_INVALID: {value: 0}
+      ERROR_OUT_OF_RANGE: {value: 1}
+      ERROR_CONVERSION: {value: 2}
+      ERROR_UNKNOWN_TYPE: {value: 3}
+      ERROR_DECIMAL: {value: 4}
+      ERROR_MISMATCH_TYPE: {value: 5}
+      ERROR_DIVIDE_BY_ZERO: {value: 6}
+      ERROR_OBJECT_SIZE: {value: 7}
+      ERROR_INVALID_TYPE: {value: 8}
+      ERROR_SERIALIZATION: {value: 9}
+      ERROR_TRANSACTION: {value: 10}
+      ERROR_NOT_IMPLEMENTED: {value: 11}
+      ERROR_EXPRESSION: {value: 12}
+      ERROR_CATALOG: {value: 13}
+      ERROR_PARSER: {value: 14}
+      ERROR_PLANNER: {value: 15}
+      ERROR_SCHEDULER: {value: 16}
+      ERROR_EXECUTOR: {value: 17}
+      ERROR_CONSTRAINT: {value: 18}
+      ERROR_INDEX: {value: 19}
+      ERROR_STAT: {value: 20}
+      ERROR_CONNECTION: {value: 21}
+      ERROR_SYNTAX: {value: 22}
+      ERROR_SETTINGS: {value: 23}
+      ERROR_BINDER: {value: 24}
+      ERROR_NETWORK: {value: 25}
+      ERROR_OPTIMIZER: {value: 26}
+      ERROR_NULL_POINTER: {value: 27}
+      ERROR_IO: {value: 28}
+      ERROR_INTERRUPT: {value: 29}
+      ERROR_FATAL: {value: 30}
+      ERROR_INTERNAL: {value: 31}
+      ERROR_INVALID_INPUT: {value: 32}
+      ERROR_OUT_OF_MEMORY: {value: 33}
+      ERROR_PERMISSION: {value: 34}
+      ERROR_PARAMETER_NOT_RESOLVED: {value: 35}
+      ERROR_PARAMETER_NOT_ALLOWED: {value: 36}
+      ERROR_DEPENDENCY: {value: 37}
+      ERROR_HTTP: {value: 38}
+      ERROR_MISSING_EXTENSION: {value: 39}
+      ERROR_AUTOLOAD: {value: 40}
+      ERROR_SEQUENCE: {value: 41}
+      INVALID_CONFIGURATION: {value: 42}
+  cast_mode:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An enum over DuckDB's different cast modes."
+    values:
+      CAST_NORMAL: {value: 0}
+      CAST_TRY: {value: 1}
+  file_flag:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Flags for opening files."
+    values:
+      FILE_FLAG_INVALID: {value: 0}
+      FILE_FLAG_READ: {value: 1, description: "Open the file with read capabilities."}
+      FILE_FLAG_WRITE: {value: 2, description: "Open the file with write capabilities."}
+      FILE_FLAG_CREATE: {value: 3, description: "Create a new file, or open if it already exists."}
+      FILE_FLAG_CREATE_NEW: {value: 4, description: "Create a new file, or fail if it already exists."}
+      FILE_FLAG_APPEND: {value: 5, description: "Open the file in append mode."}
+  config_option_scope:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An enum over DuckDB's configuration option scopes."
+    values:
+      CONFIG_OPTION_SCOPE_INVALID: {value: 0}
+      CONFIG_OPTION_SCOPE_LOCAL: {value: 1, description: "The option is set for the duration of the current transaction only. CURRENTLY NOT IMPLEMENTED."}
+      CONFIG_OPTION_SCOPE_SESSION: {value: 2, description: "The option is set for the current session/connection only."}
+      CONFIG_OPTION_SCOPE_GLOBAL: {value: 3, description: "Set the option globally for all sessions/connections."}
+  catalog_entry_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An enum over DuckDB's catalog entry types."
+    values:
+      CATALOG_ENTRY_TYPE_INVALID: {value: 0}
+      CATALOG_ENTRY_TYPE_TABLE: {value: 1}
+      CATALOG_ENTRY_TYPE_SCHEMA: {value: 2}
+      CATALOG_ENTRY_TYPE_VIEW: {value: 3}
+      CATALOG_ENTRY_TYPE_INDEX: {value: 4}
+      CATALOG_ENTRY_TYPE_PREPARED_STATEMENT: {value: 5}
+      CATALOG_ENTRY_TYPE_SEQUENCE: {value: 6}
+      CATALOG_ENTRY_TYPE_COLLATION: {value: 7}
+      CATALOG_ENTRY_TYPE_TYPE: {value: 8}
+      CATALOG_ENTRY_TYPE_DATABASE: {value: 9}

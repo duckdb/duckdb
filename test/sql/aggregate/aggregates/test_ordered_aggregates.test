@@ -195,20 +195,20 @@ endloop
 # Named arguments combined with WITHIN GROUP ordered-set aggregates.
 # The ORDER BY expression is injected as the leading positional argument; a named argument for the remaining (fraction)
 # parameter must still resolve to the same result as positional.
-# (quantile/percentile parameters are currently auto-named col/col1.)
+# (the quantile/percentile fraction parameter is named "quantile".)
 
 query I
-SELECT percentile_cont(col1 := 0.5) WITHIN GROUP (ORDER BY i) FROM generate_series(0,100) tbl(i);
+SELECT percentile_cont(quantile := 0.5) WITHIN GROUP (ORDER BY i) FROM generate_series(0,100) tbl(i);
 ----
 50.0
 
 query I
-SELECT percentile_disc(col1 := 0.25) WITHIN GROUP (ORDER BY i DESC) FROM generate_series(0,100) tbl(i);
+SELECT percentile_disc(quantile := 0.25) WITHIN GROUP (ORDER BY i DESC) FROM generate_series(0,100) tbl(i);
 ----
 75
 
 query I
-SELECT percentile_cont(col1 := [0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY i) FROM generate_series(0,100) tbl(i);
+SELECT percentile_cont(quantile := [0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY i) FROM generate_series(0,100) tbl(i);
 ----
 [25.0, 50.0, 75.0]
 

@@ -28,18 +28,34 @@
   {
     "class": "WALDropTable",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "name",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyName()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
+      },
+      {
+        "id": 103,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },
@@ -324,18 +340,34 @@
   {
     "class": "WALUseTable",
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (result.qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(table));",
+      "}"
+    ],
     "members": [
       {
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacySchema()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
       },
       {
         "id": 102,
         "name": "table",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_property": "LegacyTable()",
+        "serialize_until": "v2.0.0",
+        "deserialize_skip_assign": true
+      },
+      {
+        "id": 103,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   }

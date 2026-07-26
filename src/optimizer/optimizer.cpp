@@ -13,6 +13,7 @@
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
+#include "duckdb/optimizer/distinct_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
@@ -78,7 +79,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<MoveUnaryMinusRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<MonotonePreimageRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<LeftToPrefixRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<StringPrefixRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<InstrPrefixRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<OrderedAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctWindowedOptimizer>(rewriter));
@@ -92,6 +94,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ContainsToInClauseRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<NotComparisonSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<NotConjunctionSimplificationRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -246,10 +249,16 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = deliminator.Optimize(std::move(plan));
 	});
 
-	// rewrite aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into a cascade of aggregations
+	// rewrite aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into explicit aggregate plans
 	RunOptimizer(OptimizerType::GROUPING_SETS, [&]() {
 		GroupingSetsOptimizer grouping_sets_optimizer(*this);
 		grouping_sets_optimizer.VisitOperator(plan);
+	});
+
+	// rewrite eligible DISTINCT aggregates into explicit aggregate plans
+	RunOptimizer(OptimizerType::DISTINCT_AGGREGATE_REWRITE, [&]() {
+		DistinctAggregateRewriter distinct_aggregate_rewriter(*this);
+		distinct_aggregate_rewriter.VisitOperator(plan);
 	});
 
 	// try to inline CTEs instead of materialization

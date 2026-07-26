@@ -55,6 +55,11 @@ public:
 		return nullptr;
 	}
 
+	//! The full path of this schema (its parent chain outermost first, ending with this schema's own name)
+	vector<Identifier> GetSchemaPath() const;
+	//! The fully qualified name of an entry in this schema: [catalog, schema path..., entry_name]
+	QualifiedName GetQualifiedName(const Identifier &entry_name) const;
+
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	virtual void Scan(ClientContext &context, CatalogType type,
 	                  const std::function<void(CatalogEntry &)> &callback) = 0;

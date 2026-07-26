@@ -176,12 +176,16 @@ void QueryGraphManager::GetEquivalenceBinding(const Expression &expression, Colu
 		binding = ColumnBinding(TableIndex(entry->second.index), colref.Binding().column_index);
 		return;
 	}
-	case ExpressionClass::BOUND_CAST: {
-		auto &cast = expression.Cast<BoundCastExpression>();
-		if (cast.IsTryCast() || !BoundCastExpression::CastIsInvertible(cast.source_type(), cast.GetReturnType())) {
+	case ExpressionClass::BOUND_FUNCTION: {
+		if (!BoundCastExpression::IsCast(expression)) {
 			return;
 		}
-		GetEquivalenceBinding(cast.Child(), binding);
+		auto &cast = expression.Cast<BoundFunctionExpression>();
+		if (BoundCastExpression::IsTryCast(cast) ||
+		    !BoundCastExpression::CastIsInvertible(BoundCastExpression::SourceType(cast), cast.GetReturnType())) {
+			return;
+		}
+		GetEquivalenceBinding(BoundCastExpression::Child(cast), binding);
 		return;
 	}
 	default:
@@ -211,6 +215,12 @@ static bool RelationSetsEqual(JoinRelationSet &left, JoinRelationSet &right) {
 
 void QueryGraphManager::BindFilterEndpoints() {
 	for (auto &filter_info : filters_and_bindings) {
+		if (filter_info->must_remain_filter) {
+			D_ASSERT(filter_info->from_logical_filter);
+			D_ASSERT(!filter_info->left_set);
+			D_ASSERT(!filter_info->right_set);
+			continue;
+		}
 		auto &filter = filter_info->filter;
 		// now check if it can be used as a join predicate
 		if (BoundComparisonExpression::IsComparison(*filter)) {

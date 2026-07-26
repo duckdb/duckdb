@@ -38,6 +38,8 @@ HTTPHeaders::HTTPHeaders(DatabaseInstance &db) {
 	headers.insert({"User-Agent", StringUtil::Format("%s %s", db.config.UserAgent(), DuckDB::SourceID())});
 }
 
+HTTPHeaders::~HTTPHeaders() = default;
+
 void HTTPHeaders::Insert(string key, string value) {
 	headers.insert(make_pair(std::move(key), std::move(value)));
 }
@@ -74,6 +76,8 @@ unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 
 HTTPResponse::HTTPResponse(HTTPStatusCode code) : status(code) {
 }
+
+HTTPResponse::~HTTPResponse() = default;
 
 bool HTTPResponse::HasHeader(const string &key) const {
 	return headers.HasHeader(key);
@@ -142,6 +146,15 @@ BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders 
     : type(type), url(url), headers(MergeHeaders(headers, params)), params(params) {
 	HTTPUtil::DecomposeURL(url, path, proto_host_port);
 }
+
+// Out-of-line destructors: force the symbols to be emitted and exported from the main WASM module so
+// loadable side-module extensions (e.g. the aws/httpfs extensions) can link against them at load time.
+BaseRequest::~BaseRequest() = default;
+GetRequestInfo::~GetRequestInfo() = default;
+PutRequestInfo::~PutRequestInfo() = default;
+HeadRequestInfo::~HeadRequestInfo() = default;
+DeleteRequestInfo::~DeleteRequestInfo() = default;
+PostRequestInfo::~PostRequestInfo() = default;
 
 #ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
 class HTTPLibClient : public HTTPClient {

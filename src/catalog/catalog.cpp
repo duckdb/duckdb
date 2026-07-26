@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -148,8 +149,17 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
-	auto &schema = GetSchema(transaction, info.base->GetQualifiedName().Schema());
-	return CreateTable(transaction, schema, info);
+	auto &qname = info.base->GetQualifiedName();
+	auto &path = qname.Path();
+	optional_ptr<SchemaCatalogEntry> schema;
+	if (path.size() > 3) {
+		// nested table ([catalog, schema_path..., name]): navigate the (nested) schema path
+		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+		schema = GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
+	} else {
+		schema = GetSchema(transaction, qname.Schema());
+	}
+	return CreateTable(transaction, *schema, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -389,6 +399,10 @@ struct CatalogLookup {
 	    : catalog(catalog),
 	      lookup_info(lookup_p, QualifiedName(catalog.GetName(), std::move(schema_p), lookup_p.GetEntryIdentifier())) {
 	}
+	//! Look the entry up in the given catalog, keeping the lookup's qualification as-is. Used for nested schema
+	//! paths, which cannot be expressed as a single (catalog, schema) pair.
+	CatalogLookup(Catalog &catalog, const EntryLookupInfo &lookup_p) : catalog(catalog), lookup_info(lookup_p) {
+	}
 
 	Catalog &catalog;
 	//! The lookup, with its catalog/schema qualification set to the resolved (catalog, schema) pair
@@ -454,6 +468,42 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 	CatalogEntryRetriever retriever(context);
 	EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(catalog_name, Identifier(), schema));
 	return GetSchema(retriever, schema_lookup, if_not_found);
+}
+
+static optional_ptr<SchemaCatalogEntry> NavigateNestedSchema(CatalogTransaction transaction, SchemaCatalogEntry &parent,
+                                                             const Identifier &name, OnEntryNotFound if_not_found) {
+	auto entry = parent.Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY).GetEntry(transaction, name);
+	if (!entry) {
+		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			throw CatalogException("Schema with name \"%s\" does not exist!", name.GetIdentifierName());
+		}
+		return nullptr;
+	}
+	return entry->Cast<SchemaCatalogEntry>();
+}
+
+optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const Identifier &catalog_name,
+                                                    const vector<Identifier> &schema_path,
+                                                    OnEntryNotFound if_not_found) {
+	D_ASSERT(!schema_path.empty());
+	// resolve the outermost schema (this also resolves the catalog), then navigate the nested-schema chain
+	auto schema = GetSchema(context, catalog_name, schema_path[0], if_not_found);
+	for (idx_t i = 1; schema && i < schema_path.size(); i++) {
+		schema =
+		    NavigateNestedSchema(schema->catalog.GetCatalogTransaction(context), *schema, schema_path[i], if_not_found);
+	}
+	return schema;
+}
+
+optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogTransaction transaction,
+                                                    const vector<Identifier> &schema_path,
+                                                    OnEntryNotFound if_not_found) {
+	D_ASSERT(!schema_path.empty());
+	auto schema = GetSchema(transaction, schema_path[0], if_not_found);
+	for (idx_t i = 1; schema && i < schema_path.size(); i++) {
+		schema = NavigateNestedSchema(transaction, *schema, schema_path[i], if_not_found);
+	}
+	return schema;
 }
 
 SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const Identifier &catalog_name,
@@ -834,7 +884,10 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
 		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
 	}
-	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, lookup_info.GetSchema());
+	// the (possibly nested) schema qualification is everything up to the entry name; LookupSchema resolves it
+	auto &full_path = lookup_info.GetQualifiedName().Path();
+	vector<Identifier> schema_path(full_path.begin(), full_path.end() - 1);
+	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, std::move(schema_path));
 	auto schema_entry = LookupSchema(transaction, schema_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
 		return {nullptr, nullptr, ErrorData()};
@@ -901,8 +954,24 @@ CatalogEntryLookup Catalog::TryLookupEntryAcrossCatalogs(CatalogEntryRetriever &
                                                          OnEntryNotFound if_not_found) {
 	auto &catalog = lookup_info.GetCatalog();
 	auto &schema = lookup_info.GetSchema();
-	auto entries = GetCatalogEntries(retriever, catalog, schema);
 	vector<CatalogLookup> lookups;
+	auto &lookup_path = lookup_info.GetQualifiedName().Path();
+	if (lookup_path.size() > 3) {
+		// the entry is qualified with a nested schema path ([catalog, schema path..., name]) - this is unambiguous,
+		// so we look it up directly in the given catalog instead of expanding the search path
+		optional_ptr<Catalog> catalog_entry;
+		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+			catalog_entry = Catalog::GetCatalogEntry(retriever, lookup_path.front());
+		} else {
+			catalog_entry = &Catalog::GetCatalog(retriever, lookup_path.front());
+		}
+		if (!catalog_entry) {
+			return {nullptr, nullptr, ErrorData()};
+		}
+		lookups.emplace_back(*catalog_entry, lookup_info);
+		return TryLookupEntry(retriever, lookups, lookup_info, if_not_found, false);
+	}
+	auto entries = GetCatalogEntries(retriever, catalog, schema);
 	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
@@ -1027,13 +1096,20 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	// If we have a specific schema name and no schemas were found, the schema doesn't exist.
 	// Throw an error about the schema instead of the table
 	if (schemas.empty() && !lookups.empty() && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
-		auto &schema_name = lookups[0].lookup_info.GetSchema();
-		if (!IsInvalidSchema(schema_name)) {
-			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(schema_name),
-			                              lookup_info.GetErrorContext());
+		// the schema qualification is everything between the catalog and the entry name - for a nested schema this
+		// is more than one component
+		auto &lookup_path = lookups[0].lookup_info.GetQualifiedName().Path();
+		vector<string> schema_components;
+		for (idx_t i = lookup_path.size() > 2 ? 1 : 0; i + 1 < lookup_path.size(); i++) {
+			if (!lookup_path[i].empty()) {
+				schema_components.push_back(lookup_path[i].GetIdentifierName());
+			}
+		}
+		if (!schema_components.empty()) {
+			auto schema_name = StringUtil::Join(schema_components, ".");
 			string relation_name = schema_name + "." + lookup_info.GetEntryName();
 			auto except =
-			    CatalogException(schema_lookup.GetErrorContext(),
+			    CatalogException(lookup_info.GetErrorContext(),
 			                     "Table with name \"%s\" does not exist because schema \"%s\" does not exist.",
 			                     relation_name, schema_name);
 			return {nullptr, nullptr, ErrorData(except)};

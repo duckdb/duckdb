@@ -1123,7 +1123,6 @@ Bool:
     - FunctionKeyword
     - DeallocatePrepare
     - CreateRecursive
-    - ExplainAnalyze
     - WithOrWithoutOids
     - WithOids
     - WithoutOids
@@ -1620,6 +1619,7 @@ IdentifierType:
   type: "Identifier"
   by_value: false
   rules:
+    - AnalyzeKeyword
     - ColId
     - ColIdOrString
     - ColLabelOrString

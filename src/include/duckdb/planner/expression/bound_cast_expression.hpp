@@ -8,42 +8,32 @@
 
 #pragma once
 
-#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
 
-class BoundCastExpression : public Expression {
-public:
-	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_CAST;
+//! The BoundCastExpression has been moved to a function expression (the __cast scalar function).
+//! This class exists only as a set of helper methods.
+struct BoundCastExpression {
+	//! Whether or not the given expression is a bound cast (a function expression of type OPERATOR_CAST)
+	static bool IsCast(const Expression &expr);
 
-public:
-	BoundCastExpression(unique_ptr<Expression> child, LogicalType target_type, BoundCastInfo bound_cast,
-	                    bool try_cast = false);
+	//! Create a bound cast function expression around the given child using the provided bound cast
+	static unique_ptr<Expression> Create(unique_ptr<Expression> child, const LogicalType &target_type,
+	                                     BoundCastInfo bound_cast, bool try_cast = false);
 
-public:
-	const LogicalType &TargetType() const {
-		return return_type;
-	}
-	const Expression &Child() const {
-		return *child;
-	}
-	unique_ptr<Expression> &ChildMutable() {
-		return child;
-	}
-	bool IsTryCast() const {
-		return try_cast;
-	}
-	const BoundCastInfo &GetBoundCast() const {
-		return bound_cast;
-	}
-	BoundCastInfo &GetBoundCastMutable() {
-		return bound_cast;
-	}
-	LogicalType source_type() const { // NOLINT: allow casing for legacy reasons
-		D_ASSERT(child->GetReturnType().IsValid());
-		return child->GetReturnType();
-	}
+	//! The expression that is being cast
+	static const Expression &Child(const BoundFunctionExpression &cast_expr);
+	static unique_ptr<Expression> &ChildMutable(BoundFunctionExpression &cast_expr);
+	//! The type the expression is cast to (equal to the return type of the expression)
+	static const LogicalType &TargetType(const BoundFunctionExpression &cast_expr);
+	//! The type of the cast source (equal to the return type of the child)
+	static LogicalType SourceType(const BoundFunctionExpression &cast_expr);
+	//! Whether or not this is a try_cast (cast failures become NULL instead of throwing an error)
+	static bool IsTryCast(const BoundFunctionExpression &cast_expr);
+	static const BoundCastInfo &GetBoundCast(const BoundFunctionExpression &cast_expr);
+	static BoundCastInfo &GetBoundCastMutable(BoundFunctionExpression &cast_expr);
 
 	//! Cast an expression to the specified SQL type, using only the built-in SQL casts
 	static unique_ptr<Expression> AddDefaultCastToType(unique_ptr<Expression> expr, const LogicalType &target_type,
@@ -59,26 +49,7 @@ public:
 	//! boolean casts, because that can be e.g. -1 -> TRUE -> 1. This is necessary to prevent some optimizer bugs.
 	static bool CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type);
 
-	string ToString() const override;
-
-	bool Equals(const BaseExpression &other) const override;
-
-	unique_ptr<Expression> Copy() const override;
-
-	bool CanThrow() const override;
-
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
-
-private:
-	BoundCastExpression(ClientContext &context, unique_ptr<Expression> child, LogicalType target_type);
-
-private:
-	//! The child type
-	unique_ptr<Expression> child;
-	//! Whether to use try_cast or not. try_cast converts cast failures into NULLs instead of throwing an error.
-	bool try_cast;
-	//! The bound cast info
-	BoundCastInfo bound_cast;
+	//! Returns true if a cast from source_type to target_type can throw a runtime error
+	static bool CastCanThrow(const LogicalType &source_type, const LogicalType &target_type, bool try_cast);
 };
 } // namespace duckdb

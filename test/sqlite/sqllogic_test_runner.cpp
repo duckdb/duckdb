@@ -786,11 +786,6 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 		return;
 	}
 
-	idx_t skip_level = 0;
-	bool test_expr_executed = false;
-	bool file_tags_expr_seen = false;
-	vector<string> file_tags; // gets both implicit and file-spec'd
-
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
 	if (script.find("test/sqlite/select") != string::npos) {
@@ -816,6 +811,34 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
+
+	auto init_sqllogic = test_config.GetInitSqllogic();
+	if (!init_sqllogic.empty()) {
+		SQLLogicParser init_parser;
+		if (!init_parser.OpenFile(init_sqllogic)) {
+			FAIL("Could not find init_sqllogic '" + init_sqllogic + "'");
+		}
+		ExecuteScript(init_parser, script);
+	}
+
+	ExecuteScript(parser, script);
+
+	auto cleanup_sqllogic = test_config.GetCleanupSqllogic();
+	if (!cleanup_sqllogic.empty()) {
+		SQLLogicParser cleanup_parser;
+		if (!cleanup_parser.OpenFile(cleanup_sqllogic)) {
+			FAIL("Could not find cleanup_sqllogic '" + cleanup_sqllogic + "'");
+		}
+		ExecuteScript(cleanup_parser, script);
+	}
+}
+
+void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &script) {
+	auto &test_config = TestConfiguration::Get();
+	idx_t skip_level = 0;
+	bool test_expr_executed = false;
+	bool file_tags_expr_seen = false;
+	vector<string> file_tags; // gets both implicit and file-spec'd
 
 	if (StringUtil::EndsWith(script, ".test_slow")) {
 		file_tags.emplace_back("slow");

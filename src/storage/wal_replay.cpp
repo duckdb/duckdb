@@ -727,7 +727,11 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 	}
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto &schema = catalog.GetSchema(context, info->GetQualifiedName().Schema());
+	// the qualified name is [catalog, schema_path..., name] - navigate the (possibly nested) schema path
+	auto &path = info->GetQualifiedName().Path();
+	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	auto &schema =
+	    *catalog.GetSchema(catalog.GetCatalogTransaction(context), schema_path, OnEntryNotFound::THROW_EXCEPTION);
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);
@@ -738,7 +742,16 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
+	// build the DropInfo path [catalog, schema_path..., name]; the qualified name's path is [schema_path..., name]
+	// (older WALs that only stored the immediate schema + table name are folded into it during deserialization)
+	vector<Identifier> path;
+	path.push_back(catalog.GetName());
+	for (auto &component : entry.qualified_name.Path()) {
+		path.push_back(component);
+	}
+	Identifier table_name = std::move(path.back());
+	path.pop_back();
+	info.SetQualifiedName(QualifiedName(std::move(path), std::move(table_name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1156,8 +1169,13 @@ void WriteAheadLogDeserializer::ReplayUseTable() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	state.current_table = &catalog.GetEntry<DuckTableEntry>(
-	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.table)));
+	// the qualified name holds the (possibly nested) schema path followed by the table name - prepend the catalog
+	auto path = entry.qualified_name.Path();
+	auto table_name = std::move(path.back());
+	path.pop_back();
+	path.insert(path.begin(), catalog.GetName());
+	state.current_table =
+	    &catalog.GetEntry<DuckTableEntry>(context, QualifiedName(std::move(path), std::move(table_name)));
 }
 
 void WriteAheadLogDeserializer::ReplayInsert() {
@@ -1223,7 +1241,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			for (auto &index : indexes.Indexes()) {
 				if (!index.IsBound()) {
 					auto &unbound_index = index.Cast<UnboundIndex>();
-					unbound_index.BufferChunk(chunk, row_id_vector, column_ids, BufferedIndexReplay::INSERT_ENTRY);
+					unbound_index.BufferChunk(chunk, row_id_vector, BufferedIndexReplay::INSERT_ENTRY);
 					continue;
 				}
 				auto &bound_index = index.Cast<BoundIndex>();

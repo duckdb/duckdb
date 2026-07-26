@@ -29,7 +29,7 @@ then
 fi
 
 # download IANA and copy the latest Time Zone Data
-tz_version=2026b
+tz_version=2026c
 rm -rf icu-data
 git clone git@github.com:unicode-org/icu-data.git || true
 cp icu-data/tzdata/icunew/${tz_version}/44/*.txt ${data_path/version/$code_version}/misc

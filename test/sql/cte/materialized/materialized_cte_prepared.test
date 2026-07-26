@@ -4,6 +4,51 @@
 
 require no_alternative_verify
 
+# Prepared plans reuse the physical CTE/exchange while rebuilding pipeline objects.
+statement ok
+PREPARE direct_fanout_cte AS
+WITH c AS MATERIALIZED (SELECT i FROM range(1000) t(i))
+SELECT count(*) FROM c;
+
+loop i 0 20
+
+query I
+EXECUTE direct_fanout_cte
+----
+1000
+
+endloop
+
+# Prepared exchanges release their queue, shared spool, and pooled chunks after execution.
+statement ok
+SET threads=8
+
+statement ok
+SET memory_limit='128MB'
+
+statement ok
+PREPARE buffered_fanout_cte AS
+WITH c AS MATERIALIZED (
+  SELECT i, repeat('x', 512) AS payload
+  FROM range(150000) t(i)
+)
+SELECT (SELECT sum(length(payload)) FROM c),
+       (SELECT length(payload) FROM c LIMIT 1),
+       (SELECT length(payload) FROM c LIMIT 1 OFFSET 100000);
+
+query III
+EXECUTE buffered_fanout_cte
+----
+76800000	512	512
+
+query IT rowsort
+SELECT memory_usage_bytes, tag
+FROM duckdb_memory()
+WHERE tag IN ('ALLOCATOR', 'IN_MEMORY_TABLE')
+----
+0	ALLOCATOR
+0	IN_MEMORY_TABLE
+
 statement ok
 create table a(i integer);
 

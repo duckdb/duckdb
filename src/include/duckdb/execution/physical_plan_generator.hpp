@@ -21,6 +21,7 @@
 namespace duckdb {
 class ClientContext;
 class ColumnDataCollection;
+class PipelineBroadcastExchange;
 
 class PhysicalPlan {
 public:
@@ -74,12 +75,16 @@ public:
 	//! Recursive CTEs require at least one ChunkScan, referencing the working_table.
 	//! This data structure is used to establish it.
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recursive_cte_tables;
+	//! Materialized CTEs that are executed through a streaming exchange
+	unordered_map<TableIndex, shared_ptr<PipelineBroadcastExchange>> materialized_cte_exchanges;
 	//! Used to reference the recurring tables
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
 	//! Materialized CTE ids must be collected.
 	unordered_map<TableIndex, vector<const_reference<PhysicalOperator>>> materialized_ctes;
 	//! The index for duplicate eliminated joins.
 	idx_t delim_index = 0;
+	//! Tracks whether we are planning the recursive member of a recursive CTE.
+	idx_t planning_recursive_cte_depth = 0;
 
 public:
 	//! Creates and returns the physical plan from the logical operator.

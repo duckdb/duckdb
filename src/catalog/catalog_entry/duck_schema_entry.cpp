@@ -120,8 +120,6 @@ unique_ptr<CreateInfo> DuckSchemaEntry::GetInfo() const {
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {
 	LogicalDependencyList dependencies;
-	// the nested schema depends on its parent schema, so DROP SCHEMA on the parent is blocked (RESTRICT) or
-	// cascades through the dependency manager - just like the schema's other contents
 	dependencies.AddDependency(*this);
 	auto entry = make_uniq<DuckSchemaEntry>(catalog, info, *this);
 	auto result = entry.get();

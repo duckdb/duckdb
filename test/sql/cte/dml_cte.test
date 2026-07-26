@@ -5,6 +5,57 @@
 statement ok
 CREATE TABLE t (i INTEGER, j INTEGER);
 
+statement ok
+CREATE TABLE dml_exchange_t (i INTEGER);
+
+query I
+WITH ins AS MATERIALIZED (
+    INSERT INTO dml_exchange_t SELECT i::INTEGER FROM range(10000) tbl(i) RETURNING i
+)
+SELECT * FROM ins LIMIT 5;
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT count(*) FROM dml_exchange_t;
+----
+10000
+
+query II
+EXPLAIN WITH ins AS MATERIALIZED (
+    INSERT INTO dml_exchange_t SELECT i::INTEGER FROM range(3) tbl(i) RETURNING i
+)
+SELECT * FROM ins LIMIT 1;
+----
+physical_plan	<REGEX>:.*PIPELINE_DEPENDENT.*Run To Completion.*true.*CTE( Scan|_SCAN).*
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+TRUNCATE dml_exchange_t;
+
+query II
+WITH ins AS MATERIALIZED (
+    INSERT INTO dml_exchange_t SELECT i::INTEGER FROM range(10000) tbl(i) RETURNING i
+)
+SELECT (SELECT count(*) FROM (SELECT * FROM ins LIMIT 1)),
+       (SELECT count(*) FROM (SELECT * FROM ins LIMIT 1));
+----
+1	1
+
+query I
+SELECT count(*) FROM dml_exchange_t;
+----
+10000
+
+statement ok
+PRAGMA threads=4
+
 # Basic INSERT CTE with RETURNING
 query I rowsort
 WITH ins AS (

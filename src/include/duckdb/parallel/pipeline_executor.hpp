@@ -64,6 +64,10 @@ public:
 	//! Execute a pipeline with a source and a sink until finished, or until max_chunks were processed from the source
 	//! Returns true if execution is finished, false if Execute should be called again
 	PipelineExecuteResult Execute(idx_t max_chunks);
+	//! Pushes a chunk from an external producer through this pipeline into the sink
+	PipelineExecuteResult PushExternal(DataChunk &input);
+	//! Finalizes an externally-fed pipeline executor after the producer is exhausted
+	PipelineExecuteResult FinishExternal();
 
 	//! Called after depleting the source: finalizes the execution of this pipeline executor
 	//! This should only be called once per PipelineExecutor.
@@ -87,8 +91,13 @@ public:
 	void Reset();
 	//! Prepare the executor for another execution, skipping Reset() on the very first run.
 	void PrepareForExecution();
+	//! Whether this executor stopped consuming input early
+	bool IsFinishedProcessing() const;
 
 private:
+	enum class PipelineInputChunkMode : uint8_t { PUSH_INPUT, RESUME_INPUT };
+	enum class SourceFinishNotificationState : uint8_t { PENDING, SENT };
+
 	//! The pipeline to process
 	Pipeline &pipeline;
 	//! The thread context of this executor
@@ -101,6 +110,8 @@ private:
 	//! Intermediate states for the operators
 	vector<unique_ptr<OperatorState>> intermediate_states;
 
+	//! The global source state used by this executor
+	shared_ptr<GlobalSourceState> global_source_state;
 	//! The local source state
 	unique_ptr<LocalSourceState> local_source_state;
 	//! The local sink state (if any)
@@ -132,6 +143,8 @@ private:
 
 	//! Whether FinishSource has already been called (so FinalizeSource is skipped in PushFinalize)
 	bool source_profiling_finalized = false;
+	//! Whether the source has been told this executor will not fetch more input
+	SourceFinishNotificationState source_finish_notification_state = SourceFinishNotificationState::PENDING;
 
 	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
@@ -156,13 +169,16 @@ private:
 	SourceResultType FetchFromSource(DataChunk &result);
 
 	void FinishProcessing(int32_t operator_idx = -1);
-	bool IsFinished();
+	void NotifySourceFinished();
+	bool IsFinished() const;
 
 	//! Wrappers for sink/source calls to respective operators
 	SourceResultType GetData(DataChunk &chunk, OperatorSourceInput &input);
 	SinkResultType Sink(DataChunk &chunk, OperatorSinkInput &input);
 
 	OperatorResultType ExecutePushInternal(DataChunk &input, ExecutionBudget &chunk_budget, idx_t initial_idx = 0);
+	PipelineExecuteResult PushInputChunk(DataChunk &input, ExecutionBudget &chunk_budget, PipelineInputChunkMode mode);
+	PipelineExecuteResult FlushAndFinalize(ExecutionBudget &chunk_budget);
 	//! Pushes a chunk through the pipeline and returns a single result chunk
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);

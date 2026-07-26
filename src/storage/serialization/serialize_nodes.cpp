@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"

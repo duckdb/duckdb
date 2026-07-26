@@ -8,6 +8,8 @@
       "paths": [
         "test/sql/catalog/nested_schema/create_nested_schema.test",
         "test/sql/catalog/nested_schema/drop_nested_schema.test",
+        "test/sql/catalog/nested_schema/nested_table.test",
+        "test/sql/catalog/nested_schema/nested_table_dml.test",
         "test/sql/show_select/test_describe_all.test",
         "test/sql/catalog/function/attached_macro.test",
         "test/sql/catalog/test_temporary.test",
@@ -42,6 +44,8 @@
       "reason": "Measures memory usage.",
       "paths": [
         "test/sql/delete/in_memory_bulk_delete.test_slow",
+        "test/sql/delete/bulk_delete_version_info_memory.test",
+        "test/sql/delete/piecemeal_delete_checkpoint_compress.test_slow",
         "test/sql/pragma/profiling/test_custom_profiling_memory_and_temp_dir.test_slow",
         "test/sql/index/art/vacuum/test_art_vacuum_strings.test_slow",
         "test/sql/index/art/vacuum/test_art_vacuum_integers.test_slow"
