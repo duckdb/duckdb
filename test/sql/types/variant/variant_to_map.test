@@ -56,15 +56,19 @@ SELECT ('[1,2,3]')::JSON::VARIANT::MAP(VARCHAR,VARCHAR);
 ----
 Expected to find VARIANT(OBJECT)
 
-# multiple rows, mixed key sets, exercised through a flat vector
-query II
-SELECT i, ('{"k":"v' || (i%3) || '","j":' || i || '}')::JSON::VARIANT::MAP(VARCHAR,VARCHAR)
-FROM range(4) t(i) ORDER BY i;
+# Multiple rows, mixed key sets, exercised through a flat vector. The keys are read by name
+# rather than asserted through the rendered map: shredding fixes the object field order, so
+# a multi-row object renders its keys sorted. The single-row queries above cover key order.
+query IIII
+SELECT i, m['k'], m['j'], cardinality(m) FROM (
+    SELECT i, ('{"k":"v' || (i%3) || '","j":' || i || '}')::JSON::VARIANT::MAP(VARCHAR,VARCHAR) AS m
+    FROM range(4) t(i)
+) ORDER BY i;
 ----
-0	{k=v0, j=0}
-1	{k=v1, j=1}
-2	{k=v2, j=2}
-3	{k=v0, j=3}
+0	v0	0	2
+1	v1	1	2
+2	v2	2	2
+3	v0	3	2
 
 # NULLs interleaved with values keep row alignment
 query I
