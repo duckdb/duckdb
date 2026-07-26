@@ -2,6 +2,8 @@
 # description: Test casting VARIANT(OBJECT) to MAP
 # group: [variant]
 
+require json
+
 # A variant OBJECT converts to MAP directly. This used to fall through to the row-at-a-time
 # Value fallback in CastVariant, which was ~40x slower than the equivalent STRUCT cast.
 

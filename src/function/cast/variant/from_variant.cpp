@@ -352,7 +352,7 @@ static bool ConvertVariantToMap(FromVariantConversionData &conversion_data, Vect
 	ListVector::Reserve(result, total_offset + total_children);
 	auto &keys = MapVector::GetKeys(result);
 	auto &values = MapVector::GetValues(result);
-	auto list_data = ListVector::GetData(result);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto key_data = FlatVector::GetDataMutable<string_t>(keys);
 
 	for (idx_t i = 0; i < count; i++) {
