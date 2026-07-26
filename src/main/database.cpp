@@ -50,6 +50,12 @@
 
 namespace duckdb {
 
+DatabaseMemoryManagerOptions::DatabaseMemoryManagerOptions() {
+}
+
+DatabaseMemoryManagerOptions::~DatabaseMemoryManagerOptions() {
+}
+
 DatabaseMemoryManager::DatabaseMemoryManager(unique_ptr<Allocator> allocator_p,
                                              unique_ptr<BlockAllocator> block_allocator_p, idx_t maximum_memory,
                                              bool track_eviction_timestamps,
@@ -74,9 +80,14 @@ DatabaseMemoryManager::~DatabaseMemoryManager() {
 	Allocator::SetBackgroundThreads(false);
 }
 
-shared_ptr<DatabaseMemoryManager> DatabaseMemoryManager::Create(unique_ptr<Allocator> allocator,
-                                                                unique_ptr<BlockAllocator> block_allocator,
+shared_ptr<DatabaseMemoryManager> DatabaseMemoryManager::Create(unique_ptr<DatabaseMemoryManagerOptions> options,
                                                                 DBConfig &config) {
+	unique_ptr<Allocator> allocator;
+	unique_ptr<BlockAllocator> block_allocator;
+	if (options) {
+		allocator = std::move(options->allocator);
+		block_allocator = std::move(options->block_allocator);
+	}
 	if (!allocator) {
 		allocator = make_uniq<Allocator>();
 	}
@@ -613,8 +624,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.error_manager = make_uniq<ErrorManager>();
 	}
 	if (!config.memory_manager) {
-		config.memory_manager = DatabaseMemoryManager::Create(std::move(new_config.allocator),
-		                                                      std::move(new_config.block_allocator), config);
+		config.memory_manager = DatabaseMemoryManager::Create(std::move(new_config.memory_manager_options), config);
 	}
 	config.db_cache_entry = std::move(new_config.db_cache_entry);
 	config.path_manager = std::move(new_config.path_manager);
@@ -622,11 +632,32 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 
 void DBConfig::ShareMemoryWith(DatabaseInstance &db) {
 	auto &source = DBConfig::GetConfig(db);
+	memory_manager_options.reset();
 	memory_manager = db.GetMemoryManager();
 	options.maximum_memory = source.options.maximum_memory;
 	options.block_allocator_size = source.options.block_allocator_size;
 	options.buffer_manager_track_eviction_timestamps = source.options.buffer_manager_track_eviction_timestamps;
 	options.allocator_bulk_deallocation_flush_threshold = source.options.allocator_bulk_deallocation_flush_threshold;
+}
+
+void DBConfig::SetAllocator(unique_ptr<Allocator> allocator) {
+	if (memory_manager) {
+		throw InvalidInputException("Cannot set a custom allocator after selecting a shared memory manager");
+	}
+	if (!memory_manager_options) {
+		memory_manager_options = make_uniq<DatabaseMemoryManagerOptions>();
+	}
+	memory_manager_options->allocator = std::move(allocator);
+}
+
+void DBConfig::SetBlockAllocator(unique_ptr<BlockAllocator> block_allocator) {
+	if (memory_manager) {
+		throw InvalidInputException("Cannot set a custom block allocator after selecting a shared memory manager");
+	}
+	if (!memory_manager_options) {
+		memory_manager_options = make_uniq<DatabaseMemoryManagerOptions>();
+	}
+	memory_manager_options->block_allocator = std::move(block_allocator);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

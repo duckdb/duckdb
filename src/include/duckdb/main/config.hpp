@@ -64,6 +64,7 @@ class ExtensionCallbackManager;
 class TypeManager;
 class DatabaseInstance;
 class DatabaseMemoryManager;
+struct DatabaseMemoryManagerOptions;
 class ObjectCache;
 
 struct CompressionFunctionSet;
@@ -179,10 +180,6 @@ public:
 	unique_ptr<FileSystem> file_system;
 	//! Secret manager
 	unique_ptr<SecretManager> secret_manager;
-	//! Optional allocator transferred to the memory manager during initialization
-	unique_ptr<Allocator> allocator;
-	//! Optional block allocator transferred to the memory manager during initialization
-	unique_ptr<BlockAllocator> block_allocator;
 	//! Database configuration options
 	DBConfigOptions options;
 	//! Error manager
@@ -283,6 +280,10 @@ public:
 	void SetDefaultTempDirectory();
 	//! Share the complete memory-management domain with an existing database instance.
 	DUCKDB_API void ShareMemoryWith(DatabaseInstance &db);
+	//! Set initialization-only ownership for a custom allocator.
+	DUCKDB_API void SetAllocator(unique_ptr<Allocator> allocator);
+	//! Set initialization-only ownership for a custom block allocator.
+	DUCKDB_API void SetBlockAllocator(unique_ptr<BlockAllocator> block_allocator);
 
 	OrderType ResolveOrder(ClientContext &context, OrderType order_type) const;
 	OrderByNullType ResolveNullOrder(ClientContext &context, OrderType order_type, OrderByNullType null_type) const;
@@ -307,6 +308,7 @@ public:
 	HTTPUtil &GetHTTPUtil() const;
 
 private:
+	unique_ptr<DatabaseMemoryManagerOptions> memory_manager_options;
 	mutable mutex config_lock;
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
