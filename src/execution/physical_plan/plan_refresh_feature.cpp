@@ -6,8 +6,9 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRefreshFeature &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &refresh = Make<PhysicalRefreshFeature>(std::move(op.feature_name), std::move(op.result_names),
-	                                             std::move(op.result_types), op.estimated_cardinality);
+	auto &refresh =
+	    Make<PhysicalRefreshFeature>(std::move(op.feature_name), std::move(op.result_names), std::move(op.result_types),
+	                                 op.feature_timestamp, op.estimated_cardinality);
 	auto &plan = CreatePlan(*op.children[0]);
 	refresh.children.push_back(plan);
 	return refresh;

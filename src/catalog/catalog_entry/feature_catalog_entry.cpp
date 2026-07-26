@@ -46,9 +46,26 @@ unique_ptr<CatalogEntry> FeatureCatalogEntry::AlterEntry(CatalogTransaction tran
 	auto create_info = GetInfo();
 	auto &cast_info = create_info->Cast<CreateFeatureInfo>();
 	switch (feature_info.alter_feature_type) {
-	case AlterFeatureType::BUMP_VERSION:
+	case AlterFeatureType::BUMP_VERSION: {
 		cast_info.current_version = feature_info.new_version;
+		// Record the new snapshot in the retained version map, then drop the versions this refresh's GC
+		// evicted from the store. The cutoff mirrors PhysicalRefreshFeature's eviction cutoff exactly, so the
+		// map never advertises a version whose rows are gone.
+		cast_info.retained_version_numbers.push_back(feature_info.new_version);
+		cast_info.retained_version_timestamps_micros.push_back(feature_info.snapshot_timestamp_micros);
+		const int64_t cutoff = feature_info.new_version - retain_versions;
+		vector<int64_t> kept_versions;
+		vector<int64_t> kept_timestamps;
+		for (idx_t i = 0; i < cast_info.retained_version_numbers.size(); i++) {
+			if (cast_info.retained_version_numbers[i] > cutoff) {
+				kept_versions.push_back(cast_info.retained_version_numbers[i]);
+				kept_timestamps.push_back(cast_info.retained_version_timestamps_micros[i]);
+			}
+		}
+		cast_info.retained_version_numbers = std::move(kept_versions);
+		cast_info.retained_version_timestamps_micros = std::move(kept_timestamps);
 		break;
+	}
 	case AlterFeatureType::SET_SCHEDULE:
 		cast_info.has_schedule = true;
 		cast_info.schedule_interval = feature_info.schedule_interval;

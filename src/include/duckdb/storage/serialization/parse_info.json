@@ -371,6 +371,12 @@
         "name": "ttl_interval",
         "type": "interval_t",
         "default": "interval_t()"
+      },
+      {
+        "id": 304,
+        "name": "snapshot_timestamp_micros",
+        "type": "int64_t",
+        "default": "0"
       }
     ]
   },

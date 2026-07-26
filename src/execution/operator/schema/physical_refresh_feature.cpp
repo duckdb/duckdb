@@ -249,7 +249,7 @@ SourceResultType PhysicalRefreshFeature::GetDataInternal(ExecutionContext &conte
 	// Bump the feature's current version through the catalog so it is recorded transactionally (WAL /
 	// checkpoint) and commits atomically with the appended snapshot and the eviction.
 	AlterEntryData alter_data(gstate.catalog_name, gstate.schema_name, feature_name, OnEntryNotFound::THROW_EXCEPTION);
-	AlterFeatureInfo alter_info(std::move(alter_data), gstate.new_version);
+	AlterFeatureInfo alter_info(std::move(alter_data), gstate.new_version, feature_timestamp);
 	catalog.Alter(context.client, alter_info);
 
 	chunk.SetCardinality(1);

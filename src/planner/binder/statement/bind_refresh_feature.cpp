@@ -99,6 +99,7 @@ BoundStatement Binder::Bind(RefreshFeatureStatement &stmt) {
 	auto refresh_node = make_uniq<LogicalRefreshFeature>(stmt.feature_name);
 	refresh_node->result_names = query_obj.names;
 	refresh_node->result_types = query_obj.types;
+	refresh_node->feature_timestamp = feature_ts;
 	refresh_node->children.push_back(std::move(query_obj.plan));
 	result.plan = std::move(refresh_node);
 

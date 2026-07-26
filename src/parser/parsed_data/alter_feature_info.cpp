@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-AlterFeatureInfo::AlterFeatureInfo(AlterEntryData data, int64_t new_version)
+AlterFeatureInfo::AlterFeatureInfo(AlterEntryData data, int64_t new_version, timestamp_t snapshot_timestamp)
     : AlterInfo(AlterType::ALTER_FEATURE, std::move(data.catalog), std::move(data.schema), std::move(data.name),
                 data.if_not_found),
       alter_feature_type(AlterFeatureType::BUMP_VERSION), new_version(new_version), schedule_interval({0, 0, 0}),
-      ttl_interval({0, 0, 0}) {
+      ttl_interval({0, 0, 0}), snapshot_timestamp_micros(snapshot_timestamp.value) {
 }
 
 AlterFeatureInfo::AlterFeatureInfo(AlterEntryData data, AlterFeatureType type, interval_t interval)
@@ -16,12 +16,12 @@ AlterFeatureInfo::AlterFeatureInfo(AlterEntryData data, AlterFeatureType type, i
                 data.if_not_found),
       alter_feature_type(type), new_version(0),
       schedule_interval(type == AlterFeatureType::SET_TTL ? interval_t {0, 0, 0} : interval),
-      ttl_interval(type == AlterFeatureType::SET_TTL ? interval : interval_t {0, 0, 0}) {
+      ttl_interval(type == AlterFeatureType::SET_TTL ? interval : interval_t {0, 0, 0}), snapshot_timestamp_micros(0) {
 }
 
 AlterFeatureInfo::AlterFeatureInfo()
     : AlterInfo(AlterType::ALTER_FEATURE), alter_feature_type(AlterFeatureType::INVALID), new_version(0),
-      schedule_interval({0, 0, 0}), ttl_interval({0, 0, 0}) {
+      schedule_interval({0, 0, 0}), ttl_interval({0, 0, 0}), snapshot_timestamp_micros(0) {
 }
 
 AlterFeatureInfo::~AlterFeatureInfo() {
@@ -34,7 +34,7 @@ CatalogType AlterFeatureInfo::GetCatalogType() const {
 unique_ptr<AlterInfo> AlterFeatureInfo::Copy() const {
 	unique_ptr<AlterFeatureInfo> result;
 	if (alter_feature_type == AlterFeatureType::BUMP_VERSION) {
-		result = make_uniq<AlterFeatureInfo>(GetAlterEntryData(), new_version);
+		result = make_uniq<AlterFeatureInfo>(GetAlterEntryData(), new_version, timestamp_t(snapshot_timestamp_micros));
 	} else if (alter_feature_type == AlterFeatureType::SET_TTL) {
 		result = make_uniq<AlterFeatureInfo>(GetAlterEntryData(), alter_feature_type, ttl_interval);
 	} else {

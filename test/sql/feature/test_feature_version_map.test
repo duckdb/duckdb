@@ -28,3 +28,30 @@ query TT
 SELECT retained_versions, retained_version_timestamps FROM duckdb_features() WHERE feature_name = 'vmap';
 ----
 (empty)	(empty)
+
+# First refresh records version 1 with its snapshot timestamp.
+statement ok
+REFRESH FEATURE vmap AT '2024-01-04 00:00:00';
+
+query TT
+SELECT retained_versions, retained_version_timestamps FROM duckdb_features() WHERE feature_name = 'vmap';
+----
+1	2024-01-04 00:00:00
+
+# Second refresh appends version 2.
+statement ok
+REFRESH FEATURE vmap AT '2024-01-06 00:00:00';
+
+query TT
+SELECT retained_versions, retained_version_timestamps FROM duckdb_features() WHERE feature_name = 'vmap';
+----
+1,2	2024-01-04 00:00:00,2024-01-06 00:00:00
+
+# RETAIN 2: the third refresh evicts version 1 from both the store and the map.
+statement ok
+REFRESH FEATURE vmap AT '2024-01-08 00:00:00';
+
+query TT
+SELECT retained_versions, retained_version_timestamps FROM duckdb_features() WHERE feature_name = 'vmap';
+----
+2,3	2024-01-06 00:00:00,2024-01-08 00:00:00
