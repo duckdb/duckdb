@@ -8,15 +8,15 @@
 
 #pragma once
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 
 namespace duckdb {
 
-class Allocator;
-class BlockAllocator;
 class BufferPool;
 struct DBConfig;
 class TemporaryMemoryManager;
@@ -24,8 +24,8 @@ class ObjectCache;
 
 //! Initialization-only ownership transferred into a DatabaseMemoryManager.
 struct DatabaseMemoryManagerOptions {
-	DatabaseMemoryManagerOptions();
-	~DatabaseMemoryManagerOptions();
+	DatabaseMemoryManagerOptions() = default;
+	~DatabaseMemoryManagerOptions() = default;
 
 	unique_ptr<Allocator> allocator;
 	unique_ptr<BlockAllocator> block_allocator;
