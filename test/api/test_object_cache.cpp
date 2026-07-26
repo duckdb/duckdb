@@ -4,6 +4,7 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb; // NOLINT
@@ -131,6 +132,37 @@ TEST_CASE("Database instances share isolated memory managers and object cache", 
 	auto result = connection.Query("SELECT sum(i) FROM range(10000) t(i)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->GetValue(0, 0) == Value::BIGINT(49995000));
+}
+
+TEST_CASE("Memory pressure from one database evicts another database's object cache entry",
+          "[api][object_cache][buffer_pool]") {
+	DuckDB first;
+	DBConfig second_config;
+	second_config.ShareMemoryWith(*first.instance);
+	DuckDB second(nullptr, &second_config);
+
+	auto &cache = first.instance->GetObjectCache();
+	auto &buffer_pool = first.instance->GetBufferPool();
+	auto &second_buffer_manager = second.instance->GetBufferManager();
+	const auto first_context_id = first.instance->GetMemoryContextId();
+	const auto second_context_id = second.instance->GetMemoryContextId();
+	const auto initial_memory = buffer_pool.GetUsedMemory();
+
+	constexpr idx_t page_size = 1024 * 1024;
+	const auto allocation_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	buffer_pool.SetLimit(initial_memory + allocation_size * 3, "");
+
+	cache.Put(first_context_id, "first-entry", make_shared_ptr<EvictableTestObject>(1, allocation_size));
+	cache.Put(second_context_id, "second-entry", make_shared_ptr<EvictableTestObject>(2, allocation_size));
+	REQUIRE(cache.GetEntryCount() == 2);
+
+	vector<BufferHandle> second_pins;
+	second_pins.emplace_back(second_buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, true));
+	second_pins.emplace_back(second_buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, true));
+
+	REQUIRE(cache.Get<EvictableTestObject>(first_context_id, "first-entry") == nullptr);
+	REQUIRE(cache.Get<EvictableTestObject>(second_context_id, "second-entry") != nullptr);
+	REQUIRE(buffer_pool.GetUsedMemory() == initial_memory + allocation_size * 3);
 }
 
 TEST_CASE("ObjectCache drops non-evictable entries for a memory context", "[api][object_cache][buffer_pool]") {
