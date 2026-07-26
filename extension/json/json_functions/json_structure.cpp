@@ -5,6 +5,7 @@
 #include "json_executors.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -123,11 +124,12 @@ void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bo
 	if (description.type == LogicalTypeId::VARCHAR && !initialized) {
 		// We loop through the candidate types and format templates from back to front
 		if (convert_strings_to_integers) {
+			// TIMESTAMP_TZ before TIMESTAMP so back-to-front trial tries TZ first (issue #14919)
 			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::BIGINT, LogicalTypeId::TIMESTAMP,
-			                               LogicalTypeId::DATE, LogicalTypeId::TIME};
+			                               LogicalTypeId::TIMESTAMP_TZ, LogicalTypeId::DATE, LogicalTypeId::TIME};
 		} else {
-			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::TIMESTAMP, LogicalTypeId::DATE,
-			                               LogicalTypeId::TIME};
+			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::TIMESTAMP, LogicalTypeId::TIMESTAMP_TZ,
+			                               LogicalTypeId::DATE, LogicalTypeId::TIME};
 		}
 		initialized = true;
 	} else {
@@ -258,6 +260,31 @@ void JSONStructureNode::RefineCandidateTypesString(yyjson_val *vals[], const idx
 	EliminateCandidateTypes(val_count, string_vector, date_format_map);
 }
 
+static bool StringVectorHasTimezoneOffsets(const Vector &string_vector, const idx_t count) {
+	// TIMESTAMP_TZ auto-detect should only win when every non-null value carries an offset/Z.
+	// Otherwise plain timestamps would all become TIMESTAMPTZ.
+	const auto strings = FlatVector::GetData<string_t>(string_vector);
+	const auto &validity = FlatVector::Validity(string_vector);
+	bool saw_value = false;
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity.RowIsValid(i)) {
+			continue;
+		}
+		saw_value = true;
+		timestamp_t ts;
+		bool has_offset = false;
+		string_t tz(nullptr, 0);
+		auto res = Timestamp::TryConvertTimestampTZ(strings[i].GetData(), strings[i].GetSize(), ts, true, has_offset, tz);
+		if (res != TimestampCastResult::SUCCESS && res != TimestampCastResult::STRICT_UTC) {
+			return false;
+		}
+		if (!has_offset) {
+			return false;
+		}
+	}
+	return saw_value;
+}
+
 void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &string_vector,
                                                 MutableDateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
@@ -269,7 +296,24 @@ void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &s
 		}
 		const auto type = candidate_types.back();
 		Vector result_vector(type, vec_count);
-		if (date_format_map.HasFormats(type)) {
+		if (type == LogicalTypeId::TIMESTAMP_TZ) {
+			// If the user supplied a single timestamp_format, do not override it with unrestricted
+			// TIMESTAMPTZ detection (non-matching TZ strings should stay VARCHAR).
+			if (date_format_map.HasFormats(LogicalTypeId::TIMESTAMP) &&
+			    date_format_map.NumberOfFormats(LogicalTypeId::TIMESTAMP) == 1) {
+				candidate_types.pop_back();
+			} else {
+				// Only accept TIMESTAMPTZ when values actually include a timezone offset / Z
+				string error_message;
+				if (!StringVectorHasTimezoneOffsets(string_vector, vec_count) ||
+				    !VectorOperations::DefaultTryCast(string_vector, result_vector, vec_count, &error_message,
+				                                    true)) {
+					candidate_types.pop_back();
+				} else {
+					return;
+				}
+			}
+		} else if (date_format_map.HasFormats(type)) {
 			if (EliminateCandidateFormats(vec_count, string_vector, result_vector, date_format_map)) {
 				return;
 			} else {
