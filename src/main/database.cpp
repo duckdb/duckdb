@@ -182,9 +182,6 @@ DatabaseInstance::~DatabaseInstance() {
 	external_file_cache.reset();
 	result_set_manager.reset();
 
-	if (config.memory_manager) {
-		config.memory_manager->GetBufferPool().UnloadBlocks(memory_context_id);
-	}
 	buffer_manager.reset();
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();

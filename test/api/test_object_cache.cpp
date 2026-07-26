@@ -103,13 +103,12 @@ TEST_CASE("Database instances share isolated memory managers and object cache", 
 		REQUIRE(first_block->GetMemory().GetMemoryContextId() == first->instance->GetMemoryContextId());
 		REQUIRE(first_block->GetMemory().GetMemoryContextId() != second.instance->GetMemoryContextId());
 	}
-	shared_ptr<BlockHandle> first_queued_block;
 	{
 		auto &first_buffer_manager = first->instance->GetBufferManager();
 		auto first_pin = first_buffer_manager.Allocate(MemoryTag::EXTENSION, 1024, true);
-		first_queued_block = first_pin.GetBlockHandle();
+		auto first_queued_block = first_pin.GetBlockHandle();
+		REQUIRE(!first_queued_block->GetMemory().IsUnloaded());
 	}
-	REQUIRE(!first_queued_block->GetMemory().IsUnloaded());
 
 	first->instance->GetObjectCache().Put(first->instance->GetMemoryContextId(), "first-only",
 	                                      make_shared_ptr<TestObject>(42));
@@ -126,8 +125,6 @@ TEST_CASE("Database instances share isolated memory managers and object cache", 
 	REQUIRE(shared_pool.GetUsedMemory() == initial_memory + cache_entry_size * 2);
 
 	first.reset();
-	REQUIRE(first_queued_block->GetMemory().IsUnloaded());
-	first_queued_block.reset();
 
 	// Query with second database instance still works.
 	Connection connection(second);

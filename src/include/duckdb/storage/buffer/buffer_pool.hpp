@@ -72,9 +72,6 @@ public:
 
 	vector<EvictionQueueInformation> GetEvictionQueueInfo() const;
 
-	//! Unload queued blocks owned by a database instance before its BufferManager is destroyed.
-	void UnloadBlocks(MemoryContextId memory_context_id);
-
 	//! Register the memory domain's ObjectCache for eviction.
 	void RegisterObjectCache(ObjectCache &object_cache);
 	//! Stop eviction through this cache and wait for an in-progress eviction to finish.
