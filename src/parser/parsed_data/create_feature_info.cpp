@@ -29,6 +29,8 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->ttl_interval = ttl_interval;
 	result->retain_versions = retain_versions;
 	result->current_version = current_version;
+	result->retained_version_numbers = retained_version_numbers;
+	result->retained_version_timestamps_micros = retained_version_timestamps_micros;
 	result->has_schedule = has_schedule;
 	result->schedule_interval = schedule_interval;
 	result->schedule_enabled = schedule_enabled;
