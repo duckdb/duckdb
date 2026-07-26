@@ -133,6 +133,43 @@ TEST_CASE("Database instances share isolated memory managers and object cache", 
 	REQUIRE(result->GetValue(0, 0) == Value::BIGINT(49995000));
 }
 
+TEST_CASE("ObjectCache drops non-evictable entries for a memory context", "[api][object_cache][buffer_pool]") {
+	auto first = make_uniq<DuckDB>();
+	DBConfig second_config;
+	second_config.ShareMemoryWith(*first->instance);
+	DuckDB second(nullptr, &second_config);
+
+	auto &cache = first->instance->GetObjectCache();
+	auto first_context_id = first->instance->GetMemoryContextId();
+	auto second_context_id = second.instance->GetMemoryContextId();
+	constexpr idx_t obj_size = 1024 * 1024;
+
+	REQUIRE(cache.IsEmpty());
+	cache.Put(first_context_id, "first-non-evictable", make_shared_ptr<TestObject>(1));
+	cache.Put(second_context_id, "second-non-evictable", make_shared_ptr<TestObject>(2));
+	cache.Put(first_context_id, "first-evictable", make_shared_ptr<EvictableTestObject>(3, obj_size));
+
+	REQUIRE(cache.GetCurrentMemory() == obj_size);
+	REQUIRE(cache.GetEntryCount() == 3);
+
+	first.reset();
+
+	REQUIRE(cache.Get<TestObject>(first_context_id, "first-non-evictable") == nullptr);
+	REQUIRE(cache.Get<TestObject>(second_context_id, "second-non-evictable") != nullptr);
+	REQUIRE(cache.Get<EvictableTestObject>(first_context_id, "first-evictable") != nullptr);
+	REQUIRE(cache.GetCurrentMemory() == obj_size);
+	REQUIRE(cache.GetEntryCount() == 2);
+	REQUIRE(!cache.IsEmpty());
+
+	cache.DropNonEvictableEntries(second_context_id);
+	REQUIRE(cache.GetCurrentMemory() == obj_size);
+	REQUIRE(cache.GetEntryCount() == 1);
+
+	cache.Delete(first_context_id, "first-evictable");
+	REQUIRE(cache.GetCurrentMemory() == 0);
+	REQUIRE(cache.IsEmpty());
+}
+
 TEST_CASE("Test ObjectCache memory accounting", "[api][object_cache]") {
 	DuckDB db;
 	Connection con(db);

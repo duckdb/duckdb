@@ -56,6 +56,8 @@ struct CleanupBufferPool {
 	}
 };
 
+//! Object cache is shared among multiple database instances. When any of them is destroyed, its evictable entries
+//! aren't evicted aggressively. Instead, we rely on internal LRU cache to evict them.
 class ObjectCache {
 public:
 	//! Default max memory 8GiB for non-evictable cache entries.
@@ -153,6 +155,20 @@ public:
 			return;
 		}
 		lru_cache.Delete(cache_key);
+	}
+
+	void DropNonEvictableEntries(MemoryContextId context_id) {
+		const lock_guard<mutex> lock(lock_mutex);
+		const auto cache_key_prefix = MakeCacheKey(context_id, "");
+		vector<string> entries_to_delete;
+		for (auto entry = non_evictable_entries.begin(); entry != non_evictable_entries.end(); entry++) {
+			if (StringUtil::StartsWith(entry->first, cache_key_prefix)) {
+				entries_to_delete.emplace_back(entry->first);
+			}
+		}
+		for (auto &entry : entries_to_delete) {
+			non_evictable_entries.erase(entry);
+		}
 	}
 
 	//! Type-prefixed variants of the methods above. These namespace the caller-provided key with the entry's
