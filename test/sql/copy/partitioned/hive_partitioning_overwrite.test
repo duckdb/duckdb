@@ -45,3 +45,131 @@ statement error
 COPY (SELECT 84 AS part_col) TO '{TEST_DIR}/overwrite_test' (FORMAT PARQUET, PARTITION_BY (part_col), OVERWRITE 1, OVERWRITE_OR_IGNORE 1);
 ----
 OVERWRITE
+
+# === Issue #10282: multi-thread write then fewer-thread rewrite ===
+# OVERWRITE must recursively clear so orphan data_N.parquet files / partitions do not remain.
+# OVERWRITE_OR_IGNORE intentionally does NOT clear; it only clobbers same filenames.
+
+# Multi-threaded write creates multiple data_*.parquet files per partition
+statement ok
+SET threads = 4;
+
+statement ok
+COPY (
+	SELECT range % 2 AS p, range AS v
+	FROM range(100_000)
+) TO '{TEST_DIR}/mt_overwrite' (FORMAT PARQUET, PARTITION_BY (p));
+
+# Several files from parallel writers
+query I
+SELECT count(*) >= 2 FROM glob('{TEST_DIR}/mt_overwrite/**/*.parquet');
+----
+true
+
+query II
+SELECT p, count(*)
+FROM read_parquet('{TEST_DIR}/mt_overwrite/**/*.parquet', hive_partitioning = true)
+GROUP BY p
+ORDER BY p;
+----
+0	50000
+1	50000
+
+# Single-threaded rewrite of a smaller dataset with OVERWRITE: orphans must be gone
+statement ok
+SET threads = 1;
+
+statement ok
+COPY (
+	SELECT range % 2 AS p, range AS v
+	FROM range(100)
+) TO '{TEST_DIR}/mt_overwrite' (FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+# One file per partition (single thread)
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/mt_overwrite/**/*.parquet');
+----
+2
+
+query II
+SELECT p, count(*)
+FROM read_parquet('{TEST_DIR}/mt_overwrite/**/*.parquet', hive_partitioning = true)
+GROUP BY p
+ORDER BY p;
+----
+0	50
+1	50
+
+# OVERWRITE also drops partition directories that no longer appear in the data
+statement ok
+SET threads = 4;
+
+statement ok
+COPY (
+	SELECT range % 3 AS p, range AS v
+	FROM range(30_000)
+) TO '{TEST_DIR}/mt_overwrite_parts' (FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query I
+SELECT count(DISTINCT p)
+FROM read_parquet('{TEST_DIR}/mt_overwrite_parts/**/*.parquet', hive_partitioning = true);
+----
+3
+
+statement ok
+SET threads = 1;
+
+statement ok
+COPY (
+	SELECT 0 AS p, range AS v
+	FROM range(10)
+) TO '{TEST_DIR}/mt_overwrite_parts' (FORMAT PARQUET, PARTITION_BY (p), OVERWRITE);
+
+query I
+SELECT count(*) FROM glob('{TEST_DIR}/mt_overwrite_parts/**/*.parquet');
+----
+1
+
+query II
+SELECT p, count(*)
+FROM read_parquet('{TEST_DIR}/mt_overwrite_parts/**/*.parquet', hive_partitioning = true)
+GROUP BY ALL
+ORDER BY ALL;
+----
+0	10
+
+# Separate case: OVERWRITE_OR_IGNORE leaves partition dirs that the new write does not touch
+# (intentional after #12240 — use OVERWRITE for idempotent rebuilds)
+statement ok
+SET threads = 1;
+
+statement ok
+COPY (
+	SELECT range % 3 AS p, range AS v
+	FROM range(300)
+) TO '{TEMP_DIR}/or_ignore_parts' (FORMAT PARQUET, PARTITION_BY (p));
+
+query I
+SELECT count(DISTINCT p)
+FROM read_parquet('{TEMP_DIR}/or_ignore_parts/**/*.parquet', hive_partitioning = true);
+----
+3
+
+statement ok
+COPY (
+	SELECT 0 AS p, range AS v
+	FROM range(10)
+) TO '{TEMP_DIR}/or_ignore_parts' (FORMAT PARQUET, PARTITION_BY (p), OVERWRITE_OR_IGNORE);
+
+# Partitions p=1 and p=2 remain
+query I
+SELECT count(DISTINCT p)
+FROM read_parquet('{TEMP_DIR}/or_ignore_parts/**/*.parquet', hive_partitioning = true);
+----
+3
+
+query I
+SELECT count(*) >= 10
+FROM read_parquet('{TEMP_DIR}/or_ignore_parts/**/*.parquet', hive_partitioning = true);
+----
+true
