@@ -65,6 +65,7 @@ public:
 
 public:
 	ExternalFileCache(DatabaseInstance &db, bool enable);
+	~ExternalFileCache();
 
 public:
 	static ExternalFileCache &Get(DatabaseInstance &db);
