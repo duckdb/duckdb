@@ -1045,6 +1045,17 @@ struct ExternalThreadsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct FeatureServeLegacyAsofSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "feature_serve_legacy_asof";
+	static constexpr const char *Description =
+	    "Force SERVE FEATURE to use the legacy ASOF join against the store instead of the version-table equi-join";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct FileSearchPathSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "file_search_path";

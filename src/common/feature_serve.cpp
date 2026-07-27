@@ -7,6 +7,7 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -20,8 +21,11 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -39,6 +43,66 @@ static optional_ptr<FeatureCatalogEntry> LookupFeature(ClientContext &context, c
 		}
 	}
 	return nullptr;
+}
+
+//! One retained snapshot: its version and the single timestamp every row of that version carries.
+struct FeatureVersionStamp {
+	int64_t version;
+	timestamp_t timestamp;
+};
+
+//! The feature's retained snapshots, newest first: timestamp descending, ties broken by higher version.
+//! REFRESH AT accepts arbitrary timestamps, so version order need not match timestamp order -- a backfill can
+//! carry a higher version number with an older timestamp. Ordering by timestamp is what makes resolution
+//! correct in that case; the version tiebreak is what makes it deterministic.
+static vector<FeatureVersionStamp> RetainedVersionStamps(const FeatureCatalogEntry &feat) {
+	vector<FeatureVersionStamp> stamps;
+	for (idx_t i = 0; i < feat.retained_version_numbers.size(); i++) {
+		FeatureVersionStamp stamp;
+		stamp.version = feat.retained_version_numbers[i];
+		stamp.timestamp = timestamp_t(feat.retained_version_timestamps_micros[i]);
+		stamps.push_back(stamp);
+	}
+	std::sort(stamps.begin(), stamps.end(), [](const FeatureVersionStamp &a, const FeatureVersionStamp &b) {
+		if (a.timestamp.value != b.timestamp.value) {
+			return a.timestamp.value > b.timestamp.value;
+		}
+		return a.version > b.version;
+	});
+	return stamps;
+}
+
+//! Collapse stamps sharing a timestamp down to the highest version. Input must already be newest-first, so
+//! duplicates are adjacent and the first of each run is the highest version.
+//! This is required for correctness, not tidiness: DuckDB's ASOF join has no value-based tie-break among rows
+//! sharing an identical order-by value -- which row wins depends on insertion order. Without this, two
+//! snapshots refreshed AT the same timestamp would resolve unpredictably instead of to the newer version.
+static vector<FeatureVersionStamp> DedupVersionStampsByTimestamp(const vector<FeatureVersionStamp> &stamps) {
+	vector<FeatureVersionStamp> result;
+	for (auto &stamp : stamps) {
+		if (result.empty() || result.back().timestamp.value != stamp.timestamp.value) {
+			result.push_back(stamp);
+		}
+	}
+	return result;
+}
+
+//! Whether this statement can use the version-table path. Requires the setting to allow it and every served
+//! feature to carry a retained version map -- a feature last refreshed before that map existed has an empty
+//! one and must fall back to the legacy ASOF path. The decision is per-statement, not per-feature, so one
+//! SERVE call never mixes the two plan shapes.
+//! This is also what guarantees the version list is non-empty everywhere downstream.
+static bool CanUseEquiJoinPath(ClientContext &context, const vector<ServeFeatureRequest> &features) {
+	if (Settings::Get<FeatureServeLegacyAsofSetting>(context)) {
+		return false;
+	}
+	for (auto &request : features) {
+		auto feature_entry = LookupFeature(context, request.feature_name);
+		if (!feature_entry || feature_entry->retained_version_numbers.empty()) {
+			return false;
+		}
+	}
+	return true;
 }
 
 //! Resolve a feature for serving, raising a clear error if it exists but has never been refreshed
@@ -156,6 +220,68 @@ static unique_ptr<ParsedExpression> ServeJoinCondition(const string &feature_ali
 	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, ColumnRef("spine", spine_ts),
 	                                    ColumnRef(feature_alias, FEATURE_TIMESTAMP_COLUMN));
 	return condition ? Conjoin(std::move(condition), std::move(timestamp_condition)) : std::move(timestamp_condition);
+}
+
+//! Alias for one feature's version-boundary table. Distinct per feature so a multi-feature SERVE can attach
+//! several without collision.
+static string ServeVersionTableAlias(const string &feature_alias) {
+	return "vt_" + feature_alias;
+}
+
+//! An inline VALUES table of the feature's deduped retained (version, timestamp) pairs, with its columns named
+//! __feature_version / __feature_timestamp. Bounded by retain_versions, so it is a handful of rows however
+//! large the store is -- which is the whole point: the ASOF join sorts this instead of the store.
+static unique_ptr<TableRef> VersionBoundaryTableRef(const vector<FeatureVersionStamp> &stamps, const string &alias) {
+	auto table_ref = make_uniq<ExpressionListRef>();
+	table_ref->alias = alias;
+	table_ref->expected_names = {FEATURE_VERSION_COLUMN, FEATURE_TIMESTAMP_COLUMN};
+	table_ref->expected_types = {LogicalType::BIGINT, LogicalType::TIMESTAMP};
+	for (auto &stamp : stamps) {
+		vector<unique_ptr<ParsedExpression>> row;
+		row.push_back(make_uniq<ConstantExpression>(Value::BIGINT(stamp.version)));
+		row.push_back(make_uniq<ConstantExpression>(Value::TIMESTAMP(stamp.timestamp)));
+		table_ref->values.push_back(std::move(row));
+	}
+	return std::move(table_ref);
+}
+
+//! Attach an ASOF LEFT JOIN resolving which version applies to each spine row, so the joined table's own
+//! __feature_version column can then be referenced directly by the store join.
+//! No partition/equality condition: which version applies is a function of time alone, identical for every
+//! entity, so this matches against a handful of rows rather than the store. spine_ts is the +infinity probe
+//! column in latest mode and the user's as-of column in time-travel mode -- the construction is the same
+//! either way, and the probe being >= every retained timestamp is exactly what makes latest mode resolve to
+//! the newest snapshot. A spine row older than every snapshot resolves to NULL, matching ASOF LEFT semantics.
+static void AttachVersionBoundaryJoin(unique_ptr<TableRef> &from_table, const string &version_alias,
+                                      const vector<FeatureVersionStamp> &stamps, const string &spine_ts) {
+	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
+	join->type = JoinType::LEFT;
+	join->left = std::move(from_table);
+	join->right = VersionBoundaryTableRef(stamps, version_alias);
+	join->condition =
+	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, ColumnRef("spine", spine_ts),
+	                                    ColumnRef(version_alias, FEATURE_TIMESTAMP_COLUMN));
+	from_table = std::move(join);
+}
+
+//! Store-side join condition: the entity keys plus an equality against the version the boundary join resolved.
+//! A version holds exactly one row per entity, so this matches at most one store row per spine row -- the same
+//! guarantee the legacy ASOF join gives. Global features have no entity columns, leaving the version equality
+//! as the whole condition, which is correct: such a feature has one row per version.
+static unique_ptr<ParsedExpression> ServeEquiJoinCondition(const string &feature_alias, const string &version_alias,
+                                                           const vector<FeatureServeEntityMapping> &entity_mappings) {
+	unique_ptr<ParsedExpression> condition;
+	for (auto &mapping : entity_mappings) {
+		auto entity_condition =
+		    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, ColumnRef("spine", mapping.spine_column),
+		                                    ColumnRef(feature_alias, mapping.feature_column));
+		condition =
+		    condition ? Conjoin(std::move(condition), std::move(entity_condition)) : std::move(entity_condition);
+	}
+	auto version_condition =
+	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, ColumnRef(version_alias, FEATURE_VERSION_COLUMN),
+	                                    ColumnRef(feature_alias, FEATURE_VERSION_COLUMN));
+	return condition ? Conjoin(std::move(condition), std::move(version_condition)) : std::move(version_condition);
 }
 
 static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const vector<string> &feature_entities) {
@@ -354,6 +480,9 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 	// version of each feature by probing the ASOF join with a synthetic +infinity timestamp column.
 	bool latest_mode = spine_asof_column.empty();
 	string spine_ts = latest_mode ? SERVE_ASOF_PROBE_COLUMN : spine_asof_column;
+	// One path serves both modes: spine_ts is the +infinity probe in latest mode and the user's as-of column
+	// otherwise, and the version-boundary join treats them identically.
+	bool use_equijoin = CanUseEquiJoinPath(context, features);
 
 	auto select = make_uniq<SelectNode>();
 	select->select_list.push_back(SpineStar(latest_mode));
@@ -365,8 +494,23 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		auto alias = features.size() == 1 ? string("f") : "f" + duckdb::to_string(i);
 
 		AddFeatureProjections(select->select_list, context, feat, alias, spine_ts, latest_mode);
-		AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override, spine_ts,
-		                spine_table, spine_asof_column, latest_mode);
+		if (use_equijoin) {
+			auto entity_mappings = ResolveEntityMappings(feat, request.entity_mappings, spine_entity_override);
+			auto stamps = DedupVersionStampsByTimestamp(RetainedVersionStamps(feat));
+			auto version_alias = ServeVersionTableAlias(alias);
+			// Resolve the version first, then reach the store with it. Each feature appends its own pair of
+			// joins onto the running chain, so a multi-feature SERVE just repeats this.
+			AttachVersionBoundaryJoin(select->from_table, version_alias, stamps, spine_ts);
+			auto join = make_uniq<JoinRef>(JoinRefType::REGULAR);
+			join->type = JoinType::LEFT;
+			join->left = std::move(select->from_table);
+			join->right = BaseTable(FeatureStoreTableName(feat.name), alias);
+			join->condition = ServeEquiJoinCondition(alias, version_alias, entity_mappings);
+			select->from_table = std::move(join);
+		} else {
+			AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override, spine_ts,
+			                spine_table, spine_asof_column, latest_mode);
+		}
 	}
 
 	auto result = make_uniq<SelectStatement>();

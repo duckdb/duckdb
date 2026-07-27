@@ -707,6 +707,13 @@
         ]
     },
     {
+        "name": "feature_serve_legacy_asof",
+        "description": "Force SERVE FEATURE to use the legacy ASOF join against the store instead of the version-table equi-join",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "file_search_path",
         "description": "A comma separated list of directories to search for input files",
         "type": "VARCHAR",
