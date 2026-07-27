@@ -1157,12 +1157,6 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	                                     ADBC_INFO_DRIVER_VERSION};
 	static constexpr size_t TEST_INFO_CODE_LENGTH = sizeof(test_info_codes) / sizeof(uint32_t);
 
-	// No error
-	out_stream.release = nullptr;
-	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
-	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
-	REQUIRE(out_stream.release == nullptr);
-
 	// Invalid connection. With private_driver == nullptr this never reaches
 	// duckdb_adbc::ConnectionGetInfo: the driver manager itself (see
 	// test/api/adbc/driver_manager.cpp AdbcConnectionGetInfo) rejects the call
@@ -1195,6 +1189,14 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	// ==== HAPPY PATH ====
 	// The info_value column is a dense union, which DuckDB's arrow_scan
 	// cannot consume; the buffers are validated directly instead.
+
+	// error is an optional out parameter per adbc.h; a null error must not
+	// cause the call to fail.
+	out_stream.release = nullptr;
+	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
+	REQUIRE(status == ADBC_STATUS_OK);
+	REQUIRE(out_stream.release != nullptr);
+	out_stream.release(&out_stream);
 
 	// This returns all known info codes.
 	out_stream.release = nullptr;
@@ -4860,6 +4862,86 @@ TEST_CASE("ADBC - Three concurrent statements", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt1, &db.adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt3, &db.adbc_error)));
+}
+
+TEST_CASE("Test ADBC ConnectionGetInfo with an open result stream", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create enough rows that the query result spans multiple Arrow batches, so that
+	// partially reading it and resuming afterwards is actually meaningful.
+	db.Query("CREATE TABLE test_getinfo_large AS SELECT i, 'value_' || i::VARCHAR AS v FROM range(5000) t(i)");
+
+	// Open a streaming result on the connection and keep it alive.
+	AdbcStatement stmt;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT * FROM test_getinfo_large ORDER BY i", &db.adbc_error)));
+	ArrowArrayStream query_stream = {};
+	int64_t rows;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, &query_stream, &rows, &db.adbc_error)));
+
+	// Read only the first batch before calling GetInfo, leaving the rest of the
+	// result unread on the still-open stream.
+	ArrowArray first_batch;
+	REQUIRE(query_stream.get_next(&query_stream, &first_batch) == 0);
+	REQUIRE(first_batch.release != nullptr);
+	REQUIRE(first_batch.length > 0);
+	REQUIRE(first_batch.length < 5000);
+	int64_t total_rows = first_batch.length;
+	first_batch.release(&first_batch);
+
+	// ConnectionGetInfo assembles its result without executing a query. Interleaving it
+	// with a partially-read query_stream must therefore leave that stream able to keep
+	// yielding its remaining batches. This checks that observable behaviour only; it
+	// does not prove anything about how GetInfo is implemented internally.
+	static uint32_t info_codes[] = {ADBC_INFO_VENDOR_NAME};
+	ArrowArrayStream info_stream = {};
+	REQUIRE(SUCCESS(AdbcConnectionGetInfo(&db.adbc_connection, info_codes, 1, &info_stream, &db.adbc_error)));
+
+	// Read the remaining batches of query_stream to completion, counting how many
+	// batches get_next actually hands back. If this were only ever 1, the "partial
+	// read" above would be meaningless and the test would be vacuous again.
+	int64_t batch_count = 1;
+	while (true) {
+		ArrowArray batch;
+		REQUIRE(query_stream.get_next(&query_stream, &batch) == 0);
+		if (!batch.release) {
+			break;
+		}
+		batch_count++;
+		total_rows += batch.length;
+		batch.release(&batch);
+	}
+	REQUIRE(batch_count > 1);
+	REQUIRE(total_rows == 5000);
+
+	// The GetInfo stream itself must also be readable.
+	ArrowArray info_batch;
+	REQUIRE(info_stream.get_next(&info_stream, &info_batch) == 0);
+	REQUIRE(info_batch.release != nullptr);
+	REQUIRE(info_batch.length == 1);
+	info_batch.release(&info_batch);
+
+	// The connection must still be usable for further queries afterwards.
+	AdbcStatement stmt2;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt2, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt2, "SELECT 2 AS c", &db.adbc_error)));
+	ArrowArrayStream stream2 = {};
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt2, &stream2, &rows, &db.adbc_error)));
+	ArrowArray batch2;
+	REQUIRE(stream2.get_next(&stream2, &batch2) == 0);
+	REQUIRE(batch2.release != nullptr);
+	REQUIRE(batch2.length == 1);
+	batch2.release(&batch2);
+
+	// Clean up.
+	query_stream.release(&query_stream);
+	info_stream.release(&info_stream);
+	stream2.release(&stream2);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
 }
 
 TEST_CASE("ADBC - Connection release while stream is active", "[adbc]") {

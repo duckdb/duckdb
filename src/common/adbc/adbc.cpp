@@ -1285,12 +1285,6 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32
 		SetError(error, "Output parameter was not provided");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	if (!error) {
-		// The previous implementation routed through StatementSetSqlQuery, whose CheckResult
-		// rejected a null error unconditionally. Preserve that historical behavior here so
-		// callers relying on it (e.g. passing error == nullptr as a probe) keep failing.
-		return ADBC_STATUS_INVALID_ARGUMENT;
-	}
 	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
 	if (!conn_wrapper->connection) {
 		SetError(error, "Connection is not initialized");
