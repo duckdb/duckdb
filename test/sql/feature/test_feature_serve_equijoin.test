@@ -108,6 +108,51 @@ SERVE FEATURE oo_latest FOR oo_requests;
 X001	50.00
 
 # ============================================================
+# Tied-timestamp dedup. DuckDB's ASOF join has no value-based tie-break for rows sharing an identical
+# order-by value -- which row "wins" depends on incidental insertion order. DedupVersionStampsByTimestamp
+# collapses the version-boundary table down to one row per timestamp (keeping the higher version) before the
+# ASOF join ever sees it, so two versions refreshed AT the same timestamp resolve deterministically to the
+# higher version rather than to whichever happened to sort first.
+# ============================================================
+statement ok
+CREATE TABLE tie_cards (card_no VARCHAR);
+
+statement ok
+INSERT INTO tie_cards VALUES ('T001');
+
+statement ok
+CREATE TABLE tie_events (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO tie_events VALUES ('T001', 7.00, '2024-01-01 00:00:00');
+
+statement ok
+CREATE FEATURE tie_f ENTITY tie_cards TIMESTAMP event_time WINDOW 40 DAYS RETAIN 5 AS (SELECT card_no, SUM(amount) AS total_amount FROM tie_events GROUP BY card_no);
+
+# Version 1 AT Feb 1: total_amount = 7.00
+statement ok
+REFRESH FEATURE tie_f AT '2024-02-01 00:00:00';
+
+# A second event, then a second refresh AT the SAME timestamp -> two versions, identical timestamps, different values.
+statement ok
+INSERT INTO tie_events VALUES ('T001', 7.00, '2024-01-02 00:00:00');
+
+# Version 2 AT the identical Feb 1 timestamp: total_amount = 14.00
+statement ok
+REFRESH FEATURE tie_f AT '2024-02-01 00:00:00';
+
+query TT
+SELECT retained_versions, retained_version_timestamps FROM duckdb_features() WHERE feature_name = 'tie_f';
+----
+1,2	2024-02-01 00:00:00,2024-02-01 00:00:00
+
+# Version 2 (14.00) must win deterministically -- the higher version among the tied timestamp.
+query TR
+SERVE FEATURE tie_f FOR tie_cards;
+----
+T001	14.00
+
+# ============================================================
 # Plan shape. The new path contains a HASH_JOIN (the store equi-join); the legacy path never does -- it is a
 # single ASOF join straight against the store. Both paths contain an ASOF_JOIN node, so ASOF presence is NOT
 # a discriminator here; HASH_JOIN presence is.
