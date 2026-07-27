@@ -186,7 +186,8 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		}
 
 		if (comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-			// IS NOT DISTINCT FROM a non-NULL constant is equivalent to equality.
+			// Table filters discard NULL and false alike, so IS NOT DISTINCT FROM a
+			// non-NULL constant selects the same rows as equality. NULL is not indexed.
 			if (constant_value.IsNull()) {
 				return nullptr;
 			}
