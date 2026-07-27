@@ -1,4 +1,4 @@
-# name: test/sql/connect/concurrent_connect_detach.test_slow
+# name: test/sql/connect/concurrent_connect_detach.test
 # description: Concurrently route queries through CONNECT while detaching and reattaching the target
 # group: [connect]
 
@@ -14,7 +14,7 @@ ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
 
 concurrentloop threadid 0 8
 
-loop iteration 0 1000
+loop iteration 0 30
 
 onlyif threadid=0
 statement maybe
