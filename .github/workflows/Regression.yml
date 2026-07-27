@@ -202,7 +202,7 @@ jobs:
     if: ${{ github.repository_owner == 'duckdb' }}
     needs:
       - linux-base
-    runs-on: namespace-profile-linux-x64
+    runs-on: namespace-profile-linux-small
     strategy:
       fail-fast: false
       matrix:
