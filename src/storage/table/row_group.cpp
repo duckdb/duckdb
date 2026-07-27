@@ -49,7 +49,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
       has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
-		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
+		throw DataCorruptionException("Row group column count is unaligned with table column count. Corrupt file?");
 	}
 	this->column_pointers = std::move(pointer.data_pointers);
 	this->columns.resize(column_pointers.size());

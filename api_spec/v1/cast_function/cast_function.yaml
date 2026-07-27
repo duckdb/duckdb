@@ -1,0 +1,166 @@
+module: cast_function
+functions:
+  create_cast_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: cast_function
+    parameters: {}
+    return_type: cast_function
+    description: |
+      Creates a new cast function object.
+    return_description: The cast function object.
+  cast_function_set_source_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      cast_function:
+        type: cast_function
+        description: The cast function object.
+      source_type:
+        type: logical_type
+        description: The source type to set.
+    return_type: opaque
+    description: |
+      Sets the source type of the cast function.
+  cast_function_set_target_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      cast_function:
+        type: cast_function
+        description: The cast function object.
+      target_type:
+        type: logical_type
+        description: The target type to set.
+    return_type: opaque
+    description: |
+      Sets the target type of the cast function.
+  cast_function_set_implicit_cast_cost:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      cast_function:
+        type: cast_function
+        description: The cast function object.
+      cost:
+        type: i64
+        description: The cost to set.
+    return_type: opaque
+    description: |
+      Sets the "cost" of implicitly casting the source type to the target type using this function.
+  cast_function_set_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      cast_function:
+        type: cast_function
+        description: The cast function object.
+      function:
+        type: cast_function_t
+        description: The function to set.
+    return_type: opaque
+    description: |
+      Sets the actual cast function to use.
+  cast_function_set_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      cast_function:
+        type: cast_function
+      extra_info:
+        type: opaque
+        indirection: 1
+        description: The extra information
+      destroy:
+        type: delete_callback_t
+        description: The callback that will be called to destroy the extra information (if any)
+    return_type: opaque
+    description: |
+      Assigns extra information to the cast function that can be fetched during execution, etc.
+  cast_function_get_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object.
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Retrieves the extra info of the function as set in `duckdb_cast_function_set_extra_info`.
+    return_description: The extra info.
+  cast_function_get_cast_mode:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object.
+    return_type: cast_mode
+    description: |
+      Get the cast execution mode from the given function info.
+    return_description: The cast mode.
+  cast_function_set_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object.
+      error:
+        type: char
+        indirection: 1
+        const: true
+        description: The error message.
+    return_type: opaque
+    description: |
+      Report that an error has occurred while executing the cast function.
+  cast_function_set_row_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object.
+      error:
+        type: char
+        indirection: 1
+        const: true
+        description: The error message.
+      row:
+        type: idx
+        description: The index of the row within the output vector to set to NULL.
+      output:
+        type: vector
+        description: The output vector.
+    return_type: opaque
+    description: |
+      Report that an error has occurred while executing the cast function, setting the corresponding output row to NULL.
+  register_cast_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      con:
+        type: connection
+        description: The connection to use.
+      cast_function:
+        type: cast_function
+        description: The cast function to register.
+    return_type: state
+    description: |
+      Registers a cast function within the given connection.
+    return_description: Whether or not the registration was successful.
+  destroy_cast_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: cast_function
+    parameters:
+      cast_function:
+        type: cast_function
+        indirection: 1
+        description: The cast function object.
+    return_type: opaque
+    description: |
+      Destroys the cast function object.
