@@ -3,7 +3,7 @@
 # group: [any_all]
 
 # A non-matching NULL row only makes the result unknown when no column is decisively unequal.
-query IIII
+query IIII rowsort
 SELECT a, b,
        row(a, b) IN (SELECT * FROM (VALUES (2, 6), (3, 7), (3, NULL::INT), (4, 8)) rhs(x, y)),
        row(a, b) NOT IN (SELECT * FROM (VALUES (2, 6), (3, 7), (3, NULL::INT), (4, 8)) rhs(x, y))
@@ -13,13 +13,13 @@ FROM (VALUES (1, 5), (2, 6), (3, 9), (9, 8), (3, NULL::INT),
 1	5	false	true
 2	6	true	false
 3	9	NULL	NULL
-9	8	false	true
 3	NULL	NULL	NULL
+9	8	false	true
 NULL	8	NULL	NULL
 NULL	NULL	NULL	NULL
 
 # Cover NULLs in every build column and a build row containing only NULLs.
-query IIII
+query IIII rowsort
 SELECT a, b,
        row(a, b) IN (SELECT * FROM (VALUES (2, 6), (NULL::INT, 7), (4, NULL::INT),
                                            (NULL::INT, NULL::INT)) rhs(x, y)),
@@ -40,7 +40,7 @@ SELECT row(NULL::INT, 8) IN (SELECT * FROM (VALUES (2, 6), (3, 7)) rhs(x, y)),
 false	true
 
 # Exercise more than two equality conditions.
-query TII
+query TII rowsort
 SELECT k,
        row(a, b, c, d, e, f) IN (
            SELECT * FROM (VALUES (1, 1, 1, 1, 1, 1),
