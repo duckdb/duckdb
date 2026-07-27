@@ -101,6 +101,14 @@ static Value NumericStatsValue(const LogicalType &type, T value) {
 	}
 }
 
+static Value NumericStatsValue(const LogicalType &type, hugeint_t value) {
+	D_ASSERT(type.IsNumeric());
+	if (type.id() == LogicalTypeId::DECIMAL) {
+		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
+	}
+	return Value::Numeric(type, value);
+}
+
 template <class T>
 static bool WidenFloatingBounds(const LogicalType &type, Value &new_min, Value &new_max) {
 	auto min = new_min.GetValue<T>();
@@ -216,6 +224,10 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			potential_overflow =
 			    PROPAGATE::template Operation<int64_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
+		case PhysicalType::INT128:
+			potential_overflow =
+			    PROPAGATE::template Operation<hugeint_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
 		default:
 			return nullptr;
 		}
@@ -299,7 +311,9 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 			throw InternalException("Could not convert type %s to a decimal.",
 			                        arguments[i]->GetReturnType().ToString());
 		}
-		max_width = MaxValue<uint8_t>(width, max_width);
+		if (width > max_width) {
+			max_width = width;
+		}
 		max_scale = MaxValue<uint8_t>(scale, max_scale);
 		max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 	}
@@ -346,14 +360,11 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(BindScalarFunctionInput &input) 
 	} else {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(result_type.InternalType()));
 	}
-	if (result_type.InternalType() != PhysicalType::INT128 && result_type.InternalType() != PhysicalType::UINT128) {
-		if (IS_SUBTRACT) {
-			bound_function.SetStatisticsCallback(
-			    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>);
-		} else {
-			bound_function.SetStatisticsCallback(
-			    PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>);
-		}
+	if (IS_SUBTRACT) {
+		bound_function.SetStatisticsCallback(
+		    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>);
+	} else {
+		bound_function.SetStatisticsCallback(PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>);
 	}
 	return std::move(bind_data);
 }
@@ -962,6 +973,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	uint8_t result_width = 0, result_scale = 0;
+	uint8_t max_width = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		if (arguments[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			continue;
@@ -972,16 +984,22 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 			throw InternalException("Could not convert type %s to a decimal?",
 			                        arguments[i]->GetReturnType().ToString());
 		}
+		max_width = MaxValue<uint8_t>(width, max_width);
 		result_width += width;
 		result_scale += scale;
 	}
-	D_ASSERT(result_width > 0);
+	D_ASSERT(max_width > 0);
 	if (result_scale > Decimal::MAX_WIDTH_DECIMAL) {
 		throw OutOfRangeException(
 		    "Needed scale %d to accurately represent the multiplication result, but this is out of range of the "
 		    "DECIMAL type. Max scale is %d; could not perform an accurate multiplication. Either add a cast to DOUBLE, "
 		    "or add an explicit cast to a decimal with a lower scale.",
 		    result_scale, Decimal::MAX_WIDTH_DECIMAL);
+	}
+	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64 &&
+	    result_scale < Decimal::MAX_WIDTH_INT64) {
+		bind_data->check_overflow = true;
+		result_width = Decimal::MAX_WIDTH_INT64;
 	}
 	if (result_width > Decimal::MAX_WIDTH_DECIMAL) {
 		bind_data->check_overflow = true;
@@ -1012,10 +1030,8 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	} else {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType()));
 	}
-	if (result_type.InternalType() != PhysicalType::INT128) {
-		bound_function.SetStatisticsCallback(
-		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
-	}
+	bound_function.SetStatisticsCallback(
+	    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
 	return std::move(bind_data);
 }
 

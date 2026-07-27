@@ -49,18 +49,19 @@ select (-5000000000000000000000000000000000000.0::DECIMAL(38,1)-5000000000000000
 ----
 <REGEX>:Out of Range Error.*Overflow in subtract of DECIMAL.*
 
-# decimals are automatically promoted in multiplications
-query I
+# decimals can overflow in multiplications
+# bigint
+statement error
 select 90000000000000000.0::DECIMAL(18,1) * 10::DECIMAL(2,0);
 ----
-900000000000000000.0
+<REGEX>:Out of Range Error.*Overflow in multiplication of DECIMAL.*
 
-query I
+statement error
 select 90000000000000000.0::DECIMAL(18,1) * 1000::DECIMAL(4,0);
 ----
-90000000000000000000.0
+<REGEX>:Out of Range Error.*Overflow in multiplication of DECIMAL.*
 
-# decimals can overflow in multiplications at the hugeint boundary
+# hugeint
 statement error
 select 5000000000000000000000000000000000000.0::DECIMAL(38,1) * 2::DECIMAL(1,0);
 ----

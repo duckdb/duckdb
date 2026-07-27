@@ -36,12 +36,12 @@ SELECT 1*d FROM decimals
 ----
 99000000000000000.0
 
-query I
+statement error
 SELECT 2*d FROM decimals
 ----
-198000000000000000.0
+<REGEX>:Out of Range Error.*Overflow in multiplication of DECIMAL.*
 
-query III
-SELECT typeof(d+1000000000000000.0), typeof(-1000000000000000.0-d), typeof(2*d) FROM decimals
+query II
+SELECT typeof(d+1000000000000000.0), typeof(-1000000000000000.0-d) FROM decimals
 ----
-DECIMAL(19,1)	DECIMAL(19,1)	DECIMAL(28,1)
+DECIMAL(19,1)	DECIMAL(19,1)
