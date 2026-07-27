@@ -149,7 +149,7 @@
         "id": 212,
         "name": "nearest_approx",
         "type": "bool",
-        "default": "true",
+        "default": "false",
         "version": "v2.0.0"
       }
     ]

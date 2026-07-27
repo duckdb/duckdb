@@ -152,7 +152,7 @@ void JoinRef::Serialize(Serializer &serializer) const {
 		serializer.WritePropertyWithDefault<OrderType>(211, "nearest_order_type", nearest_order_type, OrderType::ASCENDING);
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<bool>(212, "nearest_approx", nearest_approx, true);
+		serializer.WritePropertyWithDefault<bool>(212, "nearest_approx", nearest_approx, false);
 	}
 }
 
@@ -170,7 +170,7 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(209, "ranking_expression", result->ranking_expression);
 	deserializer.ReadPropertyWithExplicitDefault<idx_t>(210, "nearest_count", result->nearest_count, 1);
 	deserializer.ReadPropertyWithExplicitDefault<OrderType>(211, "nearest_order_type", result->nearest_order_type, OrderType::ASCENDING);
-	deserializer.ReadPropertyWithExplicitDefault<bool>(212, "nearest_approx", result->nearest_approx, true);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(212, "nearest_approx", result->nearest_approx, false);
 	return std::move(result);
 }
 

@@ -36,6 +36,17 @@ SELECT count(*) FROM latest_db.nearest_view;
 ----
 4
 
+# Omitting APPROX/EXACT means EXACT
+statement ok
+CREATE VIEW latest_db.default_view AS
+  SELECT q.user_id, t.product_id FROM latest_db.users q
+    INNER JOIN latest_db.products t NEAREST 2 BY DISTANCE array_distance(q.embedding, t.embedding);
+
+query I
+SELECT sql LIKE '%EXACT NEAREST 2 BY DISTANCE%' FROM duckdb_views() WHERE view_name = 'default_view';
+----
+true
+
 # Writing to a storage version that predates NEAREST BY errors out rather than silently dropping the clause
 statement ok
 ATTACH '{TEST_DIR}/nearest_old.db' AS old_db (STORAGE_VERSION 'v1.4.0');

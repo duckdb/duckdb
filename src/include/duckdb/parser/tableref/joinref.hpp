@@ -52,8 +52,8 @@ public:
 	idx_t nearest_count = 1;
 	//! ASCENDING for BY DISTANCE, DESCENDING for BY SIMILARITY (NEAREST only)
 	OrderType nearest_order_type = OrderType::ASCENDING;
-	//! Whether APPROX (instead of EXACT) was specified (NEAREST only) - currently informational
-	bool nearest_approx = true;
+	//! Whether APPROX was specified (NEAREST only) - defaults to EXACT, currently informational
+	bool nearest_approx = false;
 
 public:
 	string ToString() const override;

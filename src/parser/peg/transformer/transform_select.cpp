@@ -760,7 +760,7 @@ static unique_ptr<TableRef> BuildNearestJoin(const optional<JoinType> &join_type
 		result->nearest_count = NumericCast<idx_t>(count);
 	}
 	result->nearest_order_type = distance_or_similarity;
-	result->nearest_approx = approx_or_exact.value_or(true);
+	result->nearest_approx = approx_or_exact.value_or(false);
 	result->ranking_expression = std::move(expression);
 	result->right = std::move(table_ref);
 	return std::move(result);
