@@ -321,12 +321,12 @@ struct VectorOperations {
 		}
 		LessThanEquals(left, right, result);
 	}
-	[[deprecated("count parameter is deprecated; call Comparator without count instead")]] static void
+	[[deprecated("count parameter is deprecated; call Comparator with ExpressionType instead")]] static void
 	Comparator(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 		if (count != left.size()) {
 			throw InternalException("Comparator: count (%llu) does not match vector size (%llu)", count, left.size());
 		}
-		Comparator(left, right, result, false);
+		Comparator(left, right, result, ExpressionType::COMPARE_EQUAL);
 	}
 	[[deprecated("count parameter is deprecated; call DistinctFrom without count instead")]] static void
 	DistinctFrom(const Vector &left, const Vector &right, Vector &result, idx_t count) {
