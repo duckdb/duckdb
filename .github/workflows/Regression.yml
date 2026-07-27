@@ -125,10 +125,16 @@ jobs:
         include:
           - name: Ingestion Perf
             benchmarks: .github/regression/ingestion.csv
-          - name: Micro + TPCH-PARQUET
-            benchmarks: .github/regression/micro.csv .github/regression/tpch_parquet.csv
-          - name: H2OAI + IMDB + CSV
-            benchmarks: .github/regression/h2oai.csv .github/regression/imdb.csv .github/regression/csv.csv
+          - name: Micro
+            benchmarks: .github/regression/tpch_parquet.csv
+          - name: TPCH-PARQUET
+            benchmarks: .github/regression/tpch_parquet.csv
+          - name: H2OAI
+            benchmarks: .github/regression/h2oai.csv
+          - name: IMDB
+            benchmarks: .github/regression/imdb.csv
+          - name: CSV
+            benchmarks: .github/regression/csv.csv
           - name: RealNest
             benchmarks: .github/regression/realnest.csv
             data_setup: |
