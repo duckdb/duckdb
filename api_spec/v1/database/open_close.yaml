@@ -1,0 +1,239 @@
+module: database
+functions:
+  create_instance_cache:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: |
+      Creates a new database instance cache.
+      The instance cache is necessary if a client/program (re)opens multiple databases to the same file within the same process.
+      Must be destroyed with 'duckdb_destroy_instance_cache'.
+    role: constructor
+    belongs_to: instance_cache
+    parameters: {}
+    return_type: instance_cache
+    return_pointer: 0
+    return_description: The database instance cache.
+  get_or_create_from_cache:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: database
+    parameters:
+      instance_cache:
+        type: instance_cache
+        description: The instance cache in which to create the database, or from which to take the database.
+      path:
+        type: char
+        indirection: 1
+        const: true
+        description: Path to the database file on disk. Both `nullptr` and `:memory:` open or retrieve an in-memory database.
+      out_database:
+        type: database
+        indirection: 1
+        kind: OUT
+        description: The resulting cached database.
+      config:
+        type: config
+        description: (Optional) configuration used to create the database.
+      out_error:
+        type: char
+        indirection: 2
+        kind: OUT
+        description: |-
+          If set and the function returns `DuckDBError`, this contains the error message.
+          Note that the error message must be freed using `duckdb_free`.
+    return_type: state
+    description: |
+      Creates a new database instance in the instance cache, or retrieves an existing database instance.
+      Must be closed with 'duckdb_close'.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  destroy_instance_cache:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: instance_cache
+    parameters:
+      instance_cache:
+        type: instance_cache
+        indirection: 1
+        description: The instance cache to destroy.
+    return_type: opaque
+    description: |
+      Destroys an existing database instance cache and de-allocates its memory.
+  open:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: database
+    parameters:
+      path:
+        type: char
+        indirection: 1
+        const: true
+        description: Path to the database file on disk. Both `nullptr` and `:memory:` open an in-memory database.
+      out_database:
+        type: database
+        indirection: 1
+        kind: OUT
+        description: The result database object.
+    return_type: state
+    description: |
+      Creates a new database or opens an existing database file stored at the given path.
+      If no path is given a new in-memory database is created instead.
+      The database must be closed with 'duckdb_close'.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  open_ext:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: database
+    parameters:
+      path:
+        type: char
+        indirection: 1
+        const: true
+        description: Path to the database file on disk. Both `nullptr` and `:memory:` open an in-memory database.
+      out_database:
+        type: database
+        indirection: 1
+        kind: OUT
+        description: The result database object.
+      config:
+        type: config
+        description: (Optional) configuration used to start up the database.
+      out_error:
+        type: char
+        indirection: 2
+        kind: OUT
+        description: |-
+          If set and the function returns `DuckDBError`, this contains the error message.
+          Note that the error message must be freed using `duckdb_free`.
+    return_type: state
+    description: |
+      Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.
+      The database must be closed with 'duckdb_close'.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  close:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: database
+    parameters:
+      database:
+        type: database
+        indirection: 1
+        description: The database object to shut down.
+    return_type: opaque
+    description: |
+      Closes the specified database and de-allocates all memory allocated for that database.
+      This should be called after you are done with any database allocated through `duckdb_open` or `duckdb_open_ext`.
+      Note that failing to call `duckdb_close` (in case of e.g. a program crash) will not cause data corruption.
+      Still, it is recommended to always correctly close a database object after you are done with it.
+  library_version:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters: {}
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      Returns the version of the linked DuckDB, with a version postfix for dev versions
+
+      Usually used for developing C extensions that must return this for a compatibility check.
+  create_config:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: config
+    parameters:
+      out_config:
+        type: config
+        indirection: 1
+        kind: OUT
+        description: The result configuration object.
+    return_type: state
+    description: |
+      Initializes an empty configuration object that can be used to provide start-up options for the DuckDB instance
+      through `duckdb_open_ext`.
+      The duckdb_config must be destroyed using 'duckdb_destroy_config'
+
+      This will always succeed unless there is a malloc failure.
+
+      Note that `duckdb_destroy_config` should always be called on the resulting config, even if the function returns
+      `DuckDBError`.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  config_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters: {}
+    return_type: size
+    description: |
+      This returns the total amount of configuration options available for usage with `duckdb_get_config_flag`.
+
+      This should not be called in a loop as it internally loops over all the options.
+    return_description: The amount of config options available.
+  get_config_flag:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      index:
+        type: size
+        description: The index of the configuration option (between 0 and `duckdb_config_count`)
+      out_name:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT
+        description: A name of the configuration flag.
+      out_description:
+        type: char
+        indirection: 2
+        const: true
+        kind: OUT
+        description: A description of the configuration flag.
+    return_type: state
+    description: |
+      Obtains a human-readable name and description of a specific configuration option. This can be used to e.g.
+      display configuration options. This will succeed unless `index` is out of range (i.e. `>= duckdb_config_count`).
+
+      The result name or description MUST NOT be freed.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  set_config:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      config:
+        type: config
+        description: The configuration object to set the option on.
+      name:
+        type: char
+        indirection: 1
+        const: true
+        description: The name of the configuration flag to set.
+      option:
+        type: char
+        indirection: 1
+        const: true
+        description: The value to set the configuration flag to.
+    return_type: state
+    description: |
+      Sets the specified option for the specified configuration. The configuration option is indicated by name.
+      To obtain a list of config options, see `duckdb_get_config_flag`.
+
+      In the source code, configuration options are defined in `config.cpp`.
+
+      This can fail if either the name is invalid, or if the value provided for the option is invalid.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  destroy_config:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: config
+    parameters:
+      config:
+        type: config
+        indirection: 1
+        description: The configuration object to destroy.
+    return_type: opaque
+    description: |
+      Destroys the specified configuration object and de-allocates all memory allocated for the object.

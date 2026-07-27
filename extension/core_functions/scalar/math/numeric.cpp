@@ -1086,7 +1086,7 @@ struct ExpOperator {
 ScalarFunction ExpFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, ExpOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1204,7 +1204,7 @@ ScalarFunction SqrtFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<SqrtOperator, IEEESqrtOperator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1225,7 +1225,7 @@ struct CbRtOperator {
 ScalarFunction CbrtFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1259,7 +1259,7 @@ ScalarFunction LnFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<LnOperator, IEEELnOperator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1294,7 +1294,7 @@ ScalarFunction Log10Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1327,9 +1327,9 @@ ScalarFunctionSet LogFun::GetFunctions() {
 	ScalarFunctionSet funcs;
 	ScalarFunction log10({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                     BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
-	// single-argument log is base-10: strictly increasing. the two-arg log(base, x) is only
+	// single-argument log is base-10: non-decreasing. the two-arg log(base, x) is only
 	// monotone in x for a fixed base, and decreasing for base < 1, so it is left unannotated.
-	log10.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	log10.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	funcs.AddFunction(std::move(log10));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                                 BindIEEEFloatingBinary<LogBaseOperator, IEEELogBaseOperator>));
@@ -1368,7 +1368,7 @@ ScalarFunction Log2Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<Log2Operator, IEEELog2Operator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1400,7 +1400,7 @@ struct DegreesOperator {
 ScalarFunction DegreesFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, DegreesOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1419,7 +1419,7 @@ struct RadiansOperator {
 ScalarFunction RadiansFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, RadiansOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 

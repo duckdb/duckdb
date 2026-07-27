@@ -92,9 +92,12 @@
     "constructor": ["return_type"]
   },
   {
-    "class": "BoundCastExpression",
+    "class": "LegacyBoundCastExpression",
     "base": "Expression",
-    "enum": "BOUND_CAST",
+    "enum": "LEGACY_BOUND_CAST",
+    "includes": [
+      "duckdb/planner/expression/legacy_bound_cast_expression.hpp"
+    ],
     "members": [
       {
         "id": 200,
@@ -112,7 +115,8 @@
         "type": "bool"
       }
     ],
-    "constructor": ["$ClientContext", "child", "return_type"]
+    "constructor": ["$ClientContext", "child", "return_type&", "try_cast"],
+    "constructor_method": "LegacyBoundCastExpression::DeserializeLegacyExpression"
   },
   {
     "class": "BoundColumnRefExpression",
