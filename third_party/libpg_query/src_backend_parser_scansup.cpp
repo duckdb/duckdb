@@ -79,6 +79,21 @@ bool get_preserve_identifier_case() {
 	return pg_preserve_identifier_case;
 }
 
+#ifdef __MVS__
+static __tlssim<bool> pg_capitalize_identifier_impl(false);
+#define pg_capitalize_identifier (*pg_capitalize_identifier_impl.access())
+#else
+static __thread bool pg_capitalize_identifier = false;
+#endif
+
+void set_capitalize_identifier(bool capitalize) {
+	pg_capitalize_identifier = capitalize;
+}
+
+bool get_capitalize_identifier() {
+	return pg_capitalize_identifier;
+}
+
 /*
  * a workhorse for downcase_truncate_identifier
  */
@@ -103,10 +118,17 @@ char *downcase_identifier(const char *ident, int len, bool warn, bool truncate) 
 		unsigned char ch = (unsigned char)ident[i];
 
 		if (!get_preserve_identifier_case()) {
-			if (ch >= 'A' && ch <= 'Z')
-				ch += 'a' - 'A';
-			else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && isupper(ch))
-				ch = tolower(ch);
+			if (get_capitalize_identifier()) {
+				if (ch >= 'a' && ch <= 'z')
+					ch -= 'a' - 'A';
+				else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && islower(ch))
+					ch = toupper(ch);
+			} else {
+				if (ch >= 'A' && ch <= 'Z')
+					ch += 'a' - 'A';
+				else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && isupper(ch))
+					ch = tolower(ch);
+			}
 		}
 		result[i] = (char)ch;
 	}

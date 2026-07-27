@@ -1464,6 +1464,7 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index,
 ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
 	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
+	options.capitalize_identifier = Settings::Get<CapitalizeIdentifierSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();

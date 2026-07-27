@@ -27,4 +27,7 @@ bool scanner_isspace(char ch);
 void set_preserve_identifier_case(bool downcase);
 bool get_preserve_identifier_case();
 
+void set_capitalize_identifier(bool capitalize);
+bool get_capitalize_identifier();
+
 }

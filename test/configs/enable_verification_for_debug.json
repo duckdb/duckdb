@@ -349,6 +349,7 @@
         "test/sql/setops/test_union_by_name.test",
         "test/sql/setops/union_all_projection_pushdown.test",
         "test/sql/settings/setting_preserve_identifier_case.test",
+        "test/sql/settings/setting_capitalize_identifier.test",
         "test/sql/show_select/test_describe_all.test",
         "test/sql/show_select/test_summarize.test",
         "test/sql/storage/append_strings_to_persistent.test",

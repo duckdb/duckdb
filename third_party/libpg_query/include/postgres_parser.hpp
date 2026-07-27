@@ -32,6 +32,7 @@ public:
 	static duckdb::vector<duckdb_libpgquery::PGKeyword> KeywordList();
 
 	static void SetPreserveIdentifierCase(bool downcase);
+	static void SetCapitalizeIdentifier(bool capitalize);
 };
 
 }
