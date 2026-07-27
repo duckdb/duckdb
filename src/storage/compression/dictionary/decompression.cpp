@@ -13,8 +13,9 @@ void CompressedStringScanState::ValidateDictionary(const SelectionVector &sel, c
 	}
 
 	if (has_error) {
-		throw DataCorruptionException("Failed to scan dictionary string - dictionary index was out of range. Database file appears "
-		                  "to be corrupted.");
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 }
 
@@ -28,8 +29,9 @@ void CompressedStringScanState::ValidateIndexBuffer() const {
 	has_error |= index_buffer_ptr[index_buffer_count - 1] > dict.size;
 
 	if (has_error) {
-		throw DataCorruptionException("Failed to scan dictionary string - dictionary was out of range. Database file appears "
-		                  "to be corrupted.");
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 }
 
@@ -84,8 +86,9 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	auto selection_buffer_size = BitpackingPrimitives::GetRequiredSize(segment.count.load(), current_width);
 	auto expected_index_buffer_offset = DictionaryCompression::DICTIONARY_HEADER_SIZE + selection_buffer_size;
 	if (index_buffer_offset != expected_index_buffer_offset) {
-		throw DataCorruptionException("Failed to scan dictionary string - selection buffer was out of range. Database file appears "
-		                  "to be corrupted.");
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - selection buffer was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 	if (index_buffer_offset > segment_capacity ||
 	    index_buffer_count > (segment_capacity - index_buffer_offset) / sizeof(uint32_t)) {
@@ -166,8 +169,9 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 	}
 
 	if (has_error) {
-		throw DataCorruptionException("Failed to scan dictionary string - dictionary index was out of range. Database file appears "
-		                  "to be corrupted.");
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 }
 
