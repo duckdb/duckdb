@@ -325,9 +325,23 @@ def print_banner(title: str):
     print("")
 
 
-def print_aggregate_report(
-    rows: List[BenchmarkRow], common_prefix: str, result_text: str, total_count: int, hidden_noise_count: int
+def print_benchmark_report(
+    rows: List[BenchmarkRow],
+    common_prefix: str,
+    result_text: str,
+    total_count: int,
+    hidden_noise_count: int,
+    time_a: Union[float, str],
+    time_b: Union[float, str],
 ):
+    buckets = {
+        BUCKET_UNCHANGED: [row for row in rows if row.bucket == BUCKET_UNCHANGED],
+        BUCKET_FASTER: [row for row in rows if row.bucket == BUCKET_FASTER],
+        BUCKET_SLOWER: [row for row in rows if row.bucket == BUCKET_SLOWER],
+        BUCKET_REGRESSION: [row for row in rows if row.bucket == BUCKET_REGRESSION],
+        BUCKET_FAILURE: [row for row in rows if row.bucket == BUCKET_FAILURE],
+    }
+
     print_banner("BENCHMARK QUERY AGGREGATES")
     print(f"suite: {suite_name()}")
     if common_prefix:
@@ -341,11 +355,13 @@ def print_aggregate_report(
     print(f"display threshold: +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
     print(f"hidden noise: {hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
     print(f"result: {result_text}")
-    print("")
-    if len(rows) == 0:
-        print("0 benchmarks above display threshold")
-    else:
-        render_table(rows)
+    print_geomean_summary(time_a, time_b)
+    print_bucket("UNCHANGED / NOISE", buckets[BUCKET_UNCHANGED], hidden_noise_count)
+    print_bucket("FASTER", buckets[BUCKET_FASTER])
+    print_bucket("SLOWER BELOW THRESHOLD", buckets[BUCKET_SLOWER])
+    print_bucket("REGRESSIONS", buckets[BUCKET_REGRESSION])
+    if len(buckets[BUCKET_FAILURE]) > 0:
+        print_bucket("FAILURES", buckets[BUCKET_FAILURE])
 
 
 def print_bucket(title: str, rows: List[BenchmarkRow], hidden_noise_count: int = 0):
@@ -358,25 +374,6 @@ def print_bucket(title: str, rows: List[BenchmarkRow], hidden_noise_count: int =
         print("0 benchmarks")
         return
     render_table(rows)
-
-
-def print_impact_bucket_summary(rows: List[BenchmarkRow], result_text: str, hidden_noise_count: int):
-    buckets = {
-        BUCKET_UNCHANGED: [row for row in rows if row.bucket == BUCKET_UNCHANGED],
-        BUCKET_FASTER: [row for row in rows if row.bucket == BUCKET_FASTER],
-        BUCKET_SLOWER: [row for row in rows if row.bucket == BUCKET_SLOWER],
-        BUCKET_REGRESSION: [row for row in rows if row.bucket == BUCKET_REGRESSION],
-        BUCKET_FAILURE: [row for row in rows if row.bucket == BUCKET_FAILURE],
-    }
-    print("")
-    print_banner("IMPACT BUCKETS SUMMARY")
-    print(f"result: {result_text}")
-    print_bucket("UNCHANGED / NOISE", buckets[BUCKET_UNCHANGED], hidden_noise_count)
-    print_bucket("FASTER", buckets[BUCKET_FASTER])
-    print_bucket("SLOWER BELOW THRESHOLD", buckets[BUCKET_SLOWER])
-    print_bucket("REGRESSIONS", buckets[BUCKET_REGRESSION])
-    if len(buckets[BUCKET_FAILURE]) > 0:
-        print_bucket("FAILURES", buckets[BUCKET_FAILURE])
 
 
 def print_geomean_summary(time_a: Union[float, str], time_b: Union[float, str]):
@@ -564,12 +561,9 @@ else:
     result_text = "no regressions detected"
 
 common_prefix = benchmark_common_prefix([result.benchmark for result in all_results])
-print_aggregate_report(visible_rows, common_prefix, result_text, len(rows), hidden_noise_count)
-
 time_a = geomean(old_runner.complete_timings)
 time_b = geomean(new_runner.complete_timings)
-print_geomean_summary(time_a, time_b)
-print_impact_bucket_summary(visible_rows, result_text, hidden_noise_count)
+print_benchmark_report(visible_rows, common_prefix, result_text, len(rows), hidden_noise_count, time_a, time_b)
 
 # nuke cached benchmark data between runs
 if not keep_benchmark_data:
