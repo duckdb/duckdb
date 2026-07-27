@@ -48,7 +48,7 @@ static bool CanRebuildExistingIndexesAfterVacuum(DataTableInfo &info, AttachedDa
 //! Returns true if checkpoint vacuum can incrementally remap every index: rowid gaps are persistable and
 //! every index is a bound ART without legacy-encoded geometry keys. If set, remap_indexes is filled with the indexes.
 static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached,
-                           optional_ptr<vector<reference<BoundIndex>>> remap_indexes) {
+                           optional_ptr<vector<shared_ptr<IndexEntry>>> remap_indexes) {
 	if (remap_indexes) {
 		remap_indexes->clear();
 	}
@@ -56,9 +56,10 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 		return false;
 	}
 	bool any_index = false;
-	for (auto &entry : table_info.GetIndexes().IndexEntries()) {
+	for (auto &entry : table_info.GetIndexes().GetEntries()) {
 		any_index = true;
-		auto &index = entry.GetIndexUnsafe();
+		auto guard = entry->ReadLock();
+		auto &index = guard.GetIndex();
 		if (!index.IsBound() || index.GetIndexType() != ART::TYPE_NAME) {
 			if (remap_indexes) {
 				remap_indexes->clear();
@@ -74,7 +75,7 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 			return false;
 		}
 		if (remap_indexes) {
-			remap_indexes->push_back(art);
+			remap_indexes->push_back(entry);
 		}
 	}
 	return any_index;
@@ -82,7 +83,7 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 
 VacuumIndexStrategy
 RowGroupCollection::GetVacuumIndexStrategy(AttachedDatabase &attached,
-                                           optional_ptr<vector<reference<BoundIndex>>> remap_indexes) const {
+                                           optional_ptr<vector<shared_ptr<IndexEntry>>> remap_indexes) const {
 	if (CanVacuumRemap(*info, attached, remap_indexes)) {
 		return VacuumIndexStrategy::REMAP;
 	}
@@ -1011,69 +1012,67 @@ struct IndexRemovalTargets {
 	optional_ptr<BoundIndex> conditional_append_target;
 };
 
-void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType removal_type,
+void GetIndexRemovalTargetsActiveCheckpoint(IndexEntryWriteGuard &guard, IndexRemovalType removal_type,
                                             IndexRemovalTargets &targets) {
-	const auto index = entry.GetSharedIndex();
-	const auto &main_index = index->Cast<BoundIndex>();
+	const auto &main_index = guard.GetIndex().Cast<BoundIndex>();
 
 	// create "removed_data_during_checkpoint" if it does not exist
-	if (!entry.removed_data_during_checkpoint) {
-		entry.removed_data_during_checkpoint = main_index.CreateDeltaIndex(DeltaIndexType::REMOVED_DURING_CHECKPOINT);
+	if (!guard.RemovedDataDuringCheckpoint()) {
+		guard.RemovedDataDuringCheckpoint() = main_index.CreateDeltaIndex(DeltaIndexType::REMOVED_DURING_CHECKPOINT);
 	}
 	if (removal_type == IndexRemovalType::MAIN_INDEX_ONLY || removal_type == IndexRemovalType::MAIN_INDEX) {
 		// removing from main index - but we cannot remove directly due to the concurrent checkpoint
 		// add removal to delta index
-		if (entry.added_data_during_checkpoint) {
+		if (guard.AddedDataDuringCheckpoint()) {
 			// if we have also added data during this checkpoint - we might need to remove from there instead
 			// we FIRST try to remove from "added_data_during_checkpoint"
 			// any rows that are not there we add to "removed_data_during_checkpoint"
-			targets.conditional_remove_target = entry.added_data_during_checkpoint.get();
-			targets.conditional_append_target = entry.removed_data_during_checkpoint.get();
+			targets.conditional_remove_target = guard.AddedDataDuringCheckpoint().get();
+			targets.conditional_append_target = guard.RemovedDataDuringCheckpoint().get();
 		} else {
 			// add removed rows to "removed_data_during_checkpoint"
-			targets.conditional_append_target = entry.removed_data_during_checkpoint.get();
+			targets.conditional_append_target = guard.RemovedDataDuringCheckpoint().get();
 		}
 		if (removal_type == IndexRemovalType::MAIN_INDEX) {
 			// we also need to append to "deleted_rows_in_use"
-			if (!entry.deleted_rows_in_use) {
+			if (!guard.DeletedRowsInUse()) {
 				// create "deleted_rows_in_use" if it does not exist yet
-				entry.deleted_rows_in_use = main_index.CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE);
+				guard.DeletedRowsInUse() = main_index.CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE);
 			}
-			targets.append_target = entry.deleted_rows_in_use;
+			targets.append_target = guard.DeletedRowsInUse();
 		}
 		return;
 	}
 	if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY ||
 	    removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
 		// revert adding to main index
-		if (entry.added_data_during_checkpoint) {
+		if (guard.AddedDataDuringCheckpoint()) {
 			// we have added data during this checkpoint as well, remove might have EITHER:
 			// (1) added to "removed_data_during_checkpoint"
 			// (2) removed data from "added_data_during_checkpoint"
 			// revert by first trying to remove from "removed_data_during_checkpoint"
 			// any rows that were not removed are re-added back to "added_data_during_checkpoint"
-			targets.conditional_remove_target = entry.removed_data_during_checkpoint.get();
-			targets.conditional_append_target = entry.added_data_during_checkpoint.get();
+			targets.conditional_remove_target = guard.RemovedDataDuringCheckpoint().get();
+			targets.conditional_append_target = guard.AddedDataDuringCheckpoint().get();
 		} else {
-			targets.conditional_remove_target = entry.removed_data_during_checkpoint.get();
+			targets.conditional_remove_target = guard.RemovedDataDuringCheckpoint().get();
 		}
 		if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
 			// we also need to remove from "deleted_rows_in_use"
-			targets.remove_target = entry.deleted_rows_in_use.get();
+			targets.remove_target = guard.DeletedRowsInUse().get();
 		}
 	}
 }
-void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, IndexRemovalTargets &targets,
+void GetIndexRemovalTargets(IndexEntryWriteGuard &guard, IndexRemovalType removal_type, IndexRemovalTargets &targets,
                             const optional_idx active_checkpoint) {
-	const auto &index = entry.GetSharedIndex();
-	auto &main_index = index->Cast<BoundIndex>();
+	auto &main_index = guard.GetIndex().Cast<BoundIndex>();
 
 	const auto supports_delta_indexes = main_index.SupportsDeltaIndexes();
 	// not all indexes require delta indexes - this is tracked through BoundIndex::RequiresTransactionality
 	// if an index does not require this we skip creating to and appending to "deleted_rows_in_use"
 	if (removal_type != IndexRemovalType::DELETED_ROWS_IN_USE) {
-		if (supports_delta_indexes && entry.ShouldUseDeltaIndexes(active_checkpoint)) {
-			GetIndexRemovalTargetsActiveCheckpoint(entry, removal_type, targets);
+		if (supports_delta_indexes && guard.ShouldUseDeltaIndexes(active_checkpoint)) {
+			GetIndexRemovalTargetsActiveCheckpoint(guard, removal_type, targets);
 			return;
 		}
 	}
@@ -1090,11 +1089,11 @@ void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, In
 	case IndexRemovalType::MAIN_INDEX:
 		// regular removal from main index - add rows to delta index if required
 		if (supports_delta_indexes) {
-			if (!entry.deleted_rows_in_use) {
+			if (!guard.DeletedRowsInUse()) {
 				// create "deleted_rows_in_use" if it does not exist yet
-				entry.deleted_rows_in_use = main_index.CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE);
+				guard.DeletedRowsInUse() = main_index.CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE);
 			}
-			targets.append_target = entry.deleted_rows_in_use;
+			targets.append_target = guard.DeletedRowsInUse();
 		}
 		targets.remove_target = main_index;
 		break;
@@ -1102,13 +1101,13 @@ void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, In
 		// revert regular append to main index - remove from deleted_rows_in_use if we appended there before
 		targets.append_target = main_index;
 		if (supports_delta_indexes) {
-			targets.remove_target = entry.deleted_rows_in_use;
+			targets.remove_target = guard.DeletedRowsInUse();
 		}
 		break;
 	case IndexRemovalType::DELETED_ROWS_IN_USE:
 		// remove from removal index if we appended any rows
 		if (supports_delta_indexes) {
-			targets.remove_target = entry.deleted_rows_in_use;
+			targets.remove_target = guard.DeletedRowsInUse();
 		}
 		break;
 	default:
@@ -1122,7 +1121,8 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	// Collect all Indexed columns on the table.
 	unordered_set<column_t> indexed_column_id_set;
 
-	for (const auto &index : indexes.Indexes()) {
+	for (auto guard : indexes.ReadLockedIndexes()) {
+		const auto &index = guard.GetIndex();
 		auto &set = index.GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
 	}
@@ -1166,16 +1166,15 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
 	}
 
-	for (auto &entry : indexes.IndexEntries()) {
-		lock_guard<mutex> guard(entry.lock);
-		auto &index = entry.GetIndexUnsafe();
+	for (auto guard : indexes.WriteLockedIndexes()) {
+		auto &index = guard.GetIndex();
 		if (index.IsBound()) {
 			// check which indexes we should append to or remove from
 			// note that this method might also involve appending to indexes
 			// the reason for that is that we have "delta" indexes that we must fill with data we are removing
 			// OR because we are actually reverting a previous removal
 			IndexRemovalTargets targets;
-			GetIndexRemovalTargets(entry, removal_type, targets, active_checkpoint);
+			GetIndexRemovalTargets(guard, removal_type, targets, active_checkpoint);
 
 			bool removal_succeeded = false;
 			if (targets.conditional_remove_target) {
@@ -1338,10 +1337,17 @@ private:
 //! TableIndexList::InitializeIndexChunk, followed by the old and new rowid.
 class VacuumIndexRemapper {
 public:
-	VacuumIndexRemapper(const vector<reference<BoundIndex>> &indexes, RowGroupCollection &collection)
-	    : indexes(indexes), table_types(collection.GetTypes()) {
+	VacuumIndexRemapper(const vector<shared_ptr<IndexEntry>> &entries, RowGroupCollection &collection)
+	    : table_types(collection.GetTypes()) {
 		DataChunk index_chunk;
 		TableIndexList::InitializeIndexChunk(index_chunk, table_types, mapped_column_ids, collection.GetTableInfo());
+
+		guards.reserve(entries.size());
+		indexes.reserve(entries.size());
+		for (const auto &entry : entries) {
+			guards.push_back(entry->WriteLock());
+			indexes.push_back(guards.back().GetIndex().Cast<BoundIndex>());
+		}
 		old_rowid_idx = mapped_column_ids.size();
 		new_rowid_idx = old_rowid_idx + 1;
 
@@ -1448,8 +1454,10 @@ private:
 	}
 
 private:
+	//! Keep every physical index stable while this task remaps its row IDs.
+	vector<IndexEntryWriteGuard> guards;
 	//! The indexes to remap.
-	const vector<reference<BoundIndex>> &indexes;
+	vector<reference<BoundIndex>> indexes;
 	const vector<LogicalType> &table_types;
 	//! Buffer slot -> table column id for the indexed key columns.
 	vector<StorageIndex> mapped_column_ids;
@@ -1472,7 +1480,7 @@ struct VacuumState {
 	//! How vacuum handles the table's indexes when it changes rowids.
 	VacuumIndexStrategy index_strategy = VacuumIndexStrategy::KEEP_ROW_IDS;
 	//! The indexes to remap, populated only when index_strategy == REMAP.
-	vector<reference<BoundIndex>> remap_indexes;
+	vector<shared_ptr<IndexEntry>> remap_indexes;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;

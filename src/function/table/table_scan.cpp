@@ -652,8 +652,15 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	return expressions;
 }
 
-bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, TableFunctionInitInput &input,
+bool TryScanIndex(IndexEntry &entry, const ColumnList &column_list, TableFunctionInitInput &input,
                   TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
+	auto guard = entry.ReadLock();
+	auto &index = guard.GetIndex();
+	if (!index.IsBound() || index.GetIndexType() != ART::TYPE_NAME) {
+		return false;
+	}
+	auto &art = index.Cast<ART>();
+
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
 	if (art.unbound_expressions.size() > 1) {
@@ -721,20 +728,19 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 		return false;
 	}
 
-	lock_guard<mutex> guard(entry.lock);
 	vector<reference<ART>> arts_to_scan;
 	arts_to_scan.push_back(art);
-	if (entry.deleted_rows_in_use) {
-		if (entry.deleted_rows_in_use->GetIndexType() != ART::TYPE_NAME) {
+	if (guard.DeletedRowsInUse()) {
+		if (guard.DeletedRowsInUse()->GetIndexType() != ART::TYPE_NAME) {
 			throw InternalException("Concurrent changes made to a non-ART index");
 		}
-		arts_to_scan.push_back(entry.deleted_rows_in_use->Cast<ART>());
+		arts_to_scan.push_back(guard.DeletedRowsInUse()->Cast<ART>());
 	}
-	if (entry.added_data_during_checkpoint) {
-		if (entry.added_data_during_checkpoint->GetIndexType() != ART::TYPE_NAME) {
+	if (guard.AddedDataDuringCheckpoint()) {
+		if (guard.AddedDataDuringCheckpoint()->GetIndexType() != ART::TYPE_NAME) {
 			throw InternalException("Concurrent changes made to a non-ART index");
 		}
-		arts_to_scan.push_back(entry.added_data_during_checkpoint->Cast<ART>());
+		arts_to_scan.push_back(guard.AddedDataDuringCheckpoint()->Cast<ART>());
 	}
 
 	auto expressions = ExtractFilterExpressions(col, *filter, storage_index.GetIndex());
@@ -815,13 +821,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	}
 
 	for (auto &entry : indexes.IndexEntries()) {
-		auto &index = entry.GetIndexUnsafe();
-		if (index.GetIndexType() != ART::TYPE_NAME) {
-			continue;
-		}
-		D_ASSERT(index.IsBound());
-		auto &art = index.Cast<ART>();
-		index_scan = TryScanIndex(art, entry, column_list, input, filter_set, max_count, row_ids);
+		index_scan = TryScanIndex(entry, column_list, input, filter_set, max_count, row_ids);
 		if (index_scan) {
 			// found an index - break
 			break;

@@ -23,7 +23,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	auto &collection = *row_groups->collection;
 	collection.InitializeEmpty();
 
-	for (const auto &index : data_table_info->GetIndexes().Indexes()) {
+	for (auto guard : data_table_info->GetIndexes().ReadLockedIndexes()) {
+		const auto &index = guard.GetIndex();
 		const auto constraint = index.GetConstraintType();
 		if (constraint == IndexConstraintType::NONE) {
 			continue;
@@ -128,7 +129,8 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	// get the index size
 	idx_t index_sizes = 0;
-	for (auto &index : append_indexes.Indexes()) {
+	for (auto guard : append_indexes.ReadLockedIndexes()) {
+		auto &index = guard.GetIndex();
 		if (!index.IsBound()) {
 			continue;
 		}
@@ -448,7 +450,8 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	Vector committed_row_ids(row_ids, committed_sel, committed_count);
 	committed_row_ids.Flatten();
 
-	for (auto &index : delete_indexes.Indexes()) {
+	for (auto guard : delete_indexes.WriteLockedIndexes()) {
+		auto &index = guard.GetIndex();
 		D_ASSERT(index.IsBound());
 		if (!index.IsUnique()) {
 			continue;

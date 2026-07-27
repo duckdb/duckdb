@@ -351,7 +351,7 @@ static void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr
 }
 
 static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInfo &info,
-                                                   const vector<shared_ptr<BoundIndex>> &matched_indexes) {
+                                                   const vector<shared_ptr<IndexEntry>> &matched_indexes) {
 	map<idx_t, vector<idx_t>> conflicts;
 	unordered_map<idx_t, unique_ptr<Vector>> sort_keys;
 	//! Register which rows have already caused a conflict
@@ -359,8 +359,10 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 
 	auto &column_ids = info.column_ids;
 	if (column_ids.empty()) {
-		for (const auto &index : matched_indexes) {
-			auto &index_column_ids = index->GetColumnIdSet();
+		for (const auto &entry : matched_indexes) {
+			auto guard = entry->ReadLock();
+			auto &index = guard.GetIndex().Cast<BoundIndex>();
+			auto &index_column_ids = index.GetColumnIdSet();
 			PrepareSortKeys(input, sort_keys, index_column_ids);
 			vector<reference<Vector>> columns;
 			for (auto &idx : index_column_ids) {
@@ -520,14 +522,14 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 	}
 
 	ConflictInfo conflict_info(conflict_target);
-	vector<shared_ptr<BoundIndex>> matching_indexes;
+	vector<shared_ptr<IndexEntry>> matching_indexes;
 
 	if (conflict_info.column_ids.empty()) {
 		const auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
-		for (auto &entry : global_indexes.IndexEntries()) {
-			lock_guard<mutex> lock(entry.lock);
-			auto &index = entry.GetIndexUnsafe();
+		for (const auto &entry : global_indexes.GetEntries()) {
+			auto guard = entry->ReadLock();
+			auto &index = guard.GetIndex();
 
 			if (!index.IsUnique()) {
 				continue;
@@ -537,13 +539,13 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 			}
 			D_ASSERT(index.IsBound());
 
-			matching_indexes.push_back(entry.GetSharedIndex<BoundIndex>());
+			matching_indexes.push_back(entry);
 		}
 
 		const auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
-		for (auto &entry : local_indexes.IndexEntries()) {
-			lock_guard<mutex> lock(entry.lock);
-			auto &index = entry.GetIndexUnsafe();
+		for (const auto &entry : local_indexes.GetEntries()) {
+			auto guard = entry->ReadLock();
+			auto &index = guard.GetIndex();
 
 			if (!index.IsUnique()) {
 				continue;
@@ -553,7 +555,7 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 			}
 			D_ASSERT(index.IsBound());
 
-			matching_indexes.push_back(entry.GetSharedIndex<BoundIndex>());
+			matching_indexes.push_back(entry);
 		}
 	}
 
