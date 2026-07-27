@@ -345,9 +345,14 @@ static unique_ptr<ParsedExpression> ReachableVersionBound(const string &aggregat
 //!   (SELECT * FROM <store>
 //!     WHERE __feature_version >= COALESCE(<min reachable>, <oldest retained>)
 //!       AND __feature_version <= <max reachable>) AS <alias>
-//! The lower bound is coalesced because a spine reaching back before every snapshot resolves to NULL there,
-//! and a NULL bound would filter out every row. The upper bound is deliberately not coalesced: a NULL there
-//! means no spine row resolves to any version at all, and an empty scan is then the correct result.
+//! The min and max bounds are the same ASOF join over the same spine, differing only in aggregate, so one goes
+//! NULL if and only if the other does: a spine reaching back before every retained snapshot makes MIN and MAX
+//! both NULL. In that case the (uncoalesced) upper bound alone already empties the scan -- __feature_version
+//! <= NULL is NULL under three-valued logic, which a WHERE clause treats as no match, for every row -- so the
+//! COALESCE on the lower bound is not what makes that case correct. Its actual purpose is narrower: without it,
+//! the lower bound would carry a NULL literal instead of a concrete >= oldest_version, which is a useless hint
+//! for the store scan's dynamic filter. Coalescing to the oldest retained version keeps that hint concrete (and
+//! harmless -- the upper bound still empties the scan) even in this degenerate case.
 static unique_ptr<TableRef> ServeStoreRef(const string &store_table, const string &feature_alias,
                                           const vector<FeatureVersionStamp> &stamps, const string &spine_table,
                                           const string &spine_asof_column, bool latest_mode) {

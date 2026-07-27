@@ -242,3 +242,23 @@ query TR
 SERVE FEATURE oo_latest FOR oo_requests;
 ----
 X001	50.00
+
+# ============================================================
+# Edge case: every spine row is before every retained snapshot (not just one row mixed in among valid ones, as
+# tt_requests has above -- the version bound is a single aggregate over the WHOLE spine, so as long as at least
+# one row resolves to a real version, MIN/MAX never actually go NULL there). With every row unresolved, both the
+# min and max reachable-version subqueries evaluate to NULL, and the store scan's uncoalesced upper bound
+# (__feature_version <= NULL) empties the scan under SQL's three-valued logic. This pins down that the result is
+# NULL feature columns, not an error and not a wrong value, independent of whatever the lower bound's COALESCE
+# does.
+# ============================================================
+statement ok
+CREATE TABLE before_all_requests (card_no VARCHAR, asof_time TIMESTAMP);
+
+statement ok
+INSERT INTO before_all_requests VALUES ('C001', '2024-01-01 00:00:00');
+
+query TTR
+SERVE FEATURE eq_txn FOR before_all_requests ASOF asof_time;
+----
+C001	2024-01-01 00:00:00	NULL
