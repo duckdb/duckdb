@@ -31,15 +31,15 @@ private:
 	explicit RecursiveDependentJoinPlanner(Binder &binder) : binder(binder) {
 	}
 	static bool TryRewritePairDependentJoinCondition(Binder &binder, unique_ptr<LogicalOperator> &op,
-	                                                 BindingReplacementMap &replacements);
+	                                                 BindingReplacementGraph &replacements);
 	static bool CanRewritePairDependentJoinCondition(LogicalOperator &op);
 	static unique_ptr<LogicalOperator> PlanPairDependentLateralJoin(Binder &binder, unique_ptr<LogicalOperator> left,
 	                                                                unique_ptr<LogicalOperator> right,
 	                                                                unique_ptr<Expression> condition,
 	                                                                const unordered_set<TableIndex> &left_bindings,
 	                                                                JoinType join_type);
-	BindingReplacementMap PlanOperator(unique_ptr<LogicalOperator> &op);
-	BindingReplacementMap PlanAnyJoinCondition(unique_ptr<LogicalOperator> &op);
+	BindingReplacementGraph PlanOperator(unique_ptr<LogicalOperator> &op);
+	BindingReplacementGraph PlanAnyJoinCondition(unique_ptr<LogicalOperator> &op);
 	void PlanJoinChildFilters(LogicalOperator &op);
 	void PlanJoinExpressions(LogicalOperator &op);
 	void PlanJoinSubqueries(LogicalJoin &join, unique_ptr<Expression> &expr, JoinSide uncorrelated_side);

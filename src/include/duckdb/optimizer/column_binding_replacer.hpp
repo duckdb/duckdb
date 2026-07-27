@@ -29,14 +29,15 @@ public:
 	LogicalType new_type;
 };
 
-//! A validated graph of binding replacements. Resolution is transitive and independent of insertion order.
-class BindingReplacementMap {
+//! A validated graph of direct binding replacement edges.
+//! Resolution follows these edges transitively and is independent of insertion order.
+class BindingReplacementGraph {
 public:
 	ColumnBinding Resolve(ColumnBinding binding) const;
 	bool TryAdd(const ReplacementBinding &replacement);
 	void Add(ColumnBinding old_binding, ColumnBinding new_binding);
 	void Add(const ReplacementBinding &replacement);
-	void Merge(const BindingReplacementMap &replacements);
+	void Merge(const BindingReplacementGraph &replacements);
 	void AddTo(ColumnBindingReplacer &replacer) const;
 
 	bool Empty() const {
@@ -91,18 +92,10 @@ protected:
 //! Applies binding replacements together with their projection-layout invariants.
 class ColumnBindingRewrite {
 public:
-	//! Restrict a replacement graph to bindings that cross the specified operator-output boundary.
-	static BindingReplacementMap ScopeToOutput(const vector<ColumnBinding> &old_output,
-	                                           const vector<ColumnBinding> &new_output,
-	                                           const BindingReplacementMap &replacements);
-	//! Scope replacements and require every previous output binding to remain reachable.
-	static BindingReplacementMap PropagateOutput(const vector<ColumnBinding> &old_output,
-	                                             const vector<ColumnBinding> &new_output,
-	                                             const BindingReplacementMap &replacements);
-	static BindingReplacementMap ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
-	                                          vector<ColumnBinding> old_child_bindings,
-	                                          const BindingReplacementMap &replacements);
-	static void ApplyToOperatorBindings(LogicalOperator &op, const BindingReplacementMap &replacements);
+	//! Apply the output-boundary view of a complete replacement graph to one parent-child edge.
+	static void ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
+	                         vector<ColumnBinding> old_child_bindings, const BindingReplacementGraph &replacements);
+	static void ApplyToOperatorBindings(LogicalOperator &op, const BindingReplacementGraph &replacements);
 
 private:
 	static void RemapProjectionMapStrict(vector<ProjectionIndex> &projection_map,

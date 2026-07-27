@@ -16,7 +16,7 @@ class Binder;
 
 struct PairDependentJoinPlan {
 	unique_ptr<LogicalOperator> plan;
-	BindingReplacementMap output_replacements;
+	BindingReplacementGraph output_replacements;
 };
 
 //! Plans the match-domain rewrite for pair-dependent FULL OUTER JOIN predicates.

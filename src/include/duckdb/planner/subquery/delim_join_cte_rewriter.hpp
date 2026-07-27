@@ -23,11 +23,11 @@ private:
 	explicit DelimJoinCTERewriter(Binder &binder);
 
 	void Rewrite(unique_ptr<LogicalOperator> &plan);
-	BindingReplacementMap RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
-	                                              bool null_rejecting_filter_above = false,
-	                                              bool preserve_evidence_side = false);
-	BindingReplacementMap MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
-	                                                bool null_rejecting_filter_above, bool preserve_evidence_side);
+	BindingReplacementGraph RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
+	                                                bool null_rejecting_filter_above = false,
+	                                                bool preserve_evidence_side = false);
+	BindingReplacementGraph MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
+	                                                  bool null_rejecting_filter_above, bool preserve_evidence_side);
 
 private:
 	Binder &binder;

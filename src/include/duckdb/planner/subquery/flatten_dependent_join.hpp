@@ -35,7 +35,7 @@ private:
 		}
 
 		vector<ColumnBinding> bindings;
-		BindingReplacementMap binding_replacements;
+		BindingReplacementGraph replacement_graph;
 	};
 	struct DependentJoinOutput {
 		vector<ColumnBinding> left_payload;
@@ -81,7 +81,7 @@ private:
 	optional_ptr<const ColumnBinding> GetCorrelatedBase(const ColumnBinding &binding) const;
 	optional_idx GetCorrelatedIndex(const ColumnBinding &binding) const;
 	void MergeCorrelatedAliases(const FlattenDependentJoins &source);
-	void AddReplacementAliases(const BindingReplacementMap &replacements);
+	void AddReplacementAliases(const BindingReplacementGraph &replacements);
 	Binder &binder;
 	column_binding_map_t<ColumnBinding> correlated_aliases;
 	column_binding_map_t<idx_t> replacement_map;
