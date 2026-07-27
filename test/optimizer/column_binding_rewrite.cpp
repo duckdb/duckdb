@@ -81,6 +81,23 @@ TEST_CASE("Binding replacement graph rejects ambiguous provenance", "[optimizer]
 	REQUIRE(identity.Empty());
 }
 
+TEST_CASE("Binding replacement graph validates output boundaries", "[optimizer][bindings]") {
+	auto binding_a = ColumnBinding(TableIndex(0), ProjectionIndex(0));
+	auto binding_b = ColumnBinding(TableIndex(1), ProjectionIndex(0));
+	auto binding_c = ColumnBinding(TableIndex(2), ProjectionIndex(0));
+	auto binding_d = ColumnBinding(TableIndex(3), ProjectionIndex(0));
+
+	BindingReplacementGraph graph;
+	graph.Add(binding_a, binding_b);
+	graph.Add(binding_b, binding_c);
+
+	// Validation stops at the current output boundary even if the complete graph continues beyond it.
+	REQUIRE_NOTHROW(ColumnBindingRewrite::ValidateOutput({binding_a}, {binding_b}, graph));
+	REQUIRE_NOTHROW(ColumnBindingRewrite::ValidateOutput({binding_b}, {binding_b}, graph));
+	REQUIRE_NOTHROW(ColumnBindingRewrite::ValidateOutput({binding_a}, {binding_c}, graph));
+	REQUIRE_NOTHROW(ColumnBindingRewrite::ValidateOutput({binding_d}, {binding_d}, graph));
+}
+
 static unique_ptr<LogicalOperator> CreateBoundaryTestPlan(TableIndex child_index, ColumnBinding filter_binding) {
 	vector<unique_ptr<Expression>> child_expressions;
 	child_expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(10)));
