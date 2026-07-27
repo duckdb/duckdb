@@ -141,31 +141,39 @@ ColumnBinding GetRowNumberColumnBinding(const unique_ptr<LogicalOperator> &op) {
 	}
 }
 
-idx_t TraverseAndFindAggregateOffset(const unique_ptr<LogicalOperator> &op) {
-	reference<LogicalOperator> current_op = *op;
-	while (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-		D_ASSERT(!current_op.get().children.empty());
-		current_op = *current_op.get().children[0];
-	}
-	const auto &aggregate = current_op.get().Cast<LogicalAggregate>();
-	return aggregate.groups.size();
-}
+struct LHSColumnInfo {
+	string name;
+	LogicalType type;
+	ColumnBinding binding;
+};
 
-string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column_id) {
+LHSColumnInfo GetLHSColumnInfo(const unique_ptr<LogicalOperator> &op, idx_t column_id) {
+	D_ASSERT(column_id < op->types.size());
+	const auto bindings = op->GetColumnBindings();
+	D_ASSERT(column_id < bindings.size());
+
+	LHSColumnInfo result;
+	result.type = op->types[column_id];
+	result.binding = bindings[column_id];
+
 	reference<LogicalOperator> current_op = *op;
+	auto get_binding = result.binding;
 
 	if (op.get()->type != LogicalOperatorType::LOGICAL_GET) {
 		D_ASSERT(op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		D_ASSERT(op.get()->expressions.size() > column_id &&
 		         op.get()->expressions[column_id]->type == ExpressionType::BOUND_COLUMN_REF);
 		const auto &colref = op.get()->expressions[column_id]->Cast<BoundColumnRefExpression>();
-		column_id = colref.binding.column_index;
+		get_binding = colref.binding;
 		current_op = *op.get()->children[0];
 	}
 
 	const auto &logical_get = current_op.get().Cast<LogicalGet>();
-	const auto column_index = logical_get.GetColumnIds()[column_id];
-	return logical_get.GetColumnName(column_index);
+	D_ASSERT(get_binding.table_index == logical_get.table_index);
+	D_ASSERT(get_binding.column_index < logical_get.GetColumnIds().size());
+	const auto column_index = logical_get.GetColumnIds()[get_binding.column_index];
+	result.name = logical_get.GetColumnName(column_index);
+	return result;
 }
 
 } // namespace
@@ -260,7 +268,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	}
 
 	op = UpdateTopmostBindings(window_idx, std::move(op), topmost_types, group_projection_idxs, topmost_bindings,
-	                           new_bindings, replacer);
+	                           new_bindings, replacer, params);
 
 	replacer.stop_operator = op.get();
 
@@ -333,6 +341,10 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	                                             optimizer.binder.GenerateTableIndex(), std::move(select_list));
 	aggregate->groupings_index = optimizer.binder.GenerateTableIndex();
 	aggregate->groups = std::move(window_expr.partitions);
+	if (aggregate->groups.empty() && params.limit == 1) {
+		// A constant group preserves the window's empty-input behavior.
+		aggregate->groups.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
+	}
 	aggregate->children.push_back(std::move(window.children[0]));
 	aggregate->ResolveOperatorTypes();
 
@@ -741,7 +753,8 @@ unique_ptr<LogicalOperator>
 TopNWindowElimination::UpdateTopmostBindings(idx_t window_idx, unique_ptr<LogicalOperator> op,
                                              const vector<LogicalType> &types, const map<idx_t, idx_t> &group_idxs,
                                              const vector<ColumnBinding> &topmost_bindings,
-                                             vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer) {
+                                             vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer,
+                                             const TopNWindowEliminationParameters &params) {
 	// The top-most operator's column order is:
 	// [projected groups][aggregate args/value][row number]
 	// Now set the new bindings according to this order and remember replacements in replacer
@@ -781,8 +794,8 @@ TopNWindowElimination::UpdateTopmostBindings(idx_t window_idx, unique_ptr<Logica
 		current_column_idx = 0;
 	}
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		// We do not have an aggregate index, so we need to set an offset to hit the correct columns
-		current_column_idx = TraverseAndFindAggregateOffset(op->children[1]);
+		// The late-materialized LHS contains the semantic partitions, not synthetic aggregate groups.
+		current_column_idx = params.partition_count;
 	}
 
 	// Project the args/value
@@ -848,6 +861,7 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	params.include_row_number = BindingsReferenceRowNumber(bindings, window);
 	params.payload_type = aggregate_payload.size() > 1 ? TopNPayloadType::STRUCT_PACK : TopNPayloadType::SINGLE_COLUMN;
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	params.partition_count = window_expr.partitions.size();
 	params.order_type = window_expr.orders[0].type;
 
 	VisitExpression(&window_expr.orders[0].expression);
@@ -1199,13 +1213,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	for (idx_t i = 0; i < rowid_column_count; i++) {
 		const idx_t lhs_rowid_idx = lhs->types.size() - (rowid_column_count - i);
 		const idx_t rhs_rowid_idx = rhs_binding_offset + i;
-		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
+		const auto lhs_column = GetLHSColumnInfo(lhs, lhs_rowid_idx);
 
 		JoinCondition condition;
 		condition.comparison = ExpressionType::COMPARE_EQUAL;
-		condition.left = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
-		                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
-		condition.right = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
+		condition.left = make_uniq<BoundColumnRefExpression>(lhs_column.name, lhs_column.type, lhs_column.binding);
+		condition.right = make_uniq<BoundColumnRefExpression>(lhs_column.name, rhs->types[aggregate_offset + i],
 		                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
 		join->conditions.push_back(std::move(condition));
 	}

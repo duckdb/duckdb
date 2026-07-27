@@ -28,6 +28,8 @@ struct TopNWindowEliminationParameters {
 	bool include_row_number;
 	//! Whether the val or arg column contains null values
 	bool can_be_null = false;
+	//! The number of semantic window partitions
+	idx_t partition_count = 0;
 };
 
 class TopNWindowElimination : public BaseColumnPruner {
@@ -61,7 +63,8 @@ private:
 	unique_ptr<LogicalOperator>
 	UpdateTopmostBindings(idx_t window_idx, unique_ptr<LogicalOperator> op, const vector<LogicalType> &types,
 	                      const map<idx_t, idx_t> &group_idxs, const vector<ColumnBinding> &topmost_bindings,
-	                      vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
+	                      vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer,
+	                      const TopNWindowEliminationParameters &params);
 	TopNWindowEliminationParameters ExtractOptimizerParameters(const LogicalWindow &window, const LogicalFilter &filter,
 	                                                           const vector<ColumnBinding> &bindings,
 	                                                           vector<unique_ptr<Expression>> &aggregate_payload);
