@@ -125,14 +125,6 @@ ColumnWriter::ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_s
 ColumnWriter::~ColumnWriter() {
 }
 
-static void DecrementMaxDefineRecursive(ColumnWriter &writer) {
-	D_ASSERT(writer.Schema().max_define > 0);
-	writer.Schema().max_define--;
-	for (auto &child : writer.ChildWriters()) {
-		DecrementMaxDefineRecursive(*child);
-	}
-}
-
 void ColumnWriter::MarkRepetitionRequired() {
 	if (column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::REQUIRED) {
 		return;
@@ -141,7 +133,15 @@ void ColumnWriter::MarkRepetitionRequired() {
 	D_ASSERT(can_have_nulls);
 	column_schema.repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
 	can_have_nulls = false;
-	DecrementMaxDefineRecursive(*this);
+	DecrementMaxDefineRecursive();
+}
+
+void ColumnWriter::DecrementMaxDefineRecursive() {
+	D_ASSERT(column_schema.max_define > 0);
+	column_schema.max_define--;
+	for (auto &child : child_writers) {
+		child->DecrementMaxDefineRecursive();
+	}
 }
 
 bool ColumnWriter::TryExportPreparedShreddingType(ShreddingType &result) const {

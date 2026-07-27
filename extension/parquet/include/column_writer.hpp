@@ -162,9 +162,6 @@ public:
 	const vector<unique_ptr<ColumnWriter>> &ChildWriters() const {
 		return child_writers;
 	}
-	vector<unique_ptr<ColumnWriter>> &ChildWriters() {
-		return child_writers;
-	}
 
 	//! Mark this writer (and descendants) as REQUIRED in the Parquet schema
 	void MarkRepetitionRequired();
@@ -233,6 +230,8 @@ protected:
 
 	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  AllocatedData &compressed_buf);
+
+	void DecrementMaxDefineRecursive();
 
 public:
 	ParquetWriter &writer;
