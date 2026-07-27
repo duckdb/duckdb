@@ -12,6 +12,7 @@
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 

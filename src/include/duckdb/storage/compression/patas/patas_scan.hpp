@@ -15,6 +15,7 @@
 #include "duckdb/storage/compression/patas/algorithm/patas.hpp"
 #include "duckdb/storage/compression/patas/patas.hpp"
 
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
