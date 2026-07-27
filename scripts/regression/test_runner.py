@@ -88,6 +88,7 @@ REGRESSION_THRESHOLD_PERCENTAGE = 0.1
 REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
 # hide benchmark changes that are below the noise floor in the final report
 DISPLAY_THRESHOLD_PERCENTAGE = 2.0
+TIMED_RUN_BATCH_SIZE = 5
 
 ANSI_RED = "\033[31m"
 ANSI_GREEN = "\033[32m"
@@ -441,7 +442,6 @@ def run_benchmarks_alternating(old_runner: BenchmarkRunner, new_runner: Benchmar
     old_failures = {}
     new_failures = {}
     requested_runs = max(timed_runs, 1) if timed_runs is not None else 1
-    timed_runs_override = 1 if timed_runs is not None else None
 
     for benchmark in benchmark_list:
         old_timings = []
@@ -449,32 +449,43 @@ def run_benchmarks_alternating(old_runner: BenchmarkRunner, new_runner: Benchmar
         old_failure = None
         new_failure = None
 
-        for _ in range(requested_runs):
-            old_run_timings, old_failure = old_runner.run_benchmark_once(benchmark, timed_runs_override)
-            if old_failure:
-                break
-            if not old_run_timings:
-                old_failure = "Benchmark did not produce any timings"
-                break
-            old_timings.extend(old_run_timings)
+        while len(old_timings) < requested_runs or len(new_timings) < requested_runs:
+            if len(old_timings) < requested_runs:
+                timed_runs_override = None
+                if timed_runs is not None:
+                    timed_runs_override = min(TIMED_RUN_BATCH_SIZE, requested_runs - len(old_timings))
 
-            new_run_timings, new_failure = new_runner.run_benchmark_once(benchmark, timed_runs_override)
-            if new_failure:
-                break
-            if not new_run_timings:
-                new_failure = "Benchmark did not produce any timings"
-                break
-            new_timings.extend(new_run_timings)
+                old_run_timings, old_failure = old_runner.run_benchmark_once(benchmark, timed_runs_override)
+                if old_failure is None and not old_run_timings:
+                    old_failure = "Benchmark did not produce any timings"
+                if old_run_timings:
+                    old_timings.extend(old_run_timings)
 
-        old_results[benchmark], old_failures[benchmark] = old_runner.complete_benchmark(benchmark, old_timings)
-        new_results[benchmark], new_failures[benchmark] = new_runner.complete_benchmark(benchmark, new_timings)
+            if len(new_timings) < requested_runs:
+                timed_runs_override = None
+                if timed_runs is not None:
+                    timed_runs_override = min(TIMED_RUN_BATCH_SIZE, requested_runs - len(new_timings))
+
+                new_run_timings, new_failure = new_runner.run_benchmark_once(benchmark, timed_runs_override)
+                if new_failure is None and not new_run_timings:
+                    new_failure = "Benchmark did not produce any timings"
+                if new_run_timings:
+                    new_timings.extend(new_run_timings)
+
+            if old_failure or new_failure:
+                break
 
         if old_failure:
             old_results[benchmark] = 'Failed to run benchmark ' + benchmark
             old_failures[benchmark] = old_failure
+        else:
+            old_results[benchmark], old_failures[benchmark] = old_runner.complete_benchmark(benchmark, old_timings)
+
         if new_failure:
             new_results[benchmark] = 'Failed to run benchmark ' + benchmark
             new_failures[benchmark] = new_failure
+        else:
+            new_results[benchmark], new_failures[benchmark] = new_runner.complete_benchmark(benchmark, new_timings)
 
     return old_results, old_failures, new_results, new_failures
 
