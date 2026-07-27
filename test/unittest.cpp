@@ -55,12 +55,21 @@ int main(int argc_in, char *argv[]) {
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 
 	auto &test_config = TestConfiguration::Get();
-	test_config.Initialize();
+	try {
+		// Applies every DUCKDB_TEST_<NAME> fallback, so a bad env value surfaces here.
+		test_config.Initialize();
+	} catch (std::exception &ex) {
+		fprintf(stderr, "%s\n", ex.what());
+		return 1;
+	}
 	bool keep_home = false;
 	bool use_stdin = false;
 	vector<string> input_files;
 	unordered_set<idx_t> input_file_arg_indices;
 
+	// The --temp-dir-* family, --run-id and --env-passthrough live in TestConfiguration's option table,
+	// so ParseArgument handles them below and Initialize() already applied their env fallbacks. What
+	// remains here is what that table cannot express.
 	idx_t argc = NumericCast<idx_t>(argc_in);
 	int new_argc = 0;
 	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
@@ -68,35 +77,6 @@ int main(int argc_in, char *argv[]) {
 		string argument(argv[i]);
 		if (argument == "--test-dir") {
 			test_directory = string(argv[++i]);
-		} else if (argument == "--temp-dir-base") {
-			SetTempDirBase(string(argv[++i]));
-		} else if (argument == "--run-id") {
-			SetRunId(string(argv[++i]));
-		} else if (argument == "--temp-dir-run-id") {
-			if (!SetTempDirRunIdInPath(string(argv[++i]))) {
-				fprintf(stderr, "--temp-dir-run-id expects one of: on, off\n");
-				return 1;
-			}
-		} else if (argument == "--temp-dir-test-id") {
-			if (!SetTempDirTestId(string(argv[++i]))) {
-				fprintf(stderr, "--temp-dir-test-id expects one of: on, off\n");
-				return 1;
-			}
-		} else if (argument == "--temp-dir-create") {
-			if (!SetTempDirCreate(string(argv[++i]))) {
-				fprintf(stderr, "--temp-dir-create expects one of: never, on-absent, always\n");
-				return 1;
-			}
-		} else if (argument == "--temp-dir-destroy") {
-			if (!SetTempDirDestroy(string(argv[++i]))) {
-				fprintf(stderr, "--temp-dir-destroy expects one of: never, on-success, always\n");
-				return 1;
-			}
-		} else if (argument == "--database-destroy") {
-			if (!SetDatabaseDestroy(string(argv[++i]))) {
-				fprintf(stderr, "--database-destroy expects one of: on, off, on-success\n");
-				return 1;
-			}
 		} else if (argument == "--require") {
 			AddRequire(string(argv[++i]));
 		} else if (argument == "--emit-on-skip") {
@@ -124,6 +104,15 @@ int main(int argc_in, char *argv[]) {
 			}
 		}
 	}
+
+	// Before any temp-dir prep or test runs: a named-but-absent var kills the whole invocation, unlike
+	// require-env's per-test skip.
+	string env_error;
+	if (!ValidateEnvPassthrough(env_error) || !test_config.ValidateTestEnv(env_error)) {
+		fprintf(stderr, "%s\n", env_error.c_str());
+		return 1;
+	}
+
 	test_config.ChangeWorkingDirectory(test_directory);
 
 	vector<string> exact_sqllogic_tests;
@@ -147,8 +136,8 @@ int main(int argc_in, char *argv[]) {
 		new_argc = filtered_argc;
 	}
 
-	// Resolve + provision $BASE/[RUN_ID] per the create disposition (the TEST_ID level is
-	// materialized later, on the per-test path, once a test name is known).
+	// Resolve + provision $BASE/[RUN_ID] (the TEST_ID level is materialized later, on the
+	// per-test path, once a test name is known).
 	string prep_error;
 	if (!PrepareTempDir(prep_error)) {
 		fprintf(stderr, "Failed to prepare temp directory: %s\n", prep_error.c_str());
@@ -158,21 +147,18 @@ int main(int argc_in, char *argv[]) {
 	// after PrepareTempDir so TEMP_DIR reflects the materialized run root.
 	test_config.UpdateEnvironment();
 
-	// HOME points at the dedicated sandbox (a sibling of the run root), absolute and set ONCE for the
-	// whole invocation -- no per-test override. This isolates ~/.duckdb (extensions, secrets) without
-	// ever landing inside a {TEST_DIR} that a test whitelists via allowed_directories. Absolute because a
-	// relative home is meaningless and would shift under any test chdir.
-	string home_dir = GetTempDirHome();
-	{
-		auto local_fs = FileSystem::CreateLocal();
-		if (!local_fs->IsPathAbsolute(home_dir)) {
-			home_dir = local_fs->JoinPath(TestGetCurrentDirectory(), home_dir);
-		}
+	string data_dir_error;
+	if (!test_config.ValidateDataDirs(data_dir_error)) {
+		fprintf(stderr, "%s\n", data_dir_error.c_str());
+		return 1;
 	}
 
-	// A remote base cannot be a home dir; skip the override there.
-	bool remote_base = FileSystem::IsRemoteFile(GetTempDirBase());
-	if (!keep_home && !remote_base) {
+	// Set ONCE per invocation, never per-test, so ~/.duckdb (extensions, secrets) is isolated without
+	// landing inside a {TEST_DIR} a test whitelists. Absolute because a relative home would shift under
+	// any test chdir.
+	string home_dir = TestMakeAbsolute(GetTempDirHome(), TestGetCurrentDirectory());
+
+	if (!keep_home) {
 #ifdef DUCKDB_WINDOWS
 		if (_putenv_s("USERPROFILE", home_dir.c_str()) != 0) {
 			fprintf(stderr, "Failed to set USERPROFILE environment variable\n");
