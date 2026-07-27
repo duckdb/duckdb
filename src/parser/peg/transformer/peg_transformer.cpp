@@ -116,12 +116,12 @@ void TransformStack::SetResultLocation(ParseResult &parse_result, TransformResul
 	}
 	auto *expression_result = dynamic_cast<TypedTransformResult<unique_ptr<ParsedExpression>> *>(&result);
 	if (expression_result && expression_result->value && !expression_result->value->HasQueryLocation()) {
-		transformer.SetQueryLocation(*expression_result->value, parse_result.GetSpan());
+		transformer.SetQueryLocation(*expression_result->value, parse_result.GetLocation());
 		return;
 	}
 	auto *table_ref_result = dynamic_cast<TypedTransformResult<unique_ptr<TableRef>> *>(&result);
 	if (table_ref_result && table_ref_result->value && !table_ref_result->value->query_location.IsValid()) {
-		transformer.SetQueryLocation(*table_ref_result->value, parse_result.GetSpan());
+		transformer.SetQueryLocation(*table_ref_result->value, parse_result.GetLocation());
 		return;
 	}
 }
@@ -291,7 +291,7 @@ unique_ptr<SQLStatement> PEGTransformer::CreatePivotStatement(unique_ptr<SQLStat
 		enum_stmt->query = enum_stmt->ToString();
 		result->statements.push_back(std::move(enum_stmt));
 	}
-	result->stmt_span = statement->stmt_span;
+	result->stmt_location = statement->stmt_location;
 	statement->query = statement->ToString();
 	result->statements.push_back(std::move(statement));
 	return std::move(result);
@@ -334,11 +334,11 @@ unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const Identifier &w
 	return unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
 }
 
-void PEGTransformer::SetQueryLocation(ParsedExpression &expr, Span query_location) {
+void PEGTransformer::SetQueryLocation(ParsedExpression &expr, QueryLocation query_location) {
 	expr.SetQueryLocation(query_location);
 }
 
-void PEGTransformer::SetQueryLocation(TableRef &ref, Span query_location) {
+void PEGTransformer::SetQueryLocation(TableRef &ref, QueryLocation query_location) {
 	ref.query_location = query_location;
 }
 

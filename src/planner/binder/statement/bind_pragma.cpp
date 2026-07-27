@@ -65,7 +65,7 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 
 BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	// bind the pragma function
-	QueryErrorContext error_context(stmt.stmt_span);
+	QueryErrorContext error_context(stmt.stmt_location);
 	auto bound_info = BindPragma(*stmt.info, error_context);
 	if (!bound_info->function.function) {
 		throw BinderException("PRAGMA function does not have a function specified");

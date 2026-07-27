@@ -1,5 +1,5 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/span.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
@@ -190,7 +190,7 @@ unordered_map<string, string> Exception::InitializeExtraInfo(const TableRef &ref
 	return InitializeExtraInfo(ref.query_location);
 }
 
-unordered_map<string, string> Exception::InitializeExtraInfo(Span error_location) {
+unordered_map<string, string> Exception::InitializeExtraInfo(QueryLocation error_location) {
 	unordered_map<string, string> result;
 	SetQueryLocation(error_location, result);
 	return result;
@@ -207,19 +207,19 @@ bool Exception::IsExecutionError(ExceptionType type) {
 	}
 }
 
-unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, Span error_location) {
+unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, QueryLocation error_location) {
 	unordered_map<string, string> result;
 	result["error_subtype"] = subtype;
 	SetQueryLocation(error_location, result);
 	return result;
 }
 
-void Exception::SetQueryLocation(Span error_location, unordered_map<string, string> &extra_info) {
+void Exception::SetQueryLocation(QueryLocation error_location, unordered_map<string, string> &extra_info) {
 	if (error_location.IsValid()) {
 		// "position" is the start offset (kept for backwards compatibility with existing consumers)
 		extra_info["position"] = to_string(error_location.offset);
-		// "span" is the structured [start, length] source range
-		extra_info["span"] = "[" + to_string(error_location.offset) + "," + to_string(error_location.length) + "]";
+		// "location" is the structured [start, length] source range
+		extra_info["location"] = "[" + to_string(error_location.offset) + "," + to_string(error_location.length) + "]";
 	}
 }
 
@@ -240,11 +240,11 @@ TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const Ph
 }
 
 TypeMismatchException::TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg)
-    : TypeMismatchException(Span(), type_1, type_2, msg) {
+    : TypeMismatchException(QueryLocation(), type_1, type_2, msg) {
 }
 
-TypeMismatchException::TypeMismatchException(Span error_location, const LogicalType &type_1, const LogicalType &type_2,
-                                             const string &msg)
+TypeMismatchException::TypeMismatchException(QueryLocation error_location, const LogicalType &type_1,
+                                             const LogicalType &type_2, const string &msg)
     : Exception(Exception::InitializeExtraInfo(error_location), ExceptionType::MISMATCH_TYPE,
                 "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
 }

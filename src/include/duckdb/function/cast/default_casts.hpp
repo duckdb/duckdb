@@ -12,7 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/span.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
@@ -83,7 +83,7 @@ struct CastParameters {
 	//! Local state
 	optional_ptr<FunctionLocalState> local_state;
 	//! Query location (if any)
-	Span query_location;
+	QueryLocation query_location;
 	//! In the case of a nested type, when facing a cast error, if we nullify the parent
 	bool nullify_parent = false;
 };
@@ -151,7 +151,7 @@ struct BindCastInput {
 	CastFunctionSet &function_set;
 	optional_ptr<BindCastInfo> info;
 	optional_ptr<ClientContext> context;
-	Span query_location;
+	QueryLocation query_location;
 
 public:
 	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);

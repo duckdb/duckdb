@@ -230,14 +230,14 @@ public:
 			auto bridged = TryBridgeTransformResult<T>(*base_result);
 			if (bridged) {
 				auto bridged_result = std::move(bridged->value);
-				SetResultLocation(bridged_result, parse_result.GetSpan());
+				SetResultLocation(bridged_result, parse_result.GetLocation());
 				return bridged_result;
 			}
 			throw InternalException("Transformer for rule '" + parse_result.name + "' returned an unexpected type.");
 		}
 
 		auto result = std::move(typed_result_ptr->value);
-		SetResultLocation(result, parse_result.GetSpan());
+		SetResultLocation(result, parse_result.GetLocation());
 		return result;
 	}
 
@@ -281,27 +281,27 @@ public:
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 	bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end);
 	unique_ptr<WindowExpression> GetWindowClause(const Identifier &window_name);
-	void SetQueryLocation(ParsedExpression &expr, Span query_location);
-	void SetQueryLocation(TableRef &ref, Span query_location);
+	void SetQueryLocation(ParsedExpression &expr, QueryLocation query_location);
+	void SetQueryLocation(TableRef &ref, QueryLocation query_location);
 
 private:
 	template <typename T>
-	void SetResultLocation(T &, Span) {
+	void SetResultLocation(T &, QueryLocation) {
 	}
-	void SetResultLocation(unique_ptr<ParsedExpression> &expr, Span span) {
+	void SetResultLocation(unique_ptr<ParsedExpression> &expr, QueryLocation location) {
 		if (!expr) {
 			return;
 		}
-		if (span.IsValid() && !expr->HasQueryLocation()) {
-			SetQueryLocation(*expr, span);
+		if (location.IsValid() && !expr->HasQueryLocation()) {
+			SetQueryLocation(*expr, location);
 		}
 	}
-	void SetResultLocation(unique_ptr<TableRef> &ref, Span span) {
+	void SetResultLocation(unique_ptr<TableRef> &ref, QueryLocation location) {
 		if (!ref) {
 			return;
 		}
-		if (span.IsValid() && !ref->query_location.IsValid()) {
-			SetQueryLocation(*ref, span);
+		if (location.IsValid() && !ref->query_location.IsValid()) {
+			SetQueryLocation(*ref, location);
 		}
 	}
 

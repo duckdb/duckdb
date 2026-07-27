@@ -98,30 +98,30 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	}
 }
 
-//! Reconstruct the source span from an error's extra info (prefers "span" so the length is kept)
-static Span ExtractSpan(const unordered_map<string, string> &info) {
+//! Reconstruct the source location from an error's extra info (prefers "location" so the length is kept)
+static QueryLocation ExtractLocation(const unordered_map<string, string> &info) {
 	auto pos_entry = info.find("position");
 	if (pos_entry == info.end()) {
-		return Span();
+		return QueryLocation();
 	}
 	uint64_t start;
 	if (!TryCast::Operation<string_t, uint64_t>(string_t(pos_entry->second), start)) {
-		return Span();
+		return QueryLocation();
 	}
 	uint64_t length = 0;
-	auto span_entry = info.find("span");
-	if (span_entry != info.end()) {
+	auto location_entry = info.find("location");
+	if (location_entry != info.end()) {
 		// value is formatted as "[start,length]"
-		auto comma = span_entry->second.find(',');
+		auto comma = location_entry->second.find(',');
 		if (comma != string::npos) {
-			auto len_str = span_entry->second.substr(comma + 1);
+			auto len_str = location_entry->second.substr(comma + 1);
 			if (!len_str.empty() && len_str.back() == ']') {
 				len_str.pop_back();
 			}
 			TryCast::Operation<string_t, uint64_t>(string_t(len_str), length);
 		}
 	}
-	return Span(start, length);
+	return QueryLocation(start, length);
 }
 
 static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
@@ -185,12 +185,12 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	}
 	// get a new top-n
 	auto top_candidates = StringUtil::TopNStrings(scores);
-	// get query location (prefer the current error's span, fall back to the new error's)
-	auto span = ExtractSpan(current_info);
-	if (!span.IsValid()) {
-		span = ExtractSpan(new_info);
+	// get query location (prefer the current error's location, fall back to the new error's)
+	auto location = ExtractLocation(current_info);
+	if (!location.IsValid()) {
+		location = ExtractLocation(new_info);
 	}
-	QueryErrorContext context(span);
+	QueryErrorContext context(location);
 	// generate a new (combined) error
 	current = BinderException::ColumnNotFound(Identifier(column_name), StringsToIdentifiers(top_candidates), context);
 	return true;

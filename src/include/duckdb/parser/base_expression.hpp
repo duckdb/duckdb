@@ -12,7 +12,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/span.hpp"
+#include "duckdb/common/query_location.hpp"
 
 namespace duckdb {
 
@@ -43,8 +43,8 @@ public:
 		type = new_type;
 	}
 
-	//! Returns the source span in the query (if any). Implicitly converts to optional_idx (start offset).
-	Span GetQueryLocation() const {
+	//! Returns the source location in the query (if any). Implicitly converts to optional_idx (start offset).
+	QueryLocation GetQueryLocation() const {
 		return query_location;
 	}
 
@@ -53,8 +53,8 @@ public:
 		query_location = location;
 	}
 
-	//! Sets the source span in the query
-	void SetQueryLocation(Span location) {
+	//! Sets the source location in the query
+	void SetQueryLocation(QueryLocation location) {
 		query_location = location;
 	}
 
@@ -93,8 +93,8 @@ protected:
 	//! The alias of the expression,
 	Identifier alias;
 
-	//! The source span in the query (if any)
-	Span query_location;
+	//! The source location in the query (if any)
+	QueryLocation query_location;
 
 protected:
 	//! Sets the class of the expression unsafely. In general expressions are immutable and should not be changed after

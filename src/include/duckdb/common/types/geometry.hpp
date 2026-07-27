@@ -11,7 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/span.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include <limits>
 #include <cmath>
@@ -275,7 +275,7 @@ public:
 
 	//! Convert from WKT
 	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, StringHeap &heap, bool strict,
-	                                  Span query_location);
+	                                  QueryLocation query_location);
 	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict);
 
 	//! Convert to WKT

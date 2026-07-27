@@ -154,7 +154,7 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 	}
 	error_render_width += line_indicator.size() + begin_trunc.size();
 
-	// get the render width of the caret indicator, covering the full span length (clamped to the visible line)
+	// get the render width of the caret indicator, covering the full location length (clamped to the visible line)
 	idx_t caret_width = 0;
 	idx_t error_end_in_line = (error_location - error_line_start) + error_length;
 	idx_t display_end_in_line = end_pos - error_line_start;

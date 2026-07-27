@@ -138,21 +138,22 @@ public:
 	//! Source length: for leaf tokens the token length; for composite results the enclosing extent of children
 	optional_idx length;
 
-	//! Returns the source span [offset, offset+length) of this parse result (length 0 when unknown)
-	Span GetSpan() const {
+	//! Returns the source location [offset, offset+length) of this parse result (length 0 when unknown)
+	QueryLocation GetLocation() const {
 		if (!offset.IsValid()) {
-			return Span();
+			return QueryLocation();
 		}
-		return Span(offset.GetIndex(), length.IsValid() ? length.GetIndex() : 0);
+		return QueryLocation(offset.GetIndex(), length.IsValid() ? length.GetIndex() : 0);
 	}
 
-	//! Grow this result's span so it encloses the given child's span (used to build composite spans bottom-up)
+	//! Grow this result's location so it encloses the given child's location (used to build composite
+	//! locations bottom-up)
 	void EncloseChild(const ParseResult &child) {
-		auto child_span = child.GetSpan();
-		if (!offset.IsValid() || !child_span.IsValid()) {
+		auto child_location = child.GetLocation();
+		if (!offset.IsValid() || !child_location.IsValid()) {
 			return;
 		}
-		auto enclosing = GetSpan().Merge(child_span);
+		auto enclosing = GetLocation().Merge(child_location);
 		length = enclosing.length;
 	}
 
