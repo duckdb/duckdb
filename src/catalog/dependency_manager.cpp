@@ -1,4 +1,5 @@
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
@@ -537,7 +538,7 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 	auto info = GetLookupProperties(object);
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		auto dep_committed_at = dep.timestamp.load();
-		if (dep_committed_at > start_time) {
+		if (!VisibleToSnapshot(dep_committed_at, start_time)) {
 			// In the event of a CASCADE, the dependency drop has not committed yet
 			// so we would be halted by the existence of a dependency we are already dropping unless we check the
 			// timestamp
@@ -555,7 +556,7 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 			return;
 		}
 		D_ASSERT(dep.Subject().flags.IsOwnership());
-		if (dep_committed_at > start_time) {
+		if (!VisibleToSnapshot(dep_committed_at, start_time)) {
 			// Same as above, objects that are owned by the object that is being dropped will be dropped as part of this
 			// transaction. Only objects that were introduced by other transactions, that this transaction could not
 			// see, should cause this error:

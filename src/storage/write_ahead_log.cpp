@@ -10,6 +10,9 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/thread.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -66,6 +69,11 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 		} else {
 			storage_manager.SetWALSize(writer->GetFileSize());
 		}
+		// logical offset 0 is this file's current end, not its start: bytes inherited from an
+		// earlier session are already durable, and a failed sync must not truncate past them
+		lock_guard<mutex> sync_guard(sync_lock);
+		durable_file_offset = writer->GetFileSize();
+		requested_sync_file_offset = durable_file_offset;
 		init_state = WALInitState::INITIALIZED;
 	}
 	return *writer;
@@ -90,6 +98,13 @@ void WriteAheadLog::Truncate(idx_t size) {
 	}
 	writer->Truncate(size);
 	storage_manager.SetWALSize(writer->GetFileSize());
+
+	// the logical offsets need no adjustment: they are never reused, so no in-flight sync can be
+	// confused by a file position coming back. Only the recorded file positions rewind
+	lock_guard<mutex> guard(sync_lock);
+	auto truncated_offset = writer->GetFileSize();
+	durable_file_offset = MinValue<idx_t>(durable_file_offset, truncated_offset);
+	requested_sync_file_offset = MinValue<idx_t>(requested_sync_file_offset, truncated_offset);
 }
 
 bool WriteAheadLog::Initialized() const {
@@ -582,14 +597,115 @@ void WriteAheadLog::Flush() {
 	if (!writer) {
 		return;
 	}
+	SyncUpTo(FlushMarker());
+}
+
+idx_t WriteAheadLog::FlushMarker() {
+	if (!writer) {
+		// nothing was ever written to this WAL: there is nothing to make durable
+		return 0;
+	}
 
 	// write an empty entry
 	WriteAheadLogSerializer serializer(*this, WALType::WAL_FLUSH);
 	serializer.End();
 
-	// flushes all changes made to the WAL to disk
-	writer->Sync();
+	// push to the OS without syncing: SyncUpTo does that, potentially batched with other commits
+	writer->Flush();
 	storage_manager.SetWALSize(writer->GetFileSize());
+	// the logical offset is never reused, so it identifies this marker uniquely; the file
+	// position is recorded with it for the failure path
+	auto marker_offset = writer->GetTotalWritten();
+	auto marker_file_offset = writer->GetFileSize();
+	{
+		lock_guard<mutex> guard(sync_lock);
+		if (marker_offset > requested_sync_offset) {
+			requested_sync_offset = marker_offset;
+			requested_sync_file_offset = marker_file_offset;
+		}
+	}
+	return marker_offset;
+}
+
+void WriteAheadLog::TruncateUnsyncedTail() {
+	if (!writer) {
+		return;
+	}
+	// drop every byte past the durable prefix: no snapshot can observe those commits, and leaving
+	// them would let a restart replay a commit whose COMMIT reported failure
+	lock_guard<mutex> guard(sync_lock);
+	if (writer->GetFileSize() <= durable_file_offset) {
+		return;
+	}
+	writer->Truncate(durable_file_offset);
+	storage_manager.SetWALSize(writer->GetFileSize());
+	requested_sync_file_offset = MinValue<idx_t>(requested_sync_file_offset, durable_file_offset);
+}
+
+void WriteAheadLog::SyncUpTo(idx_t offset) {
+	D_ASSERT(writer && offset > 0);
+	unique_lock<mutex> guard(sync_lock);
+	// durable_offset only advances on successful syncs, so an offset it covers stays durable
+	while (durable_offset < offset) {
+		if (sync_failed) {
+			throw IOException("Cannot sync WAL \"%s\": a previous sync of this WAL has failed", wal_path);
+		}
+		if (syncing_offset >= offset) {
+			// an in-flight sync already covers this offset - wait for it to complete
+			sync_cv.wait(guard);
+		} else {
+			SyncAsLeader(guard);
+		}
+	}
+}
+
+//! Sync on behalf of everything requested so far. Enters with the sync lock held, releases it
+//! around the file syncs
+void WriteAheadLog::SyncAsLeader(unique_lock<mutex> &guard) {
+	auto target = requested_sync_offset;
+	auto target_file_offset = requested_sync_file_offset;
+	// read the debug hooks before claiming leadership: throwing after syncing_offset is set would
+	// strand every waiter behind a sync nobody is performing
+	auto &db_instance = GetDatabase().GetDatabase();
+	auto fsync_sleep_ms = Settings::Get<DebugWalFsyncSleepMsSetting>(db_instance);
+	auto fsync_failure_rate = Settings::Get<DebugWalFsyncFailureRateSetting>(db_instance);
+	syncing_offset = target;
+	guard.unlock();
+	ErrorData error;
+	try {
+		if (fsync_sleep_ms > 0) {
+			ThreadUtil::SleepMs(fsync_sleep_ms);
+		}
+		if (fsync_failure_rate > 0.0) {
+			// RandomEngine, not std::random_device: that leaks a versioned libstdc++ symbol
+			thread_local RandomEngine debug_rng;
+			if (debug_rng.NextRandom() < fsync_failure_rate) {
+				throw IOException("debug_wal_fsync_failure_rate: injected WAL fsync failure");
+			}
+		}
+		writer->SyncHandle();
+	} catch (std::exception &ex) {
+		error = ErrorData(ex);
+	}
+	guard.lock();
+	if (error.HasError()) {
+		// the OS may have dropped the dirty pages: this WAL must never be synced again
+		sync_failed = true;
+		guard.unlock();
+		sync_cv.notify_all();
+		error.Throw();
+	}
+	// a truncation during the sync needs no handling: it only removed unregistered entries
+	if (target > durable_offset) {
+		durable_offset = target;
+		durable_file_offset = target_file_offset;
+	}
+	// reset so waiters elect a new leader; clobbering a concurrent leader costs a spurious fsync
+	syncing_offset = durable_offset;
+	// notify without holding the lock, so waiters do not wake up into a held mutex
+	guard.unlock();
+	sync_cv.notify_all();
+	guard.lock();
 }
 
 void WriteAheadLog::IncrementWALEntriesCount() {

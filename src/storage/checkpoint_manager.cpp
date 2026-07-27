@@ -66,6 +66,9 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
 	transaction.SetIsCheckpointTransaction();
 	checkpoint_transaction = &transaction;
+	// used as a checkpoint identifier, so it has to be unique: the caller drained pending durability
+	// under the WAL lock it still holds, so no in-flight commit can cap this start time
+	D_ASSERT(transaction.start_time == transaction.unique_start_time);
 	options.transaction_id = transaction.start_time;
 	transaction_manager.SetActiveCheckpoint(transaction.start_time);
 }

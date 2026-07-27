@@ -208,7 +208,13 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// set up the statistics for the table
 	// the column that had its type changed will have the new statistics computed during conversion
-	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr, transaction);
+	// resolve at the commits seen so far, not at this transaction's snapshot: the new column does
+	// not inherit the old column's update segments, so a committed update the snapshot cannot see
+	// would be lost rather than merely unseen
+	auto &transaction_manager = DuckTransactionManager::Get(db);
+	TransactionData rewrite_visibility(transaction.transaction_id, transaction_manager.GetLastCommit() + 1);
+	row_groups =
+	    parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr, rewrite_visibility);
 
 	// scan the original table, and fill the new column with the transformed value
 	local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);

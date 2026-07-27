@@ -40,6 +40,11 @@ public:
 	DUCKDB_API void Close();
 	//! Flush all changes and fsync the file to disk
 	DUCKDB_API void Sync();
+	//! Fsync the file handle without flushing the buffer, covering exactly what previous Flush
+	//! calls pushed to the OS. Touching only the handle is what lets the WAL call this with its
+	//! lock released; the caller must still rule out a concurrent Close(), and needs a filesystem
+	//! whose Sync tolerates a concurrent Write/Seek on the same handle
+	DUCKDB_API void SyncHandle();
 	//! Flush the buffer to the file (without sync)
 	DUCKDB_API void Flush();
 	//! Returns the current size of the file

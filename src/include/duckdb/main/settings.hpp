@@ -733,6 +733,28 @@ struct DebugVerifyVectorSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DebugWalFsyncFailureRateSetting {
+	using RETURN_TYPE = double;
+	static constexpr const char *Name = "debug_wal_fsync_failure_rate";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: probability (0-1) that a WAL fsync fails, used for testing durability error handling";
+	static constexpr const char *InputType = "DOUBLE";
+	static constexpr const char *DefaultValue = "0.0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugWalFsyncSleepMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_wal_fsync_sleep_ms";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: time to sleep during each WAL fsync, emulating high-latency durable storage";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugWindowModeSetting {
 	using RETURN_TYPE = WindowAggregationMode;
 	static constexpr const char *Name = "debug_window_mode";

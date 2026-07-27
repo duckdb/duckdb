@@ -12,6 +12,9 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/common/deque.hpp"
+
+#include <condition_variable>
 
 namespace duckdb {
 class DuckTransactionManager;
@@ -57,6 +60,8 @@ public:
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
+	//! Wait until every published commit is durable; cancellable when a client context is given
+	void WaitForDurability(optional_ptr<ClientContext> context = nullptr);
 	transaction_t GetActiveCheckpoint() const {
 		return active_checkpoint;
 	}
@@ -110,6 +115,53 @@ private:
 	bool HasOtherTransactions(DuckTransaction &transaction);
 	void CleanupTransactions();
 
+	struct TransactionHorizon {
+		transaction_t lowest_start_time = TRANSACTION_ID_START;
+		transaction_t lowest_transaction_id = MAX_TRANSACTION_ID;
+	};
+	//! Lowest start time / id over the active transactions, pinned at the durable bound; also
+	//! refreshes lowest_active_start/id. Caller holds the transaction lock
+	TransactionHorizon UpdateTransactionHorizon(optional_ptr<DuckTransaction> exclude);
+	//! Move committed transactions no snapshot can need anymore into the cleanup info
+	void SweepCommittedTransactions(transaction_t lowest_start_time, DuckCleanupInfo &cleanup_info);
+	//! Queue a composed cleanup; the transaction lock keeps catalog cleanups in commit order
+	void QueueCleanup(unique_ptr<DuckCleanupInfo> cleanup_info);
+
+	//! Register a published commit whose flush marker is not yet synced (transaction + WAL lock held)
+	void RegisterUnsyncedCommit(transaction_t commit_id, idx_t wal_offset, idx_t catalog_version);
+	//! Advance the durable bound over the completed sync and drop this thread's entry; returns
+	//! whether the bound advanced
+	bool FinishCommitDurability(transaction_t commit_id, idx_t synced_offset);
+	//! Mark that a WAL sync has failed, waking up durability waiters
+	void MarkDurabilityFailed();
+	//! Sweep transactions pinned only by not-yet-durable commits; nothing else re-triggers it
+	void GarbageCollectDurableTransactions();
+	bool HasUnsyncedCommits();
+	struct SnapshotBound {
+		//! The highest start time that observes only durable commits
+		transaction_t start_time = MAX_TRANSACTION_ID;
+		//! The catalog version that snapshot observes. Prepared statements compare versions for
+		//! equality, so this has to be exact: any other value can match a plan bound against a
+		//! different catalog state and skip a re-bind that was needed
+		idx_t catalog_version = DConstants::INVALID_INDEX;
+	};
+	//! The snapshot bound while commits are pending durability (unbounded otherwise)
+	SnapshotBound GetSnapshotBound();
+
+	//! Commits are published before their WAL flush marker is synced: until then they are tracked
+	//! here and new snapshots are bounded below them, so no transaction can observe a commit a
+	//! crash could still lose. An entry is removed only by its own thread after it leaves
+	//! WriteAheadLog::SyncUpTo, making WaitForDurability a quiescence barrier for checkpoints.
+	//! Teardown does not rely on that drain - a committing thread holds the AttachedDatabase - so
+	//! the destructor asserts the queue is empty instead
+	struct UnsyncedCommit {
+		transaction_t commit_id;
+		//! The WAL offset covering the commit's flush marker
+		idx_t wal_offset;
+		//! The committed catalog version just before this commit published
+		idx_t catalog_version;
+	};
+
 private:
 	//! The current start timestamp used by transactions
 	transaction_t current_start_timestamp;
@@ -135,6 +187,17 @@ private:
 	StorageLock vacuum_lock;
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
+
+	//! Protects all durability state below
+	mutex durability_lock;
+	//! Published commits whose flush marker is not yet durable (in commit order)
+	deque<UnsyncedCommit> unsynced_commits;
+	//! Signalled when unsynced_commits becomes empty, or when a sync fails
+	std::condition_variable durability_cv;
+	//! The highest commit id for which it and all lower commits are durable
+	transaction_t durable_commit_bound = 0;
+	//! Set when a WAL sync has failed (the database is poisoned)
+	bool durability_failed = false;
 
 	atomic<idx_t> last_uncommitted_catalog_version = {TRANSACTION_ID_START};
 	idx_t last_committed_version = 0;

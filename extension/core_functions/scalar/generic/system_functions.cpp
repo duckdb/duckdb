@@ -94,7 +94,8 @@ void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &resu
 	auto &context = state.GetContext();
 	auto &catalog = Catalog::GetCatalog(context, DatabaseManager::GetDefaultDatabase(context));
 	auto &transaction = DuckTransaction::Get(context, catalog);
-	auto val = Value::UBIGINT(transaction.start_time);
+	// the snapshot start time is capped while commits are pending durability, so it is not unique
+	auto val = Value::UBIGINT(transaction.unique_start_time);
 	result.Reference(val, count_t(input.size()));
 }
 

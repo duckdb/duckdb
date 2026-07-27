@@ -54,6 +54,10 @@ extern const row_t MAX_ROW_ID;
 //! Transaction-local row IDs start at MAX_ROW_ID
 extern const row_t MAX_ROW_ID_LOCAL;
 
+//! The transaction id, start time, and catalog-entry timestamp of the bootstrap system
+//! transaction, which precedes every real transaction. The three coincide deliberately, so that
+//! CatalogSet::UseTimestamp treats a bootstrap entry as one the system transaction created
+extern const transaction_t SYSTEM_TRANSACTION_TIMESTAMP;
 extern const transaction_t TRANSACTION_ID_START;
 extern const transaction_t MAX_TRANSACTION_ID;
 extern const transaction_t MAXIMUM_QUERY_ID;

@@ -85,6 +85,12 @@
       ]
     },
     {
+      "reason": "Asserts that a failed WAL fsync leaves the database invalidated; force_restart reopens it between statements, clearing the invalidation.",
+      "paths": [
+        "test/sql/storage/wal/wal_fsync_failure.test"
+      ]
+    },
+    {
       "reason": "Tests transient segment structure before checkpoint. force_restart checkpoints after every statement, merging segments.",
       "paths": [
         "test/sql/storage/adaptive_segment_allocation.test"

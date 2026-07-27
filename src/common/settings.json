@@ -446,6 +446,20 @@
         "default_value": "NONE"
     },
     {
+        "name": "debug_wal_fsync_failure_rate",
+        "description": "DEBUG SETTING: probability (0-1) that a WAL fsync fails, used for testing durability error handling",
+        "type": "DOUBLE",
+        "default_scope": "global",
+        "default_value": "0.0"
+    },
+    {
+        "name": "debug_wal_fsync_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep during each WAL fsync, emulating high-latency durable storage",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_window_mode",
         "description": "DEBUG SETTING: switch window mode to use",
         "type": "ENUM<WindowAggregationMode>",
