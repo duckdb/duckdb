@@ -110,3 +110,25 @@ SELECT s.inner.typed_value FROM '{TEST_DIR}/non_variant_value_typed_value.parque
 ----
 NULL
 1
+
+# Inferred shredding (no SHREDDING option): field groups added in AnalyzeSchemaFinalize must also be REQUIRED
+statement ok
+COPY (
+	SELECT {'a': 42::INTEGER, 'b': 'x'}::VARIANT AS v FROM range(3)
+) TO '{TEST_DIR}/variant_required_inferred.parquet';
+
+query II
+SELECT name, repetition_type
+FROM parquet_schema('{TEST_DIR}/variant_required_inferred.parquet')
+WHERE name IN ('metadata', 'a', 'b') OR (name = 'typed_value' AND num_children = 2)
+ORDER BY column_id;
+----
+metadata	REQUIRED
+typed_value	OPTIONAL
+b	REQUIRED
+a	REQUIRED
+
+query I
+SELECT v FROM '{TEST_DIR}/variant_required_inferred.parquet' LIMIT 1;
+----
+{'a': 42, 'b': x}
