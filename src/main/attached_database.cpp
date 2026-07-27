@@ -264,6 +264,7 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 			attached_db.reset();
 			return;
 		}
+		// Prevent concurrent weak reference upgrades before we close outside of the close_lock.s
 		attached_db->is_closing = true;
 	}
 	attached_db->Close(close_action);
