@@ -924,28 +924,28 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
 }
 
-//! Shredding group layout: value, then optional typed_value
-static constexpr idx_t SHRED_VALUE_INDEX = 0;
-static constexpr idx_t SHRED_TYPED_VALUE_INDEX = 1;
-//! Variant group layout: metadata, value, optional typed_value
-static constexpr idx_t VARIANT_METADATA_INDEX = 0;
-static constexpr idx_t VARIANT_VALUE_INDEX = 1;
-static constexpr idx_t VARIANT_TYPED_VALUE_INDEX = 2;
+static optional_ptr<ColumnWriter> FindChildWriterByName(ColumnWriter &parent, const char *name) {
+	for (auto &child : parent.ChildWriters()) {
+		if (child->Schema().name == name) {
+			return *child;
+		}
+	}
+	return nullptr;
+}
 
 static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value);
 
+// Field/element group: mark REQUIRED, then recurse into nested typed_value if present
 static void MarkShreddedGroupRequired(ColumnWriter &group) {
 	D_ASSERT(StructType::IsStruct(group.Type().id()));
 	group.MarkRepetitionRequired();
-	auto &children = group.ChildWriters();
-	D_ASSERT(children[SHRED_VALUE_INDEX]->Schema().name == "value");
-	if (children.size() > SHRED_TYPED_VALUE_INDEX) {
-		D_ASSERT(children[SHRED_TYPED_VALUE_INDEX]->Schema().name == "typed_value");
-		MarkTypedValueShreddingGroupsRequired(*children[SHRED_TYPED_VALUE_INDEX]);
+	auto nested_typed_value = FindChildWriterByName(group, "typed_value");
+	if (nested_typed_value) {
+		MarkTypedValueShreddingGroupsRequired(*nested_typed_value);
 	}
 }
 
-//! Field/element groups under typed_value must be REQUIRED (VariantShredding.md)
+// Field/element groups under typed_value must be REQUIRED (VariantShredding.md)
 static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value) {
 	auto type_id = typed_value.Type().id();
 	if (StructType::IsStruct(type_id)) {
@@ -968,12 +968,10 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	auto &name = schema.name;
 	auto &field_id = schema.field_id;
 
-	if (child_writers.size() > VARIANT_TYPED_VALUE_INDEX) {
-		D_ASSERT(child_writers[VARIANT_METADATA_INDEX]->Schema().name == "metadata");
-		D_ASSERT(child_writers[VARIANT_VALUE_INDEX]->Schema().name == "value");
-		auto &typed_value = *child_writers[VARIANT_TYPED_VALUE_INDEX];
-		D_ASSERT(typed_value.Schema().name == "typed_value");
-		MarkTypedValueShreddingGroupsRequired(typed_value);
+	// Mark shredded field/element groups REQUIRED (reserved Parquet names only)
+	auto typed_value = FindChildWriterByName(*this, "typed_value");
+	if (typed_value) {
+		MarkTypedValueShreddingGroupsRequired(*typed_value);
 	}
 
 	// variant group
