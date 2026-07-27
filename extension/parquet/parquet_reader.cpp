@@ -1516,9 +1516,6 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 			bool is_generated_column = schema_column_index >= group.columns.size();
 			bool is_column = column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN;
 			bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
-			if (is_column && !is_generated_column) {
-				column_reader.ValidateColumnMetadata(row_group_num_rows, group.columns[schema_column_index]);
-			}
 			auto stats = column_reader.Stats(state.group_index, group.columns);
 			if (stats) {
 				bool has_min_max = false;
