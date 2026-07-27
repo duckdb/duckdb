@@ -54,6 +54,27 @@ static bool PlanReturnsExactlyOneRow(const LogicalOperator &op) {
 	}
 }
 
+static bool IsMultiColumnTuple(const LogicalType &type) {
+	return type.id() == LogicalTypeId::TUPLE && StructType::GetChildCount(type) > 1;
+}
+
+static bool IsMultiColumnComparison(const BoundSubqueryExpression &expr) {
+	if (expr.GetChildren().size() > 1 || expr.GetChildTypes().size() > 1) {
+		return true;
+	}
+	for (auto &child : expr.GetChildren()) {
+		if (IsMultiColumnTuple(child->GetReturnType())) {
+			return true;
+		}
+	}
+	for (auto &child_type : expr.GetChildTypes()) {
+		if (IsMultiColumnTuple(child_type)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
                                                        unique_ptr<LogicalOperator> &root,
                                                        unique_ptr<LogicalOperator> plan) {
@@ -383,7 +404,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->any_join = true;
 		auto &dependent_join = plan;
 
-		if (expr.GetChildren().size() > 1) {
+		if (IsMultiColumnComparison(expr)) {
 			// FIXME: the code to generate the plan here is actually correct
 			// the problem is in the hash join - specifically PhysicalHashJoin::InitializeHashTable
 			// this contains code that is hard-coded for a single comparison

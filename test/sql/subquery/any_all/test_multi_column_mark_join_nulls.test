@@ -1,0 +1,293 @@
+# name: test/sql/subquery/any_all/test_multi_column_mark_join_nulls.test
+# description: NULL handling in uncorrelated multi-column MARK joins
+# group: [any_all]
+
+# A non-matching NULL row only makes the result unknown when no column is decisively unequal.
+query IIII
+SELECT a, b,
+       row(a, b) IN (SELECT * FROM (VALUES (2, 6), (3, 7), (3, NULL::INT), (4, 8)) rhs(x, y)),
+       row(a, b) NOT IN (SELECT * FROM (VALUES (2, 6), (3, 7), (3, NULL::INT), (4, 8)) rhs(x, y))
+FROM (VALUES (1, 5), (2, 6), (3, 9), (9, 8), (3, NULL::INT),
+             (NULL::INT, 8), (NULL::INT, NULL::INT)) lhs(a, b)
+----
+1	5	false	true
+2	6	true	false
+3	9	NULL	NULL
+9	8	false	true
+3	NULL	NULL	NULL
+NULL	8	NULL	NULL
+NULL	NULL	NULL	NULL
+
+# Cover NULLs in every build column and a build row containing only NULLs.
+query IIII
+SELECT a, b,
+       row(a, b) IN (SELECT * FROM (VALUES (2, 6), (NULL::INT, 7), (4, NULL::INT),
+                                           (NULL::INT, NULL::INT)) rhs(x, y)),
+       row(a, b) NOT IN (SELECT * FROM (VALUES (2, 6), (NULL::INT, 7), (4, NULL::INT),
+                                               (NULL::INT, NULL::INT)) rhs(x, y))
+FROM (VALUES (1, 5), (2, 6), (3, 7), (4, 8)) lhs(a, b)
+----
+1	5	NULL	NULL
+2	6	true	false
+3	7	NULL	NULL
+4	8	NULL	NULL
+
+# Probe NULLs can still produce a decisive result when every build row differs in another column.
+query II
+SELECT row(NULL::INT, 8) IN (SELECT * FROM (VALUES (2, 6), (3, 7)) rhs(x, y)),
+       row(NULL::INT, 8) NOT IN (SELECT * FROM (VALUES (2, 6), (3, 7)) rhs(x, y))
+----
+false	true
+
+# Exercise more than two equality conditions.
+query TII
+SELECT k,
+       row(a, b, c, d, e, f) IN (
+           SELECT * FROM (VALUES (1, 1, 1, 1, 1, 1),
+                                 (0, NULL::INT, NULL::INT, 0, NULL::INT, 0)) rhs(a, b, c, d, e, f)),
+       row(a, b, c, d, e, f) NOT IN (
+           SELECT * FROM (VALUES (1, 1, 1, 1, 1, 1),
+                                 (0, NULL::INT, NULL::INT, 0, NULL::INT, 0)) rhs(a, b, c, d, e, f))
+FROM (VALUES ('k1', 1, 1, 1, 1, 1, 1),
+             ('k2', 0, 0, 0, 0, 0, 0),
+             ('k4', 1, 0, 0, 0, 0, 0),
+             ('k8', 0, 1, 1, 0, 1, 0)) lhs(k, a, b, c, d, e, f)
+----
+k1	true	false
+k2	NULL	NULL
+k4	false	true
+k8	NULL	NULL
+
+# Empty and all-NULL build sides take different three-valued-logic paths.
+query II
+SELECT row(1, 2) IN (SELECT * FROM (VALUES (1, 2)) rhs(x, y) WHERE false),
+       row(1, 2) NOT IN (SELECT * FROM (VALUES (1, 2)) rhs(x, y) WHERE false)
+----
+false	true
+
+query II
+SELECT row(1, 2) IN (SELECT * FROM (VALUES (NULL::INT, NULL::INT)) rhs(x, y)),
+       row(1, 2) NOT IN (SELECT * FROM (VALUES (NULL::INT, NULL::INT)) rhs(x, y))
+----
+NULL	NULL
+
+# The NULL refinement must run when every build row is filtered from the hash table.
+query II
+SELECT *
+FROM (VALUES (0, 0), (1, 0)) outer_tab(f1, f2)
+WHERE (f1, f2) NOT IN (
+	SELECT * FROM (VALUES (0, NULL::INT)) inner_tab(c1, c2)
+)
+ORDER BY ALL
+----
+1	0
+
+# Keep a relevant NULL row beyond a vector boundary.
+statement ok
+CREATE TABLE mark_join_rhs AS SELECT i::INT AS a, i::INT AS b FROM range(3000) t(i);
+
+statement ok
+INSERT INTO mark_join_rhs VALUES (NULL, 7);
+
+query II
+SELECT row(4000, 7) IN (SELECT a, b FROM mark_join_rhs),
+       row(4000, 7) NOT IN (SELECT a, b FROM mark_join_rhs)
+----
+NULL	NULL
+
+query II
+SELECT row(NULL::INT, 4001) IN (SELECT a, b FROM mark_join_rhs),
+       row(NULL::INT, 4001) NOT IN (SELECT a, b FROM mark_join_rhs)
+----
+false	true
+
+# Nested equality must preserve UNKNOWN instead of treating nested NULLs as values.
+query I
+SELECT row([1, NULL::INT], 0) IN (
+	SELECT * FROM (VALUES ([1, 2], 0)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT row([1, NULL::INT], 0) IN (
+	SELECT * FROM (VALUES ([1, NULL::INT], 0)) rhs(a, b)
+)
+----
+NULL
+
+# A nested build NULL requires refinement for a non-NULL probe.
+query I
+SELECT row([1, 2], 0) IN (
+	SELECT * FROM (VALUES ([1, NULL::INT], 0)) rhs(a, b)
+)
+----
+NULL
+
+# Build-side nested NULL tracking covers the supported nested physical types.
+query IIII
+SELECT row(array_value(1, 2), 0) IN (
+	       SELECT * FROM (VALUES (array_value(1, NULL::INT), 0)) rhs(a, b)
+       ),
+       row(map([1, 2], [1, 2]), 0) IN (
+	       SELECT * FROM (VALUES (map([1, 2], [1, NULL::INT]), 0)) rhs(a, b)
+       ),
+       row({'a': 1, 'b': 2}, 0) IN (
+	       SELECT * FROM (VALUES ({'a': 1, 'b': NULL::INT}, 0)) rhs(a, b)
+       ),
+       row(union_value(num := 1)::UNION(num INT, str VARCHAR), 0) IN (
+	       SELECT *
+	       FROM (VALUES (union_value(num := NULL::INT)::UNION(num INT, str VARCHAR), 0)) rhs(a, b)
+       )
+----
+NULL	NULL	NULL	NULL
+
+query I
+SELECT row(array_value(1, NULL::INT), 0) IN (
+	SELECT * FROM (VALUES (array_value(1, 2), 0)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT row(map([1, 2], [1, NULL::INT]), 0) IN (
+	SELECT * FROM (VALUES (map([1, 2], [1, 2]), 0)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT row({'a': 1, 'b': NULL::INT}, 0) IN (
+	SELECT * FROM (VALUES ({'a': 1, 'b': 2}, 0)) rhs(a, b)
+)
+----
+NULL
+
+query I
+SELECT row(union_value(num := NULL::INT)::UNION(num INT, str VARCHAR), 0) IN (
+	SELECT * FROM (VALUES (union_value(num := 1)::UNION(num INT, str VARCHAR), 0)) rhs(a, b)
+)
+----
+NULL
+
+# A decisive nested mismatch still produces FALSE.
+query I
+SELECT row([9, NULL::INT], 0) IN (
+	SELECT * FROM (VALUES ([1, 2], 0)) rhs(a, b)
+)
+----
+false
+
+# Clean nested keys cannot produce UNKNOWN and do not require refinement.
+query I
+SELECT count(*)
+FROM range(10000) lhs(i)
+WHERE row(list_value(i), 0::INT) NOT IN (
+	SELECT list_value((i + 100000)::BIGINT), 0::INT
+	FROM range(10000) rhs(i)
+)
+----
+10000
+
+# Exact matches do not scan the refinement collection when the RHS also contains NULL.
+query III
+SELECT count(*), count(marker), count_if(marker)
+FROM (
+	SELECT row(i, 0::INT) IN (
+		SELECT a, b
+		FROM (
+			SELECT i::BIGINT AS a, 0::INT AS b FROM range(100000) rhs(i)
+			UNION ALL
+			SELECT NULL::BIGINT, 0::INT
+		)
+	) AS marker
+	FROM range(100000) lhs(i)
+)
+----
+100000	100000	100000
+
+# A subquery can expose the complete row as one tuple-valued column.
+query I
+SELECT row(1, 2) = ANY (
+	SELECT s FROM (VALUES (row(1, NULL::INT))) rhs(s)
+)
+----
+NULL
+
+# A tuple-valued condition must continue after UNKNOWN to find a later mismatch.
+query I
+SELECT row(NULL::INT, 3) = ANY (
+	SELECT s FROM (VALUES (row(1, 2))) rhs(s)
+)
+----
+false
+
+query I
+SELECT row(NULL::INT, 2) = ANY (
+	SELECT s FROM (VALUES (row(1, 2))) rhs(s)
+)
+----
+NULL
+
+# Exercise the specialized external empty-hash and nested refinement paths.
+statement ok
+SET debug_force_external=true;
+
+query II
+SELECT *
+FROM (VALUES (0, 0), (1, 0)) outer_tab(f1, f2)
+WHERE (f1, f2) NOT IN (
+	SELECT * FROM (VALUES (0, NULL::INT)) inner_tab(c1, c2)
+)
+ORDER BY ALL
+----
+1	0
+
+query I
+SELECT row([1, NULL::INT], 0) IN (
+	SELECT * FROM (VALUES ([1, 2], 0)) rhs(a, b)
+)
+----
+NULL
+
+statement ok
+SET debug_force_external=false;
+
+# Rebuild the MARK state across recursive CTE iterations.
+query II
+WITH RECURSIVE r(i, j) AS (
+	VALUES (0, 0)
+	UNION ALL
+	SELECT outer_r.i + 1, 0
+	FROM r outer_r
+	WHERE outer_r.i < 3
+	  AND row(outer_r.i + 1, 0) NOT IN (
+		  SELECT inner_r.i, NULL::INT FROM r inner_r
+	  )
+)
+SELECT * FROM r ORDER BY i
+----
+0	0
+1	0
+2	0
+3	0
+
+# Multi-column correlated MARK joins remain deliberately unsupported.
+statement error
+SELECT a, row(a, b) IN (
+    SELECT x, y FROM (VALUES (1, 1), (2, 2)) rhs(x, y) WHERE x = a
+)
+FROM (VALUES (1, 1), (2, 3)) lhs(a, b);
+----
+not yet supported
+
+# A single tuple-valued condition is still a correlated multi-column comparison.
+statement error
+SELECT row(a, b) = ANY (
+	SELECT s
+	FROM (VALUES (1, row(1, NULL::INT))) rhs(k, s)
+	WHERE k = lhs.a
+)
+FROM (VALUES (1, 1)) lhs(a, b)
+----
+not yet supported
