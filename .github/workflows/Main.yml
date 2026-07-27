@@ -819,7 +819,7 @@ jobs:
             python3 \
             samurai
           git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\"
+          make -C \"$PWD\" CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
         "
 
     - name: Deploy
