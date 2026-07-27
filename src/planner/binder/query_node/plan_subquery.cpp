@@ -22,7 +22,6 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/planner/subquery/column_binding_layout.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
@@ -509,24 +508,6 @@ void RecursiveDependentJoinPlanner::PlanJoinChildFilters(LogicalOperator &op) {
 	}
 }
 
-static BindingReplacementMap PropagateOutputBindingReplacements(const vector<ColumnBinding> &old_bindings,
-                                                                const vector<ColumnBinding> &new_bindings,
-                                                                const BindingReplacementMap &operator_replacements) {
-	ColumnBindingLayout new_output(new_bindings, "recursively planned operator output");
-	BindingReplacementMap result;
-	for (auto &old_binding : old_bindings) {
-		auto new_binding = operator_replacements.Resolve(old_binding);
-		if (new_output.positions.find(new_binding) == new_output.positions.end()) {
-			throw InternalException("Dependent-join planning lost output binding %s (resolved to %s)",
-			                        old_binding.ToString(), new_binding.ToString());
-		}
-		if (old_binding != new_binding) {
-			result.Add(old_binding, new_binding);
-		}
-	}
-	return result;
-}
-
 BindingReplacementMap RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<LogicalOperator> &op_ptr) {
 	PlanJoinChildFilters(*op_ptr);
 	if (op_ptr->type == LogicalOperatorType::LOGICAL_ANY_JOIN &&
@@ -557,11 +538,12 @@ BindingReplacementMap RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<Log
 			D_ASSERT(op_ptr->children[i]);
 			auto old_child_bindings = op_ptr->children[i]->GetColumnBindings();
 			auto child_replacements = PlanOperator(op_ptr->children[i]);
-			ColumnBindingRewrite::ApplyToChild(op_ptr, i, std::move(old_child_bindings), child_replacements);
-			operator_replacements.Merge(child_replacements);
+			auto output_replacements =
+			    ColumnBindingRewrite::ApplyToChild(op_ptr, i, std::move(old_child_bindings), child_replacements);
+			operator_replacements.Merge(output_replacements);
 		}
 	}
-	return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
+	return ColumnBindingRewrite::PropagateOutput(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 }
 
 BindingReplacementMap RecursiveDependentJoinPlanner::PlanAnyJoinCondition(unique_ptr<LogicalOperator> &op_ptr) {
@@ -571,8 +553,9 @@ BindingReplacementMap RecursiveDependentJoinPlanner::PlanAnyJoinCondition(unique
 	for (idx_t child_index = 0; child_index < op_ptr->children.size(); child_index++) {
 		auto old_child_bindings = op_ptr->children[child_index]->GetColumnBindings();
 		auto child_replacements = PlanOperator(op_ptr->children[child_index]);
-		ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
-		operator_replacements.Merge(child_replacements);
+		auto output_replacements =
+		    ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
+		operator_replacements.Merge(output_replacements);
 	}
 
 	BindingReplacementMap pair_replacements;
@@ -580,7 +563,7 @@ BindingReplacementMap RecursiveDependentJoinPlanner::PlanAnyJoinCondition(unique
 		operator_replacements.Merge(pair_replacements);
 		auto recursive_replacements = PlanOperator(op_ptr);
 		operator_replacements.Merge(recursive_replacements);
-		return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
+		return ColumnBindingRewrite::PropagateOutput(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 	}
 
 	auto &join = op_ptr->Cast<LogicalAnyJoin>();
@@ -589,10 +572,11 @@ BindingReplacementMap RecursiveDependentJoinPlanner::PlanAnyJoinCondition(unique
 	for (idx_t child_index = 0; child_index < join.children.size(); child_index++) {
 		auto old_child_bindings = join.children[child_index]->GetColumnBindings();
 		auto child_replacements = PlanOperator(join.children[child_index]);
-		ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
-		operator_replacements.Merge(child_replacements);
+		auto output_replacements =
+		    ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
+		operator_replacements.Merge(output_replacements);
 	}
-	return PropagateOutputBindingReplacements(old_output, op_ptr->GetColumnBindings(), operator_replacements);
+	return ColumnBindingRewrite::PropagateOutput(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 }
 
 void RecursiveDependentJoinPlanner::Plan(Binder &binder, unique_ptr<LogicalOperator> &op) {

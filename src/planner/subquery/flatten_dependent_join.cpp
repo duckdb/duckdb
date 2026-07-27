@@ -387,10 +387,10 @@ FlattenDependentJoins::DecorrelateSubtreeInternal(unique_ptr<LogicalOperator> &p
 		auto old_child_bindings = plan->children[child_index]->GetColumnBindings();
 		auto child_state =
 		    DecorrelateSubtree(plan->children[child_index], propagate_null_values, std::move(result.bindings));
-		ColumnBindingRewrite::ApplyToChild(plan, child_index, std::move(old_child_bindings),
-		                                   child_state.binding_replacements);
+		auto child_output_replacements = ColumnBindingRewrite::ApplyToChild(
+		    plan, child_index, std::move(old_child_bindings), child_state.binding_replacements);
 		result.bindings = child_state.bindings;
-		result.binding_replacements.Merge(child_state.binding_replacements);
+		result.binding_replacements.Merge(child_output_replacements);
 		RewriteCorrelatedBindings(*plan, result.bindings);
 	}
 	return result;
@@ -435,9 +435,9 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PrepareDependentJoi
 			// There might be unrelated correlation, so we have to traverse the tree
 			auto old_left_bindings = op.children[0]->GetColumnBindings();
 			auto independent_state = DecorrelateIndependentSubtree(op.children[0]);
-			ColumnBindingRewrite::ApplyToChild(plan, 0, std::move(old_left_bindings),
-			                                   independent_state.binding_replacements);
-			result.binding_replacements.Merge(independent_state.binding_replacements);
+			auto output_replacements = ColumnBindingRewrite::ApplyToChild(plan, 0, std::move(old_left_bindings),
+			                                                              independent_state.binding_replacements);
+			result.binding_replacements.Merge(output_replacements);
 		}
 
 		RewriteCorrelatedBindings(op, result.bindings);
@@ -714,9 +714,9 @@ FlattenDependentJoins::PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator>
 	}
 	auto old_independent_bindings = plan->children[independent_idx]->GetColumnBindings();
 	auto independent_state = DecorrelateIndependentSubtree(plan->children[independent_idx]);
-	ColumnBindingRewrite::ApplyToChild(plan, independent_idx, std::move(old_independent_bindings),
-	                                   independent_state.binding_replacements);
-	result.binding_replacements.Merge(independent_state.binding_replacements);
+	auto independent_output_replacements = ColumnBindingRewrite::ApplyToChild(
+	    plan, independent_idx, std::move(old_independent_bindings), independent_state.binding_replacements);
+	result.binding_replacements.Merge(independent_output_replacements);
 	return result;
 }
 
@@ -1036,9 +1036,9 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownJoin(unique
 		auto left_state = PushDownChild(plan, propagate_null_values, state, false);
 		auto old_right_bindings = plan->children[1]->GetColumnBindings();
 		auto independent_state = DecorrelateIndependentSubtree(plan->children[1]);
-		ColumnBindingRewrite::ApplyToChild(plan, 1, std::move(old_right_bindings),
-		                                   independent_state.binding_replacements);
-		left_state.binding_replacements.Merge(independent_state.binding_replacements);
+		auto independent_output_replacements = ColumnBindingRewrite::ApplyToChild(
+		    plan, 1, std::move(old_right_bindings), independent_state.binding_replacements);
+		left_state.binding_replacements.Merge(independent_output_replacements);
 		RewriteCorrelatedBindings(*plan, left_state.bindings);
 		return left_state;
 	}
@@ -1343,9 +1343,10 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCTE(unique_
 
 	auto old_right_bindings = plan->children[1]->GetColumnBindings();
 	auto right_state = PushDownCorrelatedNode(plan->children[1], false, cte_state);
-	ColumnBindingRewrite::ApplyToChild(plan, 1, std::move(old_right_bindings), right_state.binding_replacements);
+	auto right_output_replacements =
+	    ColumnBindingRewrite::ApplyToChild(plan, 1, std::move(old_right_bindings), right_state.binding_replacements);
 	RewriteCorrelatedBindings(*plan, right_state.bindings);
-	result.binding_replacements.Merge(right_state.binding_replacements);
+	result.binding_replacements.Merge(right_output_replacements);
 
 #ifdef DEBUG
 	plan->children[0]->ResolveOperatorTypes();

@@ -91,8 +91,17 @@ protected:
 //! Applies binding replacements together with their projection-layout invariants.
 class ColumnBindingRewrite {
 public:
-	static void ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
-	                         vector<ColumnBinding> old_child_bindings, const BindingReplacementMap &replacements);
+	//! Restrict a replacement graph to bindings that cross the specified operator-output boundary.
+	static BindingReplacementMap ScopeToOutput(const vector<ColumnBinding> &old_output,
+	                                           const vector<ColumnBinding> &new_output,
+	                                           const BindingReplacementMap &replacements);
+	//! Scope replacements and require every previous output binding to remain reachable.
+	static BindingReplacementMap PropagateOutput(const vector<ColumnBinding> &old_output,
+	                                             const vector<ColumnBinding> &new_output,
+	                                             const BindingReplacementMap &replacements);
+	static BindingReplacementMap ApplyToChild(unique_ptr<LogicalOperator> &op, idx_t child_index,
+	                                          vector<ColumnBinding> old_child_bindings,
+	                                          const BindingReplacementMap &replacements);
 	static void ApplyToOperatorBindings(LogicalOperator &op, const BindingReplacementMap &replacements);
 
 private:
