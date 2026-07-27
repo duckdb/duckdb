@@ -1,0 +1,53 @@
+# name: test/sql/types/decimal/decimal_promotion.test
+# description: Test automatic promotion of decimal arithmetic
+# group: [decimal]
+
+# addition promotes across each physical storage boundary
+query III
+SELECT typeof(1::DECIMAL(4,0) + 1::DECIMAL(4,0)),
+       typeof(1::DECIMAL(9,0) + 1::DECIMAL(9,0)),
+       typeof(1::DECIMAL(18,0) + 1::DECIMAL(18,0))
+----
+DECIMAL(5,0)	DECIMAL(10,0)	DECIMAL(19,0)
+
+# reported case
+query II
+SELECT typeof(99999999999999.9999::DECIMAL(18,4) + 0.0001::DECIMAL(5,4)),
+       99999999999999.9999::DECIMAL(18,4) + 0.0001::DECIMAL(5,4)
+----
+DECIMAL(19,4)	100000000000000.0000
+
+# aligning different scales can require significantly more width
+query IIII
+SELECT typeof(1::DECIMAL(18,0) + 0.1::DECIMAL(18,18)),
+       1::DECIMAL(18,0) + 0.1::DECIMAL(18,18),
+       typeof(0.1::DECIMAL(18,18) - 1::DECIMAL(18,0)),
+       0.1::DECIMAL(18,18) - 1::DECIMAL(18,0)
+----
+DECIMAL(37,18)	1.100000000000000000	DECIMAL(37,18)	-0.900000000000000000
+
+# multiplication promotes across each physical storage boundary
+query III
+SELECT typeof(1::DECIMAL(4,0) * 1::DECIMAL(1,0)),
+       typeof(1::DECIMAL(9,0) * 1::DECIMAL(1,0)),
+       typeof(1::DECIMAL(18,0) * 1::DECIMAL(1,0))
+----
+DECIMAL(5,0)	DECIMAL(10,0)	DECIMAL(19,0)
+
+# multiplication promotes even when neither decimal operand has width 18
+query II
+SELECT typeof(9999999999::DECIMAL(10,0) * 9999999999::DECIMAL(10,0)),
+       9999999999::DECIMAL(10,0) * 9999999999::DECIMAL(10,0)
+----
+DECIMAL(20,0)	99999999980000000001
+
+# decimal/integer arithmetic includes the full integer width
+query IIIII
+SELECT typeof(2 * 1::DECIMAL(18,1)),
+       typeof(2::TINYINT * 1::DECIMAL(18,1)),
+       typeof(2::SMALLINT * 1::DECIMAL(18,1)),
+       typeof(2::INTEGER * 1::DECIMAL(18,1)),
+       typeof(2::BIGINT * 1::DECIMAL(18,1))
+----
+DECIMAL(28,1)	DECIMAL(21,1)	DECIMAL(23,1)	DECIMAL(28,1)	DECIMAL(37,1)
+

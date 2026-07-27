@@ -308,11 +308,6 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 	if (!IS_MODULO) {
 		// for addition/subtraction, we add 1 to the width to ensure we don't overflow
 		required_width = NumericCast<uint8_t>(required_width + 1);
-		if (required_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
-			// we don't automatically promote past the hugeint boundary to avoid the large hugeint performance penalty
-			bind_data->check_overflow = true;
-			required_width = Decimal::MAX_WIDTH_INT64;
-		}
 	}
 	if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
 		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
@@ -967,7 +962,6 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	uint8_t result_width = 0, result_scale = 0;
-	uint8_t max_width = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		if (arguments[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			continue;
@@ -978,24 +972,16 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 			throw InternalException("Could not convert type %s to a decimal?",
 			                        arguments[i]->GetReturnType().ToString());
 		}
-		if (width > max_width) {
-			max_width = width;
-		}
 		result_width += width;
 		result_scale += scale;
 	}
-	D_ASSERT(max_width > 0);
+	D_ASSERT(result_width > 0);
 	if (result_scale > Decimal::MAX_WIDTH_DECIMAL) {
 		throw OutOfRangeException(
 		    "Needed scale %d to accurately represent the multiplication result, but this is out of range of the "
 		    "DECIMAL type. Max scale is %d; could not perform an accurate multiplication. Either add a cast to DOUBLE, "
 		    "or add an explicit cast to a decimal with a lower scale.",
 		    result_scale, Decimal::MAX_WIDTH_DECIMAL);
-	}
-	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64 &&
-	    result_scale < Decimal::MAX_WIDTH_INT64) {
-		bind_data->check_overflow = true;
-		result_width = Decimal::MAX_WIDTH_INT64;
 	}
 	if (result_width > Decimal::MAX_WIDTH_DECIMAL) {
 		bind_data->check_overflow = true;
