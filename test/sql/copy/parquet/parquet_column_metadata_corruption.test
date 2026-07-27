@@ -15,3 +15,15 @@ statement error
 SELECT count(*) FROM read_parquet('{DATA_DIR}/parquet-testing/parquet_column_num_values_mismatch.parquet') WHERE x = 3
 ----
 metadata is corrupt. Column has 0 values but row group has 8 rows
+
+# Disable optimization so validation runs during scan initialization
+statement ok
+PRAGMA disable_optimizer
+
+statement error
+SELECT x FROM read_parquet('{DATA_DIR}/parquet-testing/parquet_column_num_values_mismatch.parquet')
+----
+<REGEX>:.*Failed to read file .*metadata is corrupt. Column has 0 values but row group has 8 rows.*
+
+statement ok
+PRAGMA enable_optimizer

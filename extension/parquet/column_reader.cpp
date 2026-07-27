@@ -162,21 +162,8 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vect
 }
 
 void ColumnReader::ValidateColumnMetadata(idx_t row_group_num_rows, const ColumnChunk &column) {
-	if (!column.__isset.meta_data) {
-		return;
-	}
-	auto &metadata = column.meta_data;
-	if (metadata.num_values < 0) {
-		throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
-		                            "number of values (%lld)",
-		                            Reader().GetFileName(), metadata.num_values);
-	}
-	if (IsRoot() && !Type().IsNested() && MaxRepeat() == 0 &&
-	    NumericCast<idx_t>(metadata.num_values) != row_group_num_rows) {
-		throw InvalidInputException(
-		    "Failed to read file \"%s\": metadata is corrupt. Column has %lld values but row group has %lld rows",
-		    Reader().GetFileName(), metadata.num_values, NumericCast<int64_t>(row_group_num_rows));
-	}
+	Schema().ValidateColumnMetadata(column, NumericCast<int64_t>(row_group_num_rows), IsRoot(),
+	                                Reader().GetFileName().c_str());
 }
 
 uint64_t ColumnReader::TotalCompressedSize() {

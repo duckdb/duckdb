@@ -36,6 +36,32 @@ void ParquetColumnSchema::SetSchemaIndex(idx_t schema_idx) {
 	schema_index = schema_idx;
 }
 
+void ParquetColumnSchema::ValidateColumnMetadata(const ColumnChunk &column, int64_t row_group_num_rows,
+                                                 bool validate_row_count, const char *file_name) const {
+	if (!column.__isset.meta_data) {
+		return;
+	}
+	auto &metadata = column.meta_data;
+	if (metadata.num_values < 0) {
+		if (file_name) {
+			throw InvalidInputException("Failed to read file \"%s\": metadata is corrupt. Column has invalid "
+			                            "number of values (%lld)",
+			                            file_name, metadata.num_values);
+		}
+		throw InvalidInputException("Parquet metadata is corrupt. Column has invalid number of values (%lld)",
+		                            metadata.num_values);
+	}
+	if (validate_row_count && !type.IsNested() && max_repeat == 0 && metadata.num_values != row_group_num_rows) {
+		if (file_name) {
+			throw InvalidInputException(
+			    "Failed to read file \"%s\": metadata is corrupt. Column has %lld values but row group has %lld rows",
+			    file_name, metadata.num_values, row_group_num_rows);
+		}
+		throw InvalidInputException("Parquet metadata is corrupt. Column has %lld values but row group has %lld rows",
+		                            metadata.num_values, row_group_num_rows);
+	}
+}
+
 //! Writer constructors
 
 ParquetColumnSchema ParquetColumnSchema::FromLogicalType(const Identifier &name, const LogicalType &type,
@@ -140,20 +166,7 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 		                            row_group.num_rows);
 	}
 	if (schema_type == ParquetColumnSchemaType::COLUMN && column_index < columns.size()) {
-		auto &column = columns[column_index];
-		if (column.__isset.meta_data) {
-			auto &metadata = column.meta_data;
-			if (metadata.num_values < 0) {
-				throw InvalidInputException("Parquet metadata is corrupt. Column has invalid number of values (%lld)",
-				                            metadata.num_values);
-			}
-			if (!type.IsNested() && max_repeat == 0 &&
-			    NumericCast<idx_t>(metadata.num_values) != NumericCast<idx_t>(row_group.num_rows)) {
-				throw InvalidInputException(
-				    "Parquet metadata is corrupt. Column has %lld values but row group has %lld rows",
-				    metadata.num_values, row_group.num_rows);
-			}
-		}
+		ValidateColumnMetadata(columns[column_index], row_group.num_rows, true);
 	}
 	if (schema_type == ParquetColumnSchemaType::FILE_ROW_GROUP_NUMBER) {
 		// the row group number is constant within a row group - set min and max to the row group index
