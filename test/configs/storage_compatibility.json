@@ -131,6 +131,7 @@
         "test/sql/function/variant/variant_keys.test",
         "test/sql/function/variant/variant_exists.test",
         "test/sql/function/variant/variant_array_length.test",
+        "test/sql/function/variant/variant_type.test",
         "test/sql/storage/types/variant/append_shredded.test",
         "test/sql/storage/types/variant/big_table.test_slow",
         "test/sql/storage/types/variant/extension_types.test",
@@ -207,7 +208,8 @@
       "paths": [
         "test/sql/catalog/nested_schema/create_nested_schema.test",
         "test/sql/catalog/nested_schema/drop_nested_schema.test",
-        "test/sql/catalog/nested_schema/nested_table.test"
+        "test/sql/catalog/nested_schema/nested_table.test",
+        "test/sql/catalog/nested_schema/nested_table_dml.test"
       ]
     },
     {

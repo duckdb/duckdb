@@ -49,7 +49,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
       has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
-		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
+		throw DataCorruptionException("Row group column count is unaligned with table column count. Corrupt file?");
 	}
 	this->column_pointers = std::move(pointer.data_pointers);
 	this->columns.resize(column_pointers.size());
@@ -1834,6 +1834,18 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) co
 	result.start = row_group_start;
 	result.count = count;
 	return result;
+}
+
+void RowGroup::CompressVersionInfo(transaction_t lowest_active_start) {
+	if (HasUnloadedDeletes()) {
+		// deletes were not loaded - they are still stored in their compact serialized form
+		return;
+	}
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		return;
+	}
+	vinfo->CompressVersionIds(lowest_active_start);
 }
 
 vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {

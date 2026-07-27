@@ -401,6 +401,8 @@ duckdb_error_type ErrorTypeToC(const ExceptionType type) {
 		return DUCKDB_ERROR_AUTOLOAD;
 	case ExceptionType::SEQUENCE:
 		return DUCKDB_ERROR_SEQUENCE;
+	case ExceptionType::DATA_CORRUPTION:
+		return DUCKDB_ERROR_DATA_CORRUPTION;
 	case ExceptionType::INVALID_CONFIGURATION:
 		return DUCKDB_INVALID_CONFIGURATION;
 	default:
@@ -494,6 +496,8 @@ ExceptionType ErrorTypeFromC(const duckdb_error_type type) {
 		return ExceptionType::AUTOLOAD;
 	case DUCKDB_ERROR_SEQUENCE:
 		return ExceptionType::SEQUENCE;
+	case DUCKDB_ERROR_DATA_CORRUPTION:
+		return ExceptionType::DATA_CORRUPTION;
 	case DUCKDB_INVALID_CONFIGURATION:
 		return ExceptionType::INVALID_CONFIGURATION;
 	default:

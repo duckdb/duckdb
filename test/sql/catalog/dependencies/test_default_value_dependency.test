@@ -47,7 +47,7 @@ CREATE SEQUENCE seq2
 statement error con1
 CREATE TABLE integers(i INTEGER DEFAULT nextval('seq' || CAST(nextval('seq') AS VARCHAR)), j INTEGER)
 ----
-non-constant sequences are no longer supported
+must be a constant expression
 
 statement ok con1
 CREATE TABLE integers(i INTEGER DEFAULT nextval('seq1') + nextval('seq2'), j INTEGER)

@@ -1,0 +1,90 @@
+# name: test/sql/copy/parquet/bloom_filter_decimal.test
+# description: Test bloom filters on DECIMAL types (issue #23916)
+# group: [parquet]
+
+require parquet
+
+# Create a parquet file with DECIMAL(18,2) values (stored as INT64 in Parquet)
+# and DECIMAL(4,2) values (stored as INT32 in Parquet).
+# Values are even multiples of 2, so odd values like 1.00 are never in the data.
+statement ok
+COPY (
+    SELECT
+        (2 * (i % 2048))::DECIMAL(18,2) AS dec_int64,
+        (2 * (i % 50))::DECIMAL(4,2) AS dec_int32,
+        i
+    FROM range(8192) t(i)
+) TO '{TEST_DIR}/bloom_decimal.parquet' (
+    FORMAT parquet,
+    ROW_GROUP_SIZE 2048,
+    DICTIONARY_SIZE_LIMIT 4096,
+    BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.0001
+);
+
+# Verify bloom filters are written for both decimal columns
+query III
+SELECT column_id, BOOL_AND(bloom_filter_offset > 4), BOOL_AND(bloom_filter_length > 1)
+FROM parquet_metadata('{TEST_DIR}/bloom_decimal.parquet')
+WHERE column_id IN (0, 1)
+GROUP BY column_id
+ORDER BY column_id;
+----
+0	true	true
+1	true	true
+
+# -------------------------------------------------------------------
+# DECIMAL(18,2) stored as INT64 — bloom filter probe tests
+# -------------------------------------------------------------------
+
+# Value that exists: bloom filter must NOT exclude it (no false negatives)
+query I
+SELECT BOOL_AND(NOT bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_decimal.parquet', 'dec_int64', 0.00::DECIMAL(18,2));
+----
+true
+
+# Value within range but not in data (odd value): bloom filter should exclude
+query I
+SELECT BOOL_AND(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_decimal.parquet', 'dec_int64', 1.00::DECIMAL(18,2));
+----
+true
+
+# -------------------------------------------------------------------
+# DECIMAL(4,2) stored as INT32 — bloom filter probe tests
+# -------------------------------------------------------------------
+
+# Value that exists: bloom filter must NOT exclude it (no false negatives)
+query I
+SELECT BOOL_AND(NOT bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_decimal.parquet', 'dec_int32', 0.00::DECIMAL(4,2));
+----
+true
+
+# -------------------------------------------------------------------
+# Row group pruning via the scanner (the actual bug from issue #23916)
+# -------------------------------------------------------------------
+
+# INT64 decimal: query for a value NOT in the data — should return 0 rows
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_decimal.parquet' WHERE dec_int64 = 1.00::DECIMAL(18,2);
+----
+0
+
+# INT64 decimal: query for a value that IS in the data — should return results
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_decimal.parquet' WHERE dec_int64 = 0.00::DECIMAL(18,2);
+----
+4
+
+# INT32 decimal: query for a value NOT in the data — should return 0 rows
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_decimal.parquet' WHERE dec_int32 = 1.00::DECIMAL(4,2);
+----
+0
+
+# INT32 decimal: query for a value that IS in the data — should return results
+query I
+SELECT count(*) FROM '{TEST_DIR}/bloom_decimal.parquet' WHERE dec_int32 = 0.00::DECIMAL(4,2);
+----
+164

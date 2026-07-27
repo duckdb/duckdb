@@ -20,7 +20,7 @@ CSVFileHandle::CSVFileHandle(ClientContext &context_p, unique_ptr<FileHandle> fi
 
 unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const OpenFileInfo &file,
                                                      FileCompressionType compression) {
-	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ | compression;
+	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_PARALLEL_ACCESS | compression;
 	flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
 	auto file_handle = fs.OpenFile(file, flags);
 	if (file_handle->CanSeek()) {

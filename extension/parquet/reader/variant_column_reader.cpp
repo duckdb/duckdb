@@ -18,6 +18,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "parquet_column_schema.hpp"
 
 namespace duckdb_apache {
@@ -36,13 +37,34 @@ class ClientContext;
 class ParquetReader;
 class ThriftFileTransport;
 
+static vector<VariantPathComponent> GetVariantExtractPath(const ColumnIndex &index) {
+	vector<VariantPathComponent> result;
+	if (!index.IsPushdownExtract()) {
+		return result;
+	}
+	reference<const ColumnIndex> current(index.GetChildIndex(0));
+	while (true) {
+		if (current.get().HasPrimaryIndex()) {
+			throw InternalException("VARIANT pushdown extract expected a field name path");
+		}
+		result.emplace_back(current.get().GetFieldName());
+		if (!current.get().HasChildren()) {
+			break;
+		}
+		current = current.get().GetChildIndex(0);
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Variant Column Reader
 //===--------------------------------------------------------------------===//
 VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
                                          const ParquetColumnSchema &schema,
-                                         vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
+                                         vector<unique_ptr<ColumnReader>> child_readers_p,
+                                         const struct ColumnIndex &index)
+    : ColumnReader(reader, schema), context(context), index(index), extract_path(GetVariantExtractPath(index)),
+      child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 
 	for (auto &child : child_readers) {
@@ -62,6 +84,12 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
 	}
 }
 
+VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
+                                         const ParquetColumnSchema &schema,
+                                         vector<unique_ptr<ColumnReader>> child_readers_p)
+    : VariantColumnReader(context, reader, schema, std::move(child_readers_p), {}) {
+}
+
 ColumnReader &VariantColumnReader::GetChildReader(idx_t child_idx) {
 	if (!child_readers[child_idx]) {
 		throw InternalException("VariantColumnReader::GetChildReader(%d) - but this child reader is not set",
@@ -78,6 +106,15 @@ void VariantColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Col
 		}
 		child->InitializeRead(row_group_idx_p, columns, protocol_p);
 	}
+}
+
+unique_ptr<BaseStatistics> VariantColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+	auto result = ColumnReader::Stats(row_group_idx_p, columns);
+	if (result && index.IsPushdownExtract()) {
+		auto storage_index = StorageIndex::FromColumnIndex(index);
+		return result->PushdownExtract(storage_index.GetChildIndexes()[0]);
+	}
+	return result;
 }
 
 static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_value) {
@@ -149,6 +186,12 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	}
 	// convert the actual columns
 	Convert(metadata_intermediate, intermediate_group, result, num_values);
+	if (index.IsPushdownExtract()) {
+		D_ASSERT(!extract_path.empty());
+		Vector extract_result(LogicalType::VARIANT(), num_values);
+		VariantUtils::VariantExtract(result, extract_path, extract_result, num_values);
+		result.Reference(extract_result);
+	}
 
 	return value_values;
 }

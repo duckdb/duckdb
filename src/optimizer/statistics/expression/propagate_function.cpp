@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/arg_properties.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -133,6 +134,9 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 	}
 	if (BoundComparisonExpression::IsComparison(func)) {
 		return PropagateComparison(func, expr_ptr);
+	}
+	if (BoundCastExpression::IsCast(func)) {
+		return PropagateCast(func, expr_ptr);
 	}
 	vector<BaseStatistics> stats;
 	stats.reserve(func.GetChildrenMutable().size());

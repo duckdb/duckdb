@@ -238,9 +238,6 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_CASE:
 		result = VisitReplace(expr.Cast<BoundCaseExpression>(), expression);
 		break;
-	case ExpressionClass::BOUND_CAST:
-		result = VisitReplace(expr.Cast<BoundCastExpression>(), expression);
-		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
 		result = VisitReplace(expr.Cast<BoundColumnRefExpression>(), expression);
 		break;
@@ -298,11 +295,6 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpres
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundCaseExpression &expr,
-                                                            unique_ptr<Expression> *expr_ptr) {
-	return nullptr;
-}
-
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundCastExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

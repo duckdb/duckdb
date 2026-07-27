@@ -127,6 +127,32 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 	}
 }
 
+void Binder::BindOldRowCapture(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
+                               LogicalUpdate &update) {
+	// Append a reference to each physical column's scanned pre-update value, in table order, recording the
+	// input-chunk index of each so the operator can locate the OLD image without assuming a contiguous layout.
+	// rowid is appended afterwards, so it stays the last input column. A column that is SET to a constant is not
+	// otherwise scanned, so we add it to the scan here.
+	auto &column_ids = get.GetColumnIds();
+	for (auto &column : table.GetColumns().Physical()) {
+		auto logical_index = column.Logical().index;
+		optional_idx get_pos;
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (column_ids[i].GetPrimaryIndex() == logical_index) {
+				get_pos = i;
+				break;
+			}
+		}
+		if (!get_pos.IsValid()) {
+			get_pos = column_ids.size();
+			get.AddColumnId(logical_index);
+		}
+		update.old_row_columns.push_back(proj.expressions.size());
+		proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+		    column.Type(), ColumnBinding(get.table_index, ProjectionIndex(get_pos.GetIndex()))));
+	}
+}
+
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	return Bind(*stmt.node);
 }
@@ -171,10 +197,15 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
 
+	// Trigger expansion flags its generated base UPDATE for OLD capture via scoped binder state (keyed by node
+	// identity), so the parsed AST carries no trigger-internal state.
+	bool capture_old_rows = global_binder_state->trigger_old_capture.count(node) > 0;
+
 	// set return_chunk boolean early because it needs uses update_is_del_and_insert logic
-	if (!node.returning_list.empty()) {
+	if (!node.returning_list.empty() || capture_old_rows) {
 		update->return_chunk = true;
 	}
+	update->capture_old_rows = capture_old_rows;
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
@@ -204,6 +235,11 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	// bind any extra columns necessary for CHECK constraints or indexes
 	table.BindUpdateConstraints(*this, *get, *proj, *update, context);
 
+	// capture the pre-update (OLD) row image before rowid so rowid stays the final input column
+	if (update->capture_old_rows) {
+		BindOldRowCapture(table, *get, *proj, *update);
+	}
+
 	// finally bind the row id column and add them to the projection list
 	BindRowIdColumns(table, *get, proj->expressions);
 
@@ -213,10 +249,31 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	auto update_table_index = GenerateTableIndex();
 	update->table_index = update_table_index;
 	if (!node.returning_list.empty()) {
+		bool capture_old = update->capture_old_rows;
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
-		return BindReturning(std::move(node.returning_list), table, node.table->alias, update_table_index,
-		                     std::move(update_as_logicaloperator));
+		auto returning_result = BindReturning(std::move(node.returning_list), table, node.table->alias,
+		                                      update_table_index, std::move(update_as_logicaloperator));
+		if (capture_old) {
+			// Expose the captured OLD physical columns as extra output columns of the base CTE, under the reserved
+			// names computed once by trigger expansion (threaded via binder state), so the trigger's OLD transition
+			// alias can rename them. Public RETURNING (bound above) references only the NEW image, so its semantics
+			// are unchanged.
+			auto &old_capture_names = global_binder_state->trigger_old_capture_cte_names.at(node);
+			auto &proj = returning_result.plan->Cast<LogicalProjection>();
+			auto new_column_count = table.GetTypes().size();
+			idx_t physical_index = 0;
+			for (auto &column : table.GetColumns().Physical()) {
+				auto &name = old_capture_names[physical_index];
+				proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+				    name, column.Type(),
+				    ColumnBinding(update_table_index, ProjectionIndex(new_column_count + physical_index))));
+				returning_result.names.push_back(name);
+				returning_result.types.push_back(column.Type());
+				physical_index++;
+			}
+		}
+		return returning_result;
 	}
 
 	BoundStatement result;
