@@ -54,6 +54,52 @@ EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r >= 201 
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
 
+statement ok
+COPY (
+	SELECT
+		((i % 100) * 2)::INTEGER AS r,
+		i::BIGINT AS payload
+	FROM range(20480) t(i)
+) TO '{TEST_DIR}/bloom_in.parquet' (
+	FORMAT PARQUET,
+	ROW_GROUP_SIZE 2048,
+	WRITE_BLOOM_FILTER TRUE
+);
+
+# Both values are absent but within the min/max range of every row group
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_in.parquet')
+WHERE r IN (101, 103);
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Optional OR filters should also use the bloom filter
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_in.parquet')
+WHERE r = 101 OR r = 103;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# A row group cannot be pruned when any IN value might be present
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_in.parquet')
+WHERE r IN (100, 103);
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 10 / 10.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_in.parquet')
+WHERE r IN (100, 103);
+----
+205
+
 # this value is outside min/max
 query I
 SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloom1.parquet', 'r', '112121212');

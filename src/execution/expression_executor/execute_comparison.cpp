@@ -98,11 +98,11 @@ static bool TryPrimitiveSelectOperation(const Vector &left, const Vector &right,
 
 template <class PREDICATE>
 static idx_t ComparatorSelectOperation(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
-                                       idx_t count, const bool inequality, optional_ptr<SelectionVector> true_sel,
+                                       idx_t count, const ExpressionType comp, optional_ptr<SelectionVector> true_sel,
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask,
                                        PREDICATE predicate) {
 	Vector comparator_result(LogicalType::TINYINT, count);
-	VectorOperations::ComparatorFill(left, right, comparator_result, count, inequality);
+	VectorOperations::ComparatorFill(left, right, comparator_result, count, comp);
 	auto cmp_data = comparator_result.Values<int8_t>();
 
 	if (!sel) {
@@ -144,8 +144,8 @@ idx_t VectorOperations::Equals(const Vector &left, const Vector &right, optional
 	if (TryPrimitiveSelectOperation<duckdb::Equals>(left, right, sel, count, true_sel, false_sel, null_mask, result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, false, true_sel, false_sel, null_mask,
-	                                 [](int8_t v) { return v == Comparator::VALUES_ARE_EQUAL; });
+	return ComparatorSelectOperation(left, right, sel, count, ExpressionType::COMPARE_EQUAL, true_sel, false_sel,
+	                                 null_mask, [](int8_t v) { return v == Comparator::VALUES_ARE_EQUAL; });
 }
 
 idx_t VectorOperations::NotEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
@@ -156,8 +156,8 @@ idx_t VectorOperations::NotEquals(const Vector &left, const Vector &right, optio
 	                                                   result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, false, true_sel, false_sel, null_mask,
-	                                 [](int8_t v) { return v != Comparator::VALUES_ARE_EQUAL; });
+	return ComparatorSelectOperation(left, right, sel, count, ExpressionType::COMPARE_NOTEQUAL, true_sel, false_sel,
+	                                 null_mask, [](int8_t v) { return v != Comparator::VALUES_ARE_EQUAL; });
 }
 
 idx_t VectorOperations::GreaterThan(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
@@ -168,8 +168,8 @@ idx_t VectorOperations::GreaterThan(const Vector &left, const Vector &right, opt
 	                                                     result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true, true_sel, false_sel, null_mask,
-	                                 [](int8_t v) { return v > 0; });
+	return ComparatorSelectOperation(left, right, sel, count, ExpressionType::COMPARE_GREATERTHAN, true_sel, false_sel,
+	                                 null_mask, [](int8_t v) { return v > 0; });
 }
 
 idx_t VectorOperations::GreaterThanEquals(const Vector &left, const Vector &right,
@@ -182,8 +182,8 @@ idx_t VectorOperations::GreaterThanEquals(const Vector &left, const Vector &righ
 	                                                           result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true, true_sel, false_sel, null_mask,
-	                                 [](int8_t v) { return v >= 0; });
+	return ComparatorSelectOperation(left, right, sel, count, ExpressionType::COMPARE_GREATERTHANOREQUALTO, true_sel,
+	                                 false_sel, null_mask, [](int8_t v) { return v >= 0; });
 }
 
 idx_t VectorOperations::LessThan(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
@@ -194,8 +194,8 @@ idx_t VectorOperations::LessThan(const Vector &left, const Vector &right, option
 	                                                     result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true, true_sel, false_sel, null_mask,
-	                                 [](int8_t v) { return v < 0; });
+	return ComparatorSelectOperation(left, right, sel, count, ExpressionType::COMPARE_LESSTHAN, true_sel, false_sel,
+	                                 null_mask, [](int8_t v) { return v < 0; });
 }
 
 idx_t VectorOperations::LessThanEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
@@ -206,8 +206,8 @@ idx_t VectorOperations::LessThanEquals(const Vector &left, const Vector &right, 
 	                                                           result)) {
 		return result;
 	}
-	return ComparatorSelectOperation(left, right, sel, count, true, true_sel, false_sel, null_mask,
-	                                 [](int8_t v) { return v <= 0; });
+	return ComparatorSelectOperation(left, right, sel, count, ExpressionType::COMPARE_LESSTHANOREQUALTO, true_sel,
+	                                 false_sel, null_mask, [](int8_t v) { return v <= 0; });
 }
 
 } // namespace duckdb
