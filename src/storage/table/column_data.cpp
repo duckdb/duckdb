@@ -445,12 +445,11 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 	}
-	lock_guard<mutex> l(update_lock);
-	if (!updates) {
+	auto update_stats = GetUpdateStatistics();
+	if (!update_stats) {
 		// no updates - return original result
 		return prune_result;
 	}
-	auto update_stats = updates->GetStatistics();
 	// combine the update and original prune result
 	auto context = state.context.GetClientContext();
 	FilterPropagateResult update_result =
