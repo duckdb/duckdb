@@ -30,6 +30,36 @@ static vector<JoinCondition> NonRejectingDisjunction(TableIndex shared, TableInd
 	return result;
 }
 
+static bool ParentMustApplyAsOperator(JoinOrderOperatorType child_type, bool child_on_right) {
+	JoinRelationSetManager set_manager;
+	auto &r0 = set_manager.GetJoinRelation(RelationIndex(0));
+	auto &r1 = set_manager.GetJoinRelation(RelationIndex(1));
+	auto &r2 = set_manager.GetJoinRelation(RelationIndex(2));
+	auto &r0_r1 = set_manager.Union(r0, r1);
+	auto &r1_r2 = set_manager.Union(r1, r2);
+	auto &r0_r1_r2 = set_manager.Union(r0_r1, r2);
+
+	vector<unique_ptr<JoinOrderOperator>> operators;
+	if (child_on_right) {
+		operators.push_back(make_uniq<JoinOrderOperator>(0, child_type, r1, r2, r1_r2, vector<JoinCondition>()));
+		operators.push_back(make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::INNER, r0, r1_r2, r0_r1_r2,
+		                                                 vector<JoinCondition>()));
+		operators.back()->right_operators.push_back(*operators[0]);
+	} else {
+		operators.push_back(make_uniq<JoinOrderOperator>(0, child_type, r0, r1, r0_r1, vector<JoinCondition>()));
+		operators.push_back(make_uniq<JoinOrderOperator>(1, JoinOrderOperatorType::INNER, r0_r1, r2, r0_r1_r2,
+		                                                 vector<JoinCondition>()));
+		operators.back()->left_operators.push_back(*operators[0]);
+	}
+
+	const unordered_map<TableIndex, RelationIndex> relation_mapping;
+	JoinOrderConflictDetector::Build(operators, set_manager, relation_mapping);
+
+	REQUIRE(operators[1]->total_set.get().count == operators[1]->syntactic_set.get().count);
+	REQUIRE(operators[1]->conflict_rules.empty());
+	return JoinOrderConflictDetector::MustApplyAsOperator(*operators[1]);
+}
+
 TEST_CASE("CD-C honors conditional SEMI join associativity", "[optimizer][join_order]") {
 	for (auto comparison_type : {ExpressionType::COMPARE_EQUAL, ExpressionType::COMPARE_NOT_DISTINCT_FROM}) {
 		JoinRelationSetManager set_manager;
@@ -84,6 +114,12 @@ TEST_CASE("CD-C expands TES for a conflicting non-inner descendant", "[optimizer
 	REQUIRE(operators[1]->total_set.get().count == 3);
 	REQUIRE(operators[1]->conflict_rules.empty());
 	REQUIRE_FALSE(JoinOrderConflictDetector::IsApplicable(*operators[1], r1, r2));
+}
+
+TEST_CASE("CD-C preserves operator ownership after simplifying absorbed conflicts", "[optimizer][join_order]") {
+	REQUIRE(ParentMustApplyAsOperator(JoinOrderOperatorType::LEFT, false));
+	REQUIRE(ParentMustApplyAsOperator(JoinOrderOperatorType::LEFT, true));
+	REQUIRE_FALSE(ParentMustApplyAsOperator(JoinOrderOperatorType::INNER, false));
 }
 
 TEST_CASE("CD-C tests conditional associativity against the shared input", "[optimizer][join_order]") {
@@ -203,7 +239,7 @@ TEST_CASE("CD-C preserves explicit cross-product sides", "[optimizer][join_order
 	const unordered_map<TableIndex, RelationIndex> relation_mapping;
 	JoinOrderConflictDetector::Build(operators, set_manager, relation_mapping);
 
-	REQUIRE_FALSE(JoinOrderConflictDetector::RequiresExactApplication(*operators[0]));
+	REQUIRE_FALSE(JoinOrderConflictDetector::MustApplyAsOperator(*operators[0]));
 	REQUIRE(JoinOrderConflictDetector::IsApplicable(*operators[0], r0, r2));
 	REQUIRE(JoinOrderConflictDetector::IsApplicable(*operators[0], r2, r1));
 	REQUIRE_FALSE(JoinOrderConflictDetector::IsApplicable(*operators[0], r0, r1));

@@ -129,6 +129,29 @@ INNER JOIN (
 ----
 0
 
+statement ok
+SET debug_force_no_cross_product = true;
+
+# Conflict simplification must not split an INNER occurrence whose complete condition is constrained by a LEFT join.
+# The constrained occurrence supplies the connected plan, so no generated cross product is required.
+query I
+WITH a(k,v) AS (VALUES (2,1)),
+     b(k) AS (VALUES (3)),
+     c(k) AS (VALUES (2)),
+     d(k,v) AS (VALUES (NULL::INTEGER,7))
+SELECT count(*)
+FROM a
+LEFT JOIN b ON b.k=a.k
+INNER JOIN c ON c.k=a.k
+INNER JOIN d
+  ON d.k IS NOT DISTINCT FROM b.k
+ AND (d.v IS NULL OR a.v=0);
+----
+0
+
+statement ok
+RESET debug_force_no_cross_product;
+
 endloop
 
 statement ok

@@ -182,7 +182,7 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	join_operators = std::move(extraction.join_operators);
 	JoinOrderConflictDetector::Build(join_operators, set_manager, relation_manager.relation_mapping);
 	for (auto &join_operator : join_operators) {
-		if (!JoinOrderConflictDetector::RequiresExactApplication(*join_operator)) {
+		if (!JoinOrderConflictDetector::MustApplyAsOperator(*join_operator)) {
 			continue;
 		}
 		for (auto predicate_index : join_operator->costing_predicate_indices) {
@@ -344,11 +344,6 @@ void QueryGraphManager::BindFilterEndpoints() {
 	}
 }
 
-static bool IsUnconstrainedInner(const JoinOrderOperator &op) {
-	return op.type == JoinOrderOperatorType::INNER && op.conflict_rules.empty() &&
-	       op.total_set.get().count == op.syntactic_set.get().count;
-}
-
 void QueryGraphManager::CreateHyperGraphEdges() {
 	graph_component_roots.resize(relation_manager.NumRelations());
 	for (idx_t relation_idx = 0; relation_idx < graph_component_roots.size(); relation_idx++) {
@@ -370,7 +365,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 		auto operator_index = filters_and_bindings[predicate.GetIndex()]->source_operator_index;
 		if (operator_index.IsValid()) {
 			D_ASSERT(operator_index.GetIndex() < join_operators.size());
-			if (!IsUnconstrainedInner(*join_operators[operator_index.GetIndex()])) {
+			if (JoinOrderConflictDetector::MustApplyAsOperator(*join_operators[operator_index.GetIndex()])) {
 				continue;
 			}
 		}
@@ -384,7 +379,8 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 		if (op.type == JoinOrderOperatorType::CROSS_PRODUCT) {
 			continue;
 		}
-		if (IsUnconstrainedInner(op)) {
+		if (!JoinOrderConflictDetector::MustApplyAsOperator(op)) {
+			D_ASSERT(op.type == JoinOrderOperatorType::INNER);
 			// Filter pushdown can place an INNER predicate on an original operator boundary that does not match the
 			// predicate's executable expression endpoints. If CD-C found no constraint, preserve DuckDB's existing
 			// independently movable predicate edge. It was emitted above in the existing filter order; the descriptor
@@ -468,7 +464,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, total_relation);
 	for (auto &join_operator : join_operators) {
-		if (JoinOrderConflictDetector::RequiresExactApplication(*join_operator) &&
+		if (JoinOrderConflictDetector::MustApplyAsOperator(*join_operator) &&
 		    !reconstructed_operators.count(join_operator->index)) {
 			throw InternalException("Join-order optimizer did not reconstruct operator occurrence %llu",
 			                        join_operator->index);
@@ -602,7 +598,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		auto descriptor = node->join_operator;
 		if (descriptor) {
 			D_ASSERT(descriptor->type == JoinOrderOperatorType::CROSS_PRODUCT ||
-			         JoinOrderConflictDetector::RequiresExactApplication(*descriptor));
+			         JoinOrderConflictDetector::MustApplyAsOperator(*descriptor));
 			bool direct;
 			bool inverted;
 			if (descriptor->type == JoinOrderOperatorType::CROSS_PRODUCT) {
@@ -978,7 +974,7 @@ bool QueryGraphManager::IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> sel
 			if (!JoinOrderConflictDetector::IsApplicable(op, left, right)) {
 				return false;
 			}
-		} else if (JoinOrderConflictDetector::RequiresExactApplication(op) && selected_operator != &op) {
+		} else if (JoinOrderConflictDetector::MustApplyAsOperator(op) && selected_operator != &op) {
 			return false;
 		}
 	}

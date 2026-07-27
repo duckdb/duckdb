@@ -264,6 +264,8 @@ void JoinOrderConflictDetector::Build(vector<unique_ptr<JoinOrderOperator>> &ope
 	for (auto &op : operators) {
 		D_ASSERT(!JoinRelationSet::Intersects(op->left_relations, op->right_relations));
 		BuildConflictRules(*op, set_manager, relation_mapping);
+		op->must_apply_as_operator = op->type != JoinOrderOperatorType::CROSS_PRODUCT &&
+		                             (op->type != JoinOrderOperatorType::INNER || !op->conflict_rules.empty());
 		SimplifyConflictRules(*op, set_manager);
 		D_ASSERT(ContainedInUnion(op->total_set, op->left_relations, op->right_relations));
 		for (auto &rule : op->conflict_rules) {
@@ -303,14 +305,13 @@ bool JoinOrderConflictDetector::IsApplicable(const JoinOrderOperator &op, const 
 	return (direct || inverted) && ObeysConflictRules(op, left, right);
 }
 
-bool JoinOrderConflictDetector::RequiresExactApplication(const JoinOrderOperator &op) {
-	if (op.type != JoinOrderOperatorType::INNER && op.type != JoinOrderOperatorType::CROSS_PRODUCT) {
-		return true;
-	}
-	if (op.type == JoinOrderOperatorType::CROSS_PRODUCT) {
-		return false;
-	}
-	return !op.conflict_rules.empty() || op.total_set.get().count != op.syntactic_set.get().count;
+bool JoinOrderConflictDetector::MustApplyAsOperator(const JoinOrderOperator &op) {
+	D_ASSERT(op.type == JoinOrderOperatorType::INNER || op.type == JoinOrderOperatorType::CROSS_PRODUCT ||
+	         op.must_apply_as_operator);
+	D_ASSERT(op.type != JoinOrderOperatorType::CROSS_PRODUCT || !op.must_apply_as_operator);
+	D_ASSERT(op.type == JoinOrderOperatorType::CROSS_PRODUCT || op.must_apply_as_operator ||
+	         (op.conflict_rules.empty() && op.total_set.get().count == op.syntactic_set.get().count));
+	return op.must_apply_as_operator;
 }
 
 bool JoinOrderConflictDetector::IsCompletedBy(const JoinOrderOperator &op, const JoinRelationSet &relations) {
