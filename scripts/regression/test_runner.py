@@ -2,7 +2,7 @@ import os
 import math
 import functools
 import shutil
-from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
+from benchmark import BenchmarkRunner, BenchmarkRunnerConfig, DEFAULT_TIMED_RUNS
 from dataclasses import dataclass
 from typing import Optional, List, Union, Dict
 from pathlib import Path
@@ -45,7 +45,12 @@ parser.add_argument("--disable-timeout", action="store_true", help="Disable time
 parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
 parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
 parser.add_argument("--no-summary", type=str, default=False, help="No summary in the end.")
-parser.add_argument("--timed-runs", type=int, help="Number of timed runs per benchmark.")
+parser.add_argument(
+    "--timed-runs",
+    type=int,
+    default=DEFAULT_TIMED_RUNS,
+    help=f"Number of timed runs per benchmark (default: {DEFAULT_TIMED_RUNS}).",
+)
 parser.add_argument(
     "--clear-benchmark-cache", action="store_true", help="Clear benchmark caches prior to running", default=False
 )

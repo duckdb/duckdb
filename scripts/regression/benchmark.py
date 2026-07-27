@@ -23,6 +23,7 @@ STDOUT_HEADER = '''====================================================
 # timeouts in seconds
 MAX_TIMEOUT = 3600
 DEFAULT_TIMEOUT = 600
+DEFAULT_TIMED_RUNS = 10
 
 
 @dataclass
@@ -38,7 +39,7 @@ class BenchmarkRunnerConfig:
     max_timeout: int = MAX_TIMEOUT
     root_dir: str = ""
     no_summary: bool = False
-    timed_runs: Optional[int] = None
+    timed_runs: Optional[int] = DEFAULT_TIMED_RUNS
     runner_label: str = "benchmark"
 
     @classmethod
@@ -50,7 +51,7 @@ class BenchmarkRunnerConfig:
         max_timeout = kwargs.get("max_timeout", MAX_TIMEOUT)
         root_dir = kwargs.get("root_dir", "")
         no_summary = kwargs.get("no_summary", False)
-        timed_runs = kwargs.get("timed_runs", None)
+        timed_runs = kwargs.get("timed_runs", DEFAULT_TIMED_RUNS)
         runner_label = kwargs.get("runner_label", "benchmark")
 
         config = cls(
@@ -86,7 +87,12 @@ class BenchmarkRunnerConfig:
         parser.add_argument(
             "--no-summary", type=str, default=False, help="No failures summary is outputted when passing this flag."
         )
-        parser.add_argument("--timed-runs", type=int, help="Number of timed runs per benchmark.")
+        parser.add_argument(
+            "--timed-runs",
+            type=int,
+            default=DEFAULT_TIMED_RUNS,
+            help=f"Number of timed runs per benchmark (default: {DEFAULT_TIMED_RUNS}).",
+        )
 
         # Parse arguments
         parsed_args = parser.parse_args()
