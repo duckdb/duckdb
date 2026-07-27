@@ -858,9 +858,9 @@
       },
       {
         "id": 209,
-        "name": "update_from",
-        "type": "bool",
-        "default": "false"
+        "name": "row_id_handling",
+        "type": "RowIdHandling",
+        "default": "RowIdHandling::ASSUME_UNIQUE"
       }
     ],
     "constructor": [

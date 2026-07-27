@@ -39,7 +39,7 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		                                          std::move(action.expressions), std::move(defaults),
 		                                          std::move(bound_constraints), cardinality, op.return_chunk,
 		                                          /*capture_old_rows=*/false, /*old_row_columns=*/vector<idx_t>(),
-		                                          /*update_from=*/false);
+		                                          /*row_id_handling=*/RowIdHandling::ASSUME_UNIQUE);
 		auto &cast_update = result->op->Cast<PhysicalUpdate>();
 		cast_update.update_is_del_and_insert = action.update_is_del_and_insert;
 		break;

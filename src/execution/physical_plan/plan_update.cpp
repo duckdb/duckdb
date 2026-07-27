@@ -12,7 +12,7 @@ PhysicalOperator &DuckCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGe
 	auto &update = planner.Make<PhysicalUpdate>(
 	    op.types, op.table.Cast<DuckTableEntry>(), op.table.GetStorage(), op.columns, std::move(op.expressions),
 	    std::move(op.bound_defaults), std::move(op.bound_constraints), op.estimated_cardinality, op.return_chunk,
-	    op.capture_old_rows, std::move(op.old_row_columns), op.update_from);
+	    op.capture_old_rows, std::move(op.old_row_columns), op.row_id_handling);
 	auto &cast_update = update.Cast<PhysicalUpdate>();
 	cast_update.update_is_del_and_insert = op.update_is_del_and_insert;
 	cast_update.children.push_back(plan);

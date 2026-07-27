@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/row_id_deduplicator.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -124,20 +125,15 @@ public:
 	mutex match_lock;
 	unordered_set<row_t> matched_rows;
 
-	//! Record the matched target rows; throw if any row was already matched (cardinality violation). The matched
-	//! chunk is sliced from the input, so read the row-ids through a unified format rather than assuming flat.
+	//! Record the matched target rows; throw if any row was already matched (cardinality violation). Uses the
+	//! shared row-id registration primitive; a distinct count below the input count means a row-id repeated.
 	void CheckMatchedRows(DataChunk &matched, idx_t row_id_index) {
-		UnifiedVectorFormat row_id_format;
-		matched.data[row_id_index].ToUnifiedFormat(row_id_format);
-		auto row_id_data = UnifiedVectorFormat::GetData<row_t>(row_id_format);
 		lock_guard<mutex> glock(match_lock);
-		for (idx_t i = 0; i < matched.size(); i++) {
-			auto row_id = row_id_data[row_id_format.sel->get_index(i)];
-			if (!matched_rows.insert(row_id).second) {
-				throw InvalidInputException(
-				    "MERGE INTO command cannot affect the same target row more than once. A target row matched more "
-				    "than one source row; ensure the source rows are deduplicated or the ON condition is unique.");
-			}
+		auto distinct = RegisterRowIds(matched_rows, matched.data[row_id_index], matched.size());
+		if (distinct != matched.size()) {
+			throw InvalidInputException(
+			    "MERGE INTO command cannot affect the same target row more than once. A target row matched more "
+			    "than one source row; ensure the source rows are deduplicated or the ON condition is unique.");
 		}
 	}
 

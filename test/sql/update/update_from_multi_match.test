@@ -236,3 +236,30 @@ query I
 SELECT len(v) FROM t4;
 ----
 1
+
+# ── indexed target (del+insert path) with duplicate matches ──────────────────────
+# Fetch, Delete, and LocalAppend must all operate on the deduplicated row-ids; otherwise Fetch reads the
+# wrong rows and a valid UPDATE fails with a spurious duplicate-key error.
+statement ok
+CREATE TABLE target_pk (id INTEGER PRIMARY KEY, value INTEGER);
+
+statement ok
+INSERT INTO target_pk VALUES (1, 0), (2, 0);
+
+statement ok
+CREATE TABLE source_dup (id INTEGER, value INTEGER);
+
+statement ok
+INSERT INTO source_dup VALUES (1, 10), (1, 11), (2, 20), (2, 21);
+
+query I rowsort
+UPDATE target_pk SET value = source_dup.value FROM source_dup WHERE target_pk.id = source_dup.id RETURNING id;
+----
+1
+2
+
+# each target row updated exactly once to one of its matches
+query I
+SELECT count(*) FROM target_pk WHERE (id = 1 AND value IN (10, 11)) OR (id = 2 AND value IN (20, 21));
+----
+2
