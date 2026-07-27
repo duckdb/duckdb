@@ -16,8 +16,10 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -284,6 +286,99 @@ static unique_ptr<ParsedExpression> ServeEquiJoinCondition(const string &feature
 	return condition ? Conjoin(std::move(condition), std::move(version_condition)) : std::move(version_condition);
 }
 
+//! MIN or MAX of the version the spine can reach, as a scalar subquery that independently re-derives the
+//! version-boundary join over the raw spine table:
+//!   (SELECT <aggregate>(vt.__feature_version)
+//!      FROM (SELECT *, <probe> AS __bound_probe FROM <spine>) AS s
+//!      ASOF LEFT JOIN <version values> vt ON s.__bound_probe >= vt.__feature_timestamp)
+//! Self-contained: it re-wraps the spine itself rather than referencing the outer query's "spine" alias, so it
+//! can be evaluated independently of the surrounding join tree.
+//! DuckDB's ASOF inequality requires a real column on each side -- verified: a bare constant on the left
+//! throws "Binder Error: Missing ASOF JOIN inequality". In latest mode there is no real spine column to use
+//! (the spine has no as-of column of its own), so the probe is projected as one first, exactly the shape
+//! SpineTableRef already uses for the same reason. In time-travel mode the user's as-of column already exists,
+//! but it still goes through the same wrap so both modes share one construction.
+static unique_ptr<ParsedExpression> ReachableVersionBound(const string &aggregate, const string &spine_table,
+                                                          const string &spine_asof_column,
+                                                          const vector<FeatureVersionStamp> &stamps,
+                                                          const string &version_alias, bool latest_mode) {
+	constexpr const char *BOUND_PROBE_COLUMN = "__bound_probe";
+
+	auto inner = make_uniq<SelectNode>();
+	inner->select_list.push_back(make_uniq<StarExpression>());
+	unique_ptr<ParsedExpression> probe;
+	if (latest_mode) {
+		probe = make_uniq<ConstantExpression>(Value::TIMESTAMP(timestamp_t::infinity()));
+	} else {
+		probe = make_uniq<ColumnRefExpression>(spine_asof_column);
+	}
+	probe->SetAlias(BOUND_PROBE_COLUMN);
+	inner->select_list.push_back(std::move(probe));
+	inner->from_table = BaseTable(spine_table, string());
+	auto spine_stmt = make_uniq<SelectStatement>();
+	spine_stmt->node = std::move(inner);
+	auto spine_ref = make_uniq<SubqueryRef>(std::move(spine_stmt), "s");
+
+	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
+	join->type = JoinType::LEFT;
+	join->left = std::move(spine_ref);
+	join->right = VersionBoundaryTableRef(stamps, version_alias);
+	join->condition = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+	                                                  ColumnRef("s", BOUND_PROBE_COLUMN),
+	                                                  ColumnRef(version_alias, FEATURE_TIMESTAMP_COLUMN));
+
+	auto node = make_uniq<SelectNode>();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(ColumnRef(version_alias, FEATURE_VERSION_COLUMN));
+	node->select_list.push_back(make_uniq<FunctionExpression>(aggregate, std::move(children)));
+	node->from_table = std::move(join);
+
+	auto stmt = make_uniq<SelectStatement>();
+	stmt->node = std::move(node);
+	auto subquery = make_uniq<SubqueryExpression>();
+	subquery->subquery_type = SubqueryType::SCALAR;
+	subquery->subquery = std::move(stmt);
+	return std::move(subquery);
+}
+
+//! The store side of the equi-join, bounded to the versions the spine can reach:
+//!   (SELECT * FROM <store>
+//!     WHERE __feature_version >= COALESCE(<min reachable>, <oldest retained>)
+//!       AND __feature_version <= <max reachable>) AS <alias>
+//! The lower bound is coalesced because a spine reaching back before every snapshot resolves to NULL there,
+//! and a NULL bound would filter out every row. The upper bound is deliberately not coalesced: a NULL there
+//! means no spine row resolves to any version at all, and an empty scan is then the correct result.
+static unique_ptr<TableRef> ServeStoreRef(const string &store_table, const string &feature_alias,
+                                          const vector<FeatureVersionStamp> &stamps, const string &spine_table,
+                                          const string &spine_asof_column, bool latest_mode) {
+	auto version_alias = ServeVersionTableAlias(feature_alias) + "_bound";
+
+	int64_t oldest_version = stamps.front().version;
+	for (auto &stamp : stamps) {
+		oldest_version = MinValue<int64_t>(oldest_version, stamp.version);
+	}
+
+	auto lower = make_uniq<OperatorExpression>(
+	    ExpressionType::OPERATOR_COALESCE,
+	    ReachableVersionBound("min", spine_table, spine_asof_column, stamps, version_alias, latest_mode),
+	    make_uniq<ConstantExpression>(Value::BIGINT(oldest_version)));
+	auto lower_bound = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+	                                                   make_uniq<ColumnRefExpression>(string(FEATURE_VERSION_COLUMN)),
+	                                                   std::move(lower));
+	auto upper_bound = make_uniq<ComparisonExpression>(
+	    ExpressionType::COMPARE_LESSTHANOREQUALTO, make_uniq<ColumnRefExpression>(string(FEATURE_VERSION_COLUMN)),
+	    ReachableVersionBound("max", spine_table, spine_asof_column, stamps, version_alias, latest_mode));
+
+	auto inner = make_uniq<SelectNode>();
+	inner->select_list.push_back(make_uniq<StarExpression>());
+	inner->from_table = BaseTable(store_table, string());
+	inner->where_clause = Conjoin(std::move(lower_bound), std::move(upper_bound));
+
+	auto stmt = make_uniq<SelectStatement>();
+	stmt->node = std::move(inner);
+	return make_uniq<SubqueryRef>(std::move(stmt), feature_alias);
+}
+
 static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const vector<string> &feature_entities) {
 	auto result = make_uniq<StarExpression>(feature_alias);
 	for (auto &feature_entity : feature_entities) {
@@ -504,7 +599,8 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 			auto join = make_uniq<JoinRef>(JoinRefType::REGULAR);
 			join->type = JoinType::LEFT;
 			join->left = std::move(select->from_table);
-			join->right = BaseTable(FeatureStoreTableName(feat.name), alias);
+			join->right = ServeStoreRef(FeatureStoreTableName(feat.name), alias, stamps, spine_table, spine_asof_column,
+			                            latest_mode);
 			join->condition = ServeEquiJoinCondition(alias, version_alias, entity_mappings);
 			select->from_table = std::move(join);
 		} else {

@@ -215,3 +215,30 @@ physical_plan	<!REGEX>:.*HASH_JOIN.*
 
 statement ok
 RESET feature_serve_legacy_asof;
+
+# ============================================================
+# The store scan is bounded to the versions the spine can reach, so it prunes row groups by zonemap instead of
+# scanning every retained version. The bound is a scalar subquery, not a bind-time constant, so DuckDB can never
+# express it as a static Filters entry on the scan -- it always flattens a subquery-derived comparison into a
+# join instead. The only place this pruning is observable is DuckDB's runtime dynamic join-filter-pushdown
+# mechanism, which computes the filter from the join and installs it on the probe-side scan during execution --
+# hence EXPLAIN ANALYZE (which runs the query) rather than the plain EXPLAIN used elsewhere in this file, and
+# "Dynamic Filters" rather than "Filters" in the assertion below.
+# ============================================================
+query II
+EXPLAIN ANALYZE (FORMAT JSON) SELECT * FROM (SERVE FEATURE eq_txn FOR big_tt_requests ASOF asof_time);
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters.*__feature_version.*
+
+# Results are unchanged by the pruning -- same rows as before, on both paths.
+query TTR sort
+SERVE FEATURE eq_txn FOR tt_requests ASOF asof_time;
+----
+C001	2024-01-03 00:00:00	NULL
+C001	2024-01-05 00:00:00	300.00
+C001	2024-01-07 00:00:00	300.00
+
+query TR
+SERVE FEATURE oo_latest FOR oo_requests;
+----
+X001	50.00
