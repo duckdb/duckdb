@@ -435,6 +435,50 @@ class BenchmarkResult:
     new_failure: Optional[str] = None
 
 
+def run_benchmarks_alternating(old_runner: BenchmarkRunner, new_runner: BenchmarkRunner, benchmark_list: List[str]):
+    old_results = {}
+    new_results = {}
+    old_failures = {}
+    new_failures = {}
+    requested_runs = max(timed_runs, 1) if timed_runs is not None else 1
+    timed_runs_override = 1 if timed_runs is not None else None
+
+    for benchmark in benchmark_list:
+        old_timings = []
+        new_timings = []
+        old_failure = None
+        new_failure = None
+
+        for _ in range(requested_runs):
+            old_run_timings, old_failure = old_runner.run_benchmark_once(benchmark, timed_runs_override)
+            if old_failure:
+                break
+            if not old_run_timings:
+                old_failure = "Benchmark did not produce any timings"
+                break
+            old_timings.extend(old_run_timings)
+
+            new_run_timings, new_failure = new_runner.run_benchmark_once(benchmark, timed_runs_override)
+            if new_failure:
+                break
+            if not new_run_timings:
+                new_failure = "Benchmark did not produce any timings"
+                break
+            new_timings.extend(new_run_timings)
+
+        old_results[benchmark], old_failures[benchmark] = old_runner.complete_benchmark(benchmark, old_timings)
+        new_results[benchmark], new_failures[benchmark] = new_runner.complete_benchmark(benchmark, new_timings)
+
+        if old_failure:
+            old_results[benchmark] = 'Failed to run benchmark ' + benchmark
+            old_failures[benchmark] = old_failure
+        if new_failure:
+            new_results[benchmark] = 'Failed to run benchmark ' + benchmark
+            new_failures[benchmark] = new_failure
+
+    return old_results, old_failures, new_results, new_failures
+
+
 multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
 other_results: List[BenchmarkResult] = []
 error_list: List[BenchmarkResult] = []
@@ -450,8 +494,9 @@ for i in range(NUMBER_REPETITIONS):
 '''
     )
 
-    old_results, old_failures = old_runner.run_benchmarks(benchmark_list)
-    new_results, new_failures = new_runner.run_benchmarks(benchmark_list)
+    old_results, old_failures, new_results, new_failures = run_benchmarks_alternating(
+        old_runner, new_runner, benchmark_list
+    )
 
     for benchmark in benchmark_list:
         old_res = old_results[benchmark]
