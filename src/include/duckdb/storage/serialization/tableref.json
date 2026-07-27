@@ -100,7 +100,8 @@
       {
         "id": 204,
         "name": "ref_type",
-        "type": "JoinRefType"
+        "type": "JoinRefType",
+        "serialize_property": "SerializedRefType(serializer)"
       },
       {
         "id": 205,

@@ -135,7 +135,7 @@ void JoinRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(201, "right", right);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "condition", condition);
 	serializer.WriteProperty<JoinType>(203, "join_type", type);
-	serializer.WriteProperty<JoinRefType>(204, "ref_type", ref_type);
+	serializer.WriteProperty<JoinRefType>(204, "ref_type", SerializedRefType(serializer));
 	serializer.WritePropertyWithDefault<vector<Identifier>>(205, "using_columns", using_columns);
 	serializer.WritePropertyWithDefault<bool>(206, "delim_flipped", delim_flipped);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "duplicate_eliminated_columns", duplicate_eliminated_columns);

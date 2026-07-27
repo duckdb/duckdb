@@ -135,4 +135,16 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	return std::move(copy);
 }
 
+JoinRefType JoinRef::SerializedRefType(Serializer &serializer) const {
+	// The NEAREST properties are only written from v2.0.0 onwards - rather than silently dropping them (and turning
+	// the join into something else entirely), refuse to serialize to an older storage version
+	if (ref_type == JoinRefType::NEAREST && !serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		throw SerializationException(
+		    "Cannot serialize a NEAREST BY join to storage version \"%s\" - NEAREST BY requires storage version "
+		    "\"v2.0.0\" or newer",
+		    serializer.GetOptions().storage_compatibility.duckdb_version);
+	}
+	return ref_type;
+}
+
 } // namespace duckdb

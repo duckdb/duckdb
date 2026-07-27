@@ -64,5 +64,9 @@ public:
 	//! Deserializes a blob back into a JoinRef
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
+
+private:
+	//! The ref_type to write - throws if the targeted storage version does not know about it
+	JoinRefType SerializedRefType(Serializer &serializer) const;
 };
 } // namespace duckdb

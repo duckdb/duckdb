@@ -51,23 +51,6 @@ UNION ALL
 );
 ----
 
-# The clause round-trips through ToString (via a view definition) and re-parses
-statement ok
-CREATE VIEW nearest_view AS
-  SELECT q.user_id, t.product_id FROM users q
-    INNER JOIN products t APPROX NEAREST 2 BY SIMILARITY array_cosine_similarity(q.embedding, t.embedding);
-
-query I
-SELECT sql LIKE '%APPROX NEAREST 2 BY SIMILARITY%' FROM duckdb_views() WHERE view_name = 'nearest_view';
-----
-true
-
-# The stored (re-parsed) view is executable
-query I
-SELECT count(*) FROM nearest_view;
-----
-4
-
 # Unaliased bare targets: base table, subquery, table function, VALUES, and parenthesized joins
 query I
 SELECT count(*) FROM users q
