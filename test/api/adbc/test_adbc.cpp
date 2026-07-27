@@ -1119,6 +1119,13 @@ TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 }
 
+// Reads entry `idx` of a utf8 ArrowArray (buffers: validity, offsets, data).
+static string GetArrowString(ArrowArray *array, idx_t idx) {
+	auto offsets = static_cast<const int32_t *>(array->buffers[1]);
+	auto data = static_cast<const char *>(array->buffers[2]);
+	return string(data + offsets[idx], static_cast<size_t>(offsets[idx + 1] - offsets[idx]));
+}
+
 TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -1153,53 +1160,220 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	// No error
 	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
-	REQUIRE((status != ADBC_STATUS_OK));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
 	REQUIRE(out_stream.release == nullptr);
 
-	// Invalid connection
+	// Invalid connection. With private_driver == nullptr this never reaches
+	// duckdb_adbc::ConnectionGetInfo: the driver manager itself (see
+	// test/api/adbc/driver_manager.cpp AdbcConnectionGetInfo) rejects the call
+	// before dispatching to the driver.
 	AdbcConnection bogus_connection;
 	bogus_connection.private_data = nullptr;
 	bogus_connection.private_driver = nullptr;
 	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&bogus_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, &adbc_error);
-	REQUIRE((status != ADBC_STATUS_OK));
+	REQUIRE(status == ADBC_STATUS_INVALID_STATE);
 	REQUIRE(out_stream.release == nullptr);
 
 	// No stream
 	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, nullptr, &adbc_error);
-	REQUIRE((status != ADBC_STATUS_OK));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
+
+	// Connection allocated but never initialized (AdbcConnectionNew without a
+	// matching AdbcConnectionInit) must fail, not silently succeed.
+	{
+		AdbcConnection uninitialized_connection;
+		REQUIRE(SUCCESS(AdbcConnectionNew(&uninitialized_connection, &adbc_error)));
+		out_stream.release = nullptr;
+		status = AdbcConnectionGetInfo(&uninitialized_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream,
+		                               &adbc_error);
+		REQUIRE(status == ADBC_STATUS_INVALID_STATE);
+		REQUIRE(out_stream.release == nullptr);
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&uninitialized_connection, &adbc_error)));
+	}
 
 	// ==== HAPPY PATH ====
+	// The info_value column is a dense union, which DuckDB's arrow_scan
+	// cannot consume; the buffers are validated directly instead.
 
-	// This returns all known info codes
+	// This returns all known info codes.
 	out_stream.release = nullptr;
 	status = AdbcConnectionGetInfo(&adbc_connection, nullptr, 42, &out_stream, &adbc_error);
 	REQUIRE((status == ADBC_STATUS_OK));
 	REQUIRE((out_stream.release != nullptr));
 	{
-		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
-		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
-		// Create a separate connection for arrow_scan to avoid deadlock.
-		// The streaming result from AdbcConnectionGetInfo holds the ClientContext lock,
-		// and using the same connection for arrow_scan would cause a deadlock.
-		Connection separate_conn(*cconn->context->db);
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(out_stream.get_schema(&out_stream, &schema) == 0);
+		REQUIRE(string(schema.format) == "+s");
+		REQUIRE(schema.n_children == 2);
+		REQUIRE(string(schema.children[0]->name) == "info_name");
+		REQUIRE(string(schema.children[0]->format) == "I");
+		REQUIRE((schema.children[0]->flags & ARROW_FLAG_NULLABLE) == 0);
 
-		auto params = ArrowTestHelper::ConstructArrowScan(out_stream);
-		auto rel = separate_conn.TableFunction("arrow_scan", params);
-		auto res = rel->Project("info_name")->Execute();
-		REQUIRE(!res->HasError());
-		auto &mat = res->Cast<MaterializedQueryResult>();
+		auto info_value_schema = schema.children[1];
+		REQUIRE(string(info_value_schema->name) == "info_value");
+		// The value column must be a *dense* union per the ADBC spec, with
+		// all six members defined by adbc.h regardless of which ones DuckDB
+		// actually populates.
+		REQUIRE(string(info_value_schema->format) == "+ud:0,1,2,3,4,5");
+		// adbc.h:1380 does not mark `info_value` "not null" (unlike e.g.
+		// `statistic_value`, adbc.h:1662), so it must stay nullable.
+		REQUIRE((info_value_schema->flags & ARROW_FLAG_NULLABLE) != 0);
+		REQUIRE(info_value_schema->n_children == 6);
+		REQUIRE(string(info_value_schema->children[0]->name) == "string_value");
+		REQUIRE(string(info_value_schema->children[1]->name) == "bool_value");
+		REQUIRE(string(info_value_schema->children[2]->name) == "int64_value");
+		REQUIRE(string(info_value_schema->children[3]->name) == "int32_bitmask");
+		REQUIRE(string(info_value_schema->children[4]->name) == "string_list");
+		REQUIRE(string(info_value_schema->children[5]->name) == "int32_to_int32_list_map");
+		schema.release(&schema);
+
+		ArrowArray batch;
+		batch.release = nullptr;
+		REQUIRE(out_stream.get_next(&out_stream, &batch) == 0);
+		REQUIRE(batch.release);
+
+		auto names = static_cast<const uint32_t *>(batch.children[0]->buffers[1]);
+		auto value_array = batch.children[1];
+		// Dense unions have exactly two buffers (type ids + offsets) and no
+		// validity buffer of their own.
+		REQUIRE(value_array->n_buffers == 2);
+		REQUIRE(value_array->n_children == 6);
+		auto type_ids = static_cast<const int8_t *>(value_array->buffers[0]);
+		auto value_offsets = static_cast<const int32_t *>(value_array->buffers[1]);
+		auto int64_values = static_cast<const int64_t *>(value_array->children[2]->buffers[1]);
+
+		// The four members DuckDB never populates must still be structurally
+		// well-formed empty children, not just zero-length placeholders: each
+		// child's buffer count must match its Arrow layout, and the nested
+		// list/map children must themselves be well-formed empty arrays.
+
+		// bool_value: fixed-width primitive -> validity + data buffers.
+		auto bool_value = value_array->children[1];
+		REQUIRE(bool_value->length == 0);
+		REQUIRE(bool_value->null_count == 0);
+		REQUIRE(bool_value->n_buffers == 2);
+		REQUIRE(bool_value->n_children == 0);
+
+		// int32_bitmask: fixed-width primitive -> validity + data buffers.
+		auto int32_bitmask = value_array->children[3];
+		REQUIRE(int32_bitmask->length == 0);
+		REQUIRE(int32_bitmask->null_count == 0);
+		REQUIRE(int32_bitmask->n_buffers == 2);
+		REQUIRE(int32_bitmask->n_children == 0);
+
+		// string_list: list<utf8> -> validity + offsets buffers, one utf8 child.
+		// A list array's offsets buffer must always have (length + 1) entries,
+		// even when length is 0, so a single zeroed offset is required.
+		auto string_list = value_array->children[4];
+		REQUIRE(string_list->length == 0);
+		REQUIRE(string_list->null_count == 0);
+		REQUIRE(string_list->n_buffers == 2);
+		REQUIRE(string_list->n_children == 1);
+		auto string_list_offsets = static_cast<const int32_t *>(string_list->buffers[1]);
+		REQUIRE(string_list_offsets[0] == 0);
+		auto string_list_item = string_list->children[0];
+		REQUIRE(string_list_item->length == 0);
+		REQUIRE(string_list_item->null_count == 0);
+		// utf8 -> validity + offsets + data buffers.
+		REQUIRE(string_list_item->n_buffers == 3);
+		REQUIRE(string_list_item->n_children == 0);
+
+		// int32_to_int32_list_map: map<int32, list<int32>>, encoded per the
+		// Arrow map layout as list<struct<key: int32, value: list<int32>>>.
+		auto map_value = value_array->children[5];
+		REQUIRE(map_value->length == 0);
+		REQUIRE(map_value->null_count == 0);
+		REQUIRE(map_value->n_buffers == 2); // validity + offsets, like any list.
+		REQUIRE(map_value->n_children == 1);
+		auto map_offsets = static_cast<const int32_t *>(map_value->buffers[1]);
+		REQUIRE(map_offsets[0] == 0);
+		auto map_entries = map_value->children[0];
+		REQUIRE(map_entries->length == 0);
+		REQUIRE(map_entries->null_count == 0);
+		REQUIRE(map_entries->n_buffers == 1); // struct -> validity only, no data.
+		REQUIRE(map_entries->n_children == 2);
+		auto map_key = map_entries->children[0];
+		REQUIRE(map_key->length == 0);
+		REQUIRE(map_key->null_count == 0);
+		REQUIRE(map_key->n_buffers == 2); // int32 -> validity + data.
+		REQUIRE(map_key->n_children == 0);
+		auto map_entry_value = map_entries->children[1];
+		REQUIRE(map_entry_value->length == 0);
+		REQUIRE(map_entry_value->null_count == 0);
+		REQUIRE(map_entry_value->n_buffers == 2); // list<int32> -> validity + offsets.
+		REQUIRE(map_entry_value->n_children == 1);
+		auto map_value_offsets = static_cast<const int32_t *>(map_entry_value->buffers[1]);
+		REQUIRE(map_value_offsets[0] == 0);
+		auto map_value_item = map_entry_value->children[0];
+		REQUIRE(map_value_item->length == 0);
+		REQUIRE(map_value_item->null_count == 0);
+		REQUIRE(map_value_item->n_buffers == 2); // int32 -> validity + data.
+		REQUIRE(map_value_item->n_children == 0);
 
 		bool found_adbc_version = false;
-		for (idx_t row = 0; row < mat.RowCount(); row++) {
-			found_adbc_version |= (mat.GetValue(0, row).ToString() == std::to_string(ADBC_INFO_DRIVER_ADBC_VERSION));
+		bool found_vendor_name = false;
+		// Each dense union member has its own independent offsets sequence;
+		// verify both the string_value and int64_value tracks are 0,1,2,...
+		// within their own child array as rows of that type_id are seen.
+		idx_t expected_string_offset = 0;
+		idx_t expected_int64_offset = 0;
+		for (idx_t row = 0; row < static_cast<idx_t>(batch.length); row++) {
+			switch (type_ids[row]) {
+			case 0:
+				REQUIRE(static_cast<idx_t>(value_offsets[row]) == expected_string_offset);
+				if (names[row] == ADBC_INFO_VENDOR_NAME) {
+					found_vendor_name = true;
+					REQUIRE(GetArrowString(value_array->children[0], value_offsets[row]) == "duckdb");
+				}
+				expected_string_offset++;
+				break;
+			case 2:
+				REQUIRE(static_cast<idx_t>(value_offsets[row]) == expected_int64_offset);
+				if (names[row] == ADBC_INFO_DRIVER_ADBC_VERSION) {
+					found_adbc_version = true;
+					REQUIRE(int64_values[value_offsets[row]] == ADBC_VERSION_1_1_0);
+				}
+				expected_int64_offset++;
+				break;
+			default:
+				FAIL("Unexpected GetInfo union type id");
+			}
 		}
 		REQUIRE(found_adbc_version);
+		REQUIRE(found_vendor_name);
+		batch.release(&batch);
 	}
-	out_stream.release = nullptr;
+	out_stream.release(&out_stream);
 
 	{
-		// Validate ADBC_INFO_DRIVER_ADBC_VERSION is returned as int64
+		// Requesting only unrecognized info codes must yield an empty batch,
+		// not an error and not NULL rows.
+		static uint32_t unknown_code[] = {4242};
+		ArrowArrayStream unknown_stream;
+		unknown_stream.release = nullptr;
+		status = AdbcConnectionGetInfo(&adbc_connection, unknown_code, 1, &unknown_stream, &adbc_error);
+		REQUIRE((status == ADBC_STATUS_OK));
+		REQUIRE((unknown_stream.release != nullptr));
+
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(unknown_stream.get_schema(&unknown_stream, &schema) == 0);
+		schema.release(&schema);
+
+		ArrowArray batch;
+		batch.release = nullptr;
+		REQUIRE(unknown_stream.get_next(&unknown_stream, &batch) == 0);
+		REQUIRE(batch.release);
+		REQUIRE(batch.length == 0);
+		batch.release(&batch);
+		unknown_stream.release(&unknown_stream);
+	}
+
+	{
+		// Validate ADBC_INFO_DRIVER_ADBC_VERSION is returned as int64 (dense
+		// union type id 2).
 		static uint32_t version_code[] = {ADBC_INFO_DRIVER_ADBC_VERSION};
 		ArrowArrayStream version_stream;
 		version_stream.release = nullptr;
@@ -1207,32 +1381,34 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 		REQUIRE((status == ADBC_STATUS_OK));
 		REQUIRE((version_stream.release != nullptr));
 
-		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
-		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
-		// Create a separate connection for arrow_scan to avoid deadlock.
-		Connection separate_conn(*cconn->context->db);
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(version_stream.get_schema(&version_stream, &schema) == 0);
+		schema.release(&schema);
 
-		auto params = ArrowTestHelper::ConstructArrowScan(version_stream);
-		auto rel = separate_conn.TableFunction("arrow_scan", params);
-		auto res = rel->Project("info_name, info_value.int64_value AS adbc_version")->Execute();
-		REQUIRE(!res->HasError());
-		auto &mat = res->Cast<MaterializedQueryResult>();
-		REQUIRE(mat.RowCount() == 1);
-		REQUIRE(mat.GetValue(0, 0).ToString() == std::to_string(ADBC_INFO_DRIVER_ADBC_VERSION));
-		REQUIRE(mat.GetValue(1, 0).ToString() == std::to_string(ADBC_VERSION_1_1_0));
-		version_stream.release = nullptr;
+		ArrowArray batch;
+		batch.release = nullptr;
+		REQUIRE(version_stream.get_next(&version_stream, &batch) == 0);
+		REQUIRE(batch.release);
+		REQUIRE(batch.length == 1);
+
+		auto names = static_cast<const uint32_t *>(batch.children[0]->buffers[1]);
+		REQUIRE(names[0] == ADBC_INFO_DRIVER_ADBC_VERSION);
+
+		auto value_array = batch.children[1];
+		auto type_ids = static_cast<const int8_t *>(value_array->buffers[0]);
+		auto value_offsets = static_cast<const int32_t *>(value_array->buffers[1]);
+		REQUIRE(type_ids[0] == 2);
+		auto int64_values = static_cast<const int64_t *>(value_array->children[2]->buffers[1]);
+		REQUIRE(int64_values[value_offsets[0]] == ADBC_VERSION_1_1_0);
+
+		batch.release(&batch);
+		version_stream.release(&version_stream);
 	}
 
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	adbc_error.release(&adbc_error);
-}
-
-// Reads entry `idx` of a utf8 ArrowArray (buffers: validity, offsets, data).
-static string GetStatisticsString(ArrowArray *array, idx_t idx) {
-	auto offsets = static_cast<const int32_t *>(array->buffers[1]);
-	auto data = static_cast<const char *>(array->buffers[2]);
-	return string(data + offsets[idx], static_cast<size_t>(offsets[idx + 1] - offsets[idx]));
 }
 
 TEST_CASE("Test ADBC ConnectionGetStatisticNames", "[adbc]") {
@@ -1355,7 +1531,7 @@ TEST_CASE("Test ADBC ConnectionGetStatistics", "[adbc]") {
 
 	// One catalog, named after the database file.
 	REQUIRE(batch.length == 1);
-	REQUIRE(GetStatisticsString(batch.children[0], 0) == "test_get_statistics");
+	REQUIRE(GetArrowString(batch.children[0], 0) == "test_get_statistics");
 
 	// One schema in the catalog: "main".
 	auto schemas_list = batch.children[1];
@@ -1364,7 +1540,7 @@ TEST_CASE("Test ADBC ConnectionGetStatistics", "[adbc]") {
 	REQUIRE(schema_offsets[1] == 1);
 	auto schema_struct = schemas_list->children[0];
 	REQUIRE(schema_struct->length == 1);
-	REQUIRE(GetStatisticsString(schema_struct->children[0], 0) == "main");
+	REQUIRE(GetArrowString(schema_struct->children[0], 0) == "main");
 
 	// Two statistics (one ROW_COUNT per table), view excluded.
 	auto stats_list = schema_struct->children[1];
@@ -1373,8 +1549,8 @@ TEST_CASE("Test ADBC ConnectionGetStatistics", "[adbc]") {
 	REQUIRE(stats_offsets[1] == 2);
 	auto stats_struct = stats_list->children[0];
 	REQUIRE(stats_struct->length == 2);
-	REQUIRE(GetStatisticsString(stats_struct->children[0], 0) == "stats_table_one");
-	REQUIRE(GetStatisticsString(stats_struct->children[0], 1) == "stats_table_two");
+	REQUIRE(GetArrowString(stats_struct->children[0], 0) == "stats_table_one");
+	REQUIRE(GetArrowString(stats_struct->children[0], 1) == "stats_table_two");
 
 	// column_name is NULL (table-level statistics).
 	auto column_name_array = stats_struct->children[1];
@@ -1416,7 +1592,7 @@ TEST_CASE("Test ADBC ConnectionGetStatistics", "[adbc]") {
 	{
 		auto stats = batch.children[1]->children[0]->children[1]->children[0];
 		REQUIRE(stats->length == 1);
-		REQUIRE(GetStatisticsString(stats->children[0], 0) == "stats_table_one");
+		REQUIRE(GetArrowString(stats->children[0], 0) == "stats_table_one");
 	}
 	batch.release(&batch);
 	stream.release(&stream);
