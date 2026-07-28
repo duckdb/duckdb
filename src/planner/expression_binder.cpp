@@ -425,7 +425,7 @@ bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
 		return true;
 	}
 	if (colref.ColumnNames().size() == 2) {
-		return colref.GetTableName() == "alias";
+		return colref.ColumnNames()[0] == "alias";
 	}
 	return false;
 }

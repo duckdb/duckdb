@@ -86,40 +86,40 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructExtract(unique_ptr<Par
 	return std::move(extract_fun);
 }
 
-unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpression &col_ref) {
-	if (col_ref.ColumnNames().size() > 3) {
-		return nullptr;
+// Build the candidate table-qualification interpretations for a reference "[qualifiers...].table", in precedence
+// order (most top-level first): "catalog + schema path" before "schema path only".
+static vector<BindingAlias> GetTableQualifications(const vector<Identifier> &names, idx_t table_index) {
+	vector<BindingAlias> result;
+	auto &table = names[table_index];
+	if (table_index >= 1) {
+		// interpret names[0] as the catalog and names[1..table_index-1] as the schema path
+		vector<Identifier> schema_path;
+		for (idx_t i = 1; i < table_index; i++) {
+			schema_path.push_back(names[i]);
+		}
+		result.emplace_back(names[0], std::move(schema_path), table);
 	}
+	// interpret all qualifiers as a (nested) schema path with no catalog
+	vector<Identifier> schema_path;
+	for (idx_t i = 0; i < table_index; i++) {
+		schema_path.push_back(names[i]);
+	}
+	result.emplace_back(Identifier(), std::move(schema_path), table);
+	return result;
+}
+
+unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpression &col_ref) {
 	D_ASSERT(!col_ref.ColumnNames().empty());
 
-	// get a matching binding
+	// the whole reference names a table - try to interpret it as "[catalog.][schema path.]table"
 	ErrorData error;
 	optional_ptr<Binding> binding;
-	switch (col_ref.ColumnNames().size()) {
-	case 1: {
-		// single entry - this must be the table name
-		BindingAlias alias(col_ref.ColumnNames()[0]);
+	auto &names = col_ref.ColumnNames();
+	for (auto &alias : GetTableQualifications(names, names.size() - 1)) {
 		binding = binder.bind_context.GetBinding(alias, error);
-		break;
-	}
-	case 2: {
-		// two entries - this can either be "catalog.table" or "schema.table" - try both
-		BindingAlias alias(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1]);
-		binding = binder.bind_context.GetBinding(alias, error);
-		if (!binding) {
-			alias = BindingAlias(col_ref.ColumnNames()[0], Identifier::InvalidSchema(), col_ref.ColumnNames()[1]);
-			binding = binder.bind_context.GetBinding(alias, error);
+		if (binding) {
+			break;
 		}
-		break;
-	}
-	case 3: {
-		// three entries - this must be "catalog.schema.table"
-		BindingAlias alias(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], col_ref.ColumnNames()[2]);
-		binding = binder.bind_context.GetBinding(alias, error);
-		break;
-	}
-	default:
-		throw InternalException("Expected 1, 2 or 3 column names for CreateStructPack");
 	}
 	if (!binding) {
 		return nullptr;
@@ -347,61 +347,54 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInter
                                                                                     ErrorData &error,
                                                                                     idx_t &struct_extract_start) {
 	// two or more dots (i.e. "part1.part2.part3.part4...")
-	// -> part1 is a catalog, part2 is a schema, part3 is a table, part4 is a column name, part 5 and beyond are
-	// struct fields
-	// -> part1 is a catalog, part2 is a table, part3 is a column name, part4 and beyond are struct fields
-	// -> part1 is a schema, part2 is a table, part3 is a column name, part4 and beyond are struct fields
-	// -> part1 is a table, part2 is a column name, part3 and beyond are struct fields
-	// -> part1 is a column, part2 and beyond are struct fields
+	// the reference can be qualified with an arbitrarily deep catalog/schema path, e.g.:
+	// -> catalog.schema1.schema2...table.column.field...
+	// -> schema1.schema2...table.column.field...
+	// -> catalog.table.column.field...
+	// -> table.column.field...
+	// -> column.field...
 
-	// we always prefer the most top-level view
-	// i.e. in case of multiple resolution options, we resolve in order:
-	// -> 1. resolve "part1" as a catalog
-	// -> 2. resolve "part1" as a schema
-	// -> 3. resolve "part1" as a table
-	// -> 4. resolve "part1" as a column
-
-	// first check if part1 is a catalog
-	ErrorData fully_qualified_error;
-	optional_ptr<Binding> binding;
-	if (col_ref.ColumnNames().size() > 3) {
-		binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1],
-		                                    col_ref.ColumnNames()[2], col_ref.ColumnNames()[3], fully_qualified_error);
-		if (binding) {
-			// part1 is a catalog - the column reference is "catalog.schema.table.column"
-			struct_extract_start = 4;
-			return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.ColumnNames()[3]);
+	// we always prefer the most top-level view - i.e. we resolve the table as far to the right as possible (so the
+	// leading components are treated as catalog/schema rather than column/struct fields), and within a given table
+	// position we prefer treating the leading component as a catalog over a schema
+	auto &names = col_ref.ColumnNames();
+	// we could not find the column - remember the most specific error to return. In order of preference:
+	//  2. the table qualification matched a binding, but it has no such column
+	//  1. the table name matches a binding, but the catalog/schema qualification does not
+	//  0. the shallowest "table.column" error (nothing matched)
+	ErrorData best_error;
+	idx_t best_error_priority = 0;
+	// try each possible table position, from the most-qualified (table furthest to the right) to the least
+	for (idx_t table_index = names.size() - 2;; table_index--) {
+		auto &column_name = names[table_index + 1];
+		for (auto &alias : GetTableQualifications(names, table_index)) {
+			ErrorData attempt_error;
+			auto binding = binder.GetMatchingBinding(alias, column_name, attempt_error);
+			if (binding) {
+				struct_extract_start = table_index + 2;
+				return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), column_name);
+			}
+			idx_t priority = 0;
+			if (TableBindingExists(alias)) {
+				// the full qualification matched a binding, but it has no such column
+				priority = 2;
+			} else if (TableNameExists(alias.GetAlias())) {
+				// the table name matches a binding, but the catalog/schema qualification does not
+				priority = 1;
+			}
+			// prefer the first (most-qualified) error of the highest priority we have seen
+			if (priority > best_error_priority || (priority == best_error_priority && !best_error.HasError())) {
+				best_error = std::move(attempt_error);
+				best_error_priority = priority;
+			}
 		}
-	}
-	ErrorData catalog_table_error;
-	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], Identifier::InvalidSchema(), col_ref.ColumnNames()[1],
-	                                    col_ref.ColumnNames()[2], catalog_table_error);
-	if (binding) {
-		// part1 is a catalog - the column reference is "catalog.table.column"
-		struct_extract_start = 3;
-		return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.ColumnNames()[2]);
-	}
-	ErrorData schema_table_error;
-	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], col_ref.ColumnNames()[2],
-	                                    schema_table_error);
-	if (binding) {
-		// part1 is a schema - the column reference is "schema.table.column"
-		// any additional fields are turned into struct_extract calls
-		struct_extract_start = 3;
-		return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.ColumnNames()[2]);
-	}
-	ErrorData table_column_error;
-	binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], table_column_error);
-	if (binding) {
-		// part1 is a table
-		// the column reference is "table.column"
-		// any additional fields are turned into struct_extract calls
-		struct_extract_start = 2;
-		return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.ColumnNames()[1]);
+		if (table_index == 0) {
+			break;
+		}
 	}
 	// part1 could be a column
 	ErrorData unused_error;
-	auto result_expr = QualifyColumnName(col_ref, col_ref.ColumnNames()[0], unused_error);
+	auto result_expr = QualifyColumnName(col_ref, names[0], unused_error);
 	if (result_expr) {
 		// it is! add the struct extract calls
 		struct_extract_start = 1;
@@ -412,81 +405,28 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInter
 		return struct_pack;
 	}
 
-	// we could not find the column - return an error
-	// try to find out which error to return
-	optional_idx catalog_pos;
-	optional_idx schema_pos;
-	optional_idx table_pos;
-	for (const auto &binding_entry : binder.bind_context.GetBindingsList()) {
-		auto &alias = binding_entry->GetBindingAlias();
-		string catalog = alias.GetCatalog().GetIdentifierName();
-		string schema = alias.GetSchema().GetIdentifierName();
-		string table = alias.GetAlias().GetIdentifierName();
-		auto entry = binding_entry->GetStandardEntry();
-		if (entry) {
-			catalog = entry->ParentCatalog().GetName().GetIdentifierName();
-			schema = entry->ParentSchema().name.GetIdentifierName();
-		}
-
-		for (idx_t i = 0; i < 3; i++) {
-			if (catalog == col_ref.ColumnNames()[i]) {
-				catalog_pos = i;
-			}
-			if (schema == col_ref.ColumnNames()[i]) {
-				schema_pos = i;
-			}
-			if (table == col_ref.ColumnNames()[i]) {
-				table_pos = i;
-			}
-		}
-	}
-
-	error = std::move(table_column_error);
-	if (table_pos.IsValid()) {
-		// we have a valid table
-		if (table_pos.GetIndex() == 0) {
-			// the first column is a valid table - return the error as if we were binding the column as the second
-
-		} else if (table_pos.GetIndex() == 1) {
-			// the first column is a valid table
-			// this means either the first column is a catalog OR the first column is a schema
-			if (catalog_pos.IsValid()) {
-				// catalog.table
-				error = std::move(catalog_table_error);
-			} else {
-				// assume schema.table otherwise
-				error = std::move(schema_table_error);
-			}
-		} else if (col_ref.ColumnNames().size() > 3) {
-			// the second column is a valid table
-			// return the fully qualified error if we have enough components
-			error = std::move(fully_qualified_error);
-		}
-	} else if (catalog_pos.IsValid()) {
-		// the first column is a catalog
-		if (schema_pos.IsValid()) {
-			// AND a valid schema - this is likely "catalog.schema.table"
-			if (col_ref.ColumnNames().size() > 3) {
-				error = std::move(fully_qualified_error);
-			} else {
-				error = std::move(catalog_table_error);
-			}
-		} else {
-			// but no valid schema - this could be either "catalog.schema.table" or "catalog.table"
-			// return "catalog.table" for now
-			error = std::move(catalog_table_error);
-		}
-	} else if (schema_pos.IsValid()) {
-		// we did not find a catalog or a table, but we did find a schema
-		if (schema_pos.GetIndex() == 0) {
-			// "schema.table"
-			error = std::move(schema_table_error);
-		} else if (schema_pos.GetIndex() == 1 && col_ref.ColumnNames().size() > 3) {
-			// catalog.schema.table
-			error = std::move(fully_qualified_error);
-		}
-	}
+	// we could not find the column - return the most specific error we encountered
+	error = std::move(best_error);
 	return nullptr;
+}
+
+bool ColumnQualifier::TableNameExists(const Identifier &table_name) {
+	for (const auto &binding_entry : binder.bind_context.GetBindingsList()) {
+		if (binding_entry->GetBindingAlias().GetAlias() == table_name) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ColumnQualifier::TableBindingExists(const BindingAlias &alias) {
+	try {
+		ErrorData error;
+		return binder.bind_context.GetBinding(alias, error) != nullptr;
+	} catch (const std::exception &) {
+		// an ambiguity between multiple matching tables still means the table qualification exists
+		return true;
+	}
 }
 
 unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref,

@@ -353,6 +353,9 @@ public:
 	optional_ptr<Binding> GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
 	                                         const Identifier &table_name, const Identifier &column_name,
 	                                         ErrorData &error);
+	//! Look up a binding for a (possibly nested) table qualification
+	optional_ptr<Binding> GetMatchingBinding(const BindingAlias &alias, const Identifier &column_name,
+	                                         ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
