@@ -124,13 +124,17 @@ def is_retryable_failure(result):
 
 
 def write_attempt_logs(log_dir, attempt_id, chunk, result):
-    with open(os.path.join(log_dir, f'attempt-{attempt_id}.stdout.log'), 'w', encoding='utf-8') as handle:
+    stdout_path = os.path.join(log_dir, f'attempt-{attempt_id}.stdout.log')
+    stderr_path = os.path.join(log_dir, f'attempt-{attempt_id}.stderr.log')
+    files_path = os.path.join(log_dir, f'attempt-{attempt_id}.files.txt')
+    with open(stdout_path, 'w', encoding='utf-8') as handle:
         handle.write(result.stdout or '')
-    with open(os.path.join(log_dir, f'attempt-{attempt_id}.stderr.log'), 'w', encoding='utf-8') as handle:
+    with open(stderr_path, 'w', encoding='utf-8') as handle:
         handle.write(result.stderr or '')
-    with open(os.path.join(log_dir, f'attempt-{attempt_id}.files.txt'), 'w', encoding='utf-8') as handle:
+    with open(files_path, 'w', encoding='utf-8') as handle:
         for entry in chunk:
             handle.write(entry + '\n')
+    return stdout_path, stderr_path, files_path
 
 
 def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter):
@@ -144,13 +148,12 @@ def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_roo
         command = base_command + ['--clangd-executable', clangd_wrapper] + chunk
         start = time.monotonic()
         print(
-            f'clangd-tidy attempt {attempt_id} (retry {retries}/{MAX_RETRIES}, files {len(chunk)}): '
-            f'{chunk[0]}',
+            f'clangd-tidy attempt {attempt_id} (retry {retries}/{MAX_RETRIES}, files {len(chunk)}): ' f'{chunk[0]}',
             flush=True,
         )
         result = subprocess.run(command, check=False, cwd=repo_root, env=env, text=True, capture_output=True)
         elapsed = time.monotonic() - start
-        write_attempt_logs(log_dir, attempt_id, chunk, result)
+        stdout_path, stderr_path, _ = write_attempt_logs(log_dir, attempt_id, chunk, result)
         pch_size = format_bytes(directory_size(pch_dir))
         print(
             f'clangd-tidy attempt {attempt_id} finished with exit code {result.returncode} '
@@ -162,10 +165,26 @@ def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_roo
         retryable = is_retryable_failure(result)
         if retries >= MAX_RETRIES or not retryable:
             if retryable:
+                print(
+                    f'clangd-tidy retry limit reached after attempt {attempt_id}; '
+                    f'not retrying. stdout: {stdout_path}; stderr: {stderr_path}',
+                    flush=True,
+                )
                 reset_pch_dir(pch_dir)
+            else:
+                print(
+                    f'clangd-tidy attempt {attempt_id} failed with a non-retryable error; '
+                    f'not retrying. stdout: {stdout_path}; stderr: {stderr_path}',
+                    flush=True,
+                )
             return False
         reset_pch_dir(pch_dir)
         delay = (RETRY_BACKOFF_MS / 1000.0) * (2**retries) + random.uniform(0.0, 0.2)
+        print(
+            f'retrying clangd-tidy after attempt {attempt_id}; retry {retries + 1}/{MAX_RETRIES} '
+            f'in {delay:.2f}s. stdout: {stdout_path}; stderr: {stderr_path}',
+            flush=True,
+        )
         time.sleep(delay)
         retries += 1
 
