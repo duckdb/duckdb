@@ -95,7 +95,7 @@ private:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(MemoryContextId context_id, const string &key, ARGS &&...args) {
+	shared_ptr<T> GetOrCreate(MemoryContextId context_id, const string &key, ARGS &&... args) {
 		const lock_guard<mutex> lock(lock_mutex);
 		auto cache_key = MakeCacheKey(context_id, key);
 
@@ -186,7 +186,7 @@ private:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(MemoryContextId context_id, const string &key, ARGS &&...args) {
+	shared_ptr<T> GetOrCreateWithTypePrefix(MemoryContextId context_id, const string &key, ARGS &&... args) {
 		return GetOrCreate<T>(context_id, MakeTypedCacheKey<T>(key), std::forward<ARGS>(args)...);
 	}
 
@@ -261,7 +261,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
 		return cache.GetOrCreate<T>(context_id, key, std::forward<ARGS>(args)...);
 	}
 
@@ -279,7 +279,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&...args) {
+	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&... args) {
 		return cache.GetOrCreateWithTypePrefix<T>(context_id, key, std::forward<ARGS>(args)...);
 	}
 
@@ -292,26 +292,6 @@ public:
 	template <class T>
 	void DeleteWithTypePrefix(const string &key) {
 		cache.DeleteWithTypePrefix<T>(context_id, key);
-	}
-
-	idx_t GetMaxMemory() const {
-		return cache.GetMaxMemory();
-	}
-
-	idx_t GetCurrentMemory() const {
-		return cache.GetCurrentMemory();
-	}
-
-	size_t GetEntryCount() const {
-		return cache.GetEntryCount();
-	}
-
-	bool IsEmpty() const {
-		return cache.IsEmpty();
-	}
-
-	idx_t EvictToReduceMemory(idx_t target_bytes) {
-		return cache.EvictToReduceMemory(target_bytes);
 	}
 
 private:

@@ -54,6 +54,7 @@ TEST_CASE("Test buffer pool eviction: pages before object cache", "[storage][buf
 	auto &context = *con.context;
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	auto &object_cache = ObjectCache::GetObjectCache(context);
 	auto cache = ObjectCache::Get(context);
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
@@ -74,7 +75,7 @@ TEST_CASE("Test buffer pool eviction: pages before object cache", "[storage][buf
 	}
 	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_objects_memory == initial_memory + num_objects * obj_size);
-	REQUIRE(cache.GetEntryCount() == num_objects);
+	REQUIRE(object_cache.GetEntryCount() == num_objects);
 
 	// Add unpinned pages, which could be be added to the eviction queue and evicted later
 	vector<shared_ptr<BlockHandle>> pages;
@@ -86,7 +87,7 @@ TEST_CASE("Test buffer pool eviction: pages before object cache", "[storage][buf
 	}
 
 	// Verify all object cache entries are still present, since pages are evicted first
-	REQUIRE(cache.GetEntryCount() == num_objects);
+	REQUIRE(object_cache.GetEntryCount() == num_objects);
 	for (idx_t idx = 0; idx < num_objects; ++idx) {
 		auto obj = cache.GetObject(StringUtil::Format("obj%llu", idx));
 		REQUIRE(obj != nullptr);
@@ -103,6 +104,7 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 	auto &context = *con.context;
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	auto &object_cache = ObjectCache::GetObjectCache(context);
 	auto cache = ObjectCache::Get(context);
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
@@ -124,7 +126,7 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 	}
 	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_objects_memory == initial_memory + num_objects * obj_size);
-	REQUIRE(cache.GetEntryCount() == num_objects);
+	REQUIRE(object_cache.GetEntryCount() == num_objects);
 
 	// Now pin many pages, which makes sure the eviction of object cache entries
 	vector<BufferHandle> pinned_pages;
@@ -157,6 +159,7 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 	auto &context = *con.context;
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	auto &object_cache = ObjectCache::GetObjectCache(context);
 	auto cache = ObjectCache::Get(context);
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
@@ -181,7 +184,7 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 	for (idx_t idx = 0; idx < num_evictable_objects; ++idx) {
 		cache.Put(StringUtil::Format("evictable-obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
-	REQUIRE(cache.GetEntryCount() == num_objects);
+	REQUIRE(object_cache.GetEntryCount() == num_objects);
 
 	// Now pin many pages, which makes sure the eviction of object cache entries
 	vector<BufferHandle> pinned_pages;
@@ -221,6 +224,7 @@ TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and
 	auto &context = *con.context;
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	auto &object_cache = ObjectCache::GetObjectCache(context);
 	auto cache = ObjectCache::Get(context);
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
@@ -240,7 +244,7 @@ TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and
 	}
 	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_objects_memory == initial_memory);
-	REQUIRE(cache.GetEntryCount() == num_non_evictable_objects);
+	REQUIRE(object_cache.GetEntryCount() == num_non_evictable_objects);
 
 	// Now pin many pages, which makes sure the eviction of object cache entries
 	vector<BufferHandle> pinned_pages;

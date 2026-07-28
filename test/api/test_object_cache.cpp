@@ -225,9 +225,10 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 	Connection con(db);
 	auto &context = *con.context;
 	auto cache = ObjectCache::Get(context);
+	auto &object_cache = ObjectCache::GetObjectCache(context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
-	REQUIRE(cache.IsEmpty());
+	REQUIRE(object_cache.IsEmpty());
 
 	// Put and check accountable memory for buffer pool.
 	constexpr idx_t obj_size = 1024 * 1024;
@@ -235,16 +236,16 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 	for (idx_t idx = 0; idx < obj_count; ++idx) {
 		cache.Put(StringUtil::Format("evictable%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
-	REQUIRE(cache.GetEntryCount() == 10);
+	REQUIRE(object_cache.GetEntryCount() == 10);
 	const idx_t after_put_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_put_memory == initial_memory + obj_size * obj_count);
 
 	// Evict 5 objects, leaving 5 objects in cache
 	const idx_t bytes_to_free = 5 * obj_size;
-	idx_t freed = cache.EvictToReduceMemory(bytes_to_free);
+	idx_t freed = object_cache.EvictToReduceMemory(bytes_to_free);
 	REQUIRE(freed >= bytes_to_free); // Should free at least the requested amount
-	REQUIRE(cache.GetCurrentMemory() == 5 * obj_size);
-	REQUIRE(cache.GetEntryCount() == 5);
+	REQUIRE(object_cache.GetCurrentMemory() == 5 * obj_size);
+	REQUIRE(object_cache.GetEntryCount() == 5);
 
 	// First five items should be evicted.
 	for (idx_t idx = 0; idx < 5; ++idx) {
@@ -257,5 +258,5 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 		auto value = cache.GetObject(StringUtil::Format("evictable%llu", idx));
 		REQUIRE(value != nullptr);
 	}
-	REQUIRE(!cache.IsEmpty());
+	REQUIRE(!object_cache.IsEmpty());
 }
