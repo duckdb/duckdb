@@ -151,9 +151,10 @@ public:
 
 	//! Select
 	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state);
+	                    SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state,
+	                    idx_t scan_count);
 	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t count);
+	                    SelectionVector &sel, idx_t count, idx_t scan_count);
 
 	//! Skip the scan forward by "count" rows
 	virtual void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE);

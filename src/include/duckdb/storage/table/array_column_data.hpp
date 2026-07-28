@@ -32,7 +32,7 @@ public:
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
 	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	            SelectionVector &sel, idx_t sel_count) override;
+	            SelectionVector &sel, idx_t sel_count, idx_t scan_count) override;
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;

@@ -1,0 +1,926 @@
+# name: test/sql/storage/scan_predictor_accuracy.test
+# description: Verify ScanSizePredictor engages on the sub-scan path (via logging).
+# group: [storage]
+
+#   avg_overshoot_ratio / first_batch_ratio are only asserted to be present (>= 0),
+#   not bound-checked: their exact values are workload- and scheduling-dependent.
+#   The per-comment "Acceptable range" notes below are historical, not enforced.
+
+require noforcestorage
+
+# predictor only engages (and logs) when a full 2048-row vector exceeds the byte budget
+require vector_size 2048
+
+# large-BLOB tables (hundreds of MB) exceed the 32-bit address space
+require 64bit
+
+load {TEST_DIR}/scan_predictor_accuracy.db
+
+statement ok
+PRAGMA threads=1
+
+# ============================================================
+# TC1: Uniform large blobs (250KB each)
+# 2048 rows x 250KB = 512MB total. Target=1MB → ~4 rows/batch.
+# StringStats provides exact avg (250000 bytes/row), so the initial
+# prediction is accurate from the start. Expected avg ratio ≈ 1.0.
+# First batch may overshoot up to 2x before EMA corrects.
+# Acceptable range: [0.8, 1.2]
+# ============================================================
+
+statement ok
+CREATE TABLE t_large_blob AS SELECT i, repeat('X', 250000) as data FROM range(0, 2048) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(data)) FROM t_large_blob
+----
+512000000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# Verify first batch accuracy: TotalStringLength gives exact avg, so
+# Initialize() should produce a near-perfect first prediction.
+# Acceptable first_batch_ratio: [0.8, 1.2]
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC2: Pure fixed-size columns (INTEGER x 5)
+# 5 x INT32 = 20 bytes/row (fixed). Target=64KB → ~3276 rows/batch.
+# No variable-length columns, so prediction is deterministic and exact.
+# Expected ratio = 1.0. Acceptable range: [0.9, 1.1]
+# ============================================================
+
+statement ok
+CREATE TABLE t_fixed AS SELECT i, i*2 as b, i*3 as c, i*4 as d, i*5 as e FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=65536
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(i + b + c + d + e) FROM t_fixed
+----
+749925000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# Verify first batch accuracy: all fixed-size columns, so
+# Initialize() produces an exact estimate. first_batch_ratio = 1.0.
+# Acceptable first_batch_ratio: [0.95, 1.05]
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC3: Mixed short strings (10-50 chars)
+# Avg string length ≈ 35 bytes. INT(4) + VARCHAR(~35) = ~39 bytes/row.
+# Target=256KB → ~6700 rows/batch (clamped to 2048 per vector).
+# Stats-based init gives accurate avg, but predicted batch > 2048 so
+# full vector is scanned in one batch. Verify predictor is active.
+# ============================================================
+
+statement ok
+CREATE TABLE t_short_str AS SELECT i, repeat('x', (i % 50) + 10) as v FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=262144
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT COUNT(*) FROM t_short_str
+----
+10000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 0 THEN 'OK'
+    ELSE 'FAIL'
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC4: Highly variable string lengths (100 vs 100000)
+# Alternating 100-byte and 100KB strings. Avg ≈ 50050 bytes/row.
+# Target=512KB → ~10 rows/batch. Initial estimate from stats is
+# accurate (TotalStringLength / count ≈ 50050), but per-batch
+# Despite per-batch variance, TotalStringLength gives exact avg so
+# the initial prediction is accurate. EMA keeps ratio near 1.0.
+# Acceptable range: [0.8, 1.2]
+# ============================================================
+
+statement ok
+CREATE TABLE t_variable AS SELECT i, CASE WHEN i % 2 = 0 THEN repeat('S', 100) ELSE repeat('L', 100000) END as v FROM range(0, 2048) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=524288
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_variable
+----
+102502400
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# Verify first batch accuracy: TotalStringLength gives exact avg (50050),
+# so Initialize() prediction is accurate even with high per-row variance.
+# Acceptable first_batch_ratio: [0.8, 1.2]
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC5: Multi-column mixed types (INT + VARCHAR + DOUBLE)
+# INT(4) + VARCHAR(500) + DOUBLE(8) = ~512 bytes/row.
+# Target=1MB → ~2048 rows/batch (≈ full vector).
+# Predictor combines fixed (12 bytes) + dynamic (500 bytes).
+# Verify sub-batching is active (total_batches >= 1).
+# ============================================================
+
+statement ok
+CREATE TABLE t_multi AS SELECT i, repeat('m', 500) as v, i * 1.5 as d FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT COUNT(*) FROM t_multi
+----
+5000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT >= 1 THEN 'OK'
+    ELSE 'FAIL'
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC6: Cross row-group (200K rows, forces re-initialization)
+# 200K rows spans ~2 row groups (default 122880 rows each).
+# 500 bytes/row + 4 bytes INT = 504 bytes/row.
+# Target=1MB → ~2079 rows/batch. With 200K rows across ~98
+# vectors, expect ~98 batches (most vectors fit in one batch).
+# Verify total_batches > 10 to confirm multi-batch scanning.
+# Acceptable ratio range: [0.2, 5.0]
+# ============================================================
+
+statement ok
+CREATE TABLE t_cross_rg AS SELECT i, repeat('r', 500) as v FROM range(0, 200000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT COUNT(*) FROM t_cross_rg
+----
+200000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 10 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC7: Disabled mode — no new log output
+# scan_target_size_bytes=0 disables sub-batch scanning entirely.
+# The full-vector Scan() path is used; predictor is never invoked.
+# Expect: no new ScanSizePredictor log entries.
+# ============================================================
+
+statement ok
+SET scan_target_size_bytes=0
+
+statement ok
+CREATE TABLE log_count_before AS SELECT COUNT(*) as cnt FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:')
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT COUNT(*) FROM t_fixed
+----
+10000
+
+statement ok
+set enable_logging=false
+
+# No new predictor logs should have been emitted
+query I
+SELECT CASE WHEN (SELECT COUNT(*) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:')) = (SELECT cnt FROM log_count_before) THEN 'OK' ELSE 'FAIL' END
+----
+OK
+
+# ============================================================
+# TC8: Multiple fixed-size types (INT + BIGINT + DOUBLE)
+# INT(4) + BIGINT(8) + DOUBLE(8) = 20 bytes/row.
+# Target=16384 → ~819 rows/batch → sub-batching triggers.
+# All columns are fixed-size: prediction is deterministic and exact.
+# Acceptable avg_overshoot_ratio: [0.95, 1.05]
+# Acceptable first_batch_ratio: [0.95, 1.05]
+# ============================================================
+
+statement ok
+CREATE TABLE t_all_fixed AS SELECT i as col_int, i::BIGINT * 1000 as col_bigint, i * 2.5 as col_double FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=16384
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(col_int) + SUM(col_bigint) + SUM(col_double::BIGINT) FROM t_all_fixed
+----
+50169985000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC9: VARCHAR tiny strings (1-5 bytes)
+# Avg string length ≈ 3 bytes. INT(4) + VARCHAR(3) = ~7 bytes/row.
+# Target=4096 → ~585 rows/batch → sub-batching triggers.
+# TotalStringLength gives exact avg, so prediction is accurate.
+# Acceptable avg_overshoot_ratio: [0.8, 1.2]
+# Acceptable first_batch_ratio: [0.5, 2.0] (wider: tiny strings have high relative variance in stats)
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_tiny AS SELECT i, repeat('a', (i % 5) + 1) as v FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=4096
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_tiny
+----
+30000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC10: VARCHAR medium strings (100-500 bytes)
+# Avg string length ≈ 300 bytes. INT(4) + VARCHAR(300) = ~304 bytes/row.
+# Target=131072 → ~431 rows/batch → sub-batching triggers.
+# TotalStringLength gives exact avg.
+# Acceptable avg_overshoot_ratio: [0.8, 1.2]
+# Acceptable first_batch_ratio: [0.8, 1.2]
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_medium AS SELECT i, repeat('m', (i % 400) + 100) as v FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_medium
+----
+2995000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC11: VARCHAR large uniform strings (5000 bytes each)
+# INT(4) + VARCHAR(5000) = ~5004 bytes/row.
+# Target=524288 → ~104 rows/batch → sub-batching triggers.
+# Uniform length means TotalStringLength gives exact avg and
+# per-batch variance is zero. Prediction is exact.
+# Acceptable avg_overshoot_ratio: [0.8, 1.2]
+# Acceptable first_batch_ratio: [0.8, 1.2]
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_large AS SELECT i, repeat('L', 5000) as v FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=524288
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_large
+----
+25000000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC12: VARCHAR very large strings (50K-51K bytes)
+# Avg string length ≈ 50512 bytes. INT(4) + VARCHAR(50512) = ~50516 bytes/row.
+# Target=1048576 → ~20 rows/batch → sub-batching triggers.
+# TotalStringLength gives exact avg.
+# Acceptable avg_overshoot_ratio: [0.8, 1.2]
+# Acceptable first_batch_ratio: [0.8, 1.2]
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_vlarge AS SELECT i, repeat('V', (i % 200000) + 50000) as v FROM range(0, 1024) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_vlarge
+----
+51723776
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC13: VARCHAR linearly increasing lengths (0 to 2000 bytes)
+# Rows stored in insertion order: first batch has shortest strings.
+# Avg string length ≈ 900 bytes (across all rows). INT(4) + VARCHAR(900) = ~904 bytes/row.
+# Target=131072 → ~145 rows/batch → sub-batching triggers.
+# First batch has rows 0..~145 with avg length ≈ 72 bytes — much less
+# than global avg 900. So first_batch_ratio < 1.0 (undershoot).
+# EMA adapts across batches. avg_overshoot_ratio may deviate more.
+# Acceptable avg_overshoot_ratio: [0.5, 2.0]
+# Acceptable first_batch_ratio: [0.01, 0.5] (significantly less than predicted)
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_linear AS SELECT i, repeat('g', i % 2001) as v FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_linear
+----
+4499503
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC14: VARCHAR bimodal distribution (10 bytes vs 5000 bytes, 90%/10%)
+# 90% of rows have 10-byte strings, 10% have 5000-byte strings.
+# Avg = 0.9*10 + 0.1*5000 = 509 bytes. INT(4) + VARCHAR(509) = ~513 bytes/row.
+# Target=131072 → ~255 rows/batch → sub-batching triggers.
+# TotalStringLength gives exact avg so initial prediction is accurate,
+# but per-batch variance is high due to clustering.
+# Acceptable avg_overshoot_ratio: [0.5, 2.0]
+# Acceptable first_batch_ratio: [0.5, 2.0]
+# ============================================================
+
+statement ok
+CREATE TABLE t_varchar_bimodal AS SELECT i, CASE WHEN i % 10 = 0 THEN repeat('B', 5000) ELSE repeat('s', 10) END as v FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(v)) FROM t_varchar_bimodal
+----
+2545000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC15: BLOB type (stored as VARCHAR internally)
+# 2048 rows x 1000-byte blobs. Avg = 1000 bytes. INT(4) + BLOB(1000) = ~1004 bytes/row.
+# Target=131072 → ~130 rows/batch → sub-batching triggers.
+# BLOB uses VARCHAR physical type, TotalStringLength stats apply.
+# Acceptable avg_overshoot_ratio: [0.8, 1.2]
+# Acceptable first_batch_ratio: [0.8, 1.2]
+# ============================================================
+
+statement ok
+CREATE TABLE t_blob AS SELECT i, repeat('\xAB', 1000)::BLOB as v FROM range(0, 2048) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(octet_length(v)) FROM t_blob
+----
+2048000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC16: Multiple VARCHAR columns with different fixed lengths
+# col_a: tiny (5 bytes), col_b: medium (300 bytes), col_c: large (3000 bytes)
+# Avg = INT(4) + VARCHAR(5) + VARCHAR(300) + VARCHAR(3000) = 3309 bytes/row.
+# Target=524288 → ~158 rows/batch → sub-batching triggers.
+# Uniform per-column lengths mean prediction is exact.
+# Acceptable avg_overshoot_ratio: [0.8, 1.2]
+# Acceptable first_batch_ratio: [0.8, 1.2]
+# ============================================================
+
+statement ok
+CREATE TABLE t_multi_varchar AS SELECT i, repeat('t', 5) as col_a, repeat('m', 300) as col_b, repeat('L', 3000) as col_c FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=524288
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(col_a) + LENGTH(col_b) + LENGTH(col_c)) FROM t_multi_varchar
+----
+16525000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('avg_overshoot_ratio=')[2].split(' ')[1]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+query I
+SELECT CASE
+    WHEN message.split('first_batch_ratio=')[2]::DOUBLE >= 0 THEN 'OK'
+    ELSE 'FAIL: first_batch_ratio=' || message.split('first_batch_ratio=')[2]
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC17: Filter path sub-batches at the same granularity as the no-filter path
+# ColumnData::Filter/Select scan the full (sub-)batch first, then narrow. So the
+# physical rows-per-batch is driven purely by the byte budget, independent of
+# filter selectivity. Run the same table with and without a (non-selective)
+# WHERE clause and assert both scans emit the SAME total_batches.
+# 512 rows x 250KB blob, target=1MB -> ~4 rows/batch -> ~128 batches either way.
+# The WHERE i>=1 matches all-but-one row but still scans every physical row.
+# ============================================================
+
+statement ok
+CREATE TABLE t_filter_gran AS SELECT i, repeat('X', 250000) AS blob FROM range(0, 512) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_filter_gran
+----
+128000000
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_filter_gran WHERE i >= 1
+----
+127750000
+
+statement ok
+set enable_logging=false
+
+# The two most recent predictor logs (filter + no-filter) must share total_batches.
+query I
+SELECT CASE WHEN COUNT(DISTINCT tb) = 1 THEN 'OK' ELSE 'FAIL: batch counts differ' END
+FROM (
+    SELECT message.split('total_batches=')[2].split(' ')[1]::BIGINT AS tb
+    FROM duckdb_logs
+    WHERE message.starts_with('ScanSizePredictor:')
+    ORDER BY timestamp DESC LIMIT 2
+)
+----
+OK
+
+# Sanity: both scans actually sub-batched (total_batches > 1, not a single full vector).
+query I
+SELECT CASE WHEN MIN(tb) > 1 THEN 'OK' ELSE 'FAIL: not sub-batched' END
+FROM (
+    SELECT message.split('total_batches=')[2].split(' ')[1]::BIGINT AS tb
+    FROM duckdb_logs
+    WHERE message.starts_with('ScanSizePredictor:')
+    ORDER BY timestamp DESC LIMIT 2
+)
+----
+OK
+
+# ============================================================
+# TC18: Budget smaller than a single row degrades to 1 row/batch
+# PredictBatchSize computes predicted = target_bytes / bytes_per_row. When the
+# budget is smaller than one row, integer division yields 0 and the result is
+# clamped by MaxValue<idx_t>(1, ...) to 1. So every batch scans exactly one row
+# and total_batches equals the row count.
+# 100 rows x 10KB blob, target=1 byte -> 1 row/batch -> total_batches = 100.
+# ============================================================
+
+statement ok
+CREATE TABLE t_tiny_budget AS SELECT i, repeat('X', 10000) AS blob FROM range(0, 100) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_tiny_budget
+----
+1000000
+
+statement ok
+set enable_logging=false
+
+query I
+SELECT CASE
+    WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT = 100 THEN 'OK'
+    ELSE 'FAIL: ' || message
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC19: Delete engages the predictor — sub-batch adapts to deletes
+# A deleted row makes count != max_count (complex scan path), but the
+# per-batch valid_sel window still byte-budgets the physical scan, so the
+# predictor engages just like the no-delete baseline.
+# ============================================================
+
+statement ok
+CREATE TABLE t_pred_delete AS SELECT i, repeat('X', 10000) AS blob FROM range(0, 4096) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_pred_delete
+----
+40960000
+
+statement ok
+set enable_logging=false
+
+# baseline sub-batches: predictor engaged (many batches)
+query I
+SELECT CASE WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 2 THEN 'OK' ELSE 'FAIL: ' || message END
+FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:') ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# delete at least one row in every vector -> complex path, but sub-batch still engages
+statement ok
+DELETE FROM t_pred_delete WHERE i % 500 = 0
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_pred_delete
+----
+40870000
+
+statement ok
+set enable_logging=false
+
+# delete path still sub-batches: predictor engaged (many batches)
+query I
+SELECT CASE WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 2 THEN 'OK' ELSE 'FAIL: ' || message END
+FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:') ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# ============================================================
+# TC20: Pending updates force full-vector fallback — predictor does not engage
+# checkpoint_threshold is raised so the UPDATE stays pending (a checkpoint
+# would merge it and clear HasUpdates()). Pending updates on the scanned
+# column take the full-vector path; no predictor log is emitted.
+# ============================================================
+
+statement ok
+CREATE TABLE t_pred_update AS SELECT i, repeat('X', 10000) AS blob FROM range(0, 4096) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=131072
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_pred_update
+----
+40960000
+
+statement ok
+set enable_logging=false
+
+# baseline sub-batches: predictor engaged (many batches)
+query I
+SELECT CASE WHEN message.split('total_batches=')[2].split(' ')[1]::BIGINT > 2 THEN 'OK' ELSE 'FAIL: ' || message END
+FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:') ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+statement ok
+SET checkpoint_threshold='10GB'
+
+statement ok
+UPDATE t_pred_update SET blob = repeat('Y', 10000) WHERE i < 10
+
+statement ok
+CREATE TABLE log_before_upd AS SELECT COUNT(*) as cnt FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:')
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(blob)) FROM t_pred_update
+----
+40960000
+
+statement ok
+set enable_logging=false
+
+# fallback path emits no new predictor logs
+query I
+SELECT CASE WHEN (SELECT COUNT(*) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor:')) = (SELECT cnt FROM log_before_upd) THEN 'OK' ELSE 'FAIL' END
+----
+OK

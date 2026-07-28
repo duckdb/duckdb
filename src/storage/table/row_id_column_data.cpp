@@ -62,10 +62,10 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 
 void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              SelectionVector &sel, idx_t &count, const TableFilter &filter,
-                             TableFilterState &filter_state) {
+                             TableFilterState &filter_state, idx_t scan_count) {
 	auto row_start = GetRowStart(state);
 	auto current_row = row_start + state.offset_in_column;
-	auto max_count = GetVectorCount(vector_index);
+	auto max_count = scan_count;
 	state.offset_in_column += max_count;
 	// We do another quick statistics scan for row ids here
 	const auto rowid_start = current_row;
@@ -99,14 +99,14 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 }
 
 void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             SelectionVector &sel, idx_t count) {
+                             SelectionVector &sel, idx_t count, idx_t scan_count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<row_t>(result, count);
 	auto row_start = GetRowStart(state);
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
 		result_data.WriteValue(UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx)));
 	}
-	state.offset_in_column += GetVectorCount(vector_index);
+	state.offset_in_column += scan_count;
 }
 
 idx_t RowIdColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

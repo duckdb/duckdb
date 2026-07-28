@@ -27,7 +27,7 @@ public:
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
 	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	            SelectionVector &sel, idx_t count) override;
+	            SelectionVector &sel, idx_t count, idx_t scan_count) override;
 
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
