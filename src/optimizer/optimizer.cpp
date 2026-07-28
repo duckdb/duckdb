@@ -144,19 +144,32 @@ void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(context, op);
 }
 
-// Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE/MERGE INTO)
-// inside a CTE body. When that is the case, several optimizations are unsafe because
-// they use table statistics captured at plan time, which do not reflect the table
-// state after the DML has executed.
-// Note: a top-level INSERT/UPDATE/DELETE (e.g. INSERT ... RETURNING) is NOT flagged —
-// only DML nested under a MATERIALIZED_CTE or RECURSIVE_CTE node.
+static bool ContainsDML(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		return true;
+	default:
+		break;
+	}
+	for (auto &child : op.children) {
+		if (ContainsDML(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Returns true if the plan contains a DML statement inside a CTE body. A top-level
+// DML statement is not flagged. COPY TO is side-effecting, but does not invalidate
+// table statistics and is deliberately excluded here.
 static bool CTEContainsDML(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
 	    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
-		for (auto &child : op.children) {
-			if (child->HasSideEffects()) {
-				return true;
-			}
+		if (!op.children.empty() && ContainsDML(*op.children[0])) {
+			return true;
 		}
 	}
 	for (auto &child : op.children) {

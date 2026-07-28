@@ -1,0 +1,216 @@
+# name: test/sql/join/nearest/nearest_basic.test
+# description: NEAREST BY join clause - basic behaviour
+# group: [nearest]
+
+statement ok
+CREATE TABLE users(user_id INT, name VARCHAR, embedding FLOAT[3]);
+
+statement ok
+INSERT INTO users VALUES (1,'Alice',[1,0,0]),(2,'Bob',[0,1,0]),(3,'Carol',[0.2,0.3,0.9]);
+
+statement ok
+CREATE TABLE products(product_id VARCHAR, name VARCHAR, price INT, country VARCHAR, embedding FLOAT[3]);
+
+statement ok
+INSERT INTO products VALUES
+  ('P1','Trail running shoes',120,'EU',[0.9,0.1,0.1]),
+  ('P2','Hiking boots',180,'EU',[0.8,0.2,0.0]),
+  ('P3','Office shoes',95,'US',[0.1,0.9,0.1]),
+  ('P4','Sandals',45,'US',[0.0,0.8,0.2]),
+  ('P5','Running shoes',110,'EU',[0.5,0.5,0.0]);
+
+# Batch recommendations: 2 nearest products per user (BY SIMILARITY)
+query IIII
+SELECT q.user_id, q.name, t.product_id, t.name AS product FROM users q
+  INNER JOIN products t APPROX NEAREST 2 BY SIMILARITY array_cosine_similarity(q.embedding, t.embedding)
+  ORDER BY q.user_id, t.product_id;
+----
+1	Alice	P1	Trail running shoes
+1	Alice	P2	Hiking boots
+2	Bob	P3	Office shoes
+2	Bob	P4	Sandals
+3	Carol	P3	Office shoes
+3	Carol	P4	Sandals
+
+# Ad-hoc vector search with an explicit query vector, BY DISTANCE, EXACT
+query I
+SELECT t.product_id FROM (SELECT [1.0,0.0,0.0]::FLOAT[3] AS embedding) q
+  INNER JOIN products t EXACT NEAREST 3 BY DISTANCE array_distance(q.embedding, t.embedding)
+  ORDER BY t.product_id;
+----
+P1
+P2
+P5
+
+# APPROX and EXACT produce identical results (APPROX is currently informational)
+query I
+SELECT count(*) FROM (
+  SELECT t.product_id FROM (SELECT [1.0,0.0,0.0]::FLOAT[3] AS embedding) q
+    INNER JOIN products t APPROX NEAREST 3 BY DISTANCE array_distance(q.embedding, t.embedding)
+  EXCEPT
+  SELECT t.product_id FROM (SELECT [1.0,0.0,0.0]::FLOAT[3] AS embedding) q
+    INNER JOIN products t EXACT NEAREST 3 BY DISTANCE array_distance(q.embedding, t.embedding)
+);
+----
+0
+
+# Pre-filtered subquery target (EU products only), aliased
+query III
+SELECT q.user_id, t.product_id, t.price FROM users q
+  INNER JOIN (SELECT * FROM products WHERE country='EU') AS t
+    APPROX NEAREST 2 BY SIMILARITY array_cosine_similarity(q.embedding, t.embedding)
+  ORDER BY q.user_id, t.product_id;
+----
+1	P1	120
+1	P2	180
+2	P2	180
+2	P5	110
+3	P1	120
+3	P5	110
+
+# Default count is 1 when NEAREST has no number
+query II
+SELECT q.user_id, t.product_id FROM users q
+  INNER JOIN products t NEAREST BY DISTANCE array_distance(q.embedding, t.embedding)
+  ORDER BY q.user_id;
+----
+1	P1
+2	P3
+3	P4
+
+# INNER drops query rows with no matching candidates (empty target)
+statement ok
+CREATE TABLE empty_products(product_id VARCHAR, embedding FLOAT[3]);
+
+query II
+SELECT q.user_id, t.product_id FROM users q
+  INNER JOIN empty_products t NEAREST 2 BY DISTANCE array_distance(q.embedding, t.embedding)
+  ORDER BY q.user_id;
+----
+
+# LEFT OUTER preserves every query row; target columns NULL when target is empty
+query II
+SELECT q.user_id, t.product_id FROM users q
+  LEFT OUTER JOIN empty_products t NEAREST 2 BY DISTANCE array_distance(q.embedding, t.embedding)
+  ORDER BY q.user_id;
+----
+1	NULL
+2	NULL
+3	NULL
+
+# Unaliased base-table target (bare grammar path); qualified refs resolve to the table name
+query II
+SELECT q.user_id, products.product_id FROM users q
+  INNER JOIN products NEAREST 1 BY DISTANCE array_distance(q.embedding, products.embedding)
+  ORDER BY q.user_id;
+----
+1	P1
+2	P3
+3	P4
+
+# Unaliased + APPROX (bare path must not consume APPROX as an alias)
+query II
+SELECT q.user_id, products.product_id FROM users q
+  INNER JOIN products APPROX NEAREST 1 BY SIMILARITY array_cosine_similarity(q.embedding, products.embedding)
+  ORDER BY q.user_id;
+----
+1	P1
+2	P3
+3	P4
+
+# Duplicate left rows each get their own top-k
+statement ok
+CREATE TABLE dup_users(user_id INT, embedding FLOAT[3]);
+
+statement ok
+INSERT INTO dup_users VALUES (1,[1,0,0]),(1,[1,0,0]);
+
+query II
+SELECT q.user_id, t.product_id FROM dup_users q
+  INNER JOIN products t NEAREST 1 BY DISTANCE array_distance(q.embedding, t.embedding)
+  ORDER BY t.product_id;
+----
+1	P1
+1	P1
+
+# Non-vector ranking expression: any binary scalar expression works
+statement ok
+CREATE TABLE lnums(id INT, x INT);
+
+statement ok
+INSERT INTO lnums VALUES (1,10),(2,20);
+
+statement ok
+CREATE TABLE rnums(y INT);
+
+statement ok
+INSERT INTO rnums VALUES (11),(19),(25),(100);
+
+query II
+SELECT q.id, t.y FROM lnums q
+  INNER JOIN rnums t NEAREST 2 BY DISTANCE abs(q.x - t.y)
+  ORDER BY q.id, t.y;
+----
+1	11
+1	19
+2	19
+2	25
+
+# Ranking expression referencing only the target is a valid global top-k
+query I
+SELECT count(*) FROM lnums q
+  INNER JOIN rnums t NEAREST 1 BY DISTANCE t.y;
+----
+2
+
+# Candidates whose ranking expression is NULL are dropped, not ranked last
+statement ok
+CREATE TABLE rnull(y INT);
+
+statement ok
+INSERT INTO rnull VALUES (11),(NULL),(19),(NULL),(100);
+
+# NEAREST 2 picks the two closest non-NULL candidates; the NULL rows never appear
+query II
+SELECT q.id, t.y FROM lnums q
+  INNER JOIN rnull t NEAREST 2 BY DISTANCE abs(q.x - t.y)
+  ORDER BY q.id, t.y;
+----
+1	11
+1	19
+2	11
+2	19
+
+# A query row with only NULL-ranked candidates: INNER drops it, LEFT keeps it with NULLs
+statement ok
+CREATE TABLE all_null(y INT);
+
+statement ok
+INSERT INTO all_null VALUES (NULL),(NULL);
+
+query II
+SELECT q.id, t.y FROM lnums q
+  INNER JOIN all_null t NEAREST 2 BY DISTANCE abs(q.x - t.y)
+  ORDER BY q.id;
+----
+
+query II
+SELECT q.id, t.y FROM lnums q
+  LEFT OUTER JOIN all_null t NEAREST 2 BY DISTANCE abs(q.x - t.y)
+  ORDER BY q.id;
+----
+1	NULL
+2	NULL
+
+# BY SIMILARITY (largest first) vs BY DISTANCE (smallest first) pick opposite ends
+query I
+SELECT t.y FROM (SELECT 0 AS k) q
+  INNER JOIN rnums t NEAREST 1 BY SIMILARITY t.y;
+----
+100
+
+query I
+SELECT t.y FROM (SELECT 0 AS k) q
+  INNER JOIN rnums t NEAREST 1 BY DISTANCE t.y;
+----
+11

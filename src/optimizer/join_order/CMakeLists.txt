@@ -6,6 +6,7 @@ add_library_unity(
   join_predicate.cpp
   join_relation_set.cpp
   join_node.cpp
+  join_order_operator.cpp
   join_order_optimizer.cpp
   cardinality_estimator.cpp
   cost_model.cpp

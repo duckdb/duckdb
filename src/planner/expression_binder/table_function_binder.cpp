@@ -35,7 +35,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(Identifier(col_ref.GetName()))) {
 			throw ParameterNotResolvedException();
 		}
-	} else if (col_ref.ColumnNames()[0].GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos &&
+	} else if (StringUtil::StartsWith(col_ref.ColumnNames()[0].GetIdentifierName(), DummyBinding::DUMMY_NAME) &&
 	           binder.macro_binding && binder.macro_binding->HasMatchingBinding(Identifier(col_ref.GetName()))) {
 		throw ParameterNotResolvedException();
 	}
