@@ -51,6 +51,7 @@ jobs:
 
       - name: Install tools
         run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - uses: ./.github/actions/ccache-action
 
@@ -126,9 +127,7 @@ jobs:
           - name: Ingestion Perf
             benchmarks: .github/regression/ingestion.csv
           - name: Micro
-            benchmarks: .github/regression/tpch_parquet.csv
-          - name: TPCH-PARQUET
-            benchmarks: .github/regression/tpch_parquet.csv
+            benchmarks: .github/regression/micro.csv
           - name: H2OAI
             benchmarks: .github/regression/h2oai.csv
           - name: IMDB
@@ -147,8 +146,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -219,6 +218,9 @@ jobs:
           - name: TPCDS SF3
             benchmarks: .github/regression/tpcds_sf3.csv
             threads: 4
+          - name: TPCH-PARQUET SF1
+            benchmarks: .github/regression/tpch_parquet.csv
+            threads: 2
 
     steps:
       - name: "Checkout"
@@ -228,8 +230,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -279,8 +281,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Checkout Private Regression
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
@@ -329,8 +331,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -374,8 +376,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -416,8 +418,9 @@ jobs:
 
       - name: Install
         run: |
-          python3 scripts/ci/retry.py -- make toolsci
-          python3 scripts/ci/retry.py -- pip install tqdm
+          python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+          python3 scripts/ci/retry.py --timeout 2m -- pip install tqdm
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8

@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
@@ -77,12 +78,10 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 	// Calculate location and length cleanly
 	if (stmt_pr.offset.IsValid()) {
-		stmt->stmt_location = stmt_pr.offset.GetIndex();
-
+		auto start = stmt_pr.offset.GetIndex();
 		idx_t end_index =
 		    terminator_offset.IsValid() ? terminator_offset.GetIndex() : (tokens.back().offset + tokens.back().length);
-
-		stmt->stmt_length = end_index - stmt->stmt_location;
+		stmt->stmt_location = QueryLocation(start, end_index - start);
 	}
 
 	return stmt;
@@ -118,7 +117,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 		}
 		auto &error_token = tokens[error_token_idx];
 		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
-		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
+		throw ParserException::SyntaxError(token_stream, error_message,
+		                                   QueryLocation(error_token.offset, error_token.length));
 	}
 
 	// Advance the caller's cursor past the consumed tokens.

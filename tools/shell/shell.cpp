@@ -1030,8 +1030,8 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			if (!statement) {
 				continue; // a peel that preprocessing swallowed
 			}
-			idx_t start_pos = statement->stmt_location;
-			idx_t len = statement->stmt_length;
+			idx_t start_pos = statement->stmt_location.offset;
+			idx_t len = statement->stmt_location.length;
 			while (len > 0 && IsSpace(zSql[start_pos])) {
 				start_pos++;
 				len--;

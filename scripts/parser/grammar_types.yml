@@ -544,6 +544,15 @@ TableRef:
     - JoinOrPivot
     - JoinClause
     - RegularJoinClause
+    - NearestJoinClause
+    - NearestJoinAliased
+    - NearestJoinBare
+    - NearestBareTableRef
+    - NearestValuesRef
+    - NearestTableFunction
+    - NearestTableSubquery
+    - NearestBaseTableRef
+    - NearestParensTableRef
     - JoinByClause
     - JoinWithoutOnClause
     - TableUnpivotClause
@@ -1093,6 +1102,9 @@ Bool:
     - Lateral
     - WithOrdinality
     - Asof
+    - ApproxOrExact
+    - NearestApprox
+    - NearestExact
     - Materialized
     - SampleUnit
     - DropBehavior
@@ -1339,6 +1351,9 @@ OrderTypeValue:
   rules:
     - DescendingOrder
     - AscendingOrder
+    - DistanceOrSimilarity
+    - NearestDistance
+    - NearestSimilarity
 
 OrderByNullTypeValue:
   type: "OrderByNullType"

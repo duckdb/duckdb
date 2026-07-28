@@ -280,16 +280,16 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
-	// If the CTE body is a DML statement (INSERT/UPDATE/DELETE/MERGE INTO), all MetaPipelines
-	// created while building children[1] (the query side) must run after the DML completes.
-	// We follow the same pattern as PhysicalJoin::BuildJoinPipelines: capture the DML pipelines
+	// If the CTE body has side effects, all MetaPipelines created while building
+	// children[1] (the query side) must run after the CTE completes.
+	// We follow the same pattern as PhysicalJoin::BuildJoinPipelines: capture the side-effecting pipelines
 	// and the current last child before building children[1], then call AddRecursiveDependencies
 	// with RecursiveDependencyMode::FORCE so ordering is always enforced (not just when pipelines exceed the
 	// thread count, as is the case for join build dependencies).
-	vector<shared_ptr<Pipeline>> dml_pipelines;
+	vector<shared_ptr<Pipeline>> side_effect_pipelines;
 	optional_ptr<MetaPipeline> last_child_ptr;
-	if (cte_body_is_dml) {
-		child_meta_pipeline.GetPipelines(dml_pipelines, false);
+	if (cte_body_has_side_effects) {
+		child_meta_pipeline.GetPipelines(side_effect_pipelines, false);
 		last_child_ptr = meta_pipeline.GetLastChild();
 	}
 
@@ -302,12 +302,12 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 		current.AddDependency(cte_pipeline);
 	}
 	if (exchange && last_child_ptr && !current.HasDataflowDependencies()) {
-		for (auto &dml_pipeline : dml_pipelines) {
-			current.AddDependency(dml_pipeline);
+		for (auto &side_effect_pipeline : side_effect_pipelines) {
+			current.AddDependency(side_effect_pipeline);
 		}
 	}
 	if (last_child_ptr) {
-		meta_pipeline.AddRecursiveDependencies(dml_pipelines, *last_child_ptr, RecursiveDependencyMode::FORCE,
+		meta_pipeline.AddRecursiveDependencies(side_effect_pipelines, *last_child_ptr, RecursiveDependencyMode::FORCE,
 		                                       exchange ? DataflowDependencyMode::SKIP
 		                                                : DataflowDependencyMode::INCLUDE);
 	}
