@@ -539,8 +539,8 @@ static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatal
 	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
 	join->type = JoinType::LEFT;
 	join->left = std::move(from_table);
-	join->right =
-	    ServeStoreTableRef(store_table, feature_alias, spine_table, spine_asof_column, latest_mode, disable_optimizations);
+	join->right = ServeStoreTableRef(store_table, feature_alias, spine_table, spine_asof_column, latest_mode,
+	                                 disable_optimizations);
 	join->condition = ServeJoinCondition(feature_alias, entity_mappings, spine_ts);
 	from_table = std::move(join);
 }
