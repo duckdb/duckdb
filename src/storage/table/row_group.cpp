@@ -1178,7 +1178,9 @@ void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
-		col_data.InitializeAppend(append_state.states[i]);
+		auto &state = append_state.states[i];
+		state.transient = &append_state.transient;
+		col_data.InitializeAppend(state);
 	}
 }
 
