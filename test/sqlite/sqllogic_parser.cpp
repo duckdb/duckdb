@@ -1,5 +1,5 @@
 #include "sqllogic_parser.hpp"
-#include "catch.hpp"
+#include "test_reporter.hpp"
 
 #include <fstream>
 
@@ -191,7 +191,7 @@ string SQLLogicParser::ExtractExpectedError(ExpectedResult expected_result, bool
 void SQLLogicParser::FailRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
 	auto error_message =
 	    file_name + ":" + to_string(current_line + 1) + ": " + ExceptionFormatValue::Format(msg, values);
-	FAIL(error_message.c_str());
+	TEST_FAIL(error_message);
 }
 
 SQLLogicToken SQLLogicParser::Tokenize() {

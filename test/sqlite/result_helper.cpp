@@ -1,6 +1,5 @@
 #include "result_helper.hpp"
 
-#include "catch.hpp"
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "re2/re2.h"
@@ -9,16 +8,16 @@
 #include "termcolor.hpp"
 #include "test_helpers.hpp"
 #include "test_config.hpp"
+#include "test_reporter.hpp"
 
 #include <thread>
 
-// PROTOTYPE: shadow Catch's SKIP_TEST to also emit the parseable skip marker.
-// Skip sites here live in TestResultHelper, which holds a `runner` reference.
-#undef SKIP_TEST
+// Skips here also emit the parseable marker before recording the skip with the reporter.
+// The skip sites live in TestResultHelper, which holds a `runner` reference.
 #define SKIP_TEST(reason)                                                                                              \
 	do {                                                                                                               \
 		duckdb::SQLLogicTestLogger::PrintSkip(runner.file_name, (reason));                                             \
-		Catch::getResultCapture().skipTestDuringRun(reason);                                                           \
+		duckdb::TestReporter::Get().Skip(reason);                                                                      \
 	} while (0)
 
 namespace duckdb {
@@ -34,8 +33,9 @@ void TestResultHelper::SortQueryResult(SortStyle sort_style, vector<string> &res
 	}
 	if (result.size() % ncols != 0) {
 		// row-sort failed: result is not row-wise aligned, bail
-		FAIL(StringUtil::Format("Failed to sort query result - result is not aligned. Found %d rows with %d columns",
-		                        result.size(), ncols));
+		TEST_FAIL(
+		    StringUtil::Format("Failed to sort query result - result is not aligned. Found %d rows with %d columns",
+		                       result.size(), ncols));
 		return;
 	}
 	// row-oriented sorting
@@ -235,9 +235,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				if (!success) {
 					break;
 				}
-				// we do this just to increment the assertion counter
-				string success_log = StringUtil::Format("CheckQueryResult: %s:%d", query.file_name, query.query_line);
-				REQUIRE(success_log.c_str());
+				TEST_ASSERTION();
 
 				current_column++;
 				if (current_column == expected_column_count) {
@@ -288,7 +286,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			});
 			return false;
 		}
-		REQUIRE(!hash_compare_error);
+		TEST_REQUIRE(!hash_compare_error);
 	}
 	return true;
 }
@@ -340,9 +338,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 						return false;
 					}
 				}
-				string success_log =
-				    StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
-				REQUIRE(success_log.c_str());
+				TEST_ASSERTION();
 				return true;
 			}
 		}
@@ -359,13 +355,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		}
 		return false;
 	}
-	if (error) {
-		REQUIRE(false);
-	} else {
-		string success_log =
-		    StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
-		REQUIRE(success_log.c_str());
-	}
+	TEST_ASSERTION();
 	return true;
 }
 
