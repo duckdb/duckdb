@@ -44,6 +44,15 @@ SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_n
 ----
 db2	a	tt
 
+# create a view in a nested schema
+statement ok
+CREATE VIEW s1.child.v1 AS SELECT 42 AS x;
+
+query I
+SELECT x FROM s1.child.v1;
+----
+42
+
 # dropping a table in a nested schema
 statement ok
 DROP TABLE s1.child.t1;

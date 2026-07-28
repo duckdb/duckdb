@@ -162,11 +162,21 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 	return CreateTable(transaction, *schema, info);
 }
 
+static SchemaCatalogEntry &GetCreateSchema(Catalog &catalog, CatalogTransaction transaction, CreateInfo &info) {
+	auto &qname = info.GetQualifiedName();
+	auto &path = qname.Path();
+	if (path.size() > 3) {
+		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+		return *catalog.GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
+	}
+	return catalog.GetSchema(transaction, qname.Schema());
+}
+
 //===--------------------------------------------------------------------===//
 // View
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, CreateViewInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetCreateSchema(*this, transaction, info);
 	return CreateView(transaction, schema, info);
 }
 
@@ -183,7 +193,7 @@ optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, S
 // Sequence
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetCreateSchema(*this, transaction, info);
 	return CreateSequence(transaction, schema, info);
 }
 
@@ -200,7 +210,7 @@ optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transactio
 // Type
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetCreateSchema(*this, transaction, info);
 	return CreateType(transaction, schema, info);
 }
 
@@ -274,7 +284,7 @@ optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction tran
 // Function
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetCreateSchema(*this, transaction, info);
 	return CreateFunction(transaction, schema, info);
 }
 
