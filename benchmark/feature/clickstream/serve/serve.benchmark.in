@@ -10,6 +10,11 @@ include benchmark/feature/clickstream/data/clickstream_load.benchmark.in
 name ${BENCH_NAME}
 group feature
 
+# Runs on every Initialize(), even when load/reload is skipped by the source-data cache, so this
+# is the one place to force a session setting for a benchmarking comparison run.
+init
+SET feature_serve_legacy_asof = false;
+
 # Sanity check (runs once, before the timed loop): source, feature store and serving spine
 # must be populated, otherwise the timings would be meaningless.
 assert I

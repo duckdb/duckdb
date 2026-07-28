@@ -12,6 +12,11 @@ include benchmark/feature/clickstream/data/clickstream_load.benchmark.in
 name ${BENCH_NAME}
 group feature
 
+# Runs on every Initialize(), even when load/reload is skipped by the source-data cache, so this
+# is the one place to force a session setting for a benchmarking comparison run.
+init
+SET feature_serve_legacy_asof = false;
+
 # The timed run mutates state (REFRESH appends versions), so rebuild a clean feature store after
 # every run. SETUP_SQL is idempotent (DROP FEATURE IF EXISTS first), so re-running it restores the
 # pre-run state, keeping timings independent. This runs after the profiler stops, so it is untimed.
