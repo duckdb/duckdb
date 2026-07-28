@@ -179,11 +179,13 @@ EXPLAIN (FORMAT JSON) SELECT * FROM (SERVE FEATURE eq_txn FOR big_tt_requests AS
 physical_plan	<REGEX>:.*HASH_JOIN.*
 
 # ============================================================
-# The legacy path stays reachable, returns identical rows in both modes, and has no HASH_JOIN -- which is what
-# makes the two assertions above discriminating rather than vacuously true.
+# The unoptimized baseline stays reachable, returns identical rows in both modes, and has no HASH_JOIN -- which
+# is what makes the two assertions above discriminating rather than vacuously true. feature_disable_optimizations
+# turns off every feature-store optimization at once, the legacy ASOF fallback among them, so this also pins down
+# that none of them change the answer.
 # ============================================================
 statement ok
-SET feature_serve_legacy_asof = true;
+SET feature_disable_optimizations = true;
 
 query TR sort
 SERVE FEATURE eq_txn FOR requests;
@@ -214,7 +216,7 @@ EXPLAIN (FORMAT JSON) SELECT * FROM (SERVE FEATURE eq_txn FOR big_tt_requests AS
 physical_plan	<!REGEX>:.*HASH_JOIN.*
 
 statement ok
-RESET feature_serve_legacy_asof;
+RESET feature_disable_optimizations;
 
 # ============================================================
 # The store scan is bounded to the versions the spine can reach, so it prunes row groups by zonemap instead of
