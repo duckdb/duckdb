@@ -30,7 +30,7 @@ void CompressedStringScanState::ValidateIndexBuffer() const {
 
 	if (has_error) {
 		throw DataCorruptionException(
-		    "Failed to scan dictionary string - dictionary was out of range. Database file appears "
+		    "Failed to scan dictionary string - dictionary offset was out of range. Database file appears "
 		    "to be corrupted.");
 	}
 }
