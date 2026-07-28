@@ -13,8 +13,10 @@ import time
 
 
 MAX_CHUNK_CHARS = 100000
+MAX_CHUNK_FILES = 100
 MAX_RETRIES = 2
 RETRY_BACKOFF_MS = 500
+ERROR_TAIL_LINES = 120
 RETRY_PATTERNS = (
     'invalid header end',
     'broken pipe',
@@ -40,12 +42,12 @@ def is_ignored_file(path, repo_root):
     return relative == 'third_party' or relative.startswith('third_party' + os.sep)
 
 
-def chunk_files(files, max_chars=MAX_CHUNK_CHARS):
+def chunk_files(files, max_chars=MAX_CHUNK_CHARS, max_files=MAX_CHUNK_FILES):
     chunk = []
     current_chars = 0
     for path in files:
         path_len = len(path) + 1
-        if chunk and current_chars + path_len > max_chars:
+        if chunk and (len(chunk) >= max_files or current_chars + path_len > max_chars):
             yield chunk
             chunk = []
             current_chars = 0
@@ -123,6 +125,21 @@ def is_retryable_failure(result):
     return any(pattern in lower for pattern in RETRY_PATTERNS)
 
 
+def print_output_tail(label, text):
+    lines = (text or '').splitlines()
+    if not lines:
+        return
+    shown = lines[-ERROR_TAIL_LINES:]
+    omitted = len(lines) - len(shown)
+    print(f'--- clangd-tidy {label} tail ({len(shown)} lines', end='', flush=True)
+    if omitted > 0:
+        print(f', {omitted} omitted', end='', flush=True)
+    print(') ---', flush=True)
+    for line in shown:
+        print(line, flush=True)
+    print(f'--- end clangd-tidy {label} tail ---', flush=True)
+
+
 def write_attempt_logs(log_dir, attempt_id, chunk, result):
     stdout_path = os.path.join(log_dir, f'attempt-{attempt_id}.stdout.log')
     stderr_path = os.path.join(log_dir, f'attempt-{attempt_id}.stderr.log')
@@ -172,11 +189,14 @@ def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_roo
                 )
                 reset_pch_dir(pch_dir)
             else:
+                print_output_tail('stdout', result.stdout)
+                print_output_tail('stderr', result.stderr)
                 print(
                     f'clangd-tidy attempt {attempt_id} failed with a non-retryable error; '
                     f'not retrying. stdout: {stdout_path}; stderr: {stderr_path}',
                     flush=True,
                 )
+                reset_pch_dir(pch_dir)
             return False
         reset_pch_dir(pch_dir)
         delay = (RETRY_BACKOFF_MS / 1000.0) * (2**retries) + random.uniform(0.0, 0.2)
@@ -195,16 +215,7 @@ def process_chunk(
     ok = run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter)
     if ok:
         return
-    if len(chunk) == 1:
-        hard_failures.append(chunk[0])
-        return
-    mid = len(chunk) // 2
-    process_chunk(
-        base_command, chunk[:mid], repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter, hard_failures
-    )
-    process_chunk(
-        base_command, chunk[mid:], repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter, hard_failures
-    )
+    hard_failures.extend(chunk)
 
 
 def main():
@@ -279,6 +290,8 @@ def main():
             attempt_counter,
             hard_failures,
         )
+        if hard_failures:
+            break
 
     if hard_failures:
         print('clangd-tidy hard failures after retries:', file=sys.stderr)
