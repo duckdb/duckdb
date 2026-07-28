@@ -57,7 +57,6 @@ static bool PlanReturnsExactlyOneRow(const LogicalOperator &op) {
 	}
 }
 
-
 static bool IsExtremumRewriteValid(const BoundSubqueryExpression &expr) {
 	// TODO/FIXME: Generalize this rewrite to multi-column subqueries
 	if (expr.GetChildren().size() != 1 || expr.GetChildTypes().size() != 1 || expr.GetChildTargets().size() != 1) {
@@ -520,7 +519,6 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 			// It produces a single aggregated result per RHS execution.
 			auto delim_join =
 			    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE, std::move(root), perform_delim);
-			delim_join->subquery_type = SubqueryType::SCALAR;
 			delim_join->any_join = false;
 			delim_join->AddChild(std::move(plan));
 			root = std::move(delim_join);
