@@ -387,6 +387,34 @@ static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info
 	});
 }
 
+// Keep struct literal defaults aligned with nested field renames.
+static void RenameStructPackField(ParsedExpression &expr, const vector<Identifier> &column_path,
+                                  const Identifier &new_name, idx_t depth = 1) {
+	if (expr.GetExpressionClass() != ExpressionClass::FUNCTION) {
+		return;
+	}
+	auto &func = expr.Cast<FunctionExpression>();
+	// Struct default values are stored as `struct_pack` function calls.
+	if (func.FunctionName() != "struct_pack") {
+		return;
+	}
+
+	auto &arguments = func.GetArgumentsMutable();
+	const auto &field_name = column_path[depth];
+	const bool last_entry = depth + 1 == column_path.size();
+	for (auto &argument : arguments) {
+		if (argument.GetName() != field_name) {
+			continue;
+		}
+		if (last_entry) {
+			argument.SetName(new_name);
+		} else {
+			RenameStructPackField(*argument.GetExpressionMutable(), column_path, new_name, depth + 1);
+		}
+		return;
+	}
+}
+
 unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
 	auto rename_idx = GetColumnIndex(info.old_name);
 	if (rename_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
@@ -1018,7 +1046,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
 	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
 	                                        std::move(function));
-	return ChangeColumnType(context, change_column_type);
+	return ChangeColumnType(context, change_column_type, [&](ColumnDefinition &column) {
+		if (!column.HasDefaultValue()) {
+			return;
+		}
+		auto default_value = column.DefaultValue().Copy();
+		RenameStructPackField(*default_value, info.column_path, info.new_name);
+		column.SetDefaultValue(std::move(default_value));
+	});
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
@@ -1104,7 +1139,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
-unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
+unique_ptr<CatalogEntry>
+DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info,
+                                 const std::function<void(ColumnDefinition &)> &rewrite_column) {
 	// Bind type
 	auto type_binder = Binder::CreateBinder(context);
 	type_binder->SetSearchPath(catalog, schema.name);
@@ -1140,6 +1177,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 				throw NotImplementedException("Changing types of generated columns is not supported yet");
 			}
 			copy.SetType(info.target_type);
+			if (rewrite_column) {
+				rewrite_column(copy);
+			}
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
 		if (copy.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), change_idx)) {

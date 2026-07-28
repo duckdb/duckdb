@@ -58,3 +58,27 @@ statement error
 ALTER TABLE test RENAME x.i TO v2
 ----
 does not exist
+
+# rename updates struct default field names
+statement ok
+CREATE TABLE test_default(s STRUCT(a INTEGER, b INTEGER) DEFAULT {'a': 1, 'b': 2})
+
+statement ok
+INSERT INTO test_default DEFAULT VALUES
+
+statement ok
+ALTER TABLE test_default RENAME s.a TO c
+
+statement ok
+INSERT INTO test_default DEFAULT VALUES
+
+query I
+SELECT s FROM test_default
+----
+{'c': 1, 'b': 2}
+{'c': 1, 'b': 2}
+
+query T
+SELECT sql FROM duckdb_tables() WHERE table_name='test_default'
+----
+CREATE TABLE test_default(s STRUCT(c INTEGER, b INTEGER) DEFAULT(struct_pack(c := 1, b := 2)));
