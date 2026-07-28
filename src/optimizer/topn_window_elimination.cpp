@@ -248,7 +248,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	unique_ptr<LogicalOperator> late_mat_lhs = nullptr;
 	if (params.payload_type == TopNPayloadType::STRUCT_PACK) {
 		// Try circumventing struct-packing with late materialization
-		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload);
+		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload, params);
 		if (late_mat_lhs && aggregate_payload.size() == 1) {
 			params.payload_type = TopNPayloadType::SINGLE_COLUMN;
 		}
@@ -897,7 +897,8 @@ bool TopNWindowElimination::ExtractSingleBinding(unique_ptr<Expression> *expr, C
 
 bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
                                                       vector<idx_t> &lhs_projections,
-                                                      vector<reference<LogicalOperator>> &stack) {
+                                                      vector<reference<LogicalOperator>> &stack,
+                                                      TopNWindowEliminationParameters &params) {
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	vector<ColumnBinding> projections(window_expr.partitions.size() + args.size());
 
@@ -947,6 +948,11 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			if (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI &&
 			    join.join_type != JoinType::ANTI) {
 				return false;
+			}
+			if (join.join_type == JoinType::INNER) {
+				// An inner join can produce the same base-table row more than once. The selected row IDs must then
+				// be joined back using an inner join to preserve their multiplicity.
+				params.row_ids_may_have_duplicates = true;
 			}
 
 			// If there is a join, we only allow late materialization if the projected output stems from a single table.
@@ -1074,11 +1080,12 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 	return true;
 }
 
-unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization(const LogicalWindow &window,
-                                                                                 vector<unique_ptr<Expression>> &args) {
+unique_ptr<LogicalOperator>
+TopNWindowElimination::TryPrepareLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
+                                                     TopNWindowEliminationParameters &params) {
 	vector<idx_t> lhs_projections;
 	vector<reference<LogicalOperator>> stack;
-	bool use_late_materialization = CanUseLateMaterialization(window, args, lhs_projections, stack);
+	bool use_late_materialization = CanUseLateMaterialization(window, args, lhs_projections, stack, params);
 	if (!use_late_materialization) {
 		return nullptr;
 	}
@@ -1209,7 +1216,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	const idx_t rhs_binding_offset =
 	    rhs->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ? 0 : aggregate_offset;
 
-	auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
+	auto join = make_uniq<LogicalComparisonJoin>(params.row_ids_may_have_duplicates ? JoinType::INNER : JoinType::SEMI);
 	for (idx_t i = 0; i < rowid_column_count; i++) {
 		const idx_t lhs_rowid_idx = lhs->types.size() - (rowid_column_count - i);
 		const idx_t rhs_rowid_idx = rhs_binding_offset + i;
@@ -1227,6 +1234,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 		// Add row_number to join result
 		join->join_type = JoinType::INNER;
 		join->right_projection_map.push_back(rhs->types.size() - 1);
+	} else if (params.row_ids_may_have_duplicates) {
+		// Project the join key instead and let the final projection remove it.
+		join->right_projection_map.push_back(aggregate_offset);
 	}
 
 	// Remove the row_numbers from the LHS projection map
