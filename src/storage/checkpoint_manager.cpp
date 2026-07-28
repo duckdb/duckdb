@@ -473,10 +473,10 @@ static unique_ptr<CreateInfo> ReadCreateInfo(Deserializer &deserializer, Catalog
 	// 100 is the serialization field ID for the catalog entry's CreateInfo payload
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, entry_name);
 	if (!info) {
-		throw IOException("corrupt database file - %s entry without create info", entry_name);
+		throw DataCorruptionException("corrupt database file - %s entry without create info", entry_name);
 	}
 	if (info->type != expected_type) {
-		throw IOException("corrupt database file - catalog entry type mismatch for %s", entry_name);
+		throw DataCorruptionException("corrupt database file - catalog entry type mismatch for %s", entry_name);
 	}
 	return info;
 }
@@ -522,7 +522,7 @@ void CheckpointReader::ReadEntry(CatalogTransaction transaction, Deserializer &d
 		break;
 	}
 	default:
-		throw IOException("corrupt database file - unrecognized catalog type in checkpoint");
+		throw DataCorruptionException("corrupt database file - unrecognized catalog type in checkpoint");
 	}
 }
 
@@ -563,7 +563,7 @@ void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer 
 	auto &schema = catalog.GetSchema(transaction, trigger_info.GetQualifiedName().Schema());
 	auto table_entry = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, trigger_info.base_table->Table());
 	if (!table_entry) {
-		throw IOException("corrupt database file - trigger entry without table entry");
+		throw DataCorruptionException("corrupt database file - trigger entry without table entry");
 	}
 	auto &duck_table = table_entry->Cast<DuckTableEntry>();
 	duck_table.CreateTrigger(transaction, trigger_info);
@@ -611,7 +611,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	auto catalog_table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table);
 	if (!catalog_table) {
 		// See internal issue 3663.
-		throw IOException("corrupt database file - index entry without table entry");
+		throw DataCorruptionException("corrupt database file - index entry without table entry");
 	}
 	auto &table = catalog_table->Cast<DuckTableEntry>();
 

@@ -651,6 +651,10 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		}
 	}
 
+	if (create_trigger_info.timing == TriggerTiming::INSTEAD_OF) {
+		throw NotImplementedException("INSTEAD OF triggers are not yet supported");
+	}
+
 	// Validate UPDATE OF columns exist
 	if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT && !create_trigger_info.columns.empty()) {
 		for (const auto &col_name : create_trigger_info.columns) {

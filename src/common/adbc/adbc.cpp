@@ -2934,6 +2934,8 @@ static const char *DuckDBErrorTypeToString(duckdb_error_type type) {
 		return "Autoload";
 	case DUCKDB_ERROR_SEQUENCE:
 		return "Sequence";
+	case DUCKDB_ERROR_DATA_CORRUPTION:
+		return "DataCorruption";
 	case DUCKDB_INVALID_CONFIGURATION:
 		return "InvalidConfiguration";
 	default:

@@ -39,8 +39,8 @@ NULL	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [1]	[1, 2]	True	True	False	True	False	False	False	True
 [1]	[1, NULL]	True	True	False	True	False	False	False	True
 [1]	[NULL]	True	True	NULL	NULL	False	False	False	True
-[1]	[NULL, 2]	True	True	NULL	NULL	False	False	False	True
-[1]	[NULL, NULL]	True	True	NULL	NULL	False	False	False	True
+[1]	[NULL, 2]	True	True	False	True	False	False	False	True
+[1]	[NULL, NULL]	True	True	False	True	False	False	False	True
 [1, 2]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [1, 2]	[1]	False	False	False	True	True	True	False	True
 [1, 2]	[1, 2]	False	True	True	False	False	True	True	False
@@ -111,8 +111,8 @@ NULL	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [duck]	[duck, goose]	True	True	False	True	False	False	False	True
 [duck]	[duck, NULL]	True	True	False	True	False	False	False	True
 [duck]	[NULL]	True	True	NULL	NULL	False	False	False	True
-[duck]	[NULL, goose]	True	True	NULL	NULL	False	False	False	True
-[duck]	[NULL, NULL]	True	True	NULL	NULL	False	False	False	True
+[duck]	[NULL, goose]	True	True	False	True	False	False	False	True
+[duck]	[NULL, NULL]	True	True	False	True	False	False	False	True
 [duck, goose]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [duck, goose]	[duck]	False	False	False	True	True	True	False	True
 [duck, goose]	[duck, goose]	False	True	True	False	False	True	True	False
