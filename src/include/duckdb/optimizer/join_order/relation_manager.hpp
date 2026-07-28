@@ -71,6 +71,8 @@ public:
 	vector<unique_ptr<SingleJoinRelation>> GetRelations();
 
 	const vector<RelationStats> GetRelationStats();
+	//! Return the extracted relation set represented by an operator subtree.
+	optional_ptr<JoinRelationSet> GetRelationSet(LogicalOperator &op, JoinRelationSetManager &set_manager);
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<TableIndex, RelationIndex> relation_mapping;
 

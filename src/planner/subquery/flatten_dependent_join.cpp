@@ -1,5 +1,4 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
-#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
 
 #include "duckdb/common/operator/add.hpp"
@@ -8,7 +7,6 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -267,9 +265,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
-	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
-		DelimJoinCTERewriter::Rewrite(binder, plan);
-	}
 	// ANY joins must retain their general shape until enclosing decorrelation and binding rewrites are complete.
 	FinalizeAnyJoins(plan);
 	return plan;

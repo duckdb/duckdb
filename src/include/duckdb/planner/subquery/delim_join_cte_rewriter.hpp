@@ -17,12 +17,12 @@ namespace duckdb {
 //! Rewrites fully decorrelated DelimJoins into materialized CTEs.
 class DelimJoinCTERewriter {
 public:
-	static void Rewrite(Binder &binder, unique_ptr<LogicalOperator> &plan);
+	static bool Rewrite(Binder &binder, unique_ptr<LogicalOperator> &plan);
 
 private:
 	explicit DelimJoinCTERewriter(Binder &binder);
 
-	void Rewrite(unique_ptr<LogicalOperator> &plan);
+	bool Rewrite(unique_ptr<LogicalOperator> &plan);
 	BindingReplacementGraph RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
 	                                                bool null_rejecting_filter_above = false,
 	                                                bool preserve_evidence_side = false);
@@ -32,6 +32,7 @@ private:
 private:
 	Binder &binder;
 	bool cte_deliminator_enabled;
+	bool rewritten_delim_join = false;
 	vector<TableIndex> generated_dedup_cte_indexes;
 };
 

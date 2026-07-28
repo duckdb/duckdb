@@ -55,6 +55,7 @@
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 #include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
@@ -240,6 +241,20 @@ void Optimizer::RunBuiltInOptimizers() {
 		filter_pushdown.CheckMarkToSemi(*plan, top_bindings);
 		plan = filter_pushdown.Rewrite(std::move(plan));
 	});
+
+	if (Settings::Get<DelimJoinAsCteSetting>(context)) {
+		if (DelimJoinCTERewriter::Rewrite(binder, plan)) {
+			Verify(*plan);
+
+			// The rewrite exposes ordinary MARK joins after the first filter-pushdown pass.
+			RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
+				FilterPushdown filter_pushdown(*this);
+				unordered_set<TableIndex> top_bindings;
+				filter_pushdown.CheckMarkToSemi(*plan, top_bindings);
+				plan = filter_pushdown.Rewrite(std::move(plan));
+			});
+		}
+	}
 
 	// derive and push filters into materialized CTEs
 	RunOptimizer(OptimizerType::CTE_FILTER_PUSHER, [&]() {

@@ -13,6 +13,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain_factorer.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -29,17 +30,22 @@ namespace duckdb {
 
 static constexpr const char *CTE_DELIMINATOR_PROFILER_KEY = "optimizer.deliminator";
 
-static void VerifyNoDelim(LogicalOperator &op) {
-	// Verify that there are no delim joins or delim scans in the plan, as these should have been rewritten to CTEs at
-	// this point.
+static bool CanRewriteDelimJoinAsCTE(const LogicalOperator &op) {
+	return !op.HasSideEffects() && !op.HasVolatileExpressions();
+}
+
+static void VerifyNoRewriteableDelim(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		if (!CanRewriteDelimJoinAsCTE(op)) {
+			return;
+		}
 		throw InternalException("Found DELIM_JOIN after flattening dependent joins");
 	}
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		throw InternalException("Found DELIM_GET after flattening dependent joins");
 	}
 	for (auto &child : op.children) {
-		VerifyNoDelim(*child);
+		VerifyNoRewriteableDelim(*child);
 	}
 }
 
@@ -2151,6 +2157,7 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 	}
 
 	plan->type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+	plan->Cast<LogicalComparisonJoin>().convert_mark_to_semi = true;
 
 	auto dedup_cte_index = binder.GenerateTableIndex();
 	auto dedup_ref_count = RewriteDelimScanReferences(plan->children[1], dedup_cte_index);
@@ -2171,6 +2178,34 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 		return {};
 	}
 	generated_dedup_cte_indexes.push_back(dedup_cte_index);
+
+	auto factored_domain =
+	    cte_deliminator_enabled ? DuplicateEliminatedDomainFactorer::TryFactor(binder, plan) : nullptr;
+	if (factored_domain) {
+		vector<LogicalType> dedup_types;
+		dedup_types.reserve(join.duplicate_eliminated_columns.size());
+		for (auto &expression : join.duplicate_eliminated_columns) {
+			dedup_types.push_back(expression->GetReturnType());
+		}
+		join.duplicate_eliminated_columns.clear();
+		output_replacements.Merge(factored_domain->output_replacements);
+
+		auto dedup_cte_name = Identifier("__duckdb_delim_dedup_" + to_string(dedup_cte_index.index));
+		BindingReplacementGraph dedup_output_replacements;
+		auto dedup_cte_child = CreateIdentityProjection(binder, std::move(plan), dedup_output_replacements);
+		output_replacements.Merge(dedup_output_replacements);
+		auto dedup_cte = make_uniq<LogicalMaterializedCTE>(
+		    dedup_cte_name, dedup_cte_index, dedup_types.size(), std::move(factored_domain->domain),
+		    std::move(dedup_cte_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+
+		BindingReplacementGraph factor_output_replacements;
+		auto factor_child = CreateIdentityProjection(binder, std::move(dedup_cte), factor_output_replacements);
+		output_replacements.Merge(factor_output_replacements);
+		plan = make_uniq<LogicalMaterializedCTE>(factored_domain->cte_name, factored_domain->cte_index,
+		                                         factored_domain->column_count, std::move(factored_domain->source),
+		                                         std::move(factor_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+		return output_replacements;
+	}
 
 	plan->children[0]->ResolveOperatorTypes();
 	auto left_bindings = plan->children[0]->GetColumnBindings();
@@ -2302,6 +2337,9 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
                                                                       bool null_rejecting_filter_above,
                                                                       bool preserve_evidence_side) {
 	BindingReplacementGraph output_replacements;
+	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN && !CanRewriteDelimJoinAsCTE(*plan)) {
+		return output_replacements;
+	}
 	for (idx_t child_idx = 0; child_idx < plan->children.size(); child_idx++) {
 		auto &child = plan->children[child_idx];
 		auto old_child_bindings = child->GetColumnBindings();
@@ -2320,6 +2358,7 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 		output_replacements.Merge(child_replacements);
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		rewritten_delim_join = true;
 		auto materialize_replacements =
 		    MaterializeDelimJoinAsCTE(plan, rewrite_root, null_rejecting_filter_above, preserve_evidence_side);
 		output_replacements.Merge(materialize_replacements);
@@ -2327,12 +2366,12 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 	return output_replacements;
 }
 
-void DelimJoinCTERewriter::Rewrite(Binder &binder, unique_ptr<LogicalOperator> &plan) {
+bool DelimJoinCTERewriter::Rewrite(Binder &binder, unique_ptr<LogicalOperator> &plan) {
 	DelimJoinCTERewriter rewriter(binder);
-	rewriter.Rewrite(plan);
+	return rewriter.Rewrite(plan);
 }
 
-void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
+bool DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
 	bool filters_pushed;
 	do {
 		filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);
@@ -2344,7 +2383,8 @@ void DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
 		GeneratedDomainJoinEliminator generated_domain_join_eliminator(plan, generated_dedup_cte_indexes);
 		generated_domain_join_eliminator.Rewrite();
 	}
-	VerifyNoDelim(*plan);
+	VerifyNoRewriteableDelim(*plan);
+	return rewritten_delim_join;
 }
 
 } // namespace duckdb

@@ -246,16 +246,28 @@ NULL	0
 statement ok
 SET delim_join_as_cte=true;
 
+# Q 17: derive the duplicate-eliminated domain from the selective part input instead of materializing
+# the complete lineitem/part payload solely to obtain p_partkey
+query II
+EXPLAIN SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < (SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*Groups: p_partkey.*
+
+query II
+EXPLAIN SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < (SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
+----
+logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
+
 query II
 EXPLAIN SELECT x FROM range(1000000) o(x) WHERE x < 10000 AND EXISTS (SELECT 1 FROM range(10000000) l(y) WHERE y = x AND y > 0);
 ----
 logical_opt	<REGEX>:.*Join Type: RIGHT_SEMI.*x = x.*
 
-# Q 22: the selected delimiter domain should still restrict the NOT EXISTS evidence side
+# Q 22: the factored duplicate-eliminated domain should still restrict the NOT EXISTS evidence side
 query II
 EXPLAIN SELECT cntrycode, count(*) AS numcust, sum(c_acctbal) AS totacctbal FROM (SELECT substring(c_phone FROM 1 FOR 2) AS cntrycode, c_acctbal FROM customer WHERE substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > (SELECT avg(c_acctbal) FROM customer WHERE c_acctbal > 0.00 AND substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17')) AND NOT EXISTS (SELECT * FROM orders WHERE o_custkey = c_custkey)) AS custsale GROUP BY cntrycode ORDER BY cntrycode;
 ----
-logical_opt	<REGEX>:.*__duckdb_delim.*Join Type: MARK.*Join Type: (SEMI|RIGHT_SEMI).*o_custkey = c_custkey.*
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Join Type: MARK.*Join Type: (SEMI|RIGHT_SEMI).*o_custkey = c_custkey.*
 
 # Delimiter CTE fanout should stay runnable with grouped build-side consumers
 query I

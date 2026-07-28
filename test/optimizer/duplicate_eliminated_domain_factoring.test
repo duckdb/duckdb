@@ -1,0 +1,467 @@
+# name: test/optimizer/duplicate_eliminated_domain_factoring.test
+# description: Factor duplicate-eliminated domains from cheaper outer-input subtrees
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+CREATE TABLE domain_dim(k INTEGER, state VARCHAR);
+
+statement ok
+INSERT INTO domain_dim VALUES (1, 'selected'), (2, 'selected'), (3, 'selected'), (4, 'other'), (NULL, 'selected');
+
+statement ok
+CREATE TABLE domain_fact(k INTEGER, v INTEGER, payload VARCHAR);
+
+statement ok
+INSERT INTO domain_fact VALUES
+    (1, 2, 'a'), (1, 4, 'b'), (1, 6, 'c'),
+    (2, 1, 'd'), (2, 5, 'e'), (4, 7, 'f'),
+    (NULL, 2, 'null-low'), (NULL, 6, 'null-high');
+
+# Q17 shape: the filtered dimension provides a safe-superset key domain.
+query III rowsort
+SELECT f.k, f.v, length(f.payload)
+FROM domain_fact f
+JOIN domain_dim d ON f.k = d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_fact i
+      WHERE i.k = d.k
+  );
+----
+1	2	1
+2	1	1
+
+query II
+EXPLAIN
+SELECT f.k, f.v
+FROM domain_fact f
+JOIN domain_dim d ON f.k = d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_fact i
+      WHERE i.k = d.k
+  );
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*Join Type: SEMI.*
+
+# Factoring the candidate source must preserve duplicate payload rows.
+statement ok
+CREATE TABLE domain_duplicate_dim(k INTEGER, state VARCHAR, tag VARCHAR);
+
+statement ok
+INSERT INTO domain_duplicate_dim VALUES
+    (1, 'selected', 'a'), (1, 'selected', 'b'), (2, 'selected', 'c'), (9, 'selected', 'unused');
+
+query III rowsort
+SELECT f.k, f.v, d.tag
+FROM domain_fact f
+JOIN domain_duplicate_dim d ON f.k = d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_fact i
+      WHERE i.k = d.k
+  );
+----
+1	2	a
+1	2	b
+2	1	c
+
+query II
+EXPLAIN
+SELECT f.k, f.v
+FROM domain_fact f
+JOIN domain_duplicate_dim d ON f.k = d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_fact i
+      WHERE i.k = d.k
+  );
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_duplicate_dim.*
+
+# Q1 shape: trace the correlated key through an inner-join equality to the filtered side.
+statement ok
+CREATE TABLE domain_totals(customer_id INTEGER, store_key INTEGER, total INTEGER);
+
+statement ok
+INSERT INTO domain_totals VALUES
+    (10, 1, 100), (11, 1, 20), (12, 2, 90), (13, 2, 10), (14, 4, 1000);
+
+query I rowsort
+SELECT t.customer_id
+FROM domain_totals t
+JOIN domain_dim d ON d.k = t.store_key
+WHERE d.state = 'selected'
+  AND t.total > (
+      SELECT avg(t2.total) * 1.2
+      FROM domain_totals t2
+      WHERE t2.store_key = t.store_key
+  );
+----
+10
+12
+
+query II
+EXPLAIN
+SELECT t.customer_id
+FROM domain_totals t
+JOIN domain_dim d ON d.k = t.store_key
+WHERE d.state = 'selected'
+  AND t.total > (
+      SELECT avg(t2.total) * 1.2
+      FROM domain_totals t2
+      WHERE t2.store_key = t.store_key
+  );
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*Groups: store_key.*
+
+# Trace a key through a direct projection mapping.
+query I rowsort
+SELECT t.customer_id
+FROM domain_totals t
+JOIN (
+    SELECT k AS store_key, state
+    FROM domain_dim
+) d ON d.store_key = t.store_key
+WHERE d.state = 'selected'
+  AND t.total > (
+      SELECT avg(t2.total) * 1.2
+      FROM domain_totals t2
+      WHERE t2.store_key = d.store_key
+  );
+----
+10
+12
+
+query II
+EXPLAIN
+SELECT t.customer_id
+FROM domain_totals t
+JOIN (
+    SELECT k AS store_key, state
+    FROM domain_dim
+) d ON d.store_key = t.store_key
+WHERE d.state = 'selected'
+  AND t.total > (
+      SELECT avg(t2.total) * 1.2
+      FROM domain_totals t2
+      WHERE t2.store_key = d.store_key
+  );
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*
+
+# A grouped candidate can provide grouping keys.
+query II rowsort
+SELECT f.k, f.v
+FROM domain_fact f
+JOIN (
+    SELECT k
+    FROM domain_dim
+    GROUP BY k
+    HAVING min(state) = 'selected'
+) d ON f.k = d.k
+WHERE f.v < (
+    SELECT avg(i.v)
+    FROM domain_fact i
+    WHERE i.k = d.k
+);
+----
+1	2
+2	1
+
+query II
+EXPLAIN
+SELECT f.k, f.v
+FROM domain_fact f
+JOIN (
+    SELECT k
+    FROM domain_dim
+    GROUP BY k
+    HAVING min(state) = 'selected'
+) d ON f.k = d.k
+WHERE f.v < (
+    SELECT avg(i.v)
+    FROM domain_fact i
+    WHERE i.k = d.k
+);
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*Groups: k.*
+
+# Aggregate results themselves are not proven key-domain sources.
+query II
+EXPLAIN
+SELECT f.k
+FROM domain_fact f
+JOIN (
+    SELECT min(k) AS k
+    FROM domain_dim
+) d ON f.k = d.k
+WHERE f.v < (
+    SELECT avg(i.v)
+    FROM domain_fact i
+    WHERE i.k = d.k
+);
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+# A SEMI join can provide keys from its output side.
+query II rowsort
+SELECT f.k, f.v
+FROM domain_fact f
+JOIN (
+    SELECT d.k
+    FROM domain_dim d
+    SEMI JOIN domain_totals p ON d.k = p.store_key
+    WHERE d.state = 'selected'
+) d ON f.k = d.k
+WHERE f.v < (
+    SELECT avg(i.v)
+    FROM domain_fact i
+    WHERE i.k = d.k
+);
+----
+1	2
+2	1
+
+query II
+EXPLAIN
+SELECT f.k, f.v
+FROM domain_fact f
+JOIN (
+    SELECT d.k
+    FROM domain_dim d
+    SEMI JOIN domain_totals p ON d.k = p.store_key
+    WHERE d.state = 'selected'
+) d ON f.k = d.k
+WHERE f.v < (
+    SELECT avg(i.v)
+    FROM domain_fact i
+    WHERE i.k = d.k
+);
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Join Type: SEMI.*
+
+# All correlated keys must be covered in canonical order.
+statement ok
+CREATE TABLE domain_pair_dim(k1 INTEGER, k2 INTEGER, state VARCHAR);
+
+statement ok
+INSERT INTO domain_pair_dim VALUES
+    (1, 10, 'selected'), (2, 20, 'selected'), (3, 30, 'other'), (9, 90, 'selected');
+
+statement ok
+CREATE TABLE domain_pair_fact(k1 INTEGER, k2 INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO domain_pair_fact VALUES
+    (1, 10, 2), (1, 10, 4), (1, 10, 6),
+    (2, 20, 1), (2, 20, 5), (3, 30, 7);
+
+query III rowsort
+SELECT f.k1, f.k2, f.v
+FROM domain_pair_fact f
+JOIN domain_pair_dim d ON f.k1 = d.k1 AND f.k2 = d.k2
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_pair_fact i
+      WHERE i.k1 = d.k1 AND i.k2 = d.k2
+  );
+----
+1	10	2
+2	20	1
+
+query II
+EXPLAIN
+SELECT f.v
+FROM domain_pair_fact f
+JOIN domain_pair_dim d ON f.k1 = d.k1 AND f.k2 = d.k2
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_pair_fact i
+      WHERE i.k1 = d.k1 AND i.k2 = d.k2
+  );
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_pair_dim.*Groups: (k1, k2|k2, k1).*
+
+# IS NOT DISTINCT FROM can map a NULL key through the candidate side.
+query I rowsort
+SELECT f.v
+FROM domain_fact f
+JOIN domain_dim d ON f.k IS NOT DISTINCT FROM d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_fact i
+      WHERE i.k IS NOT DISTINCT FROM d.k
+  );
+----
+1
+2
+2
+
+query II
+EXPLAIN
+SELECT f.v
+FROM domain_fact f
+JOIN domain_dim d ON f.k IS NOT DISTINCT FROM d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_fact i
+      WHERE i.k IS NOT DISTINCT FROM d.k
+  );
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*
+
+# The outer key mapping and correlated comparison retain their independent NULL semantics.
+query I rowsort
+SELECT f.v
+FROM domain_fact f
+JOIN domain_dim d ON f.k IS NOT DISTINCT FROM d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_fact i
+      WHERE i.k = d.k
+  );
+----
+1
+2
+
+query II
+EXPLAIN
+SELECT f.v
+FROM domain_fact f
+JOIN domain_dim d ON f.k IS NOT DISTINCT FROM d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_fact i
+      WHERE i.k = d.k
+  );
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*
+
+# COUNT retains scalar empty-input behavior for selected outer keys without inner rows.
+statement ok
+CREATE TABLE domain_outer(k INTEGER, payload INTEGER);
+
+statement ok
+INSERT INTO domain_outer VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TABLE domain_measure(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO domain_measure VALUES (1, 3), (1, 7);
+
+query IIII rowsort
+SELECT o.k,
+       (SELECT sum(m.v) FROM domain_measure m WHERE m.k = d.k),
+       (SELECT avg(m.v) FROM domain_measure m WHERE m.k = d.k),
+       (SELECT count(*) FROM domain_measure m WHERE m.k = d.k)
+FROM domain_outer o
+JOIN domain_dim d ON d.k = o.k
+WHERE d.state = 'selected';
+----
+1	10	5	2
+2	NULL	NULL	0
+
+# Outer joins are coverage barriers and retain the existing full-payload fallback.
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(*) FROM domain_measure m WHERE m.k = d.k)
+FROM domain_outer o
+LEFT JOIN domain_dim d ON d.k = o.k AND d.state = 'selected';
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+# RIGHT and FULL joins are also coverage barriers.
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(*) FROM domain_measure m WHERE m.k = d.k)
+FROM domain_outer o
+RIGHT JOIN (
+    SELECT * FROM domain_dim WHERE state = 'selected'
+) d ON d.k = o.k;
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(*) FROM domain_measure m WHERE m.k = d.k)
+FROM domain_outer o
+FULL JOIN (
+    SELECT * FROM domain_dim WHERE state = 'selected'
+) d ON d.k = o.k;
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+# No proper input covers both independent correlated keys.
+statement ok
+CREATE TABLE domain_other(j INTEGER);
+
+statement ok
+INSERT INTO domain_other VALUES (3), (7);
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(*) FROM domain_pair_fact m WHERE m.k1 = o.k AND m.v = r.j)
+FROM domain_outer o
+CROSS JOIN domain_other r;
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+# Nested decorrelation still uses the factored domain from the outer filtered side.
+query II rowsort
+SELECT o.k,
+       (SELECT count(*)
+        FROM domain_measure m
+        WHERE m.k = d.k
+          AND EXISTS (SELECT 1 WHERE m.v > 0))
+FROM domain_outer o
+JOIN domain_dim d ON d.k = o.k
+WHERE d.state = 'selected';
+----
+1	2
+2	0
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(*)
+        FROM domain_measure m
+        WHERE m.k = d.k
+          AND EXISTS (SELECT 1 WHERE m.v > 0))
+FROM domain_outer o
+JOIN domain_dim d ON d.k = o.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*
+
+# A volatile correlated key cannot be moved into a shared factor.
+query II
+EXPLAIN
+SELECT f.k,
+       (SELECT count(*) FROM domain_measure m WHERE m.k = d.r)
+FROM domain_fact f
+JOIN (
+    SELECT k, CAST(floor(random() * 2) AS INTEGER) AS r
+    FROM domain_dim
+    WHERE state = 'selected'
+) d ON f.k = d.k;
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
