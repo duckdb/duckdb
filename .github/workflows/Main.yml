@@ -474,6 +474,10 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
+      LTO: full
+      LTO_JOBS: 8
+      CC: clang-20
+      CXX: clang++-20
 
     steps:
     - name: "Checkout"
@@ -498,8 +502,6 @@ jobs:
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
-        LTO: full
-        LTO_JOBS: 8
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
