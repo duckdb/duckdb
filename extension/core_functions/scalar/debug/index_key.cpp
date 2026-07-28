@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -131,6 +132,15 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	                                      QualifiedName(path.qualified_name.Catalog(), path.qualified_name.Schema(),
 	                                                    path.qualified_name.Name()))
 	                        .Cast<TableCatalogEntry>();
+
+	// Register a catalog dependency so that prepared statements are invalidated when the table/index is dropped.
+	// During deserialization (statement cache), the binder may not be available — the dependency is
+	// preserved from the serialized properties, so we only register when the binder is present.
+	if (input.HasBinder()) {
+		auto &binder = input.GetBinder();
+		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), context);
+	}
+
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();
