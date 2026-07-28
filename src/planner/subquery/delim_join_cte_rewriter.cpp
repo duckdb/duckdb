@@ -635,13 +635,16 @@ static bool ExpressionIsNotNull(ClientContext &context, LogicalOperator &op, con
 		if (!GetBoundColumnRefBinding(expr, binding)) {
 			return false;
 		}
+		auto join_type = op.Cast<LogicalComparisonJoin>().join_type;
 		optional_ptr<LogicalOperator> binding_child;
-		for (auto &child : op.children) {
+		for (idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
+			auto &child = op.children[child_idx];
 			auto child_bindings = child->GetColumnBindings();
 			if (std::find(child_bindings.begin(), child_bindings.end(), binding) == child_bindings.end()) {
 				continue;
 			}
-			if (binding_child) {
+			if (binding_child || (child_idx == 0 && IsRightOuterJoin(join_type)) ||
+			    (child_idx == 1 && (IsLeftOuterJoin(join_type) || join_type == JoinType::SINGLE))) {
 				return false;
 			}
 			binding_child = *child;
