@@ -54,3 +54,79 @@ SELECT id FROM db.index_tbl WHERE grp = 10 ORDER BY id;
 ----
 1
 3
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/read_only_wal_replay_create_index_add_column.db' AS db;
+
+statement ok
+CREATE TABLE db.tbl(i INTEGER);
+
+statement ok
+INSERT INTO db.tbl VALUES (1), (2);
+
+statement ok
+BEGIN;
+
+statement ok
+CREATE INDEX idx ON db.tbl(i);
+
+statement ok
+ALTER TABLE db.tbl ADD COLUMN j INTEGER DEFAULT 42;
+
+statement ok
+COMMIT;
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/read_only_wal_replay_create_index_add_column.db' AS db (READ_ONLY);
+
+statement ok
+SET index_scan_percentage=1;
+
+statement ok
+SET index_scan_max_count=999999999;
+
+query II
+SELECT i, j FROM db.tbl WHERE i = 2;
+----
+2	42
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/read_only_wal_replay_alter_primary_key.db' AS db;
+
+statement ok
+CREATE TABLE db.pk_tbl(i INTEGER);
+
+statement ok
+INSERT INTO db.pk_tbl VALUES (1), (2);
+
+statement ok
+ALTER TABLE db.pk_tbl ADD PRIMARY KEY(i);
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEST_DIR}/read_only_wal_replay_alter_primary_key.db' AS db (READ_ONLY);
+
+statement ok
+SET index_scan_percentage=1;
+
+statement ok
+SET index_scan_max_count=999999999;
+
+query I
+SELECT i FROM db.pk_tbl WHERE i = 2;
+----
+2
+
+statement ok
+DETACH db;

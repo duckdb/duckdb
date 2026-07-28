@@ -10,9 +10,11 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 
@@ -24,6 +26,9 @@ struct FixedSizeAllocatorInfo {
 	vector<idx_t> segment_counts;
 	vector<idx_t> allocation_sizes;
 	vector<idx_t> buffers_with_free_space;
+	//! In-memory WAL replay buffers used to initialize read-only indexes without writing blocks.
+	//! These are transient runtime state and are never serialized.
+	shared_ptr<vector<BufferHandle>> transient_buffers;
 
 	void Serialize(Serializer &serializer) const;
 	static FixedSizeAllocatorInfo Deserialize(Deserializer &deserializer);

@@ -338,8 +338,15 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 		auto allocation_size = info.allocation_sizes[i];
 
 		// create the FixedSizeBuffer
-		buffers[buffer_id] =
-		    make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, buffer_block_pointer);
+		if (info.transient_buffers) {
+			D_ASSERT(info.transient_buffers->size() == info.buffer_ids.size());
+			buffers[buffer_id] =
+			    make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size,
+			                               std::move((*info.transient_buffers)[i]));
+		} else {
+			buffers[buffer_id] =
+			    make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, buffer_block_pointer);
+		}
 		total_segment_count += segment_count;
 	}
 
