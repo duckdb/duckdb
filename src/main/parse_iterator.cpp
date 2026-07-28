@@ -110,18 +110,17 @@ bool ParseIterator::Peek() {
 		}
 		if (stmt) {
 			// ParseTopLevelStatement doesn't populate stmt->query (it operates on tokens, not the
-			// source string). Mirror Parser::ParseQuery's per-statement post-processing: span from
+			// source string). Mirror Parser::ParseQuery's per-statement post-processing: extend from
 			// the statement's start to the next statement's start (or end of input) so the trailing
 			// `;` and inter-statement whitespace end up inside stmt->query — downstream consumers
 			// (logging, error reporting, EXPLAIN) rely on that shape.
-			idx_t stmt_loc = stmt->stmt_location;
+			idx_t stmt_loc = stmt->stmt_location.offset;
 			idx_t end_loc = sql.size();
 			if (token_cursor < tokens->size() && (*tokens)[token_cursor].type != TokenType::END_OF_INPUT) {
 				end_loc = (*tokens)[token_cursor].offset;
 			}
 			stmt->query = sql.substr(stmt_loc, end_loc - stmt_loc);
-			stmt->stmt_location = 0;
-			stmt->stmt_length = stmt->query.size();
+			stmt->stmt_location = QueryLocation(0, stmt->query.size());
 			if (stmt->type == StatementType::CREATE_STATEMENT) {
 				auto &create = stmt->Cast<CreateStatement>();
 				create.info->sql = stmt->query;

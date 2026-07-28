@@ -15,6 +15,9 @@ void TableRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(101, "alias", alias);
 	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample", sample);
 	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<uint32_t>(104, "query_location_length", query_location.length, 0);
+	}
 }
 
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
@@ -22,6 +25,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	auto alias = deserializer.ReadPropertyWithDefault<Identifier>(101, "alias");
 	auto sample = deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample");
 	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
+	auto query_location_length = deserializer.ReadPropertyWithExplicitDefault<uint32_t>(104, "query_location_length", 0);
 	unique_ptr<TableRef> result;
 	switch (type) {
 	case TableReferenceType::BASE_TABLE:
@@ -57,6 +61,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	result->alias = std::move(alias);
 	result->sample = std::move(sample);
 	result->query_location = query_location;
+	result->query_location.length = query_location_length;
 	return result;
 }
 

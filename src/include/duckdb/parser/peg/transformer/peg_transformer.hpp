@@ -230,14 +230,14 @@ public:
 			auto bridged = TryBridgeTransformResult<T>(*base_result);
 			if (bridged) {
 				auto bridged_result = std::move(bridged->value);
-				SetResultLocation(bridged_result, parse_result.offset);
+				SetResultLocation(bridged_result, parse_result.GetLocation());
 				return bridged_result;
 			}
 			throw InternalException("Transformer for rule '" + parse_result.name + "' returned an unexpected type.");
 		}
 
 		auto result = std::move(typed_result_ptr->value);
-		SetResultLocation(result, parse_result.offset);
+		SetResultLocation(result, parse_result.GetLocation());
 		return result;
 	}
 
@@ -281,27 +281,27 @@ public:
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 	bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end);
 	unique_ptr<WindowExpression> GetWindowClause(const Identifier &window_name);
-	void SetQueryLocation(ParsedExpression &expr, optional_idx query_location);
-	void SetQueryLocation(TableRef &ref, optional_idx query_location);
+	void SetQueryLocation(ParsedExpression &expr, QueryLocation query_location);
+	void SetQueryLocation(TableRef &ref, QueryLocation query_location);
 
 private:
 	template <typename T>
-	void SetResultLocation(T &, optional_idx) {
+	void SetResultLocation(T &, QueryLocation) {
 	}
-	void SetResultLocation(unique_ptr<ParsedExpression> &expr, optional_idx offset) {
+	void SetResultLocation(unique_ptr<ParsedExpression> &expr, QueryLocation location) {
 		if (!expr) {
 			return;
 		}
-		if (offset.IsValid() && !expr->GetQueryLocation().IsValid()) {
-			SetQueryLocation(*expr, offset);
+		if (location.IsValid() && !expr->HasQueryLocation()) {
+			SetQueryLocation(*expr, location);
 		}
 	}
-	void SetResultLocation(unique_ptr<TableRef> &ref, optional_idx offset) {
+	void SetResultLocation(unique_ptr<TableRef> &ref, QueryLocation location) {
 		if (!ref) {
 			return;
 		}
-		if (offset.IsValid() && !ref->query_location.IsValid()) {
-			SetQueryLocation(*ref, offset.GetIndex());
+		if (location.IsValid() && !ref->query_location.IsValid()) {
+			SetQueryLocation(*ref, location);
 		}
 	}
 

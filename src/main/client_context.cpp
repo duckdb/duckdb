@@ -1040,7 +1040,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	if (statement) {
-		StatementVerification(lock, query, statement, parameters);
+		try {
+			StatementVerification(lock, query, statement, parameters);
+		} catch (std::exception &ex) {
+			// preserve extra error data (like query location)
+			return ErrorResult<PendingQueryResult>(ErrorData(ex), query);
+		}
 	}
 	return PendingStatementOrPreparedStatement(lock, query, std::move(statement), prepared, parameters);
 }
