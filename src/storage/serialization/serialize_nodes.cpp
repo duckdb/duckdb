@@ -356,6 +356,7 @@ void ExtraOperatorInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<optional_idx>(101, "total_files", total_files);
 	serializer.WriteProperty<optional_idx>(102, "filtered_files", filtered_files);
 	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", sample_options);
+	serializer.WritePropertyWithDefault<optional_idx>(104, "pruned_directories", pruned_directories, optional_idx());
 }
 
 ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
@@ -364,6 +365,7 @@ ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<optional_idx>(101, "total_files", result.total_files);
 	deserializer.ReadProperty<optional_idx>(102, "filtered_files", result.filtered_files);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", result.sample_options);
+	deserializer.ReadPropertyWithExplicitDefault<optional_idx>(104, "pruned_directories", result.pruned_directories, optional_idx());
 	return result;
 }
 
@@ -414,6 +416,8 @@ void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", hive_types_schema);
 	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
 	serializer.WritePropertyWithDefault<bool>(107, "allow_empty", allow_empty);
+	serializer.WritePropertyWithDefault<bool>(108, "hive_directory_pruning", hive_directory_pruning, false);
+	serializer.WritePropertyWithDefault<bool>(109, "explicit_hive_directory_pruning", explicit_hive_directory_pruning, false);
 }
 
 MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
@@ -426,6 +430,8 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", result.hive_types_schema);
 	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
 	deserializer.ReadPropertyWithDefault<bool>(107, "allow_empty", result.allow_empty);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(108, "hive_directory_pruning", result.hive_directory_pruning, false);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(109, "explicit_hive_directory_pruning", result.explicit_hive_directory_pruning, false);
 	return result;
 }
 

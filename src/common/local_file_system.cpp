@@ -12,6 +12,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
 #include <cstdint>
@@ -2180,6 +2181,11 @@ bool LocalGlobResult::ExpandNextPath() const {
 	auto &current_path = next_dir.path;
 	expand_directories.pop();
 
+	if (!is_empty && PathIsPruned(current_path)) {
+		// no file below this directory can match - skip it entirely instead of listing its contents
+		return true;
+	}
+
 	auto &next_split = splits[split_index];
 	bool is_last_component = split_index + 1 == splits.size();
 	auto &next_component = next_split.path;
@@ -2207,7 +2213,10 @@ bool LocalGlobResult::ExpandNextPath() const {
 			}
 		}
 	} else {
-		// glob - need to resolve the glob
+		// glob - need to resolve the glob by listing the contents of the current path
+		if (context) {
+			DUCKDB_LOG_FILE_SYSTEM_LIST(*context, fs, current_path);
+		}
 		if (IsCrawl(next_component)) {
 			if (is_last_component) {
 				// the crawl is the last component - we are looking for files in this directory

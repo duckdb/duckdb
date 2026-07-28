@@ -16,6 +16,7 @@
 #include "duckdb/common/enums/file_glob_options.hpp"
 
 namespace duckdb {
+class HivePathFilter;
 class MultiFileList;
 class NodeStatistics;
 class LogicalGet;
@@ -43,17 +44,19 @@ struct MultiFileCount {
 
 class MultiFileListIterationHelper {
 public:
-	DUCKDB_API explicit MultiFileListIterationHelper(const MultiFileList &collection);
+	DUCKDB_API explicit MultiFileListIterationHelper(const MultiFileList &collection, MultiFileListScanType scan_type);
 
 private:
 	const MultiFileList &file_list;
+	//! Whether files that are not expanded yet are fetched, or the iteration stops at the last available file
+	MultiFileListScanType scan_type;
 
 private:
 	class MultiFileListIterator;
 
 	class MultiFileListIterator {
 	public:
-		DUCKDB_API explicit MultiFileListIterator(optional_ptr<const MultiFileList> file_list);
+		DUCKDB_API MultiFileListIterator(optional_ptr<const MultiFileList> file_list, MultiFileListScanType scan_type);
 
 		optional_ptr<const MultiFileList> file_list;
 		MultiFileListScanData file_scan_data;
@@ -91,8 +94,13 @@ public:
 	MultiFileList();
 	virtual ~MultiFileList();
 
-	//! Get Iterator over the files for pretty for loops
-	MultiFileListIterationHelper Files() const;
+	//! Get Iterator over the files for pretty for loops - by default every file is expanded while iterating,
+	//! "FETCH_IF_AVAILABLE" stops at the last file that is available without any further I/O
+	MultiFileListIterationHelper Files(MultiFileListScanType scan_type = MultiFileListScanType::ALWAYS_FETCH) const;
+	//! Get Iterator over a sample of the files: at least "min_files", plus any further files that are already
+	//! available - as opposed to Files() this never forces the entire list to be expanded
+	//! When "min_files" is not set every file is iterated over instead
+	MultiFileListIterationHelper SampleFiles(optional_idx min_files) const;
 
 	//! Initialize a sequential scan over a file list
 	void InitializeScan(MultiFileListScanData &iterator) const;
@@ -123,11 +131,23 @@ public:
 	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context) const;
 	virtual unique_ptr<MultiFileList> Copy() const;
 
+	//! Set the filter used to skip paths while the list is expanded - lists that expand paths lazily can use this to
+	//! avoid listing directories that can never contain a matching file. The list only observes the filter: it applies
+	//! for as long as the caller holds on to it
+	virtual void SetPathFilter(const shared_ptr<HivePathFilter> &filter) const;
+
 protected:
 	//! Whether or not the file at the index is available instantly - or if this requires additional I/O
 	virtual bool FileIsAvailable(idx_t i) const;
 	//! Get the i-th expanded file
 	virtual OpenFileInfo GetFile(idx_t i) const = 0;
+	//! Whether or not the given path can be skipped according to the path filter
+	bool PathIsPruned(const string &path) const;
+
+protected:
+	//! The path filter - only affects which paths are expanded, hence it can be set on a const file list
+	//! Held weakly so that it expires together with the pushdown that installed it
+	mutable weak_ptr<HivePathFilter> path_filter;
 
 public:
 	template <class TARGET>
@@ -198,6 +218,7 @@ public:
 	GlobMultiFileList(ClientContext &context, vector<string> globs, FileGlobInput input);
 
 	vector<OpenFileInfo> GetDisplayFileList(optional_idx max_files = optional_idx()) const override;
+	void SetPathFilter(const shared_ptr<HivePathFilter> &filter) const override;
 
 protected:
 	bool ExpandNextPath() const override;

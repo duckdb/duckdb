@@ -124,6 +124,12 @@
       "paths": [
         "test/sql/join/natural/natural_join.test"
       ]
+    },
+    {
+      "reason": "Counting directory listings requires filter pushdown from optimizer.",
+      "paths": [
+        "test/sql/copy/partitioned/hive_early_directory_pruning_listings.test"
+      ]
     }
   ]
 }

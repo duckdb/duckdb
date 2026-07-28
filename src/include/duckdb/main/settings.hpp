@@ -1280,6 +1280,18 @@ struct GeometryMinimumShreddingSize {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct HiveDirectoryPruningSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "hive_directory_pruning";
+	static constexpr const char *Description =
+	    "Whether or not directories whose hive partition keys cannot match a filter are skipped without being listed. "
+	    "Can be overridden per scan with the hive_directory_pruning named parameter.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct HomeDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "home_directory";

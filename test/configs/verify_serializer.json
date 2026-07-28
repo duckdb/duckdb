@@ -9,6 +9,18 @@
       "paths": [
         "test/extension/test_extensible_filter.test"
       ]
+    },
+    {
+      "reason": "Filtering out every file leaves an empty file list that cannot be re-bound after serialization",
+      "paths": [
+        "test/sql/copy/partitioned/hive_early_directory_pruning.test"
+      ]
+    },
+    {
+      "reason": "The pushdown is not re-applied after serialization, so no directory is pruned",
+      "paths": [
+        "test/sql/copy/partitioned/hive_early_directory_pruning_listings.test"
+      ]
     }
   ]
 }

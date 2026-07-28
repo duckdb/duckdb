@@ -112,6 +112,7 @@ public:
 		result->file_list = std::move(multi_file_list_p);
 		// auto-detect hive partitioning
 		result->file_options = std::move(file_options_p);
+		result->file_options.ResolveHiveDirectoryPruning(context);
 		result->bind_data = interface.InitializeBindData(*result, std::move(options_p));
 		result->interface = std::move(interface_p);
 
