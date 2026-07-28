@@ -151,7 +151,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalBlockSizeSetting),
     DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteBlockSizeSetting),
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
-    DUCKDB_SETTING(FeatureServeLegacyAsofSetting),
+    DUCKDB_SETTING(FeatureDisableOptimizationsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
     DUCKDB_SETTING(ForceColumnMetadataReuseSetting),

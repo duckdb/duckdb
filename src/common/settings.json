@@ -707,8 +707,8 @@
         ]
     },
     {
-        "name": "feature_serve_legacy_asof",
-        "description": "Force SERVE FEATURE to use the legacy ASOF join against the store instead of the version-table equi-join",
+        "name": "feature_disable_optimizations",
+        "description": "Disable every feature-store optimization to measure an unoptimized baseline: SERVE falls back to the legacy ASOF join instead of the version-table equi-join, the SERVE store scan is left unbounded, REFRESH GC stops pushing its zonemap row-group filter, and the REFRESH spine keeps its DISTINCT",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "false"

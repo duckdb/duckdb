@@ -52,9 +52,9 @@ SERVE FEATURE ooo FOR cards;
 ----
 C001	20.00
 
-# The legacy path agrees on all of it.
+# The unoptimized baseline (legacy ASOF fallback included) agrees on all of it.
 statement ok
-SET feature_serve_legacy_asof = true;
+SET feature_disable_optimizations = true;
 
 query TTR sort
 SERVE FEATURE ooo FOR ooo_requests ASOF asof_time;
@@ -68,7 +68,7 @@ SERVE FEATURE ooo FOR cards;
 C001	20.00
 
 statement ok
-RESET feature_serve_legacy_asof;
+RESET feature_disable_optimizations;
 
 # ============================================================
 # Two snapshots refreshed AT the same timestamp. DuckDB's ASOF join has no value-based tie-break, so this is

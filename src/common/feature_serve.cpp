@@ -89,13 +89,19 @@ static vector<FeatureVersionStamp> DedupVersionStampsByTimestamp(const vector<Fe
 	return result;
 }
 
-//! Whether this statement can use the version-table path. Requires the setting to allow it and every served
-//! feature to carry a retained version map -- a feature last refreshed before that map existed has an empty
-//! one and must fall back to the legacy ASOF path. The decision is per-statement, not per-feature, so one
+//! Whether the feature-store optimizations are switched off wholesale for an unoptimized baseline measurement.
+//! Benchmarking-only: every optimization it disables is result-preserving, so this changes timings, not answers.
+static bool OptimizationsDisabled(ClientContext &context) {
+	return Settings::Get<FeatureDisableOptimizationsSetting>(context);
+}
+
+//! Whether this statement can use the version-table path. Requires the optimizations to be enabled and every
+//! served feature to carry a retained version map -- a feature last refreshed before that map existed has an
+//! empty one and must fall back to the legacy ASOF path. The decision is per-statement, not per-feature, so one
 //! SERVE call never mixes the two plan shapes.
 //! This is also what guarantees the version list is non-empty everywhere downstream.
 static bool CanUseEquiJoinPath(ClientContext &context, const vector<ServeFeatureRequest> &features) {
-	if (Settings::Get<FeatureServeLegacyAsofSetting>(context)) {
+	if (OptimizationsDisabled(context)) {
 		return false;
 	}
 	for (auto &request : features) {
@@ -355,7 +361,13 @@ static unique_ptr<ParsedExpression> ReachableVersionBound(const string &aggregat
 //! harmless -- the upper bound still empties the scan) even in this degenerate case.
 static unique_ptr<TableRef> ServeStoreRef(const string &store_table, const string &feature_alias,
                                           const vector<FeatureVersionStamp> &stamps, const string &spine_table,
-                                          const string &spine_asof_column, bool latest_mode) {
+                                          const string &spine_asof_column, bool latest_mode,
+                                          bool disable_optimizations) {
+	if (disable_optimizations) {
+		// Baseline: scan the whole store and let the equi-join discard the unreachable versions.
+		return BaseTable(store_table, feature_alias);
+	}
+
 	auto version_alias = ServeVersionTableAlias(feature_alias) + "_bound";
 
 	int64_t oldest_version = stamps.front().version;
@@ -483,8 +495,10 @@ static void AddFeatureProjections(vector<unique_ptr<ParsedExpression>> &select_l
 //! Latest mode probes with +infinity (no upper bound prunes anything), so it reads the store table directly.
 static unique_ptr<TableRef> ServeStoreTableRef(const string &store_table, const string &feature_alias,
                                                const string &spine_table, const string &spine_asof_column,
-                                               bool latest_mode) {
-	if (latest_mode) {
+                                               bool latest_mode, bool disable_optimizations) {
+	// Latest mode probes with +infinity, so the bound prunes nothing anyway; the baseline switch drops it in
+	// time-travel mode too, leaving an unbounded store scan under the ASOF join.
+	if (latest_mode || disable_optimizations) {
 		return BaseTable(store_table, feature_alias);
 	}
 
@@ -515,7 +529,7 @@ static unique_ptr<TableRef> ServeStoreTableRef(const string &store_table, const 
 static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatalogEntry &feat,
                             const string &feature_alias, const vector<FeatureServeEntityMapping> &feature_mappings,
                             const string &spine_entity_override, const string &spine_ts, const string &spine_table,
-                            const string &spine_asof_column, bool latest_mode) {
+                            const string &spine_asof_column, bool latest_mode, bool disable_optimizations) {
 	// Serve from the denormalized store table via an ASOF join: every retained version is present, and the
 	// join resolves each spine row to the entity's latest snapshot at or before the spine's as-of time (in
 	// latest mode the as-of time is the +infinity probe, so this resolves to the entity's newest snapshot).
@@ -525,7 +539,8 @@ static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatal
 	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
 	join->type = JoinType::LEFT;
 	join->left = std::move(from_table);
-	join->right = ServeStoreTableRef(store_table, feature_alias, spine_table, spine_asof_column, latest_mode);
+	join->right =
+	    ServeStoreTableRef(store_table, feature_alias, spine_table, spine_asof_column, latest_mode, disable_optimizations);
 	join->condition = ServeJoinCondition(feature_alias, entity_mappings, spine_ts);
 	from_table = std::move(join);
 }
@@ -583,6 +598,8 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 	// One path serves both modes: spine_ts is the +infinity probe in latest mode and the user's as-of column
 	// otherwise, and the version-boundary join treats them identically.
 	bool use_equijoin = CanUseEquiJoinPath(context, features);
+	// Read once per statement so every feature in a multi-feature SERVE is planned the same way.
+	bool disable_optimizations = OptimizationsDisabled(context);
 
 	auto select = make_uniq<SelectNode>();
 	select->select_list.push_back(SpineStar(latest_mode));
@@ -605,12 +622,12 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 			join->type = JoinType::LEFT;
 			join->left = std::move(select->from_table);
 			join->right = ServeStoreRef(FeatureStoreTableName(feat.name), alias, stamps, spine_table, spine_asof_column,
-			                            latest_mode);
+			                            latest_mode, disable_optimizations);
 			join->condition = ServeEquiJoinCondition(alias, version_alias, entity_mappings);
 			select->from_table = std::move(join);
 		} else {
 			AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override, spine_ts,
-			                spine_table, spine_asof_column, latest_mode);
+			                spine_table, spine_asof_column, latest_mode, disable_optimizations);
 		}
 	}
 

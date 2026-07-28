@@ -1045,11 +1045,13 @@ struct ExternalThreadsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct FeatureServeLegacyAsofSetting {
+struct FeatureDisableOptimizationsSetting {
 	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "feature_serve_legacy_asof";
+	static constexpr const char *Name = "feature_disable_optimizations";
 	static constexpr const char *Description =
-	    "Force SERVE FEATURE to use the legacy ASOF join against the store instead of the version-table equi-join";
+	    "Disable every feature-store optimization to measure an unoptimized baseline: SERVE falls back to the legacy "
+	    "ASOF join instead of the version-table equi-join, the SERVE store scan is left unbounded, REFRESH GC stops "
+	    "pushing its zonemap row-group filter, and the REFRESH spine keeps its DISTINCT";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
