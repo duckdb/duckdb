@@ -42,9 +42,8 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 }
 
 static void duckdb_prepare_param_index_to_name_map_internal(PreparedStatementWrapper *wrapper) {
-	auto &named_param_map = wrapper->statement->named_param_map;
 	auto &cache = wrapper->param_index_to_name;
-	for (auto &kv : named_param_map) {
+	for (auto &kv : wrapper->statement->GetNamedParameterMap()) {
 		cache[kv.second] = kv.first.GetIdentifierName();
 	}
 }
@@ -121,7 +120,7 @@ idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement) {
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return 0;
 	}
-	return wrapper->statement->named_param_map.size();
+	return wrapper->param_index_to_name.size();
 }
 
 static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement prepared_statement, idx_t index) {
@@ -170,7 +169,8 @@ duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared
 
 	LogicalType param_type;
 
-	if (wrapper->statement->data->TryGetType(duckdb::Identifier(identifier), param_type)) {
+	auto data = wrapper->statement->TryGetData();
+	if (data && data->TryGetType(duckdb::Identifier(identifier), param_type)) {
 		return reinterpret_cast<duckdb_logical_type>(new LogicalType(param_type));
 	}
 	// The value_map is gone after executing the prepared statement
@@ -196,7 +196,11 @@ idx_t duckdb_prepared_statement_column_count(duckdb_prepared_statement prepared_
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return 0;
 	}
-	return wrapper->statement->ColumnCount();
+	auto data = wrapper->statement->TryGetData();
+	if (!data) {
+		return 0;
+	}
+	return data->types.size();
 }
 
 const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prepared_statement, idx_t col_idx) {
@@ -204,8 +208,11 @@ const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prep
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
 	}
-	auto &names = wrapper->statement->GetNames();
-
+	auto data = wrapper->statement->TryGetData();
+	if (!data) {
+		return nullptr;
+	}
+	auto &names = data->names;
 	if (col_idx >= names.size()) {
 		return nullptr;
 	}
@@ -218,7 +225,11 @@ duckdb_logical_type duckdb_prepared_statement_column_logical_type(duckdb_prepare
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
 	}
-	auto types = wrapper->statement->GetTypes();
+	auto data = wrapper->statement->TryGetData();
+	if (!data) {
+		return nullptr;
+	}
+	auto &types = data->types;
 	if (col_idx >= types.size()) {
 		return nullptr;
 	}
@@ -243,10 +254,10 @@ duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return DuckDBError;
 	}
-	if (param_idx <= 0 || param_idx > wrapper->statement->named_param_map.size()) {
+	if (param_idx <= 0 || param_idx > wrapper->param_index_to_name.size()) {
 		wrapper->error_data =
 		    duckdb::InvalidInputException("Can not bind to parameter number %d, statement only has %d parameter(s)",
-		                                  param_idx, wrapper->statement->named_param_map.size());
+		                                  param_idx, wrapper->param_index_to_name.size());
 		wrapper->success = false;
 		return DuckDBError;
 	}
@@ -265,9 +276,9 @@ duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_stat
 		return DuckDBError;
 	}
 	auto name = std::string(name_p);
-	for (auto &pair : wrapper->statement->named_param_map) {
-		if (pair.first == name) {
-			*param_idx_out = pair.second;
+	for (auto &pair : wrapper->param_index_to_name) {
+		if (StringUtil::CIEquals(pair.second, name)) {
+			*param_idx_out = pair.first;
 			return DuckDBSuccess;
 		}
 	}
@@ -462,8 +473,14 @@ duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement s
 		return DUCKDB_STATEMENT_TYPE_INVALID;
 	}
 	auto stmt = reinterpret_cast<PreparedStatementWrapper *>(statement);
-
-	return StatementTypeToC(stmt->statement->GetStatementType());
+	if (!stmt->statement) {
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
+	auto data = stmt->statement->TryGetData();
+	if (!data) {
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
+	return StatementTypeToC(data->statement_type);
 }
 
 template <class T>

@@ -7,7 +7,10 @@ namespace duckdb {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExecute &op) {
 	if (op.prepared->physical_plan) {
 		D_ASSERT(op.children.empty());
-		return Make<PhysicalExecute>(op.prepared->physical_plan->Root());
+		// keep the prepared statement data alive - it owns the plan we are referring to
+		auto &execute = Make<PhysicalExecute>(op.prepared->physical_plan->Root());
+		execute.Cast<PhysicalExecute>().prepared = op.prepared;
+		return execute;
 	}
 
 	D_ASSERT(op.children.size() == 1);
