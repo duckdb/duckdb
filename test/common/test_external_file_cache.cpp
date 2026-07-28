@@ -446,8 +446,8 @@ TEST_CASE("Entry evicted while referenced allows re-creation of the same path", 
 	}
 	REQUIRE(cache.GetCachedFileCount() == 1);
 
-	auto held_entry = object_cache.GetObject(db_instance.GetMemoryContextId(),
-	                                         StringUtil::Format("external_file_cache-%s", test_file.GetPath()));
+	auto &object_cache = ObjectCache::Get(db_instance);
+	auto held_entry = object_cache.GetObject(StringUtil::Format("external_file_cache-%s", test_file.GetPath()));
 	REQUIRE(held_entry);
 
 	EvictObjectCache(object_cache);

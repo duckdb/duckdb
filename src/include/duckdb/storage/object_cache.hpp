@@ -71,6 +71,10 @@ public:
 	ObjectCache(idx_t max_memory, BufferPool &buffer_pool_p) : lru_cache(max_memory), buffer_pool(buffer_pool_p) {
 	}
 
+private:
+	friend class BoundObjectCache;
+	friend class DatabaseInstance;
+
 	shared_ptr<ObjectCacheEntry> GetObject(MemoryContextId context_id, const string &key) {
 		const lock_guard<mutex> lock(lock_mutex);
 		auto cache_key = MakeCacheKey(context_id, key);
@@ -197,6 +201,7 @@ public:
 		Delete(context_id, MakeTypedCacheKey<T>(key));
 	}
 
+public:
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);
 	DUCKDB_API static BoundObjectCache Get(ClientContext &context);
 	DUCKDB_API static BoundObjectCache Get(DatabaseInstance &db);
@@ -246,9 +251,6 @@ private:
 
 class BoundObjectCache {
 public:
-	BoundObjectCache(ObjectCache &cache_p, MemoryContextId context_id_p) : cache(cache_p), context_id(context_id_p) {
-	}
-
 	shared_ptr<ObjectCacheEntry> GetObject(const string &key) {
 		return cache.GetObject(context_id, key);
 	}
@@ -313,6 +315,11 @@ public:
 	}
 
 private:
+	friend class ObjectCache;
+
+	BoundObjectCache(ObjectCache &cache_p, MemoryContextId context_id_p) : cache(cache_p), context_id(context_id_p) {
+	}
+
 	ObjectCache &cache;
 	MemoryContextId context_id;
 };
