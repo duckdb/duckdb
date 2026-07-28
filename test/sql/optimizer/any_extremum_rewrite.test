@@ -115,3 +115,28 @@ query I
 SELECT 1 <= ANY(SELECT y FROM t2 WHERE y IS NOT NULL)
 ----
 True
+
+# ---------------------------------------------------------
+# COLLATIONS
+# ---------------------------------------------------------
+query I
+SELECT 'b' COLLATE NOCASE > ANY(SELECT x FROM (VALUES ('Z'), ('a')) t(x));
+----
+true
+
+statement ok
+CREATE TABLE t_col(x VARCHAR);
+
+statement ok
+INSERT INTO t_col VALUES ('Z'), ('a');
+
+query I
+SELECT 'b' COLLATE NOCASE > ANY(SELECT x FROM t_col);
+----
+true
+
+query I
+SELECT 'A' COLLATE NOCASE > ANY(SELECT x FROM t_col);
+----
+false
+
