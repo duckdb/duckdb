@@ -1,16 +1,9 @@
-commit fb059307b24be15aa1d2379c14db6d169e9b0309
+commit 0300ad36c0c3d1290f61d6ef9f65a564a2045372
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Sun Jul 26 15:40:06 2026 -0700
 
     Adopt new object cache API
 
-diff --git a/duckdb b/duckdb
-index c97bd8b9..0cd9e829 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit c97bd8b96e0481b9e58d491f4fcd8599fccd65fb
-+Subproject commit 0cd9e82950be5affb1a7096943d1481c3320914c
 diff --git a/src/include/storage/ducklake_catalog.hpp b/src/include/storage/ducklake_catalog.hpp
 index 69478c4c..a160bf34 100644
 --- a/src/include/storage/ducklake_catalog.hpp
