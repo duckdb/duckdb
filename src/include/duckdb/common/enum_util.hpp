@@ -278,6 +278,8 @@ enum class InterruptMode : uint8_t;
 
 enum class JoinFilterPushdownMode : uint8_t;
 
+enum class JoinOrderOperatorType : uint8_t;
+
 enum class JoinRefType : uint8_t;
 
 enum class JoinType : uint8_t;
@@ -439,6 +441,8 @@ enum class RequestType : uint8_t;
 enum class ResultModifierType : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
+
+enum class RowIdHandling : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
@@ -959,6 +963,9 @@ template<>
 const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode value);
 
 template<>
+const char* EnumUtil::ToChars<JoinOrderOperatorType>(JoinOrderOperatorType value);
+
+template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
 
 template<>
@@ -1200,6 +1207,9 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
 
 template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
+
+template<>
+const char* EnumUtil::ToChars<RowIdHandling>(RowIdHandling value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
@@ -1794,6 +1804,9 @@ template<>
 JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value);
 
 template<>
+JoinOrderOperatorType EnumUtil::FromString<JoinOrderOperatorType>(const char *value);
+
+template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);
 
 template<>
@@ -2035,6 +2048,9 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
 
 template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
+
+template<>
+RowIdHandling EnumUtil::FromString<RowIdHandling>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);

@@ -418,7 +418,12 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-(alpha|rc)[0-9]+$")
+set(DUCKDB_BASE_VERSION_REGEX "^v[0-9]+[.][0-9]+[.][0-9]+")
+set(DUCKDB_PRERELEASE_VERSION_REGEX "${DUCKDB_BASE_VERSION_REGEX}-(alpha|rc)[0-9]+$")
+set(DUCKDB_RELEASE_VERSION_REGEX "${DUCKDB_BASE_VERSION_REGEX}$")
+set(DUCKDB_FULL_DESCRIBE_REGEX "${DUCKDB_BASE_VERSION_REGEX}(-(alpha|rc)[0-9]+)?-[0-9]+-g[a-f0-9]+$")
+
+if (OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_PRERELEASE_VERSION_REGEX}")
   if (DUCKDB_EXPLICIT_VERSION)
     if (DUCKDB_EXPLICIT_PLATFORM STREQUAL DUCKDB_EXPLICIT_PLATFORM)
       message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' and DUCKDB_EXPLICIT_PLATFORM '${DUCKDB_EXPLICIT_PLATFORM}' are both set and different")
@@ -428,60 +433,49 @@ if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-(alpha|rc)[0-9]+$")
 endif()
 
 if (OVERRIDE_GIT_DESCRIBE)
-  if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-(alpha|rc)[0-9]+$")
-    string(REGEX REPLACE "^(v[0-9]+\.[0-9]+\.[0-9]+)\-.*" "\\1" OVERRIDE_GIT_DESCRIBE_BASE "${OVERRIDE_GIT_DESCRIBE}")
-    find_package(Git)
-    if(Git_FOUND)
-      execute_process(
-            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE GIT_RESULT
-            OUTPUT_VARIABLE GIT_COMMIT_HASH
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
-        set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE_BASE}-0-g${GIT_COMMIT_HASH}")
-        if (GIT_RESULT)
-          message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
-          set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE_BASE}-0-g0123456789")
+  find_package(Git)
+  if (Git_FOUND AND NOT DEFINED GIT_COMMIT_HASH)
+    execute_process(
+          COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          RESULT_VARIABLE GIT_HASH_RESULT
+          OUTPUT_VARIABLE GIT_COMMIT_HASH
+          OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (GIT_HASH_RESULT)
+      unset(GIT_COMMIT_HASH)
+      message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
     endif()
-    else()
-      set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE_BASE}-0-g0123456789")
-    endif()
-  elseif (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+(\-(alpha|rc)[0-9]+)?\-[0-9]+\-g[a-f0-9]+$")
+  endif()
+
+  if (OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_FULL_DESCRIBE_REGEX}")
     set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}")
-  elseif(OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+$")
-    find_package(Git)
-    if(Git_FOUND)
-      execute_process(
-            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE GIT_RESULT
-            OUTPUT_VARIABLE GIT_COMMIT_HASH
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
-        set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g${GIT_COMMIT_HASH}")
-        if (GIT_RESULT)
-          message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
-          set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
-    endif()
-    else()
-      set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
-    endif()
   else()
-    message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or 'vX.Y.Z-alphaW-N-gGITHASH123', version only 'vX.Y.Z' or prerelease like 'vX.Y.Z-alphaW' or 'vX.Y.Z-rcW")
+    if (OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_PRERELEASE_VERSION_REGEX}")
+      string(REGEX REPLACE "^(${DUCKDB_BASE_VERSION_REGEX}).*" "\\1" OVERRIDE_GIT_DESCRIBE_BASE "${OVERRIDE_GIT_DESCRIBE}")
+    elseif(OVERRIDE_GIT_DESCRIBE MATCHES "${DUCKDB_RELEASE_VERSION_REGEX}")
+      set(OVERRIDE_GIT_DESCRIBE_BASE "${OVERRIDE_GIT_DESCRIBE}")
+    else()
+      message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or 'vX.Y.Z-alphaW-N-gGITHASH123', version only 'vX.Y.Z' or prerelease like 'vX.Y.Z-alphaW' or 'vX.Y.Z-rcW")
+    endif()
+    if (NOT DEFINED GIT_COMMIT_HASH)
+      set(GIT_COMMIT_HASH "0123456789")
+    endif()
+    set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE_BASE}-0-g${GIT_COMMIT_HASH}")
   endif()
 else()
   find_package(Git)
   if(Git_FOUND)
-     if (NOT DEFINED GIT_COMMIT_HASH)
-     execute_process(
+    if (NOT DEFINED GIT_COMMIT_HASH)
+      execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            RESULT_VARIABLE GIT_RESULT
+            RESULT_VARIABLE GIT_HASH_RESULT
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
-        if (GIT_RESULT)
-          message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH or OVERRIDE_GIT_DESCRIBE")
-          set(GIT_COMMIT_HASH "0123456789")
-    endif()
+      if (GIT_HASH_RESULT)
+        unset(GIT_COMMIT_HASH)
+        message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH or OVERRIDE_GIT_DESCRIBE")
+      endif()
     endif()
     execute_process(
           COMMAND ${GIT_EXECUTABLE} describe --tags --long --match "${VERSIONING_TAG_MATCH}"
@@ -495,11 +489,17 @@ else()
       else()
         message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
       endif()
+      if (NOT DEFINED GIT_COMMIT_HASH)
+        set(GIT_COMMIT_HASH "0123456789")
+      endif()
       set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
     endif()
   else()
     message(WARNING "Git NOT FOUND and EXTERNAL_GIT_DESCRIBE not provided, continuing with dummy version v0.0.1")
-    set(GIT_DESCRIBE "v0.0.1-0-g0123456789")
+    if (NOT DEFINED GIT_COMMIT_HASH)
+      set(GIT_COMMIT_HASH "0123456789")
+    endif()
+    set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
   endif()
 endif()
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/parser/query_error_context.hpp"
@@ -47,7 +48,7 @@ public:
 	}
 
 	template <typename... ARGS>
-	explicit BinderException(optional_idx error_location, const string &msg, ARGS &&...params)
+	explicit BinderException(QueryLocation error_location, const string &msg, ARGS &&...params)
 	    : BinderException(Exception::InitializeExtraInfo(error_location),
 	                      ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}

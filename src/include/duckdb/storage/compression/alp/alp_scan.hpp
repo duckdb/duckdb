@@ -11,6 +11,7 @@
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include "duckdb/storage/table/column_segment.hpp"
@@ -147,9 +148,10 @@ public:
 				const idx_t value_buffer_copy_size = sizeof(T) * vector_size;
 				if (vector_ptr + value_buffer_copy_size > segment_data + block_size) {
 					const auto bytes_remaining_in_block = (segment_data + block_size) - vector_ptr;
-					throw IOException("Corrupted ALP segment: stored vector_size is invalid, to-copy bytes (%d) "
-					                  "would exceed bytes remaining in the block (%d)",
-					                  value_buffer_copy_size, bytes_remaining_in_block);
+					throw DataCorruptionException(
+					    "Corrupted ALP segment: stored vector_size is invalid, to-copy bytes (%d) "
+					    "would exceed bytes remaining in the block (%d)",
+					    value_buffer_copy_size, bytes_remaining_in_block);
 				}
 				memcpy(value_buffer, vector_ptr, value_buffer_copy_size);
 			}
@@ -168,15 +170,16 @@ public:
 		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
 		if (vector_state.exceptions_count > vector_size) {
-			throw IOException("Corrupted ALP segment: exceptions_count (%d) exceeds vector_size (%d)",
-			                  vector_state.exceptions_count, vector_size);
+			throw DataCorruptionException("Corrupted ALP segment: exceptions_count (%d) exceeds vector_size (%d)",
+			                              vector_state.exceptions_count, vector_size);
 		}
 		if (vector_state.v_factor > vector_state.v_exponent) {
-			throw IOException("Corrupted ALP segment: v_factor (%d) exceeds v_exponent (%d)", vector_state.v_factor,
-			                  vector_state.v_exponent);
+			throw DataCorruptionException("Corrupted ALP segment: v_factor (%d) exceeds v_exponent (%d)",
+			                              vector_state.v_factor, vector_state.v_exponent);
 		}
 		if (vector_state.bit_width > sizeof(uint64_t) * 8) {
-			throw IOException("Corrupted ALP segment: Invalid bit_width encountered: %d", vector_state.bit_width);
+			throw DataCorruptionException("Corrupted ALP segment: Invalid bit_width encountered: %d",
+			                              vector_state.bit_width);
 		}
 
 		idx_t read_bytes = 0;
@@ -185,7 +188,7 @@ public:
 
 			const idx_t max_encoded = sizeof(vector_state.for_encoded);
 			if (bp_size > max_encoded || data_byte_offset + read_bytes + bp_size > block_size) {
-				throw IOException("Corrupted ALP segment: encoded payload too large");
+				throw DataCorruptionException("Corrupted ALP segment: encoded payload too large");
 			}
 			memcpy(vector_state.for_encoded, (void *)vector_ptr, bp_size);
 			vector_ptr += bp_size;
@@ -198,7 +201,7 @@ public:
 			const idx_t exceptions_copy_size = sizeof(EXACT_TYPE) * vector_state.exceptions_count;
 			if (exceptions_copy_size > max_exceptions_size ||
 			    data_byte_offset + read_bytes + exceptions_copy_size > block_size) {
-				throw IOException("Corrupted ALP segment: exceptions payload too large");
+				throw DataCorruptionException("Corrupted ALP segment: exceptions payload too large");
 			}
 			memcpy(vector_state.exceptions, (void *)vector_ptr, exceptions_copy_size);
 			vector_ptr += exceptions_copy_size;
@@ -210,7 +213,7 @@ public:
 			    AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count;
 			if (exceptions_positions_copy_size > max_exceptions_positions_size ||
 			    data_byte_offset + read_bytes + exceptions_positions_copy_size > block_size) {
-				throw IOException("Corrupted ALP segment: exceptions_positions payload too large");
+				throw DataCorruptionException("Corrupted ALP segment: exceptions_positions payload too large");
 			}
 			memcpy(vector_state.exceptions_positions, (void *)vector_ptr, exceptions_positions_copy_size);
 			vector_ptr += exceptions_positions_copy_size;

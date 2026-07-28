@@ -624,18 +624,22 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 namespace {
 
 struct RoundPrecisionFunctionData : public FunctionData {
-	explicit RoundPrecisionFunctionData(int32_t target_scale) : target_scale(target_scale) {
+	RoundPrecisionFunctionData(int32_t target_scale, uint8_t source_width, bool check_overflow)
+	    : target_scale(target_scale), source_width(source_width), check_overflow(check_overflow) {
 	}
 
 	int32_t target_scale;
+	uint8_t source_width;
+	bool check_overflow;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<RoundPrecisionFunctionData>(target_scale);
+		return make_uniq<RoundPrecisionFunctionData>(target_scale, source_width, check_overflow);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<RoundPrecisionFunctionData>();
-		return target_scale == other.target_scale;
+		return target_scale == other.target_scale && source_width == other.source_width &&
+		       check_overflow == other.check_overflow;
 	}
 };
 
@@ -644,7 +648,7 @@ void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vect
 	OP::template Operation<T, POWERS_OF_TEN>(input, state, result);
 }
 
-template <typename NEGOP, typename POSOP>
+template <typename NEGOP, typename POSOP, bool CAN_CARRY = false>
 unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -659,9 +663,20 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	uint8_t target_scale;
 	auto width = DecimalType::GetWidth(decimal_type);
 	auto scale = DecimalType::GetScale(decimal_type);
+	auto result_width = width;
+	auto argument_type = decimal_type;
+	bool check_overflow = false;
 	if (round_value < 0) {
 		target_scale = 0;
-		switch (decimal_type.InternalType()) {
+		if (CAN_CARRY && scale == 0 && round_value >= -int32_t(width)) {
+			if (result_width < Decimal::MAX_WIDTH_DECIMAL) {
+				result_width++;
+			} else {
+				check_overflow = true;
+			}
+		}
+		auto result_type = LogicalType::DECIMAL(result_width, target_scale);
+		switch (result_type.InternalType()) {
 		case PhysicalType::INT16:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int16_t, NumericHelper, NEGOP>);
 			break;
@@ -674,6 +689,9 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 		default:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, NEGOP>);
 			break;
+		}
+		if (result_type.InternalType() != decimal_type.InternalType()) {
+			argument_type = LogicalType::DECIMAL(result_width, scale);
 		}
 	} else {
 		if (round_value >= (int32_t)scale) {
@@ -698,9 +716,9 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 			}
 		}
 	}
-	bound_function.GetArguments()[0] = decimal_type;
-	bound_function.SetReturnType(LogicalType::DECIMAL(width, target_scale));
-	return make_uniq<RoundPrecisionFunctionData>(round_value);
+	bound_function.GetArguments()[0] = argument_type;
+	bound_function.SetReturnType(LogicalType::DECIMAL(result_width, target_scale));
+	return make_uniq<RoundPrecisionFunctionData>(round_value, width, check_overflow);
 }
 
 struct TruncOperatorPrecision {
@@ -971,8 +989,7 @@ struct DecimalRoundNegativePrecisionOperator {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<RoundPrecisionFunctionData>();
 		auto source_scale = DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType());
-		auto width = DecimalType::GetWidth(func_expr.GetChildren()[0]->GetReturnType());
-		if (info.target_scale <= -int32_t(width - source_scale)) {
+		if (info.target_scale < -int32_t(info.source_width - source_scale)) {
 			// scale too big for width
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			result.SetValue(0, Value::INTEGER(0));
@@ -989,7 +1006,14 @@ struct DecimalRoundNegativePrecisionOperator {
 			} else {
 				input += addition;
 			}
-			return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
+			auto rounded = UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
+			if constexpr (std::is_same_v<T, hugeint_t>) {
+				if (info.check_overflow && (rounded <= -Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL] ||
+				                            rounded >= Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL])) {
+					throw OutOfRangeException("Overflow in ROUND of DECIMAL(38)");
+				}
+			}
+			return rounded;
 		});
 	}
 };
@@ -1031,8 +1055,8 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			break;
 		case LogicalTypeId::DECIMAL:
 			bind_func = BindGenericRoundFunctionDecimal<RoundDecimalOperator>;
-			bind_prec_func =
-			    BindDecimalRoundPrecision<DecimalRoundNegativePrecisionOperator, DecimalRoundPositivePrecisionOperator>;
+			bind_prec_func = BindDecimalRoundPrecision<DecimalRoundNegativePrecisionOperator,
+			                                           DecimalRoundPositivePrecisionOperator, true>;
 			break;
 		case LogicalTypeId::TINYINT:
 			round_func = ScalarFunction::NopFunction;

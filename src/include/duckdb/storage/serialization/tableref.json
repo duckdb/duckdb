@@ -26,6 +26,16 @@
         "name": "query_location",
         "type": "optional_idx",
         "default": "optional_idx()"
+      },
+      {
+        "id": 104,
+        "name": "query_location_length",
+        "type": "uint32_t",
+        "property": "query_location.length",
+        "default": "0",
+        "version": "v2.0.0",
+        "equals_skip": true,
+        "hash_skip": true
       }
     ]
   },
@@ -100,7 +110,8 @@
       {
         "id": 204,
         "name": "ref_type",
-        "type": "JoinRefType"
+        "type": "JoinRefType",
+        "serialize_property": "SerializedRefType(serializer)"
       },
       {
         "id": 205,
@@ -123,6 +134,33 @@
         "type": "bool",
         "default": "true",
         "version": "v1.4.0"
+      },
+      {
+        "id": 209,
+        "name": "ranking_expression",
+        "type": "ParsedExpression*",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 210,
+        "name": "nearest_count",
+        "type": "idx_t",
+        "default": "1",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 211,
+        "name": "nearest_order_type",
+        "type": "OrderType",
+        "default": "OrderType::ASCENDING",
+        "version": "v2.0.0"
+      },
+      {
+        "id": 212,
+        "name": "nearest_approx",
+        "type": "bool",
+        "default": "false",
+        "version": "v2.0.0"
       }
     ]
   },

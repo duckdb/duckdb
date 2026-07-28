@@ -326,14 +326,17 @@ optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &schema_name, 
 optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
                                                  const Identifier &table_name, const Identifier &column_name,
                                                  ErrorData &error) {
-	optional_ptr<Binding> binding;
-	if (macro_binding && table_name == macro_binding->GetAlias()) {
-		binding = optional_ptr<Binding>(macro_binding.get());
-	} else {
-		BindingAlias alias(catalog_name, schema_name, table_name);
-		binding = bind_context.GetBinding(alias, column_name, error);
+	BindingAlias alias(catalog_name, schema_name, table_name);
+	return GetMatchingBinding(alias, column_name, error);
+}
+
+optional_ptr<Binding> Binder::GetMatchingBinding(const BindingAlias &alias, const Identifier &column_name,
+                                                 ErrorData &error) {
+	if (macro_binding && alias.GetSchemaPath().empty() && alias.GetCatalog().empty() &&
+	    alias.GetAlias() == macro_binding->GetAlias()) {
+		return optional_ptr<Binding>(macro_binding.get());
 	}
-	return binding;
+	return bind_context.GetBinding(alias, column_name, error);
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
@@ -391,8 +394,9 @@ void VerifyNotExcluded(const ParsedExpression &root_expr) {
 		    if (!column_ref.IsQualified()) {
 			    return;
 		    }
-		    auto &table_name = column_ref.GetTableName();
-		    if (table_name == "excluded") {
+		    // the table qualifier is the component directly before the column name
+		    auto &names = column_ref.ColumnNames();
+		    if (names[names.size() - 2] == "excluded") {
 			    throw NotImplementedException(
 			        "'excluded' qualified columns are not supported in the RETURNING clause yet");
 		    }

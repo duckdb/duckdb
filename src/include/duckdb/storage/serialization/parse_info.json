@@ -544,6 +544,16 @@
         "id": 209,
         "name": "is_format_auto_detected",
         "type": "bool"
+      },
+      {
+        "id": 210,
+        "name": "file_path_expression",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 211,
+        "name": "parsed_options",
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ],
     "methods": {

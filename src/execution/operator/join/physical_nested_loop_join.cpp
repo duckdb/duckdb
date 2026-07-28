@@ -73,7 +73,7 @@ void PhysicalJoin::ConstructAntiJoinResult(DataChunk &left, DataChunk &result, b
 }
 
 void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
-                                           bool has_null) {
+                                           bool has_null, optional_ptr<const bool> found_unknown) {
 	// for the initial set of columns we just reference the left side
 	result.SetChildCardinality(left.size());
 	for (idx_t i = 0; i < left.ColumnCount(); i++) {
@@ -85,7 +85,8 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
 	auto &mask = FlatVector::ValidityMutable(mark_vector);
-	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
+	mask.SetAllValid(left.size());
+	for (idx_t col_idx = 0; !found_unknown && col_idx < join_keys.ColumnCount(); col_idx++) {
 		auto entries = join_keys.data[col_idx].Validity();
 		if (!entries.CanHaveNull()) {
 			continue;
@@ -103,7 +104,13 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 		memset(bool_result, 0, sizeof(bool) * left.size());
 	}
 	// if the right side contains NULL values, the result of any FALSE becomes NULL
-	if (has_null) {
+	if (found_unknown) {
+		for (idx_t i = 0; i < left.size(); i++) {
+			if (!bool_result[i] && found_unknown.get()[i]) {
+				mask.SetInvalid(i);
+			}
+		}
+	} else if (has_null) {
 		for (idx_t i = 0; i < left.size(); i++) {
 			if (!bool_result[i]) {
 				mask.SetInvalid(i);
@@ -433,11 +440,16 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	state.lhs_executor.Execute(input, state.left_condition);
 
 	bool found_match[STANDARD_VECTOR_SIZE] = {false};
-	NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions);
+	bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
+	const bool track_unknown = join_type == JoinType::MARK && conditions.size() == 1 &&
+	                           conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE;
+	NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions,
+	                            track_unknown ? optional_ptr<bool>(found_unknown) : nullptr);
 	switch (join_type) {
 	case JoinType::MARK:
 		// now construct the mark join result from the found matches
-		PhysicalJoin::ConstructMarkJoinResult(state.left_condition, input, chunk, found_match, gstate.has_null);
+		PhysicalJoin::ConstructMarkJoinResult(state.left_condition, input, chunk, found_match, gstate.has_null,
+		                                      track_unknown ? optional_ptr<const bool>(found_unknown) : nullptr);
 		break;
 	case JoinType::SEMI:
 		// construct the semi join result from the found matches

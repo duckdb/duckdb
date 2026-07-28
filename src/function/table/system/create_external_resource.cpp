@@ -60,17 +60,13 @@ static bool MapTryGet(const Value &map_value, const string &key, string &out) {
 	return false;
 }
 
-//! The recipe's handle/result columns are part of the connect contract: they must be MAPs. Validate and
-//! normalize to MAP(VARCHAR, VARCHAR), so a recipe that returns something else (e.g. a scalar) gets a clear
-//! error instead of crashing when the value is later read or emitted.
-static Value RequireResourceMap(const Value &value, const string &function_name, const string &column) {
+Value RequireResourceMap(const Value &value, const string &function_name, const string &column) {
 	if (value.IsNull()) {
 		return value;
 	}
 	if (value.type().id() != LogicalTypeId::MAP) {
-		throw InvalidInputException(
-		    "create_external_resource: function \"%s\" must return a MAP in its '%s' column, got %s", function_name,
-		    column, value.type().ToString());
+		throw InvalidInputException("external resource callback \"%s\" must return a MAP in its '%s' column, got %s",
+		                            function_name, column, value.type().ToString());
 	}
 	return value.DefaultCastAs(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
 }

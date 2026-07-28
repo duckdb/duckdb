@@ -25,7 +25,7 @@ public:
 	//! Return a reference to the client context (from the optimizer)
 	ClientContext &GetContext();
 
-	void CheckMarkToSemi(LogicalOperator &op, unordered_set<TableIndex> &table_bindings);
+	void CheckMarkToSemi(LogicalOperator &op, const unordered_set<TableIndex> &table_bindings);
 
 	struct Filter {
 		unordered_set<TableIndex> bindings;
