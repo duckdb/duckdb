@@ -31,7 +31,6 @@ DictFSSTCompressionState::~DictFSSTCompressionState() {
 	}
 }
 
-static constexpr uint16_t FSST_SYMBOL_TABLE_SIZE = sizeof(duckdb_fsst_decoder_t);
 static constexpr idx_t DICTIONARY_ENCODE_THRESHOLD = 4096;
 
 static inline bool IsEncoded(DictionaryAppendState state) {
@@ -54,6 +53,9 @@ static DictFSSTMode ConvertToMode(DictionaryAppendState &state) {
 
 idx_t DictFSSTCompressionState::Finalize() {
 	const bool is_fsst_encoded = IsEncoded(append_state);
+	if (is_fsst_encoded) {
+		D_ASSERT(analyze->disable_fsst == false);
+	}
 
 // calculate sizes
 #ifdef DEBUG
@@ -240,7 +242,8 @@ void DictFSSTCompressionState::FlushEncodingBuffer() {
 void DictFSSTCompressionState::CreateEmptySegment() {
 	CreateAndPinNewSegment();
 
-	append_state = DictionaryAppendState::REGULAR;
+	// If analysis determined that FSST cannot be used, skip the decision phase.
+	append_state = analyze->disable_fsst ? DictionaryAppendState::NOT_ENCODED : DictionaryAppendState::REGULAR;
 	string_lengths_width = 0;
 	real_string_lengths_width = 0;
 	dictionary_indices_width = 0;
@@ -329,7 +332,7 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 
 	idx_t available_space = state.info.GetBlockSize();
 	if (APPEND_STATE == DictionaryAppendState::REGULAR) {
-		available_space -= FSST_SYMBOL_TABLE_SIZE;
+		available_space -= DictFSSTCompression::FSST_SYMBOL_TABLE_SIZE;
 	}
 	if (required_space > available_space) {
 		if (fail_on_no_space) {
@@ -412,7 +415,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 
 	idx_t available_space = state.info.GetBlockSize();
 	if (APPEND_STATE == DictionaryAppendState::REGULAR) {
-		available_space -= FSST_SYMBOL_TABLE_SIZE;
+		available_space -= DictFSSTCompression::FSST_SYMBOL_TABLE_SIZE;
 	}
 	if (required_space > available_space) {
 		if (fail_on_no_space) {
