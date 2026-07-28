@@ -503,7 +503,8 @@ jobs:
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
-        LTO: thin
+        LTO: full
+        LTO_JOBS: 4
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
@@ -672,7 +673,8 @@ jobs:
         -e GEN=ninja                                                           \
         -e CC='ccache gcc'                                                     \
         -e CXX='ccache g++'                                                    \
-        -e LTO=thin                                                            \
+        -e LTO=full                                                            \
+        -e LTO_JOBS=4                                                          \
         -e CCACHE_DIR="$PWD/.ccache"                                           \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
