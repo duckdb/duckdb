@@ -509,7 +509,8 @@ jobs:
         EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/linux_release_extensions.cmake'
         ENABLE_EXTENSION_AUTOLOADING: 1
         ENABLE_EXTENSION_AUTOINSTALL: 1
-        LTO: thin
+        LTO: full
+        LTO_JOBS: 4
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
         FORCE_WARN_UNUSED: 1
@@ -698,7 +699,8 @@ jobs:
     - name: Build
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
-        LTO: thin
+        LTO: full
+        LTO_JOBS: 4
         EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
         ENABLE_EXTENSION_AUTOLOADING: 1
         ENABLE_EXTENSION_AUTOINSTALL: 1
