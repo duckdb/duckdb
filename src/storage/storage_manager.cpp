@@ -184,6 +184,15 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 	return context.db->GetObjectCache();
 }
 
+BoundObjectCache ObjectCache::Get(ClientContext &context) {
+	auto &db = DatabaseInstance::GetDatabase(context);
+	return Get(db);
+}
+
+BoundObjectCache ObjectCache::Get(DatabaseInstance &db) {
+	return BoundObjectCache(db.GetObjectCache(), db.GetMemoryContextId());
+}
+
 idx_t StorageManager::GetWALSize() {
 	return wal_size;
 }

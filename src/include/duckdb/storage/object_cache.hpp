@@ -20,6 +20,8 @@
 
 namespace duckdb {
 class ClientContext;
+class DatabaseInstance;
+class BoundObjectCache;
 
 struct BufferPoolPayload {
 	explicit BufferPoolPayload(unique_ptr<TempBufferPoolReservation> &&res) : reservation(std::move(res)) {
@@ -89,7 +91,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(MemoryContextId context_id, const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreate(MemoryContextId context_id, const string &key, ARGS &&...args) {
 		const lock_guard<mutex> lock(lock_mutex);
 		auto cache_key = MakeCacheKey(context_id, key);
 
@@ -180,7 +182,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(MemoryContextId context_id, const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreateWithTypePrefix(MemoryContextId context_id, const string &key, ARGS &&...args) {
 		return GetOrCreate<T>(context_id, MakeTypedCacheKey<T>(key), std::forward<ARGS>(args)...);
 	}
 
@@ -196,6 +198,8 @@ public:
 	}
 
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);
+	DUCKDB_API static BoundObjectCache Get(ClientContext &context);
+	DUCKDB_API static BoundObjectCache Get(DatabaseInstance &db);
 
 	idx_t GetMaxMemory() const {
 		const lock_guard<mutex> lock(lock_mutex);
@@ -233,12 +237,84 @@ private:
 private:
 	mutable mutex lock_mutex;
 	//! LRU cache for evictable entries
-
 	SharedLruCache<string, ObjectCacheEntry, duckdb::BufferPoolPayload> lru_cache;
 	//! Separate storage for non-evictable entries (i.e., encryption keys)
 	unordered_map<string, shared_ptr<ObjectCacheEntry>> non_evictable_entries;
 	//! Used to create buffer pool reservation on entries creation.
 	BufferPool &buffer_pool;
+};
+
+class BoundObjectCache {
+public:
+	BoundObjectCache(ObjectCache &cache_p, MemoryContextId context_id_p) : cache(cache_p), context_id(context_id_p) {
+	}
+
+	shared_ptr<ObjectCacheEntry> GetObject(const string &key) {
+		return cache.GetObject(context_id, key);
+	}
+
+	template <class T>
+	shared_ptr<T> Get(const string &key) {
+		return cache.Get<T>(context_id, key);
+	}
+
+	template <class T, class... ARGS>
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
+		return cache.GetOrCreate<T>(context_id, key, std::forward<ARGS>(args)...);
+	}
+
+	void Put(const string &key, shared_ptr<ObjectCacheEntry> value) {
+		cache.Put(context_id, key, std::move(value));
+	}
+
+	void Delete(const string &key) {
+		cache.Delete(context_id, key);
+	}
+
+	template <class T>
+	shared_ptr<T> GetWithTypePrefix(const string &key) {
+		return cache.GetWithTypePrefix<T>(context_id, key);
+	}
+
+	template <class T, class... ARGS>
+	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&...args) {
+		return cache.GetOrCreateWithTypePrefix<T>(context_id, key, std::forward<ARGS>(args)...);
+	}
+
+	template <class T>
+	void PutWithTypePrefix(const string &key,
+	                       shared_ptr<ObjectCacheEntry> value) { // NOLINT(performance-unnecessary-value-param)
+		cache.PutWithTypePrefix<T>(context_id, key, std::move(value));
+	}
+
+	template <class T>
+	void DeleteWithTypePrefix(const string &key) {
+		cache.DeleteWithTypePrefix<T>(context_id, key);
+	}
+
+	idx_t GetMaxMemory() const {
+		return cache.GetMaxMemory();
+	}
+
+	idx_t GetCurrentMemory() const {
+		return cache.GetCurrentMemory();
+	}
+
+	size_t GetEntryCount() const {
+		return cache.GetEntryCount();
+	}
+
+	bool IsEmpty() const {
+		return cache.IsEmpty();
+	}
+
+	idx_t EvictToReduceMemory(idx_t target_bytes) {
+		return cache.EvictToReduceMemory(target_bytes);
+	}
+
+private:
+	ObjectCache &cache;
+	MemoryContextId context_id;
 };
 
 } // namespace duckdb

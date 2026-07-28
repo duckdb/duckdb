@@ -51,7 +51,6 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -1273,14 +1272,12 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 			                        encryption_util, footer_size);
 		} else {
-			auto memory_context_id = DatabaseInstance::GetDatabase(context_p).GetMemoryContextId();
-			metadata = ObjectCache::GetObjectCache(context_p).GetWithTypePrefix<ParquetFileMetadataCache>(
-			    memory_context_id, file.path);
+			auto cache = ObjectCache::Get(context_p);
+			metadata = cache.GetWithTypePrefix<ParquetFileMetadataCache>(file.path);
 			if (!metadata || !metadata->IsValid(*file_handle)) {
 				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 				                        encryption_util, footer_size);
-				ObjectCache::GetObjectCache(context_p).PutWithTypePrefix<ParquetFileMetadataCache>(memory_context_id,
-				                                                                                   file.path, metadata);
+				cache.PutWithTypePrefix<ParquetFileMetadataCache>(file.path, metadata);
 			}
 		}
 	} else {
@@ -1309,8 +1306,7 @@ bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
 
 shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(ClientContext &context,
                                                                           const OpenFileInfo &file) {
-	return ObjectCache::GetObjectCache(context).GetWithTypePrefix<ParquetFileMetadataCache>(
-	    DatabaseInstance::GetDatabase(context).GetMemoryContextId(), file.path);
+	return ObjectCache::Get(context).GetWithTypePrefix<ParquetFileMetadataCache>(file.path);
 }
 
 ParquetUnionData::~ParquetUnionData() {

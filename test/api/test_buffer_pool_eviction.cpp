@@ -54,8 +54,7 @@ TEST_CASE("Test buffer pool eviction: pages before object cache", "[storage][buf
 	auto &context = *con.context;
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
-	auto &cache = ObjectCache::GetObjectCache(context);
-	auto memory_context_id = DatabaseInstance::GetDatabase(context).GetMemoryContextId();
+	auto cache = ObjectCache::Get(context);
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
 	// Set a memory limit that will force eviction
@@ -71,8 +70,7 @@ TEST_CASE("Test buffer pool eviction: pages before object cache", "[storage][buf
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_objects; ++idx) {
-		cache.Put(memory_context_id, StringUtil::Format("obj%llu", idx),
-		          make_shared_ptr<EvictableTestObject>(idx, obj_size));
+		cache.Put(StringUtil::Format("obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
 	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_objects_memory == initial_memory + num_objects * obj_size);
@@ -90,7 +88,7 @@ TEST_CASE("Test buffer pool eviction: pages before object cache", "[storage][buf
 	// Verify all object cache entries are still present, since pages are evicted first
 	REQUIRE(cache.GetEntryCount() == num_objects);
 	for (idx_t idx = 0; idx < num_objects; ++idx) {
-		auto obj = cache.GetObject(memory_context_id, StringUtil::Format("obj%llu", idx));
+		auto obj = cache.GetObject(StringUtil::Format("obj%llu", idx));
 		REQUIRE(obj != nullptr);
 	}
 
@@ -105,8 +103,7 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 	auto &context = *con.context;
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
-	auto &cache = ObjectCache::GetObjectCache(context);
-	auto memory_context_id = DatabaseInstance::GetDatabase(context).GetMemoryContextId();
+	auto cache = ObjectCache::Get(context);
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
 	// Set a memory limit that will force eviction
@@ -123,8 +120,7 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_objects; ++idx) {
-		cache.Put(memory_context_id, StringUtil::Format("obj%llu", idx),
-		          make_shared_ptr<EvictableTestObject>(idx, obj_size));
+		cache.Put(StringUtil::Format("obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
 	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_objects_memory == initial_memory + num_objects * obj_size);
@@ -142,7 +138,7 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 	// Check object cache entries are partially evicted.
 	vector<idx_t> evicted_entries;
 	for (idx_t idx = 0; idx < num_objects; ++idx) {
-		auto obj = cache.GetObject(memory_context_id, StringUtil::Format("obj%llu", idx));
+		auto obj = cache.GetObject(StringUtil::Format("obj%llu", idx));
 		if (obj == nullptr) {
 			evicted_entries.emplace_back(idx);
 		}
@@ -161,8 +157,7 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 	auto &context = *con.context;
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
-	auto &cache = ObjectCache::GetObjectCache(context);
-	auto memory_context_id = DatabaseInstance::GetDatabase(context).GetMemoryContextId();
+	auto cache = ObjectCache::Get(context);
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
 	// Set a memory limit that will force eviction
@@ -181,12 +176,10 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
-		cache.Put(memory_context_id, StringUtil::Format("non-evictable-obj%llu", idx),
-		          make_shared_ptr<NonEvictableObject>(idx));
+		cache.Put(StringUtil::Format("non-evictable-obj%llu", idx), make_shared_ptr<NonEvictableObject>(idx));
 	}
 	for (idx_t idx = 0; idx < num_evictable_objects; ++idx) {
-		cache.Put(memory_context_id, StringUtil::Format("evictable-obj%llu", idx),
-		          make_shared_ptr<EvictableTestObject>(idx, obj_size));
+		cache.Put(StringUtil::Format("evictable-obj%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
 	REQUIRE(cache.GetEntryCount() == num_objects);
 
@@ -202,7 +195,7 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 	// Check evictable object cache entries are partially evicted.
 	vector<idx_t> evicted_entries;
 	for (idx_t idx = 0; idx < num_evictable_objects; ++idx) {
-		auto obj = cache.GetObject(memory_context_id, StringUtil::Format("evictable-obj%llu", idx));
+		auto obj = cache.GetObject(StringUtil::Format("evictable-obj%llu", idx));
 		if (obj == nullptr) {
 			evicted_entries.emplace_back(idx);
 		}
@@ -212,7 +205,7 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 
 	// Check non-evictable object cache entries are still there.
 	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
-		auto obj = cache.GetObject(memory_context_id, StringUtil::Format("non-evictable-obj%llu", idx));
+		auto obj = cache.GetObject(StringUtil::Format("non-evictable-obj%llu", idx));
 		REQUIRE(obj != nullptr);
 	}
 
@@ -228,8 +221,7 @@ TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and
 	auto &context = *con.context;
 	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
-	auto &cache = ObjectCache::GetObjectCache(context);
-	auto memory_context_id = DatabaseInstance::GetDatabase(context).GetMemoryContextId();
+	auto cache = ObjectCache::Get(context);
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
 	// Set a memory limit that will force eviction
@@ -244,8 +236,7 @@ TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and
 
 	// Add object cache entries first
 	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
-		cache.Put(memory_context_id, StringUtil::Format("non-evictable-obj%llu", idx),
-		          make_shared_ptr<NonEvictableObject>(idx));
+		cache.Put(StringUtil::Format("non-evictable-obj%llu", idx), make_shared_ptr<NonEvictableObject>(idx));
 	}
 	const idx_t after_objects_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_objects_memory == initial_memory);
@@ -265,7 +256,7 @@ TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and
 
 	// Check non-evictable entries are still there untouched, and overall memory usage is equal to memory limit.
 	for (idx_t idx = 0; idx < num_non_evictable_objects; ++idx) {
-		auto obj = cache.GetObject(memory_context_id, StringUtil::Format("non-evictable-obj%llu", idx));
+		auto obj = cache.GetObject(StringUtil::Format("non-evictable-obj%llu", idx));
 		REQUIRE(obj != nullptr);
 	}
 	const auto final_memory_usage = buffer_manager.GetUsedMemory();

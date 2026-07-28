@@ -34,19 +34,19 @@ private:
 };
 
 void EnsureDebugFileSystemInstalled(DatabaseInstance &db) {
-	auto &cache = db.GetObjectCache();
-	if (cache.GetWithTypePrefix<DebugFileSystemCacheEntry>(db.GetMemoryContextId(), "instance")) {
+	auto cache = ObjectCache::Get(db);
+	if (cache.GetWithTypePrefix<DebugFileSystemCacheEntry>("instance")) {
 		return;
 	}
 	auto &config = DBConfig::GetConfig(db);
 	config.file_system = make_uniq<DebugFileSystem>(std::move(config.file_system), db);
 	auto &debug_fs = static_cast<DebugFileSystem &>(*config.file_system);
-	cache.PutWithTypePrefix<DebugFileSystemCacheEntry>(db.GetMemoryContextId(), "instance",
+	cache.PutWithTypePrefix<DebugFileSystemCacheEntry>("instance",
 	                                                   make_shared_ptr<DebugFileSystemCacheEntry>(debug_fs));
 }
 
 DebugFileSystem &GetDebugFileSystemOrThrow(DatabaseInstance &db) {
-	auto entry = db.GetObjectCache().GetWithTypePrefix<DebugFileSystemCacheEntry>(db.GetMemoryContextId(), "instance");
+	auto entry = ObjectCache::Get(db).GetWithTypePrefix<DebugFileSystemCacheEntry>("instance");
 	if (!entry) {
 		throw InternalException("DebugFileSystem is not installed");
 	}

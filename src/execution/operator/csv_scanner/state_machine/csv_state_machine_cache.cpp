@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -496,9 +495,8 @@ const StateMachine &CSVStateMachineCache::Get(const CSVStateMachineOptions &stat
 }
 
 CSVStateMachineCache &CSVStateMachineCache::Get(ClientContext &context) {
-	auto &cache = ObjectCache::GetObjectCache(context);
-	return *cache.GetOrCreate<CSVStateMachineCache>(DatabaseInstance::GetDatabase(context).GetMemoryContextId(),
-	                                                CSVStateMachineCache::ObjectType());
+	auto cache = ObjectCache::Get(context);
+	return *cache.GetOrCreate<CSVStateMachineCache>(CSVStateMachineCache::ObjectType());
 }
 
 } // namespace duckdb

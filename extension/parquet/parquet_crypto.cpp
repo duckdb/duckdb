@@ -18,7 +18,6 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/function.hpp"
@@ -37,9 +36,8 @@ using duckdb_parquet::ColumnChunk;
 namespace duckdb {
 
 ParquetKeys &ParquetKeys::Get(ClientContext &context) {
-	auto &cache = ObjectCache::GetObjectCache(context);
-	return *cache.GetOrCreate<ParquetKeys>(DatabaseInstance::GetDatabase(context).GetMemoryContextId(),
-	                                       ParquetKeys::ObjectType());
+	auto cache = ObjectCache::Get(context);
+	return *cache.GetOrCreate<ParquetKeys>(ParquetKeys::ObjectType());
 }
 
 void ParquetKeys::AddKey(const string &key_name, const string &key) {
