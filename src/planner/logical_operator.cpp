@@ -97,6 +97,7 @@ bool LogicalOperator::HasSideEffects() const {
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return true;
 	default:
 		break;

@@ -58,8 +58,7 @@ public:
 	void ResolveOperatorTypes();
 
 	//! Returns true if this operator or any of its descendants has side effects
-	//! (INSERT, UPDATE, DELETE, MERGE INTO). Used to prevent inlining or
-	//! elimination of DML CTEs.
+	//! Used to prevent inlining or elimination of side-effecting CTEs.
 	bool HasSideEffects() const;
 
 	virtual string GetName() const;

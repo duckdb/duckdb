@@ -53,6 +53,7 @@ class UpdateSetInfo;
 class LogicalProjection;
 class LogicalGet;
 class LogicalUpdate;
+class CopyQueryNode;
 class LogicalVacuum;
 
 class ColumnList;
@@ -524,6 +525,7 @@ private:
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);
+	BoundStatement BindNode(CopyQueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
