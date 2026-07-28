@@ -165,6 +165,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 static SchemaCatalogEntry &GetCreateSchema(Catalog &catalog, CatalogTransaction transaction, CreateInfo &info) {
 	auto &qname = info.GetQualifiedName();
 	auto &path = qname.Path();
+	// Path is [catalog, schema_path..., name]
 	if (path.size() > 3) {
 		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
 		return *catalog.GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
