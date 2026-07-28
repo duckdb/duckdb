@@ -330,6 +330,23 @@ SELECT json_set('{"a":1}', '$not_a_path', '2')
 ----
 JSON path error
 
+# Constant modification path errors remain catchable by TRY
+query T
+SELECT TRY(json_set('{}', '$not_a_path', '1'))
+----
+NULL
+
+query T
+SELECT TRY(json_set('{"a":1}', '$.a[*]', '1'))
+----
+NULL
+
+# Unreachable modification calls must not fail before execution either
+query T
+SELECT CASE WHEN false THEN json_set('{}', '$not_a_path', '1') ELSE '{}'::JSON END
+----
+{}
+
 # Wildcards are not supported in modification functions
 statement error
 SELECT json_set('{"a":[1,2]}', '$.a[*]', '9')

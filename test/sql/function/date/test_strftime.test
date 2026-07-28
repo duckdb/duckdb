@@ -129,7 +129,7 @@ endloop
 statement error
 SELECT strftime(d, d::VARCHAR) FROM dates ORDER BY d;
 ----
-<REGEX>:.*Invalid Input Error.*must be a constant.*
+<REGEX>:.*Binder Error.*must be a constant.*
 
 # unterminated escape
 statement error

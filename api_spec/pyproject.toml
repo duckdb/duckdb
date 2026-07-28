@@ -1,0 +1,9 @@
+[project]
+name = "duckdb-api-spec"
+version = "0.1.0"
+description = "Environment for generating and formatting the DuckDB C API headers"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+generate = ["capigen==0.5.0", "black==24.*", "clang_format==11.0.1", "cmake-format"]

@@ -98,6 +98,32 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	}
 }
 
+//! Reconstruct the source location from an error's extra info (prefers "location" so the length is kept)
+static QueryLocation ExtractLocation(const unordered_map<string, string> &info) {
+	auto pos_entry = info.find("position");
+	if (pos_entry == info.end()) {
+		return QueryLocation();
+	}
+	uint64_t start;
+	if (!TryCast::Operation<string_t, uint64_t>(string_t(pos_entry->second), start)) {
+		return QueryLocation();
+	}
+	uint64_t length = 0;
+	auto location_entry = info.find("location");
+	if (location_entry != info.end()) {
+		// value is formatted as "[start,length]"
+		auto comma = location_entry->second.find(',');
+		if (comma != string::npos) {
+			auto len_str = location_entry->second.substr(comma + 1);
+			if (!len_str.empty() && len_str.back() == ']') {
+				len_str.pop_back();
+			}
+			TryCast::Operation<string_t, uint64_t>(string_t(len_str), length);
+		}
+	}
+	return QueryLocation(start, length);
+}
+
 static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	auto &current_info = current.ExtraInfo();
 	auto &new_info = new_error.ExtraInfo();
@@ -159,17 +185,12 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	}
 	// get a new top-n
 	auto top_candidates = StringUtil::TopNStrings(scores);
-	// get query location
-	QueryErrorContext context;
-	current_entry = current_info.find("position");
-	new_entry = new_info.find("position");
-	uint64_t position;
-	if (current_entry != current_info.end() &&
-	    TryCast::Operation<string_t, uint64_t>(current_entry->second, position)) {
-		context = QueryErrorContext(position);
-	} else if (new_entry != new_info.end() && TryCast::Operation<string_t, uint64_t>(new_entry->second, position)) {
-		context = QueryErrorContext(position);
+	// get query location (prefer the current error's location, fall back to the new error's)
+	auto location = ExtractLocation(current_info);
+	if (!location.IsValid()) {
+		location = ExtractLocation(new_info);
 	}
+	QueryErrorContext context(location);
 	// generate a new (combined) error
 	current = BinderException::ColumnNotFound(Identifier(column_name), StringsToIdentifiers(top_candidates), context);
 	return true;

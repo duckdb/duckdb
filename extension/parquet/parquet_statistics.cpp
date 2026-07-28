@@ -15,14 +15,17 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "reader/uuid_column_reader.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -673,12 +676,58 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	return row_group_stats;
 }
 
+// Optional filters store the expression used for pruning in their bind data.
+static optional_ptr<const Expression> GetOptionalFilterChild(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	auto &func = expr.Cast<BoundFunctionExpression>();
+	if (!func.BindInfo()) {
+		return nullptr;
+	}
+	if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+		return func.BindInfo()->Cast<OptionalFilterFunctionData>().child_filter_expr.get();
+	}
+	if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+		return func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>().child_filter_expr.get();
+	}
+	return nullptr;
+}
+
+// Bloom filters can only probe IN lists over this column and constants of the same type.
+static optional_ptr<const BoundOperatorExpression> GetBloomFilterInExpression(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
+	    expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return nullptr;
+	}
+	auto &in_expr = expr.Cast<BoundOperatorExpression>();
+	auto &children = in_expr.GetChildren();
+	if (children.size() <= 1 || children[0]->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+		return nullptr;
+	}
+	auto &column = children[0]->Cast<BoundReferenceExpression>();
+	if (column.Index() != 0) {
+		return nullptr;
+	}
+	for (idx_t child_idx = 1; child_idx < children.size(); ++child_idx) {
+		if (children[child_idx]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+			return nullptr;
+		}
+		auto &constant = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
+		if (constant.IsNull() || column.GetReturnType() != constant.type()) {
+			return nullptr;
+		}
+	}
+	return in_expr;
+}
+
 static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const Expression &expr) {
 	if (!BoundComparisonExpression::IsComparison(expr)) {
 		return nullptr;
 	}
 	auto &comp = expr.Cast<BoundFunctionExpression>();
-	if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+	if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+	    comp.GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		return nullptr;
 	}
 	auto &left = BoundComparisonExpression::Left(comp);
@@ -707,6 +756,13 @@ static bool HasFilterConstants(const Expression &expr) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
 		return GetBloomFilterConstant(expr) != nullptr;
 	}
+	if (GetBloomFilterInExpression(expr)) {
+		return true;
+	}
+	auto optional_filter_child = GetOptionalFilterChild(expr);
+	if (optional_filter_child) {
+		return HasFilterConstants(*optional_filter_child);
+	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
 	}
@@ -726,7 +782,12 @@ static bool HasFilterConstants(const TableFilter &duckdb_filter) {
 
 template <class T>
 static uint64_t ValueXH64FixedWidth(const Value &constant) {
-	T val = constant.GetValue<T>();
+	T val;
+	if (constant.type().id() == LogicalTypeId::DECIMAL) {
+		val = Hugeint::Cast<T>(IntegralValue::Get(constant));
+	} else {
+		val = constant.GetValue<T>();
+	}
 	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
 }
 
@@ -819,6 +880,16 @@ static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnS
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return TryHashTimestamp(constant, schema);
+	case LogicalTypeId::DECIMAL:
+		if (schema.parquet_type == duckdb_parquet::Type::INT32) {
+			return ValueXH64FixedWidth<int32_t>(constant);
+		} else if (schema.parquet_type == duckdb_parquet::Type::INT64) {
+			return ValueXH64FixedWidth<int64_t>(constant);
+		}
+		// We do not support bloom filter hashing for FLBA/BYTE_ARRAY decimals yet.
+		// Returning nullopt safely disables pruning for this column without throwing an error,
+		// which is necessary for reading Parquet files generated by other systems.
+		return nullopt;
 	default:
 		break;
 	}
@@ -840,6 +911,10 @@ static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnS
 		return ValueXH64FixedWidth<uint64_t>(constant);
 	case PhysicalType::INT64:
 		return ValueXH64FixedWidth<int64_t>(constant);
+	case PhysicalType::INT128:
+		// We do not support bloom filter hashing for hugeints/large decimals yet.
+		// Returning nullopt safely disables pruning. Throwing an exception would crash valid reads.
+		return nullopt;
 	case PhysicalType::FLOAT:
 		return ValueXH64FixedWidth<float>(constant);
 	case PhysicalType::DOUBLE:
@@ -853,6 +928,41 @@ static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnS
 	}
 }
 
+static bool BloomFilterExcludes(const Value &constant, ParquetBloomFilter &bloom_filter,
+                                const ParquetColumnSchema &schema) {
+	// Floating-point equality treats positive and negative zero as equal, but Parquet hashes their bit patterns.
+	// Likewise, all NaN payloads compare equal, so no single hash can rule out a row group containing one.
+	switch (constant.type().InternalType()) {
+	case PhysicalType::FLOAT: {
+		auto float_value = constant.GetValue<float>();
+		if (Value::IsNan(float_value)) {
+			return false;
+		}
+		if (float_value == 0.0f) {
+			return !bloom_filter.FilterCheck(ValueXH64FixedWidth(0.0f)) &&
+			       !bloom_filter.FilterCheck(ValueXH64FixedWidth(-0.0f));
+		}
+		break;
+	}
+	case PhysicalType::DOUBLE: {
+		auto double_value = constant.GetValue<double>();
+		if (Value::IsNan(double_value)) {
+			return false;
+		}
+		if (double_value == 0.0) {
+			return !bloom_filter.FilterCheck(ValueXH64FixedWidth(0.0)) &&
+			       !bloom_filter.FilterCheck(ValueXH64FixedWidth(-0.0));
+		}
+		break;
+	}
+	default:
+		break;
+	}
+
+	auto hash = ValueXXH64(constant, schema);
+	return hash && !bloom_filter.FilterCheck(*hash);
+}
+
 static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_filter,
                              const ParquetColumnSchema &schema) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
@@ -860,8 +970,23 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 		if (!constant) {
 			return false;
 		}
-		auto hash = ValueXXH64(constant->GetValue(), schema);
-		return hash && !bloom_filter.FilterCheck(*hash);
+		return BloomFilterExcludes(constant->GetValue(), bloom_filter, schema);
+	}
+	auto in_expr = GetBloomFilterInExpression(expr);
+	if (in_expr) {
+		auto &children = in_expr->GetChildren();
+		// An IN filter is excluded only when every candidate is absent.
+		for (idx_t child_idx = 1; child_idx < children.size(); ++child_idx) {
+			auto &constant = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
+			if (!BloomFilterExcludes(constant, bloom_filter, schema)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	auto optional_filter_child = GetOptionalFilterChild(expr);
+	if (optional_filter_child) {
+		return ApplyBloomFilter(*optional_filter_child, bloom_filter, schema);
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
@@ -908,6 +1033,9 @@ bool ParquetStatisticsUtils::BloomFilterSupported(const ParquetColumnSchema &sch
 		return true;
 	case LogicalTypeId::UUID:
 		return schema.parquet_type == duckdb_parquet::Type::FIXED_LEN_BYTE_ARRAY && schema.type_length == 16;
+	case LogicalTypeId::DECIMAL:
+		// We currently only support decimal bloom filters backed by 32-bit or 64-bit integers.
+		return schema.parquet_type == duckdb_parquet::Type::INT32 || schema.parquet_type == duckdb_parquet::Type::INT64;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		// When type info is UNIT_NS, DuckDB type TIMESTAMP_NS/TIMESTAMP_TZ_NS is used.

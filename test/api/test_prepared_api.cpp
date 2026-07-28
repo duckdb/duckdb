@@ -403,7 +403,7 @@ TEST_CASE("PREPARE multiple statements", "[prepared]") {
 	// we can use ExtractStatements to execute the individual statements though
 	auto statements = con.ExtractStatements(query);
 	for (auto &statement : statements) {
-		string stmt = query.substr(statement->stmt_location, statement->stmt_length);
+		string stmt = query.substr(statement->stmt_location.offset, statement->stmt_location.length);
 		prepared = con.Prepare(stmt);
 		REQUIRE(!prepared->HasError());
 

@@ -57,25 +57,22 @@ struct WindowFunctionInfo {
 	}
 };
 
-class BindWindowFunctionInput {
+class BindWindowFunctionInput : public BindFunctionInput {
 public:
 	using OptionalOrdering = optional_ptr<vector<OrderByNode>>;
 
+	// Defined out-of-line: converting to the BindFunctionInput base requires the complete BoundWindowFunction.
+	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
+	                        vector<unique_ptr<Expression>> &arguments_p, const vector<Identifier> &argument_names_p,
+	                        OptionalOrdering orders_p = nullptr, OptionalOrdering arg_orders_p = nullptr);
+
+	//! Construct without argument names - looking arguments up by name is not available in this case.
 	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
 	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrdering orders_p = nullptr,
-	                        OptionalOrdering arg_orders_p = nullptr)
-	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p), orders(orders_p),
-	      arg_orders(arg_orders_p) {
-	}
+	                        OptionalOrdering arg_orders_p = nullptr);
 
-	ClientContext &GetClientContext() const {
-		return context;
-	}
 	BoundWindowFunction &GetBoundFunction() const {
 		return bound_function;
-	}
-	vector<unique_ptr<Expression>> &GetArguments() const {
-		return arguments;
 	}
 	bool HasOrders() const {
 		return orders.get();
@@ -91,9 +88,7 @@ public:
 	}
 
 private:
-	ClientContext &context;
 	BoundWindowFunction &bound_function;
-	vector<unique_ptr<Expression>> &arguments;
 	OptionalOrdering orders;
 	OptionalOrdering arg_orders;
 };

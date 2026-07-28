@@ -78,6 +78,9 @@ public:
 	//! Push a finished job's scan state, so learned reader state carries over to jobs created later
 	void PushState(unique_ptr<LocalTableFunctionState> state);
 
+	//! Pop a recycled scan state, returns null when none is available
+	unique_ptr<LocalTableFunctionState> TryPopState();
+
 	//! Block until the claimed job's scheduled I/O has completed
 	void WaitForJob(MultiFileScanJob &job);
 
@@ -91,8 +94,6 @@ private:
 	bool TryReserveSlot();
 	//! Schedule the job's I/O and admit the job to the queue in batch-index order
 	void PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
-	//! Pop a recycled scan state, returns null when none is available
-	unique_ptr<LocalTableFunctionState> TryPopState();
 	//! Push an error onto the async executor
 	void PushError(ErrorData error);
 	//! Throw if any read-ahead thread or task pushed an error

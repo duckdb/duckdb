@@ -42,7 +42,7 @@ void HandleCastError::AssignError(const string &error_message, CastParameters &p
 }
 
 void HandleCastError::AssignError(const string &error_message, string *error_message_ptr,
-                                  optional_ptr<const Expression> cast_source, optional_idx error_location) {
+                                  optional_ptr<const Expression> cast_source, QueryLocation error_location) {
 	string column;
 	if (cast_source && cast_source->HasAlias()) {
 		column = " when casting from source column " + cast_source->GetAlias();

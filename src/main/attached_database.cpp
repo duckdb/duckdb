@@ -258,11 +258,29 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 	}
 
 	auto close_lock = attached_db->close_lock;
-	lock_guard<mutex> guard(*close_lock);
-	if (attached_db.use_count() == 1) {
-		attached_db->Close(close_action);
+	{
+		lock_guard<mutex> guard(*close_lock);
+		if (attached_db.use_count() != 1) {
+			attached_db.reset();
+			return;
+		}
+		attached_db->is_closing = true;
 	}
+	attached_db->Close(close_action);
 	attached_db.reset();
+}
+
+shared_ptr<AttachedDatabase> AttachedDatabase::TryGetReference(const weak_ptr<AttachedDatabase> &attached_db) {
+	auto result = attached_db.lock();
+	if (!result) {
+		return nullptr;
+	}
+	auto close_lock = result->close_lock;
+	lock_guard<mutex> guard(*close_lock);
+	if (result->is_closing) {
+		result.reset();
+	}
+	return result;
 }
 
 void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {

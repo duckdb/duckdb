@@ -1777,7 +1777,8 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	// Test Catalog Name
 	REQUIRE(!SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, "bla", "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
-	REQUIRE(StringUtil::Contains(adbc_error.message, "Catalog \"bla\" does not exist"));
+	// "bla" is not an attached database, so "bla.main" is interpreted as a (nested) schema path
+	REQUIRE(StringUtil::Contains(adbc_error.message, "schema \"bla.main\" does not exist"));
 	adbc_error.release(&adbc_error);
 
 	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, "system", "main", "duckdb_indexes", &arrow_schema,
