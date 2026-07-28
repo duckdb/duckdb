@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import argparse
 from typing import Optional, Union, Tuple, List
 import functools
+import os
 
 print = functools.partial(print, flush=True)
 
@@ -22,6 +23,7 @@ STDOUT_HEADER = '''====================================================
 # timeouts in seconds
 MAX_TIMEOUT = 3600
 DEFAULT_TIMEOUT = 600
+DEFAULT_TIMED_RUNS = 10
 
 
 @dataclass
@@ -37,7 +39,8 @@ class BenchmarkRunnerConfig:
     max_timeout: int = MAX_TIMEOUT
     root_dir: str = ""
     no_summary: bool = False
-    timed_runs: Optional[int] = None
+    timed_runs: Optional[int] = DEFAULT_TIMED_RUNS
+    runner_label: str = "benchmark"
 
     @classmethod
     def from_params(cls, benchmark_runner, benchmark_file, **kwargs) -> "BenchmarkRunnerConfig":
@@ -48,7 +51,8 @@ class BenchmarkRunnerConfig:
         max_timeout = kwargs.get("max_timeout", MAX_TIMEOUT)
         root_dir = kwargs.get("root_dir", "")
         no_summary = kwargs.get("no_summary", False)
-        timed_runs = kwargs.get("timed_runs", None)
+        timed_runs = kwargs.get("timed_runs", DEFAULT_TIMED_RUNS)
+        runner_label = kwargs.get("runner_label", "benchmark")
 
         config = cls(
             benchmark_runner=benchmark_runner,
@@ -61,6 +65,7 @@ class BenchmarkRunnerConfig:
             root_dir=root_dir,
             no_summary=no_summary,
             timed_runs=timed_runs,
+            runner_label=runner_label,
         )
         return config
 
@@ -82,7 +87,12 @@ class BenchmarkRunnerConfig:
         parser.add_argument(
             "--no-summary", type=str, default=False, help="No failures summary is outputted when passing this flag."
         )
-        parser.add_argument("--timed-runs", type=int, help="Number of timed runs per benchmark.")
+        parser.add_argument(
+            "--timed-runs",
+            type=int,
+            default=DEFAULT_TIMED_RUNS,
+            help=f"Number of timed runs per benchmark (default: {DEFAULT_TIMED_RUNS}).",
+        )
 
         # Parse arguments
         parsed_args = parser.parse_args()
@@ -128,7 +138,7 @@ class BenchmarkRunner:
         except:
             return False
 
-    def construct_args(self, benchmark_path):
+    def construct_args(self, benchmark_path, timed_runs_override: Optional[int] = None):
         benchmark_args = []
         benchmark_args.extend([self.config.benchmark_runner, benchmark_path])
         if self.config.root_dir:
@@ -141,12 +151,15 @@ class BenchmarkRunner:
             benchmark_args.extend(["--disable-timeout"])
         if self.config.no_summary:
             benchmark_args.extend(["--no-summary"])
-        if self.config.timed_runs is not None and self.supports_timed_runs:
-            benchmark_args.extend(["--timed-runs", str(self.config.timed_runs)])
+        timed_runs = self.config.timed_runs if timed_runs_override is None else timed_runs_override
+        if timed_runs is not None and self.supports_timed_runs:
+            benchmark_args.extend(["--timed-runs", str(timed_runs)])
         return benchmark_args
 
-    def run_benchmark_once(self, benchmark) -> Tuple[Optional[List[float]], Optional[str]]:
-        benchmark_args = self.construct_args(benchmark)
+    def run_benchmark_once(
+        self, benchmark, timed_runs_override: Optional[int] = None
+    ) -> Tuple[Optional[List[float]], Optional[str]]:
+        benchmark_args = self.construct_args(benchmark, timed_runs_override)
         timeout_seconds = DEFAULT_TIMEOUT
         if self.config.disable_timeout:
             timeout_seconds = self.config.max_timeout
@@ -173,7 +186,12 @@ class BenchmarkRunner:
                 exit(0)
             return None, err
         if self.config.verbose:
-            print(err)
+            if os.getenv('CI') == 'true':
+                print(f"::group::raw output: {self.config.runner_label} {benchmark}")
+                print(err)
+                print("::endgroup::")
+            else:
+                print(err)
         # read the input CSV
         f = StringIO(err)
         csv_reader = csv.reader(f, delimiter='\t')
@@ -193,6 +211,12 @@ class BenchmarkRunner:
             print(err)
             return None, err
 
+    def complete_benchmark(self, benchmark, timings: List[float]) -> Tuple[Union[float, str], Optional[str]]:
+        if not timings:
+            return 'Failed to run benchmark ' + benchmark, "Benchmark did not produce any timings"
+        self.complete_timings.extend(timings)
+        return float(statistics.median(timings)), None
+
     def run_benchmark(self, benchmark) -> Tuple[Union[float, str], Optional[str]]:
         requested_runs = self.config.timed_runs if self.config.timed_runs is not None else 0
         timings = []
@@ -205,8 +229,7 @@ class BenchmarkRunner:
             timings.extend(run_timings)
             if self.supports_timed_runs or len(timings) >= requested_runs:
                 break
-        self.complete_timings.extend(timings)
-        return float(statistics.median(timings)), None
+        return self.complete_benchmark(benchmark, timings)
 
     def run_benchmarks(self, benchmark_list: List[str]):
         results = {}

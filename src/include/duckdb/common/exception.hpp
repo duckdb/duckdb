@@ -88,7 +88,8 @@ enum class ExceptionType : uint8_t {
 	AUTOLOAD = 40,          // Thrown when an extension fails to autoload
 	SEQUENCE = 41,
 	INVALID_CONFIGURATION =
-	    42 // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
+	    42, // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
+	DATA_CORRUPTION = 43 // Data corruption was detected in persistent storage
 };
 
 class Exception : public std::runtime_error {
@@ -245,6 +246,16 @@ public:
 	template <typename... ARGS>
 	explicit IOException(const unordered_map<string, string> &extra_info, const string &msg, ARGS &&...params)
 	    : IOException(extra_info, ConstructMessage(msg, std::forward<ARGS>(params)...)) {
+	}
+};
+
+class DataCorruptionException : public Exception {
+public:
+	DUCKDB_API explicit DataCorruptionException(const string &msg);
+
+	template <typename... ARGS>
+	explicit DataCorruptionException(const string &msg, ARGS &&...params)
+	    : DataCorruptionException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 };
 

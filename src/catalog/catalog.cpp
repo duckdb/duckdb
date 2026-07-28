@@ -399,6 +399,10 @@ struct CatalogLookup {
 	    : catalog(catalog),
 	      lookup_info(lookup_p, QualifiedName(catalog.GetName(), std::move(schema_p), lookup_p.GetEntryIdentifier())) {
 	}
+	//! Look the entry up in the given catalog, keeping the lookup's qualification as-is. Used for nested schema
+	//! paths, which cannot be expressed as a single (catalog, schema) pair.
+	CatalogLookup(Catalog &catalog, const EntryLookupInfo &lookup_p) : catalog(catalog), lookup_info(lookup_p) {
+	}
 
 	Catalog &catalog;
 	//! The lookup, with its catalog/schema qualification set to the resolved (catalog, schema) pair
@@ -950,8 +954,24 @@ CatalogEntryLookup Catalog::TryLookupEntryAcrossCatalogs(CatalogEntryRetriever &
                                                          OnEntryNotFound if_not_found) {
 	auto &catalog = lookup_info.GetCatalog();
 	auto &schema = lookup_info.GetSchema();
-	auto entries = GetCatalogEntries(retriever, catalog, schema);
 	vector<CatalogLookup> lookups;
+	auto &lookup_path = lookup_info.GetQualifiedName().Path();
+	if (lookup_path.size() > 3) {
+		// the entry is qualified with a nested schema path ([catalog, schema path..., name]) - this is unambiguous,
+		// so we look it up directly in the given catalog instead of expanding the search path
+		optional_ptr<Catalog> catalog_entry;
+		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+			catalog_entry = Catalog::GetCatalogEntry(retriever, lookup_path.front());
+		} else {
+			catalog_entry = &Catalog::GetCatalog(retriever, lookup_path.front());
+		}
+		if (!catalog_entry) {
+			return {nullptr, nullptr, ErrorData()};
+		}
+		lookups.emplace_back(*catalog_entry, lookup_info);
+		return TryLookupEntry(retriever, lookups, lookup_info, if_not_found, false);
+	}
+	auto entries = GetCatalogEntries(retriever, catalog, schema);
 	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
@@ -1076,13 +1096,20 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	// If we have a specific schema name and no schemas were found, the schema doesn't exist.
 	// Throw an error about the schema instead of the table
 	if (schemas.empty() && !lookups.empty() && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
-		auto &schema_name = lookups[0].lookup_info.GetSchema();
-		if (!IsInvalidSchema(schema_name)) {
-			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(schema_name),
-			                              lookup_info.GetErrorContext());
+		// the schema qualification is everything between the catalog and the entry name - for a nested schema this
+		// is more than one component
+		auto &lookup_path = lookups[0].lookup_info.GetQualifiedName().Path();
+		vector<string> schema_components;
+		for (idx_t i = lookup_path.size() > 2 ? 1 : 0; i + 1 < lookup_path.size(); i++) {
+			if (!lookup_path[i].empty()) {
+				schema_components.push_back(lookup_path[i].GetIdentifierName());
+			}
+		}
+		if (!schema_components.empty()) {
+			auto schema_name = StringUtil::Join(schema_components, ".");
 			string relation_name = schema_name + "." + lookup_info.GetEntryName();
 			auto except =
-			    CatalogException(schema_lookup.GetErrorContext(),
+			    CatalogException(lookup_info.GetErrorContext(),
 			                     "Table with name \"%s\" does not exist because schema \"%s\" does not exist.",
 			                     relation_name, schema_name);
 			return {nullptr, nullptr, ErrorData(except)};
