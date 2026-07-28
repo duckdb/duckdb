@@ -35,6 +35,13 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 	return result;
 }
 
+vector<Identifier> QualifiedName::GetSchemaPath() const {
+	if (path.size() <= 2) {
+		return {};
+	}
+	return vector<Identifier>(path.begin() + 1, path.end() - 1);
+}
+
 //! This parses a superset of the strings that the actual SQL parser accepts: it allows whitespace, most special
 //! characters like ()'- and keywords without requiring double quotes. It only requires double quotes around .
 //! characters and doubled double quotes (which collapse into a single double quote). It's only possible to fully

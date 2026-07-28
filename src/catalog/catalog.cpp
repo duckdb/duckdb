@@ -154,8 +154,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 	optional_ptr<SchemaCatalogEntry> schema;
 	if (path.size() > 3) {
 		// nested table ([catalog, schema_path..., name]): navigate the (nested) schema path
-		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
-		schema = GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
+		schema = GetSchema(transaction, qname.GetSchemaPath(), OnEntryNotFound::THROW_EXCEPTION);
 	} else {
 		schema = GetSchema(transaction, qname.Schema());
 	}
@@ -167,8 +166,7 @@ static SchemaCatalogEntry &GetCreateSchema(Catalog &catalog, CatalogTransaction 
 	auto &path = qname.Path();
 	// Path is [catalog, schema_path..., name]
 	if (path.size() > 3) {
-		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
-		return *catalog.GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
+		return *catalog.GetSchema(transaction, qname.GetSchemaPath(), OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return catalog.GetSchema(transaction, qname.Schema());
 }

@@ -61,7 +61,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		// leading components form the catalog; default_catalog=false leaves the catalog empty when none is given.
 		auto resolved = ResolveCatalog(context, stmt.info->GetQualifiedName(), false);
 		auto &rpath = resolved.Path();
-		vector<Identifier> schema_path(rpath.begin() + 1, rpath.end() - 1);
+		auto schema_path = resolved.GetSchemaPath();
 		if (schema_path.size() > 1) {
 			// a nested schema was given - navigate to it and drop from it. Keep the full resolved path so execution
 			// navigates the same nested schema (and no-ops for IF EXISTS).

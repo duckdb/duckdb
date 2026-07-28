@@ -69,6 +69,8 @@ struct QualifiedName {
 	const vector<Identifier> &Path() const {
 		return path;
 	}
+	//! Return the schema components from a resolved path of the form [catalog, schema_path..., name]
+	vector<Identifier> GetSchemaPath() const;
 
 	//! Return a copy of this name with the name replaced, keeping the catalog/schema qualification
 	QualifiedName WithName(Identifier name) const {

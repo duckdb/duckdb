@@ -242,7 +242,7 @@ QualifiedName Binder::ResolveCatalog(CatalogEntryRetriever &retriever, const Qua
 QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name) {
 	auto resolved = ResolveCatalog(retriever, name, false);
 	auto &path = resolved.Path();
-	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	auto schema_path = resolved.GetSchemaPath();
 	if (schema_path.size() <= 1) {
 		// unqualified, or qualified with a single schema level: keep the (catalog, schema, name) shape so that the
 		// regular search-path based lookup applies
@@ -290,7 +290,7 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	// resolve the target into [catalog, schema_path..., name] and fetch the (possibly nested) schema it lives in
 	SearchSchema(info);
 	auto &path = info.GetQualifiedName().Path();
-	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	auto schema_path = info.GetQualifiedName().GetSchemaPath();
 	auto &schema_obj = *Catalog::GetSchema(context, path.front(), schema_path, OnEntryNotFound::THROW_EXCEPTION);
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
 	if (!info.temporary) {
