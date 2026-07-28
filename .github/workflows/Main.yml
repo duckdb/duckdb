@@ -510,7 +510,7 @@ jobs:
         ENABLE_EXTENSION_AUTOLOADING: 1
         ENABLE_EXTENSION_AUTOINSTALL: 1
         LTO: full
-        LTO_JOBS: 6
+        LTO_JOBS: 8
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
         FORCE_WARN_UNUSED: 1
@@ -700,7 +700,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         LTO: full
-        LTO_JOBS: 6
+        LTO_JOBS: 8
         EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
         ENABLE_EXTENSION_AUTOLOADING: 1
         ENABLE_EXTENSION_AUTOINSTALL: 1
