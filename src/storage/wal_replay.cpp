@@ -56,6 +56,7 @@ public:
 	idx_t wal_version = 1;
 	optional_idx current_position;
 	optional_idx checkpoint_position;
+	optional_idx checkpoint_end_position;
 	optional_idx expected_checkpoint_id;
 	WALReplayState replay_state;
 
@@ -293,6 +294,8 @@ private:
 	                                    WALReplayState replay_state = WALReplayState::MAIN_WAL);
 	void CopyOverWAL(BufferedFileReader &reader, FileHandle &target, data_ptr_t buffer, idx_t buffer_size,
 	                 idx_t copy_end);
+	void RemoveCheckpointFromWAL(const ReplayState &checkpoint_state, BufferedFileReader &main_wal_reader,
+	                             const string &recovery_path);
 	void MergeIntoRecoveryWAL(Connection &con, const ReplayState &checkpoint_state, BufferedFileReader &main_wal_reader,
 	                          const string &recovery_path, unique_ptr<FileHandle> checkpoint_handle);
 
@@ -346,6 +349,30 @@ void WriteAheadLogReplayer::CopyOverWAL(BufferedFileReader &reader, FileHandle &
 
 		target.Write(buffer, read_count);
 	}
+}
+
+void WriteAheadLogReplayer::RemoveCheckpointFromWAL(const ReplayState &checkpoint_state,
+                                                    BufferedFileReader &main_wal_reader, const string &recovery_path) {
+	D_ASSERT(checkpoint_state.checkpoint_position.IsValid());
+	D_ASSERT(checkpoint_state.checkpoint_end_position.IsValid());
+
+	auto recovery_handle =
+	    fs.OpenFile(recovery_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+
+	static constexpr idx_t BATCH_SIZE = Storage::DEFAULT_BLOCK_SIZE;
+	auto buffer = make_uniq_array<data_t>(BATCH_SIZE);
+
+	// Preserve every WAL entry except the failed checkpoint marker itself.
+	main_wal_reader.Reset();
+	CopyOverWAL(main_wal_reader, *recovery_handle, buffer.get(), BATCH_SIZE,
+	            checkpoint_state.checkpoint_position.GetIndex());
+	main_wal_reader.Seek(checkpoint_state.checkpoint_end_position.GetIndex());
+	CopyOverWAL(main_wal_reader, *recovery_handle, buffer.get(), BATCH_SIZE, main_wal_reader.FileSize());
+
+	recovery_handle->Sync();
+	recovery_handle.reset();
+	main_wal_reader.handle.reset();
+	fs.MoveFile(recovery_path, main_wal_path);
 }
 
 void WriteAheadLogReplayer::MergeIntoRecoveryWAL(Connection &con, const ReplayState &checkpoint_state,
@@ -430,7 +457,11 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 			// read the current entry (deserialize only)
 			checkpoint_state.current_position = reader.CurrentOffset();
 			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(checkpoint_state, reader, true);
-			if (deserializer.ReplayEntry()) {
+			auto is_wal_flush = deserializer.ReplayEntry();
+			if (checkpoint_state.checkpoint_position.IsValid() && !checkpoint_state.checkpoint_end_position.IsValid()) {
+				checkpoint_state.checkpoint_end_position = reader.CurrentOffset();
+			}
+			if (is_wal_flush) {
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
@@ -451,7 +482,13 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		}
 	} // LCOV_EXCL_STOP
 	unique_ptr<FileHandle> checkpoint_handle;
-	if (checkpoint_state.checkpoint_id.IsValid()) {
+	unique_ptr<BufferedFileReader> rewritten_wal_reader;
+	bool remove_failed_checkpoint_marker = false;
+	// A serialization error can leave a partially deserialized checkpoint marker in the replay state. Only reconcile
+	// checkpoints after the complete marker entry has been consumed.
+	bool has_complete_checkpoint_marker =
+	    checkpoint_state.checkpoint_id.IsValid() && checkpoint_state.checkpoint_end_position.IsValid();
+	if (has_complete_checkpoint_marker) {
 		if (replay_state == WALReplayState::CHECKPOINT_WAL) {
 			throw InvalidInputException(
 			    "Failure while replaying checkpoint WAL file \"%s\": checkpoint WAL cannot contain a checkpoint marker",
@@ -471,6 +508,9 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 			if (checkpoint_was_successful) {
 				// the contents of the WAL have already been checkpointed and there is no checkpoint WAL - we are done
 				return nullptr;
+			}
+			if (!storage_manager.GetAttached().IsReadOnly()) {
+				remove_failed_checkpoint_marker = true;
 			}
 		} else {
 			// we have a checkpoint WAL
@@ -512,12 +552,23 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		auto expected_id = checkpoint_state.expected_checkpoint_id.GetIndex();
 		WriteAheadLogDeserializer::ThrowVersionError(expected_id - 1, expected_id);
 	}
+	if (remove_failed_checkpoint_marker) {
+		// The checkpoint failed, but its marker cannot remain in a WAL that will become writable again.
+		auto recovery_path = database.GetStorageManager().GetRecoveryWALPath();
+		RemoveCheckpointFromWAL(checkpoint_state, reader, recovery_path);
+
+		// Open the rewritten WAL for replay.
+		auto main_handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
+		rewritten_wal_reader = make_uniq<BufferedFileReader>(fs, std::move(main_handle));
+	}
 
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context, replay_state);
 
-	// reset the reader - we are going to read the WAL from the beginning again
-	reader.Reset();
+	// Reset the reader - we are going to read the WAL from the beginning again. If we removed a failed checkpoint
+	// marker, use the reader for the rewritten WAL instead of the original file handle.
+	auto &wal_reader = rewritten_wal_reader ? *rewritten_wal_reader : reader;
+	wal_reader.Reset();
 
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here
@@ -527,7 +578,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	try {
 		while (true) {
 			// read the current entry
-			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(state, reader);
+			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(state, wal_reader);
 			if (deserializer.ReplayEntry()) {
 				con.Commit();
 
@@ -537,9 +588,9 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 				}
 				state.replay_index_infos.clear();
 
-				successful_offset = reader.CurrentOffset();
+				successful_offset = wal_reader.CurrentOffset();
 				// check if the file is exhausted
-				if (reader.Finished()) {
+				if (wal_reader.Finished()) {
 					// we finished reading the file: break
 					all_succeeded = true;
 					break;
@@ -1307,6 +1358,9 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 }
 
 void WriteAheadLogDeserializer::ReplayCheckpoint() {
+	if (state.checkpoint_position.IsValid()) {
+		throw InvalidInputException("WAL cannot contain more than one checkpoint marker");
+	}
 	auto entry = WALCheckpoint::Deserialize(deserializer);
 	state.checkpoint_id = entry.meta_block;
 	state.checkpoint_position = state.current_position;
