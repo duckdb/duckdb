@@ -6,6 +6,7 @@ import multiprocessing
 import os
 import random
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -86,6 +87,34 @@ exec {shlex.quote(clangd_binary)} "$@" --pch-storage=disk
     return wrapper_path
 
 
+def format_bytes(size):
+    suffixes = ('B', 'KiB', 'MiB', 'GiB', 'TiB')
+    value = float(size)
+    for suffix in suffixes:
+        if value < 1024 or suffix == suffixes[-1]:
+            return f'{value:.1f} {suffix}'
+        value /= 1024
+
+
+def directory_size(path):
+    total = 0
+    if not os.path.exists(path):
+        return total
+    for root, _, files in os.walk(path):
+        for filename in files:
+            file_path = os.path.join(root, filename)
+            try:
+                total += os.path.getsize(file_path)
+            except OSError:
+                pass
+    return total
+
+
+def reset_pch_dir(pch_dir):
+    shutil.rmtree(pch_dir, ignore_errors=True)
+    os.makedirs(pch_dir, exist_ok=True)
+
+
 def is_retryable_failure(result):
     if result.returncode == 0:
         return False
@@ -106,19 +135,36 @@ def write_attempt_logs(log_dir, attempt_id, chunk, result):
 
 def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_root, clangd_binary, attempt_counter):
     retries = 0
+    pch_dir = os.path.join(pch_root, 'current')
+    os.makedirs(pch_dir, exist_ok=True)
     while True:
         attempt_counter[0] += 1
         attempt_id = attempt_counter[0]
-        attempt_pch_dir = os.path.join(pch_root, f'attempt-{attempt_id}')
-        os.makedirs(attempt_pch_dir, exist_ok=True)
-        clangd_wrapper = create_attempt_clangd_wrapper(log_dir, clangd_binary, attempt_pch_dir, attempt_id)
+        clangd_wrapper = create_attempt_clangd_wrapper(log_dir, clangd_binary, pch_dir, attempt_id)
         command = base_command + ['--clangd-executable', clangd_wrapper] + chunk
+        start = time.monotonic()
+        print(
+            f'clangd-tidy attempt {attempt_id} (retry {retries}/{MAX_RETRIES}, files {len(chunk)}): '
+            f'{chunk[0]}',
+            flush=True,
+        )
         result = subprocess.run(command, check=False, cwd=repo_root, env=env, text=True, capture_output=True)
+        elapsed = time.monotonic() - start
         write_attempt_logs(log_dir, attempt_id, chunk, result)
+        pch_size = format_bytes(directory_size(pch_dir))
+        print(
+            f'clangd-tidy attempt {attempt_id} finished with exit code {result.returncode} '
+            f'in {elapsed:.1f}s; pch size: {pch_size}',
+            flush=True,
+        )
         if result.returncode == 0:
             return True
-        if retries >= MAX_RETRIES or not is_retryable_failure(result):
+        retryable = is_retryable_failure(result)
+        if retries >= MAX_RETRIES or not retryable:
+            if retryable:
+                reset_pch_dir(pch_dir)
             return False
+        reset_pch_dir(pch_dir)
         delay = (RETRY_BACKOFF_MS / 1000.0) * (2**retries) + random.uniform(0.0, 0.2)
         time.sleep(delay)
         retries += 1
@@ -200,7 +246,9 @@ def main():
 
     attempt_counter = [0]
     hard_failures = []
-    for chunk in chunk_files(files):
+    chunks = list(chunk_files(files))
+    print(f'Running clangd-tidy on {len(files)} files in {len(chunks)} chunks', flush=True)
+    for chunk in chunks:
         process_chunk(
             base_command,
             chunk,
