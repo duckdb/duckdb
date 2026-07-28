@@ -126,9 +126,7 @@ jobs:
           - name: Ingestion Perf
             benchmarks: .github/regression/ingestion.csv
           - name: Micro
-            benchmarks: .github/regression/tpch_parquet.csv
-          - name: TPCH-PARQUET
-            benchmarks: .github/regression/tpch_parquet.csv
+            benchmarks: .github/regression/micro.csv
           - name: H2OAI
             benchmarks: .github/regression/h2oai.csv
           - name: IMDB
@@ -219,6 +217,9 @@ jobs:
           - name: TPCDS SF3
             benchmarks: .github/regression/tpcds_sf3.csv
             threads: 4
+          - name: TPCH-PARQUET SF1
+            benchmarks: .github/regression/tpch_parquet.csv
+            threads: 2
 
     steps:
       - name: "Checkout"
