@@ -26,7 +26,7 @@ struct FixedSizeAllocatorInfo {
 	vector<idx_t> segment_counts;
 	vector<idx_t> allocation_sizes;
 	vector<idx_t> buffers_with_free_space;
-	//! In-memory WAL replay buffers used to initialize read-only indexes without writing blocks.
+	//! Transient buffers used to initialize read-only entities (i.e., index entries during WAL replay)
 	//! These are transient runtime state and are never serialized.
 	shared_ptr<vector<BufferHandle>> transient_buffers;
 
