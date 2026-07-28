@@ -504,7 +504,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         LTO: full
-        LTO_JOBS: 6
+        LTO_JOBS: 8
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
@@ -674,7 +674,7 @@ jobs:
         -e CC='ccache gcc'                                                     \
         -e CXX='ccache g++'                                                    \
         -e LTO=full                                                            \
-        -e LTO_JOBS=6                                                          \
+        -e LTO_JOBS=8                                                          \
         -e CCACHE_DIR="$PWD/.ccache"                                           \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
