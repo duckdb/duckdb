@@ -278,6 +278,8 @@ enum class InterruptMode : uint8_t;
 
 enum class JoinFilterPushdownMode : uint8_t;
 
+enum class JoinOrderOperatorType : uint8_t;
+
 enum class JoinRefType : uint8_t;
 
 enum class JoinType : uint8_t;
@@ -440,6 +442,8 @@ enum class ResultModifierType : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
 
+enum class RowIdHandling : uint8_t;
+
 enum class SampleMethod : uint8_t;
 
 enum class SampleType : uint8_t;
@@ -559,6 +563,8 @@ enum class TupleDataValidityType : uint8_t;
 enum class UndoFlags : uint32_t;
 
 enum class UnionInvalidReason : uint8_t;
+
+enum class VacuumIndexStrategy : uint8_t;
 
 enum class VariantChildLookupMode : uint8_t;
 
@@ -957,6 +963,9 @@ template<>
 const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode value);
 
 template<>
+const char* EnumUtil::ToChars<JoinOrderOperatorType>(JoinOrderOperatorType value);
+
+template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
 
 template<>
@@ -1200,6 +1209,9 @@ template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
 
 template<>
+const char* EnumUtil::ToChars<RowIdHandling>(RowIdHandling value);
+
+template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
 
 template<>
@@ -1378,6 +1390,9 @@ const char* EnumUtil::ToChars<UndoFlags>(UndoFlags value);
 
 template<>
 const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value);
+
+template<>
+const char* EnumUtil::ToChars<VacuumIndexStrategy>(VacuumIndexStrategy value);
 
 template<>
 const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode value);
@@ -1789,6 +1804,9 @@ template<>
 JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value);
 
 template<>
+JoinOrderOperatorType EnumUtil::FromString<JoinOrderOperatorType>(const char *value);
+
+template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);
 
 template<>
@@ -2032,6 +2050,9 @@ template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
 
 template<>
+RowIdHandling EnumUtil::FromString<RowIdHandling>(const char *value);
+
+template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
 
 template<>
@@ -2210,6 +2231,9 @@ UndoFlags EnumUtil::FromString<UndoFlags>(const char *value);
 
 template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value);
+
+template<>
+VacuumIndexStrategy EnumUtil::FromString<VacuumIndexStrategy>(const char *value);
 
 template<>
 VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value);

@@ -5,6 +5,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/row_id_deduplicator.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -288,20 +289,14 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 	return update_chunk.size();
 }
 
-// TODO: should we use a hash table to keep track of this instead?
 static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) {
-	// Insert all rows, if any of the rows has already been updated before, we throw an error
-	auto data = FlatVector::GetData<row_t>(row_ids);
-
-	auto &updated_rows = lstate.updated_rows;
-	for (idx_t i = 0; i < count; i++) {
-		auto result = updated_rows.insert(data[i]);
-		if (result.second == false) {
-			// This is following postgres behavior:
-			throw InvalidInputException(
-			    "ON CONFLICT DO UPDATE can not update the same row twice in the same command. Ensure that no rows "
-			    "proposed for insertion within the same command have duplicate constrained values");
-		}
+	// Register all row-ids; a distinct count below `count` means a row-id repeated, which we reject.
+	auto distinct = RegisterRowIds(lstate.updated_rows, row_ids, count);
+	if (distinct != count) {
+		// This is following postgres behavior:
+		throw InvalidInputException(
+		    "ON CONFLICT DO UPDATE can not update the same row twice in the same command. Ensure that no rows "
+		    "proposed for insertion within the same command have duplicate constrained values");
 	}
 }
 

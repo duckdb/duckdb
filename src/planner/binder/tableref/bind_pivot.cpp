@@ -65,7 +65,8 @@ static void ExtractPivotExpressions(ParsedExpression &root_expr, identifier_set_
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
 		    if (child_colref.IsQualified()) {
-			    if (child_colref.ColumnNames()[0].GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos &&
+			    if (StringUtil::StartsWith(child_colref.ColumnNames()[0].GetIdentifierName(),
+			                               DummyBinding::DUMMY_NAME) &&
 			        macro_binding && macro_binding->HasMatchingBinding(Identifier(child_colref.GetName()))) {
 				    throw ParameterNotResolvedException();
 			    }

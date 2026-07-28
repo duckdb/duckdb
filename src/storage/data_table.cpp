@@ -1031,8 +1031,7 @@ void DataTable::LocalAppend(LocalAppendState &state, DuckTableEntry &table_entry
 	}
 
 	// Append to the transaction-local data.
-	auto data_table_info = GetDataTableInfo();
-	LocalStorage::Append(state, table_entry, chunk, *data_table_info);
+	LocalStorage::Append(state, table_entry, chunk);
 }
 
 void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
@@ -1376,9 +1375,8 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 // Indexes
 //===--------------------------------------------------------------------===//
 ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-                                     DataChunk &table_chunk, DataChunk &index_chunk,
-                                     const vector<StorageIndex> &mapped_column_ids, row_t row_start,
-                                     const IndexAppendMode index_append_mode, optional_idx active_checkpoint) {
+                                     DataChunk &table_chunk, row_t row_start, const IndexAppendMode index_append_mode,
+                                     optional_idx active_checkpoint) {
 	// Generate the vector of row identifiers.
 	Vector row_ids(LogicalType::ROW_TYPE);
 	VectorOperations::GenerateSequence(row_ids, table_chunk.size(), row_start, 1);
@@ -1392,9 +1390,9 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		lock_guard<mutex> guard(entry.lock);
 		auto &index = *entry.index;
 		if (!index.IsBound()) {
-			// Buffer only the key columns, and store their mapping.
+			// Buffer the append: the unbound index buffers its own columns of the table chunk.
 			auto &unbound_index = index.Cast<UnboundIndex>();
-			unbound_index.BufferChunk(index_chunk, row_ids, mapped_column_ids, BufferedIndexReplay::INSERT_ENTRY);
+			unbound_index.BufferChunk(table_chunk, row_ids, BufferedIndexReplay::INSERT_ENTRY);
 			continue;
 		}
 
@@ -1470,13 +1468,11 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 }
 
 ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk,
-                                     DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids,
                                      row_t row_start, const IndexAppendMode index_append_mode) {
 	D_ASSERT(IsMainTable());
 	auto active_checkpoint = GetAttached().GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
-	return AppendToIndexes(info->indexes, delete_indexes, table_chunk, index_chunk, mapped_column_ids, row_start,
-	                       index_append_mode, checkpoint_id);
+	return AppendToIndexes(info->indexes, delete_indexes, table_chunk, row_start, index_append_mode, checkpoint_id);
 }
 
 void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start) {

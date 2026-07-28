@@ -1,0 +1,533 @@
+module: table_function
+functions:
+  create_table_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: table_function
+    parameters: {}
+    return_type: table_function
+    description: |
+      Creates a new empty table function.
+
+      The return value should be destroyed with `duckdb_destroy_table_function`.
+    return_description: The table function object.
+  destroy_table_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: table_function
+    parameters:
+      table_function:
+        type: table_function
+        indirection: 1
+        description: The table function to destroy
+    return_type: opaque
+    description: |
+      Destroys the given table function object.
+  table_function_set_name:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      table_function:
+        type: table_function
+        description: The table function
+      name:
+        type: char
+        indirection: 1
+        const: true
+        description: The name of the table function
+    return_type: opaque
+    description: |
+      Sets the name of the given table function.
+  table_function_add_parameter:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      table_function:
+        type: table_function
+        description: The table function.
+      type:
+        type: logical_type
+        description: The parameter type. Cannot contain INVALID.
+    return_type: opaque
+    description: |
+      Adds a parameter to the table function.
+  table_function_add_named_parameter:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      table_function:
+        type: table_function
+        description: The table function.
+      name:
+        type: char
+        indirection: 1
+        const: true
+        description: The parameter name.
+      type:
+        type: logical_type
+        description: The parameter type. Cannot contain INVALID.
+    return_type: opaque
+    description: |
+      Adds a named parameter to the table function.
+  table_function_set_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      table_function:
+        type: table_function
+        description: The table function
+      extra_info:
+        type: opaque
+        indirection: 1
+        description: The extra information
+      destroy:
+        type: delete_callback_t
+        description: The callback that will be called to destroy the extra information (if any)
+    return_type: opaque
+    description: |
+      Assigns extra information to the table function that can be fetched during binding, etc.
+  table_function_set_bind:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      table_function:
+        type: table_function
+        description: The table function
+      bind:
+        type: table_function_bind_t
+        description: The bind function
+    return_type: opaque
+    description: |
+      Sets the bind function of the table function.
+  table_function_set_init:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      table_function:
+        type: table_function
+        description: The table function
+      init:
+        type: table_function_init_t
+        description: The init function
+    return_type: opaque
+    description: |
+      Sets the init function of the table function.
+  table_function_set_local_init:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      table_function:
+        type: table_function
+        description: The table function
+      init:
+        type: table_function_init_t
+        description: The init function
+    return_type: opaque
+    description: |
+      Sets the thread-local init function of the table function.
+  table_function_set_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      table_function:
+        type: table_function
+        description: The table function
+      function:
+        type: table_function_t
+        description: The function
+    return_type: opaque
+    description: |
+      Sets the main function of the table function.
+  table_function_supports_projection_pushdown:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      table_function:
+        type: table_function
+        description: The table function
+      pushdown:
+        type: bool
+        description: True if the table function supports projection pushdown, false otherwise.
+    return_type: opaque
+    description: |
+      Sets whether or not the given table function supports projection pushdown.
+
+      If this is set to true, the system will provide a list of all required columns in the `init` stage through
+      the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
+      If this is set to false (the default), the system will expect all columns to be projected.
+  register_table_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      con:
+        type: connection
+        description: The connection to register it in.
+      function:
+        type: table_function
+        description: The function pointer
+    return_type: state
+    description: |
+      Register the table function object within the given connection.
+
+      The function requires at least a name, a bind function, an init function and a main function.
+
+      If the function is incomplete or a function with this name already exists DuckDBError is returned.
+    return_description: Whether or not the registration was successful.
+  bind_get_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The info object
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
+    return_description: The extra info
+  table_function_get_client_context:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info object of the table function.
+      out_context:
+        type: client_context
+        indirection: 1
+        kind: OUT
+        description: The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`.
+    return_type: opaque
+    description: |
+      Retrieves the client context of the bind info of a table function.
+  bind_add_result_column:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The table function's bind info.
+      name:
+        type: char
+        indirection: 1
+        const: true
+        description: The column name.
+      type:
+        type: logical_type
+        description: The logical column type.
+    return_type: opaque
+    description: |
+      Adds a result column to the output of the table function.
+  bind_get_parameter_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The info object
+    return_type: idx
+    description: |
+      Retrieves the number of regular (non-named) parameters to the function.
+    return_description: The number of parameters
+  bind_get_parameter:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The info object
+      index:
+        type: idx
+        description: The index of the parameter to get
+    return_type: value
+    description: |
+      Retrieves the parameter at the given index.
+
+      The result must be destroyed with `duckdb_destroy_value`.
+    return_description: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
+  bind_get_named_parameter:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The info object
+      name:
+        type: char
+        indirection: 1
+        const: true
+        description: The name of the parameter
+    return_type: value
+    description: |
+      Retrieves a named parameter with the given name.
+
+      The result must be destroyed with `duckdb_destroy_value`.
+    return_description: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
+  bind_set_bind_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info of the table function.
+      bind_data:
+        type: opaque
+        indirection: 1
+        description: The bind data object.
+      destroy:
+        type: delete_callback_t
+        description: The callback to destroy the bind data (if any).
+    return_type: opaque
+    description: |
+      Sets the user-provided bind data in the bind object of the table function.
+      This object can be retrieved again during execution.
+  bind_set_cardinality:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind data object.
+      cardinality:
+        type: idx
+      is_exact:
+        type: bool
+        description: Whether or not the cardinality estimate is exact, or an approximation
+    return_type: opaque
+    description: |
+      Sets the cardinality estimate for the table function, used for optimization.
+  bind_set_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The info object
+      error:
+        type: char
+        indirection: 1
+        const: true
+        description: The error message
+    return_type: opaque
+    description: |
+      Report that an error has occurred while calling bind on a table function.
+  init_get_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The info object
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
+    return_description: The extra info
+  init_get_bind_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The info object
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
+
+      Note that the bind data should be considered as read-only.
+      For tracking state, use the init data instead.
+    return_description: The bind data object
+  init_set_init_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The info object
+      init_data:
+        type: opaque
+        indirection: 1
+        description: The init data object.
+      destroy:
+        type: delete_callback_t
+        description: The callback that will be called to destroy the init data (if any)
+    return_type: opaque
+    description: |
+      Sets the user-provided init data in the init object. This object can be retrieved again during execution.
+  init_get_column_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The info object
+    return_type: idx
+    description: |
+      Returns the number of projected columns.
+
+      This function must be used if projection pushdown is enabled to figure out which columns to emit.
+    return_description: The number of projected columns.
+  init_get_column_index:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The info object
+      column_index:
+        type: idx
+        description: The index at which to get the projected column index, from 0..duckdb_init_get_column_count(info)
+    return_type: idx
+    description: |
+      Returns the column index of the projected column at the specified position.
+
+      This function must be used if projection pushdown is enabled to figure out which columns to emit.
+    return_description: The column index of the projected column.
+  init_set_max_threads:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The info object
+      max_threads:
+        type: idx
+        description: The maximum amount of threads that can process this table function
+    return_type: opaque
+    description: |
+      Sets how many threads can process this table function in parallel (default: 1)
+  init_set_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The info object
+      error:
+        type: char
+        indirection: 1
+        const: true
+        description: The error message
+    return_type: opaque
+    description: |
+      Report that an error has occurred while calling init.
+  function_get_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
+    return_description: The extra info
+  function_get_bind_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The function info object.
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Gets the table function's bind data set by `duckdb_bind_set_bind_data`.
+
+      Note that the bind data is read-only.
+      For tracking state, use the init data instead.
+    return_description: The bind data object.
+  function_get_init_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Gets the init data set by `duckdb_init_set_init_data` during the init.
+    return_description: The init data object
+  function_get_local_init_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Gets the thread-local init data set by `duckdb_init_set_init_data` during the local_init.
+    return_description: The init data object
+  function_set_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object
+      error:
+        type: char
+        indirection: 1
+        const: true
+        description: The error message
+    return_type: opaque
+    description: |
+      Report that an error has occurred while executing the function.
+  table_function_bind_get_result_column_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info provided to the bind function
+    return_type: idx
+    description: |
+      Retrieves the number of result columns of a table function.
+
+      If the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the number of columns in the target table at the start of the bind callback.
+    return_description: The number of result columns.
+  table_function_bind_get_result_column_name:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info provided to the bind function
+      col_idx:
+        type: idx
+        description: The index of the result column to retrieve the name for
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      Retrieves the name of a result column of a table function.
+
+      If the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the names of the columns in the target table at the start of the bind callback.
+
+      The result is valid for the duration of the bind callback or until the next call to `duckdb_bind_add_result_column`, so it must not be destroyed.
+    return_description: The name of the result column.
+  table_function_bind_get_result_column_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info provided to the bind function
+      col_idx:
+        type: idx
+        description: The index of the result column to retrieve the type for
+    return_type: logical_type
+    description: |
+      Retrieves the type of a result column of a table function.
+
+      If the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the types of the columns in the target table at the start of the bind callback.
+
+      The result must be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The type of the result column.

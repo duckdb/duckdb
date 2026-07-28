@@ -3,6 +3,7 @@
 import argparse
 import gzip
 import os
+import platform
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,27 @@ DOWNLOAD_USER_AGENT = "duckdb-ci/check-staged-extensions"
 DOWNLOAD_RETRIES = 2
 DOWNLOAD_RETRY_SECONDS = 10
 EXTENSION_SEPARATOR_TRANSLATION = str.maketrans({",": " ", ";": " "})
+
+
+def normalize_arch(machine: str) -> str:
+    machine = machine.lower()
+    if machine in {"x86_64", "amd64"}:
+        return "amd64"
+    if machine in {"aarch64", "arm64"}:
+        return "arm64"
+    return machine
+
+
+def cli_asset_name(system: str | None = None, machine: str | None = None) -> str:
+    system = (system or platform.system()).lower()
+    arch = normalize_arch(machine or platform.machine())
+
+    if system == "linux" and arch in {"amd64", "arm64"}:
+        return f"duckdb_cli-linux-{arch}.gz"
+    if system == "darwin" and arch in {"amd64", "arm64"}:
+        return f"duckdb_cli-osx-{arch}.gz"
+
+    raise RuntimeError(f"unsupported staged CLI platform: {system}/{arch}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,9 +57,10 @@ def parse_args() -> argparse.Namespace:
 def cli_asset_url(asset_base_url: str, git_sha: str, version: str) -> str:
     short_sha = git_sha[:10]
     base = asset_base_url.rstrip("/")
+    asset_name = cli_asset_name()
     if version:
-        return f"{base}/{short_sha}/{version}/duckdb/duckdb/github_release/duckdb_cli-linux-amd64.gz"
-    return f"{base}/{short_sha}/duckdb/duckdb/github_release/duckdb_cli-linux-amd64.gz"
+        return f"{base}/{short_sha}/{version}/duckdb/duckdb/github_release/{asset_name}"
+    return f"{base}/{short_sha}/duckdb/duckdb/github_release/{asset_name}"
 
 
 def download_cli(url: str, target: Path) -> None:

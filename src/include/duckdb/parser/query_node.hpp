@@ -29,7 +29,8 @@ enum class QueryNodeType : uint8_t {
 	UPDATE_QUERY_NODE = 7,
 	DELETE_QUERY_NODE = 8,
 	INSERT_QUERY_NODE = 9,
-	MERGE_QUERY_NODE = 10
+	MERGE_QUERY_NODE = 10,
+	COPY_QUERY_NODE = 11
 };
 
 struct CommonTableExpressionInfo;

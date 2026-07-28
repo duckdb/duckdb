@@ -358,6 +358,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		    t == QueryNodeType::DELETE_QUERY_NODE) {
 			throw BinderException("DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a VIEW");
 		}
+		if (t == QueryNodeType::COPY_QUERY_NODE) {
+			throw BinderException("COPY statements are not allowed as CTE bodies inside a VIEW");
+		}
 	}
 	optional_ptr<LogicalDependencyList> dependencies;
 	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
@@ -649,6 +652,10 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.0.0)";
 			throw BinderException(msg);
 		}
+	}
+
+	if (create_trigger_info.timing == TriggerTiming::INSTEAD_OF) {
+		throw NotImplementedException("INSTEAD OF triggers are not yet supported");
 	}
 
 	// Validate UPDATE OF columns exist

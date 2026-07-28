@@ -62,10 +62,10 @@ void ExpressionColumnReader::InitializeChunk() {
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }
 
-void ExpressionColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
-                                            TProtocol &protocol_p) {
+void ExpressionColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows,
+                                            const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 	for (auto &child_reader : child_readers) {
-		child_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
+		child_reader->InitializeRead(row_group_idx_p, row_group_num_rows, columns, protocol_p);
 	}
 }
 
