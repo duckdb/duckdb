@@ -1,58 +1,70 @@
-commit b7a39eb41d25283be79d1eec8d0da65d9744ea43
+commit fb059307b24be15aa1d2379c14db6d169e9b0309
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Sun Jul 26 15:40:06 2026 -0700
 
     Adopt new object cache API
 
+diff --git a/duckdb b/duckdb
+index c97bd8b9..0cd9e829 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit c97bd8b96e0481b9e58d491f4fcd8599fccd65fb
++Subproject commit 0cd9e82950be5affb1a7096943d1481c3320914c
+diff --git a/src/include/storage/ducklake_catalog.hpp b/src/include/storage/ducklake_catalog.hpp
+index 69478c4c..a160bf34 100644
+--- a/src/include/storage/ducklake_catalog.hpp
++++ b/src/include/storage/ducklake_catalog.hpp
+@@ -309,7 +309,6 @@ private:
+ 	string StatsCacheKey(idx_t next_file_id, TableIndex table_id) const;
+ 	string SchemaCacheKey(idx_t schema_version) const;
+ 	string SchemaPinStateKey() const;
+-	ObjectCache &GetObjectCacheInstance();
+ 
+ private:
+ 	mutex name_maps_lock;
 diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
-index 1cbce0f8..a8e6ba0d 100644
+index 1cbce0f8..9b794205 100644
 --- a/src/storage/ducklake_catalog.cpp
 +++ b/src/storage/ducklake_catalog.cpp
-@@ -357,13 +357,13 @@ shared_ptr<DuckLakeSchemaCacheEntry> DuckLakeCatalog::GetSchemaCacheEntry(DuckLa
+@@ -355,7 +355,7 @@ idx_t DuckLakeCatalog::GetBeginSnapshotForSchemaVersion(TableIndex table_id, idx
+ 
+ shared_ptr<DuckLakeSchemaCacheEntry> DuckLakeCatalog::GetSchemaCacheEntry(DuckLakeTransaction &transaction,
                                                                            DuckLakeSnapshot snapshot) {
- 	auto &cache = GetObjectCacheInstance();
+-	auto &cache = GetObjectCacheInstance();
++	auto cache = ObjectCache::Get(GetDatabase());
  	auto key = SchemaCacheKey(snapshot.schema_version);
--	auto cached = cache.Get<DuckLakeSchemaCacheEntry>(key);
-+	auto cached = cache.Get<DuckLakeSchemaCacheEntry>(GetDatabase().GetMemoryContextId(), key);
+ 	auto cached = cache.Get<DuckLakeSchemaCacheEntry>(key);
  	if (cached) {
- 		return cached;
- 	}
- 	auto schema = LoadSchemaForSnapshot(transaction, snapshot);
- 	auto entry = make_shared_ptr<DuckLakeSchemaCacheEntry>(std::move(schema));
--	cache.Put(std::move(key), entry);
-+	cache.Put(GetDatabase().GetMemoryContextId(), std::move(key), entry);
- 	return entry;
- }
+@@ -809,7 +809,7 @@ shared_ptr<DuckLakeTableStats> DuckLakeCatalog::GetTableStats(DuckLakeTransactio
  
-@@ -811,7 +811,7 @@ shared_ptr<DuckLakeTableStats> DuckLakeCatalog::GetTableStats(DuckLakeTransactio
+ shared_ptr<DuckLakeTableStats> DuckLakeCatalog::GetTableStats(DuckLakeTransaction &transaction,
                                                                DuckLakeSnapshot snapshot, TableIndex table_id) {
- 	auto &cache = GetObjectCacheInstance();
+-	auto &cache = GetObjectCacheInstance();
++	auto cache = ObjectCache::Get(GetDatabase());
  	auto key = StatsCacheKey(snapshot.next_file_id, table_id);
--	auto cached = cache.Get<DuckLakeTableStatsCacheEntry>(key);
-+	auto cached = cache.Get<DuckLakeTableStatsCacheEntry>(GetDatabase().GetMemoryContextId(), key);
+ 	auto cached = cache.Get<DuckLakeTableStatsCacheEntry>(key);
  	if (cached) {
- 		auto *raw = cached.get();
- 		return shared_ptr<DuckLakeTableStats>(std::move(cached), &raw->stats);
-@@ -834,7 +834,7 @@ shared_ptr<DuckLakeTableStats> DuckLakeCatalog::GetTableStats(DuckLakeTransactio
- 	}
- 
- 	auto entry = make_shared_ptr<DuckLakeTableStatsCacheEntry>(std::move(*table_stats));
--	cache.Put(std::move(key), entry);
-+	cache.Put(GetDatabase().GetMemoryContextId(), std::move(key), entry);
- 	auto *raw = entry.get();
- 	return shared_ptr<DuckLakeTableStats>(std::move(entry), &raw->stats);
- }
 @@ -1099,11 +1099,11 @@ string DuckLakeCatalog::SchemaCacheKey(idx_t schema_version) const {
  }
  
  void DuckLakeCatalog::InvalidateTableStatsCache(idx_t next_file_id, TableIndex table_id) {
 -	GetObjectCacheInstance().Delete(StatsCacheKey(next_file_id, table_id));
-+	GetObjectCacheInstance().Delete(GetDatabase().GetMemoryContextId(), StatsCacheKey(next_file_id, table_id));
++	ObjectCache::Get(GetDatabase()).Delete(StatsCacheKey(next_file_id, table_id));
  }
  
  void DuckLakeCatalog::InvalidateSchemaCache(idx_t schema_version) {
 -	GetObjectCacheInstance().Delete(SchemaCacheKey(schema_version));
-+	GetObjectCacheInstance().Delete(GetDatabase().GetMemoryContextId(), SchemaCacheKey(schema_version));
++	ObjectCache::Get(GetDatabase()).Delete(SchemaCacheKey(schema_version));
  }
  
  void DuckLakeCatalog::InvalidateNameMapCache(MappingIndex mapping_id) {
+@@ -1115,8 +1115,4 @@ string DuckLakeCatalog::SchemaPinStateKey() const {
+ 	return StringUtil::Format("ducklake_schema_pin:%s:%s:%s", GetName(), MetadataPath(), instance_id);
+ }
+ 
+-ObjectCache &DuckLakeCatalog::GetObjectCacheInstance() {
+-	return GetDatabase().GetObjectCache();
+-}
+-
+ } // namespace duckdb
