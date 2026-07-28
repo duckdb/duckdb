@@ -1,7 +1,6 @@
 import subprocess
 import sys
 import os
-import re
 
 if len(sys.argv) < 2 or not os.path.isfile(sys.argv[1]):
     print("Usage: [libduckdb dynamic library file, release build]")
@@ -45,10 +44,11 @@ whitelist = [
     'ErrorFromArrayStream',
 ]
 
-for symbol in res.stdout.decode('utf-8').split('\n'):
-    if len(symbol.strip()) == 0:
+for value in res.stdout.decode('utf-8').split('\n'):
+    symbol = value.strip()
+    if not symbol:
         continue
-    if re.search(r' U\s*$', symbol):  # undefined because dynamic linker
+    if symbol.endswith(' U'):  # undefined because dynamic linker
         continue
     if symbol.endswith(' U 0 0') and "random_device" not in symbol:  # undefined because dynamic linker
         continue
