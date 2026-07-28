@@ -212,25 +212,26 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 		owned_stats.push_back(BaseStatistics::FromConstant(constant).ToUnique());
 		return owned_stats.back().get();
 	}
-	case ExpressionClass::BOUND_CAST: {
-		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		auto child_stats = TryGetFilterStats(context_p, cast_expr.Child(), stats, owned_stats);
-		if (!child_stats) {
-			return nullptr;
-		}
-		auto cast_stats = StatisticsPropagator::TryPropagateCast(*child_stats, cast_expr.Child().GetReturnType(),
-		                                                         cast_expr.GetReturnType());
-		if (!cast_stats) {
-			return nullptr;
-		}
-		if (cast_expr.IsTryCast()) {
-			cast_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
-		}
-		owned_stats.push_back(std::move(cast_stats));
-		return owned_stats.back().get();
-	}
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
+
+		if (BoundCastExpression::IsCast(func)) {
+			auto &cast_child = BoundCastExpression::Child(func);
+			auto child_stats = TryGetFilterStats(context_p, cast_child, stats, owned_stats);
+			if (!child_stats) {
+				return nullptr;
+			}
+			auto cast_stats =
+			    StatisticsPropagator::TryPropagateCast(*child_stats, cast_child.GetReturnType(), func.GetReturnType());
+			if (!cast_stats) {
+				return nullptr;
+			}
+			if (BoundCastExpression::IsTryCast(func)) {
+				cast_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+			}
+			owned_stats.push_back(std::move(cast_stats));
+			return owned_stats.back().get();
+		}
 
 		if (!context_p) {
 			// Since statistics callback need context, so this path is the fallback

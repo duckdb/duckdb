@@ -247,7 +247,7 @@ shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
 	if (!is_connected) {
 		return nullptr;
 	}
-	return connected_to_database.lock();
+	return AttachedDatabase::TryGetReference(connected_to_database);
 }
 
 //! True if `type` is a CONNECT control statement that must execute against LOCAL even while a
@@ -1040,7 +1040,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	if (statement) {
-		StatementVerification(lock, query, statement, parameters);
+		try {
+			StatementVerification(lock, query, statement, parameters);
+		} catch (std::exception &ex) {
+			// preserve extra error data (like query location)
+			return ErrorResult<PendingQueryResult>(ErrorData(ex), query);
+		}
 	}
 	return PendingStatementOrPreparedStatement(lock, query, std::move(statement), prepared, parameters);
 }
@@ -1072,7 +1077,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				// rewritten SELECT below.
 				prepared.reset();
 			}
-			auto live = connected_to_database.lock();
+			auto live = TryGetConnectedCatalog();
 			if (!live) {
 				// Target was detached elsewhere; user must explicitly DISCONNECT to clear is_connected.
 				return ErrorResult<PendingQueryResult>(
@@ -1085,6 +1090,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			// is contracted to be implemented. Wrap the returned TableRef into a SelectStatement.
 			auto remote_ref = live->GetCatalog().RemoteExecute(*this, query);
 			statement = WrapAsSelect(std::move(remote_ref));
+			AttachedDatabase::InvokeCloseIfLastReference(live, *this);
 			// statement is now SELECT * FROM <remote-ref>; fall through.
 		}
 	}

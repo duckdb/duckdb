@@ -1,4 +1,5 @@
 #include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
@@ -62,7 +63,7 @@ CatalogException CatalogException::MissingEntry(const string &type, const Identi
 
 CatalogException CatalogException::EntryAlreadyExists(CatalogType type, const Identifier &name,
                                                       QueryErrorContext context) {
-	auto extra_info = Exception::InitializeExtraInfo("ENTRY_ALREADY_EXISTS", optional_idx());
+	auto extra_info = Exception::InitializeExtraInfo("ENTRY_ALREADY_EXISTS", QueryLocation());
 	extra_info["name"] = name.GetIdentifierName();
 	extra_info["type"] = CatalogTypeToString(type);
 	return CatalogException(extra_info, StringUtil::Format("%s with name \"%s\" already exists!",

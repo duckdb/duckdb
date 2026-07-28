@@ -57,9 +57,13 @@ public:
 	unique_ptr<ParquetColumnSchema> owned_schema;
 
 public:
-	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
+	void InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_rows, const vector<ColumnChunk> &columns,
+	                    TProtocol &protocol_p) override;
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
+
+	void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
+	            idx_t approved_tuple_count) override;
 
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;

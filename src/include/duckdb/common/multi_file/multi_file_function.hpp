@@ -50,7 +50,7 @@ struct MultiFileReaderInterface {
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) = 0;
 	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) = 0;
 
-	virtual bool SupportsReadAhead() const {
+	virtual bool SupportsReadAhead(const MultiFileBindData &bind_data) const {
 		return false;
 	}
 	virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -256,13 +256,14 @@ public:
 	}
 
 	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData &data,
-	                                                         const vector<column_t> &column_ids,
+	                                                         const vector<ColumnIndex> &column_indexes,
 	                                                         optional_ptr<TableFilterSet> filters) {
 		if (!filters) {
 			return nullptr;
 		}
-		auto new_list = data.multi_file_reader->DynamicFilterPushdown(context, *data.file_list, data.file_options,
-		                                                              data.names, data.types, column_ids, *filters);
+		MultiFileDynamicPushdownInfo pushdown_info(context, data.file_options, data.names, data.types, column_indexes,
+		                                           *filters);
+		auto new_list = data.multi_file_reader->DynamicFilterPushdown(*data.file_list, pushdown_info);
 		return new_list;
 	}
 
@@ -438,7 +439,7 @@ public:
 
 			auto primary_index = local_id.GetPrimaryIndex();
 			auto cast_entry = reader.cast_map.find(primary_index);
-			auto expr_entry = reader.expression_map.find(primary_index);
+			auto expr_entry = reader.expression_map.find(ProjectionIndex(i));
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
@@ -563,7 +564,7 @@ public:
 
 	static void InitializeReadAhead(ClientContext &context, const MultiFileBindData &bind_data,
 	                                MultiFileGlobalState &gstate) {
-		if (!bind_data.interface->SupportsReadAhead() ||
+		if (!bind_data.interface->SupportsReadAhead(bind_data) ||
 		    TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
 			return;
 		}
@@ -587,7 +588,7 @@ public:
 		}
 
 		// before instantiating a scan trigger a dynamic filter pushdown if possible
-		auto new_list = MultiFileFilterPushdown(context, bind_data, input.column_ids, input.filters);
+		auto new_list = MultiFileFilterPushdown(context, bind_data, input.column_indexes, input.filters);
 		if (new_list) {
 			result = make_uniq<MultiFileGlobalState>(std::move(new_list));
 		} else {
@@ -825,6 +826,11 @@ public:
 			if (!job && read_ahead.IsDone() && !read_ahead.HasActiveProducers()) {
 				job = read_ahead.ClaimJob();
 				if (!job) {
+					// finish scan states left in the recycle pool so per-file accounting completes
+					unique_lock<mutex> parallel_lock(gstate.lock);
+					while (auto state = read_ahead.TryPopState()) {
+						bind_data.interface->FinishReading(context, *gstate.global_state, *state);
+					}
 					return MultiFileAcquireResult::EXHAUSTED;
 				}
 			}

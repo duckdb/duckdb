@@ -44,15 +44,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	}
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
-		if (!arguments[i]->IsFoldable()) {
-			throw BinderException("sort_specifier must be a constant value - but got %s", arguments[i]->ToString());
-		}
-
-		// Rebind to return a date if we are truncating that far
-		Value sort_specifier = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[i]);
-		if (sort_specifier.IsNull()) {
-			throw BinderException("sort_specifier cannot be NULL");
-		}
+		auto sort_specifier = input.GetNonNullConstant(i);
 		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
@@ -1048,11 +1040,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	auto result = make_uniq<SortKeyBindData>();
 	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		// Parse column definition
-		const auto &col_arg = *arguments[i];
-		if (!col_arg.IsFoldable()) {
-			throw BinderException("col must be a constant value - but got %s", col_arg.ToString());
-		}
-		Value col = ExpressionExecutor::EvaluateScalar(context, col_arg);
+		Value col = input.GetConstant(i);
 		const auto col_list = Parser::ParseColumnList(col.ToString());
 		if (col_list.LogicalColumnCount() != 1) {
 			throw BinderException("decode_sort_key col must contain exactly one column");
@@ -1074,14 +1062,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 		children.emplace_back(col_name, col_type);
 
 		// Parse sort specifier
-		const auto &specifier_arg = *arguments[i + 1];
-		if (!specifier_arg.IsFoldable()) {
-			throw BinderException("sort_specifier must be a constant value - but got %s", specifier_arg.ToString());
-		}
-		Value sort_specifier = ExpressionExecutor::EvaluateScalar(context, specifier_arg);
-		if (sort_specifier.IsNull()) {
-			throw BinderException("sort_specifier cannot be NULL");
-		}
+		auto sort_specifier = input.GetNonNullConstant(i + 1);
 		const auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
@@ -1514,9 +1495,10 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 }
 
 ScalarFunction DecodeSortKeyFun::GetFunction() {
-	ScalarFunction sort_key_function("decode_sort_key", {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                 LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction,
-	                                 DecodeSortKeyBind);
+	ScalarFunction sort_key_function(
+	    "decode_sort_key",
+	    {{"sort_key", LogicalType::ANY}, {"col", LogicalType::VARCHAR}, {"sort_specifier", LogicalType::VARCHAR}},
+	    LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction, DecodeSortKeyBind);
 	sort_key_function.SetVarArgs(LogicalType::VARCHAR);
 	return sort_key_function;
 }

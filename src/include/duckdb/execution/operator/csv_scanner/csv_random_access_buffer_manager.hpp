@@ -20,6 +20,7 @@ public:
 	                             bool per_file_single_threaded, unique_ptr<CSVFileHandle> file_handle);
 
 	shared_ptr<CSVBufferHandle> GetBuffer(const idx_t buffer_idx) override;
+	CSVBufferResidency GetBufferResidency(const idx_t buffer_idx, shared_ptr<CSVBufferHandle> &handle) override;
 	void ResetBuffer(const idx_t buffer_idx) override;
 	bool Done() const override;
 	void ResetBufferManager() override;

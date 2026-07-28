@@ -175,8 +175,8 @@ string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column
 //! rebuilt that way, so it must not be eligible for late materialization.
 bool IsRecreatableByLateMaterialization(const Expression &expr) {
 	reference<const Expression> current = expr;
-	while (current.get().GetExpressionClass() == ExpressionClass::BOUND_CAST) {
-		current = current.get().Cast<BoundCastExpression>().Child();
+	while (BoundCastExpression::IsCast(current.get())) {
+		current = BoundCastExpression::Child(current.get().Cast<BoundFunctionExpression>());
 	}
 	return current.get().GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
