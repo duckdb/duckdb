@@ -63,3 +63,16 @@ query II
 EXPLAIN SELECT i FROM integers LIMIT 8192
 ----
 logical_opt	<REGEX>:.*LIMIT.*PROJECTION.*
+
+statement ok
+CREATE SEQUENCE s START 1
+
+query II
+EXPLAIN SELECT nextval('s') AS v FROM integers LIMIT 1 OFFSET 1
+----
+logical_opt	<REGEX>:.*LIMIT.*PROJECTION.*
+
+query I
+SELECT nextval('s') AS v FROM integers LIMIT 1 OFFSET 1
+----
+2
