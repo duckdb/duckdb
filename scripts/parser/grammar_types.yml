@@ -102,6 +102,11 @@ SQLStatement:
     - UseStatement
     - VacuumStatement
     - PragmaAssignOrFunction
+    - ExternalResourceStatement
+    - CreateExternalResourceStmt
+    - RegisterExternalResourceStmt
+    - DestroyExternalResourceStmt
+    - ShowExternalResourcesStmt
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -1127,6 +1132,7 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - ShowAllModifier
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword
     - FunctionTypeFunction

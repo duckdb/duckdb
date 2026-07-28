@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/operator/logical_external_resource.hpp"
 
 namespace duckdb {
 
@@ -123,6 +124,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		result = LogicalExtensionOperator::Deserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_EXTERNAL_RESOURCE:
+		result = LogicalExternalResource::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = LogicalFilter::Deserialize(deserializer);
@@ -599,6 +603,17 @@ unique_ptr<LogicalOperator> LogicalExpressionGet::Deserialize(Deserializer &dese
 	auto expr_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "expr_types");
 	auto expressions = deserializer.ReadPropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(202, "expressions");
 	auto result = duckdb::unique_ptr<LogicalExpressionGet>(new LogicalExpressionGet(table_index, std::move(expr_types), std::move(expressions)));
+	return std::move(result);
+}
+
+void LogicalExternalResource::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WriteProperty<BoundExternalResource>(200, "data", data);
+}
+
+unique_ptr<LogicalOperator> LogicalExternalResource::Deserialize(Deserializer &deserializer) {
+	auto data = deserializer.ReadProperty<BoundExternalResource>(200, "data");
+	auto result = duckdb::unique_ptr<LogicalExternalResource>(new LogicalExternalResource(data));
 	return std::move(result);
 }
 

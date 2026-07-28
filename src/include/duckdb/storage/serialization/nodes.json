@@ -152,6 +152,40 @@
     ]
   },
   {
+    "class": "BoundExternalResource",
+    "includes": [
+      "duckdb/planner/operator/logical_external_resource.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "operation",
+        "type": "ExternalResourceOperation"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "params",
+        "type": "unordered_map<string, Value>"
+      },
+      {
+        "id": 104,
+        "name": "handle",
+        "type": "Value"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "CaseCheck",
     "includes": [
       "duckdb/parser/expression/case_expression.hpp"
