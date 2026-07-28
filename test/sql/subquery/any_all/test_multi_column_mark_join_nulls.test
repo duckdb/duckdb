@@ -13,8 +13,8 @@ FROM (VALUES (1, 5), (2, 6), (3, 9), (9, 8), (3, NULL::INT),
 1	5	false	true
 2	6	true	false
 3	9	NULL	NULL
-9	8	false	true
 3	NULL	NULL	NULL
+9	8	false	true
 NULL	8	NULL	NULL
 NULL	NULL	NULL	NULL
 
