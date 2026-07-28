@@ -66,12 +66,12 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 }
 
 void AtClause::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(1, "unit", unit);
+	serializer.WritePropertyWithDefault<Identifier>(1, "unit", unit);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(2, "expr", expr);
 }
 
 unique_ptr<AtClause> AtClause::Deserialize(Deserializer &deserializer) {
-	auto unit = deserializer.ReadPropertyWithDefault<string>(1, "unit");
+	auto unit = deserializer.ReadPropertyWithDefault<Identifier>(1, "unit");
 	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(2, "expr");
 	auto result = duckdb::unique_ptr<AtClause>(new AtClause(std::move(unit), std::move(expr)));
 	return result;
