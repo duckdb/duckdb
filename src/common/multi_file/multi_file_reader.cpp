@@ -209,13 +209,21 @@ unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &
 	return files.ComplexFilterPushdown(context, options, info, filters);
 }
 
-unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(ClientContext &context, const MultiFileList &files,
-                                                                 const MultiFileOptions &options,
-                                                                 const vector<Identifier> &names,
-                                                                 const vector<LogicalType> &types,
-                                                                 const vector<column_t> &column_ids,
-                                                                 TableFilterSet &filters) {
-	return files.DynamicFilterPushdown(context, options, names, types, column_ids, filters);
+MultiFileDynamicPushdownInfo::MultiFileDynamicPushdownInfo(ClientContext &context, const MultiFileOptions &options,
+                                                           const vector<Identifier> &column_names,
+                                                           const vector<LogicalType> &column_types,
+                                                           const vector<ColumnIndex> &column_indexes,
+                                                           TableFilterSet &filters)
+    : context(context), options(options), column_names(column_names), column_types(column_types),
+      column_indexes(column_indexes), filters(filters) {
+	for (auto &column_id : column_indexes) {
+		column_ids.push_back(column_id.GetPrimaryIndex());
+	}
+}
+
+unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(const MultiFileList &files,
+                                                                 MultiFileDynamicPushdownInfo &pushdown_info) {
+	return files.DynamicFilterPushdown(pushdown_info);
 }
 
 bool MultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,

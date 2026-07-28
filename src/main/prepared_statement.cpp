@@ -115,8 +115,7 @@ PreparedStatement::CreateExecuteStatement(const identifier_map_t<BoundParameterD
 	execute->name = Identifier(name);
 	// report the query that was prepared - not the generated EXECUTE - in errors and profiling output
 	execute->query = query;
-	execute->stmt_location = 0;
-	execute->stmt_length = query.size();
+	execute->stmt_location = QueryLocation(0, query.size());
 	// the values are already typed - pass them in pre-bound instead of as SQL literals
 	execute->bound_values = named_values;
 	return std::move(execute);

@@ -857,6 +857,17 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 	}
 }
 
+void StringValueResult::InvalidateUnwrittenColumns(idx_t first_unwritten_col) {
+	// A borked row is sliced out of the chunk later on, but the slice still spans it - the columns we never got around
+	// to writing must not be left as uninitialized string_t values with their valid bit set
+	if (borked_rows.find(static_cast<idx_t>(number_of_rows)) == borked_rows.end()) {
+		return;
+	}
+	for (idx_t col_idx = first_unwritten_col; col_idx < validity_mask.size(); col_idx++) {
+		validity_mask[col_idx]->SetInvalid(static_cast<idx_t>(number_of_rows));
+	}
+}
+
 bool StringValueResult::AddRowInternal() {
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - current_line_position.end;
@@ -873,13 +884,7 @@ bool StringValueResult::AddRowInternal() {
 
 	const auto chunk_col_id_before = chunk_col_id;
 	if (current_errors.HandleErrors(*this)) {
-		// Before we add row, invalid all columns that are not populated for this row (i.e., CSV rows have fewer fields
-		// than expected). Otherwise, uninitialized string_t with valid bits set would lead invalid memory access.
-		if (borked_rows.find(static_cast<idx_t>(number_of_rows)) != borked_rows.end()) {
-			for (idx_t cur_col_idx = chunk_col_id_before; cur_col_idx < validity_mask.size(); ++cur_col_idx) {
-				validity_mask[cur_col_idx]->SetInvalid(static_cast<idx_t>(number_of_rows));
-			}
-		}
+		InvalidateUnwrittenColumns(chunk_col_id_before);
 
 		D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
 		D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
@@ -2034,7 +2039,9 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 	}
 	const bool found_error =
 	    result.current_errors.HasErrorType(UNTERMINATED_QUOTES) || result.current_errors.HasErrorType(INVALID_STATE);
+	auto chunk_col_id_before = result.chunk_col_id;
 	if (result.current_errors.HandleErrors(result)) {
+		result.InvalidateUnwrittenColumns(chunk_col_id_before);
 		result.number_of_rows++;
 	}
 	if (states.IsQuotedCurrent() && !found_error) {
@@ -2043,7 +2050,9 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 			// quotes
 			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
 			                             result.last_position);
+			chunk_col_id_before = result.chunk_col_id;
 			if (result.current_errors.HandleErrors(result)) {
+				result.InvalidateUnwrittenColumns(chunk_col_id_before);
 				result.number_of_rows++;
 			}
 		} else {

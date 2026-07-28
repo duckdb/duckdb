@@ -10,8 +10,10 @@
 
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
+#include "duckdb/optimizer/join_order/join_order_operator.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -22,6 +24,11 @@ namespace duckdb {
 
 class JoinOrderOptimizer;
 class FilterInfo;
+
+struct JoinOrderExtraction {
+	vector<unique_ptr<FilterInfo>> filters;
+	vector<unique_ptr<JoinOrderOperator>> join_operators;
+};
 
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {
@@ -48,9 +55,8 @@ public:
 
 	//! for each join filter in the logical plan op, extract the relations that are referred to on
 	//! both sides of the join filter, along with the tables & indexes.
-	vector<unique_ptr<FilterInfo>> ExtractEdges(LogicalOperator &op,
-	                                            vector<reference<LogicalOperator>> &filter_operators,
-	                                            JoinRelationSetManager &set_manager);
+	JoinOrderExtraction ExtractEdges(LogicalOperator &op, vector<reference<LogicalOperator>> &filter_operators,
+	                                 JoinRelationSetManager &set_manager);
 
 	//! Extract the set of relations referred to inside an expression
 	bool ExtractBindings(const Expression &expression, unordered_set<RelationIndex> &bindings);
@@ -68,8 +74,6 @@ public:
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<TableIndex, RelationIndex> relation_mapping;
 
-	bool CrossProductWithRelationAllowed(idx_t relation_id);
-
 	void PrintRelationStats();
 
 private:
@@ -82,7 +86,7 @@ private:
 	ClientContext &context;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<SingleJoinRelation>> relations;
-	unordered_set<idx_t> no_cross_product_relations;
+	reference_map_t<LogicalOperator, RelationIndex> operator_relations;
 };
 
 } // namespace duckdb

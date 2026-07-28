@@ -822,7 +822,6 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	prepare->name = Identifier(name);
 	prepare->query = statement_query;
 	prepare->stmt_location = statement->stmt_location;
-	prepare->stmt_length = statement->stmt_length;
 	prepare->statement = std::move(statement);
 
 	PendingQueryParameters parameters;
@@ -1274,7 +1273,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
                                                                    bool verify) {
 	auto query = statement->query;
 	if (verify) {
-		StatementVerification(lock, query, statement, parameters);
+		try {
+			StatementVerification(lock, query, statement, parameters);
+		} catch (std::exception &ex) {
+			// preserve extra error data (like query location)
+			return ErrorResult<PendingQueryResult>(ErrorData(ex), query);
+		}
 	}
 	return PendingStatement(lock, query, std::move(statement), parameters);
 }

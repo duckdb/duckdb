@@ -1,0 +1,24 @@
+diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
+--- a/src/functions/ducklake_compaction_functions.cpp
++++ b/src/functions/ducklake_compaction_functions.cpp
+@@ -666,7 +666,7 @@
+ 
+ 	// generate the LogicalCopyToFile
+ 	auto copy = make_uniq<LogicalCopyToFile>(std::move(copy_options.copy_function), std::move(copy_options.bind_data),
+-	                                         std::move(copy_options.info));
++	                                         std::move(copy_options.info), binder.GenerateTableIndex());
+ 
+ 	auto &fs = FileSystem::GetFileSystem(context);
+ 	if (write_row_id) {
+diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
+--- a/src/functions/ducklake_flush_inlined_data.cpp
++++ b/src/functions/ducklake_flush_inlined_data.cpp
+@@ -378,7 +378,7 @@
+ 
+ 	// generate the LogicalCopyToFile
+ 	auto copy = make_uniq<LogicalCopyToFile>(std::move(copy_options.copy_function), std::move(copy_options.bind_data),
+-	                                         std::move(copy_options.info));
++	                                         std::move(copy_options.info), binder.GenerateTableIndex());
+ 
+ 	copy->file_path = std::move(copy_options.file_path);
+ 	copy->use_tmp_file = copy_options.use_tmp_file;
