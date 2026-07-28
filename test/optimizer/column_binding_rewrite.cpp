@@ -108,7 +108,7 @@ static unique_ptr<LogicalOperator> CreateBoundaryTestPlan(TableIndex child_index
 	auto filter = make_uniq<LogicalFilter>(std::move(filter_expression));
 	filter->projection_map.emplace_back(ProjectionIndex(0));
 	filter->children.push_back(std::move(child));
-	return filter;
+	return std::move(filter);
 }
 
 TEST_CASE("Binding rewrites stop at child output boundaries", "[optimizer][bindings]") {
