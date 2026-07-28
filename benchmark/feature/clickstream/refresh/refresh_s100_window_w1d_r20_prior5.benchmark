@@ -1,0 +1,9 @@
+# name: benchmark/feature/clickstream/refresh/refresh_s100_window_w1d_r20_prior5.benchmark
+# description: Generated REFRESH scenario s100_window_w1d_r20_prior5 (seed=42)
+# group: [refresh]
+
+template benchmark/feature/clickstream/refresh/refresh.benchmark.in
+BENCH_NAME=Refresh_s100_window_w1d_r20_prior5
+PARQUET_COUNT=100
+SETUP_SQL=DROP FEATURE IF EXISTS f; DROP FEATURE IF EXISTS f2; DROP FEATURE IF EXISTS f3; CREATE FEATURE f ENTITY users TIMESTAMP EventTime WINDOW 1 DAY RETAIN 20 AS (SELECT DISTINCT UserID, COUNT(*) OVER (PARTITION BY UserID) AS event_count, AVG(RegionID) OVER (PARTITION BY UserID) AS avg_region FROM hits); REFRESH FEATURE f AT '2013-03-03 00:00:00'; REFRESH FEATURE f AT '2013-04-02 00:00:00'; REFRESH FEATURE f AT '2013-05-02 00:00:00'; REFRESH FEATURE f AT '2013-06-01 00:00:00'; REFRESH FEATURE f AT '2013-07-01 00:00:00';
+RUN_QUERY=REFRESH FEATURE f AT '2013-07-31 00:00:00';
