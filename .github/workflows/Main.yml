@@ -509,7 +509,7 @@ jobs:
         EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/linux_release_extensions.cmake'
         ENABLE_EXTENSION_AUTOLOADING: 1
         ENABLE_EXTENSION_AUTOINSTALL: 1
-        LTO: full
+        LTO: thin
         LTO_JOBS: 8
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
