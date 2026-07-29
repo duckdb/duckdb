@@ -414,7 +414,7 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	}
 	if (last_child_ptr) {
 		meta_pipeline.AddRecursiveDependencies(side_effect_pipelines, *last_child_ptr, RecursiveDependencyMode::FORCE,
-		                                       exchange ? DataflowDependencyMode::SKIP
+		                                       exchange ? DataflowDependencyMode::SKIP_CONFLICTING
 		                                                : DataflowDependencyMode::INCLUDE);
 	}
 }
