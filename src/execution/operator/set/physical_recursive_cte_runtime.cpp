@@ -116,16 +116,20 @@ static idx_t GetRecursiveRowLimit(idx_t frontier_rows) {
 	return MaxValue<idx_t>((frontier_rows + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
 }
 
-static idx_t GetRecursiveWorkerCount(const RecursiveCTEState &state, idx_t work_units, idx_t row_limit) {
+static idx_t GetRecursiveWorkerCount(const RecursiveCTEState &state, idx_t work_units, idx_t row_limit,
+                                     idx_t execute_pipeline_count) {
 	D_ASSERT(work_units > 1);
 	D_ASSERT(row_limit > 1);
+	D_ASSERT(execute_pipeline_count > 0);
 	const auto configured_threads =
 	    TaskScheduler::GetScheduler(state.op.recursive_meta_pipeline->GetExecutor().context).NumberOfThreads();
 	const auto worker_count = MinValue(MinValue(row_limit, work_units), configured_threads);
-	// Ordinary UNION ALL needs enough work to amortize both the event graph and private-output combine.
-	if (!state.op.using_key && state.op.union_all && state.op.recursive_reference_count <= 1 && worker_count > 1 &&
-	    work_units / worker_count < 2) {
-		return 1;
+	if (!state.op.using_key && state.op.union_all && worker_count > 1) {
+		// Ordinary UNION ALL needs enough work to amortize every scheduled pipeline and private-output combine.
+		const auto minimum_work_units_per_worker = MaxValue<idx_t>(execute_pipeline_count, 2);
+		if (work_units / worker_count < minimum_work_units_per_worker) {
+			return 1;
+		}
 	}
 	return worker_count;
 }
@@ -312,6 +316,9 @@ public:
 static idx_t AddRecursiveInlineStage(RecursiveCTEPipelineSchedulePlan &plan, RecursiveCTEInlineStageType type,
                                      Pipeline &pipeline) {
 	plan.stages.emplace_back(type, pipeline);
+	if (type == RecursiveCTEInlineStageType::EXECUTE) {
+		plan.execute_pipeline_count++;
+	}
 	return plan.stages.size() - 1;
 }
 
@@ -956,7 +963,8 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	if (row_limit > 1) {
 		work_units = GetRecursiveWorkUnits(gstate);
 		if (work_units > 1) {
-			worker_count = GetRecursiveWorkerCount(gstate, work_units, row_limit);
+			worker_count =
+			    GetRecursiveWorkerCount(gstate, work_units, row_limit, schedule_plan->execute_pipeline_count);
 		}
 	} else if (collect_metrics) {
 		// Runtime metrics report exact frontier work even when the row bound makes the epoch serial.

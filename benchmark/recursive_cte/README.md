@@ -35,6 +35,13 @@ a proper subset of a composite `USING KEY`. The partial-probe workloads are
 therefore isolated operator benchmarks: they measure the one-to-many lookup
 shape without claiming that the published query corpus exercises it.
 
+The `flummi` directory contains a curated set of generated recursive programs
+from [Flummi](https://github.com/DBatUTuebingen/flummi), pinned to the upstream
+source revision documented there. These add control-flow-heavy graph, cellular
+automaton, clustering, and ray-tracing workloads. Their deterministic inputs
+and compact result checks make the generated programs suitable for continuous
+performance and correctness regression testing.
+
 The optional `queries/ldbc/dvr.sql` workload runs the published DVR access
 pattern over DuckDB's existing LDBC SF0.1 dataset. Follow the setup steps in
 `benchmark/ldbc/README.md`, then run:

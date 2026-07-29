@@ -19,3 +19,10 @@ benchmark/recursive_cte/partial_probe_single_epoch.benchmark
 benchmark/recursive_cte/partial_probe_five_epochs.benchmark
 benchmark/recursive_cte/partial_probe_sparse_large.benchmark
 benchmark/recursive_cte/tiny_frontier_union_all.benchmark
+benchmark/recursive_cte/flummi_community_detection.benchmark
+benchmark/recursive_cte/flummi_connected_components.benchmark
+benchmark/recursive_cte/flummi_generations.benchmark
+benchmark/recursive_cte/flummi_k_core_using_key.benchmark
+benchmark/recursive_cte/flummi_kmeans.benchmark
+benchmark/recursive_cte/flummi_life.benchmark
+benchmark/recursive_cte/flummi_ray.benchmark
