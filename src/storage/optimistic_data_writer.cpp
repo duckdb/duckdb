@@ -26,6 +26,10 @@ OptimisticDataWriter::~OptimisticDataWriter() {
 }
 
 bool OptimisticDataWriter::PrepareWrite() {
+	// check if optimistic writing is enabled
+	if (!Settings::Get<EnableOptimisticWriteSetting>(context)) {
+		return false;
+	}
 	// check if we should pre-emptively write the table to disk
 	auto &attached = table.GetAttached();
 	auto &storage_manager = StorageManager::Get(attached);

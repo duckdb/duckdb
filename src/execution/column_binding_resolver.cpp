@@ -69,9 +69,13 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// get bindings from the duplicate-eliminated side
 		auto &delim_side = comp_join.delim_flipped ? *comp_join.children[1] : *comp_join.children[0];
 		VisitOperator(delim_side);
+		auto delim_bindings = bindings;
+		auto delim_types = types;
 		for (auto &cond : comp_join.conditions) {
-			auto &expr = comp_join.delim_flipped ? cond.RightReference() : cond.LeftReference();
-			VisitExpression(&expr);
+			if (cond.IsComparison()) {
+				auto &expr = comp_join.delim_flipped ? cond.RightReference() : cond.LeftReference();
+				VisitExpression(&expr);
+			}
 		}
 		// visit the duplicate eliminated columns
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
@@ -80,9 +84,28 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// now the other side
 		auto &other_side = comp_join.delim_flipped ? *comp_join.children[0] : *comp_join.children[1];
 		VisitOperator(other_side);
+		auto other_bindings = bindings;
+		auto other_types = types;
 		for (auto &cond : comp_join.conditions) {
-			auto &expr = comp_join.delim_flipped ? cond.LeftReference() : cond.RightReference();
-			VisitExpression(&expr);
+			if (cond.IsComparison()) {
+				auto &expr = comp_join.delim_flipped ? cond.LeftReference() : cond.RightReference();
+				VisitExpression(&expr);
+			}
+		}
+
+		// arbitrary expressions are resolved against both join sides in logical left/right order
+		auto combined_bindings = comp_join.delim_flipped ? other_bindings : delim_bindings;
+		auto &right_bindings = comp_join.delim_flipped ? delim_bindings : other_bindings;
+		combined_bindings.insert(combined_bindings.end(), right_bindings.begin(), right_bindings.end());
+		auto combined_types = comp_join.delim_flipped ? other_types : delim_types;
+		auto &right_types = comp_join.delim_flipped ? delim_types : other_types;
+		combined_types.insert(combined_types.end(), right_types.begin(), right_types.end());
+		bindings = std::move(combined_bindings);
+		types = std::move(combined_types);
+		for (auto &cond : comp_join.conditions) {
+			if (!cond.IsComparison()) {
+				VisitExpression(&cond.JoinExpressionReference());
+			}
 		}
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();

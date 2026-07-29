@@ -140,6 +140,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CONNECT";
 	case LogicalOperatorType::LOGICAL_DISCONNECT:
 		return "DISCONNECT";
+	case LogicalOperatorType::LOGICAL_EXTERNAL_RESOURCE:
+		return "EXTERNAL_RESOURCE";
 	}
 	return "INVALID";
 }
