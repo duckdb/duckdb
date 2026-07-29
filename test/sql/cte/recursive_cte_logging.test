@@ -131,6 +131,51 @@ CALL enable_logging('PhysicalOperator');
 statement ok
 CALL truncate_duckdb_logs();
 
+# A materialized window source can expose parallel work beyond the narrow recursive frontier.
+query III
+WITH RECURSIVE t(i, level, rn) AS (
+	SELECT i, 0, 0::BIGINT
+	FROM range(current_setting('standard_vector_size')::BIGINT * 2) values(i)
+	UNION ALL
+	(
+		WITH tmp AS MATERIALIZED (SELECT * FROM t),
+		ranked AS (
+			SELECT a.i,
+			       a.level,
+			       row_number() OVER (PARTITION BY a.i ORDER BY b.i DESC) AS rn
+			FROM tmp a
+			JOIN tmp b
+			  ON a.i % greatest(current_setting('standard_vector_size')::BIGINT / 64, 1)
+			   = b.i % greatest(current_setting('standard_vector_size')::BIGINT / 64, 1)
+		)
+		SELECT i, level + 1, rn
+		FROM ranked
+		WHERE rn = 1 AND level < 2
+	)
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT * 6,
+       max(level) = 2,
+       sum(rn) = current_setting('standard_vector_size')::BIGINT * 4
+FROM t;
+----
+1	1	1
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
 # Growing frontiers must not be throttled by measurements from earlier, cheaper epochs.
 query II
 WITH RECURSIVE t(i, level) AS (
