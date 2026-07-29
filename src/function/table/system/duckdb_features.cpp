@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/feature_refresh_scheduler.hpp"
@@ -64,6 +65,14 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	return_types.emplace_back(LogicalType::INTERVAL);
 
 	names.emplace_back("entity_table");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	// The retained version numbers and their snapshot timestamps, comma-joined. Used by SERVE to assign each
+	// spine row its version without touching the store; exposed here so tests can assert on it.
+	names.emplace_back("retained_versions");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("retained_version_timestamps");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
@@ -129,6 +138,19 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		output.data[13].Append(Value::INTERVAL(feat.ttl_interval));
 		// entity_table
 		output.data[14].Append(Value(feat.entity_table));
+
+		// retained_versions
+		vector<string> version_strings;
+		for (auto version : feat.retained_version_numbers) {
+			version_strings.push_back(to_string(version));
+		}
+		output.data[15].Append(Value(StringUtil::Join(version_strings, ",")));
+		// retained_version_timestamps
+		vector<string> timestamp_strings;
+		for (auto micros : feat.retained_version_timestamps_micros) {
+			timestamp_strings.push_back(Timestamp::ToString(timestamp_t(micros)));
+		}
+		output.data[16].Append(Value(StringUtil::Join(timestamp_strings, ",")));
 
 		count++;
 	}

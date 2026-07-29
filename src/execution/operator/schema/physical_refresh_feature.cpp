@@ -12,6 +12,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
@@ -182,15 +183,20 @@ static void EvictOldVersions(ClientContext &context, DuckTableEntry &table, idx_
 	// zonemap (min/max) statistics skip those row groups without scanning them. The exact per-row
 	// check below is unchanged and still runs on every row that is scanned, since a row group can
 	// straddle a version boundary if an earlier append didn't fill it exactly.
+	// Skipping the filter is therefore result-preserving -- it just scans every row group -- which is
+	// what the baseline setting asks for when measuring the cost this pushdown avoids.
 	TableFilterSet filters;
-	auto version_ref = make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, storage_t(0));
-	auto cutoff_value = make_uniq<BoundConstantExpression>(Value::BIGINT(cutoff));
-	auto version_filter = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-	                                                        std::move(version_ref), std::move(cutoff_value));
-	filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(version_filter)));
+	bool push_zonemap_filter = !Settings::Get<FeatureDisableOptimizationsSetting>(context);
+	if (push_zonemap_filter) {
+		auto version_ref = make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, storage_t(0));
+		auto cutoff_value = make_uniq<BoundConstantExpression>(Value::BIGINT(cutoff));
+		auto version_filter = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		                                                        std::move(version_ref), std::move(cutoff_value));
+		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(version_filter)));
+	}
 
 	TableScanState scan_state;
-	storage.InitializeScan(context, transaction, scan_state, column_ids, &filters);
+	storage.InitializeScan(context, transaction, scan_state, column_ids, push_zonemap_filter ? &filters : nullptr);
 
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(Allocator::Get(context), vector<LogicalType> {LogicalType::BIGINT, LogicalType::ROW_TYPE});
@@ -249,7 +255,7 @@ SourceResultType PhysicalRefreshFeature::GetDataInternal(ExecutionContext &conte
 	// Bump the feature's current version through the catalog so it is recorded transactionally (WAL /
 	// checkpoint) and commits atomically with the appended snapshot and the eviction.
 	AlterEntryData alter_data(gstate.catalog_name, gstate.schema_name, feature_name, OnEntryNotFound::THROW_EXCEPTION);
-	AlterFeatureInfo alter_info(std::move(alter_data), gstate.new_version);
+	AlterFeatureInfo alter_info(std::move(alter_data), gstate.new_version, feature_timestamp);
 	catalog.Alter(context.client, alter_info);
 
 	chunk.SetCardinality(1);

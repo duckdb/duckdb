@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -36,8 +37,9 @@ enum class AlterFeatureType : uint8_t {
 //! Updates a feature transactionally so the change is written to the WAL / checkpoint and survives a
 //! restart. The specific operation is selected by alter_feature_type.
 struct AlterFeatureInfo : public AlterInfo {
-	//! Construct a BUMP_VERSION alter (used internally by REFRESH FEATURE)
-	AlterFeatureInfo(AlterEntryData data, int64_t new_version);
+	//! Construct a BUMP_VERSION alter (used internally by REFRESH FEATURE). The snapshot timestamp is appended
+	//! to the feature's retained version map, and versions evicted by GC are pruned from it.
+	AlterFeatureInfo(AlterEntryData data, int64_t new_version, timestamp_t snapshot_timestamp);
 	//! Construct an interval-carrying alter. The interval is interpreted per type: SET_TTL sets the TTL,
 	//! SET_SCHEDULE sets the schedule interval, and ENABLE/DISABLE_SCHEDULE ignore it.
 	AlterFeatureInfo(AlterEntryData data, AlterFeatureType type, interval_t interval);
@@ -51,6 +53,8 @@ struct AlterFeatureInfo : public AlterInfo {
 	interval_t schedule_interval;
 	//! The new TTL interval (valid when alter_feature_type == SET_TTL)
 	interval_t ttl_interval;
+	//! Snapshot timestamp of the new version as micros since epoch (valid when alter_feature_type == BUMP_VERSION)
+	int64_t snapshot_timestamp_micros;
 
 public:
 	CatalogType GetCatalogType() const override;

@@ -114,6 +114,8 @@ void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(213, "schedule_enabled", schedule_enabled, true);
 	serializer.WritePropertyWithDefault<interval_t>(214, "window_interval", window_interval, interval_t());
 	serializer.WritePropertyWithDefault<interval_t>(215, "ttl_interval", ttl_interval, interval_t());
+	serializer.WritePropertyWithDefault<vector<int64_t>>(216, "retained_version_numbers", retained_version_numbers, vector<int64_t>());
+	serializer.WritePropertyWithDefault<vector<int64_t>>(217, "retained_version_timestamps_micros", retained_version_timestamps_micros, vector<int64_t>());
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
@@ -134,6 +136,8 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithExplicitDefault<bool>(213, "schedule_enabled", result->schedule_enabled, true);
 	deserializer.ReadPropertyWithExplicitDefault<interval_t>(214, "window_interval", result->window_interval, interval_t());
 	deserializer.ReadPropertyWithExplicitDefault<interval_t>(215, "ttl_interval", result->ttl_interval, interval_t());
+	deserializer.ReadPropertyWithExplicitDefault<vector<int64_t>>(216, "retained_version_numbers", result->retained_version_numbers, vector<int64_t>());
+	deserializer.ReadPropertyWithExplicitDefault<vector<int64_t>>(217, "retained_version_timestamps_micros", result->retained_version_timestamps_micros, vector<int64_t>());
 	result->FinalizeDeserialization();
 	return std::move(result);
 }

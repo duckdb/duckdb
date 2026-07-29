@@ -456,6 +456,18 @@
         "name": "ttl_interval",
         "type": "interval_t",
         "default": "interval_t()"
+      },
+      {
+        "id": 216,
+        "name": "retained_version_numbers",
+        "type": "vector<int64_t>",
+        "default": "vector<int64_t>()"
+      },
+      {
+        "id": 217,
+        "name": "retained_version_timestamps_micros",
+        "type": "vector<int64_t>",
+        "default": "vector<int64_t>()"
       }
     ]
   }

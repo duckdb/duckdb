@@ -707,6 +707,13 @@
         ]
     },
     {
+        "name": "feature_disable_optimizations",
+        "description": "Disable every feature-store optimization to measure an unoptimized baseline: SERVE falls back to the legacy ASOF join instead of the version-table equi-join, the SERVE store scan is left unbounded, REFRESH GC stops pushing its zonemap row-group filter, and the REFRESH spine keeps its DISTINCT",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "file_search_path",
         "description": "A comma separated list of directories to search for input files",
         "type": "VARCHAR",

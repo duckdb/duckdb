@@ -1,0 +1,172 @@
+# name: test/sql/feature/test_feature_serve_equijoin_edge.test
+# description: SERVE version-table edge cases -- out-of-order REFRESH AT, tied timestamps, global, multi-feature
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE cards (card_no VARCHAR);
+
+statement ok
+INSERT INTO cards VALUES ('C001');
+
+statement ok
+CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO transactions VALUES
+    ('C001', 10.00, '2024-01-01 10:00:00'),
+    ('C001', 20.00, '2024-01-05 10:00:00');
+
+statement ok
+CREATE FEATURE ooo ENTITY cards TIMESTAMP event_time WINDOW 2 DAYS RETAIN 5 AS (SELECT card_no, SUM(amount) AS total_amount FROM transactions GROUP BY card_no);
+
+# Version 1 is stamped LATER than version 2: a backfill run after a current refresh.
+statement ok
+REFRESH FEATURE ooo AT '2024-01-06 00:00:00';
+
+statement ok
+REFRESH FEATURE ooo AT '2024-01-02 00:00:00';
+
+statement ok
+CREATE TABLE ooo_requests (card_no VARCHAR, asof_time TIMESTAMP);
+
+statement ok
+INSERT INTO ooo_requests VALUES
+    ('C001', '2024-01-03 00:00:00'),
+    ('C001', '2024-01-07 00:00:00');
+
+# Jan 3 -> the Jan 2 snapshot (version 2); Jan 7 -> the Jan 6 snapshot (version 1). Resolution follows
+# timestamp order, not version order, so both are right despite the inverted version numbering.
+query TTR sort
+SERVE FEATURE ooo FOR ooo_requests ASOF asof_time;
+----
+C001	2024-01-03 00:00:00	10.00
+C001	2024-01-07 00:00:00	20.00
+
+# Latest mode picks the max-timestamp snapshot (version 1, Jan 6), not the highest version number.
+query TR
+SERVE FEATURE ooo FOR cards;
+----
+C001	20.00
+
+# The unoptimized baseline (legacy ASOF fallback included) agrees on all of it.
+statement ok
+SET feature_disable_optimizations = true;
+
+query TTR sort
+SERVE FEATURE ooo FOR ooo_requests ASOF asof_time;
+----
+C001	2024-01-03 00:00:00	10.00
+C001	2024-01-07 00:00:00	20.00
+
+query TR
+SERVE FEATURE ooo FOR cards;
+----
+C001	20.00
+
+statement ok
+RESET feature_disable_optimizations;
+
+# ============================================================
+# Two snapshots refreshed AT the same timestamp. DuckDB's ASOF join has no value-based tie-break, so this is
+# what DedupVersionStampsByTimestamp exists for: the higher version must win, deterministically.
+# ============================================================
+statement ok
+CREATE TABLE tie_cards (card_no VARCHAR);
+
+statement ok
+INSERT INTO tie_cards VALUES ('T001');
+
+statement ok
+CREATE TABLE tie_events (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO tie_events VALUES ('T001', 7.00, '2024-01-01 00:00:00');
+
+statement ok
+CREATE FEATURE tie_f ENTITY tie_cards TIMESTAMP event_time WINDOW 40 DAYS RETAIN 5 AS (SELECT card_no, SUM(amount) AS total_amount FROM tie_events GROUP BY card_no);
+
+statement ok
+REFRESH FEATURE tie_f AT '2024-02-01 00:00:00';
+
+# A second event, then a second refresh AT the SAME timestamp -> two versions, identical timestamps,
+# different values. Version 2 (14.00) must win.
+statement ok
+INSERT INTO tie_events VALUES ('T001', 7.00, '2024-01-02 00:00:00');
+
+statement ok
+REFRESH FEATURE tie_f AT '2024-02-01 00:00:00';
+
+query TT
+SELECT retained_versions, retained_version_timestamps FROM duckdb_features() WHERE feature_name = 'tie_f';
+----
+1,2	2024-02-01 00:00:00,2024-02-01 00:00:00
+
+query TR
+SERVE FEATURE tie_f FOR tie_cards;
+----
+T001	14.00
+
+statement ok
+CREATE TABLE tie_requests (card_no VARCHAR, asof_time TIMESTAMP);
+
+statement ok
+INSERT INTO tie_requests VALUES ('T001', '2024-03-01 00:00:00');
+
+query TTR
+SERVE FEATURE tie_f FOR tie_requests ASOF asof_time;
+----
+T001	2024-03-01 00:00:00	14.00
+
+# ============================================================
+# Global feature: no entity columns, so the store join is the version equality alone.
+# ============================================================
+statement ok
+CREATE TABLE g_entity (only_key INTEGER);
+
+statement ok
+INSERT INTO g_entity VALUES (1);
+
+statement ok
+CREATE FEATURE g_total ENTITY g_entity TIMESTAMP event_time WINDOW 30 DAYS RETAIN 2 AS (SELECT SUM(amount) AS grand_total FROM transactions);
+
+statement ok
+REFRESH FEATURE g_total AT '2024-01-06 00:00:00';
+
+statement ok
+CREATE TABLE g_requests (req_id INTEGER);
+
+statement ok
+INSERT INTO g_requests VALUES (1), (2);
+
+query IR sort
+SERVE FEATURE g_total FOR g_requests;
+----
+1	30.00
+2	30.00
+
+# ============================================================
+# Multi-feature: each feature attaches its own version-boundary join and its own store join.
+# ============================================================
+query TTRR sort
+SERVE FEATURE ooo, ooo FOR ooo_requests ASOF asof_time;
+----
+C001	2024-01-03 00:00:00	10.00	10.00
+C001	2024-01-07 00:00:00	20.00	20.00
+
+# ============================================================
+# A spine reaching back before every retained snapshot resolves to NULL, not to the oldest snapshot.
+# ============================================================
+statement ok
+CREATE TABLE early_requests (card_no VARCHAR, asof_time TIMESTAMP);
+
+statement ok
+INSERT INTO early_requests VALUES ('C001', '2020-01-01 00:00:00');
+
+query TTR
+SERVE FEATURE ooo FOR early_requests ASOF asof_time;
+----
+C001	2020-01-01 00:00:00	NULL

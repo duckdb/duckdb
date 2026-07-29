@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -26,6 +27,9 @@ public:
 	//! Column names/types of the new version table (schema of the child query result)
 	vector<string> result_names;
 	vector<LogicalType> result_types;
+	//! The snapshot timestamp this refresh stamps onto every row (the AT clause, else the bind-time now()).
+	//! Recorded in the catalog's retained version map so SERVE can assign versions without scanning the store.
+	timestamp_t feature_timestamp;
 
 public:
 	void Serialize(Serializer &serializer) const override;

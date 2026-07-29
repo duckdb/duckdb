@@ -17,6 +17,9 @@ void LogicalRefreshFeature::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(200, "feature_name", feature_name);
 	serializer.WriteProperty(201, "result_names", result_names);
 	serializer.WriteProperty(202, "result_types", result_types);
+	// timestamp_t has no Serialize overload in this framework; round-trip it as raw micros, matching the
+	// same convention used for the catalog's retained_version_timestamps_micros.
+	serializer.WriteProperty(203, "feature_timestamp", feature_timestamp.value);
 }
 
 unique_ptr<LogicalOperator> LogicalRefreshFeature::Deserialize(Deserializer &deserializer) {
@@ -24,6 +27,7 @@ unique_ptr<LogicalOperator> LogicalRefreshFeature::Deserialize(Deserializer &des
 	result->feature_name = deserializer.ReadProperty<string>(200, "feature_name");
 	result->result_names = deserializer.ReadProperty<vector<string>>(201, "result_names");
 	result->result_types = deserializer.ReadProperty<vector<LogicalType>>(202, "result_types");
+	result->feature_timestamp = timestamp_t(deserializer.ReadProperty<int64_t>(203, "feature_timestamp"));
 	return std::move(result);
 }
 

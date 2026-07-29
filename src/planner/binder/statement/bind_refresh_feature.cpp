@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/feature_refresh.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/statement/refresh_feature_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -82,11 +83,15 @@ BoundStatement Binder::Bind(RefreshFeatureStatement &stmt) {
 	// If the entity table's PRIMARY KEY covers the feature's entity keys, the entity spine is already unique and
 	// its DISTINCT (a full hash-aggregate over the entity table on every refresh) can be dropped. Look the entity
 	// table up in the feature's own catalog/schema; if it can't be resolved, keep the DISTINCT (correct default).
+	// Leaving the DISTINCT in is always correct (it just removes nothing), so the baseline setting keeps it to
+	// measure what the elision saves.
 	bool entity_key_is_unique = false;
-	auto entity_entry = feat.ParentCatalog().GetEntry<TableCatalogEntry>(
-	    context, feat.ParentSchema().name, feat.entity_table, OnEntryNotFound::RETURN_NULL);
-	if (entity_entry) {
-		entity_key_is_unique = EntityKeyIsUnique(*entity_entry, feat.entity_key_columns);
+	if (!Settings::Get<FeatureDisableOptimizationsSetting>(context)) {
+		auto entity_entry = feat.ParentCatalog().GetEntry<TableCatalogEntry>(
+		    context, feat.ParentSchema().name, feat.entity_table, OnEntryNotFound::RETURN_NULL);
+		if (entity_entry) {
+			entity_key_is_unique = EntityKeyIsUnique(*entity_entry, feat.entity_key_columns);
+		}
 	}
 
 	// Build and bind the query that produces the new snapshot (one row per entity at feature_ts, tagged with the
@@ -99,6 +104,7 @@ BoundStatement Binder::Bind(RefreshFeatureStatement &stmt) {
 	auto refresh_node = make_uniq<LogicalRefreshFeature>(stmt.feature_name);
 	refresh_node->result_names = query_obj.names;
 	refresh_node->result_types = query_obj.types;
+	refresh_node->feature_timestamp = feature_ts;
 	refresh_node->children.push_back(std::move(query_obj.plan));
 	result.plan = std::move(refresh_node);
 

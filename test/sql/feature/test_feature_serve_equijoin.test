@@ -1,0 +1,266 @@
+# name: test/sql/feature/test_feature_serve_equijoin.test
+# description: SERVE resolves versions via a tiny version table, then equi-joins the store
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE cards (card_no VARCHAR);
+
+statement ok
+INSERT INTO cards VALUES ('C001'), ('C002');
+
+statement ok
+CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO transactions VALUES
+    ('C001', 100.00, '2024-01-01 10:00:00'),
+    ('C001', 200.00, '2024-01-01 14:00:00'),
+    ('C002', 75.00, '2024-01-01 11:00:00');
+
+statement ok
+CREATE FEATURE eq_txn ENTITY cards TIMESTAMP event_time WINDOW 7 DAYS RETAIN 3 AS (SELECT card_no, SUM(amount) AS total_amount FROM transactions GROUP BY card_no);
+
+statement ok
+REFRESH FEATURE eq_txn AT '2024-01-04 00:00:00';
+
+statement ok
+CREATE TABLE requests (card_no VARCHAR);
+
+statement ok
+INSERT INTO requests VALUES ('C001'), ('C002');
+
+# Latest mode: the +infinity probe resolves each entity to its newest snapshot.
+query TR sort
+SERVE FEATURE eq_txn FOR requests;
+----
+C001	300.00
+C002	75.00
+
+# A second snapshot so time travel has something to choose between.
+statement ok
+REFRESH FEATURE eq_txn AT '2024-01-06 00:00:00';
+
+statement ok
+CREATE TABLE tt_requests (card_no VARCHAR, asof_time TIMESTAMP);
+
+statement ok
+INSERT INTO tt_requests VALUES
+    ('C001', '2024-01-05 00:00:00'),
+    ('C001', '2024-01-07 00:00:00'),
+    ('C001', '2024-01-03 00:00:00');
+
+# Jan 5 -> the Jan 4 snapshot, Jan 7 -> the Jan 6 snapshot, Jan 3 -> before every snapshot, so NULL.
+query TTR sort
+SERVE FEATURE eq_txn FOR tt_requests ASOF asof_time;
+----
+C001	2024-01-03 00:00:00	NULL
+C001	2024-01-05 00:00:00	300.00
+C001	2024-01-07 00:00:00	300.00
+
+# ============================================================
+# Latest mode resolves by MAXIMUM TIMESTAMP, not by current_version.
+# current_version counts refresh executions; REFRESH AT lets a backfill run afterwards carrying a HIGHER
+# version number but an OLDER timestamp. The +infinity probe is what makes this correct.
+# ============================================================
+statement ok
+CREATE TABLE oo_entity (entity_id VARCHAR);
+
+statement ok
+INSERT INTO oo_entity VALUES ('X001');
+
+statement ok
+CREATE TABLE oo_events (entity_id VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO oo_events VALUES ('X001', 5.00, '2024-01-01 00:00:00'), ('X001', 50.00, '2024-01-10 00:00:00');
+
+statement ok
+CREATE FEATURE oo_latest ENTITY oo_entity TIMESTAMP event_time WINDOW 1 DAYS RETAIN 3 AS (SELECT entity_id, SUM(amount) AS total FROM oo_events GROUP BY entity_id);
+
+# Version 1: window [Jan 10, Jan 11) captures the Jan 10 event -> 50.
+statement ok
+REFRESH FEATURE oo_latest AT '2024-01-11 00:00:00';
+
+# Version 2 (current_version becomes 2): a BACKFILL with an OLDER timestamp.
+# Window [Jan 1, Jan 2) captures the Jan 1 event -> 5.
+statement ok
+REFRESH FEATURE oo_latest AT '2024-01-02 00:00:00';
+
+query TT
+SELECT current_version, retained_version_timestamps FROM duckdb_features() WHERE feature_name = 'oo_latest';
+----
+2	2024-01-11 00:00:00,2024-01-02 00:00:00
+
+statement ok
+CREATE TABLE oo_requests (entity_id VARCHAR);
+
+statement ok
+INSERT INTO oo_requests VALUES ('X001');
+
+# Must serve version 1 (total 50), the max-timestamp snapshot -- NOT current_version 2 (total 5).
+query TR
+SERVE FEATURE oo_latest FOR oo_requests;
+----
+X001	50.00
+
+# ============================================================
+# Tied-timestamp dedup. DuckDB's ASOF join has no value-based tie-break for rows sharing an identical
+# order-by value -- which row "wins" depends on incidental insertion order. DedupVersionStampsByTimestamp
+# collapses the version-boundary table down to one row per timestamp (keeping the higher version) before the
+# ASOF join ever sees it, so two versions refreshed AT the same timestamp resolve deterministically to the
+# higher version rather than to whichever happened to sort first.
+# ============================================================
+statement ok
+CREATE TABLE tie_cards (card_no VARCHAR);
+
+statement ok
+INSERT INTO tie_cards VALUES ('T001');
+
+statement ok
+CREATE TABLE tie_events (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO tie_events VALUES ('T001', 7.00, '2024-01-01 00:00:00');
+
+statement ok
+CREATE FEATURE tie_f ENTITY tie_cards TIMESTAMP event_time WINDOW 40 DAYS RETAIN 5 AS (SELECT card_no, SUM(amount) AS total_amount FROM tie_events GROUP BY card_no);
+
+# Version 1 AT Feb 1: total_amount = 7.00
+statement ok
+REFRESH FEATURE tie_f AT '2024-02-01 00:00:00';
+
+# A second event, then a second refresh AT the SAME timestamp -> two versions, identical timestamps, different values.
+statement ok
+INSERT INTO tie_events VALUES ('T001', 7.00, '2024-01-02 00:00:00');
+
+# Version 2 AT the identical Feb 1 timestamp: total_amount = 14.00
+statement ok
+REFRESH FEATURE tie_f AT '2024-02-01 00:00:00';
+
+query TT
+SELECT retained_versions, retained_version_timestamps FROM duckdb_features() WHERE feature_name = 'tie_f';
+----
+1,2	2024-02-01 00:00:00,2024-02-01 00:00:00
+
+# Version 2 (14.00) must win deterministically -- the higher version among the tied timestamp.
+query TR
+SERVE FEATURE tie_f FOR tie_cards;
+----
+T001	14.00
+
+# ============================================================
+# Plan shape. The new path contains a HASH_JOIN (the store equi-join); the legacy path never does -- it is a
+# single ASOF join straight against the store. Both paths contain an ASOF_JOIN node, so ASOF presence is NOT
+# a discriminator here; HASH_JOIN presence is.
+# A 200-row spine clears asof_loop_join_threshold (default 64) so the legacy path uses the real ASOF operator
+# rather than degrading to a nested-loop join, which would make the comparison meaningless.
+# EXPLAIN cannot appear inside a subquery (it is a top-level statement), so the plan is asserted with the
+# native sqllogictest directive: query II expects the row (physical_plan, <json>). See
+# test/sql/explain/test_explain_limit.test for the same idiom.
+# ============================================================
+statement ok
+CREATE TABLE big_requests AS SELECT 'C001' AS card_no FROM range(200);
+
+statement ok
+CREATE TABLE big_tt_requests AS SELECT 'C001' AS card_no, TIMESTAMP '2024-01-05 00:00:00' AS asof_time FROM range(200);
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM (SERVE FEATURE eq_txn FOR big_requests);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM (SERVE FEATURE eq_txn FOR big_tt_requests ASOF asof_time);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*
+
+# ============================================================
+# The unoptimized baseline stays reachable, returns identical rows in both modes, and has no HASH_JOIN -- which
+# is what makes the two assertions above discriminating rather than vacuously true. feature_disable_optimizations
+# turns off every feature-store optimization at once, the legacy ASOF fallback among them, so this also pins down
+# that none of them change the answer.
+# ============================================================
+statement ok
+SET feature_disable_optimizations = true;
+
+query TR sort
+SERVE FEATURE eq_txn FOR requests;
+----
+C001	300.00
+C002	75.00
+
+query TTR sort
+SERVE FEATURE eq_txn FOR tt_requests ASOF asof_time;
+----
+C001	2024-01-03 00:00:00	NULL
+C001	2024-01-05 00:00:00	300.00
+C001	2024-01-07 00:00:00	300.00
+
+query TR
+SERVE FEATURE oo_latest FOR oo_requests;
+----
+X001	50.00
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM (SERVE FEATURE eq_txn FOR big_requests);
+----
+physical_plan	<!REGEX>:.*HASH_JOIN.*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM (SERVE FEATURE eq_txn FOR big_tt_requests ASOF asof_time);
+----
+physical_plan	<!REGEX>:.*HASH_JOIN.*
+
+statement ok
+RESET feature_disable_optimizations;
+
+# ============================================================
+# The store scan is bounded to the versions the spine can reach, so it prunes row groups by zonemap instead of
+# scanning every retained version. The bound is a scalar subquery, not a bind-time constant, so DuckDB can never
+# express it as a static Filters entry on the scan -- it always flattens a subquery-derived comparison into a
+# join instead. The only place this pruning is observable is DuckDB's runtime dynamic join-filter-pushdown
+# mechanism, which computes the filter from the join and installs it on the probe-side scan during execution --
+# hence EXPLAIN ANALYZE (which runs the query) rather than the plain EXPLAIN used elsewhere in this file, and
+# "Dynamic Filters" rather than "Filters" in the assertion below.
+# ============================================================
+query II
+EXPLAIN ANALYZE (FORMAT JSON) SELECT * FROM (SERVE FEATURE eq_txn FOR big_tt_requests ASOF asof_time);
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters.*__feature_version.*
+
+# Results are unchanged by the pruning -- same rows as before, on both paths.
+query TTR sort
+SERVE FEATURE eq_txn FOR tt_requests ASOF asof_time;
+----
+C001	2024-01-03 00:00:00	NULL
+C001	2024-01-05 00:00:00	300.00
+C001	2024-01-07 00:00:00	300.00
+
+query TR
+SERVE FEATURE oo_latest FOR oo_requests;
+----
+X001	50.00
+
+# ============================================================
+# Edge case: every spine row is before every retained snapshot (not just one row mixed in among valid ones, as
+# tt_requests has above -- the version bound is a single aggregate over the WHOLE spine, so as long as at least
+# one row resolves to a real version, MIN/MAX never actually go NULL there). With every row unresolved, both the
+# min and max reachable-version subqueries evaluate to NULL, and the store scan's uncoalesced upper bound
+# (__feature_version <= NULL) empties the scan under SQL's three-valued logic. This pins down that the result is
+# NULL feature columns, not an error and not a wrong value, independent of whatever the lower bound's COALESCE
+# does.
+# ============================================================
+statement ok
+CREATE TABLE before_all_requests (card_no VARCHAR, asof_time TIMESTAMP);
+
+statement ok
+INSERT INTO before_all_requests VALUES ('C001', '2024-01-01 00:00:00');
+
+query TTR
+SERVE FEATURE eq_txn FOR before_all_requests ASOF asof_time;
+----
+C001	2024-01-01 00:00:00	NULL

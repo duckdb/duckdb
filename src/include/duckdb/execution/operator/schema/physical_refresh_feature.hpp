@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/index_vector.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -53,16 +54,18 @@ public:
 
 public:
 	PhysicalRefreshFeature(PhysicalPlan &physical_plan, string feature_name, vector<string> result_names,
-	                       vector<LogicalType> result_types, idx_t estimated_cardinality)
+	                       vector<LogicalType> result_types, timestamp_t feature_timestamp, idx_t estimated_cardinality)
 	    : PhysicalOperator(physical_plan, PhysicalOperatorType::REFRESH_FEATURE, {LogicalType::BIGINT},
 	                       estimated_cardinality),
 	      feature_name(std::move(feature_name)), result_names(std::move(result_names)),
-	      result_types(std::move(result_types)) {
+	      result_types(std::move(result_types)), feature_timestamp(feature_timestamp) {
 	}
 
 	string feature_name;
 	vector<string> result_names;
 	vector<LogicalType> result_types;
+	//! The snapshot timestamp stamped onto this refresh's rows; recorded in the catalog version map
+	timestamp_t feature_timestamp;
 
 public:
 	// Sink interface

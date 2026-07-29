@@ -1,0 +1,9 @@
+# name: benchmark/feature/clickstream/serve/serve_s1_window_r5_n1_ttl0_sp100k_asof-mid_f1_cte.benchmark
+# description: Generated SERVE scenario s1_window_r5_n1_ttl0_sp100k_asof-mid_f1_cte (seed=42)
+# group: [serve]
+
+template benchmark/feature/clickstream/serve/serve.benchmark.in
+BENCH_NAME=Serve_s1_window_r5_n1_ttl0_sp100k_asof-mid_f1_cte
+PARQUET_COUNT=1
+SETUP_SQL=DROP FEATURE IF EXISTS f; DROP FEATURE IF EXISTS f2; DROP FEATURE IF EXISTS f3; CREATE FEATURE f ENTITY users TIMESTAMP EventTime WINDOW 3650 DAYS RETAIN 5 AS (SELECT DISTINCT UserID, COUNT(*) OVER (PARTITION BY UserID) AS event_count, AVG(RegionID) OVER (PARTITION BY UserID) AS avg_region FROM hits); CREATE OR REPLACE TABLE serve_requests AS SELECT DISTINCT UserID, TIMESTAMP '2013-08-01 00:00:00' AS EventTime FROM hits USING SAMPLE 100000 ROWS; REFRESH FEATURE f AT '2013-07-31 00:00:00';
+RUN_QUERY=WITH s AS (SELECT * FROM SERVE FEATURE f FOR serve_requests ASOF EventTime) SELECT count(*) AS n FROM s WHERE event_count IS NOT NULL;
