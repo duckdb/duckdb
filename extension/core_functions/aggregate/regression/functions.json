@@ -44,15 +44,15 @@
     {
         "name": "regr_sxx",
         "parameters": "y,x",
-        "description": "",
-        "example": "REGR_COUNT(y, x) * VAR_POP(x)",
+        "description": "Returns the sum of squared deviations of the independent variable for non-NULL pairs, sum((x - avg(x))^2), computed in a numerically stable way.",
+        "example": "regr_sxx(y, x)",
         "type": "aggregate_function",
         "struct": "RegrSXXFun"
     },
     {
         "name": "regr_sxy",
         "parameters": "y,x",
-        "description": "Returns the population covariance of input values",
+        "description": "Returns the sum of deviation products for non-NULL pairs, sum((y - avg(y)) * (x - avg(x))), computed in a numerically stable way.",
         "example": "REGR_COUNT(y, x) * COVAR_POP(y, x)",
         "type": "aggregate_function",
         "struct": "RegrSXYFun"
@@ -60,8 +60,8 @@
     {
         "name": "regr_syy",
         "parameters": "y,x",
-        "description": "",
-        "example": "REGR_COUNT(y, x) * VAR_POP(y)",
+        "description": "Returns the sum of squared deviations of the dependent variable for non-NULL pairs, sum((y - avg(y))^2), computed in a numerically stable way.",
+        "example": "regr_syy(y, x)",
         "type": "aggregate_function",
         "struct": "RegrSYYFun"
     }
