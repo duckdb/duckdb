@@ -1,0 +1,31 @@
+# name: test/sql/aggregate/aggregates/export_state_wide_payload.test
+# description: Exported aggregate states must survive parallel combines of wide string payloads
+# group: [aggregates]
+
+statement ok
+SET threads=4;
+
+statement ok
+PRAGMA verify_parallelism;
+
+statement ok
+CREATE TABLE input AS
+SELECT i % 10000 AS g, repeat(md5((i % 10000)::VARCHAR), 10) AS s
+FROM range(1000000) t(i);
+
+# every row of a group carries the same value, so any combine order must produce it exactly
+query I
+SELECT count(*)
+FROM (
+	SELECT g,
+	       finalize(first(s) EXPORT_STATE) AS f,
+	       finalize(last(s) EXPORT_STATE) AS l,
+	       finalize(any_value(s) EXPORT_STATE) AS a
+	FROM input
+	GROUP BY g
+) grouped
+WHERE f <> repeat(md5(g::VARCHAR), 10)
+   OR l <> repeat(md5(g::VARCHAR), 10)
+   OR a <> repeat(md5(g::VARCHAR), 10);
+----
+0

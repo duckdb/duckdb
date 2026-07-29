@@ -136,7 +136,10 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.HasStateCombineCallback());
 		AggregateInputData aggr_input_data(aggr, state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
-		aggr_input_data.payload_heap = state.payload_heap;
+		if (aggr.state_export_mode == AggregateStateExportMode::NONE) {
+			// Exported states are read as raw bytes, so combining must not move payloads to a payload heap
+			aggr_input_data.payload_heap = state.payload_heap;
+		}
 		aggr.function.GetStateCombineCallback()(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
@@ -182,7 +185,9 @@ void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &l
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
 		AggregateFinalizeInputData finalize_input_data(aggr, state.allocator, state.local_states[i].get());
-		finalize_input_data.payload_heap = state.payload_heap;
+		if (aggr.state_export_mode == AggregateStateExportMode::NONE) {
+			finalize_input_data.payload_heap = state.payload_heap;
+		}
 		aggr.function.GetStateFinalizeCallback()(addresses_copy, finalize_input_data, target, result.size(), 0);
 		FlatVector::SetSize(target, count_t(result.size()));
 
