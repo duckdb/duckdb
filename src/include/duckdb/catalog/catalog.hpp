@@ -262,6 +262,8 @@ public:
 	//! Look up a (possibly nested) schema by its path (outermost first) in this catalog
 	DUCKDB_API optional_ptr<SchemaCatalogEntry>
 	GetSchema(CatalogTransaction transaction, const vector<Identifier> &schema_path, OnEntryNotFound if_not_found);
+	//! Resolve the (possibly nested) schema an entry lives in from its qualified name ([catalog, schema..., name])
+	DUCKDB_API SchemaCatalogEntry &GetEntrySchema(CatalogTransaction transaction, const QualifiedName &name);
 	[[deprecated("Fold the catalog into the EntryLookupInfo and use GetSchema(context, "
 	             "EntryLookupInfo)")]] DUCKDB_API static optional_ptr<SchemaCatalogEntry>
 	GetSchema(ClientContext &context, const Identifier &catalog_name, const EntryLookupInfo &schema_lookup,

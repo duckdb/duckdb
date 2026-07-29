@@ -1,0 +1,83 @@
+# name: test/sql/catalog/nested_schema/nested_schema_limits.test
+# description: Behaviour of nested schemas in areas that do not (yet) support them
+# group: [nested_schema]
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE TABLE s1.s2.t(i INTEGER);
+
+statement ok
+INSERT INTO s1.s2.t VALUES (1);
+
+# a dotted name is at most three components: a nested table cannot additionally be qualified with its catalog
+
+statement error
+SELECT * FROM memory.s1.s2.t;
+----
+<REGEX>:.*syntax error.*
+
+statement error
+CREATE TABLE memory.s1.s2.t2(i INTEGER);
+----
+<REGEX>:.*syntax error.*
+
+# nested schemas cannot be used in the search path - the error says so explicitly
+
+statement error
+USE s1.s2;
+----
+<REGEX>:.*nested schema.*cannot be used in the search path.*
+
+statement error
+SET search_path='s1.s2';
+----
+<REGEX>:.*nested schema.*cannot be used in the search path.*
+
+# a path that is neither a catalog+schema nor a nested schema still reports "not found"
+
+statement error
+USE s1.nope;
+----
+<REGEX>:.*No catalog \+ schema named.*
+
+# SHOW TABLES FROM resolves nested schemas
+
+query I
+SHOW TABLES FROM s1.s2;
+----
+t
+
+statement error
+SHOW TABLES FROM s1.nope;
+----
+<REGEX>:.*No catalog \+ schema named.*
+
+# the metadata functions report the innermost schema name; the parent is available via duckdb_schemas()
+
+query II
+SELECT schema_name, table_name FROM duckdb_tables() WHERE table_name = 't';
+----
+s2	t
+
+query I
+SELECT s.parent_schema FROM duckdb_tables() t JOIN duckdb_schemas() s ON t.schema_oid = s.oid
+WHERE t.table_name = 't';
+----
+s1
+
+# information_schema and pg_catalog also report the innermost schema name
+
+query II
+SELECT table_schema, table_name FROM information_schema.tables WHERE table_name = 't';
+----
+s2	t
+
+query I
+SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname = 's2';
+----
+s2

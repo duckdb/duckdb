@@ -21,7 +21,7 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateIndexInfo>();
-	result->SetQualifiedName(QualifiedName({GetSchemaName()}, name));
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->table = GetTableName();
 
 	result->temporary = temporary;
@@ -47,6 +47,7 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 
 string IndexCatalogEntry::ToSQL() const {
 	auto info = GetInfo();
+	info->StripCatalogQualification();
 	return info->ToString();
 }
 

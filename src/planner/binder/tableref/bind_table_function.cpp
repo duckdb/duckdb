@@ -380,7 +380,17 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 
 	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(fexpr.FunctionName()),
 	                                      error_context);
-	auto &func_catalog = *GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	optional_ptr<CatalogEntry> func_entry;
+	// the function can be qualified with a nested schema path (e.g. "s1.s2.my_macro()") - that is unambiguous, so
+	// we look it up directly
+	auto bound_name = BindTableName(fexpr.GetQualifiedName());
+	if (bound_name.Path().size() > 3) {
+		func_entry =
+		    GetCatalogEntry(EntryLookupInfo(table_function_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
+	} else {
+		func_entry = GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	}
+	auto &func_catalog = *func_entry;
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();

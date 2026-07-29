@@ -718,6 +718,19 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	}
 }
 
+//! Re-qualify a serialized entry name for the catalog it is replayed into: the (possibly nested) schema path is kept,
+//! the serialized catalog component is replaced by the catalog we are replaying into
+static QualifiedName ReplayQualifiedName(Catalog &catalog, const QualifiedName &entry_name, const Identifier &name) {
+	auto &path = entry_name.Path();
+	vector<Identifier> result;
+	result.push_back(catalog.GetName());
+	// a fully qualified path leads with the catalog - skip it
+	for (idx_t i = path.size() >= 3 ? 1 : 0; i + 1 < path.size(); i++) {
+		result.push_back(path[i]);
+	}
+	return QualifiedName(std::move(result), name);
+}
+
 //===--------------------------------------------------------------------===//
 // Replay Table
 //===--------------------------------------------------------------------===//
@@ -990,9 +1003,9 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 		return;
 	}
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(trigger_info.GetQualifiedName().Catalog(),
-	                                                                          trigger_info.GetQualifiedName().Schema(),
-	                                                                          trigger_info.base_table->Table()));
+	// the trigger lives in the same (possibly nested) schema as its base table
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(
+	    context, ReplayQualifiedName(catalog, trigger_info.GetQualifiedName(), trigger_info.base_table->Table()));
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.CreateTrigger(transaction, trigger_info);
@@ -1126,8 +1139,9 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	const auto schema_name = create_info->GetQualifiedName().Schema();
 	const auto table_name = info.table;
 
-	auto &entry =
-	    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), schema_name, table_name));
+	// the table lives in the same (possibly nested) schema as the index
+	auto &entry = catalog.GetEntry<TableCatalogEntry>(
+	    context, ReplayQualifiedName(catalog, create_info->GetQualifiedName(), table_name));
 	auto &table = entry.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
 	auto &io_manager = TableIOManager::Get(storage);

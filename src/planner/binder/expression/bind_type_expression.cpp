@@ -29,8 +29,13 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 
 	binder.BindSchemaOrCatalog(context, type_catalog, type_schema);
 
-	// Required for WAL lookup to work
-	if (type_catalog.empty() && !DatabaseManager::Get(context).HasDefaultDatabase()) {
+	// a type can be qualified with a nested schema path (e.g. "s1.s2.my_type") - that is unambiguous, so we look it
+	// up directly instead of running the progressive search-path fallbacks below
+	auto bound_name = Binder::BindTableName(binder.EntryRetriever(), type_expr.GetQualifiedName());
+	if (bound_name.Path().size() > 3) {
+		entry =
+		    binder.entry_retriever.GetEntry(EntryLookupInfo(type_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
+	} else if (type_catalog.empty() && !DatabaseManager::Get(context).HasDefaultDatabase()) {
 		// Look in the system catalog if no catalog was specified
 		entry = binder.entry_retriever.GetEntry(EntryLookupInfo(
 		    type_lookup, QualifiedName(Identifier::SystemCatalog(), type_schema, type_lookup.GetEntryIdentifier())));

@@ -267,6 +267,14 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	                                error_context);
 	auto func = binder.GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
 	                                   function_lookup, OnEntryNotFound::RETURN_NULL);
+	if (!func) {
+		// the function might be qualified with a nested schema path (e.g. "s1.s2.my_macro()") - resolve the
+		// qualification and retry. We keep the name as written for the dot-call fallback below.
+		auto bound_name = binder.BindTableName(function.GetQualifiedName());
+		if (bound_name.Path().size() > 3) {
+			func = binder.GetCatalogEntry(EntryLookupInfo(function_lookup, bound_name), OnEntryNotFound::RETURN_NULL);
+		}
+	}
 	if (func) {
 		// found the function - we are done
 		return func;
