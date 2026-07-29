@@ -55,13 +55,16 @@ PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> 
 //===--------------------------------------------------------------------===//
 class UpdateGlobalState : public GlobalSinkState {
 public:
-	explicit UpdateGlobalState(ClientContext &context, const vector<LogicalType> &return_types)
+	explicit UpdateGlobalState(ClientContext &context, const vector<LogicalType> &return_types, bool deduplicate_rows)
 	    : updated_count(0), return_collection(context, return_types) {
+		if (deduplicate_rows) {
+			updated_rows = make_uniq<RowIdDeduplicator>(context, vector<LogicalType> {LogicalType::ROW_TYPE});
+		}
 	}
 
 	mutex lock;
 	atomic<idx_t> updated_count;
-	unordered_set<row_t> updated_rows;
+	unique_ptr<RowIdDeduplicator> updated_rows;
 	ColumnDataCollection return_collection;
 };
 
@@ -173,7 +176,8 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		if (deduplicate) {
 			sel.Initialize(update_chunk.size());
 			lock_guard<mutex> glock(g_state.lock);
-			update_count = RegisterRowIds(g_state.updated_rows, row_ids, update_chunk.size(), sel);
+			D_ASSERT(g_state.updated_rows);
+			update_count = g_state.updated_rows->Register(row_ids, update_chunk.size(), sel);
 			if (row_id_handling == RowIdHandling::ERROR && update_count != update_chunk.size()) {
 				throw InvalidInputException("UPDATE command cannot update the same row more than once");
 			}
@@ -218,7 +222,8 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	idx_t update_count = update_chunk.size();
 	const bool deduplicate = row_id_handling != RowIdHandling::ASSUME_UNIQUE;
 	if (deduplicate) {
-		update_count = RegisterRowIds(g_state.updated_rows, row_ids, update_chunk.size(), sel);
+		D_ASSERT(g_state.updated_rows);
+		update_count = g_state.updated_rows->Register(row_ids, update_chunk.size(), sel);
 		if (row_id_handling == RowIdHandling::ERROR && update_count != update_chunk.size()) {
 			throw InvalidInputException("UPDATE command cannot update the same row more than once");
 		}
@@ -274,7 +279,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 }
 
 unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &context) const {
-	return make_uniq<UpdateGlobalState>(context, GetTypes());
+	return make_uniq<UpdateGlobalState>(context, GetTypes(), row_id_handling != RowIdHandling::ASSUME_UNIQUE);
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {

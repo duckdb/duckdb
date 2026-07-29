@@ -82,11 +82,14 @@ InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<Logica
 }
 
 InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
-                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints)
+                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool deduplicate_rows)
     : collection_index(DConstants::INVALID_INDEX), bound_constraints(bound_constraints) {
 	auto &allocator = Allocator::Get(context);
 	update_chunk.Initialize(allocator, types);
 	append_chunk.Initialize(allocator, types);
+	if (deduplicate_rows) {
+		updated_rows = make_uniq<RowIdDeduplicator>(context, vector<LogicalType> {LogicalType::ROW_TYPE});
+	}
 }
 
 ConstraintState &InsertLocalState::GetConstraintState(DataTable &table, TableCatalogEntry &table_ref) {
@@ -122,7 +125,8 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<InsertLocalState>(context.client, insert_types, bound_constraints);
+	return make_uniq<InsertLocalState>(context.client, insert_types, bound_constraints,
+	                                   action_type == OnConflictAction::UPDATE);
 }
 
 bool AllConflictsMeetCondition(DataChunk &result) {
@@ -291,7 +295,8 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 
 static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) {
 	// Register all row-ids; a distinct count below `count` means a row-id repeated, which we reject.
-	auto distinct = RegisterRowIds(lstate.updated_rows, row_ids, count);
+	D_ASSERT(lstate.updated_rows);
+	auto distinct = lstate.updated_rows->Register(row_ids, count);
 	if (distinct != count) {
 		// This is following postgres behavior:
 		throw InvalidInputException(
