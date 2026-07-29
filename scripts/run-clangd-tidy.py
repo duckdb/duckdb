@@ -12,8 +12,7 @@ import sys
 import time
 
 
-MAX_CHUNK_CHARS = 100000
-MAX_CHUNK_FILES = 200
+TARGET_CHUNK_COUNT = 10
 MAX_FAILED_CHUNKS = 2
 MAX_RETRIES = 2
 RETRY_BACKOFF_MS = 500
@@ -43,19 +42,18 @@ def is_ignored_file(path, repo_root):
     return relative == 'third_party' or relative.startswith('third_party' + os.sep)
 
 
-def chunk_files(files, max_chars=MAX_CHUNK_CHARS, max_files=MAX_CHUNK_FILES):
-    chunk = []
-    current_chars = 0
-    for path in files:
-        path_len = len(path) + 1
-        if chunk and (len(chunk) >= max_files or current_chars + path_len > max_chars):
-            yield chunk
-            chunk = []
-            current_chars = 0
-        chunk.append(path)
-        current_chars += path_len
-    if chunk:
-        yield chunk
+def chunk_files(files, target_chunk_count=TARGET_CHUNK_COUNT):
+    if not files:
+        return
+    chunk_count = min(target_chunk_count, len(files))
+    chunk_size, remainder = divmod(len(files), chunk_count)
+    start = 0
+    for chunk_index in range(chunk_count):
+        end = start + chunk_size
+        if chunk_index < remainder:
+            end += 1
+        yield files[start:end]
+        start = end
 
 
 def load_files(build_path):
