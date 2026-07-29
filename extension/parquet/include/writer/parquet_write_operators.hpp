@@ -34,6 +34,16 @@ struct BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
+	static idx_t BloomFilterEntriesPerValue() {
+		return 1;
+	}
+
+	template <class SRC, class TGT>
+	static optional<uint64_t> GetExtraBloomFilterHash(const SRC &, const TGT &) {
+		return nullopt;
+	}
+
+	template <class SRC, class TGT>
 	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
 		return nullptr;
 	}
@@ -268,6 +278,18 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static uint64_t XXHash64(const TGT &target_value) {
 		return duckdb_zstd::XXH64(target_value.bytes, ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE, 0);
+	}
+
+	template <class SRC, class TGT>
+	static idx_t BloomFilterEntriesPerValue() {
+		return 2;
+	}
+
+	template <class SRC, class TGT>
+	static optional<uint64_t> GetExtraBloomFilterHash(const SRC &source_value, const TGT &) {
+		// Preserve the Parquet plain-encoding hash and add the hash used by DuckDB comparisons.
+		auto normalized_value = Operation<SRC, TGT>(source_value.Normalize());
+		return XXHash64<SRC, TGT>(normalized_value);
 	}
 };
 
