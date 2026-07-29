@@ -626,7 +626,8 @@ private:
 	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
-	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name);
+	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name,
+	                                         bool default_schema_precedence = false);
 
 	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 

@@ -14,8 +14,9 @@
 
 namespace duckdb {
 
-CatalogSearchEntry::CatalogSearchEntry(Identifier catalog_p, Identifier schema_p)
-    : catalog(std::move(catalog_p)), schema(std::move(schema_p)) {
+CatalogSearchEntry::CatalogSearchEntry(Identifier catalog_p, Identifier schema_p, bool default_schema_precedence_p)
+    : catalog(std::move(catalog_p)), schema(std::move(schema_p)),
+      default_schema_precedence(default_schema_precedence_p) {
 }
 
 string CatalogSearchEntry::ToString() const {
@@ -282,6 +283,37 @@ vector<Identifier> CatalogSearchPath::GetSchemasForCatalog(const Identifier &cat
 		}
 	}
 	return schemas;
+}
+
+vector<CatalogSearchEntry> CatalogSearchPath::GetImplicitSearchCatalogs() const {
+	// Get the implicit entries that were not already resolved by the precedence flag.
+	vector<CatalogSearchEntry> catalogs;
+	for (auto &path : paths) {
+		if (path.GetSchema().empty() && !path.GetCatalog().empty() && !path.DefaultSchemaPrecedence()) {
+			catalogs.push_back(path);
+		}
+	}
+	return catalogs;
+}
+
+vector<CatalogSearchEntry> CatalogSearchPath::GetWithPrecedenceSchemas(ClientContext &context) const {
+	vector<CatalogSearchEntry> res;
+	for (auto &path : paths) {
+		// Resolve implicit entries with default_schema_precedence to the catalog's default schema.
+		if (path.GetSchema().empty()) {
+			if (path.GetCatalog().empty() || !path.DefaultSchemaPrecedence()) {
+				continue;
+			}
+			auto catalog_entry = Catalog::GetCatalogEntry(context, path.GetCatalog());
+			if (!catalog_entry) {
+				continue;
+			}
+			res.emplace_back(path.GetCatalog(), Identifier(catalog_entry->GetDefaultSchema()));
+		} else {
+			res.emplace_back(path);
+		}
+	}
+	return res;
 }
 
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {

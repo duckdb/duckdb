@@ -708,7 +708,7 @@ jobs:
       run: |
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - uses: actions/upload-artifact@v7
@@ -836,7 +836,7 @@ jobs:
       run: |
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
 
     - uses: actions/upload-artifact@v7

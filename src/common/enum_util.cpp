@@ -5134,10 +5134,13 @@ const StringUtil::EnumStringLiteral *GetSerializationVersionDeprecatedValues() {
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_4_2), "V1_4_2" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_4_3), "V1_4_3" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_4_4), "V1_4_4" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_4_5), "V1_4_5" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_0), "V1_5_0" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_1), "V1_5_1" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_2), "V1_5_2" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_3), "V1_5_3" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_4), "V1_5_4" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_5), "V1_5_5" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::V2_0_0), "V2_0_0" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::LATEST), "LATEST" },
 		{ static_cast<uint32_t>(SerializationVersionDeprecated::INVALID), "INVALID" }
@@ -5147,12 +5150,12 @@ const StringUtil::EnumStringLiteral *GetSerializationVersionDeprecatedValues() {
 
 template<>
 const char* EnumUtil::ToChars<SerializationVersionDeprecated>(SerializationVersionDeprecated value) {
-	return StringUtil::EnumToString(GetSerializationVersionDeprecatedValues(), 27, "SerializationVersionDeprecated", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSerializationVersionDeprecatedValues(), 30, "SerializationVersionDeprecated", static_cast<uint32_t>(value));
 }
 
 template<>
 SerializationVersionDeprecated EnumUtil::FromString<SerializationVersionDeprecated>(const char *value) {
-	return static_cast<SerializationVersionDeprecated>(StringUtil::StringToEnum(GetSerializationVersionDeprecatedValues(), 27, "SerializationVersionDeprecated", value));
+	return static_cast<SerializationVersionDeprecated>(StringUtil::StringToEnum(GetSerializationVersionDeprecatedValues(), 30, "SerializationVersionDeprecated", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSetOperationTypeValues() {
@@ -5632,10 +5635,13 @@ const StringUtil::EnumStringLiteral *GetStorageVersionValues() {
 		{ static_cast<uint32_t>(StorageVersion::V1_4_2), "V1_4_2" },
 		{ static_cast<uint32_t>(StorageVersion::V1_4_3), "V1_4_3" },
 		{ static_cast<uint32_t>(StorageVersion::V1_4_4), "V1_4_4" },
+		{ static_cast<uint32_t>(StorageVersion::V1_4_5), "V1_4_5" },
 		{ static_cast<uint32_t>(StorageVersion::V1_5_0), "V1_5_0" },
 		{ static_cast<uint32_t>(StorageVersion::V1_5_1), "V1_5_1" },
 		{ static_cast<uint32_t>(StorageVersion::V1_5_2), "V1_5_2" },
 		{ static_cast<uint32_t>(StorageVersion::V1_5_3), "V1_5_3" },
+		{ static_cast<uint32_t>(StorageVersion::V1_5_4), "V1_5_4" },
+		{ static_cast<uint32_t>(StorageVersion::V1_5_5), "V1_5_5" },
 		{ static_cast<uint32_t>(StorageVersion::V2_0_0), "V2_0_0" },
 		{ static_cast<uint32_t>(StorageVersion::LATEST), "LATEST" },
 		{ static_cast<uint32_t>(StorageVersion::DEPRECATED), "DEPRECATED" },
@@ -5646,12 +5652,12 @@ const StringUtil::EnumStringLiteral *GetStorageVersionValues() {
 
 template<>
 const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value) {
-	return StringUtil::EnumToString(GetStorageVersionValues(), 67, "StorageVersion", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetStorageVersionValues(), 70, "StorageVersion", static_cast<uint32_t>(value));
 }
 
 template<>
 StorageVersion EnumUtil::FromString<StorageVersion>(const char *value) {
-	return static_cast<StorageVersion>(StringUtil::StringToEnum(GetStorageVersionValues(), 67, "StorageVersion", value));
+	return static_cast<StorageVersion>(StringUtil::StringToEnum(GetStorageVersionValues(), 70, "StorageVersion", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStrTimeSpecifierValues() {
