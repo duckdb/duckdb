@@ -20,6 +20,7 @@ public:
 public:
 	ListColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
 	                 unique_ptr<ColumnReader> child_column_reader_p);
+	ColumnReader &GetChildReader();
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
 
