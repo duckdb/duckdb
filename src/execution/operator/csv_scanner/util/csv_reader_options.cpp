@@ -413,8 +413,7 @@ void CSVReaderOptions::SetWriteOption(const Identifier &loption, const Value &va
 }
 
 bool CSVReaderOptions::SetBaseOption(const Identifier &loption, const Value &value, bool write_option) {
-	if (StringUtil::CIStartsWith(loption.GetIdentifierName(), "delim") ||
-	    StringUtil::CIStartsWith(loption.GetIdentifierName(), "sep")) {
+	if (loption.StartsWith("delim") || loption.StartsWith("sep")) {
 		SetDelimiter(ParseString(value, loption));
 	} else if (loption == "quote") {
 		SetQuote(ParseString(value, loption));
