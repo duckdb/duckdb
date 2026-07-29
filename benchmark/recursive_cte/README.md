@@ -42,6 +42,12 @@ automaton, clustering, and ray-tracing workloads. Their deterministic inputs
 and compact result checks make the generated programs suitable for continuous
 performance and correctness regression testing.
 
+The `asql_ws2526` directory contains selected recursive workloads adapted from
+the University of Tübingen's Advanced SQL WS 2025/26 teaching material. They
+add CYK parsing, one-dimensional diffusion, Marching Squares, and Sudoku over
+deterministic synthetic inputs. CYK and diffusion include ordinary and
+`USING KEY` variants for direct comparison.
+
 The `aoc2022` directory contains selected recursive Advent of Code 2022 SQL
 solutions from the University of Tübingen database group. Personal puzzle
 inputs are replaced with deterministic synthetic data. The selected workloads

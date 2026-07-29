@@ -26,6 +26,12 @@ benchmark/recursive_cte/flummi_k_core_using_key.benchmark
 benchmark/recursive_cte/flummi_kmeans.benchmark
 benchmark/recursive_cte/flummi_life.benchmark
 benchmark/recursive_cte/flummi_ray.benchmark
+benchmark/recursive_cte/asql_cyk.benchmark
+benchmark/recursive_cte/asql_cyk_using_key.benchmark
+benchmark/recursive_cte/asql_fluid.benchmark
+benchmark/recursive_cte/asql_fluid_using_key.benchmark
+benchmark/recursive_cte/asql_marching_squares.benchmark
+benchmark/recursive_cte/asql_sudoku.benchmark
 benchmark/recursive_cte/aoc2022_day05.benchmark
 benchmark/recursive_cte/aoc2022_day07.benchmark
 benchmark/recursive_cte/aoc2022_day09.benchmark
