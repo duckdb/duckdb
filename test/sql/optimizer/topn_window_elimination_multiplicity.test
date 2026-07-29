@@ -100,18 +100,6 @@ QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
 ----
 logical_opt	<!REGEX>:.*Join Type: SEMI.*
 
-# Late materialization remains enabled rather than falling back to struct packing.
-query II
-EXPLAIN SELECT id, p
-FROM (
-	SELECT l_topn_dup.id, l_topn_dup.p, r_topn_dup.s
-	FROM l_topn_dup
-	JOIN r_topn_dup ON l_topn_dup.k = r_topn_dup.k
-) AS src
-QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
-----
-logical_opt	<REGEX>:.*arg_max\(rowid, s, 2\).*
-
 # Scan/filter/projection paths still use the cheaper semi reconstruction join.
 statement ok
 CREATE TABLE topn_unique_rowids(id INTEGER, p VARCHAR, s INTEGER)

@@ -76,9 +76,9 @@ private:
 	                                                          vector<unique_ptr<Expression>> &args,
 	                                                          TopNWindowEliminationParameters &params);
 	unique_ptr<LogicalOperator> ConstructLHS(LogicalGet &rhs, vector<idx_t> &projections) const;
-	static unique_ptr<LogicalOperator> ConstructJoin(unique_ptr<LogicalOperator> lhs, unique_ptr<LogicalOperator> rhs,
-	                                                 idx_t rhs_rowid_idx,
-	                                                 const TopNWindowEliminationParameters &params);
+	unique_ptr<LogicalOperator> ConstructJoin(unique_ptr<LogicalOperator> lhs, unique_ptr<LogicalOperator> rhs,
+	                                          const map<idx_t, idx_t> &group_projection_idxs,
+	                                          const TopNWindowEliminationParameters &params);
 	bool CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
 	                               vector<idx_t> &projections, vector<reference<LogicalOperator>> &stack,
 	                               TopNWindowEliminationParameters &params);
