@@ -60,7 +60,7 @@ struct ExportAggregateBindData : public FunctionData {
 };
 
 template <class OP, class... ARGS>
-void TemplateDispatch(PhysicalType type, ARGS &&... args) {
+void TemplateDispatch(PhysicalType type, ARGS &&...args) {
 	switch (type) {
 	case PhysicalType::BOOL:
 		OP::template Operation<bool>(std::forward<ARGS>(args)...);
@@ -1184,6 +1184,19 @@ AggregateFunctionSet CombineAggrFun::GetFunctions() {
 	repeated.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	set.AddFunction(std::move(repeated));
 	return set;
+}
+
+void AggregateStateSerialization::SerializeStates(const BoundAggregateFunction &aggr,
+                                                  optional_ptr<FunctionData> bind_data,
+                                                  const AggregateStateLayout &layout, Vector &states, idx_t count,
+                                                  Vector &result, ArenaAllocator &allocator, idx_t offset) {
+	SerializeState(aggr, bind_data, layout, states, count, result, allocator, offset);
+}
+
+void AggregateStateSerialization::DeserializeStates(const BoundAggregateFunction &aggr,
+                                                    const AggregateStateLayout &layout, const Vector &input,
+                                                    idx_t count, data_ptr_t dest_buffer, ArenaAllocator &allocator) {
+	DeserializeState(aggr, layout, input, count, dest_buffer, allocator);
 }
 
 } // namespace duckdb
