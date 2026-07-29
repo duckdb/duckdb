@@ -491,8 +491,9 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 	VerifyOnConflictCondition<GLOBAL>(context, combined_chunk, on_conflict_condition, constraint_state, tuples,
 	                                  data_table, local_storage);
 
-	if (&tuples == &lstate.update_chunk) {
-		// Allow updating duplicate rows for the 'update_chunk'
+	if (RefersToSameObject(tuples, lstate.update_chunk)) {
+		D_ASSERT(op.action_type == OnConflictAction::UPDATE);
+		// Reject updating the same target row more than once.
 		RegisterUpdatedRows(lstate, row_ids, conflict_count);
 	}
 	auto affected_tuples = PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);
