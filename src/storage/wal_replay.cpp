@@ -217,7 +217,13 @@ public:
 			deserializer.End();
 			return true;
 		}
-		ReplayEntry(wal_type);
+		if (CanSkipPayload(wal_type)) {
+			// Framed entries have already been read and integrity-checked, so jump directly to the root terminator.
+			D_ASSERT(stream.GetCapacity() >= sizeof(field_id_t));
+			stream.SetPosition(stream.GetCapacity() - sizeof(field_id_t));
+		} else {
+			ReplayEntry(wal_type);
+		}
 		deserializer.End();
 		return false;
 	}
@@ -230,6 +236,20 @@ public:
 
 protected:
 	void ReplayEntry(WALType wal_type);
+	bool CanSkipPayload(WALType wal_type) const {
+		if (!deserialize_only || !data) {
+			return false;
+		}
+		D_ASSERT(state.wal_version == 2 || state.wal_version == 3);
+		switch (wal_type) {
+		case WALType::INSERT_TUPLE:
+		case WALType::DELETE_TUPLE:
+		case WALType::UPDATE_TUPLE:
+			return true;
+		default:
+			return false;
+		}
+	}
 
 	void ReplayVersion();
 
