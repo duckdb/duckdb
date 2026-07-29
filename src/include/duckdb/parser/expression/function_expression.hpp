@@ -32,9 +32,6 @@ public:
 	const Identifier &GetName() const {
 		return name;
 	}
-	void SetName(Identifier name_p) {
-		name = std::move(name_p);
-	}
 
 	bool HasName() const {
 		return !name.empty();

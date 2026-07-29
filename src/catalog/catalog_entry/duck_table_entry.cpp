@@ -388,31 +388,14 @@ static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info
 }
 
 // Keep struct literal defaults aligned with nested field renames.
-static void RenameStructPackField(ParsedExpression &expr, const vector<Identifier> &column_path,
-                                  const Identifier &new_name, idx_t depth = 1) {
-	if (expr.GetExpressionClass() != ExpressionClass::FUNCTION) {
-		return;
-	}
-	auto &func = expr.Cast<FunctionExpression>();
-	// Struct default values are stored as `struct_pack` function calls.
-	if (func.FunctionName() != "struct_pack") {
-		return;
-	}
-
-	auto &arguments = func.GetArgumentsMutable();
-	const auto &field_name = column_path[depth];
-	const bool last_entry = depth + 1 == column_path.size();
-	for (auto &argument : arguments) {
-		if (argument.GetName() != field_name) {
-			continue;
-		}
-		if (last_entry) {
-			argument.SetName(new_name);
-		} else {
-			RenameStructPackField(*argument.GetExpressionMutable(), column_path, new_name, depth + 1);
-		}
-		return;
-	}
+static unique_ptr<ParsedExpression> RemapStructDefault(unique_ptr<ParsedExpression> default_value,
+                                                       const LogicalType &new_type, const Value &mapping) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(default_value));
+	children.push_back(make_uniq<ConstantExpression>(Value(new_type)));
+	children.push_back(make_uniq<ConstantExpression>(mapping.Copy()));
+	children.push_back(make_uniq<ConstantExpression>(Value()));
+	return make_uniq<FunctionExpression>("remap_struct", std::move(children));
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
@@ -1044,15 +1027,15 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 	children.push_back(make_uniq<ConstantExpression>(Value()));
 
 	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
+	auto default_type = res.new_type;
+	auto default_mapping = res.mapping.Copy();
 	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
 	                                        std::move(function));
 	return ChangeColumnType(context, change_column_type, [&](ColumnDefinition &column) {
 		if (!column.HasDefaultValue()) {
 			return;
 		}
-		auto default_value = column.DefaultValue().Copy();
-		RenameStructPackField(*default_value, info.column_path, info.new_name);
-		column.SetDefaultValue(std::move(default_value));
+		column.SetDefaultValue(RemapStructDefault(column.DefaultValue().Copy(), default_type, default_mapping));
 	});
 }
 
