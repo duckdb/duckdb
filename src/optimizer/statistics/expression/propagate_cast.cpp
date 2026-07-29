@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/storage/statistics/array_stats.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 
@@ -218,6 +220,23 @@ static unique_ptr<BaseStatistics> StatisticsPropagateVariant(const BaseStatistic
 	return StatisticsPropagator::TryPropagateCast(typed_stats, structured_type, target);
 }
 
+static unique_ptr<BaseStatistics> StatisticsPropagateArrayToList(const BaseStatistics &input, const LogicalType &source,
+                                                                 const LogicalType &target) {
+	D_ASSERT(source.id() == LogicalTypeId::ARRAY);
+	D_ASSERT(target.id() == LogicalTypeId::LIST);
+
+	auto &source_child_type = ArrayType::GetChildType(source);
+	auto &target_child_type = ListType::GetChildType(target);
+	if (source_child_type != target_child_type || input.GetStatsType() != StatisticsType::ARRAY_STATS) {
+		return nullptr;
+	}
+
+	auto result = ListStats::CreateEmpty(target);
+	result.CopyBase(input);
+	ListStats::GetChildStats(result).Copy(ArrayStats::GetChildStats(input));
+	return result.ToUnique();
+}
+
 unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStatistics &stats,
                                                                   const LogicalType &source,
                                                                   const LogicalType &target) {
@@ -232,6 +251,9 @@ unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStat
 		// A geometry -> geometry cast only changes CRS metadata, not coordinates, so the bounding box,
 		// type set and null-ness are unchanged: propagate the statistics as-is.
 		return stats.Copy().ToUnique();
+	}
+	if (source.id() == LogicalTypeId::ARRAY && target.id() == LogicalTypeId::LIST) {
+		return StatisticsPropagateArrayToList(stats, source, target);
 	}
 	if (!CanPropagateCast(source, target)) {
 		return nullptr;
