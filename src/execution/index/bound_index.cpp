@@ -147,6 +147,14 @@ void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 	executor.Execute(input, result);
 }
 
+idx_t BoundIndex::UnboundExpressionCount() const {
+	return unbound_expressions.size();
+}
+
+unique_ptr<Expression> BoundIndex::CopyUnboundExpression(const idx_t index) const {
+	return unbound_expressions[index]->Copy();
+}
+
 unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {

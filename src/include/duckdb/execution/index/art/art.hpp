@@ -29,10 +29,10 @@ struct ARTIndexScanState;
 struct DeleteIndexInfo {
 	DeleteIndexInfo() : delete_indexes(nullptr) {
 	}
-	explicit DeleteIndexInfo(vector<reference<BoundIndex>> &delete_indexes) : delete_indexes(delete_indexes) {
+	explicit DeleteIndexInfo(vector<reference<const BoundIndex>> &delete_indexes) : delete_indexes(delete_indexes) {
 	}
 
-	optional_ptr<vector<reference<BoundIndex>>> delete_indexes;
+	optional_ptr<vector<reference<const BoundIndex>>> delete_indexes;
 };
 
 class ART : public BoundIndex {
@@ -74,11 +74,11 @@ public:
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
-	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
+	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
 	unique_ptr<IndexScanState> InitializeFullScan();
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
 	//! If all row IDs were fetched, it return true, else false.
-	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
+	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids) const;
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.
@@ -146,7 +146,7 @@ public:
 
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
-	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const;
 	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
 	                        unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
 	//! Returns true if this ART may hold GEOMETRY keys in the legacy pre-v1.5.0 encoding,
@@ -172,17 +172,17 @@ private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
-	bool FullScan(idx_t max_count, set<row_t> &row_ids);
-	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
-	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids);
-	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
-	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-	                      set<row_t> &row_ids);
+	bool FullScan(idx_t max_count, set<row_t> &row_ids) const;
+	bool SearchEqual(const ARTKey &key, idx_t max_count, set<row_t> &row_ids) const;
+	bool SearchGreater(const ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) const;
+	bool SearchLess(const ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) const;
+	bool SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
+	                      idx_t max_count, set<row_t> &row_ids) const;
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
 	void VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
-	                optional_idx &conflict_idx, idx_t i);
+	                optional_idx &conflict_idx, idx_t i) const;
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
@@ -206,9 +206,9 @@ private:
 };
 
 template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const;
 
 template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const;
 
 } // namespace duckdb

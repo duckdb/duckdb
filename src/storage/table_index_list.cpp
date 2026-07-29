@@ -4,7 +4,6 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -24,62 +23,124 @@ IndexEntry::IndexEntry(unique_ptr<Index> index_p) : owned_index(std::move(index_
 	}
 }
 
-IndexEntryReadGuard::IndexEntryReadGuard(IndexEntry &entry_p, unique_ptr<StorageLockKey> lock_p)
-    : lock(std::move(lock_p)), entry(entry_p) {
+IndexEntryReadGuard::IndexEntryReadGuard(shared_ptr<IndexEntry> entry_p, unique_ptr<StorageLockKey> lock_p)
+    : entry(std::move(entry_p)), lock(std::move(lock_p)) {
 }
 
-Index &IndexEntryReadGuard::GetIndex() & {
-	return *entry.owned_index;
+const BoundIndex &IndexEntryReadGuard::GetDelta(const IndexEntryDelta delta) const {
+	switch (delta) {
+	case IndexEntryDelta::DELETED_ROWS_IN_USE:
+		if (entry->deleted_rows_in_use) {
+			return *entry->deleted_rows_in_use;
+		}
+		break;
+	case IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT:
+		if (entry->added_data_during_checkpoint) {
+			return *entry->added_data_during_checkpoint;
+		}
+		break;
+	case IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT:
+		if (entry->removed_data_during_checkpoint) {
+			return *entry->removed_data_during_checkpoint;
+		}
+		break;
+	}
+	throw InternalException("Attempted to access a missing index delta");
 }
 
-const Index &IndexEntryReadGuard::GetIndex() const & {
-	return *entry.owned_index;
-}
-
-optional_ptr<BoundIndex> IndexEntryReadGuard::DeletedRowsInUse() const {
-	return entry.deleted_rows_in_use;
-}
-
-optional_ptr<BoundIndex> IndexEntryReadGuard::AddedDataDuringCheckpoint() const {
-	return entry.added_data_during_checkpoint;
-}
-
-optional_ptr<BoundIndex> IndexEntryReadGuard::RemovedDataDuringCheckpoint() const {
-	return entry.removed_data_during_checkpoint;
+bool IndexEntryReadGuard::HasDelta(const IndexEntryDelta delta) const {
+	switch (delta) {
+	case IndexEntryDelta::DELETED_ROWS_IN_USE:
+		return entry->deleted_rows_in_use != nullptr;
+	case IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT:
+		return entry->added_data_during_checkpoint != nullptr;
+	case IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT:
+		return entry->removed_data_during_checkpoint != nullptr;
+	}
+	throw InternalException("Unsupported index delta type");
 }
 
 bool IndexEntryReadGuard::ShouldUseDeltaIndexes(const optional_idx active_checkpoint) const {
 	if (!active_checkpoint.IsValid()) {
 		return false;
 	}
-	if (!entry.last_written_checkpoint.IsValid()) {
+	if (!entry->last_written_checkpoint.IsValid()) {
 		return true;
 	}
-	return active_checkpoint.GetIndex() != entry.last_written_checkpoint.GetIndex();
+	return active_checkpoint.GetIndex() != entry->last_written_checkpoint.GetIndex();
 }
 
-IndexEntryWriteGuard::IndexEntryWriteGuard(IndexEntry &entry_p, unique_ptr<StorageLockKey> lock_p)
-    : IndexEntryReadGuard(entry_p, std::move(lock_p)) {
+IndexEntryWriteGuard::IndexEntryWriteGuard(shared_ptr<IndexEntry> entry_p, unique_ptr<StorageLockKey> lock_p)
+    : IndexEntryReadGuard(std::move(entry_p), std::move(lock_p)) {
 }
 
-unique_ptr<BoundIndex> &IndexEntryWriteGuard::DeletedRowsInUse() {
-	return entry.deleted_rows_in_use;
+BoundIndex &IndexEntryWriteGuard::GetDelta(const IndexEntryDelta delta) {
+	switch (delta) {
+	case IndexEntryDelta::DELETED_ROWS_IN_USE:
+		if (entry->deleted_rows_in_use) {
+			return *entry->deleted_rows_in_use;
+		}
+		break;
+	case IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT:
+		if (entry->added_data_during_checkpoint) {
+			return *entry->added_data_during_checkpoint;
+		}
+		break;
+	case IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT:
+		if (entry->removed_data_during_checkpoint) {
+			return *entry->removed_data_during_checkpoint;
+		}
+		break;
+	}
+	throw InternalException("Attempted to access a missing index delta");
 }
 
-unique_ptr<BoundIndex> &IndexEntryWriteGuard::AddedDataDuringCheckpoint() {
-	return entry.added_data_during_checkpoint;
+void IndexEntryWriteGuard::SetDelta(const IndexEntryDelta delta, unique_ptr<BoundIndex> index) {
+	switch (delta) {
+	case IndexEntryDelta::DELETED_ROWS_IN_USE:
+		entry->deleted_rows_in_use = std::move(index);
+		return;
+	case IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT:
+		entry->added_data_during_checkpoint = std::move(index);
+		return;
+	case IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT:
+		entry->removed_data_during_checkpoint = std::move(index);
+		return;
+	}
+	throw InternalException("Unsupported index delta type");
 }
 
-unique_ptr<BoundIndex> &IndexEntryWriteGuard::RemovedDataDuringCheckpoint() {
-	return entry.removed_data_during_checkpoint;
+void IndexEntryWriteGuard::ResetDelta(const IndexEntryDelta delta) {
+	switch (delta) {
+	case IndexEntryDelta::DELETED_ROWS_IN_USE:
+		entry->deleted_rows_in_use.reset();
+		return;
+	case IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT:
+		entry->added_data_during_checkpoint.reset();
+		return;
+	case IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT:
+		entry->removed_data_during_checkpoint.reset();
+		return;
+	}
+	throw InternalException("Unsupported index delta type");
+}
+
+void IndexEntryWriteGuard::MergeRemovedDataDuringCheckpoint() {
+	auto &art = entry->owned_index->Cast<ART>();
+	art.RemovalMerge(GetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT));
+}
+
+ErrorData IndexEntryWriteGuard::MergeAddedDataDuringCheckpoint(const IndexAppendMode append_mode) {
+	auto &art = entry->owned_index->Cast<ART>();
+	return art.InsertMerge(GetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT), append_mode);
 }
 
 void IndexEntryWriteGuard::MarkWrittenForCheckpoint(const transaction_t checkpoint_id) {
-	entry.last_written_checkpoint = checkpoint_id;
+	entry->last_written_checkpoint = checkpoint_id;
 }
 
 void IndexEntryWriteGuard::ReplaceIndex(unique_ptr<Index> index) {
-	entry.owned_index = std::move(index);
+	entry->owned_index = std::move(index);
 }
 
 template <class T>
@@ -165,7 +226,7 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index));
 	index_entries.push_back(std::move(index_entry));
 	auto guard = index_entries.back()->ReadLock();
-	if (!guard.GetIndex().IsBound()) {
+	if (!guard.Invoke(&Index::IsBound)) {
 		unbound_count++;
 	}
 }
@@ -174,12 +235,11 @@ void TableIndexList::RemoveIndex(const Identifier &name) {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (idx_t i = 0; i < index_entries.size(); i++) {
 		auto guard = index_entries[i]->WriteLock();
-		auto &index = guard.GetIndex();
-		if (index.GetIndexName() == name) {
-			if (!index.IsBound()) {
+		if (guard.Invoke(&Index::GetIndexName) == name) {
+			if (!guard.Invoke(&Index::IsBound)) {
 				unbound_count--;
 			}
-			index.ResetStorage();
+			guard.Invoke(&Index::ResetStorage);
 			index_entries.erase_at(i);
 			return;
 		}
@@ -189,15 +249,14 @@ void TableIndexList::RemoveIndex(const Identifier &name) {
 unordered_set<string> TableIndexList::DistinctIndexTypes() const {
 	unordered_set<string> result;
 	for (auto guard : ReadLockedIndexes()) {
-		result.insert(guard.GetIndex().GetIndexType());
+		result.insert(guard.Invoke(&Index::GetIndexType));
 	}
 	return result;
 }
 
 bool TableIndexList::AllIndexesBoundOfType(const char *index_type) const {
 	for (auto guard : ReadLockedIndexes()) {
-		const auto &index = guard.GetIndex();
-		if (!index.IsBound() || index.GetIndexType() != index_type) {
+		if (!guard.Invoke(&Index::IsBound) || guard.Invoke(&Index::GetIndexType) != index_type) {
 			return false;
 		}
 	}
@@ -207,9 +266,8 @@ bool TableIndexList::AllIndexesBoundOfType(const char *index_type) const {
 bool TableIndexList::NameIsUnique(const string &name) const {
 	// Only covers PK, FK, and UNIQUE indexes.
 	for (auto guard : ReadLockedIndexes()) {
-		const auto &index = guard.GetIndex();
-		if (index.IsPrimary() || index.IsForeign() || index.IsUnique()) {
-			if (index.GetIndexName() == name) {
+		if (guard.Invoke(&Index::IsPrimary) || guard.Invoke(&Index::IsForeign) || guard.Invoke(&Index::IsUnique)) {
+			if (guard.Invoke(&Index::GetIndexName) == name) {
 				return false;
 			}
 		}
@@ -220,12 +278,10 @@ bool TableIndexList::NameIsUnique(const string &name) const {
 shared_ptr<IndexEntry> TableIndexList::FindEntry(const Identifier &name) const {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		auto guard = entry->ReadLock();
-		const auto &index = guard.GetIndex();
-		if (index.GetIndexName() != name) {
+		if (entry->Read<Index>([name](const Index &index) { return index.GetIndexName() != name; })) {
 			continue;
-		}
-		if (!index.IsBound()) {
+		};
+		if (entry->Read<Index>([name](const Index &index) { return index.IsBound(); })) {
 			throw InternalException("TableIndexList::Find cannot return an unbound index");
 		}
 		return entry;
@@ -263,8 +319,8 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		shared_ptr<IndexEntry> index_entry;
 		for (auto &entry : index_entries) {
 			auto guard = entry->ReadLock();
-			const auto &index = guard.GetIndex();
-			if (!index.IsBound() && (index_type == nullptr || index.GetIndexType() == index_type)) {
+			if (!guard.Invoke(&Index::IsBound) &&
+			    (index_type == nullptr || guard.Invoke(&Index::GetIndexType) == index_type)) {
 				index_entry = entry;
 				break;
 			}
@@ -303,19 +359,12 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		// Apply any outstanding buffered replays and replace the unbound index with a bound index.
 		unique_ptr<BoundIndex> bound_idx;
 		{
-			auto guard = index_entry->ReadLock();
-			auto &unbound_index = guard.GetIndex().Cast<UnboundIndex>();
-			bound_idx = idx_binder.BindIndex(unbound_index);
-			if (unbound_index.HasBufferedReplays()) {
-				// For replaying buffered index operations, we only want the physical column types (skip over
-				// generated column types).
-				vector<LogicalType> physical_column_types;
-				for (auto &col : table.GetColumns().Physical()) {
-					physical_column_types.push_back(col.Type());
-				}
-				bound_idx->ApplyBufferedReplays(physical_column_types, unbound_index.GetBufferedReplays(),
-				                                unbound_index.GetMappedColumnIds());
+			auto guard = index_entry->WriteLock();
+			vector<LogicalType> physical_column_types;
+			for (auto &col : table.GetColumns().Physical()) {
+				physical_column_types.push_back(col.Type());
 			}
+			bound_idx = guard.Invoke(&UnboundIndex::Bind, idx_binder, physical_column_types);
 		}
 
 		// Commit the bound index to the index entry.
@@ -331,15 +380,17 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 	}
 }
 
-bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const Index &index, const ForeignKeyType fk_type) {
-	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index.IsUnique() : !index.IsForeign()) {
+bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const IndexEntryReadGuard &guard,
+                       const ForeignKeyType fk_type) {
+	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !guard.Invoke(&Index::IsUnique)
+	                                                         : !guard.Invoke(&Index::IsForeign)) {
 		return false;
 	}
-	if (fk_keys.size() != index.GetColumnIds().size()) {
+	auto column_ids = guard.Invoke(&Index::GetColumnIds);
+	if (fk_keys.size() != column_ids.size()) {
 		return false;
 	}
 
-	auto &column_ids = index.GetColumnIds();
 	for (auto &fk_key : fk_keys) {
 		bool found = false;
 		for (auto &index_key : column_ids) {
@@ -360,8 +411,7 @@ shared_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<Physical
 	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		auto guard = entry->ReadLock();
-		const auto &index = guard.GetIndex();
-		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
+		if (IsForeignKeyIndex(fk_keys, guard, fk_type)) {
 			return entry;
 		}
 	}
@@ -380,36 +430,35 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 		throw InternalException("TableIndexList::VerifyForeignKey failed to find foreign key index");
 	}
 
-	auto guard = entry->ReadLock();
-	auto &index = guard.GetIndex();
-	D_ASSERT(index.IsBound());
+	auto guard = entry->WriteLock();
+	D_ASSERT(guard.Invoke(&Index::IsBound));
 	IndexAppendInfo index_append_info;
 	unique_ptr<IndexEntryReadGuard> delete_guard;
 	if (storage) {
-		auto delete_entry = storage->delete_indexes.FindEntry(index.GetIndexName());
+		auto delete_entry = storage->delete_indexes.FindEntry(guard.Invoke(&Index::GetIndexName));
 		if (delete_entry) {
 			delete_guard = make_uniq<IndexEntryReadGuard>(delete_entry->ReadLock());
-			index_append_info.delete_indexes.push_back(delete_guard->GetIndex().Cast<BoundIndex>());
+			delete_guard->Invoke(&BoundIndex::AddToDeleteIndexes, index_append_info);
 		}
 	}
-	if (guard.RemovedDataDuringCheckpoint()) {
-		index_append_info.delete_indexes.push_back(*guard.RemovedDataDuringCheckpoint());
+	if (guard.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+		guard.InvokeDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT, &BoundIndex::AddToDeleteIndexes,
+		                  index_append_info);
 	}
 
-	auto &main_index = index.Cast<BoundIndex>();
-	main_index.VerifyConstraint(chunk, index_append_info, conflict_manager);
-	if (guard.AddedDataDuringCheckpoint()) {
+	guard.Invoke(&BoundIndex::VerifyConstraint, chunk, index_append_info, conflict_manager);
+	if (guard.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 		// if we have added any rows during checkpoint - check in that index as well
 		IndexAppendInfo added_during_checkpoint_info;
-		guard.AddedDataDuringCheckpoint()->VerifyConstraint(chunk, added_during_checkpoint_info, conflict_manager);
+		guard.InvokeDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT, &BoundIndex::VerifyConstraint, chunk,
+		                  added_during_checkpoint_info, conflict_manager);
 	}
 }
 
 unordered_set<column_t> TableIndexList::GetRequiredColumns() const {
 	unordered_set<column_t> column_ids;
 	for (auto guard : ReadLockedIndexes()) {
-		const auto &index = guard.GetIndex();
-		for (auto col_id : index.GetColumnIds()) {
+		for (auto col_id : guard.Invoke(&Index::GetColumnIds)) {
 			column_ids.insert(col_id);
 		}
 	}
@@ -421,30 +470,18 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 
 	IndexSerializationResult result;
 
-	idx_t bound_count = 0;
+	result.owned_infos.reserve(index_entries.size());
 	for (const auto &entry : index_entries) {
-		auto guard = entry->ReadLock();
-		if (guard.GetIndex().IsBound()) {
-			bound_count++;
+		auto guard = entry->WriteLock();
+		IndexStorageInfo storage_info;
+		if (guard.Invoke(&Index::IsBound)) {
+			storage_info = guard.Invoke(&BoundIndex::SerializeToDisk, context, info.options);
+		} else {
+			storage_info = guard.Invoke(&UnboundIndex::CopyStorageInfo);
 		}
-	}
-	result.bound_infos.reserve(bound_count);
-	for (const auto &entry : index_entries) {
-		auto guard = entry->ReadLock();
-		auto &index = guard.GetIndex();
-		if (!index.IsBound()) {
-			// Unbound: reference existing storage info
-			auto &unbound_index = index.Cast<UnboundIndex>();
-			D_ASSERT(!unbound_index.GetStorageInfo().name.empty());
-			result.ordered_infos.push_back(unbound_index.GetStorageInfo());
-			continue;
-		}
-		// Bound: move new storage info into bound_infos, then reference it
-		auto &bound_index = index.Cast<BoundIndex>();
-		auto storage_info = bound_index.SerializeToDisk(context, info.options);
 		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
-		result.bound_infos.push_back(std::move(storage_info));
-		result.ordered_infos.push_back(result.bound_infos.back());
+		result.owned_infos.push_back(std::move(storage_info));
+		result.ordered_infos.push_back(result.owned_infos.back());
 	}
 
 	return result;
@@ -453,22 +490,19 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) const {
 	for (auto guard : WriteLockedIndexes()) {
 		// Merge any data appended to the index while the checkpoint was running.
-		auto &index = guard.GetIndex();
-		if (!index.IsBound()) {
+		if (!guard.Invoke(&Index::IsBound)) {
 			continue;
 		}
-		auto &bound_index = index.Cast<BoundIndex>();
-		if (guard.RemovedDataDuringCheckpoint() || guard.AddedDataDuringCheckpoint()) {
-			if (bound_index.GetIndexType() != ART::TYPE_NAME) {
+		if (guard.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT) ||
+		    guard.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+			if (guard.Invoke(&Index::GetIndexType) != ART::TYPE_NAME) {
 				throw InternalException("Concurrent changes made to a non-ART index");
 			}
 
-			auto &art = bound_index.Cast<ART>();
-
-			if (guard.RemovedDataDuringCheckpoint()) {
-				art.RemovalMerge(*guard.RemovedDataDuringCheckpoint());
+			if (guard.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+				guard.MergeRemovedDataDuringCheckpoint();
 			}
-			if (guard.AddedDataDuringCheckpoint()) {
+			if (guard.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 				// NOTE: we insert duplicates here (IndexAppendMode::INSERT_DUPLICATES)
 				// this is necessary due to the way that data is inserted into indexes during transaction commit
 				// essentially we always FIRST insert data into the index, THEN remove data
@@ -476,15 +510,15 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) const {
 				// i.e. if we have a transaction like: DELETE FROM tbl WHERE i=42; INSERT INTO tbl VALUES (42);
 				// we will FIRST insert 42, THEN delete 42 from the index
 				// We plan to change this in the future - see https://github.com/duckdblabs/duckdb-internal/issues/6886
-				auto error = art.InsertMerge(*guard.AddedDataDuringCheckpoint(), IndexAppendMode::INSERT_DUPLICATES);
+				auto error = guard.MergeAddedDataDuringCheckpoint(IndexAppendMode::INSERT_DUPLICATES);
 				if (error.HasError()) {
 					throw InternalException("Failed to append while merging checkpoint deltas - this "
 					                        "signifies a bug or broken index: %s",
 					                        error.Message());
 				}
 			}
-			guard.RemovedDataDuringCheckpoint().reset();
-			guard.AddedDataDuringCheckpoint().reset();
+			guard.ResetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT);
+			guard.ResetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT);
 		}
 		guard.MarkWrittenForCheckpoint(checkpoint_id);
 	}

@@ -361,8 +361,7 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 	if (column_ids.empty()) {
 		for (const auto &entry : matched_indexes) {
 			auto guard = entry->ReadLock();
-			auto &index = guard.GetIndex().Cast<BoundIndex>();
-			auto &index_column_ids = index.GetColumnIdSet();
+			auto index_column_ids = guard.Invoke(&Index::GetColumnIdSet);
 			PrepareSortKeys(input, sort_keys, index_column_ids);
 			vector<reference<Vector>> columns;
 			for (auto &idx : index_column_ids) {
@@ -529,15 +528,15 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
 		for (const auto &entry : global_indexes.GetEntries()) {
 			auto guard = entry->ReadLock();
-			auto &index = guard.GetIndex();
 
-			if (!index.IsUnique()) {
+			if (!guard.Invoke(&Index::IsUnique)) {
 				continue;
 			}
-			if (!conflict_info.ConflictTargetMatches(index)) {
+			if (!conflict_info.ConflictTargetMatches(guard.Invoke(&Index::IsUnique),
+			                                         guard.Invoke(&Index::GetColumnIdSet))) {
 				continue;
 			}
-			D_ASSERT(index.IsBound());
+			D_ASSERT(guard.Invoke(&Index::IsBound));
 
 			matching_indexes.push_back(entry);
 		}
@@ -545,15 +544,15 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 		const auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
 		for (const auto &entry : local_indexes.GetEntries()) {
 			auto guard = entry->ReadLock();
-			auto &index = guard.GetIndex();
 
-			if (!index.IsUnique()) {
+			if (!guard.Invoke(&Index::IsUnique)) {
 				continue;
 			}
-			if (!conflict_info.ConflictTargetMatches(index)) {
+			if (!conflict_info.ConflictTargetMatches(guard.Invoke(&Index::IsUnique),
+			                                         guard.Invoke(&Index::GetColumnIdSet))) {
 				continue;
 			}
-			D_ASSERT(index.IsBound());
+			D_ASSERT(guard.Invoke(&Index::IsBound));
 
 			matching_indexes.push_back(entry);
 		}

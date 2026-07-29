@@ -1239,14 +1239,12 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			}
 			current_row_id += chunk.size();
 			for (auto guard : indexes.WriteLockedIndexes()) {
-				auto &index = guard.GetIndex();
-				if (!index.IsBound()) {
-					auto &unbound_index = index.Cast<UnboundIndex>();
-					unbound_index.BufferChunk(chunk, row_id_vector, BufferedIndexReplay::INSERT_ENTRY);
+				if (!guard.Invoke(&Index::IsBound)) {
+					guard.Invoke(&UnboundIndex::BufferChunk, chunk, row_id_vector, BufferedIndexReplay::INSERT_ENTRY);
 					continue;
 				}
-				auto &bound_index = index.Cast<BoundIndex>();
-				bound_index.Append(chunk, row_id_vector);
+				guard.Invoke(static_cast<ErrorData (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Append), chunk,
+				             row_id_vector);
 			}
 		}
 	}

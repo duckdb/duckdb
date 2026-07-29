@@ -655,20 +655,18 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 bool TryScanIndex(IndexEntry &entry, const ColumnList &column_list, TableFunctionInitInput &input,
                   TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
 	auto guard = entry.ReadLock();
-	auto &index = guard.GetIndex();
-	if (!index.IsBound() || index.GetIndexType() != ART::TYPE_NAME) {
+	if (!guard.Invoke(&Index::IsBound) || guard.Invoke(&Index::GetIndexType) != ART::TYPE_NAME) {
 		return false;
 	}
-	auto &art = index.Cast<ART>();
 
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
-	if (art.unbound_expressions.size() > 1) {
+	if (guard.Invoke(&BoundIndex::UnboundExpressionCount) > 1) {
 		return false;
 	}
 
-	auto index_expr = art.unbound_expressions[0]->Copy();
-	auto &indexed_columns = art.GetColumnIds();
+	auto index_expr = guard.Invoke(&BoundIndex::CopyUnboundExpression, 0);
+	auto indexed_columns = guard.Invoke(&Index::GetColumnIds);
 
 	// NOTE: We do not push down multi-column filters, e.g., 42 = a + b.
 	if (indexed_columns.size() != 1) {
@@ -728,32 +726,28 @@ bool TryScanIndex(IndexEntry &entry, const ColumnList &column_list, TableFunctio
 		return false;
 	}
 
-	vector<reference<ART>> arts_to_scan;
-	arts_to_scan.push_back(art);
-	if (guard.DeletedRowsInUse()) {
-		if (guard.DeletedRowsInUse()->GetIndexType() != ART::TYPE_NAME) {
-			throw InternalException("Concurrent changes made to a non-ART index");
-		}
-		arts_to_scan.push_back(guard.DeletedRowsInUse()->Cast<ART>());
-	}
-	if (guard.AddedDataDuringCheckpoint()) {
-		if (guard.AddedDataDuringCheckpoint()->GetIndexType() != ART::TYPE_NAME) {
-			throw InternalException("Concurrent changes made to a non-ART index");
-		}
-		arts_to_scan.push_back(guard.AddedDataDuringCheckpoint()->Cast<ART>());
-	}
-
 	auto expressions = ExtractFilterExpressions(col, *filter, storage_index.GetIndex());
 	for (const auto &filter_expr : expressions) {
-		for (auto &art_ref : arts_to_scan) {
-			auto &art_to_scan = art_ref.get();
-			auto scan_state = art_to_scan.TryInitializeScan(*index_expr, *filter_expr);
-			if (!scan_state) {
+		auto scan_state = guard.Invoke(&ART::TryInitializeScan, *index_expr, *filter_expr);
+		if (!scan_state) {
+			return false;
+		}
+
+		if (!guard.Invoke(&ART::Scan, *scan_state, max_count, row_ids)) {
+			row_ids.clear();
+			return false;
+		}
+		for (auto delta : {IndexEntryDelta::DELETED_ROWS_IN_USE, IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT}) {
+			if (!guard.HasDelta(delta)) {
+				continue;
+			}
+			auto delta_scan_state = guard.InvokeDelta(delta, &ART::TryInitializeScan, *index_expr, *filter_expr);
+			if (!delta_scan_state) {
 				return false;
 			}
 
 			// Check if we can use an index scan, and already retrieve the matching row ids.
-			if (!art_to_scan.Scan(*scan_state, max_count, row_ids)) {
+			if (!guard.InvokeDelta(delta, &ART::Scan, *delta_scan_state, max_count, row_ids)) {
 				row_ids.clear();
 				return false;
 			}

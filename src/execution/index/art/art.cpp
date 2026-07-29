@@ -152,7 +152,7 @@ static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Value &low_v
 	return std::move(result);
 }
 
-unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const Expression &filter_expr) {
+unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const Expression &filter_expr) const {
 	Value low_value, high_value, equal_value;
 	ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
 
@@ -410,12 +410,12 @@ void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_ve
 }
 
 template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const {
 	GenerateKeysInternal<false>(allocator, input, keys);
 }
 
 template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) const {
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
@@ -690,18 +690,18 @@ bool ART::HasLegacyGeometryKeys() const {
 //===--------------------------------------------------------------------===//
 // Point and range lookups
 //===--------------------------------------------------------------------===//
-bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) {
+bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
 	Iterator it(*this);
 	it.FindMinimum(tree);
-	ARTKey empty_key = ARTKey();
+	const auto empty_key = ARTKey();
 	RowIdSetOutput output(row_ids, max_count);
 	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
+bool ART::SearchEqual(const ARTKey &key, idx_t max_count, set<row_t> &row_ids) const {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
 	if (!leaf) {
 		return true;
@@ -709,12 +709,12 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
 
 	Iterator it(*this);
 	it.FindMinimum(*leaf);
-	ARTKey empty_key = ARTKey();
+	const auto empty_key = ARTKey();
 	RowIdSetOutput output(row_ids, max_count);
 	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) {
+bool ART::SearchGreater(const ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -733,7 +733,7 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &ro
 	return it.Scan(ARTKey(), output, false) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) {
+bool ART::SearchLess(const ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -752,8 +752,8 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t
 	return it.Scan(upper_bound, output, equal) == ARTScanResult::COMPLETED;
 }
 
-bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-                           set<row_t> &row_ids) {
+bool ART::SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
+                           idx_t max_count, set<row_t> &row_ids) const {
 	if (!tree.HasMetadata()) {
 		return true;
 	}
@@ -771,7 +771,7 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 	return it.Scan(upper_bound, output, right_equal) == ARTScanResult::COMPLETED;
 }
 
-bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) {
+bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids) const {
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	if (scan_state.values[0].IsNull()) {
 		// full scan
@@ -857,7 +857,7 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 }
 
 void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
-                     optional_idx &conflict_idx, idx_t i) {
+                     optional_idx &conflict_idx, idx_t i) const {
 	// Get the set of deleted row ids for this value if we have any delete indexes
 	vector<row_t> deleted_row_ids;
 	if (delete_index_info.delete_indexes) {

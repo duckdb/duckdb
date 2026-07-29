@@ -45,7 +45,7 @@ public:
 
 public:
 	IndexAppendMode append_mode;
-	vector<reference<BoundIndex>> delete_indexes;
+	vector<reference<const BoundIndex>> delete_indexes;
 };
 
 enum class DeltaIndexType {
@@ -103,6 +103,14 @@ public:
 	}
 	IndexConstraintType GetConstraintType() const override {
 		return index_constraint_type;
+	}
+	idx_t UnboundExpressionCount() const;
+	unique_ptr<Expression> CopyUnboundExpression(idx_t index) const;
+	const vector<LogicalType> &GetLogicalTypes() const {
+		return logical_types;
+	}
+	void AddToDeleteIndexes(IndexAppendInfo &info) const {
+		info.delete_indexes.push_back(*this);
 	}
 
 public:
@@ -214,7 +222,7 @@ public:
 
 protected:
 	//! Lock used for any changes to the index
-	mutex lock;
+	mutable mutex lock;
 
 	//! The vector of bound expressions to generate the Index keys based on a data chunk.
 	//! The leaves of the bound expressions are BoundReferenceExpressions.

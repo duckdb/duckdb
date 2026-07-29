@@ -201,7 +201,7 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, c
 //===--------------------------------------------------------------------===//
 
 template <class NODE>
-static unsafe_optional_ptr<Node> GetChildInternal(ART &art, NODE &node, const uint8_t byte, const bool unsafe) {
+static unsafe_optional_ptr<Node> GetChildInternal(const ART &art, NODE &node, const uint8_t byte, const bool unsafe) {
 	D_ASSERT(node.HasMetadata());
 
 	auto type = node.GetType();
@@ -220,7 +220,7 @@ static unsafe_optional_ptr<Node> GetChildInternal(ART &art, NODE &node, const ui
 	}
 }
 
-const unsafe_optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte) const {
+const unsafe_optional_ptr<Node> Node::GetChild(const ART &art, const uint8_t byte) const {
 	return GetChildInternal(art, *this, byte, false);
 }
 
@@ -229,7 +229,7 @@ unsafe_optional_ptr<Node> Node::GetChildMutable(ART &art, const uint8_t byte, co
 }
 
 template <class NODE>
-unsafe_optional_ptr<Node> GetNextChildInternal(ART &art, NODE &node, uint8_t &byte) {
+unsafe_optional_ptr<Node> GetNextChildInternal(const ART &art, NODE &node, uint8_t &byte) {
 	D_ASSERT(node.HasMetadata());
 
 	auto type = node.GetType();
@@ -247,11 +247,11 @@ unsafe_optional_ptr<Node> GetNextChildInternal(ART &art, NODE &node, uint8_t &by
 	}
 }
 
-const unsafe_optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) const {
+const unsafe_optional_ptr<Node> Node::GetNextChild(const ART &art, uint8_t &byte) const {
 	return GetNextChildInternal(art, *this, byte);
 }
 
-bool Node::HasByte(ART &art, const uint8_t byte) const {
+bool Node::HasByte(const ART &art, const uint8_t byte) const {
 	D_ASSERT(HasMetadata());
 
 	auto type = GetType();
@@ -267,7 +267,7 @@ bool Node::HasByte(ART &art, const uint8_t byte) const {
 	}
 }
 
-bool Node::GetNextByte(ART &art, uint8_t &byte) const {
+bool Node::GetNextByte(const ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 
 	auto type = GetType();

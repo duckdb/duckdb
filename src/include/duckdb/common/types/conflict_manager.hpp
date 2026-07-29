@@ -76,8 +76,8 @@ public:
 		index_names.insert(index_name);
 	}
 	//! Returns true, if the index is in this conflict manager.
-	bool IndexMatches(BoundIndex &index) {
-		return index_names.find(index.name) != index_names.end();
+	bool IndexMatches(const Identifier &index_name) const {
+		return index_names.find(index_name) != index_names.end();
 	}
 	//! Returns a reference to the matching indexes.
 	const vector<shared_ptr<IndexEntry>> &MatchingIndexes() const {

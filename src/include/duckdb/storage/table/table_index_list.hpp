@@ -9,16 +9,21 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 
+#include <type_traits>
+
 namespace duckdb {
 
 class ConflictManager;
+class ConflictInfo;
 class IndexEntry;
 class IndexEntryReadGuard;
 class IndexEntryWriteGuard;
+class IndexBinder;
 class LocalTableStorage;
 struct IndexStorageInfo;
 struct DataTableInfo;
@@ -40,8 +45,14 @@ struct TableIndexIterationResult<IndexEntryWriteGuard> {
 	using type = IndexEntryWriteGuard;
 };
 
-//! IndexBindState to transition index binding phases preventing lock order inversion.
+//! IndexBindState transitions index binding phases while preventing lock order inversion.
 enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
+//! Identifies a checkpoint or transaction delta owned by an IndexEntry.
+enum class IndexEntryDelta : uint8_t {
+	DELETED_ROWS_IN_USE,
+	ADDED_DATA_DURING_CHECKPOINT,
+	REMOVED_DATA_DURING_CHECKPOINT
+};
 
 //! IndexEntryReadGuard provides shared access to a stable physical index.
 //! Other readers can access the entry concurrently, while replacement and entry-level mutations are blocked.
@@ -50,22 +61,31 @@ public:
 	IndexEntryReadGuard(IndexEntryReadGuard &&) = default;
 	IndexEntryReadGuard &operator=(IndexEntryReadGuard &&) = delete;
 
-	Index &GetIndex() &;
-	const Index &GetIndex() const &;
-	Index &GetIndex() && = delete;
-	const Index &GetIndex() const && = delete;
-	optional_ptr<BoundIndex> DeletedRowsInUse() const;
-	optional_ptr<BoundIndex> AddedDataDuringCheckpoint() const;
-	optional_ptr<BoundIndex> RemovedDataDuringCheckpoint() const;
+	template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+	auto Invoke(RESULT (TARGET::*method)(METHOD_ARGS...) const, CALL_ARGS &&...args) const &;
+	template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+	auto Invoke(RESULT (TARGET::*method)(METHOD_ARGS...) const, CALL_ARGS &&...args) const && = delete;
+
+	template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+	auto InvokeDelta(IndexEntryDelta delta, RESULT (TARGET::*method)(METHOD_ARGS...) const,
+	                 CALL_ARGS &&...args) const &;
+	template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+	auto InvokeDelta(IndexEntryDelta delta, RESULT (TARGET::*method)(METHOD_ARGS...) const,
+	                 CALL_ARGS &&...args) const && = delete;
+
+	bool HasDelta(IndexEntryDelta delta) const;
 	bool ShouldUseDeltaIndexes(optional_idx active_checkpoint) const;
 
-protected:
+private:
 	friend class IndexEntry;
-	IndexEntryReadGuard(IndexEntry &entry, unique_ptr<StorageLockKey> lock);
+	friend class IndexEntryWriteGuard;
+	IndexEntryReadGuard(shared_ptr<IndexEntry> entry, unique_ptr<StorageLockKey> lock);
 
-protected:
+	const BoundIndex &GetDelta(IndexEntryDelta delta) const;
+
+	//! Declared before lock so the lock is released before the entry can be destroyed.
+	shared_ptr<IndexEntry> entry;
 	unique_ptr<StorageLockKey> lock;
-	IndexEntry &entry;
 };
 
 //! IndexEntryWriteGuard provides exclusive access to the physical index and checkpoint state.
@@ -74,31 +94,53 @@ public:
 	IndexEntryWriteGuard(IndexEntryWriteGuard &&) = default;
 	IndexEntryWriteGuard &operator=(IndexEntryWriteGuard &&) = delete;
 
-	unique_ptr<BoundIndex> &DeletedRowsInUse();
-	unique_ptr<BoundIndex> &AddedDataDuringCheckpoint();
-	unique_ptr<BoundIndex> &RemovedDataDuringCheckpoint();
+	using IndexEntryReadGuard::Invoke;
+	using IndexEntryReadGuard::InvokeDelta;
+
+	template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+	auto Invoke(RESULT (TARGET::*method)(METHOD_ARGS...), CALL_ARGS &&...args) &;
+	template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+	auto Invoke(RESULT (TARGET::*method)(METHOD_ARGS...), CALL_ARGS &&...args) && = delete;
+
+	template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+	auto InvokeDelta(IndexEntryDelta delta, RESULT (TARGET::*method)(METHOD_ARGS...), CALL_ARGS &&...args) &;
+	template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+	auto InvokeDelta(IndexEntryDelta delta, RESULT (TARGET::*method)(METHOD_ARGS...), CALL_ARGS &&...args) && = delete;
+
+	void SetDelta(IndexEntryDelta delta, unique_ptr<BoundIndex> index);
+	void ResetDelta(IndexEntryDelta delta);
+	void MergeRemovedDataDuringCheckpoint();
+	ErrorData MergeAddedDataDuringCheckpoint(IndexAppendMode append_mode);
 	void MarkWrittenForCheckpoint(transaction_t checkpoint_id);
 	void ReplaceIndex(unique_ptr<Index> index);
 
 private:
 	friend class IndexEntry;
-	IndexEntryWriteGuard(IndexEntry &entry, unique_ptr<StorageLockKey> lock);
+	IndexEntryWriteGuard(shared_ptr<IndexEntry> entry, unique_ptr<StorageLockKey> lock);
+
+	BoundIndex &GetDelta(IndexEntryDelta delta);
 };
 
 //! IndexEntry contains an atomic in addition to the index to ensure correct binding.
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
-class IndexEntry {
+class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
 	explicit IndexEntry(unique_ptr<Index> index);
 
 public:
+	template <class TARGET, class FUNC>
+	auto Read(FUNC &&func) const {
+		lock.GetSharedLock();
+		const auto &index = owned_index->Cast<TARGET>();
+		return func(index);
+	}
 	//! Acquire shared access to a stable physical index.
 	IndexEntryReadGuard ReadLock() {
-		return IndexEntryReadGuard(*this, lock.GetSharedLock());
+		return IndexEntryReadGuard(shared_from_this(), lock.GetSharedLock());
 	}
 	//! Acquire exclusive access to the physical index and checkpoint state.
 	IndexEntryWriteGuard WriteLock() {
-		return IndexEntryWriteGuard(*this, lock.GetExclusiveLock());
+		return IndexEntryWriteGuard(shared_from_this(), lock.GetExclusiveLock());
 	}
 	IndexBindState GetBindState() const {
 		return bind_state.load();
@@ -112,7 +154,7 @@ private:
 	friend class IndexEntryWriteGuard;
 	atomic<IndexBindState> bind_state;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
-	StorageLock lock;
+	mutable StorageLock lock;
 	//! The last checkpoint index that was written with this index
 	optional_idx last_written_checkpoint;
 	//! The physical index owned by this stable logical entry.
@@ -124,24 +166,47 @@ private:
 	unique_ptr<BoundIndex> removed_data_during_checkpoint;
 };
 
+template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+auto IndexEntryReadGuard::Invoke(RESULT (TARGET::*method)(METHOD_ARGS...) const, CALL_ARGS &&...args) const & {
+	static_assert(!std::is_pointer_v<RESULT>, "Locked index operations cannot return pointers");
+	const auto &index = entry->owned_index->Cast<TARGET>();
+	return (index.*method)(std::forward<CALL_ARGS>(args)...);
+}
+
+template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+auto IndexEntryReadGuard::InvokeDelta(IndexEntryDelta delta, RESULT (TARGET::*method)(METHOD_ARGS...) const,
+                                      CALL_ARGS &&...args) const & {
+	static_assert(!std::is_pointer_v<RESULT>, "Locked index operations cannot return pointers");
+	const auto &index = GetDelta(delta).Cast<TARGET>();
+	return (index.*method)(std::forward<CALL_ARGS>(args)...);
+}
+
+template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+auto IndexEntryWriteGuard::Invoke(RESULT (TARGET::*method)(METHOD_ARGS...), CALL_ARGS &&...args) & {
+	static_assert(!std::is_pointer_v<RESULT>, "Locked index operations cannot return pointers");
+	auto &index = entry->owned_index->Cast<TARGET>();
+	return (index.*method)(std::forward<CALL_ARGS>(args)...);
+}
+
+template <class TARGET, class RESULT, class... METHOD_ARGS, class... CALL_ARGS>
+auto IndexEntryWriteGuard::InvokeDelta(IndexEntryDelta delta, RESULT (TARGET::*method)(METHOD_ARGS...),
+                                       CALL_ARGS &&...args) & {
+	static_assert(!std::is_pointer_v<RESULT>, "Locked index operations cannot return pointers");
+	auto &index = GetDelta(delta).Cast<TARGET>();
+	return (index.*method)(std::forward<CALL_ARGS>(args)...);
+}
+
 struct IndexSerializationInfo {
 	case_insensitive_map_t<Value> options;
 	transaction_t checkpoint_id;
 };
 
-// When serializing indexes, new IndexStorageInfos are created upon BoundIndex serialization, whereas for
-// UnboundIndex, IndexStorageInfo already exists inside the UnboundIndex.
-// We want to serialize IndexStorageInfo's in the same order that we serialized indexes, which is stored as
-// a vector of references in the ordered_infos field here.
-// UnboundIndexes still "own" the IndexStorageInfo and so a reference can just be directly pushed.
-// For BoundIndexes, however, we need to keep the newly created IndexStorageInfo's alive, and so they
-// are stored in this result type. When a BoundIndex is added to bound_infos, a reference to this is then
-// pushed to ordered_infos.
+// IndexStorageInfo is move-only. Keep every serialized info in owned_infos and expose stable ordered references.
 struct IndexSerializationResult {
 	//! The ordered list of references to serialize - preserves iteration order of index_entries
 	vector<reference<const IndexStorageInfo>> ordered_infos;
-	//! Storage for bound index infos to keep them alive.
-	vector<IndexStorageInfo> bound_infos;
+	//! Storage for index infos to keep the references in ordered_infos alive.
+	vector<IndexStorageInfo> owned_infos;
 };
 
 class TableIndexList {
