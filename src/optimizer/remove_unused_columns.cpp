@@ -56,7 +56,8 @@ RemoveUnusedColumns::RemoveUnusedColumns(Optimizer &optimizer)
 
 RemoveUnusedColumns::RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root)
     : optimizer(parent.optimizer), binder(parent.binder), context(parent.context), everything_referenced(is_root),
-      allow_missing_cte_references(parent.allow_missing_cte_references), root(parent.root) {
+      allow_missing_cte_references(parent.allow_missing_cte_references), analyze_only(parent.analyze_only),
+      root(parent.root) {
 }
 
 unordered_map<TableIndex, MaterializedCTEInfo> &RemoveUnusedColumns::GetCTEMap() {
@@ -70,21 +71,15 @@ optional_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> RemoveUnusedColumns
 	return root.root_cte_map.get();
 }
 
-bool RemoveUnusedColumns::GatherRecursiveDependencies(LogicalOperator &bottom, TableIndex cte_index,
+void RemoveUnusedColumns::GatherRecursiveDependencies(unique_ptr<LogicalOperator> &bottom, TableIndex cte_index,
                                                       const unordered_set<ProjectionIndex> &required_columns,
                                                       unordered_set<ProjectionIndex> &recursive_dependencies) {
-	unique_ptr<LogicalOperator> analysis_plan;
-	try {
-		analysis_plan = bottom.Copy(context);
-	} catch (NotImplementedException &) {
-		return false;
-	}
-	analysis_plan->ResolveOperatorTypes();
-	auto bindings = analysis_plan->GetColumnBindings();
+	auto bindings = bottom->GetColumnBindings();
 
 	RemoveUnusedColumns analysis(optimizer);
 	analysis.everything_referenced = false;
 	analysis.allow_missing_cte_references = true;
+	analysis.analyze_only = true;
 	analysis.GetCTEMap().insert({cte_index, MaterializedCTEInfo()});
 	for (auto column_idx : required_columns) {
 		if (column_idx.GetIndex() >= bindings.size()) {
@@ -92,7 +87,7 @@ bool RemoveUnusedColumns::GatherRecursiveDependencies(LogicalOperator &bottom, T
 		}
 		analysis.column_references.emplace(bindings[column_idx.GetIndex()], ReferencedColumn());
 	}
-	analysis.VisitOperator(analysis_plan);
+	analysis.VisitOperator(bottom);
 
 	auto cte_map = analysis.TryGetCTEMap();
 	D_ASSERT(cte_map);
@@ -101,7 +96,6 @@ bool RemoveUnusedColumns::GatherRecursiveDependencies(LogicalOperator &bottom, T
 	for (auto &entry : cte_entry->second.column_references) {
 		recursive_dependencies.insert(entry.first.column_index);
 	}
-	return true;
 }
 
 bool RemoveUnusedColumns::ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &rec,
@@ -116,13 +110,14 @@ bool RemoveUnusedColumns::ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &r
 	}
 	while (true) {
 		unordered_set<ProjectionIndex> recursive_dependencies;
-		if (!GatherRecursiveDependencies(*rec.children[1], rec.table_index, required_columns, recursive_dependencies)) {
-			return false;
-		}
+		GatherRecursiveDependencies(rec.children[1], rec.table_index, required_columns, recursive_dependencies);
 		const auto old_count = required_columns.size();
 		required_columns.insert(recursive_dependencies.begin(), recursive_dependencies.end());
+		if (required_columns.size() >= rec.column_count) {
+			return false;
+		}
 		if (required_columns.size() == old_count) {
-			return required_columns.size() < rec.column_count;
+			return true;
 		}
 	}
 }
@@ -252,7 +247,200 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 	}
 }
 
+void RemoveUnusedColumns::AnalyzeOperator(unique_ptr<LogicalOperator> &op_ref) {
+	auto &op = *op_ref;
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto &aggr = op.Cast<LogicalAggregate>();
+		RemoveUnusedColumns remove(*this, everything_referenced);
+		for (auto &group : aggr.groups) {
+			remove.VisitExpression(&group);
+		}
+		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+			auto binding = ColumnBinding(aggr.aggregate_index, ProjectionIndex(i));
+			if (everything_referenced || column_references.find(binding) != column_references.end()) {
+				remove.VisitExpression(&aggr.expressions[i]);
+			}
+		}
+		remove.VisitOperator(op.children[0]);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_UNION: {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		if (!setop.setop_all || everything_referenced) {
+			for (auto &child : op.children) {
+				RemoveUnusedColumns remove(*this, true);
+				remove.VisitOperator(child);
+			}
+			return;
+		}
+
+		vector<ProjectionIndex> entries;
+		for (idx_t i = 0; i < setop.column_count; i++) {
+			auto column_idx = ProjectionIndex(i);
+			if (column_references.find(ColumnBinding(setop.table_index, column_idx)) != column_references.end()) {
+				entries.push_back(column_idx);
+			}
+		}
+		if (entries.empty()) {
+			entries.emplace_back(0);
+		}
+		for (auto &child : op.children) {
+			auto bindings = child->GetColumnBindings();
+			RemoveUnusedColumns remove(*this, false);
+			for (auto column_idx : entries) {
+				if (column_idx.GetIndex() >= bindings.size()) {
+					throw InternalException("UNION liveness column is out of range");
+				}
+				remove.column_references.emplace(bindings[column_idx.GetIndex()], ReferencedColumn());
+			}
+			remove.VisitOperator(child);
+		}
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		for (auto &child : op.children) {
+			RemoveUnusedColumns remove(*this, true);
+			remove.VisitOperator(child);
+		}
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &proj = op.Cast<LogicalProjection>();
+		RemoveUnusedColumns remove(*this, false);
+		for (idx_t i = 0; i < proj.expressions.size(); i++) {
+			auto binding = ColumnBinding(proj.table_index, ProjectionIndex(i));
+			if (everything_referenced || column_references.find(binding) != column_references.end()) {
+				remove.VisitExpression(&proj.expressions[i]);
+			}
+		}
+		remove.VisitOperator(op.children[0]);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO: {
+		RemoveUnusedColumns remove(*this, true);
+		remove.VisitOperatorExpressions(op);
+		remove.VisitOperator(op.children[0]);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_GET: {
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		if (!op.children.empty()) {
+			RemoveUnusedColumns remove(*this, true);
+			remove.VisitOperator(op.children[0]);
+		}
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		auto &distinct = op.Cast<LogicalDistinct>();
+		if (distinct.distinct_type != DistinctType::DISTINCT_ON) {
+			everything_referenced = true;
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		for (auto &child : op.children) {
+			RemoveUnusedColumns remove(*this, true);
+			remove.VisitOperator(child);
+		}
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		auto &cte_map_ref = GetCTEMap();
+		auto &cte = op.Cast<LogicalCTE>();
+		auto &cte_map_entry = cte_map_ref[cte.table_index];
+		GatherCTEScans(cte.table_index, *cte.children[1], cte_map_entry.expected_readers);
+		cte_map_entry.everything_referenced = false;
+
+		auto output_bindings = cte.GetColumnBindings();
+		bool has_output_references = false;
+		for (auto &binding : output_bindings) {
+			if (column_references.find(binding) != column_references.end()) {
+				has_output_references = true;
+				break;
+			}
+		}
+		auto prune_rhs_outputs = !everything_referenced && has_output_references;
+		RemoveUnusedColumns rhs_child_analyzer(*this, !prune_rhs_outputs);
+		if (prune_rhs_outputs) {
+			for (auto &entry : column_references) {
+				rhs_child_analyzer.column_references.emplace(entry.first, entry.second);
+			}
+		}
+		rhs_child_analyzer.VisitOperator(cte.children[1]);
+
+		unordered_set<ProjectionIndex> referenced_columns_in_rhs;
+		for (auto &entry : cte_map_entry.column_references) {
+			referenced_columns_in_rhs.insert(entry.first.column_index);
+		}
+		if (cte_map_entry.expected_readers != cte_map_entry.seen_readers) {
+			throw InternalException("CTE analysis did not traverse every CTE reference");
+		}
+
+		if (cte_map_entry.everything_referenced) {
+			RemoveUnusedColumns lhs_child_analyzer(*this, true);
+			lhs_child_analyzer.VisitOperator(cte.children[0]);
+			return;
+		}
+		if (referenced_columns_in_rhs.empty()) {
+			referenced_columns_in_rhs.emplace(0);
+		}
+		auto bindings = cte.children[0]->GetColumnBindings();
+		RemoveUnusedColumns lhs_child_analyzer(*this, false);
+		for (auto column_idx : referenced_columns_in_rhs) {
+			if (column_idx.GetIndex() >= bindings.size()) {
+				throw InternalException("CTE liveness column is out of range");
+			}
+			lhs_child_analyzer.column_references.emplace(bindings[column_idx.GetIndex()], ReferencedColumn());
+		}
+		lhs_child_analyzer.VisitOperator(cte.children[0]);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_CTE_REF: {
+		auto &cte_ref = op.Cast<LogicalCTERef>();
+		auto cte_info_map = TryGetCTEMap();
+		if (!cte_info_map) {
+			everything_referenced = true;
+			return;
+		}
+		auto it = cte_info_map->find(cte_ref.cte_index);
+		if (it == cte_info_map->end()) {
+			if (allow_missing_cte_references) {
+				return;
+			}
+			throw InternalException("Could not find CTE definition for CTE reference");
+		}
+		auto &cte_entry = it->second;
+		for (auto &entry : column_references) {
+			if (entry.first.table_index == cte_ref.table_index) {
+				cte_entry.column_references.insert(entry);
+			}
+		}
+		cte_entry.seen_readers.insert(cte_ref.table_index);
+		cte_entry.everything_referenced = cte_ref.chunk_types.size() == cte_entry.column_references.size();
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+	case LogicalOperatorType::LOGICAL_PIVOT:
+		everything_referenced = true;
+		break;
+	default:
+		break;
+	}
+	LogicalOperatorVisitor::VisitOperatorExpressions(op);
+	LogicalOperatorVisitor::VisitOperatorChildren(op);
+}
+
 void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
+	if (analyze_only) {
+		AnalyzeOperator(op_ref);
+		return;
+	}
 	auto &op = *op_ref;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
