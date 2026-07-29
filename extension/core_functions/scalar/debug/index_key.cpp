@@ -134,8 +134,8 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	                        .Cast<TableCatalogEntry>();
 
 	// Register a catalog dependency so that prepared statements are invalidated when the table/index is dropped.
-	// During deserialization (statement cache), the binder may not be available — the dependency is
-	// preserved from the serialized properties, so we only register when the binder is present.
+	// The binder may not be available when this function is called through expression
+	// serialization/deserialization (e.g. LogicalOperator::Verify in debug builds).
 	if (input.HasBinder()) {
 		auto &binder = input.GetBinder();
 		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), context);
