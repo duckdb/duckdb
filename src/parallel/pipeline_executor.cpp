@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
+PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p, optional_idx reserved_batch_index)
     : pipeline(pipeline_p), thread(context_p), context(context_p, thread, &pipeline_p) {
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
@@ -23,8 +23,13 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
 			// batch index is not set yet - initialize before fetching anything
-			partition_info.batch_index =
-			    pipeline.IsExternalInput() ? pipeline.GetBaseBatchIndex() : pipeline.RegisterNewBatchIndex();
+			if (pipeline.IsExternalInput()) {
+				D_ASSERT(!reserved_batch_index.IsValid());
+				partition_info.batch_index = pipeline.GetBaseBatchIndex();
+			} else {
+				partition_info.batch_index =
+				    reserved_batch_index.IsValid() ? reserved_batch_index.GetIndex() : pipeline.RegisterNewBatchIndex();
+			}
 			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
@@ -335,7 +340,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			// the operators have to be called with the same input chunk to produce the rest of the output
 			D_ASSERT(source_chunk.size() > 0);
 			result = ExecutePushInternal(source_chunk, chunk_budget);
-		} else if (exhausted_pipeline && !next_batch_blocked && !done_flushing) {
+		} else if (exhausted_pipeline && (!next_batch_blocked || done_flushing)) {
 			// The pipeline was exhausted, try flushing all operators
 			return FlushAndFinalize(chunk_budget);
 		} else if (!exhausted_pipeline || next_batch_blocked) {
@@ -353,7 +358,8 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				}
 			}
 
-			if (required_partition_info.AnyRequired()) {
+			if (required_partition_info.AnyRequired() &&
+			    (source_result != SourceResultType::FINISHED || source_chunk.size() > 0)) {
 				auto next_batch_result = NextBatch(source_chunk, source_result == SourceResultType::HAVE_MORE_OUTPUT);
 				next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
 				if (next_batch_blocked) {
@@ -613,6 +619,14 @@ PipelineExecuteResult PipelineExecutor::FlushAndFinalize(ExecutionBudget &chunk_
 			return PipelineExecuteResult::NOT_FINISHED;
 		}
 		done_flushing = true;
+	}
+	if (required_partition_info.AnyRequired() && !pipeline.IsExternalInput()) {
+		DataChunk empty_chunk;
+		auto next_batch_result = NextBatch(empty_chunk, false);
+		next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
+		if (next_batch_blocked) {
+			return PipelineExecuteResult::INTERRUPTED;
+		}
 	}
 	return PushFinalize();
 }

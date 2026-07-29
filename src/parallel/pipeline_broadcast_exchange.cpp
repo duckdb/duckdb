@@ -316,8 +316,12 @@ struct PipelineBroadcastExchange::BufferState {
 		return min_batch_index;
 	}
 
-	void UpdateMinBatchIndex(idx_t new_min_batch_index) {
-		min_batch_index = MaxValue(min_batch_index, new_min_batch_index);
+	bool UpdateMinBatchIndex(idx_t new_min_batch_index) {
+		if (new_min_batch_index <= min_batch_index) {
+			return false;
+		}
+		min_batch_index = new_min_batch_index;
+		return true;
 	}
 
 	bool HasReadyBatch() const {
@@ -1016,25 +1020,33 @@ PipelineBroadcastExchange::FlushReadyBatches(idx_t min_batch_index, const Interr
 	bool appended = false;
 	while (true) {
 		vector<ExchangeLogEntry> log_entries;
+		vector<InterruptState> writers;
 		AppendAdmission admission;
 		AppendReservation reservation;
 		shared_ptr<DataChunk> copy;
+		bool has_ready_batch;
 		try {
 			annotated_lock_guard<annotated_mutex> guard(lock);
-			buffer->UpdateMinBatchIndex(min_batch_index);
-			if (!buffer->HasReadyBatch()) {
-				return appended ? BufferedPushState::APPENDED : BufferedPushState::NOT_REQUIRED;
+			if (buffer->UpdateMinBatchIndex(min_batch_index)) {
+				WakeWritersLocked(writers, log_entries, WriterWakeMode::FORCE);
 			}
-			admission = PrepareAppendLocked(interrupt_state, log_entries);
-			if (admission == AppendAdmission::READY) {
-				append_reservation_state = AppendReservationState::RESERVED;
-				copy = buffer->ReservePendingAppend(reservation);
+			has_ready_batch = buffer->HasReadyBatch();
+			if (has_ready_batch) {
+				admission = PrepareAppendLocked(interrupt_state, log_entries);
+				if (admission == AppendAdmission::READY) {
+					append_reservation_state = AppendReservationState::RESERVED;
+					copy = buffer->ReservePendingAppend(reservation);
+				}
 			}
 		} catch (...) {
 			Cancel();
 			throw;
 		}
+		CallbackAll(writers);
 		LogTransitions(log_entries);
+		if (!has_ready_batch) {
+			return appended ? BufferedPushState::APPENDED : BufferedPushState::NOT_REQUIRED;
+		}
 		if (admission == AppendAdmission::BLOCKED) {
 			return BufferedPushState::BLOCKED;
 		}
@@ -1065,7 +1077,7 @@ PipelineBroadcastExchange::FlushReadyBatches(idx_t min_batch_index, const Interr
 		}
 
 		vector<InterruptState> readers;
-		vector<InterruptState> writers;
+		writers.clear();
 		vector<InterruptState> appenders;
 		log_entries.clear();
 		BufferedPushState result;

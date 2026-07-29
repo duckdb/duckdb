@@ -57,7 +57,7 @@ private:
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
 public:
-	PipelineExecutor(ClientContext &context, Pipeline &pipeline);
+	PipelineExecutor(ClientContext &context, Pipeline &pipeline, optional_idx reserved_batch_index = optional_idx());
 
 	//! Fully execute a pipeline with a source and a sink until the source is completely exhausted
 	PipelineExecuteResult Execute();

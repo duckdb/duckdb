@@ -42,6 +42,7 @@ public:
 
 	Pipeline &pipeline;
 	unique_ptr<PipelineExecutor> pipeline_executor;
+	optional_idx reserved_batch_index;
 
 	string TaskType() const override {
 		return "PipelineTask";

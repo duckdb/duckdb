@@ -23,6 +23,11 @@ static shared_ptr<GlobalSourceState> ToSharedSourceState(unique_ptr<GlobalSource
 
 PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
     : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p) {
+	auto sink = pipeline.GetSink();
+	if (sink && sink->RequiredPartitionInfo().AnyRequired()) {
+		// Account for every task before lazy executor construction can advance the batch minimum.
+		reserved_batch_index = pipeline.RegisterNewBatchIndex();
+	}
 }
 
 bool PipelineTask::TaskBlockedOnResult() const {
@@ -35,7 +40,7 @@ const PipelineExecutor &PipelineTask::GetPipelineExecutor() const {
 
 TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
 	if (!pipeline_executor) {
-		pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
+		pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline, reserved_batch_index);
 	}
 
 	pipeline_executor->SetTaskForInterrupts(shared_from_this());
