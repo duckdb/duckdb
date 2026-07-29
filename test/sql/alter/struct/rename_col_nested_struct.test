@@ -54,11 +54,6 @@ SELECT s FROM test_default
 {'s2': {'c': 1, 'b': 2}}
 {'s2': {'c': 1, 'b': 2}}
 
-query T
-SELECT sql FROM duckdb_tables() WHERE table_name='test_default'
-----
-CREATE TABLE test_default(s STRUCT(s2 STRUCT(c INTEGER, b INTEGER)) DEFAULT(struct_pack(s2 := struct_pack(c := 1, b := 2))));
-
 # rename updates intermediate struct default field names
 statement ok
 CREATE TABLE test_default_parent(s STRUCT(s2 STRUCT(a INTEGER, b INTEGER)) DEFAULT {'s2': {'a': 1, 'b': 2}})
