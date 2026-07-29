@@ -459,6 +459,31 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	return FilterPushdownResult::NO_PUSHDOWN;
 }
 
+static bool GetCaseInsensitivePrefixBounds(const string &prefix, string &min_prefix, string &max_prefix) {
+	min_prefix.reserve(prefix.size());
+	max_prefix.reserve(prefix.size());
+	for (auto c : prefix) {
+		auto byte = static_cast<uint8_t>(c);
+		if (byte & 0x80) {
+			return false;
+		}
+		auto lower_byte = StringUtil::ASCII_TO_LOWER_MAP[byte];
+		min_prefix.push_back(UnsafeNumericCast<char>(StringUtil::ASCII_TO_UPPER_MAP[byte]));
+		switch (lower_byte) {
+		case 'i':
+			max_prefix += "\xC4\xB0"; // U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE
+			break;
+		case 'k':
+			max_prefix += "\xE2\x84\xAA"; // U+212A KELVIN SIGN
+			break;
+		default:
+			max_prefix.push_back(UnsafeNumericCast<char>(lower_byte));
+			break;
+		}
+	}
+	return !min_prefix.empty() && Utf8Proc::FindNextLegalUTF8(max_prefix);
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table_filters,
                                                            const vector<ColumnIndex> &column_ids, Expression &expr) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
@@ -511,32 +536,16 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	if (case_insensitive) {
-		// ASCII case variants fall between the uppercase prefix and the successor of the lowercase prefix.
-		string lower_bound_prefix;
-		string upper_bound_prefix;
-		lower_bound_prefix.reserve(prefix.size());
-		upper_bound_prefix.reserve(prefix.size());
-		for (auto c : prefix) {
-			auto ascii_byte = static_cast<uint8_t>(c);
-			if (ascii_byte & 0x80) {
-				return FilterPushdownResult::NO_PUSHDOWN;
-			}
-			auto lower_ascii_byte = StringUtil::ASCII_TO_LOWER_MAP[ascii_byte];
-			// U+0130 and U+212A lowercase to ASCII i and k, so ASCII bounds are not safe for these characters.
-			if (lower_ascii_byte == 'i' || lower_ascii_byte == 'k') {
-				return FilterPushdownResult::NO_PUSHDOWN;
-			}
-			lower_bound_prefix.push_back(UnsafeNumericCast<char>(StringUtil::ASCII_TO_UPPER_MAP[ascii_byte]));
-			upper_bound_prefix.push_back(UnsafeNumericCast<char>(lower_ascii_byte));
-		}
-		if (lower_bound_prefix.empty() || !Utf8Proc::FindNextLegalUTF8(upper_bound_prefix)) {
+		string min_prefix;
+		string max_prefix;
+		if (!GetCaseInsensitivePrefixBounds(prefix, min_prefix, max_prefix)) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 		auto lower_bound = CreateComparisonExpression(
-		    *func.GetChildren()[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(std::move(lower_bound_prefix)));
+		    *func.GetChildren()[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(std::move(min_prefix)));
 		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(lower_bound)));
 		auto upper_bound = CreateComparisonExpression(*func.GetChildren()[0], ExpressionType::COMPARE_LESSTHAN,
-		                                              Value(std::move(upper_bound_prefix)));
+		                                              Value(std::move(max_prefix)));
 		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
 		return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 	}

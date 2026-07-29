@@ -347,34 +347,57 @@ WHERE s ILIKE 'p0000%'
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 3 / 4.*
 
-# Unicode characters that lowercase to ASCII must not be excluded by ASCII bounds
+# ILIKE bounds include Unicode characters that lowercase to ASCII
 statement ok
 COPY (
 	SELECT CASE
-		WHEN range < 2048 THEN 'İ' || lpad(range::VARCHAR, 4, '0')
-		WHEN range < 4096 THEN 'K' || lpad((range - 2048)::VARCHAR, 4, '0')
-		ELSE 'z' || lpad((range - 4096)::VARCHAR, 4, '0')
+		WHEN range < 2048 THEN 'A' || lpad(range::VARCHAR, 4, '0')
+		WHEN range < 4096 THEN 'İ' || lpad((range - 2048)::VARCHAR, 4, '0')
+		WHEN range < 6144 THEN 'K' || lpad((range - 4096)::VARCHAR, 4, '0')
+		WHEN range < 8192 THEN 'z' || lpad((range - 6144)::VARCHAR, 4, '0')
+		ELSE 'Å' || lpad((range - 8192)::VARCHAR, 4, '0')
 	END AS s
-	FROM range(6144)
-) TO '{TEST_DIR}/expr_prune_ilike_unicode.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+	FROM range(10240)
+) TO '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
 
 query I
 SELECT count(*)
-FROM '{TEST_DIR}/expr_prune_ilike_unicode.parquet'
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
 WHERE s ILIKE 'i%'
 ----
 2048
 
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
+WHERE s ILIKE 'i%'
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 2 / 5.*
+
 query I
 SELECT count(*)
-FROM '{TEST_DIR}/expr_prune_ilike_unicode.parquet'
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
 WHERE s ILIKE 'k%'
 ----
 2048
 
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
+WHERE s ILIKE 'k%'
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 3 / 5.*
+
 query I
 SELECT count(*)
-FROM '{TEST_DIR}/expr_prune_ilike_unicode.parquet'
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
 WHERE s ILIKE 'İ%'
 ----
 2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
+WHERE s ILIKE 'İ%'
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 5 / 5.*
