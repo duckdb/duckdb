@@ -320,6 +320,278 @@ SELECT * FROM query(getvariable('aoc_sql'));
 ----
 69	112	700	65e1bf4e3503c34f573df4e2f60394fa
 
+# Day 5: two nested-list supply-stack states
+statement ok
+CREATE TABLE aoc2022_day05_initial(pos INTEGER, stack VARCHAR);
+
+statement ok
+INSERT INTO aoc2022_day05_initial
+SELECT pos,
+       string_agg(chr(ascii('A') + ((pos * 7 + depth * 11) % 26)::INTEGER), '' ORDER BY depth)
+FROM range(1, 17) positions(pos), range(256) depths(depth)
+GROUP BY pos;
+
+statement ok
+CREATE TABLE aoc2022_day05_moves(move INTEGER, crates INTEGER, source INTEGER, target INTEGER);
+
+statement ok
+INSERT INTO aoc2022_day05_moves
+SELECT move::INTEGER,
+       (1 + move % 3)::INTEGER,
+       (1 + (move - 1) % 16)::INTEGER,
+       (1 + move % 16)::INTEGER
+FROM range(1, 1025) moves(move);
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2022_day05.sql')
+);
+
+query ITTI
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+1025	865d67a079714554d53a5785cc91adf2	bc52199b231d6e32adc6e657e5a72c96	4096
+
+# Day 7: hierarchical filesystem ascent
+statement ok
+CREATE TABLE aoc2022_day07_tree(node INTEGER, parent INTEGER, is_directory BOOLEAN, size BIGINT);
+
+statement ok
+INSERT INTO aoc2022_day07_tree
+SELECT node::INTEGER,
+       CASE WHEN node = 0 THEN NULL ELSE ((node - 1) // 4)::INTEGER END,
+       node < 4096,
+       CASE WHEN node < 4096 THEN NULL ELSE (node * 17 + 3)::BIGINT END
+FROM range(16384) nodes(node);
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2022_day07.sql')
+);
+
+query IIIT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+16384	2139027456	17001342063	1dfcd76161ee61786e90a705214a27ce
+
+# Day 14: a narrow sand state machine with a growing nested list
+statement ok
+CREATE TABLE aoc2022_day14_rocks(x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO aoc2022_day14_rocks
+SELECT x::INTEGER, 28
+FROM range(470, 531) xs(x)
+UNION ALL
+SELECT 470, y::INTEGER
+FROM range(14, 28) ys(y)
+UNION ALL
+SELECT 530, y::INTEGER
+FROM range(9, 28) ys(y)
+UNION ALL
+SELECT x::INTEGER, 18
+FROM range(480, 492) xs(x);
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2022_day14.sql')
+);
+
+query IIT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+684	790	f5c7e8e272a5178c5d59dad88fbe407c
+
+# Day 17: bit-packed falling rocks
+statement ok
+CREATE MACRO aoc2022_day17_bits(value) AS
+	list_sum(
+		list_transform(
+			range(length(value)),
+			lambda bit: (reverse(value)[bit + 1] = '#')::INTEGER * 1 << bit
+		)
+	)::INTEGER;
+
+statement ok
+CREATE MACRO aoc2022_day17_push_left(rock, chamber) AS
+	CASE
+		WHEN list_bit_or(
+			list_transform(generate_series(1, length(rock)), lambda y: rock[y] << 1 & chamber[y])
+		)
+			THEN rock
+		ELSE list_transform(rock, lambda row: row << 1)
+	END;
+
+statement ok
+CREATE MACRO aoc2022_day17_push_right(rock, chamber) AS
+	CASE
+		WHEN list_bit_or(
+			list_transform(generate_series(1, length(rock)), lambda y: rock[y] >> 1 & chamber[y])
+		)
+			THEN rock
+		ELSE list_transform(rock, lambda row: row >> 1)
+	END;
+
+statement ok
+CREATE MACRO aoc2022_day17_collide(rock, chamber) AS
+	list_bit_or(
+		list_transform(generate_series(1, length(rock)), lambda y: rock[y] & chamber[y])
+	);
+
+statement ok
+CREATE MACRO aoc2022_day17_merge(rock, chamber) AS
+	list_transform(generate_series(1, length(rock)), lambda y: rock[y] | chamber[y]);
+
+statement ok
+CREATE TABLE aoc2022_day17_rocks(id INTEGER, bits INTEGER[]);
+
+statement ok
+INSERT INTO aoc2022_day17_rocks VALUES
+	(0, [aoc2022_day17_bits('...####..')]),
+	(1, [
+		aoc2022_day17_bits('....#....'),
+		aoc2022_day17_bits('...###...'),
+		aoc2022_day17_bits('....#....')
+	]),
+	(2, [
+		aoc2022_day17_bits('.....#...'),
+		aoc2022_day17_bits('.....#...'),
+		aoc2022_day17_bits('...###...')
+	]),
+	(3, [
+		aoc2022_day17_bits('...#.....'),
+		aoc2022_day17_bits('...#.....'),
+		aoc2022_day17_bits('...#.....'),
+		aoc2022_day17_bits('...#.....')
+	]),
+	(4, [aoc2022_day17_bits('...##....'), aoc2022_day17_bits('...##....')]);
+
+statement ok
+CREATE TABLE aoc2022_day17_jets(id INTEGER, jet VARCHAR);
+
+statement ok
+INSERT INTO aoc2022_day17_jets
+SELECT id::INTEGER, substr(pattern, id % length(pattern) + 1, 1)
+FROM (SELECT '<<>><<>>>><<><>>><<<>>><<>>' AS pattern), range(257) jets(id);
+
+statement ok
+CREATE MACRO aoc2022_day17_rock_count() AS 800;
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2022_day17.sql')
+);
+
+query IIIT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+801	1567	188	42e522de41046a4621b91304d9e22fd8
+
+# Day 21: expression-tree evaluation with two recursive self-joins
+statement ok
+CREATE TABLE aoc2022_day21_monkeys(
+	id INTEGER,
+	left_child INTEGER,
+	right_child INTEGER,
+	value BIGINT
+);
+
+statement ok
+INSERT INTO aoc2022_day21_monkeys
+SELECT id::INTEGER,
+       CASE WHEN id < 4095 THEN (2 * id + 1)::INTEGER ELSE NULL END,
+       CASE WHEN id < 4095 THEN (2 * id + 2)::INTEGER ELSE NULL END,
+       CASE WHEN id >= 4095 THEN (id * 13 + 7)::BIGINT ELSE NULL END
+FROM range(8191) monkeys(id);
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2022_day21.sql')
+);
+
+query IIIIT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+560789376	8191	5287370377	12	08f90ba04a3eb116db8e596b6ca83545
+
+# Day 22: alternating movement and turn branches
+statement ok
+CREATE TABLE aoc2022_day22_instructions(instruction INTEGER, distance INTEGER, turn INTEGER);
+
+statement ok
+INSERT INTO aoc2022_day22_instructions
+SELECT instruction::INTEGER,
+       (5 + instruction % 23)::INTEGER,
+       CASE WHEN instruction % 5 < 2 THEN 1 ELSE -1 END::INTEGER
+FROM range(1, 1025) instructions(instruction);
+
+statement ok
+CREATE MACRO aoc2022_day22_width() AS 97;
+
+statement ok
+CREATE MACRO aoc2022_day22_height() AS 89;
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2022_day22.sql')
+);
+
+query IIIIII
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+1024	53	41	1	1023	17354
+
+# Day 24: moving hazards and three dependent traversals
+statement ok
+CREATE TABLE aoc2022_day24_config(width INTEGER, height INTEGER, repeat INTEGER);
+
+statement ok
+INSERT INTO aoc2022_day24_config VALUES (17, 19, 323);
+
+statement ok
+CREATE TABLE aoc2022_day24_blizzards(id INTEGER, x INTEGER, y INTEGER, dx INTEGER, dy INTEGER);
+
+statement ok
+INSERT INTO aoc2022_day24_blizzards
+SELECT id::INTEGER,
+       ((id * 7 + 3) % 17)::INTEGER,
+       ((id * 11 + 5) % 19)::INTEGER,
+       CASE id % 4 WHEN 0 THEN 1 WHEN 2 THEN -1 ELSE 0 END::INTEGER,
+       CASE id % 4 WHEN 1 THEN 1 WHEN 3 THEN -1 ELSE 0 END::INTEGER
+FROM range(28) blizzards(id);
+
+statement ok
+CREATE MACRO aoc2022_day24_modulo(a, b) AS ((a) % (b) + (b)) % (b);
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2022_day24.sql')
+);
+
+query IIIIII
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+36	72	109	5620	5633	5746
+
+# Day 25: balanced-base-five conversion
+statement ok
+CREATE TABLE aoc2022_day25_values(value HUGEINT);
+
+statement ok
+INSERT INTO aoc2022_day25_values
+SELECT (i * i * i * 97 + i * 13 + 5)::HUGEINT
+FROM range(1, 4097) values(i);
+
+statement ok
+SET VARIABLE aoc_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2022_day25.sql')
+);
+
+query TIIIT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+1=-2=01010001=20112==-00	24	6829101595801600	1	b4fea56c42102479939e7fc19ff1974d
+
 statement ok
 SET VARIABLE aoc_sql = (
 	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/aoc2022_day23_using_key.sql')
