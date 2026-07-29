@@ -258,7 +258,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// removes any redundant DelimGets/DelimJoins
 	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
-		Deliminator deliminator;
+		Deliminator deliminator(context);
 		plan = deliminator.Optimize(std::move(plan));
 	});
 
