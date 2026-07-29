@@ -2,6 +2,7 @@
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
 #include "duckdb/common/arrow/physical_arrow_batch_collector.hpp"
 #include "duckdb/common/arrow/arrow_query_result.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"

@@ -1423,6 +1423,11 @@ DUCKDB_API Value Value::GetValue() const {
 	return Value(*this);
 }
 
+template <>
+DUCKDB_API Identifier Value::GetValue() const {
+	return Identifier(GetValue<string>());
+}
+
 uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
