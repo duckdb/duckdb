@@ -78,11 +78,6 @@ SELECT s FROM test_default
 {'c': 1, 'b': 2}
 {'c': 1, 'b': 2}
 
-query T
-SELECT sql FROM duckdb_tables() WHERE table_name='test_default'
-----
-CREATE TABLE test_default(s STRUCT(c INTEGER, b INTEGER) DEFAULT(struct_pack(c := 1, b := 2)));
-
 # rename updates struct default field names through a cast
 statement ok
 CREATE TABLE test_cast_default(

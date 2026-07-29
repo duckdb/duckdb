@@ -1019,6 +1019,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 		res.error.Throw();
 	}
 
+	auto default_type = res.new_type;
+	auto default_mapping = res.mapping.Copy();
+
 	// construct the struct remapping expression
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
@@ -1027,16 +1030,16 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 	children.push_back(make_uniq<ConstantExpression>(Value()));
 
 	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
-	auto default_type = res.new_type;
-	auto default_mapping = res.mapping.Copy();
 	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
 	                                        std::move(function));
-	return ChangeColumnType(context, change_column_type, [&](ColumnDefinition &column) {
-		if (!column.HasDefaultValue()) {
-			return;
-		}
-		column.SetDefaultValue(RemapStructDefault(column.DefaultValue().Copy(), default_type, default_mapping));
-	});
+	return ChangeColumnType(context, change_column_type,
+	                        [default_type, default_mapping = std::move(default_mapping)](ColumnDefinition &column) {
+		                        if (!column.HasDefaultValue()) {
+			                        return;
+		                        }
+		                        column.SetDefaultValue(
+		                            RemapStructDefault(column.DefaultValue().Copy(), default_type, default_mapping));
+	                        });
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
