@@ -813,6 +813,25 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 	return plan;
 }
 
+//! Snapshot the metadata that the PreparedStatement handle exposes to the user
+static PreparedStatementInfo GetPreparedStatementInfo(PreparedStatementData &data) {
+	PreparedStatementInfo info;
+	info.names = data.names;
+	info.types = data.types;
+	info.statement_type = data.statement_type;
+	info.properties = data.properties;
+	if (data.unbound_statement) {
+		info.named_param_map = data.unbound_statement->named_param_map;
+	}
+	for (auto &entry : data.value_map) {
+		LogicalType parameter_type;
+		if (data.TryGetType(entry.first, parameter_type)) {
+			info.parameter_types.emplace(entry.first, std::move(parameter_type));
+		}
+	}
+	return info;
+}
+
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
                                                              unique_ptr<SQLStatement> statement) {
 	auto statement_query = statement->query;
@@ -830,17 +849,12 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	if (result->HasError()) {
 		result->ThrowError();
 	}
-	return make_uniq<PreparedStatement>(shared_from_this(), std::move(name), std::move(statement_query));
-}
-
-shared_ptr<PreparedStatementData> ClientContext::GetPreparedStatement(const string &name) {
-	auto lock = LockContext();
-	auto &prepared_statements = client_data->prepared_statements;
-	auto entry = prepared_statements.find(Identifier(name));
-	if (entry == prepared_statements.end()) {
-		return nullptr;
+	auto entry = client_data->prepared_statements.find(Identifier(name));
+	if (entry == client_data->prepared_statements.end()) {
+		throw InternalException("PREPARE succeeded but the prepared statement was not registered");
 	}
-	return entry->second;
+	return make_uniq<PreparedStatement>(shared_from_this(), std::move(name), std::move(statement_query),
+	                                    GetPreparedStatementInfo(*entry->second));
 }
 
 void ClientContext::RemovePreparedStatement(const string &name) {

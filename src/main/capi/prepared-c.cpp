@@ -1,6 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -169,8 +168,7 @@ duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared
 
 	LogicalType param_type;
 
-	auto data = wrapper->statement->TryGetData();
-	if (data && data->TryGetType(duckdb::Identifier(identifier), param_type)) {
+	if (wrapper->statement->TryGetParameterType(duckdb::Identifier(identifier), param_type)) {
 		return reinterpret_cast<duckdb_logical_type>(new LogicalType(param_type));
 	}
 	// The value_map is gone after executing the prepared statement
@@ -196,11 +194,7 @@ idx_t duckdb_prepared_statement_column_count(duckdb_prepared_statement prepared_
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return 0;
 	}
-	auto data = wrapper->statement->TryGetData();
-	if (!data) {
-		return 0;
-	}
-	return data->types.size();
+	return wrapper->statement->ColumnCount();
 }
 
 const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prepared_statement, idx_t col_idx) {
@@ -208,11 +202,7 @@ const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prep
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
 	}
-	auto data = wrapper->statement->TryGetData();
-	if (!data) {
-		return nullptr;
-	}
-	auto &names = data->names;
+	auto &names = wrapper->statement->GetNames();
 	if (col_idx >= names.size()) {
 		return nullptr;
 	}
@@ -225,11 +215,7 @@ duckdb_logical_type duckdb_prepared_statement_column_logical_type(duckdb_prepare
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
 	}
-	auto data = wrapper->statement->TryGetData();
-	if (!data) {
-		return nullptr;
-	}
-	auto &types = data->types;
+	auto &types = wrapper->statement->GetTypes();
 	if (col_idx >= types.size()) {
 		return nullptr;
 	}
@@ -476,11 +462,7 @@ duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement s
 	if (!stmt->statement) {
 		return DUCKDB_STATEMENT_TYPE_INVALID;
 	}
-	auto data = stmt->statement->TryGetData();
-	if (!data) {
-		return DUCKDB_STATEMENT_TYPE_INVALID;
-	}
-	return StatementTypeToC(data->statement_type);
+	return StatementTypeToC(stmt->statement->GetStatementType());
 }
 
 template <class T>

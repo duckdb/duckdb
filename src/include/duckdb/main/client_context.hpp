@@ -209,8 +209,6 @@ public:
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
 	//! Directly prepare a SQL statement
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
-	//! Get the data of the prepared statement with the given name (nullptr if it does not exist)
-	DUCKDB_API shared_ptr<PreparedStatementData> GetPreparedStatement(const string &name);
 	//! Deallocate the prepared statement with the given name - does nothing if it does not exist
 	DUCKDB_API void RemovePreparedStatement(const string &name);
 	//! Bind a statement and return its signature, without building a PreparedStatement, optimizing, or

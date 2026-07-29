@@ -1,13 +1,13 @@
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 
 namespace duckdb {
 
-PreparedStatement::PreparedStatement(const shared_ptr<ClientContext> &context_p, string name_p, string query_p)
-    : context(context_p), name(std::move(name_p)), query(std::move(query_p)), success(true) {
+PreparedStatement::PreparedStatement(const shared_ptr<ClientContext> &context_p, string name_p, string query_p,
+                                     PreparedStatementInfo info_p)
+    : context(context_p), name(std::move(name_p)), query(std::move(query_p)), success(true), info(std::move(info_p)) {
 	D_ASSERT(!context.expired());
 }
 
@@ -40,71 +40,47 @@ shared_ptr<ClientContext> PreparedStatement::TryGetContext() const {
 	return context.lock();
 }
 
-shared_ptr<PreparedStatementData> PreparedStatement::TryGetData() const {
-	auto client_context = context.lock();
-	if (!client_context) {
-		return nullptr;
+idx_t PreparedStatement::ColumnCount() const {
+	return info.types.size();
+}
+
+StatementType PreparedStatement::GetStatementType() const {
+	return info.statement_type;
+}
+
+const StatementProperties &PreparedStatement::GetStatementProperties() const {
+	return info.properties;
+}
+
+const vector<LogicalType> &PreparedStatement::GetTypes() const {
+	return info.types;
+}
+
+const vector<Identifier> &PreparedStatement::GetNames() const {
+	return info.names;
+}
+
+const identifier_map_t<idx_t> &PreparedStatement::GetNamedParameterMap() const {
+	return info.named_param_map;
+}
+
+idx_t PreparedStatement::GetParameterCount() const {
+	return info.named_param_map.size();
+}
+
+bool PreparedStatement::TryGetParameterType(const Identifier &identifier, LogicalType &result) const {
+	auto entry = info.parameter_types.find(identifier);
+	if (entry == info.parameter_types.end()) {
+		return false;
 	}
-	return client_context->GetPreparedStatement(name);
-}
-
-shared_ptr<PreparedStatementData> PreparedStatement::GetData() const {
-	auto data = TryGetData();
-	if (!data) {
-		throw InvalidInputException("Prepared statement \"%s\" is no longer available - the connection it was "
-		                            "prepared in has been closed, or the statement has been deallocated",
-		                            name);
-	}
-	return data;
-}
-
-idx_t PreparedStatement::ColumnCount() {
-	return GetData()->types.size();
-}
-
-StatementType PreparedStatement::GetStatementType() {
-	return GetData()->statement_type;
-}
-
-StatementProperties PreparedStatement::GetStatementProperties() {
-	return GetData()->properties;
-}
-
-vector<LogicalType> PreparedStatement::GetTypes() {
-	return GetData()->types;
-}
-
-vector<Identifier> PreparedStatement::GetNames() {
-	return GetData()->names;
-}
-
-identifier_map_t<idx_t> PreparedStatement::GetNamedParameterMap() {
-	auto data = GetData();
-	if (!data->unbound_statement) {
-		return identifier_map_t<idx_t>();
-	}
-	return data->unbound_statement->named_param_map;
-}
-
-idx_t PreparedStatement::GetParameterCount() {
-	auto data = GetData();
-	if (!data->unbound_statement) {
-		return 0;
-	}
-	return data->unbound_statement->named_param_map.size();
-}
-
-bool PreparedStatement::TryGetParameterType(const Identifier &identifier, LogicalType &result) {
-	return GetData()->TryGetType(identifier, result);
+	result = entry->second;
+	return true;
 }
 
 case_insensitive_map_t<LogicalType> PreparedStatement::GetExpectedParameterTypes() const {
-	auto data = GetData();
-	case_insensitive_map_t<LogicalType> expected_types(data->value_map.size());
-	for (auto &it : data->value_map) {
-		auto &identifier = it.first;
-		D_ASSERT(it.second);
-		expected_types[identifier.GetIdentifierName()] = it.second->GetValue().type();
+	case_insensitive_map_t<LogicalType> expected_types(info.parameter_types.size());
+	for (auto &entry : info.parameter_types) {
+		expected_types[entry.first.GetIdentifierName()] = entry.second;
 	}
 	return expected_types;
 }
