@@ -12,11 +12,15 @@ import sys
 import time
 
 
-TARGET_CHUNK_COUNT = 10
-MAX_FAILED_CHUNKS = 2
+# Amount of evenly sized filename chunks.
+TARGET_CHUNK_COUNT = 8
+
+MAX_FAILED_CHUNKS = 3
 MAX_RETRIES = 2
-RETRY_BACKOFF_MS = 500
+
 ERROR_TAIL_LINES = 2000
+
+RETRY_BACKOFF_MS = 500
 RETRY_PATTERNS = (
     'invalid header end',
     'broken pipe',
