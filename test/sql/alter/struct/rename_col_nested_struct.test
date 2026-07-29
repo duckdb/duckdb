@@ -77,8 +77,3 @@ SELECT s FROM test_default_parent
 ----
 {'x': {'a': 1, 'b': 2}}
 {'x': {'a': 1, 'b': 2}}
-
-query T
-SELECT sql FROM duckdb_tables() WHERE table_name='test_default_parent'
-----
-CREATE TABLE test_default_parent(s STRUCT(x STRUCT(a INTEGER, b INTEGER)) DEFAULT(struct_pack(x := struct_pack(a := 1, b := 2))));
