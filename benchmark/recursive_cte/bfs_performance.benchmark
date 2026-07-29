@@ -5,4 +5,4 @@ template benchmark/recursive_cte/recursive_cte.benchmark.in
 TIER=performance
 QUERY=bfs
 BENCHMARK_NAME=Recursive CTE BFS performance
-DESCRIPTION=Run breadth-first traversal over a one-million-node binary tree
+DESCRIPTION=Run breadth-first traversal over a quarter-million-node binary tree

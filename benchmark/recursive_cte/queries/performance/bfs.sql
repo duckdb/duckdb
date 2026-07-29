@@ -1,6 +1,6 @@
 WITH RECURSIVE
 params(node_count) AS (
-	VALUES (1000000)
+	VALUES (250000)
 ),
 edges(src, dst) AS (
 	SELECT node::BIGINT, (node * 2 + 1)::BIGINT
