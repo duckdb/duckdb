@@ -1,0 +1,79 @@
+# name: test/optimizer/duplicate_eliminated_aggregate_parquet.test
+# description: Use native Parquet scan identity for CTE-free correlated aggregates
+# group: [optimizer]
+
+require parquet
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+CREATE TABLE parquet_fact(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO parquet_fact VALUES (1, 2), (1, 4), (1, 6);
+
+statement ok
+COPY (SELECT 1 AS k, 'selected' AS state, 'a' AS tag)
+TO '{TEST_DIR}/direct_identity_a.parquet' (FORMAT PARQUET);
+
+statement ok
+COPY (SELECT 1 AS k, 'selected' AS state, 'b' AS tag)
+TO '{TEST_DIR}/direct_identity_b.parquet' (FORMAT PARQUET);
+
+# A single Parquet file uses its native row number without introducing a window.
+query II rowsort
+SELECT f.v, d.tag
+FROM parquet_fact f
+JOIN read_parquet('{TEST_DIR}/direct_identity_a.parquet') d ON f.k = d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM parquet_fact i
+      WHERE i.k = d.k
+  );
+----
+2	a
+
+query II
+EXPLAIN
+SELECT f.v
+FROM parquet_fact f
+JOIN read_parquet('{TEST_DIR}/direct_identity_a.parquet') d ON f.k = d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM parquet_fact i
+      WHERE i.k = d.k
+  );
+----
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+
+# Both files have file-local row number zero. The composite scan identity must keep both payload rows.
+query II rowsort
+SELECT f.v, d.tag
+FROM parquet_fact f
+JOIN read_parquet('{TEST_DIR}/direct_identity_*.parquet') d ON f.k = d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM parquet_fact i
+      WHERE i.k = d.k
+  );
+----
+2	a
+2	b
+
+query II
+EXPLAIN
+SELECT f.v
+FROM parquet_fact f
+JOIN read_parquet('{TEST_DIR}/direct_identity_*.parquet') d ON f.k = d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM parquet_fact i
+      WHERE i.k = d.k
+  );
+----
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*

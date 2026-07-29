@@ -13,6 +13,7 @@
 namespace duckdb {
 
 class Binder;
+struct DuplicateEliminatedDomainCandidate;
 
 struct FactoredDuplicateEliminatedDomain {
 	TableIndex cte_index;
@@ -26,7 +27,9 @@ struct FactoredDuplicateEliminatedDomain {
 //! Factors a duplicate-eliminated domain from a cheaper, covering subtree of a join's outer payload.
 class DuplicateEliminatedDomainFactorer {
 public:
-	static unique_ptr<FactoredDuplicateEliminatedDomain> TryFactor(Binder &binder, unique_ptr<LogicalOperator> &join);
+	static unique_ptr<FactoredDuplicateEliminatedDomain>
+	TryFactor(Binder &binder, unique_ptr<LogicalOperator> &join,
+	          DuplicateEliminatedDomainCandidate &candidate);
 };
 
 } // namespace duckdb

@@ -41,7 +41,7 @@ WHERE ctr1.ctr_total_return >
 ORDER BY c_customer_id
 LIMIT 100;
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*Filters: s_state = 'TN'.*Table: memory.main.store.*
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
 
 query II
 EXPLAIN
@@ -69,4 +69,4 @@ WHERE ctr1.ctr_total_return >
 ORDER BY c_customer_id
 LIMIT 100;
 ----
-logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
+logical_opt	<!REGEX>:.*(__duckdb_delim_|WINDOW).*

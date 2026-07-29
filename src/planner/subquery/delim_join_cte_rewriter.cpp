@@ -13,6 +13,8 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_aggregate_rewriter.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain_candidate.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain_factorer.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -2149,6 +2151,7 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
                                                                         bool null_rejecting_filter_above,
                                                                         bool preserve_evidence_side) {
 	BindingReplacementGraph output_replacements;
+	unique_ptr<FactoredDuplicateEliminatedDomain> factored_domain;
 	{
 		auto &join = plan->Cast<LogicalComparisonJoin>();
 		if (join.delim_flipped) {
@@ -2171,6 +2174,16 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 		if (SingleJoinRHSIsDeduplicated(join)) {
 			join.join_type = null_rejecting_filter_above ? JoinType::INNER : JoinType::LEFT;
 		}
+		auto selected_candidate =
+		    dedup_ref_count > 0 ? DuplicateEliminatedDomainCandidateFinder::FindBest(binder.context, join) : nullptr;
+		if (selected_candidate &&
+		    DuplicateEliminatedAggregateRewriter::TryRewrite(
+		        binder, plan, dedup_cte_index, rewrite_root, *selected_candidate, output_replacements)) {
+			return output_replacements;
+		}
+		if (selected_candidate) {
+			factored_domain = DuplicateEliminatedDomainFactorer::TryFactor(binder, plan, *selected_candidate);
+		}
 	}
 	auto &join = plan->Cast<LogicalComparisonJoin>();
 	if (dedup_ref_count == 0) {
@@ -2179,8 +2192,6 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 	}
 	generated_dedup_cte_indexes.push_back(dedup_cte_index);
 
-	auto factored_domain =
-	    cte_deliminator_enabled ? DuplicateEliminatedDomainFactorer::TryFactor(binder, plan) : nullptr;
 	if (factored_domain) {
 		vector<LogicalType> dedup_types;
 		dedup_types.reserve(join.duplicate_eliminated_columns.size());

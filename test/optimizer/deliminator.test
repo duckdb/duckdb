@@ -32,7 +32,7 @@ logical_opt	<!REGEX>:.*SINGLE.*
 query II
 explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
 ----
-logical_opt	<REGEX>:.*Groups: p_partkey.*COMPARISON_JOIN.*(l_partkey = p_partkey|p_partkey = l_partkey).*(DELIM_GET|CTE_SCAN).*
+logical_opt	<!REGEX>:.*(DELIM_GET|CTE_SCAN|__duckdb_duplicate_eliminated_factor_|WINDOW).*
 
 # Q 17: the generated delimiter CTE should not preserve unused columns from the lineitem input
 query II
@@ -251,7 +251,7 @@ SET delim_join_as_cte=true;
 query II
 EXPLAIN SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < (SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*Groups: p_partkey.*
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
 
 query II
 EXPLAIN SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < (SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);

@@ -47,7 +47,7 @@ WHERE d.state = 'selected'
       WHERE i.k = d.k
   );
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*Join Type: SEMI.*
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
 
 # Factoring the candidate source must preserve duplicate payload rows.
 statement ok
@@ -84,7 +84,7 @@ WHERE d.state = 'selected'
       WHERE i.k = d.k
   );
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_duplicate_dim.*
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
 
 # Q1 shape: trace the correlated key through an inner-join equality to the filtered side.
 statement ok
@@ -120,7 +120,7 @@ WHERE d.state = 'selected'
       WHERE t2.store_key = t.store_key
   );
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*Groups: store_key.*
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
 
 # Trace a key through a direct projection mapping.
 query I rowsort
@@ -155,7 +155,7 @@ WHERE d.state = 'selected'
       WHERE t2.store_key = d.store_key
   );
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
 
 # A grouped candidate can provide grouping keys.
 query II rowsort
@@ -290,7 +290,7 @@ WHERE d.state = 'selected'
       WHERE i.k1 = d.k1 AND i.k2 = d.k2
   );
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_pair_dim.*Groups: (k1, k2|k2, k1).*
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
 
 # IS NOT DISTINCT FROM can map a NULL key through the candidate side.
 query I rowsort
@@ -320,7 +320,7 @@ WHERE d.state = 'selected'
       WHERE i.k IS NOT DISTINCT FROM d.k
   );
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
 
 # The outer key mapping and correlated comparison retain their independent NULL semantics.
 query I rowsort
@@ -349,7 +349,7 @@ WHERE d.state = 'selected'
       WHERE i.k = d.k
   );
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
 
 # COUNT retains scalar empty-input behavior for selected outer keys without inner rows.
 statement ok
@@ -375,6 +375,110 @@ WHERE d.state = 'selected';
 ----
 1	10	5	2
 2	NULL	NULL	0
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT sum(m.v) FROM domain_measure m WHERE m.k = d.k),
+       (SELECT avg(m.v) FROM domain_measure m WHERE m.k = d.k),
+       (SELECT count(*) FROM domain_measure m WHERE m.k = d.k)
+FROM domain_outer o
+JOIN domain_dim d ON d.k = o.k
+WHERE d.state = 'selected';
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+query IIIII rowsort
+SELECT o.k,
+       (SELECT count(DISTINCT m.v) FILTER (WHERE m.v > 0)
+        FROM domain_measure m WHERE m.k = d.k),
+       (SELECT sum(m.v) FILTER (WHERE m.v > 5)
+        FROM domain_measure m WHERE m.k = d.k),
+       (SELECT count(m.v) FROM domain_measure m WHERE m.k = d.k),
+       (SELECT first(m.v ORDER BY m.v) FROM domain_measure m WHERE m.k = d.k)
+FROM domain_outer o
+JOIN domain_dim d ON d.k = o.k
+WHERE d.state = 'selected';
+----
+1	2	7	2	3
+2	0	NULL	0	NULL
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(DISTINCT m.v) FILTER (WHERE m.v > 0)
+        FROM domain_measure m WHERE m.k = d.k)
+FROM domain_outer o
+JOIN domain_dim d ON d.k = o.k
+WHERE d.state = 'selected';
+----
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
+
+# A table function without a native scan identity retains the duplicate-eliminated CTE.
+query II
+EXPLAIN
+SELECT f.k, f.v
+FROM domain_fact f
+JOIN (
+    SELECT range::INTEGER AS k
+    FROM range(1, 4)
+    WHERE range < 3
+) d ON f.k = d.k
+WHERE f.v < (
+    SELECT avg(i.v)
+    FROM domain_fact i
+    WHERE i.k = d.k
+);
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# A source whose key cardinality is much lower than its row count retains the factored domain.
+statement ok
+CREATE TABLE domain_high_dup(k INTEGER, state VARCHAR);
+
+statement ok
+INSERT INTO domain_high_dup
+SELECT i % 2, 'selected'
+FROM range(100) r(i);
+
+statement ok
+ANALYZE domain_high_dup;
+
+query II
+EXPLAIN
+SELECT f.k,
+       (SELECT count(*)
+        FROM domain_fact i
+        WHERE i.k = d.k)
+FROM domain_fact f
+JOIN domain_high_dup d ON f.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*
+
+# No component of a high-duplication composite key is near-unique.
+statement ok
+CREATE TABLE domain_high_dup_pair(k1 INTEGER, k2 INTEGER, state VARCHAR);
+
+statement ok
+INSERT INTO domain_high_dup_pair
+SELECT i % 2, i % 3, 'selected'
+FROM range(100) r(i);
+
+statement ok
+ANALYZE domain_high_dup_pair;
+
+query II
+EXPLAIN
+SELECT f.v,
+       (SELECT count(*)
+        FROM domain_pair_fact i
+        WHERE i.k1 = d.k1 AND i.k2 = d.k2)
+FROM domain_pair_fact f
+JOIN domain_high_dup_pair d ON f.k1 = d.k1 AND f.k2 = d.k2
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*
 
 # Outer joins are coverage barriers and retain the existing full-payload fallback.
 query II
@@ -425,7 +529,7 @@ CROSS JOIN domain_other r;
 ----
 logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
-# Nested decorrelation still uses the factored domain from the outer filtered side.
+# The outer aggregate is rewritten directly; the nested EXISTS retains its own delimiter CTE.
 query II rowsort
 SELECT o.k,
        (SELECT count(*)
@@ -450,7 +554,7 @@ FROM domain_outer o
 JOIN domain_dim d ON d.k = o.k
 WHERE d.state = 'selected';
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
 # A volatile correlated key cannot be moved into a shared factor.
 query II
