@@ -42,9 +42,9 @@ CSVReaderOptions::CSVReaderOptions(const CSVOption<char> single_byte_delimiter,
 		dialect_options.state_machine_options.delimiter = multi_byte_delimiter;
 	}
 }
-static bool ParseBoolean(const Value &value, const string &loption);
+static bool ParseBoolean(const Value &value, const Identifier &loption);
 
-static bool ParseBoolean(const vector<Value> &set, const string &loption) {
+static bool ParseBoolean(const vector<Value> &set, const Identifier &loption) {
 	if (set.empty()) {
 		// no option specified: default to true
 		return true;
@@ -55,7 +55,7 @@ static bool ParseBoolean(const vector<Value> &set, const string &loption) {
 	return ParseBoolean(set[0], loption);
 }
 
-static bool ParseBoolean(const Value &value, const string &loption) {
+static bool ParseBoolean(const Value &value, const Identifier &loption) {
 	if (value.IsNull()) {
 		throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", loption);
 	}
@@ -70,7 +70,7 @@ static bool ParseBoolean(const Value &value, const string &loption) {
 	return BooleanValue::Get(value.DefaultCastAs(LogicalType::BOOLEAN));
 }
 
-static string ParseString(const Value &value, const string &loption) {
+static string ParseString(const Value &value, const Identifier &loption) {
 	if (value.IsNull()) {
 		return string();
 	}
@@ -87,7 +87,7 @@ static string ParseString(const Value &value, const string &loption) {
 	return value.GetValue<string>();
 }
 
-static int64_t ParseInteger(const Value &value, const string &loption) {
+static int64_t ParseInteger(const Value &value, const Identifier &loption) {
 	if (value.IsNull()) {
 		throw BinderException("\"%s\" expects a non-null integer value", loption);
 	}
@@ -251,7 +251,7 @@ void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, b
 	}
 }
 
-void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, vector<string> &expected_names) {
+void CSVReaderOptions::SetReadOption(const Identifier &loption, const Value &value, vector<string> &expected_names) {
 	if (SetBaseOption(loption, value)) {
 		return;
 	}
@@ -380,7 +380,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	}
 }
 
-void CSVReaderOptions::SetWriteOption(const string &loption, const Value &value) {
+void CSVReaderOptions::SetWriteOption(const Identifier &loption, const Value &value) {
 	if (loption == "new_line") {
 		// Steal this from SetBaseOption so we can write different newlines (e.g., format JSON ARRAY)
 		write_newline = ParseString(value, loption);
@@ -412,11 +412,9 @@ void CSVReaderOptions::SetWriteOption(const string &loption, const Value &value)
 	}
 }
 
-bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, bool write_option) {
-	// Make sure this function was only called after the option was turned into lowercase
-	D_ASSERT(!std::any_of(loption.begin(), loption.end(), ::isupper));
-
-	if (StringUtil::StartsWith(loption, "delim") || StringUtil::StartsWith(loption, "sep")) {
+bool CSVReaderOptions::SetBaseOption(const Identifier &loption, const Value &value, bool write_option) {
+	if (StringUtil::CIStartsWith(loption.GetIdentifierName(), "delim") ||
+	    StringUtil::CIStartsWith(loption.GetIdentifierName(), "sep")) {
 		SetDelimiter(ParseString(value, loption));
 	} else if (loption == "quote") {
 		SetQuote(ParseString(value, loption));
@@ -572,7 +570,7 @@ static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	}
 	return it->second;
 }
-bool StoreUserDefinedParameter(const string &option) {
+bool StoreUserDefinedParameter(const Identifier &option) {
 	if (option == "column_types" || option == "types" || option == "dtypes" || option == "auto_detect" ||
 	    option == "auto_type_candidates" || option == "columns" || option == "names") {
 		// We don't store options related to types, names and auto-detection since these are either irrelevant to our
@@ -622,7 +620,7 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 	}
 }
 
-bool GetBooleanValue(const string &loption, const Value &val) {
+bool GetBooleanValue(const Identifier &loption, const Value &val) {
 	if (val.IsNull()) {
 		throw BinderException("read_csv %s cannot be NULL", loption);
 	}
@@ -643,21 +641,21 @@ string CSVReaderOptions::GetUserDefinedParameters() const {
 void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
                                            MultiFileOptions &file_options) {
 	for (auto &kv : in) {
-		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
-		if (MultiFileReader().ParseOption(loption, kv.second, file_options, context)) {
+		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
 		}
-		ParseOption(context, kv.first.GetIdentifierName(), kv.second);
+		ParseOption(context, kv.first, kv.second);
 	}
 }
 
-void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, const Value &val) {
-	auto loption = StringUtil::Lower(key);
+void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key, const Value &val) {
 	// skip variables that are specific to auto-detection
-	if (StoreUserDefinedParameter(loption)) {
-		user_defined_parameters[loption] = val.ToSQLString();
+	if (StoreUserDefinedParameter(key)) {
+		// the parameter list is rendered back into a SQL prompt by GetUserDefinedParameters, so it is stored
+		// normalized to lowercase rather than echoing back whatever casing the user wrote
+		user_defined_parameters[Identifier(StringUtil::Lower(key.GetIdentifierName()))] = val.ToSQLString();
 	}
-	if (loption == "columns") {
+	if (key == "columns") {
 		if (!name_list.empty()) {
 			throw BinderException("read_csv column_names/names can only be supplied once");
 		}
@@ -693,7 +691,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 		name_list = std::move(parsed_names);
 		sql_type_list = std::move(parsed_types);
 		sql_types_per_column = std::move(parsed_types_per_column);
-	} else if (loption == "auto_type_candidates") {
+	} else if (key == "auto_type_candidates") {
 		auto_type_candidates.clear();
 		map<uint8_t, LogicalType> candidate_types;
 		// We always have the extremes of Null and Varchar, so we can default to varchar if the
@@ -719,7 +717,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 		for (auto &candidate_type : candidate_types) {
 			auto_type_candidates.emplace_back(candidate_type.second);
 		}
-	} else if (loption == "column_names" || loption == "names") {
+	} else if (key == "column_names" || key == "names") {
 		unordered_set<string> column_names;
 		if (!name_list.empty()) {
 			throw BinderException("read_csv column_names/names can only be supplied once");
@@ -750,7 +748,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 			}
 			column_names.insert(name);
 		}
-	} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
+	} else if (key == "column_types" || key == "types" || key == "dtypes") {
 		auto &child_type = val.type();
 		if (child_type.id() != LogicalTypeId::STRUCT && child_type.id() != LogicalTypeId::LIST) {
 			throw BinderException("read_csv %s requires a struct or list as input", key);
@@ -803,18 +801,18 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 				sql_types_per_column = std::move(parsed_types_per_column);
 			}
 		}
-	} else if (loption == "all_varchar") {
-		all_varchar = GetBooleanValue(loption, val);
-	} else if (loption == "files_to_sniff") {
-		files_to_sniff = ParseInteger(val, loption);
+	} else if (key == "all_varchar") {
+		all_varchar = GetBooleanValue(key, val);
+	} else if (key == "files_to_sniff") {
+		files_to_sniff = ParseInteger(val, key);
 		if (files_to_sniff < 1 && files_to_sniff != -1) {
 			throw BinderException(
 			    "Unsupported parameter for files_to_sniff: value must be -1 for all files or higher than one.");
 		}
-	} else if (loption == "normalize_names") {
-		normalize_names = GetBooleanValue(loption, val);
+	} else if (key == "normalize_names") {
+		normalize_names = GetBooleanValue(key, val);
 	} else {
-		SetReadOption(loption, val, name_list);
+		SetReadOption(key, val, name_list);
 	}
 }
 //! This function is used to remember options set by the sniffer, for use in ReadCSVRelation

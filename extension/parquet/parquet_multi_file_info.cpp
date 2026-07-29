@@ -205,7 +205,7 @@ void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType
 	}
 }
 
-static bool GetBooleanArgument(const string &key, const vector<Value> &option_values) {
+static bool GetBooleanArgument(const Identifier &key, const vector<Value> &option_values) {
 	if (option_values.empty()) {
 		return true;
 	}
@@ -584,7 +584,7 @@ unique_ptr<BaseFileReaderOptions> ParquetMultiFileInfo::InitializeOptions(Client
 	return make_uniq<ParquetFileReaderOptions>(context);
 }
 
-bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
                                            BaseFileReaderOptions &file_options, vector<string> &expected_names,
                                            vector<LogicalType> &expected_types) {
 	auto &parquet_options = file_options.Cast<ParquetFileReaderOptions>();
@@ -629,13 +629,12 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 	return false;
 }
 
-bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &original_key, const Value &val,
+bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
                                        MultiFileOptions &file_options, BaseFileReaderOptions &base_options) {
 	auto &parquet_options = base_options.Cast<ParquetFileReaderOptions>();
 	auto &options = parquet_options.options;
-	auto key = StringUtil::Lower(original_key);
 	if (val.IsNull()) {
-		throw BinderException("Cannot use NULL as argument to %s", original_key);
+		throw BinderException("Cannot use NULL as argument to %s", key);
 	}
 	if (key == "compression") {
 		// COMPRESSION has no effect on parquet read.

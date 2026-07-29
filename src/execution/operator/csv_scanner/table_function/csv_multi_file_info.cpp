@@ -20,15 +20,15 @@ unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientCont
 	return make_uniq<CSVFileReaderOptions>();
 }
 
-bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
                                        BaseFileReaderOptions &options_p, vector<string> &expected_names,
                                        vector<LogicalType> &expected_types) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
-	options.options.SetReadOption(StringUtil::Lower(key), ConvertVectorToValue(values), expected_names);
+	options.options.SetReadOption(key, ConvertVectorToValue(values), expected_names);
 	return true;
 }
 
-bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
+bool CSVMultiFileInfo::ParseOption(ClientContext &context, const Identifier &key, const Value &val,
                                    MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	options.options.ParseOption(context, key, val);
