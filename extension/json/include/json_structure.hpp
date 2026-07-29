@@ -33,7 +33,8 @@ public:
 	JSONStructureDescription &GetOrCreateDescription(LogicalTypeId type);
 
 	bool ContainsVarchar() const;
-	void InitializeCandidateTypes(idx_t max_depth, bool convert_strings_to_integers, idx_t depth = 0);
+	void InitializeCandidateTypes(idx_t max_depth, bool convert_strings_to_integers, bool detect_string_types,
+	                              idx_t depth = 0);
 	void RefineCandidateTypes(yyjson_val *vals[], idx_t val_count, Vector &string_vector, ArenaAllocator &allocator,
 	                          MutableDateFormatMap &date_format_map);
 

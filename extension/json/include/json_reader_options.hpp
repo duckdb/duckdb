@@ -116,6 +116,8 @@ struct JSONReaderOptions {
 	idx_t maximum_sample_files = 32;
 	//! Whether we auto-detect and convert JSON strings to integers
 	bool convert_strings_to_integers = false;
+	//! Whether we auto-detect DATE/TIME/TIMESTAMP/UUID types from JSON strings
+	bool detect_string_types = true;
 	//! If a struct contains more fields than this threshold with at least 80% similar types,
 	//! we infer it as MAP type
 	idx_t map_inference_threshold = 200;
