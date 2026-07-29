@@ -241,6 +241,8 @@ public:
 	bool highlighting_enabled = true;
 	//! Whether or not we are running in safe mode
 	bool safe_mode = false;
+	//! Interrupt queries that run longer than this many milliseconds (0 = no timeout)
+	idx_t query_timeout_ms = 0;
 	//! Whether or not we are highlighting errors
 	OptionType highlight_errors = OptionType::DEFAULT;
 	//! Whether or not we are highlighting results
@@ -446,6 +448,7 @@ public:
 	static MetadataResult SetSeparator(ShellState &state, const vector<string> &args);
 	static MetadataResult EnableSafeMode(ShellState &state, const vector<string> &args);
 	static MetadataResult ToggleTimer(ShellState &state, const vector<string> &args);
+	static MetadataResult SetQueryTimeout(ShellState &state, const vector<string> &args);
 	SuccessState ChangeDirectory(const string &path);
 	SuccessState ShowDatabases();
 	void CloseOutputFile(FILE *file);

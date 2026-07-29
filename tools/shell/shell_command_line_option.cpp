@@ -251,6 +251,8 @@ static const CommandLineOption command_line_options[] = {
     {"storage-version", 1, "VER", SetStorageVersion, nullptr,
      "database storage compatibility version to use. Default: 'v0.10.0'"},
     {"table", 0, "", nullptr, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},
+    {"timeout", 1, "DURATION", nullptr, ShellState::SetQueryTimeout,
+     "interrupt queries that run for longer than DURATION (e.g. 500ms, 10s, 0.5h)"},
     {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
     {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
     {"unsigned", 0, "", AllowUnsigned, nullptr, "allow loading of unsigned extensions"},
