@@ -40,7 +40,7 @@ class InsertLocalState : public LocalSinkState {
 public:
 public:
 	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool deduplicate_rows);
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, OnConflictAction action_type);
 
 public:
 	ConstraintState &GetConstraintState(DataTable &table, TableCatalogEntry &table_ref);

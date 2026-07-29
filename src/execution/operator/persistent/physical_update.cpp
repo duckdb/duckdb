@@ -55,9 +55,10 @@ PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> 
 //===--------------------------------------------------------------------===//
 class UpdateGlobalState : public GlobalSinkState {
 public:
-	explicit UpdateGlobalState(ClientContext &context, const vector<LogicalType> &return_types, bool deduplicate_rows)
+	explicit UpdateGlobalState(ClientContext &context, const vector<LogicalType> &return_types,
+	                           RowIdHandling row_id_handling)
 	    : updated_count(0), return_collection(context, return_types) {
-		if (deduplicate_rows) {
+		if (row_id_handling != RowIdHandling::ASSUME_UNIQUE) {
 			updated_rows = make_uniq<RowIdDeduplicator>(context, vector<LogicalType> {LogicalType::ROW_TYPE});
 		}
 	}
@@ -279,7 +280,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 }
 
 unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &context) const {
-	return make_uniq<UpdateGlobalState>(context, GetTypes(), row_id_handling != RowIdHandling::ASSUME_UNIQUE);
+	return make_uniq<UpdateGlobalState>(context, GetTypes(), row_id_handling);
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {

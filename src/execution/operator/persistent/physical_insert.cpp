@@ -82,12 +82,13 @@ InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<Logica
 }
 
 InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
-                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool deduplicate_rows)
+                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+                                   OnConflictAction action_type)
     : collection_index(DConstants::INVALID_INDEX), bound_constraints(bound_constraints) {
 	auto &allocator = Allocator::Get(context);
 	update_chunk.Initialize(allocator, types);
 	append_chunk.Initialize(allocator, types);
-	if (deduplicate_rows) {
+	if (action_type == OnConflictAction::UPDATE) {
 		updated_rows = make_uniq<RowIdDeduplicator>(context, vector<LogicalType> {LogicalType::ROW_TYPE});
 	}
 }
@@ -125,8 +126,7 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<InsertLocalState>(context.client, insert_types, bound_constraints,
-	                                   action_type == OnConflictAction::UPDATE);
+	return make_uniq<InsertLocalState>(context.client, insert_types, bound_constraints, action_type);
 }
 
 bool AllConflictsMeetCondition(DataChunk &result) {
