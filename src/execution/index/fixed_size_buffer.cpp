@@ -48,10 +48,12 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_t
 }
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
-                                 BufferHandle buffer_handle_p)
+                                 shared_ptr<BlockHandle> block_handle_p)
     : block_manager(block_manager), readers(0), segment_count(segment_count), allocation_size(allocation_size),
-      dirty(false), vacuum(false), loaded(false), block_pointer(), buffer_handle(std::move(buffer_handle_p)) {
-	block_handle = buffer_handle.GetBlockHandle();
+      dirty(false), vacuum(false), loaded(false), block_pointer(), block_handle(std::move(block_handle_p)) {
+	D_ASSERT(block_handle);
+	buffer_handle = block_manager.buffer_manager.Pin(block_handle);
+	D_ASSERT(buffer_handle.IsValid());
 }
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,

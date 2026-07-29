@@ -797,13 +797,13 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 
 			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
 
-			// For read-only mode, buffer handles for index entries are stored in the transient buffers vector to
-			// construct in-memory entries during WAL replay.
+			// For read-only mode, retain the transient block handle and release the pin held by the buffer handle. The
+			// buffer can then be evicted to temporary storage until the index is bound.
 			if (db.IsReadOnly()) {
-				if (!data_info.transient_buffers) {
-					data_info.transient_buffers = make_shared_ptr<vector<BufferHandle>>();
+				if (!data_info.transient_block_handles) {
+					data_info.transient_block_handles = make_shared_ptr<vector<shared_ptr<BlockHandle>>>();
 				}
-				data_info.transient_buffers->push_back(std::move(buffer_handle));
+				data_info.transient_block_handles->push_back(std::move(block_handle));
 				continue;
 			}
 
