@@ -78,8 +78,8 @@ struct RegrSlopeFun {
 struct RegrSXXFun {
 	static constexpr const char *Name = "regr_sxx";
 	static constexpr const char *Parameters = "y,x";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "REGR_COUNT(y, x) * VAR_POP(x)";
+	static constexpr const char *Description = "Returns the sum of squared deviations of the independent variable for non-NULL pairs, sum((x - avg(x))^2), computed in a numerically stable way.";
+	static constexpr const char *Example = "regr_sxx(y, x)";
 	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
@@ -88,7 +88,7 @@ struct RegrSXXFun {
 struct RegrSXYFun {
 	static constexpr const char *Name = "regr_sxy";
 	static constexpr const char *Parameters = "y,x";
-	static constexpr const char *Description = "Returns the population covariance of input values";
+	static constexpr const char *Description = "Returns the sum of deviation products for non-NULL pairs, sum((y - avg(y)) * (x - avg(x))), computed in a numerically stable way.";
 	static constexpr const char *Example = "REGR_COUNT(y, x) * COVAR_POP(y, x)";
 	static constexpr const char *Categories = "";
 
@@ -98,8 +98,8 @@ struct RegrSXYFun {
 struct RegrSYYFun {
 	static constexpr const char *Name = "regr_syy";
 	static constexpr const char *Parameters = "y,x";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "REGR_COUNT(y, x) * VAR_POP(y)";
+	static constexpr const char *Description = "Returns the sum of squared deviations of the dependent variable for non-NULL pairs, sum((y - avg(y))^2), computed in a numerically stable way.";
+	static constexpr const char *Example = "regr_syy(y, x)";
 	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
