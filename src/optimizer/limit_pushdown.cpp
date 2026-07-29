@@ -20,6 +20,16 @@ bool LimitPushdown::CanOptimize(duckdb::LogicalOperator &op) {
 			// Push down only when limit value is smaller than 8192.
 			// when physical_limit is introduced, it will end a parallel pipeline
 			// restrict the limit value to be small so that remaining operations run fast without parallelization.
+			if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE && limit.offset_val.GetConstantValue() > 0) {
+				// If we push the limit below the projection, the offset rows are discarded before the
+				// projection runs, so a volatile expression produces different values for the rows we keep.
+				auto &projection = op.children[0]->Cast<LogicalProjection>();
+				for (auto &expr : projection.expressions) {
+					if (expr->IsVolatile()) {
+						return false;
+					}
+				}
+			}
 			return true;
 		}
 	}
