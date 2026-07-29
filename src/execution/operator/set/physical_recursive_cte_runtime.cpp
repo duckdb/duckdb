@@ -141,8 +141,14 @@ static RecursiveCTEParallelism GetRecursiveParallelism(const RecursiveCTEState &
 	}
 	if (!state.op.using_key && state.op.union_all && worker_count > 1) {
 		// Ordinary UNION ALL needs enough work to amortize every scheduled pipeline and private-output combine.
+		auto estimated_work_units = work_units;
+		if (state.op.working_table && schedule_plan.cte_scan_pipeline_count > 0) {
+			// A materialized CTE can fan one recursive frontier out into several scans. Count those scans as
+			// scheduled work instead of treating all of their pipelines as pure scheduling overhead.
+			estimated_work_units += state.CurrentInputTable().ChunkCount() * schedule_plan.cte_scan_pipeline_count;
+		}
 		const auto minimum_work_units_per_worker = MaxValue<idx_t>(schedule_plan.execute_pipeline_count, 2);
-		if (work_units / worker_count < minimum_work_units_per_worker) {
+		if (estimated_work_units / worker_count < minimum_work_units_per_worker) {
 			if (schedule_plan.has_source_tasks) {
 				// Source tasks can expose work that is not represented by recursive frontier chunks.
 				return RecursiveCTEParallelism(worker_count, RecursiveCTEParallelismMode::SOURCE_TASKS);
@@ -342,6 +348,9 @@ static idx_t AddRecursiveInlineStage(RecursiveCTEPipelineSchedulePlan &plan, Rec
 	if (type == RecursiveCTEInlineStageType::EXECUTE) {
 		plan.execute_pipeline_count++;
 		auto source = pipeline.GetSource();
+		if (source && source->type == PhysicalOperatorType::CTE_SCAN) {
+			plan.cte_scan_pipeline_count++;
+		}
 		has_source_tasks = source && source->HasSourceTasks();
 		if (has_source_tasks) {
 			plan.has_source_tasks = true;
@@ -1010,10 +1019,14 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	const auto frontier_storage_bytes = collect_metrics ? GetRecursiveFrontierStorageBytes(gstate) : 0;
 	gstate.scheduler.SetEpochThreadLimit(parallelism.worker_count);
 	if (!using_key && union_all) {
+		const auto source_tasks_write_recursive_output =
+		    parallelism.mode == RecursiveCTEParallelismMode::SOURCE_TASKS &&
+		    schedule_plan->source_tasks_write_recursive_output;
+		// Materialized fan-out already provides pipeline concurrency; private output multiplies collections per scan.
+		const auto has_materialized_fanout = schedule_plan->cte_scan_pipeline_count > 1;
 		gstate.use_local_union_all_output =
-		    parallelism.worker_count > 1 && (work_units / parallelism.worker_count >= 2 ||
-		                                     (parallelism.mode == RecursiveCTEParallelismMode::SOURCE_TASKS &&
-		                                      schedule_plan->source_tasks_write_recursive_output));
+		    parallelism.worker_count > 1 && (source_tasks_write_recursive_output ||
+		                                     (!has_materialized_fanout && work_units / parallelism.worker_count >= 2));
 		if (!gstate.use_local_union_all_output) {
 			gstate.CurrentOutputTable().InitializeAppend(gstate.CurrentOutputAppendState());
 		}

@@ -42,6 +42,12 @@ automaton, clustering, and ray-tracing workloads. Their deterministic inputs
 and compact result checks make the generated programs suitable for continuous
 performance and correctness regression testing.
 
+The `aoc2022` directory contains selected recursive Advent of Code 2022 SQL
+solutions from the University of Tübingen database group. Personal puzzle
+inputs are replaced with deterministic synthetic data. The selected workloads
+cover eight additional recursive plan shapes, including chained state
+machines, flood fill, branching search, and recursive windows.
+
 The optional `queries/ldbc/dvr.sql` workload runs the published DVR access
 pattern over DuckDB's existing LDBC SF0.1 dataset. Follow the setup steps in
 `benchmark/ldbc/README.md`, then run:

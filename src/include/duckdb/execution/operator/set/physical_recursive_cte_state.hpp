@@ -67,6 +67,7 @@ struct RecursiveCTEPipelineSchedulePlan {
 	vector<RecursiveCTEScheduleStage> stages;
 	vector<reference<Pipeline>> initialize_on_schedule_pipelines;
 	idx_t execute_pipeline_count = 0;
+	idx_t cte_scan_pipeline_count = 0;
 	bool has_source_tasks = false;
 	bool source_tasks_write_recursive_output = false;
 };

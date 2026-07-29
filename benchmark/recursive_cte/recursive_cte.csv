@@ -26,3 +26,15 @@ benchmark/recursive_cte/flummi_k_core_using_key.benchmark
 benchmark/recursive_cte/flummi_kmeans.benchmark
 benchmark/recursive_cte/flummi_life.benchmark
 benchmark/recursive_cte/flummi_ray.benchmark
+benchmark/recursive_cte/aoc2022_day09.benchmark
+benchmark/recursive_cte/aoc2022_day11.benchmark
+benchmark/recursive_cte/aoc2022_day12.benchmark
+benchmark/recursive_cte/aoc2022_day16.benchmark
+benchmark/recursive_cte/aoc2022_day18.benchmark
+benchmark/recursive_cte/aoc2022_day19.benchmark
+benchmark/recursive_cte/aoc2022_day20.benchmark
+benchmark/recursive_cte/aoc2022_day23.benchmark
+benchmark/recursive_cte/aoc2022_day12_using_key.benchmark
+benchmark/recursive_cte/aoc2022_day20_using_key.benchmark
+benchmark/recursive_cte/aoc2022_day23_using_key.benchmark
+benchmark/recursive_cte/aoc2022_day16_using_key.benchmark

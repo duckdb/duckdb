@@ -131,6 +131,54 @@ CALL enable_logging('PhysicalOperator');
 statement ok
 CALL truncate_duckdb_logs();
 
+# Scans of materialized recursive state amplify frontier work across the UNION ALL fan-out.
+query III
+WITH RECURSIVE t(i, digest, level) AS (
+	SELECT i, md5(i::VARCHAR), 0
+	FROM range(current_setting('standard_vector_size')::BIGINT * 2) values(i)
+	UNION ALL
+	(
+		WITH state AS MATERIALIZED (
+			SELECT i, md5(md5(md5(digest))) AS digest, level + 1 AS level
+			FROM t
+			WHERE level < 3
+		)
+		SELECT * FROM state WHERE i % 6 = 0
+		UNION ALL
+		SELECT * FROM state WHERE i % 6 = 1
+		UNION ALL
+		SELECT * FROM state WHERE i % 6 = 2
+		UNION ALL
+		SELECT * FROM state WHERE i % 6 = 3
+		UNION ALL
+		SELECT * FROM state WHERE i % 6 = 4
+		UNION ALL
+		SELECT * FROM state WHERE i % 6 = 5
+	)
+)
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT * 8,
+       max(level),
+       sum(length(digest))
+FROM t;
+----
+1	3	524288
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
 # A materialized window source can expose parallel work beyond the narrow recursive frontier.
 query III
 WITH RECURSIVE t(i, level, rn) AS (
