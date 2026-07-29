@@ -30,8 +30,6 @@ struct DuckDBErrorDetails {
 
 #include <string.h>
 
-#include "duckdb/main/prepared_statement_data.hpp"
-
 #include "duckdb/parser/keyword_helper.hpp"
 
 // We must leak the symbols of the init function
@@ -1625,11 +1623,11 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	// would be worth the extra management
 
 	auto prepared_wrapper = reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement);
-	if (!prepared_wrapper || !prepared_wrapper->statement || !prepared_wrapper->statement->data) {
+	if (!prepared_wrapper || !prepared_wrapper->statement) {
 		SetError(error, "Invalid prepared statement wrapper");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto count = prepared_wrapper->statement->data->properties.parameter_count;
+	auto count = prepared_wrapper->statement->GetParameterCount();
 	std::vector<duckdb_logical_type> types(count);
 	std::vector<std::string> owned_names;
 	owned_names.reserve(count);
@@ -1742,8 +1740,8 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	std::memset(&raw_stream_wrapper->result, 0, sizeof(raw_stream_wrapper->result));
 	DuckDBAdbcStreamWrapperGuard stream_wrapper(raw_stream_wrapper);
 	// Only process the stream if there are parameters to bind
-	auto prepared_statement_params = reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)
-	                                     ->statement->data->properties.parameter_count;
+	auto prepared_statement_params =
+	    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->GetParameterCount();
 	if (has_stream && prepared_statement_params > 0) {
 		// A stream was bound to the statement, use that to bind parameters
 		ArrowArrayStream stream = wrapper->ingestion_stream;
