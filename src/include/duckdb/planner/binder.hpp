@@ -59,6 +59,7 @@ class ExternalDependency;
 class TableFunction;
 class TableStorageInfo;
 class BoundConstraint;
+class ForeignKeyConstraint;
 class AtClause;
 class BoundAtClause;
 
@@ -260,6 +261,8 @@ public:
 	                                                 const ColumnList &columns);
 
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
+	//! Resolves a FOREIGN KEY that is added to an already existing table.
+	void BindAlterForeignKeyConstraint(ForeignKeyConstraint &fk, TableCatalogEntry &table);
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);

@@ -351,6 +351,23 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 			throw CatalogException::MissingEntry(type, name, string());
 		}
 	}
+
+	if (!info.IsAddForeignKey()) {
+		return;
+	}
+
+	// Add the matching foreign key constraint to the referenced table.
+	auto &constraint_info = info.Cast<AlterTableInfo>().Cast<AddConstraintInfo>();
+	auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
+	if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+		return;
+	}
+
+	AlterEntryData alter_data(QualifiedName(catalog.GetName(), fk.info.schema, fk.info.table),
+	                          OnEntryNotFound::THROW_EXCEPTION);
+	AlterForeignKeyInfo fk_info(std::move(alter_data), info.GetQualifiedName().Name(), fk.pk_columns, fk.fk_columns,
+	                            fk.info.pk_keys, fk.info.fk_keys, AlterForeignKeyType::AFT_ADD);
+	Alter(transaction, fk_info);
 }
 
 void DuckSchemaEntry::Scan(ClientContext &context, CatalogType type,

@@ -49,6 +49,10 @@ public:
 	vector<column_t> indexed_columns;
 	vector<column_t> rowid_column;
 
+private:
+	//! Verify that the already stored keys exist in the referenced table.
+	void VerifyForeignKey(ClientContext &context, DataChunk &key_chunk) const;
+
 public:
 	//! Source interface, NOP for this operator
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,

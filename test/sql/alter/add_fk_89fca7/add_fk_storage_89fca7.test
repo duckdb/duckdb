@@ -1,0 +1,117 @@
+# name: test/sql/alter/add_fk_89fca7/add_fk_storage_89fca7.test
+# description: Test persisting and rolling back a FOREIGN KEY added to an existing table.
+# group: [add_fk_89fca7]
+
+load {TEST_DIR}/add_fk_89fca7.db
+
+statement ok
+CREATE TABLE parent (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE child (id INTEGER, parent_id INTEGER)
+
+statement ok
+INSERT INTO parent VALUES (1), (2)
+
+statement ok
+INSERT INTO child VALUES (1, 1)
+
+statement ok
+ALTER TABLE child ADD CONSTRAINT fk_persist FOREIGN KEY (parent_id) REFERENCES parent(id)
+
+restart
+
+query II
+SELECT id, parent_id FROM child ORDER BY id
+----
+1	1
+
+statement error
+INSERT INTO child VALUES (2, 42)
+----
+<REGEX>:Constraint Error.*
+
+statement ok
+INSERT INTO child VALUES (2, 2)
+
+statement error
+DELETE FROM parent WHERE id = 2
+----
+<REGEX>:Constraint Error.*
+
+# The referenced table cannot be dropped while the key exists.
+
+statement error
+DROP TABLE parent
+----
+<REGEX>:.*Error.*
+
+statement ok
+DROP TABLE child
+
+statement ok
+DROP TABLE parent
+
+# Rolling back leaves the table unconstrained.
+
+statement ok
+CREATE TABLE rollback_parent (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE rollback_child (id INTEGER, parent_id INTEGER)
+
+statement ok
+INSERT INTO rollback_parent VALUES (1)
+
+statement ok
+INSERT INTO rollback_child VALUES (1, 1)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE rollback_child ADD CONSTRAINT fk_rollback FOREIGN KEY (parent_id) REFERENCES rollback_parent(id)
+
+statement error
+INSERT INTO rollback_child VALUES (2, 42)
+----
+<REGEX>:Constraint Error.*
+
+statement ok
+ROLLBACK
+
+statement ok
+INSERT INTO rollback_child VALUES (2, 42)
+
+statement ok
+DROP TABLE rollback_parent
+
+# Committing inside a transaction keeps the key.
+
+statement ok
+CREATE TABLE commit_parent (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE commit_child (id INTEGER, parent_id INTEGER)
+
+statement ok
+INSERT INTO commit_parent VALUES (1)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE commit_child ADD CONSTRAINT fk_commit FOREIGN KEY (parent_id) REFERENCES commit_parent(id)
+
+statement ok
+COMMIT
+
+restart
+
+statement error
+INSERT INTO commit_child VALUES (1, 42)
+----
+<REGEX>:Constraint Error.*
+
+statement ok
+INSERT INTO commit_child VALUES (1, 1)

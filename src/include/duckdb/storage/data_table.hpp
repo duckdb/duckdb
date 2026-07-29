@@ -311,6 +311,10 @@ public:
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);
 
+	//! Verify that the keys of a foreign key that is being added exist in the referenced table.
+	void VerifyNewForeignKeyConstraint(const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
+	                                   DataChunk &chunk);
+
 private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);

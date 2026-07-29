@@ -1336,6 +1336,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		}
 		table_info.constraints.push_back(info.constraint->Copy());
 
+	} else if (info.constraint->type == ConstraintType::FOREIGN_KEY) {
+		table_info.constraints.push_back(info.constraint->Copy());
+
 	} else {
 		throw InternalException("unsupported constraint type in ALTER TABLE statement");
 	}

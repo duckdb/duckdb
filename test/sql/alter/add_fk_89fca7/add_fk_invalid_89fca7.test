@@ -1,0 +1,126 @@
+# name: test/sql/alter/add_fk_89fca7/add_fk_invalid_89fca7.test
+# description: Test rejecting a FOREIGN KEY that the table or the reference cannot satisfy.
+# group: [add_fk_89fca7]
+
+statement ok
+CREATE TABLE parent (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE child (id INTEGER, parent_id INTEGER)
+
+statement ok
+INSERT INTO parent VALUES (1), (2)
+
+statement ok
+INSERT INTO child VALUES (100, 1), (101, 5)
+
+# Row 101 has no matching parent, so the key cannot be added.
+
+statement error
+ALTER TABLE child ADD CONSTRAINT fk_child FOREIGN KEY (parent_id) REFERENCES parent(id)
+----
+<REGEX>:.*Error.*
+
+# The rejected statement left the table alone: the rows are still there and the
+# table is still unconstrained.
+
+query II
+SELECT id, parent_id FROM child ORDER BY id
+----
+100	1
+101	5
+
+statement ok
+INSERT INTO child VALUES (102, 9)
+
+# Once the offending rows are gone the same key can be added.
+
+statement ok
+DELETE FROM child WHERE parent_id NOT IN (SELECT id FROM parent)
+
+query II
+SELECT id, parent_id FROM child ORDER BY id
+----
+100	1
+
+statement ok
+ALTER TABLE child ADD CONSTRAINT fk_child FOREIGN KEY (parent_id) REFERENCES parent(id)
+
+statement error
+INSERT INTO child VALUES (103, 5)
+----
+<REGEX>:Constraint Error.*
+
+statement ok
+DROP TABLE child
+
+statement ok
+DROP TABLE parent
+
+# The referenced columns carry no UNIQUE or PRIMARY KEY constraint.
+
+statement ok
+CREATE TABLE unkeyed (id INTEGER)
+
+statement ok
+CREATE TABLE refers_unkeyed (id INTEGER, other_id INTEGER)
+
+statement error
+ALTER TABLE refers_unkeyed ADD CONSTRAINT fk_unkeyed FOREIGN KEY (other_id) REFERENCES unkeyed(id)
+----
+<REGEX>:.*Error.*
+
+statement ok
+INSERT INTO refers_unkeyed VALUES (1, 42)
+
+# The referencing and referenced columns have incompatible types.
+
+statement ok
+CREATE TABLE typed_parent (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE typed_child (id INTEGER, parent_id VARCHAR)
+
+statement error
+ALTER TABLE typed_child ADD CONSTRAINT fk_typed FOREIGN KEY (parent_id) REFERENCES typed_parent(id)
+----
+<REGEX>:.*Error.*
+
+# The referencing column does not exist.
+
+statement error
+ALTER TABLE typed_child ADD CONSTRAINT fk_missing FOREIGN KEY (nonexistent) REFERENCES typed_parent(id)
+----
+<REGEX>:.*Error.*
+
+# The referenced table does not exist.
+
+statement error
+ALTER TABLE typed_child ADD CONSTRAINT fk_no_table FOREIGN KEY (id) REFERENCES nonexistent_table(id)
+----
+<REGEX>:.*Error.*
+
+# The referenced column does not exist.
+
+statement error
+ALTER TABLE typed_child ADD CONSTRAINT fk_no_column FOREIGN KEY (id) REFERENCES typed_parent(nonexistent)
+----
+<REGEX>:.*Error.*
+
+# None of the rejected statements constrained the table.
+
+statement ok
+INSERT INTO typed_child VALUES (7, 'still unconstrained')
+
+# A different number of columns on each side of the key.
+
+statement ok
+CREATE TABLE pair_parent (a INTEGER, b INTEGER, PRIMARY KEY (a, b))
+
+statement ok
+CREATE TABLE pair_child (a INTEGER, b INTEGER)
+
+statement error
+ALTER TABLE pair_child ADD CONSTRAINT fk_pair FOREIGN KEY (a) REFERENCES pair_parent(a, b)
+----
+<REGEX>:.*Error.*

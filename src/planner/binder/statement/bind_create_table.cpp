@@ -604,6 +604,51 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 	}
 }
 
+void Binder::BindAlterForeignKeyConstraint(ForeignKeyConstraint &fk, TableCatalogEntry &table) {
+	auto &schema = table.schema;
+	auto &columns = table.GetColumns();
+	FindForeignKeyIndexes(columns, fk.fk_columns, fk.info.fk_keys);
+
+	// Resolve the self-reference.
+	if (table.name == fk.info.table) {
+		fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
+		FindMatchingPrimaryKeyColumns(columns, table.GetConstraints(), fk);
+		FindForeignKeyIndexes(columns, fk.pk_columns, fk.info.pk_keys);
+		CheckForeignKeyTypes(columns, columns, fk);
+		return;
+	}
+
+	Identifier fk_catalog = fk.info.schema.empty() ? schema.ParentCatalog().GetName() : Identifier::InvalidCatalog();
+	string fk_schema = fk.info.schema.empty() ? schema.name.GetIdentifierName() : fk.info.schema.GetIdentifierName();
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(fk.info.table));
+	auto table_entry = entry_retriever.GetEntry(EntryLookupInfo(
+	    table_lookup, QualifiedName(fk_catalog, Identifier(fk_schema), table_lookup.GetEntryIdentifier())));
+	if (table_entry->type == CatalogType::VIEW_ENTRY) {
+		throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
+	}
+
+	auto &pk_table_entry = table_entry->Cast<TableCatalogEntry>();
+	fk.info.schema = pk_table_entry.schema.name;
+	if (&pk_table_entry.schema != &schema) {
+		throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
+	}
+	FindMatchingPrimaryKeyColumns(pk_table_entry.GetColumns(), pk_table_entry.GetConstraints(), fk);
+	FindForeignKeyIndexes(pk_table_entry.GetColumns(), fk.pk_columns, fk.info.pk_keys);
+	CheckForeignKeyTypes(pk_table_entry.GetColumns(), columns, fk);
+
+	if (pk_table_entry.IsDuckTable()) {
+		auto &storage = pk_table_entry.GetStorage();
+		if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
+			auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
+			throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
+			                      "present on these columns",
+			                      pk_table_entry.name, fk_column_names);
+		}
+	}
+
+	D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
+}
+
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
                                                              vector<unique_ptr<Expression>> &bound_defaults,
                                                              AlterBindMode bind_mode) {

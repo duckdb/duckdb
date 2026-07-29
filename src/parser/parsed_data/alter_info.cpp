@@ -43,4 +43,18 @@ bool AlterInfo::IsAddPrimaryKey() const {
 	return true;
 }
 
+bool AlterInfo::IsAddForeignKey() const {
+	if (type != AlterType::ALTER_TABLE) {
+		return false;
+	}
+
+	auto &table_info = Cast<AlterTableInfo>();
+	if (table_info.alter_table_type != AlterTableType::ADD_CONSTRAINT) {
+		return false;
+	}
+
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	return constraint_info.constraint->type == ConstraintType::FOREIGN_KEY;
+}
+
 } // namespace duckdb

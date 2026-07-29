@@ -1,0 +1,147 @@
+# name: test/sql/alter/add_fk_89fca7/add_fk_89fca7.test
+# description: Test adding a FOREIGN KEY to an existing table.
+# group: [add_fk_89fca7]
+
+statement ok
+CREATE TABLE parent (id INTEGER PRIMARY KEY, name VARCHAR)
+
+statement ok
+CREATE TABLE child (id INTEGER, parent_id INTEGER)
+
+statement ok
+INSERT INTO parent VALUES (1, 'a'), (2, 'b'), (3, 'c')
+
+statement ok
+INSERT INTO child VALUES (10, 1), (11, 2), (12, NULL)
+
+statement ok
+ALTER TABLE child ADD CONSTRAINT fk_child_parent FOREIGN KEY (parent_id) REFERENCES parent(id)
+
+# The existing rows are untouched.
+
+query II
+SELECT id, parent_id FROM child ORDER BY id
+----
+10	1
+11	2
+12	NULL
+
+statement error
+INSERT INTO child VALUES (13, 99)
+----
+<REGEX>:Constraint Error.*
+
+# A NULL key is still allowed.
+
+statement ok
+INSERT INTO child VALUES (14, NULL)
+
+statement error
+UPDATE child SET parent_id = 99 WHERE id = 10
+----
+<REGEX>:Constraint Error.*
+
+statement ok
+UPDATE child SET parent_id = 3 WHERE id = 10
+
+# The referenced side is enforced too.
+
+statement error
+DELETE FROM parent WHERE id = 3
+----
+<REGEX>:Constraint Error.*
+
+statement ok
+DELETE FROM parent WHERE id = 1
+
+statement ok
+DROP TABLE child
+
+statement ok
+DROP TABLE parent
+
+# Multi-column keys.
+
+statement ok
+CREATE TABLE regions (country VARCHAR, region VARCHAR, PRIMARY KEY (country, region))
+
+statement ok
+CREATE TABLE city (name VARCHAR, country VARCHAR, region VARCHAR)
+
+statement ok
+INSERT INTO regions VALUES ('US', 'CA'), ('US', 'NY')
+
+statement ok
+INSERT INTO city VALUES ('San Jose', 'US', 'CA')
+
+statement ok
+ALTER TABLE city ADD CONSTRAINT fk_city FOREIGN KEY (country, region) REFERENCES regions(country, region)
+
+statement ok
+INSERT INTO city VALUES ('Albany', 'US', 'NY')
+
+statement error
+INSERT INTO city VALUES ('Austin', 'US', 'TX')
+----
+<REGEX>:Constraint Error.*
+
+# Only one half of the key matching is not enough.
+
+statement error
+INSERT INTO city VALUES ('Buffalo', 'CA', 'NY')
+----
+<REGEX>:Constraint Error.*
+
+statement ok
+DROP TABLE city
+
+statement ok
+DROP TABLE regions
+
+# The unnamed form, mirroring ALTER TABLE ... ADD PRIMARY KEY (...).
+
+statement ok
+CREATE TABLE unnamed_parent (id INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE unnamed_child (id INTEGER, parent_id INTEGER)
+
+statement ok
+INSERT INTO unnamed_parent VALUES (1)
+
+statement ok
+INSERT INTO unnamed_child VALUES (1, 1)
+
+statement ok
+ALTER TABLE unnamed_child ADD FOREIGN KEY (parent_id) REFERENCES unnamed_parent(id)
+
+statement error
+INSERT INTO unnamed_child VALUES (2, 42)
+----
+<REGEX>:Constraint Error.*
+
+# A UNIQUE constraint on the referenced columns is enough, it need not be the
+# primary key.
+
+statement ok
+CREATE TABLE unique_parent (id INTEGER PRIMARY KEY, code VARCHAR UNIQUE)
+
+statement ok
+CREATE TABLE unique_child (id INTEGER, code VARCHAR)
+
+statement ok
+INSERT INTO unique_parent VALUES (1, 'abc')
+
+statement ok
+INSERT INTO unique_child VALUES (1, 'abc')
+
+statement ok
+ALTER TABLE unique_child ADD CONSTRAINT fk_code FOREIGN KEY (code) REFERENCES unique_parent(code)
+
+statement error
+INSERT INTO unique_child VALUES (2, 'zzz')
+----
+<REGEX>:Constraint Error.*
+
+statement ok
+INSERT INTO unique_child VALUES (2, 'abc')

@@ -2,8 +2,10 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
@@ -38,27 +40,41 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 	auto &table = entry.Cast<TableCatalogEntry>();
 	auto &column_list = table.GetColumns();
-
-	auto bound_constraint =
-	    BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
-	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
+	auto table_name = table_info.GetQualifiedName().Name();
 
 	// Create the CreateIndexInfo.
 	auto create_index_info = make_uniq<CreateIndexInfo>();
-	create_index_info->table = table_info.GetQualifiedName().Name();
+	create_index_info->table = table_name;
 	create_index_info->index_type = ART::TYPE_NAME;
-	create_index_info->constraint_type = IndexConstraintType::PRIMARY;
 
-	for (const auto &physical_index : bound_unique.keys) {
+	vector<PhysicalIndex> key_columns;
+	Identifier index_name;
+
+	if (constraint_info.constraint->type == ConstraintType::FOREIGN_KEY) {
+		auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
+		BindAlterForeignKeyConstraint(fk, table);
+
+		create_index_info->constraint_type = IndexConstraintType::FOREIGN;
+		key_columns = fk.info.fk_keys;
+		// Match the index naming of a foreign key declared in CREATE TABLE.
+		index_name = Identifier(EnumUtil::ToString(IndexConstraintType::FOREIGN) + "_" +
+		                        table_name.GetIdentifierName() + "_" + to_string(table.GetConstraints().size()));
+	} else {
+		auto bound_constraint = BindUniqueConstraint(*constraint_info.constraint, table_name, column_list);
+		auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
+
+		create_index_info->constraint_type = IndexConstraintType::PRIMARY;
+		key_columns = bound_unique.keys;
+		index_name = constraint_info.constraint->Cast<UniqueConstraint>().GetName(table_name);
+	}
+
+	for (const auto &physical_index : key_columns) {
 		auto &col = column_list.GetColumn(physical_index);
-		unique_ptr<ParsedExpression> parsed =
-		    make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
+		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_name);
 		create_index_info->expressions.push_back(parsed->Copy());
 		create_index_info->parsed_expressions.push_back(parsed->Copy());
 	}
 
-	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
-	auto index_name = unique_constraint.GetName(table_info.GetQualifiedName().Name());
 	create_index_info->SetIndexName(index_name);
 	D_ASSERT(!create_index_info->GetIndexName().empty());
 
@@ -167,7 +183,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	stmt.info->SetQualifiedName(
 	    QualifiedName(catalog.GetName(), entry->ParentSchema().name, stmt.info->GetQualifiedName().Name()));
 
-	if (!stmt.info->IsAddPrimaryKey()) {
+	if (!stmt.info->IsAddPrimaryKey() && !stmt.info->IsAddForeignKey()) {
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 		return result;
 	}

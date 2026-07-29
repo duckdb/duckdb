@@ -7,6 +7,9 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -77,6 +80,60 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	return std::move(lstate);
 }
 
+//! A foreign key index does not contain NULL keys, matching an index that is created
+//! together with its table.
+static void FilterNullKeys(DataChunk &key_chunk, DataChunk &row_chunk) {
+	SelectionVector sel(key_chunk.size());
+	idx_t count = 0;
+	for (idx_t row_idx = 0; row_idx < key_chunk.size(); row_idx++) {
+		bool has_null = false;
+		for (idx_t col_idx = 0; col_idx < key_chunk.ColumnCount(); col_idx++) {
+			if (FlatVector::IsNull(key_chunk.data[col_idx], row_idx)) {
+				has_null = true;
+				break;
+			}
+		}
+		if (!has_null) {
+			sel.set_index(count++, row_idx);
+		}
+	}
+
+	if (count == key_chunk.size()) {
+		return;
+	}
+	key_chunk.Slice(sel, count);
+	row_chunk.Slice(sel, count);
+}
+
+void PhysicalCreateIndex::VerifyForeignKey(ClientContext &context, DataChunk &key_chunk) const {
+	auto &constraint_info = alter_table_info->Cast<AddConstraintInfo>();
+	auto &fk = constraint_info.constraint->Cast<ForeignKeyConstraint>();
+
+	physical_index_set_t pk_key_set;
+	for (const auto &pk_key : fk.info.pk_keys) {
+		pk_key_set.insert(pk_key);
+	}
+	physical_index_set_t fk_key_set;
+	for (const auto &fk_key : fk.info.fk_keys) {
+		fk_key_set.insert(fk_key);
+	}
+	BoundForeignKeyConstraint bound_fk(fk.info, std::move(pk_key_set), std::move(fk_key_set));
+
+	// The verification reads the keys at their physical position in this table.
+	vector<LogicalType> types;
+	for (auto &col : table.GetColumns().Physical()) {
+		types.emplace_back(col.Type());
+	}
+	DataChunk fk_chunk;
+	fk_chunk.InitializeEmpty(types);
+	for (idx_t i = 0; i < fk.info.fk_keys.size(); i++) {
+		fk_chunk.data[fk.info.fk_keys[i].index].Reference(key_chunk.data[i]);
+	}
+	fk_chunk.SetCardinality(key_chunk.size());
+
+	table.GetStorage().VerifyNewForeignKeyConstraint(bound_fk, context, fk_chunk);
+}
+
 SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
@@ -88,12 +145,18 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	lstate.key_chunk.ReferenceColumns(chunk, indexed_columns);
 	lstate.row_chunk.ReferenceColumns(chunk, rowid_column);
 
-	// Check for NULLs, if we are creating a PRIMARY KEY.
-	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
 	if (alter_table_info) {
-		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
-			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
-				throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());
+		if (info->constraint_type == IndexConstraintType::FOREIGN) {
+			// A foreign key permits NULLs, but every other key must already be present
+			// in the referenced table.
+			VerifyForeignKey(context.client, lstate.key_chunk);
+			FilterNullKeys(lstate.key_chunk, lstate.row_chunk);
+		} else {
+			// Check for NULLs, if we are creating a PRIMARY KEY.
+			for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
+				if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
+					throw ConstraintException("NOT NULL constraint failed: %s", info->GetIndexName());
+				}
 			}
 		}
 	}
