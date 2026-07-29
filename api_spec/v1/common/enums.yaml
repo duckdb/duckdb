@@ -153,6 +153,7 @@ enums:
       ERROR_MISSING_EXTENSION: {value: 39}
       ERROR_AUTOLOAD: {value: 40}
       ERROR_SEQUENCE: {value: 41}
+      ERROR_DATA_CORRUPTION: {value: 43}
       INVALID_CONFIGURATION: {value: 42}
   cast_mode:
     lifecycle:

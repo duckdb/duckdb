@@ -155,6 +155,7 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalAlter &op);
 	PhysicalOperator &CreatePlan(LogicalAttach &op);
 	PhysicalOperator &CreatePlan(LogicalConnect &op);
+	PhysicalOperator &CreatePlan(LogicalExternalResource &op);
 	PhysicalOperator &CreatePlan(LogicalDetach &op);
 	PhysicalOperator &CreatePlan(LogicalDisconnect &op);
 	PhysicalOperator &CreatePlan(LogicalDrop &op);

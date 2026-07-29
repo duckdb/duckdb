@@ -1960,6 +1960,24 @@ static const TransformFrameOps EXTRACT_STRING_ARGUMENT_OPS = {
 static const TransformFrameOps EXTRACT_DATE_PART_OPS = {"ExtractDatePart",
                                                         &PEGTransformerFactory::InitializeExtractDatePartTrampoline,
                                                         &PEGTransformerFactory::FinalizeExtractDatePartTrampoline};
+static const TransformFrameOps EXTERNAL_RESOURCE_STATEMENT_OPS = {
+    "ExternalResourceStatement", &PEGTransformerFactory::InitializeExternalResourceStatementTrampoline,
+    &PEGTransformerFactory::FinalizeExternalResourceStatementTrampoline};
+static const TransformFrameOps CREATE_EXTERNAL_RESOURCE_STMT_OPS = {
+    "CreateExternalResourceStmt", &PEGTransformerFactory::InitializeCreateExternalResourceStmtTrampoline,
+    &PEGTransformerFactory::FinalizeCreateExternalResourceStmtTrampoline};
+static const TransformFrameOps REGISTER_EXTERNAL_RESOURCE_STMT_OPS = {
+    "RegisterExternalResourceStmt", &PEGTransformerFactory::InitializeRegisterExternalResourceStmtTrampoline,
+    &PEGTransformerFactory::FinalizeRegisterExternalResourceStmtTrampoline};
+static const TransformFrameOps DESTROY_EXTERNAL_RESOURCE_STMT_OPS = {
+    "DestroyExternalResourceStmt", &PEGTransformerFactory::InitializeDestroyExternalResourceStmtTrampoline,
+    &PEGTransformerFactory::FinalizeDestroyExternalResourceStmtTrampoline};
+static const TransformFrameOps SHOW_EXTERNAL_RESOURCES_STMT_OPS = {
+    "ShowExternalResourcesStmt", &PEGTransformerFactory::InitializeShowExternalResourcesStmtTrampoline,
+    &PEGTransformerFactory::FinalizeShowExternalResourcesStmtTrampoline};
+static const TransformFrameOps SHOW_ALL_MODIFIER_OPS = {"ShowAllModifier",
+                                                        &PEGTransformerFactory::InitializeShowAllModifierTrampoline,
+                                                        &PEGTransformerFactory::FinalizeShowAllModifierTrampoline};
 static const TransformFrameOps INSERT_STATEMENT_OPS = {"InsertStatement",
                                                        &PEGTransformerFactory::InitializeInsertStatementTrampoline,
                                                        &PEGTransformerFactory::FinalizeInsertStatementTrampoline};
@@ -2426,6 +2444,51 @@ static const TransformFrameOps TIMESTAMP_AT_UNIT_OPS = {"TimestampAtUnit",
                                                         &PEGTransformerFactory::FinalizeTimestampAtUnitTrampoline};
 static const TransformFrameOps JOIN_CLAUSE_OPS = {"JoinClause", &PEGTransformerFactory::InitializeJoinClauseTrampoline,
                                                   &PEGTransformerFactory::FinalizeJoinClauseTrampoline};
+static const TransformFrameOps NEAREST_JOIN_CLAUSE_OPS = {"NearestJoinClause",
+                                                          &PEGTransformerFactory::InitializeNearestJoinClauseTrampoline,
+                                                          &PEGTransformerFactory::FinalizeNearestJoinClauseTrampoline};
+static const TransformFrameOps NEAREST_JOIN_ALIASED_OPS = {
+    "NearestJoinAliased", &PEGTransformerFactory::InitializeNearestJoinAliasedTrampoline,
+    &PEGTransformerFactory::FinalizeNearestJoinAliasedTrampoline};
+static const TransformFrameOps NEAREST_JOIN_BARE_OPS = {"NearestJoinBare",
+                                                        &PEGTransformerFactory::InitializeNearestJoinBareTrampoline,
+                                                        &PEGTransformerFactory::FinalizeNearestJoinBareTrampoline};
+static const TransformFrameOps NEAREST_BARE_TABLE_REF_OPS = {
+    "NearestBareTableRef", &PEGTransformerFactory::InitializeNearestBareTableRefTrampoline,
+    &PEGTransformerFactory::FinalizeNearestBareTableRefTrampoline};
+static const TransformFrameOps NEAREST_VALUES_REF_OPS = {"NearestValuesRef",
+                                                         &PEGTransformerFactory::InitializeNearestValuesRefTrampoline,
+                                                         &PEGTransformerFactory::FinalizeNearestValuesRefTrampoline};
+static const TransformFrameOps NEAREST_TABLE_FUNCTION_OPS = {
+    "NearestTableFunction", &PEGTransformerFactory::InitializeNearestTableFunctionTrampoline,
+    &PEGTransformerFactory::FinalizeNearestTableFunctionTrampoline};
+static const TransformFrameOps NEAREST_TABLE_SUBQUERY_OPS = {
+    "NearestTableSubquery", &PEGTransformerFactory::InitializeNearestTableSubqueryTrampoline,
+    &PEGTransformerFactory::FinalizeNearestTableSubqueryTrampoline};
+static const TransformFrameOps NEAREST_BASE_TABLE_REF_OPS = {
+    "NearestBaseTableRef", &PEGTransformerFactory::InitializeNearestBaseTableRefTrampoline,
+    &PEGTransformerFactory::FinalizeNearestBaseTableRefTrampoline};
+static const TransformFrameOps NEAREST_PARENS_TABLE_REF_OPS = {
+    "NearestParensTableRef", &PEGTransformerFactory::InitializeNearestParensTableRefTrampoline,
+    &PEGTransformerFactory::FinalizeNearestParensTableRefTrampoline};
+static const TransformFrameOps APPROX_OR_EXACT_OPS = {"ApproxOrExact",
+                                                      &PEGTransformerFactory::InitializeApproxOrExactTrampoline,
+                                                      &PEGTransformerFactory::FinalizeApproxOrExactTrampoline};
+static const TransformFrameOps NEAREST_APPROX_OPS = {"NearestApprox",
+                                                     &PEGTransformerFactory::InitializeNearestApproxTrampoline,
+                                                     &PEGTransformerFactory::FinalizeNearestApproxTrampoline};
+static const TransformFrameOps NEAREST_EXACT_OPS = {"NearestExact",
+                                                    &PEGTransformerFactory::InitializeNearestExactTrampoline,
+                                                    &PEGTransformerFactory::FinalizeNearestExactTrampoline};
+static const TransformFrameOps DISTANCE_OR_SIMILARITY_OPS = {
+    "DistanceOrSimilarity", &PEGTransformerFactory::InitializeDistanceOrSimilarityTrampoline,
+    &PEGTransformerFactory::FinalizeDistanceOrSimilarityTrampoline};
+static const TransformFrameOps NEAREST_DISTANCE_OPS = {"NearestDistance",
+                                                       &PEGTransformerFactory::InitializeNearestDistanceTrampoline,
+                                                       &PEGTransformerFactory::FinalizeNearestDistanceTrampoline};
+static const TransformFrameOps NEAREST_SIMILARITY_OPS = {"NearestSimilarity",
+                                                         &PEGTransformerFactory::InitializeNearestSimilarityTrampoline,
+                                                         &PEGTransformerFactory::FinalizeNearestSimilarityTrampoline};
 static const TransformFrameOps REGULAR_JOIN_CLAUSE_OPS = {"RegularJoinClause",
                                                           &PEGTransformerFactory::InitializeRegularJoinClauseTrampoline,
                                                           &PEGTransformerFactory::FinalizeRegularJoinClauseTrampoline};
@@ -3477,6 +3540,12 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ExtractIdentifierArgument", &EXTRACT_IDENTIFIER_ARGUMENT_OPS},
 	    {"ExtractStringArgument", &EXTRACT_STRING_ARGUMENT_OPS},
 	    {"ExtractDatePart", &EXTRACT_DATE_PART_OPS},
+	    {"ExternalResourceStatement", &EXTERNAL_RESOURCE_STATEMENT_OPS},
+	    {"CreateExternalResourceStmt", &CREATE_EXTERNAL_RESOURCE_STMT_OPS},
+	    {"RegisterExternalResourceStmt", &REGISTER_EXTERNAL_RESOURCE_STMT_OPS},
+	    {"DestroyExternalResourceStmt", &DESTROY_EXTERNAL_RESOURCE_STMT_OPS},
+	    {"ShowExternalResourcesStmt", &SHOW_EXTERNAL_RESOURCES_STMT_OPS},
+	    {"ShowAllModifier", &SHOW_ALL_MODIFIER_OPS},
 	    {"InsertStatement", &INSERT_STATEMENT_OPS},
 	    {"OrAction", &OR_ACTION_OPS},
 	    {"InsertOrReplace", &INSERT_OR_REPLACE_OPS},
@@ -3641,6 +3710,21 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"VersionAtUnit", &VERSION_AT_UNIT_OPS},
 	    {"TimestampAtUnit", &TIMESTAMP_AT_UNIT_OPS},
 	    {"JoinClause", &JOIN_CLAUSE_OPS},
+	    {"NearestJoinClause", &NEAREST_JOIN_CLAUSE_OPS},
+	    {"NearestJoinAliased", &NEAREST_JOIN_ALIASED_OPS},
+	    {"NearestJoinBare", &NEAREST_JOIN_BARE_OPS},
+	    {"NearestBareTableRef", &NEAREST_BARE_TABLE_REF_OPS},
+	    {"NearestValuesRef", &NEAREST_VALUES_REF_OPS},
+	    {"NearestTableFunction", &NEAREST_TABLE_FUNCTION_OPS},
+	    {"NearestTableSubquery", &NEAREST_TABLE_SUBQUERY_OPS},
+	    {"NearestBaseTableRef", &NEAREST_BASE_TABLE_REF_OPS},
+	    {"NearestParensTableRef", &NEAREST_PARENS_TABLE_REF_OPS},
+	    {"ApproxOrExact", &APPROX_OR_EXACT_OPS},
+	    {"NearestApprox", &NEAREST_APPROX_OPS},
+	    {"NearestExact", &NEAREST_EXACT_OPS},
+	    {"DistanceOrSimilarity", &DISTANCE_OR_SIMILARITY_OPS},
+	    {"NearestDistance", &NEAREST_DISTANCE_OPS},
+	    {"NearestSimilarity", &NEAREST_SIMILARITY_OPS},
 	    {"RegularJoinClause", &REGULAR_JOIN_CLAUSE_OPS},
 	    {"JoinByClause", &JOIN_BY_CLAUSE_OPS},
 	    {"Asof", &ASOF_OPS},
@@ -17937,6 +18021,140 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExtractDatePartT
 	return make_uniq<TypedTransformResult<DatePartSpecifier>>(result);
 }
 
+void PEGTransformerFactory::InitializeExternalResourceStatementTrampoline(PEGTransformer &transformer,
+                                                                          TransformStack &stack,
+                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeExternalResourceStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<SQLStatement>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCreateExternalResourceStmtTrampoline(PEGTransformer &transformer,
+                                                                           TransformStack &stack,
+                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	auto &attach_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (attach_options_opt.HasResult()) {
+		stack.PushFrame(attach_options_opt.GetResult(), ATTACH_OPTIONS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (attach_alias_opt.HasResult()) {
+		stack.PushFrame(attach_alias_opt.GetResult(), ATTACH_ALIAS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCreateExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
+	optional<Identifier> attach_alias {};
+	if (frame.child_results[0]) {
+		attach_alias = frame.TakeResult<Identifier>(0);
+	}
+	optional<vector<GenericCopyOption>> attach_options {};
+	if (frame.child_results[1]) {
+		attach_options = frame.TakeResult<vector<GenericCopyOption>>(1);
+	}
+	auto result = TransformCreateExternalResourceStmt(transformer, string_literal, attach_alias, attach_options);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeRegisterExternalResourceStmtTrampoline(PEGTransformer &transformer,
+                                                                             TransformStack &stack,
+                                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	stack.PushFrame(list_pr.GetChild(6), EXPRESSION_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (attach_alias_opt.HasResult()) {
+		stack.PushFrame(attach_alias_opt.GetResult(), ATTACH_ALIAS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeRegisterExternalResourceStmtTrampoline(
+    PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(3));
+	optional<Identifier> attach_alias {};
+	if (frame.child_results[0]) {
+		attach_alias = frame.TakeResult<Identifier>(0);
+	}
+	auto expression = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result =
+	    TransformRegisterExternalResourceStmt(transformer, string_literal, attach_alias, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer,
+                                                                            TransformStack &stack,
+                                                                            TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(3), COL_ID_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	auto col_id = frame.TakeResult<Identifier>(0);
+	auto result = TransformDestroyExternalResourceStmt(transformer, col_id);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer,
+                                                                          TransformStack &stack,
+                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &show_all_modifier_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (show_all_modifier_opt.HasResult()) {
+		stack.PushFrame(show_all_modifier_opt.GetResult(), SHOW_ALL_MODIFIER_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	optional<bool> show_all_modifier {};
+	if (frame.child_results[0]) {
+		show_all_modifier = frame.TakeResult<bool>(0);
+	}
+	auto result = TransformShowExternalResourcesStmt(transformer, show_all_modifier);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeShowAllModifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeShowAllModifierTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto result = TransformShowAllModifier(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
 void PEGTransformerFactory::InitializeInsertStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                 TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -21380,6 +21598,358 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeJoinClauseTrampo
                                                                                      TransformStackFrame &frame) {
 	auto result = frame.TakeResult<unique_ptr<TableRef>>(0);
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNearestJoinClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNearestJoinClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<TableRef>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNearestJoinAliasedTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(5);
+	stack.PushFrame(list_pr.GetChild(8), EXPRESSION_OPS, TransformFrameResultTarget(frame.frame_index, 4));
+	stack.PushFrame(list_pr.GetChild(7), DISTANCE_OR_SIMILARITY_OPS, TransformFrameResultTarget(frame.frame_index, 3));
+	auto &approx_or_exact_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (approx_or_exact_opt.HasResult()) {
+		stack.PushFrame(approx_or_exact_opt.GetResult(), APPROX_OR_EXACT_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 2));
+	}
+	stack.PushFrame(list_pr.GetChild(2), TABLE_REF_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	auto &join_type_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (join_type_opt.HasResult()) {
+		stack.PushFrame(join_type_opt.GetResult(), JOIN_TYPE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNearestJoinAliasedTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	optional<JoinType> join_type {};
+	if (frame.child_results[0]) {
+		join_type = frame.TakeResult<JoinType>(0);
+	}
+	auto table_ref = frame.TakeResult<unique_ptr<TableRef>>(1);
+	optional<bool> approx_or_exact {};
+	if (frame.child_results[2]) {
+		approx_or_exact = frame.TakeResult<bool>(2);
+	}
+	optional<unique_ptr<ParsedExpression>> number_literal {};
+	auto &number_literal_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (number_literal_opt.HasResult()) {
+		number_literal = TransformNumberLiteral(transformer, number_literal_opt.GetResult());
+	}
+	auto distance_or_similarity = frame.TakeResult<OrderType>(3);
+	auto expression = frame.TakeResult<unique_ptr<ParsedExpression>>(4);
+	auto result = TransformNearestJoinAliased(transformer, join_type, std::move(table_ref), approx_or_exact,
+	                                          std::move(number_literal), distance_or_similarity, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNearestJoinBareTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(5);
+	stack.PushFrame(list_pr.GetChild(8), EXPRESSION_OPS, TransformFrameResultTarget(frame.frame_index, 4));
+	stack.PushFrame(list_pr.GetChild(7), DISTANCE_OR_SIMILARITY_OPS, TransformFrameResultTarget(frame.frame_index, 3));
+	auto &approx_or_exact_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (approx_or_exact_opt.HasResult()) {
+		stack.PushFrame(approx_or_exact_opt.GetResult(), APPROX_OR_EXACT_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 2));
+	}
+	stack.PushFrame(list_pr.GetChild(2), NEAREST_BARE_TABLE_REF_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	auto &join_type_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (join_type_opt.HasResult()) {
+		stack.PushFrame(join_type_opt.GetResult(), JOIN_TYPE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNearestJoinBareTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	optional<JoinType> join_type {};
+	if (frame.child_results[0]) {
+		join_type = frame.TakeResult<JoinType>(0);
+	}
+	auto nearest_bare_table_ref = frame.TakeResult<unique_ptr<TableRef>>(1);
+	optional<bool> approx_or_exact {};
+	if (frame.child_results[2]) {
+		approx_or_exact = frame.TakeResult<bool>(2);
+	}
+	optional<unique_ptr<ParsedExpression>> number_literal {};
+	auto &number_literal_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (number_literal_opt.HasResult()) {
+		number_literal = TransformNumberLiteral(transformer, number_literal_opt.GetResult());
+	}
+	auto distance_or_similarity = frame.TakeResult<OrderType>(3);
+	auto expression = frame.TakeResult<unique_ptr<ParsedExpression>>(4);
+	auto result = TransformNearestJoinBare(transformer, join_type, std::move(nearest_bare_table_ref), approx_or_exact,
+	                                       std::move(number_literal), distance_or_similarity, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNearestBareTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNearestBareTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<TableRef>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNearestValuesRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), VALUES_CLAUSE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNearestValuesRefTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto values_clause = frame.TakeResult<unique_ptr<SelectStatement>>(0);
+	auto result = TransformNearestValuesRef(transformer, std::move(values_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNearestTableFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(4);
+	auto &with_ordinality_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (with_ordinality_opt.HasResult()) {
+		stack.PushFrame(with_ordinality_opt.GetResult(), WITH_ORDINALITY_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 3));
+	}
+	stack.PushFrame(list_pr.GetChild(2), TABLE_FUNCTION_ARGUMENTS_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 2));
+	stack.PushFrame(list_pr.GetChild(1), QUALIFIED_TABLE_FUNCTION_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 1));
+	auto &lateral_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (lateral_opt.HasResult()) {
+		stack.PushFrame(lateral_opt.GetResult(), LATERAL_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNearestTableFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	optional<bool> lateral {};
+	if (frame.child_results[0]) {
+		lateral = frame.TakeResult<bool>(0);
+	}
+	auto qualified_table_function = frame.TakeResult<QualifiedName>(1);
+	auto table_function_arguments = frame.TakeResult<vector<FunctionArgument>>(2);
+	optional<bool> with_ordinality {};
+	if (frame.child_results[3]) {
+		with_ordinality = frame.TakeResult<bool>(3);
+	}
+	auto result = TransformNearestTableFunction(transformer, lateral, qualified_table_function,
+	                                            std::move(table_function_arguments), with_ordinality);
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNearestTableSubqueryTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	stack.PushFrame(list_pr.GetChild(1), SUBQUERY_REFERENCE_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	auto &lateral_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (lateral_opt.HasResult()) {
+		stack.PushFrame(lateral_opt.GetResult(), LATERAL_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNearestTableSubqueryTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	optional<bool> lateral {};
+	if (frame.child_results[0]) {
+		lateral = frame.TakeResult<bool>(0);
+	}
+	auto subquery_reference = frame.TakeResult<unique_ptr<TableRef>>(1);
+	auto result = TransformNearestTableSubquery(transformer, lateral, std::move(subquery_reference));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNearestBaseTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(3);
+	auto &sample_clause_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (sample_clause_opt.HasResult()) {
+		stack.PushFrame(sample_clause_opt.GetResult(), SAMPLE_CLAUSE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 2));
+	}
+	auto &at_clause_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (at_clause_opt.HasResult()) {
+		stack.PushFrame(at_clause_opt.GetResult(), AT_CLAUSE_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	stack.PushFrame(list_pr.GetChild(0), BASE_TABLE_NAME_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNearestBaseTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto base_table_name = frame.TakeResult<unique_ptr<BaseTableRef>>(0);
+	optional<unique_ptr<AtClause>> at_clause {};
+	if (frame.child_results[1]) {
+		at_clause = frame.TakeResult<unique_ptr<AtClause>>(1);
+	}
+	optional<unique_ptr<SampleOptions>> sample_clause {};
+	if (frame.child_results[2]) {
+		sample_clause = frame.TakeResult<unique_ptr<SampleOptions>>(2);
+	}
+	auto result = TransformNearestBaseTableRef(transformer, std::move(base_table_name), std::move(at_clause),
+	                                           std::move(sample_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNearestParensTableRefTrampoline(PEGTransformer &transformer,
+                                                                      TransformStack &stack,
+                                                                      TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	auto &sample_clause_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (sample_clause_opt.HasResult()) {
+		stack.PushFrame(sample_clause_opt.GetResult(), SAMPLE_CLAUSE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	stack.PushFrame(ExtractResultFromParens(list_pr.GetChild(0)), TABLE_REF_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNearestParensTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto table_ref = frame.TakeResult<unique_ptr<TableRef>>(0);
+	optional<unique_ptr<SampleOptions>> sample_clause {};
+	if (frame.child_results[1]) {
+		sample_clause = frame.TakeResult<unique_ptr<SampleOptions>>(1);
+	}
+	auto result = TransformNearestParensTableRef(transformer, std::move(table_ref), std::move(sample_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeApproxOrExactTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeApproxOrExactTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = frame.TakeResult<bool>(0);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeNearestApproxTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNearestApproxTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = TransformNearestApprox(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeNearestExactTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNearestExactTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = TransformNearestExact(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeDistanceOrSimilarityTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDistanceOrSimilarityTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto result = frame.TakeResult<OrderType>(0);
+	return make_uniq<TypedTransformResult<OrderType>>(result);
+}
+
+void PEGTransformerFactory::InitializeNearestDistanceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNearestDistanceTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto result = TransformNearestDistance(transformer);
+	return make_uniq<TypedTransformResult<OrderType>>(result);
+}
+
+void PEGTransformerFactory::InitializeNearestSimilarityTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNearestSimilarityTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto result = TransformNearestSimilarity(transformer);
+	return make_uniq<TypedTransformResult<OrderType>>(result);
 }
 
 void PEGTransformerFactory::InitializeRegularJoinClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,

@@ -38,7 +38,7 @@ namespace duckdb {
 
 ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, PhysicalType target,
                                                        optional_ptr<CastParameters> parameters) {
-	optional_idx query_location;
+	QueryLocation query_location;
 	if (parameters) {
 		query_location = parameters->query_location;
 		if (parameters->cast_source && parameters->cast_target) {
@@ -1817,7 +1817,7 @@ template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
 	// Pass the query location of the cast source if available.
 	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict,
-	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : optional_idx());
+	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : QueryLocation());
 }
 
 //===--------------------------------------------------------------------===//

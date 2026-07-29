@@ -404,9 +404,14 @@ jobs:
     - name: Install clangd-tidy
       run: python3 scripts/ci/retry.py -- make install-clangd-tidy
 
-    - name: Tidy Check Diff
-      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
-      run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
+    - name: Tidy Check (clangd)
+      run: |
+        mkdir -p ~/.config/clangd
+        cat > ~/.config/clangd/config.yaml <<'EOF'
+        Diagnostics:
+          UnusedIncludes: None
+        EOF
+        make tidy-check-clangd 'CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*'
 
     - name: Upload clangd-tidy logs
       if: ${{ failure() }}
@@ -683,7 +688,7 @@ jobs:
             python3.12   \
             perl-IPC-Cmd
           git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\"
+          make -C \"$PWD\" CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
         "
 
     - name: CLI check
@@ -819,7 +824,7 @@ jobs:
             python3 \
             samurai
           git config --global --add safe.directory \"$PWD\"
-          make -C \"$PWD\"
+          make -C \"$PWD\" CMAKE_VARS_BUILD=-DGIT_COMMIT_HASH=${{ needs.prepare.outputs.git_sha }}
         "
 
     - name: Deploy

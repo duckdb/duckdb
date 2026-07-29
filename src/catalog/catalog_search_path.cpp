@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -29,7 +30,7 @@ string CatalogSearchEntry::WriteOptionallyQuoted(const Identifier &input) {
 	auto &name = input.GetIdentifierName();
 	for (idx_t i = 0; i < name.size(); i++) {
 		if (name[i] == '.' || name[i] == ',' || name[i] == '"') {
-			return "\"" + StringUtil::Replace(name, "\"", "\"\"") + "\"";
+			return SQLQuotedIdentifier::ToString(name);
 		}
 	}
 	return name;

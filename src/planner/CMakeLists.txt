@@ -18,6 +18,7 @@ add_library_unity(
   expression.cpp
   table_binding.cpp
   expression_binder.cpp
+  expression_nullability.cpp
   joinside.cpp
   logical_operator.cpp
   binder.cpp

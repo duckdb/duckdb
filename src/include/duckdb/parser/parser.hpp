@@ -54,7 +54,7 @@ public:
 	//! separator-only run (no statement). Throws ParserException on syntax error.
 	//!
 	//! Does NOT populate `stmt->query` — the caller owns the source string and can slice it
-	//! using `stmt->stmt_location` / `stmt->stmt_length` if needed.
+	//! using `stmt->stmt_location` if needed.
 	DUCKDB_API unique_ptr<SQLStatement> ParseTopLevelStatement(vector<MatcherToken> &tokens, idx_t &token_cursor);
 
 	//! Run the `parse_function` extensions over the tail of `query` starting at `token_cursor`,

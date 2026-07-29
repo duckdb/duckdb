@@ -114,9 +114,10 @@ public:
 			// compute and verify the checksum
 			auto computed_checksum = Checksum(buffer.get(), size);
 			if (stored_checksum != computed_checksum) {
-				throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
-				                  "stored checksum %llu",
-				                  offset, computed_checksum, stored_checksum);
+				throw DataCorruptionException(
+				    "Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+				    "stored checksum %llu",
+				    offset, computed_checksum, stored_checksum);
 			}
 
 			return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
@@ -191,9 +192,10 @@ public:
 			// compute and verify the checksum
 			auto computed_checksum = Checksum(out_buffer.get(), size);
 			if (stored_checksum != computed_checksum) {
-				throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
-				                  "stored checksum %llu",
-				                  offset, computed_checksum, stored_checksum);
+				throw DataCorruptionException(
+				    "Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+				    "stored checksum %llu",
+				    offset, computed_checksum, stored_checksum);
 			}
 
 			return WriteAheadLogDeserializer(state_p, std::move(out_buffer), size, deserialize_only);
@@ -682,7 +684,7 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	bool is_set = false;
 	deserializer.ReadOptionalList(102, "db_identifier", [&](Deserializer::List &list, idx_t i) {
 		if (i >= MainHeader::DB_IDENTIFIER_LEN) {
-			throw IOException("Corrupt file - database identifier in header out of range");
+			throw DataCorruptionException("Corrupt file - database identifier in header out of range");
 		}
 		db_identifier[i] = list.ReadElement<uint8_t>();
 		is_set = true;
