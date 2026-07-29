@@ -135,9 +135,8 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 
 	//! Iterate over all the children in the Object
 	for (const auto &entry : entries) {
-		auto key_string = GetString(entry.key);
-
 		if (WRITE_DATA) {
+			auto key_string = GetString(entry.key);
 			auto keys_index = start_key_index++;
 			auto dictionary_index = result.GetOrCreateIndex(key_string);
 
