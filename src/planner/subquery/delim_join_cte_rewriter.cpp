@@ -2177,8 +2177,8 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 		auto selected_candidate =
 		    dedup_ref_count > 0 ? DuplicateEliminatedDomainCandidateFinder::FindBest(binder.context, join) : nullptr;
 		if (selected_candidate &&
-		    DuplicateEliminatedAggregateRewriter::TryRewrite(
-		        binder, plan, dedup_cte_index, rewrite_root, *selected_candidate, output_replacements)) {
+		    DuplicateEliminatedAggregateRewriter::TryRewrite(binder, plan, dedup_cte_index, rewrite_root,
+		                                                     *selected_candidate, output_replacements)) {
 			return output_replacements;
 		}
 		if (selected_candidate) {

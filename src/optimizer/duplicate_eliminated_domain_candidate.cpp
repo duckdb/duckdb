@@ -430,14 +430,13 @@ DuplicateEliminatedDomainCandidateFinder::FindBest(ClientContext &context, Logic
 	if (candidates.empty()) {
 		return nullptr;
 	}
-	auto selected_index =
-	    FindBestCandidate(context, *join.children[0], join.duplicate_eliminated_columns, candidates);
+	auto selected_index = FindBestCandidate(context, *join.children[0], join.duplicate_eliminated_columns, candidates);
 	if (!selected_index.IsValid()) {
 		return nullptr;
 	}
 	auto &selected = candidates[selected_index.GetIndex()];
-	return make_uniq<DuplicateEliminatedDomainCandidate>(
-	    selected.source.get(), std::move(selected.key_indices), selected.joins_above);
+	return make_uniq<DuplicateEliminatedDomainCandidate>(selected.source.get(), std::move(selected.key_indices),
+	                                                     selected.joins_above);
 }
 
 unique_ptr<DuplicateEliminatedDomainCandidate>

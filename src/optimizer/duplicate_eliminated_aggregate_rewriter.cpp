@@ -12,6 +12,7 @@
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -63,14 +64,13 @@ struct AggregateDomainPreservation {
 };
 
 struct AggregateDomainUse {
-	AggregateDomainUse(LogicalAggregate &aggregate_p, LogicalComparisonJoin &domain_join_p,
-	                   LogicalCTERef &domain_ref_p, idx_t domain_child_p,
-	                   vector<reference<LogicalOperator>> above_aggregate_p,
+	AggregateDomainUse(LogicalAggregate &aggregate_p, LogicalComparisonJoin &domain_join_p, LogicalCTERef &domain_ref_p,
+	                   idx_t domain_child_p, vector<reference<LogicalOperator>> above_aggregate_p,
 	                   vector<reference<LogicalOperator>> below_aggregate_p,
 	                   unique_ptr<AggregateDomainPreservation> preservation_p)
 	    : aggregate(aggregate_p), domain_join(domain_join_p), domain_ref(domain_ref_p), domain_child(domain_child_p),
-	      above_aggregate(std::move(above_aggregate_p)),
-	      below_aggregate(std::move(below_aggregate_p)), preservation(std::move(preservation_p)) {
+	      above_aggregate(std::move(above_aggregate_p)), below_aggregate(std::move(below_aggregate_p)),
+	      preservation(std::move(preservation_p)) {
 	}
 
 	reference<LogicalAggregate> aggregate;
@@ -84,8 +84,7 @@ struct AggregateDomainUse {
 
 static idx_t CountDomainCTERefs(LogicalOperator &op, TableIndex cte_index) {
 	idx_t count = 0;
-	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF &&
-	    op.Cast<LogicalCTERef>().cte_index == cte_index) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == cte_index) {
 		count++;
 	}
 	for (auto &child : op.children) {
@@ -113,11 +112,11 @@ static bool IsGroupingOnlyAggregate(LogicalOperator &op) {
 	       aggregate.grouping_sets.empty();
 }
 
-static unique_ptr<AggregateDomainUse>
-FindDomainJoin(unique_ptr<LogicalOperator> &op, LogicalAggregate &aggregate, TableIndex cte_index,
-               const vector<reference<LogicalOperator>> &above_aggregate,
-               vector<reference<LogicalOperator>> below_aggregate,
-               unique_ptr<AggregateDomainPreservation> preservation) {
+static unique_ptr<AggregateDomainUse> FindDomainJoin(unique_ptr<LogicalOperator> &op, LogicalAggregate &aggregate,
+                                                     TableIndex cte_index,
+                                                     const vector<reference<LogicalOperator>> &above_aggregate,
+                                                     vector<reference<LogicalOperator>> below_aggregate,
+                                                     unique_ptr<AggregateDomainPreservation> preservation) {
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN && op->children.size() == 2) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		if ((join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI) || join.HasProjectionMap()) {
@@ -141,16 +140,15 @@ FindDomainJoin(unique_ptr<LogicalOperator> &op, LogicalAggregate &aggregate, Tab
 			return nullptr;
 		}
 		auto &cteref = op->children[domain_child.GetIndex()]->Cast<LogicalCTERef>();
-		return make_uniq<AggregateDomainUse>(aggregate, join, cteref, domain_child.GetIndex(),
-		                                     above_aggregate, std::move(below_aggregate),
-		                                     std::move(preservation));
+		return make_uniq<AggregateDomainUse>(aggregate, join, cteref, domain_child.GetIndex(), above_aggregate,
+		                                     std::move(below_aggregate), std::move(preservation));
 	}
 	if (!IsDirectPathOperator(*op) && !IsGroupingOnlyAggregate(*op)) {
 		return nullptr;
 	}
 	below_aggregate.push_back(*op);
-	return FindDomainJoin(op->children[0], aggregate, cte_index, above_aggregate,
-	                      std::move(below_aggregate), std::move(preservation));
+	return FindDomainJoin(op->children[0], aggregate, cte_index, above_aggregate, std::move(below_aggregate),
+	                      std::move(preservation));
 }
 
 static unique_ptr<AggregateDomainUse>
@@ -168,11 +166,9 @@ FindAggregateDomainUse(unique_ptr<LogicalOperator> &op, TableIndex cte_index,
 				return nullptr;
 			}
 		}
-		return FindDomainJoin(op->children[0], aggregate, cte_index, above_aggregate, {},
-		                      std::move(preservation));
+		return FindDomainJoin(op->children[0], aggregate, cte_index, above_aggregate, {}, std::move(preservation));
 	}
-	if (!preservation && op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-	    op->children.size() == 2) {
+	if (!preservation && op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN && op->children.size() == 2) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		if (join.join_type == JoinType::LEFT && !join.HasProjectionMap()) {
 			optional_idx domain_child;
@@ -188,10 +184,10 @@ FindAggregateDomainUse(unique_ptr<LogicalOperator> &op, TableIndex cte_index,
 			}
 			if (domain_child.IsValid() && domain_child.GetIndex() == 0) {
 				auto domain_idx = domain_child.GetIndex();
-				auto preserved_domain = make_uniq<AggregateDomainPreservation>(
-				    op, join, op->children[domain_idx]->Cast<LogicalCTERef>());
-				return FindAggregateDomainUse(op->children[1 - domain_idx], cte_index,
-				                              std::move(above_aggregate), std::move(preserved_domain));
+				auto preserved_domain =
+				    make_uniq<AggregateDomainPreservation>(op, join, op->children[domain_idx]->Cast<LogicalCTERef>());
+				return FindAggregateDomainUse(op->children[1 - domain_idx], cte_index, std::move(above_aggregate),
+				                              std::move(preserved_domain));
 			}
 		}
 	}
@@ -199,8 +195,7 @@ FindAggregateDomainUse(unique_ptr<LogicalOperator> &op, TableIndex cte_index,
 		return nullptr;
 	}
 	above_aggregate.push_back(*op);
-	return FindAggregateDomainUse(op->children[0], cte_index, std::move(above_aggregate),
-	                              std::move(preservation));
+	return FindAggregateDomainUse(op->children[0], cte_index, std::move(above_aggregate), std::move(preservation));
 }
 
 static bool TraceBindingThroughProjection(LogicalProjection &projection, ColumnBinding &binding) {
@@ -277,8 +272,8 @@ static bool AggregateGroupsMatchDomain(const AggregateDomainUse &use) {
 	return covered.size() == aggregate.groups.size();
 }
 
-static bool TraceCandidateBindingToGet(LogicalOperator &op, ColumnBinding binding,
-                                       optional_ptr<LogicalGet> &get, optional_idx &get_column) {
+static bool TraceCandidateBindingToGet(LogicalOperator &op, ColumnBinding binding, optional_ptr<LogicalGet> &get,
+                                       optional_idx &get_column) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto bindings = op.GetColumnBindings();
@@ -320,8 +315,8 @@ struct ScanIdentityDescriptor {
 	vector<TableColumn> columns;
 };
 
-static unique_ptr<ScanIdentityDescriptor>
-FindEligibleScanIdentity(ClientContext &context, DuplicateEliminatedDomainCandidate &candidate) {
+static unique_ptr<ScanIdentityDescriptor> FindEligibleScanIdentity(ClientContext &context,
+                                                                   DuplicateEliminatedDomainCandidate &candidate) {
 	auto source_bindings = candidate.source.get()->GetColumnBindings();
 	optional_ptr<LogicalGet> candidate_get;
 	vector<idx_t> get_columns;
@@ -381,8 +376,7 @@ static bool AddScanIdentity(LogicalOperator &op, const ScanIdentityDescriptor &i
 		if (&get != &identity.get.get()) {
 			return false;
 		}
-		auto row_id_indices =
-		    LateMaterializationHelper::GetOrInsertRowIds(get, identity.column_ids, identity.columns);
+		auto row_id_indices = LateMaterializationHelper::GetOrInsertRowIds(get, identity.column_ids, identity.columns);
 		auto bindings = get.GetColumnBindings();
 		for (auto row_id_index : row_id_indices) {
 			identities.emplace_back(bindings[row_id_index.GetIndex()], get.types[row_id_index.GetIndex()]);
@@ -405,8 +399,7 @@ static bool AddScanIdentity(LogicalOperator &op, const ScanIdentityDescriptor &i
 		projected.reserve(identities.size());
 		for (auto &identity : identities) {
 			auto output_idx = ColumnBinding::PushExpression(
-			    projection.expressions,
-			    make_uniq<BoundColumnRefExpression>(identity.type, identity.binding));
+			    projection.expressions, make_uniq<BoundColumnRefExpression>(identity.type, identity.binding));
 			projected.emplace_back(ColumnBinding(projection.table_index, output_idx), identity.type);
 		}
 		identities = std::move(projected);
@@ -439,8 +432,7 @@ static bool IsDirectScanSource(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
 		return true;
 	}
-	if ((op.type != LogicalOperatorType::LOGICAL_FILTER &&
-	     op.type != LogicalOperatorType::LOGICAL_PROJECTION) ||
+	if ((op.type != LogicalOperatorType::LOGICAL_FILTER && op.type != LogicalOperatorType::LOGICAL_PROJECTION) ||
 	    op.children.size() != 1) {
 		return false;
 	}
@@ -454,8 +446,7 @@ static bool FindDirectSourcePath(unique_ptr<LogicalOperator> &root, const Logica
 	}
 	for (idx_t path_idx = 0; path_idx < path.size(); path_idx++) {
 		if (IsDirectScanSource(*path[path_idx].get())) {
-			path.erase(path.begin() + NumericCast<operator_location_path_t::difference_type>(path_idx + 1),
-			           path.end());
+			path.erase(path.begin() + NumericCast<operator_location_path_t::difference_type>(path_idx + 1), path.end());
 			return true;
 		}
 	}
@@ -482,8 +473,7 @@ static bool ConditionReferencesBindings(const JoinCondition &condition, const co
 	       ExpressionReferencesBindings(condition.GetRHS(), bindings);
 }
 
-static bool CanDetachCandidate(const operator_location_path_t &path,
-                               const column_binding_set_t &source_bindings) {
+static bool CanDetachCandidate(const operator_location_path_t &path, const column_binding_set_t &source_bindings) {
 	if (path.empty()) {
 		return false;
 	}
@@ -547,15 +537,13 @@ static void DetachCandidate(const operator_location_path_t &path, idx_t path_idx
 		}
 		join.conditions = std::move(retained);
 		if (join.conditions.empty()) {
-			auto cross_product =
-			    make_uniq<LogicalCrossProduct>(std::move(op->children[0]), std::move(op->children[1]));
+			auto cross_product = make_uniq<LogicalCrossProduct>(std::move(op->children[0]), std::move(op->children[1]));
 			op = std::move(cross_product);
 		}
 	}
 }
 
-static bool GetAlignmentConditions(LogicalComparisonJoin &join,
-                                   vector<idx_t> &alignment_condition_indices) {
+static bool GetAlignmentConditions(LogicalComparisonJoin &join, vector<idx_t> &alignment_condition_indices) {
 	auto rhs_bindings = join.children[1]->GetColumnBindings();
 	unordered_set<idx_t> used_conditions;
 	for (auto &key : join.duplicate_eliminated_columns) {
@@ -577,10 +565,10 @@ static bool GetAlignmentConditions(LogicalComparisonJoin &join,
 			if (!GetDomainBinding(condition.GetLHS(), left) || !GetDomainBinding(condition.GetRHS(), right)) {
 				continue;
 			}
-			bool left_matches = left == key_binding &&
-			                    std::find(rhs_bindings.begin(), rhs_bindings.end(), right) != rhs_bindings.end();
-			bool right_matches = right == key_binding &&
-			                     std::find(rhs_bindings.begin(), rhs_bindings.end(), left) != rhs_bindings.end();
+			bool left_matches =
+			    left == key_binding && std::find(rhs_bindings.begin(), rhs_bindings.end(), right) != rhs_bindings.end();
+			bool right_matches =
+			    right == key_binding && std::find(rhs_bindings.begin(), rhs_bindings.end(), left) != rhs_bindings.end();
 			if (left_matches || right_matches) {
 				match = condition_idx;
 				break;
@@ -604,8 +592,7 @@ static void PropagateBindings(vector<reference<LogicalOperator>> &path, vector<T
 			grouped.reserve(bindings.size());
 			for (auto &binding : bindings) {
 				auto output_idx = ColumnBinding::PushExpression(
-				    aggregate.groups,
-				    make_uniq<BoundColumnRefExpression>(binding.type, binding.binding));
+				    aggregate.groups, make_uniq<BoundColumnRefExpression>(binding.type, binding.binding));
 				grouped.emplace_back(ColumnBinding(aggregate.group_index, output_idx), binding.type);
 			}
 			bindings = std::move(grouped);
@@ -621,8 +608,7 @@ static void PropagateBindings(vector<reference<LogicalOperator>> &path, vector<T
 		projected.reserve(bindings.size());
 		for (auto &binding : bindings) {
 			auto output_idx = ColumnBinding::PushExpression(
-			    projection.expressions,
-			    make_uniq<BoundColumnRefExpression>(binding.type, binding.binding));
+			    projection.expressions, make_uniq<BoundColumnRefExpression>(binding.type, binding.binding));
 			projected.emplace_back(ColumnBinding(projection.table_index, output_idx), binding.type);
 		}
 		bindings = std::move(projected);
@@ -630,16 +616,14 @@ static void PropagateBindings(vector<reference<LogicalOperator>> &path, vector<T
 	}
 }
 
-static TrackedBinding AddRealRowMarker(Binder &binder, unique_ptr<LogicalOperator> &rhs_root,
-                                       AggregateDomainUse &use) {
+static TrackedBinding AddRealRowMarker(Binder &binder, unique_ptr<LogicalOperator> &rhs_root, AggregateDomainUse &use) {
 	auto &domain_join = use.domain_join.get();
 	auto old_bindings = domain_join.children[0]->GetColumnBindings();
 	auto old_types = domain_join.children[0]->types;
 	vector<unique_ptr<Expression>> expressions;
 	expressions.reserve(old_bindings.size() + 1);
 	for (idx_t binding_idx = 0; binding_idx < old_bindings.size(); binding_idx++) {
-		expressions.push_back(
-		    make_uniq<BoundColumnRefExpression>(old_types[binding_idx], old_bindings[binding_idx]));
+		expressions.push_back(make_uniq<BoundColumnRefExpression>(old_types[binding_idx], old_bindings[binding_idx]));
 	}
 	expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
 	auto projection_index = binder.GenerateTableIndex();
@@ -668,16 +652,14 @@ static void AddAggregateFilter(LogicalAggregate &aggregate, const TrackedBinding
 		auto marker_ref = make_uniq<BoundColumnRefExpression>(marker.type, marker.binding);
 		if (bound_aggregate.GetFilter()) {
 			bound_aggregate.GetFilterMutable() = make_uniq<BoundConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, std::move(bound_aggregate.GetFilterMutable()),
-			    std::move(marker_ref));
+			    ExpressionType::CONJUNCTION_AND, std::move(bound_aggregate.GetFilterMutable()), std::move(marker_ref));
 		} else {
 			bound_aggregate.GetFilterMutable() = std::move(marker_ref);
 		}
 	}
 }
 
-static bool GetAggregateDomainPreservationReplacements(AggregateDomainUse &use,
-                                                       BindingReplacementGraph &replacements) {
+static bool GetAggregateDomainPreservationReplacements(AggregateDomainUse &use, BindingReplacementGraph &replacements) {
 	if (!use.preservation) {
 		return true;
 	}
@@ -740,12 +722,10 @@ static void RemoveAggregateDomainPreservation(unique_ptr<LogicalOperator> &rhs_r
 
 class DirectAggregateRewrite {
 public:
-	DirectAggregateRewrite(Binder &binder_p, unique_ptr<LogicalOperator> &join_op_p,
-	                       TableIndex domain_cte_index_p, LogicalOperator &rewrite_root_p,
-	                       DuplicateEliminatedDomainCandidate &selected_candidate_p)
+	DirectAggregateRewrite(Binder &binder_p, unique_ptr<LogicalOperator> &join_op_p, TableIndex domain_cte_index_p,
+	                       LogicalOperator &rewrite_root_p, DuplicateEliminatedDomainCandidate &selected_candidate_p)
 	    : binder(binder_p), join_op(join_op_p), join(join_op_p->Cast<LogicalComparisonJoin>()),
-	      domain_cte_index(domain_cte_index_p), rewrite_root(rewrite_root_p),
-	      selected_candidate(selected_candidate_p) {
+	      domain_cte_index(domain_cte_index_p), rewrite_root(rewrite_root_p), selected_candidate(selected_candidate_p) {
 	}
 
 	bool TryRewrite(BindingReplacementGraph &output_replacements) {
@@ -780,9 +760,8 @@ private:
 			return false;
 		}
 		auto &direct_source_location = source_path.back().get();
-		source_candidate =
-		    DuplicateEliminatedDomainCandidateFinder::CreateForSource(join, direct_source_location,
-		                                                              selected_candidate.joins_above);
+		source_candidate = DuplicateEliminatedDomainCandidateFinder::CreateForSource(join, direct_source_location,
+		                                                                             selected_candidate.joins_above);
 		if (!source_candidate) {
 			return false;
 		}
@@ -809,127 +788,127 @@ private:
 	}
 
 	void Apply(BindingReplacementGraph &output_replacements) {
-	unique_ptr<LogicalOperator> source;
-	vector<JoinCondition> boundary_conditions;
-	DetachCandidate(source_path, 0, source_binding_set, source, boundary_conditions);
-	if (!source || !join.children[0] || boundary_conditions.empty()) {
-		throw InternalException("Validated duplicate-eliminated aggregate source could not be detached");
-	}
-
-	vector<TrackedBinding> identities;
-	if (!AddScanIdentity(*source, *scan_identity, identities)) {
-		throw InternalException("Validated duplicate-eliminated aggregate source lost its scan identity");
-	}
-	source->ResolveOperatorTypes();
-	auto new_source_bindings = source->GetColumnBindings();
-	vector<TrackedBinding> source_columns;
-	source_columns.reserve(source_bindings.size());
-	for (idx_t binding_idx = 0; binding_idx < source_bindings.size(); binding_idx++) {
-		source_columns.emplace_back(new_source_bindings[binding_idx], source_types[binding_idx]);
-	}
-
-	auto domain_bindings = domain_use->domain_ref.get().GetColumnBindings();
-	BindingReplacementGraph domain_replacements;
-	for (idx_t key_idx = 0; key_idx < source_candidate->key_indices.size(); key_idx++) {
-		auto source_idx = source_candidate->key_indices[key_idx];
-		domain_replacements.Add(domain_bindings[key_idx], source_columns[source_idx].binding);
-	}
-	domain_use->domain_join.get().children[domain_use->domain_child] = std::move(source);
-	if (domain_use->domain_child == 0) {
-		std::swap(domain_use->domain_join.get().children[0], domain_use->domain_join.get().children[1]);
-		for (auto &condition : domain_use->domain_join.get().conditions) {
-			condition.Swap();
+		unique_ptr<LogicalOperator> source;
+		vector<JoinCondition> boundary_conditions;
+		DetachCandidate(source_path, 0, source_binding_set, source, boundary_conditions);
+		if (!source || !join.children[0] || boundary_conditions.empty()) {
+			throw InternalException("Validated duplicate-eliminated aggregate source could not be detached");
 		}
-	}
-	domain_use->domain_join.get().join_type = drop_empty_groups ? JoinType::INNER : JoinType::RIGHT;
 
-	CorrelatedColumnBindingReplacer domain_replacer;
-	domain_replacements.AddTo(domain_replacer);
-	domain_replacer.stop_operator = *domain_use->domain_join.get().children[1];
-	domain_replacer.VisitOperator(*join.children[1]);
+		vector<TrackedBinding> identities;
+		if (!AddScanIdentity(*source, *scan_identity, identities)) {
+			throw InternalException("Validated duplicate-eliminated aggregate source lost its scan identity");
+		}
+		source->ResolveOperatorTypes();
+		auto new_source_bindings = source->GetColumnBindings();
+		vector<TrackedBinding> source_columns;
+		source_columns.reserve(source_bindings.size());
+		for (idx_t binding_idx = 0; binding_idx < source_bindings.size(); binding_idx++) {
+			source_columns.emplace_back(new_source_bindings[binding_idx], source_types[binding_idx]);
+		}
 
-	vector<TrackedBinding> aggregate_marker;
-	if (!drop_empty_groups) {
-		aggregate_marker.push_back(AddRealRowMarker(binder, join.children[1], *domain_use));
-	}
-	domain_use->domain_join.get().ResolveOperatorTypes();
-
-	vector<TrackedBinding> aggregate_source_columns = source_columns;
-	vector<TrackedBinding> aggregate_identities = identities;
-	PropagateBindings(domain_use->below_aggregate, aggregate_source_columns);
-	PropagateBindings(domain_use->below_aggregate, aggregate_identities);
-	if (!drop_empty_groups) {
-		PropagateBindings(domain_use->below_aggregate, aggregate_marker);
-	}
-
-	auto &aggregate = domain_use->aggregate.get();
-	vector<TrackedBinding> output_source_columns;
-	output_source_columns.reserve(aggregate_source_columns.size());
-	for (auto &source_column : aggregate_source_columns) {
-		auto group_idx = ColumnBinding::PushExpression(
-		    aggregate.groups,
-		    make_uniq<BoundColumnRefExpression>(source_column.type, source_column.binding));
-		output_source_columns.emplace_back(ColumnBinding(aggregate.group_index, group_idx), source_column.type);
-	}
-	for (auto &identity : aggregate_identities) {
-		ColumnBinding::PushExpression(
-		    aggregate.groups, make_uniq<BoundColumnRefExpression>(identity.type, identity.binding));
-	}
-	if (!drop_empty_groups) {
-		AddAggregateFilter(aggregate, aggregate_marker[0]);
-	}
-	aggregate.ResolveOperatorTypes();
-
-	RemoveAggregateDomainPreservation(join.children[1], *domain_use, preservation_replacements);
-	PropagateBindings(domain_use->above_aggregate, output_source_columns);
-	join.children[1]->ResolveOperatorTypes();
-	if (CountDomainCTERefs(*join.children[1], domain_cte_index) != 0) {
-		throw InternalException("CTE-free correlated aggregate retained a generated domain reference");
-	}
-	if (!join.right_projection_map.empty()) {
-		auto rhs_bindings = join.children[1]->GetColumnBindings();
-		for (auto &source_column : output_source_columns) {
-			auto entry = std::find(rhs_bindings.begin(), rhs_bindings.end(), source_column.binding);
-			if (entry == rhs_bindings.end()) {
-				throw InternalException("CTE-free correlated aggregate lost a moved payload binding");
-			}
-			auto projection_index = ProjectionIndex(NumericCast<idx_t>(entry - rhs_bindings.begin()));
-			if (std::find(join.right_projection_map.begin(), join.right_projection_map.end(), projection_index) ==
-			    join.right_projection_map.end()) {
-				join.right_projection_map.push_back(projection_index);
+		auto domain_bindings = domain_use->domain_ref.get().GetColumnBindings();
+		BindingReplacementGraph domain_replacements;
+		for (idx_t key_idx = 0; key_idx < source_candidate->key_indices.size(); key_idx++) {
+			auto source_idx = source_candidate->key_indices[key_idx];
+			domain_replacements.Add(domain_bindings[key_idx], source_columns[source_idx].binding);
+		}
+		domain_use->domain_join.get().children[domain_use->domain_child] = std::move(source);
+		if (domain_use->domain_child == 0) {
+			std::swap(domain_use->domain_join.get().children[0], domain_use->domain_join.get().children[1]);
+			for (auto &condition : domain_use->domain_join.get().conditions) {
+				condition.Swap();
 			}
 		}
-	}
+		domain_use->domain_join.get().join_type = drop_empty_groups ? JoinType::INNER : JoinType::RIGHT;
 
-	BindingReplacementGraph source_replacements;
-	for (idx_t binding_idx = 0; binding_idx < source_bindings.size(); binding_idx++) {
-		source_replacements.Add(source_bindings[binding_idx], output_source_columns[binding_idx].binding);
-	}
+		CorrelatedColumnBindingReplacer domain_replacer;
+		domain_replacements.AddTo(domain_replacer);
+		domain_replacer.stop_operator = *domain_use->domain_join.get().children[1];
+		domain_replacer.VisitOperator(*join.children[1]);
 
-	std::sort(alignment_condition_indices.begin(), alignment_condition_indices.end(), std::greater<idx_t>());
-	for (auto condition_idx : alignment_condition_indices) {
-		join.conditions.erase(join.conditions.begin() + NumericCast<vector<JoinCondition>::difference_type>(condition_idx));
-	}
-	for (auto &condition : boundary_conditions) {
-		join.conditions.push_back(std::move(condition));
-	}
-	if (join.conditions.empty()) {
-		throw InternalException("CTE-free correlated aggregate rewrite produced a disconnected payload");
-	}
-	join.join_type = JoinType::INNER;
-	join.duplicate_eliminated_columns.clear();
+		vector<TrackedBinding> aggregate_marker;
+		if (!drop_empty_groups) {
+			aggregate_marker.push_back(AddRealRowMarker(binder, join.children[1], *domain_use));
+		}
+		domain_use->domain_join.get().ResolveOperatorTypes();
 
-	CorrelatedColumnBindingReplacer source_replacer;
-	source_replacements.AddTo(source_replacer);
-	source_replacer.stop_operator = *join.children[1];
-	source_replacer.VisitOperator(rewrite_root);
-	BindingReplacementGraph direct_replacements;
-	direct_replacements.Merge(preservation_replacements);
-	direct_replacements.Merge(source_replacements);
-	join_op->ResolveOperatorTypes();
-	ColumnBindingRewrite::ValidateOutput(old_output_bindings, join_op->GetColumnBindings(), direct_replacements);
-	output_replacements.Merge(preservation_replacements);
-	output_replacements.Merge(source_replacements);
+		vector<TrackedBinding> aggregate_source_columns = source_columns;
+		vector<TrackedBinding> aggregate_identities = identities;
+		PropagateBindings(domain_use->below_aggregate, aggregate_source_columns);
+		PropagateBindings(domain_use->below_aggregate, aggregate_identities);
+		if (!drop_empty_groups) {
+			PropagateBindings(domain_use->below_aggregate, aggregate_marker);
+		}
+
+		auto &aggregate = domain_use->aggregate.get();
+		vector<TrackedBinding> output_source_columns;
+		output_source_columns.reserve(aggregate_source_columns.size());
+		for (auto &source_column : aggregate_source_columns) {
+			auto group_idx = ColumnBinding::PushExpression(
+			    aggregate.groups, make_uniq<BoundColumnRefExpression>(source_column.type, source_column.binding));
+			output_source_columns.emplace_back(ColumnBinding(aggregate.group_index, group_idx), source_column.type);
+		}
+		for (auto &identity : aggregate_identities) {
+			ColumnBinding::PushExpression(aggregate.groups,
+			                              make_uniq<BoundColumnRefExpression>(identity.type, identity.binding));
+		}
+		if (!drop_empty_groups) {
+			AddAggregateFilter(aggregate, aggregate_marker[0]);
+		}
+		aggregate.ResolveOperatorTypes();
+
+		RemoveAggregateDomainPreservation(join.children[1], *domain_use, preservation_replacements);
+		PropagateBindings(domain_use->above_aggregate, output_source_columns);
+		join.children[1]->ResolveOperatorTypes();
+		if (CountDomainCTERefs(*join.children[1], domain_cte_index) != 0) {
+			throw InternalException("CTE-free correlated aggregate retained a generated domain reference");
+		}
+		if (!join.right_projection_map.empty()) {
+			auto rhs_bindings = join.children[1]->GetColumnBindings();
+			for (auto &source_column : output_source_columns) {
+				auto entry = std::find(rhs_bindings.begin(), rhs_bindings.end(), source_column.binding);
+				if (entry == rhs_bindings.end()) {
+					throw InternalException("CTE-free correlated aggregate lost a moved payload binding");
+				}
+				auto projection_index = ProjectionIndex(NumericCast<idx_t>(entry - rhs_bindings.begin()));
+				if (std::find(join.right_projection_map.begin(), join.right_projection_map.end(), projection_index) ==
+				    join.right_projection_map.end()) {
+					join.right_projection_map.push_back(projection_index);
+				}
+			}
+		}
+
+		BindingReplacementGraph source_replacements;
+		for (idx_t binding_idx = 0; binding_idx < source_bindings.size(); binding_idx++) {
+			source_replacements.Add(source_bindings[binding_idx], output_source_columns[binding_idx].binding);
+		}
+
+		std::sort(alignment_condition_indices.begin(), alignment_condition_indices.end(), std::greater<idx_t>());
+		for (auto condition_idx : alignment_condition_indices) {
+			join.conditions.erase(join.conditions.begin() +
+			                      NumericCast<vector<JoinCondition>::difference_type>(condition_idx));
+		}
+		for (auto &condition : boundary_conditions) {
+			join.conditions.push_back(std::move(condition));
+		}
+		if (join.conditions.empty()) {
+			throw InternalException("CTE-free correlated aggregate rewrite produced a disconnected payload");
+		}
+		join.join_type = JoinType::INNER;
+		join.duplicate_eliminated_columns.clear();
+
+		CorrelatedColumnBindingReplacer source_replacer;
+		source_replacements.AddTo(source_replacer);
+		source_replacer.stop_operator = *join.children[1];
+		source_replacer.VisitOperator(rewrite_root);
+		BindingReplacementGraph direct_replacements;
+		direct_replacements.Merge(preservation_replacements);
+		direct_replacements.Merge(source_replacements);
+		join_op->ResolveOperatorTypes();
+		ColumnBindingRewrite::ValidateOutput(old_output_bindings, join_op->GetColumnBindings(), direct_replacements);
+		output_replacements.Merge(preservation_replacements);
+		output_replacements.Merge(source_replacements);
 	}
 
 private:
@@ -953,10 +932,10 @@ private:
 	bool drop_empty_groups = false;
 };
 
-bool DuplicateEliminatedAggregateRewriter::TryRewrite(
-    Binder &binder, unique_ptr<LogicalOperator> &join_op, TableIndex domain_cte_index,
-    LogicalOperator &rewrite_root, DuplicateEliminatedDomainCandidate &candidate,
-    BindingReplacementGraph &output_replacements) {
+bool DuplicateEliminatedAggregateRewriter::TryRewrite(Binder &binder, unique_ptr<LogicalOperator> &join_op,
+                                                      TableIndex domain_cte_index, LogicalOperator &rewrite_root,
+                                                      DuplicateEliminatedDomainCandidate &candidate,
+                                                      BindingReplacementGraph &output_replacements) {
 	DirectAggregateRewrite rewrite(binder, join_op, domain_cte_index, rewrite_root, candidate);
 	return rewrite.TryRewrite(output_replacements);
 }
