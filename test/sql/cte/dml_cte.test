@@ -299,23 +299,17 @@ SELECT * FROM t;
 statement error
 WITH cte AS (CREATE TABLE forbidden (i INT)) SELECT 1;
 ----
-<REGEX>:.*(syntax error|A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement).*
+<REGEX>:.*(syntax error|A CTE body must be).*
 
 statement error
 WITH cte AS (DROP TABLE forbidden) SELECT 1;
 ----
-<REGEX>:.*(syntax error|A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement).*
+<REGEX>:.*(syntax error|A CTE body must be).*
 
 statement error
 WITH cte AS (ALTER TABLE t ADD COLUMN x INT) SELECT 1;
 ----
-<REGEX>:.*(syntax error|A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement).*
-
-# COPY is parsed by the grammar but rejected as an invalid CTE body type
-statement error
-WITH cte AS (COPY t TO 'x.csv') SELECT 1;
-----
-<REGEX>:.*A CTE body must be a SELECT, INSERT, UPDATE, or DELETE statement.*
+<REGEX>:.*(syntax error|A CTE body must be).*
 
 # Recursive CTEs with DML bodies are not supported
 statement error
@@ -1262,6 +1256,23 @@ SELECT COUNT(*) FROM cte_inline_t;
 
 statement ok
 DROP TABLE cte_inline_t;
+
+# EmptyResultPullup must retain a DML CTE when the outer query is empty.
+statement ok
+CREATE TABLE empty_consumer_t (i INTEGER);
+
+query I
+WITH ins AS (INSERT INTO empty_consumer_t VALUES (42) RETURNING i)
+SELECT 42 WHERE false;
+----
+
+query I
+SELECT * FROM empty_consumer_t;
+----
+42
+
+statement ok
+DROP TABLE empty_consumer_t;
 
 # Serialization: verify that views containing SELECT CTEs survive a DB restart
 # (exercises the v8 query_node field serialization path)

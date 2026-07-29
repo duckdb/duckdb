@@ -2,7 +2,7 @@ import os
 import math
 import functools
 import shutil
-from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
+from benchmark import BenchmarkRunner, BenchmarkRunnerConfig, DEFAULT_TIMED_RUNS
 from dataclasses import dataclass
 from typing import Optional, List, Union, Dict
 from pathlib import Path
@@ -45,7 +45,12 @@ parser.add_argument("--disable-timeout", action="store_true", help="Disable time
 parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
 parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
 parser.add_argument("--no-summary", type=str, default=False, help="No summary in the end.")
-parser.add_argument("--timed-runs", type=int, help="Number of timed runs per benchmark.")
+parser.add_argument(
+    "--timed-runs",
+    type=int,
+    default=DEFAULT_TIMED_RUNS,
+    help=f"Number of timed runs per benchmark (default: {DEFAULT_TIMED_RUNS}).",
+)
 parser.add_argument(
     "--clear-benchmark-cache", action="store_true", help="Clear benchmark caches prior to running", default=False
 )
@@ -88,6 +93,7 @@ REGRESSION_THRESHOLD_PERCENTAGE = 0.1
 REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
 # hide benchmark changes that are below the noise floor in the final report
 DISPLAY_THRESHOLD_PERCENTAGE = 2.0
+TIMED_RUN_BATCH_SIZE = 5
 
 ANSI_RED = "\033[31m"
 ANSI_GREEN = "\033[32m"
@@ -319,9 +325,23 @@ def print_banner(title: str):
     print("")
 
 
-def print_aggregate_report(
-    rows: List[BenchmarkRow], common_prefix: str, result_text: str, total_count: int, hidden_noise_count: int
+def print_benchmark_report(
+    rows: List[BenchmarkRow],
+    common_prefix: str,
+    result_text: str,
+    total_count: int,
+    hidden_noise_count: int,
+    time_a: Union[float, str],
+    time_b: Union[float, str],
 ):
+    buckets = {
+        BUCKET_UNCHANGED: [row for row in rows if row.bucket == BUCKET_UNCHANGED],
+        BUCKET_FASTER: [row for row in rows if row.bucket == BUCKET_FASTER],
+        BUCKET_SLOWER: [row for row in rows if row.bucket == BUCKET_SLOWER],
+        BUCKET_REGRESSION: [row for row in rows if row.bucket == BUCKET_REGRESSION],
+        BUCKET_FAILURE: [row for row in rows if row.bucket == BUCKET_FAILURE],
+    }
+
     print_banner("BENCHMARK QUERY AGGREGATES")
     print(f"suite: {suite_name()}")
     if common_prefix:
@@ -335,11 +355,13 @@ def print_aggregate_report(
     print(f"display threshold: +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
     print(f"hidden noise: {hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
     print(f"result: {result_text}")
-    print("")
-    if len(rows) == 0:
-        print("0 benchmarks above display threshold")
-    else:
-        render_table(rows)
+    print_geomean_summary(time_a, time_b)
+    print_bucket("UNCHANGED / NOISE", buckets[BUCKET_UNCHANGED], hidden_noise_count)
+    print_bucket("FASTER", buckets[BUCKET_FASTER])
+    print_bucket("SLOWER BELOW THRESHOLD", buckets[BUCKET_SLOWER])
+    print_bucket("REGRESSIONS", buckets[BUCKET_REGRESSION])
+    if len(buckets[BUCKET_FAILURE]) > 0:
+        print_bucket("FAILURES", buckets[BUCKET_FAILURE])
 
 
 def print_bucket(title: str, rows: List[BenchmarkRow], hidden_noise_count: int = 0):
@@ -352,25 +374,6 @@ def print_bucket(title: str, rows: List[BenchmarkRow], hidden_noise_count: int =
         print("0 benchmarks")
         return
     render_table(rows)
-
-
-def print_impact_bucket_summary(rows: List[BenchmarkRow], result_text: str, hidden_noise_count: int):
-    buckets = {
-        BUCKET_UNCHANGED: [row for row in rows if row.bucket == BUCKET_UNCHANGED],
-        BUCKET_FASTER: [row for row in rows if row.bucket == BUCKET_FASTER],
-        BUCKET_SLOWER: [row for row in rows if row.bucket == BUCKET_SLOWER],
-        BUCKET_REGRESSION: [row for row in rows if row.bucket == BUCKET_REGRESSION],
-        BUCKET_FAILURE: [row for row in rows if row.bucket == BUCKET_FAILURE],
-    }
-    print("")
-    print_banner("IMPACT BUCKETS SUMMARY")
-    print(f"result: {result_text}")
-    print_bucket("UNCHANGED / NOISE", buckets[BUCKET_UNCHANGED], hidden_noise_count)
-    print_bucket("FASTER", buckets[BUCKET_FASTER])
-    print_bucket("SLOWER BELOW THRESHOLD", buckets[BUCKET_SLOWER])
-    print_bucket("REGRESSIONS", buckets[BUCKET_REGRESSION])
-    if len(buckets[BUCKET_FAILURE]) > 0:
-        print_bucket("FAILURES", buckets[BUCKET_FAILURE])
 
 
 def print_geomean_summary(time_a: Union[float, str], time_b: Union[float, str]):
@@ -435,6 +438,60 @@ class BenchmarkResult:
     new_failure: Optional[str] = None
 
 
+def run_benchmarks_alternating(old_runner: BenchmarkRunner, new_runner: BenchmarkRunner, benchmark_list: List[str]):
+    old_results = {}
+    new_results = {}
+    old_failures = {}
+    new_failures = {}
+    requested_runs = max(timed_runs, 1) if timed_runs is not None else 1
+
+    for benchmark in benchmark_list:
+        old_timings = []
+        new_timings = []
+        old_failure = None
+        new_failure = None
+
+        while len(old_timings) < requested_runs or len(new_timings) < requested_runs:
+            if len(old_timings) < requested_runs:
+                timed_runs_override = None
+                if timed_runs is not None:
+                    timed_runs_override = min(TIMED_RUN_BATCH_SIZE, requested_runs - len(old_timings))
+
+                old_run_timings, old_failure = old_runner.run_benchmark_once(benchmark, timed_runs_override)
+                if old_failure is None and not old_run_timings:
+                    old_failure = "Benchmark did not produce any timings"
+                if old_run_timings:
+                    old_timings.extend(old_run_timings)
+
+            if len(new_timings) < requested_runs:
+                timed_runs_override = None
+                if timed_runs is not None:
+                    timed_runs_override = min(TIMED_RUN_BATCH_SIZE, requested_runs - len(new_timings))
+
+                new_run_timings, new_failure = new_runner.run_benchmark_once(benchmark, timed_runs_override)
+                if new_failure is None and not new_run_timings:
+                    new_failure = "Benchmark did not produce any timings"
+                if new_run_timings:
+                    new_timings.extend(new_run_timings)
+
+            if old_failure or new_failure:
+                break
+
+        if old_failure:
+            old_results[benchmark] = 'Failed to run benchmark ' + benchmark
+            old_failures[benchmark] = old_failure
+        else:
+            old_results[benchmark], old_failures[benchmark] = old_runner.complete_benchmark(benchmark, old_timings)
+
+        if new_failure:
+            new_results[benchmark] = 'Failed to run benchmark ' + benchmark
+            new_failures[benchmark] = new_failure
+        else:
+            new_results[benchmark], new_failures[benchmark] = new_runner.complete_benchmark(benchmark, new_timings)
+
+    return old_results, old_failures, new_results, new_failures
+
+
 multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
 other_results: List[BenchmarkResult] = []
 error_list: List[BenchmarkResult] = []
@@ -450,8 +507,9 @@ for i in range(NUMBER_REPETITIONS):
 '''
     )
 
-    old_results, old_failures = old_runner.run_benchmarks(benchmark_list)
-    new_results, new_failures = new_runner.run_benchmarks(benchmark_list)
+    old_results, old_failures, new_results, new_failures = run_benchmarks_alternating(
+        old_runner, new_runner, benchmark_list
+    )
 
     for benchmark in benchmark_list:
         old_res = old_results[benchmark]
@@ -503,12 +561,9 @@ else:
     result_text = "no regressions detected"
 
 common_prefix = benchmark_common_prefix([result.benchmark for result in all_results])
-print_aggregate_report(visible_rows, common_prefix, result_text, len(rows), hidden_noise_count)
-
 time_a = geomean(old_runner.complete_timings)
 time_b = geomean(new_runner.complete_timings)
-print_geomean_summary(time_a, time_b)
-print_impact_bucket_summary(visible_rows, result_text, hidden_noise_count)
+print_benchmark_report(visible_rows, common_prefix, result_text, len(rows), hidden_noise_count, time_a, time_b)
 
 # nuke cached benchmark data between runs
 if not keep_benchmark_data:

@@ -8,6 +8,8 @@
 #include "test_helpers.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 
+#include <cstdlib>
+
 using namespace duckdb;
 
 TEST_CASE("Test simple relation API", "[relation_api]") {
@@ -935,6 +937,10 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 }
 
 TEST_CASE("Test CSV Relation with union by name", "[relation_api]") {
+	if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {
+		SKIP_TEST("not supported with forced async sink/source task injection");
+		return;
+	}
 	DuckDB db(nullptr);
 	Connection con(db);
 

@@ -64,7 +64,7 @@ class PlanSignatureTableIndexMap {
 public:
 	explicit PlanSignatureTableIndexMap(ArenaAllocator &allocator_p)
 	    : allocator(allocator_p), table_index_map(allocator), to_canonical_table_index(allocator),
-	      restore_original_table_index(allocator) {
+	      restore_original_table_index(allocator), restore_original_table_filter_index(allocator) {
 	}
 
 public:
@@ -89,6 +89,7 @@ private:
 			// Clear temporary data structures
 			to_canonical_table_index.clear();
 			restore_original_table_index.clear();
+			restore_original_table_filter_index.clear();
 			column_ids.clear();
 			projection_ids.clear();
 			table_indices.clear();
@@ -267,6 +268,25 @@ private:
 					}
 				}
 
+				for (auto &entry : get.table_filters) {
+					D_ASSERT(entry.GetIndex().GetIndex() < column_ids.size());
+					const auto canonical_index =
+					    ProjectionIndex(column_ids[entry.GetIndex().GetIndex()].GetPrimaryIndex());
+					if (!restore_original_table_filter_index.emplace(canonical_index, entry.GetIndex()).second) {
+						restore_original_table_filter_index.clear();
+						return false;
+					}
+				}
+				if (!restore_original_table_filter_index.empty()) {
+					TableFilterSet remapped_filters;
+					for (auto &entry : get.table_filters) {
+						const auto canonical_index =
+						    ProjectionIndex(column_ids[entry.GetIndex().GetIndex()].GetPrimaryIndex());
+						remapped_filters.PushFilter(canonical_index, entry.TakeFilter());
+					}
+					get.table_filters = std::move(remapped_filters);
+				}
+
 				// Store mapping for base tables
 				auto &column_index_map = table_index_map.at(table_indices[0]);
 				if (projection_ids.empty()) {
@@ -287,6 +307,14 @@ private:
 				get.GetMutableColumnIds() = std::move(column_ids);
 				D_ASSERT(get.projection_ids.empty());
 				get.projection_ids = std::move(projection_ids);
+				if (!restore_original_table_filter_index.empty()) {
+					TableFilterSet remapped_filters;
+					for (auto &entry : get.table_filters) {
+						remapped_filters.PushFilter(restore_original_table_filter_index.at(entry.GetIndex()),
+						                            entry.TakeFilter());
+					}
+					get.table_filters = std::move(remapped_filters);
+				}
 				break;
 			}
 		}
@@ -378,6 +406,8 @@ private:
 	//! Temporary map from original table index to canonical table index (and reverse)
 	arena_unordered_map<TableIndex, TableIndex> to_canonical_table_index;
 	arena_unordered_map<TableIndex, TableIndex> restore_original_table_index;
+	//! Temporary map from canonical table filter index to original table filter index
+	arena_unordered_map<ProjectionIndex, ProjectionIndex> restore_original_table_filter_index;
 	//! Temporary vector to store table indices
 	vector<TableIndex> table_indices;
 	//! Temporary vector to store projection maps

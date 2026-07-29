@@ -7181,6 +7181,82 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExtractDatePart
 	return make_uniq<TypedTransformResult<DatePartSpecifier>>(result);
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformExternalResourceStatementInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformCreateExternalResourceStmtInternal(PEGTransformer &transformer,
+                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(3));
+	optional<Identifier> attach_alias {};
+	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (attach_alias_opt.HasResult()) {
+		auto attach_alias_value = transformer.Transform<Identifier>(attach_alias_opt.GetResult());
+		attach_alias = attach_alias_value;
+	}
+	optional<vector<GenericCopyOption>> attach_options {};
+	auto &attach_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (attach_options_opt.HasResult()) {
+		auto attach_options_value = transformer.Transform<vector<GenericCopyOption>>(attach_options_opt.GetResult());
+		attach_options = attach_options_value;
+	}
+	auto result = TransformCreateExternalResourceStmt(transformer, string_literal, attach_alias, attach_options);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformRegisterExternalResourceStmtInternal(PEGTransformer &transformer,
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(3));
+	optional<Identifier> attach_alias {};
+	auto &attach_alias_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (attach_alias_opt.HasResult()) {
+		auto attach_alias_value = transformer.Transform<Identifier>(attach_alias_opt.GetResult());
+		attach_alias = attach_alias_value;
+	}
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(6));
+	auto result =
+	    TransformRegisterExternalResourceStmt(transformer, string_literal, attach_alias, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformDestroyExternalResourceStmtInternal(PEGTransformer &transformer,
+                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(3));
+	auto result = TransformDestroyExternalResourceStmt(transformer, col_id);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformShowExternalResourcesStmtInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> show_all_modifier {};
+	auto &show_all_modifier_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (show_all_modifier_opt.HasResult()) {
+		auto show_all_modifier_value = transformer.Transform<bool>(show_all_modifier_opt.GetResult());
+		show_all_modifier = show_all_modifier_value;
+	}
+	auto result = TransformShowExternalResourcesStmt(transformer, show_all_modifier);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowAllModifierInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto result = TransformShowAllModifier(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInsertStatementInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -8991,6 +9067,199 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformJoinClauseInter
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = transformer.Transform<unique_ptr<TableRef>>(choice_pr.GetResult());
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNearestJoinClauseInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<TableRef>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNearestJoinAliasedInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<JoinType> join_type {};
+	auto &join_type_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (join_type_opt.HasResult()) {
+		auto join_type_value = transformer.Transform<JoinType>(join_type_opt.GetResult());
+		join_type = join_type_value;
+	}
+	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(2));
+	optional<bool> approx_or_exact {};
+	auto &approx_or_exact_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (approx_or_exact_opt.HasResult()) {
+		auto approx_or_exact_value = transformer.Transform<bool>(approx_or_exact_opt.GetResult());
+		approx_or_exact = approx_or_exact_value;
+	}
+	optional<unique_ptr<ParsedExpression>> number_literal {};
+	auto &number_literal_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (number_literal_opt.HasResult()) {
+		auto number_literal_value = transformer.Transform<unique_ptr<ParsedExpression>>(number_literal_opt.GetResult());
+		number_literal = std::move(number_literal_value);
+	}
+	auto distance_or_similarity = transformer.Transform<OrderType>(list_pr.GetChild(7));
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(8));
+	auto result = TransformNearestJoinAliased(transformer, join_type, std::move(table_ref), approx_or_exact,
+	                                          std::move(number_literal), distance_or_similarity, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNearestJoinBareInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<JoinType> join_type {};
+	auto &join_type_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (join_type_opt.HasResult()) {
+		auto join_type_value = transformer.Transform<JoinType>(join_type_opt.GetResult());
+		join_type = join_type_value;
+	}
+	auto nearest_bare_table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(2));
+	optional<bool> approx_or_exact {};
+	auto &approx_or_exact_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (approx_or_exact_opt.HasResult()) {
+		auto approx_or_exact_value = transformer.Transform<bool>(approx_or_exact_opt.GetResult());
+		approx_or_exact = approx_or_exact_value;
+	}
+	optional<unique_ptr<ParsedExpression>> number_literal {};
+	auto &number_literal_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (number_literal_opt.HasResult()) {
+		auto number_literal_value = transformer.Transform<unique_ptr<ParsedExpression>>(number_literal_opt.GetResult());
+		number_literal = std::move(number_literal_value);
+	}
+	auto distance_or_similarity = transformer.Transform<OrderType>(list_pr.GetChild(7));
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(8));
+	auto result = TransformNearestJoinBare(transformer, join_type, std::move(nearest_bare_table_ref), approx_or_exact,
+	                                       std::move(number_literal), distance_or_similarity, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformNearestBareTableRefInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<TableRef>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNearestValuesRefInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto values_clause = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(0));
+	auto result = TransformNearestValuesRef(transformer, std::move(values_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformNearestTableFunctionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> lateral {};
+	auto &lateral_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (lateral_opt.HasResult()) {
+		auto lateral_value = transformer.Transform<bool>(lateral_opt.GetResult());
+		lateral = lateral_value;
+	}
+	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.GetChild(1));
+	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr.GetChild(2));
+	optional<bool> with_ordinality {};
+	auto &with_ordinality_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (with_ordinality_opt.HasResult()) {
+		auto with_ordinality_value = transformer.Transform<bool>(with_ordinality_opt.GetResult());
+		with_ordinality = with_ordinality_value;
+	}
+	auto result = TransformNearestTableFunction(transformer, lateral, qualified_table_function,
+	                                            std::move(table_function_arguments), with_ordinality);
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformNearestTableSubqueryInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> lateral {};
+	auto &lateral_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (lateral_opt.HasResult()) {
+		auto lateral_value = transformer.Transform<bool>(lateral_opt.GetResult());
+		lateral = lateral_value;
+	}
+	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(1));
+	auto result = TransformNearestTableSubquery(transformer, lateral, std::move(subquery_reference));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformNearestBaseTableRefInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.GetChild(0));
+	optional<unique_ptr<AtClause>> at_clause {};
+	auto &at_clause_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (at_clause_opt.HasResult()) {
+		auto at_clause_value = transformer.Transform<unique_ptr<AtClause>>(at_clause_opt.GetResult());
+		at_clause = std::move(at_clause_value);
+	}
+	optional<unique_ptr<SampleOptions>> sample_clause {};
+	auto &sample_clause_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (sample_clause_opt.HasResult()) {
+		auto sample_clause_value = transformer.Transform<unique_ptr<SampleOptions>>(sample_clause_opt.GetResult());
+		sample_clause = std::move(sample_clause_value);
+	}
+	auto result = TransformNearestBaseTableRef(transformer, std::move(base_table_name), std::move(at_clause),
+	                                           std::move(sample_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformNearestParensTableRefInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(ExtractResultFromParens(list_pr.GetChild(0)));
+	optional<unique_ptr<SampleOptions>> sample_clause {};
+	auto &sample_clause_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (sample_clause_opt.HasResult()) {
+		auto sample_clause_value = transformer.Transform<unique_ptr<SampleOptions>>(sample_clause_opt.GetResult());
+		sample_clause = std::move(sample_clause_value);
+	}
+	auto result = TransformNearestParensTableRef(transformer, std::move(table_ref), std::move(sample_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformApproxOrExactInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<bool>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNearestApproxInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto result = TransformNearestApprox(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNearestExactInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto result = TransformNearestExact(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformDistanceOrSimilarityInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<OrderType>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<OrderType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNearestDistanceInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto result = TransformNearestDistance(transformer);
+	return make_uniq<TypedTransformResult<OrderType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNearestSimilarityInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto result = TransformNearestSimilarity(transformer);
+	return make_uniq<TypedTransformResult<OrderType>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRegularJoinClauseInternal(PEGTransformer &transformer,
@@ -10998,6 +11267,12 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ExtractIdentifierArgument", &PEGTransformerFactory::TransformExtractIdentifierArgumentInternal},
 	    {"ExtractStringArgument", &PEGTransformerFactory::TransformExtractStringArgumentInternal},
 	    {"ExtractDatePart", &PEGTransformerFactory::TransformExtractDatePartInternal},
+	    {"ExternalResourceStatement", &PEGTransformerFactory::TransformExternalResourceStatementInternal},
+	    {"CreateExternalResourceStmt", &PEGTransformerFactory::TransformCreateExternalResourceStmtInternal},
+	    {"RegisterExternalResourceStmt", &PEGTransformerFactory::TransformRegisterExternalResourceStmtInternal},
+	    {"DestroyExternalResourceStmt", &PEGTransformerFactory::TransformDestroyExternalResourceStmtInternal},
+	    {"ShowExternalResourcesStmt", &PEGTransformerFactory::TransformShowExternalResourcesStmtInternal},
+	    {"ShowAllModifier", &PEGTransformerFactory::TransformShowAllModifierInternal},
 	    {"InsertStatement", &PEGTransformerFactory::TransformInsertStatementInternal},
 	    {"OrAction", &PEGTransformerFactory::TransformOrActionInternal},
 	    {"InsertOrReplace", &PEGTransformerFactory::TransformInsertOrReplaceInternal},
@@ -11156,6 +11431,21 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"VersionAtUnit", &PEGTransformerFactory::TransformVersionAtUnitInternal},
 	    {"TimestampAtUnit", &PEGTransformerFactory::TransformTimestampAtUnitInternal},
 	    {"JoinClause", &PEGTransformerFactory::TransformJoinClauseInternal},
+	    {"NearestJoinClause", &PEGTransformerFactory::TransformNearestJoinClauseInternal},
+	    {"NearestJoinAliased", &PEGTransformerFactory::TransformNearestJoinAliasedInternal},
+	    {"NearestJoinBare", &PEGTransformerFactory::TransformNearestJoinBareInternal},
+	    {"NearestBareTableRef", &PEGTransformerFactory::TransformNearestBareTableRefInternal},
+	    {"NearestValuesRef", &PEGTransformerFactory::TransformNearestValuesRefInternal},
+	    {"NearestTableFunction", &PEGTransformerFactory::TransformNearestTableFunctionInternal},
+	    {"NearestTableSubquery", &PEGTransformerFactory::TransformNearestTableSubqueryInternal},
+	    {"NearestBaseTableRef", &PEGTransformerFactory::TransformNearestBaseTableRefInternal},
+	    {"NearestParensTableRef", &PEGTransformerFactory::TransformNearestParensTableRefInternal},
+	    {"ApproxOrExact", &PEGTransformerFactory::TransformApproxOrExactInternal},
+	    {"NearestApprox", &PEGTransformerFactory::TransformNearestApproxInternal},
+	    {"NearestExact", &PEGTransformerFactory::TransformNearestExactInternal},
+	    {"DistanceOrSimilarity", &PEGTransformerFactory::TransformDistanceOrSimilarityInternal},
+	    {"NearestDistance", &PEGTransformerFactory::TransformNearestDistanceInternal},
+	    {"NearestSimilarity", &PEGTransformerFactory::TransformNearestSimilarityInternal},
 	    {"RegularJoinClause", &PEGTransformerFactory::TransformRegularJoinClauseInternal},
 	    {"JoinByClause", &PEGTransformerFactory::TransformJoinByClauseInternal},
 	    {"Asof", &PEGTransformerFactory::TransformAsofInternal},
