@@ -1,0 +1,236 @@
+--- a/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
++++ b/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
+@@ -92,9 +92,7 @@ TableFunction IcebergTableEntry::GetScanFunction(ClientContext &context, unique_
+ 	vector<Value> inputs = {storage_location};
+ 	TableFunctionBindInput bind_input(inputs, param_map, return_types, names, nullptr, nullptr, iceberg_scan_function,
+ 	                                  empty_ref);
+-	vector<string> bind_names;
+-	auto result = iceberg_scan_function.bind(context, bind_input, return_types, bind_names);
+-	names = StringsToIdentifiers(bind_names);
++	auto result = iceberg_scan_function.bind(context, bind_input, return_types, names);
+ 	bind_data = std::move(result);
+ 	auto &file_bind_data = bind_data->Cast<MultiFileBindData>();
+ 	file_bind_data.virtual_columns = GetVirtualColumns();
+--- a/src/function/ducklake/iceberg_to_ducklake.cpp
++++ b/src/function/ducklake/iceberg_to_ducklake.cpp
+@@ -796,7 +796,7 @@ public:
+ };
+ 
+ static unique_ptr<FunctionData> IcebergToDuckLakeBind(ClientContext &context, TableFunctionBindInput &input,
+-                                                      vector<LogicalType> &return_types, vector<string> &names) {
++                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	auto ret = make_uniq<IcebergToDuckLakeBindData>();
+ 	auto input_string = input.inputs[0].ToString();
+ 	ret->ducklake_catalog = input.inputs[1].ToString();
+--- a/src/function/metadata/iceberg_column_stats.cpp
++++ b/src/function/metadata/iceberg_column_stats.cpp
+@@ -57,7 +57,7 @@ static string GeometryBoundJson(const GeometryExtent &extent, bool lower_corner)
+ }
+ 
+ static unique_ptr<FunctionData> IcebergColumnStatsBind(ClientContext &context, TableFunctionBindInput &input,
+-                                                       vector<LogicalType> &return_types, vector<string> &names) {
++                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	// return a TableRef that contains the scans for the
+ 	auto ret = make_uniq<IcebergColumnStatsBindData>();
+ 
+--- a/src/function/metadata/iceberg_load_table_response.cpp
++++ b/src/function/metadata/iceberg_load_table_response.cpp
+@@ -67,7 +67,7 @@ static unique_ptr<HTTPResponse> MakeRequest(ClientContext &context, const Iceber
+ }
+ 
+ static unique_ptr<FunctionData> IcebergLoadTableResponseBind(ClientContext &context, TableFunctionBindInput &input,
+-                                                             vector<LogicalType> &return_types, vector<string> &names) {
++                                                             vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	auto input_string = input.inputs[0].ToString();
+ 	auto qualified_name = QualifiedName::ParseComponents(input_string);
+ 
+--- a/src/function/metadata/iceberg_metadata.cpp
++++ b/src/function/metadata/iceberg_metadata.cpp
+@@ -94,7 +94,7 @@ public:
+ };
+ 
+ static unique_ptr<FunctionData> IcebergMetaDataBind(ClientContext &context, TableFunctionBindInput &input,
+-                                                    vector<LogicalType> &return_types, vector<string> &names) {
++                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	// return a TableRef that contains the scans for the
+ 	auto ret = make_uniq<IcebergMetaDataBindData>();
+ 
+@@ -115,9 +115,13 @@ static unique_ptr<FunctionData> IcebergMetaDataBind(ClientContext &context, Tabl
+ 	return_types.insert(return_types.end(), manifest_entry_types.begin(), manifest_entry_types.end());
+ 
+ 	auto manifest_names = IcebergManifestNames();
+-	names.insert(names.end(), manifest_names.begin(), manifest_names.end());
++	for (auto &manifest_name : manifest_names) {
++		names.emplace_back(manifest_name);
++	}
+ 	auto manifest_entry_names = IcebergManifestEntryNames();
+-	names.insert(names.end(), manifest_entry_names.begin(), manifest_entry_names.end());
++	for (auto &manifest_entry_name : manifest_entry_names) {
++		names.emplace_back(manifest_entry_name);
++	}
+ 
+ 	D_ASSERT(manifest_types.size() == manifest_names.size());
+ 
+--- a/src/function/metadata/iceberg_partition_stats.cpp
++++ b/src/function/metadata/iceberg_partition_stats.cpp
+@@ -54,7 +54,7 @@ public:
+ };
+ 
+ static unique_ptr<FunctionData> IcebergPartitionStatsBind(ClientContext &context, TableFunctionBindInput &input,
+-                                                          vector<LogicalType> &return_types, vector<string> &names) {
++                                                          vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	// return a TableRef that contains the scans for the
+ 	auto ret = make_uniq<IcebergPartitionStatsBindData>();
+ 
+--- a/src/function/metadata/iceberg_rewrite_data_files.cpp
++++ b/src/function/metadata/iceberg_rewrite_data_files.cpp
+@@ -148,7 +148,7 @@ static unique_ptr<LogicalOperator> BindGroupCopy(Binder &binder, const RewritePl
+ }
+ 
+ static unique_ptr<LogicalOperator> RewriteDataFilesBindOperator(ClientContext &context, TableFunctionBindInput &input,
+-                                                                TableIndex bind_index, vector<string> &return_names) {
++                                                                TableIndex bind_index, vector<Identifier> &return_names) {
+ 	if (!input.binder) {
+ 		throw InternalException("iceberg_rewrite_data_files: bind_operator called without a binder");
+ 	}
+--- a/src/function/metadata/iceberg_schema_properties_functions.cpp
++++ b/src/function/metadata/iceberg_schema_properties_functions.cpp
+@@ -61,7 +61,7 @@ static bool CheckEntryIsIcebergSchema(optional_ptr<SchemaCatalogEntry> entry) {
+ 
+ static unique_ptr<FunctionData> SetIcebergSchemaPropertiesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                                vector<LogicalType> &return_types,
+-                                                               vector<string> &names) {
++                                                               vector<Identifier> &names) {
+ 	auto ret = make_uniq<IcebergSchemaPropertiesBindData>();
+ 
+ 	auto input_string = input.inputs[0].ToString();
+@@ -88,13 +88,13 @@ static unique_ptr<FunctionData> SetIcebergSchemaPropertiesBind(ClientContext &co
+ 	}
+ 
+ 	return_types.insert(return_types.end(), LogicalType::BIGINT);
+-	names.insert(names.end(), string("Success"));
++	names.emplace_back("Success");
+ 	return std::move(ret);
+ }
+ 
+ static unique_ptr<FunctionData> RemoveIcebergSchemaPropertiesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                                   vector<LogicalType> &return_types,
+-                                                                  vector<string> &names) {
++                                                                  vector<Identifier> &names) {
+ 	auto ret = make_uniq<IcebergSchemaPropertiesBindData>();
+ 	auto input_string = input.inputs[0].ToString();
+ 	auto iceberg_schema = IcebergUtils::GetSchemaEntry(context, input_string);
+@@ -118,13 +118,13 @@ static unique_ptr<FunctionData> RemoveIcebergSchemaPropertiesBind(ClientContext
+ 	}
+ 
+ 	return_types.insert(return_types.end(), LogicalType::BIGINT);
+-	names.insert(names.end(), string("Success"));
++	names.emplace_back("Success");
+ 	return std::move(ret);
+ }
+ 
+ static unique_ptr<FunctionData> GetIcebergSchemaPropertiesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                                vector<LogicalType> &return_types,
+-                                                               vector<string> &names) {
++                                                               vector<Identifier> &names) {
+ 	auto ret = make_uniq<IcebergSchemaPropertiesBindData>();
+ 	auto input_string = input.inputs[0].ToString();
+ 	auto iceberg_schema = IcebergUtils::GetSchemaEntry(context, input_string);
+@@ -135,8 +135,8 @@ static unique_ptr<FunctionData> GetIcebergSchemaPropertiesBind(ClientContext &co
+ 
+ 	return_types.insert(return_types.end(), LogicalType::VARCHAR);
+ 	return_types.insert(return_types.end(), LogicalType::VARCHAR);
+-	names.insert(names.end(), string("key"));
+-	names.insert(names.end(), string("value"));
++	names.emplace_back("key");
++	names.emplace_back("value");
+ 	return std::move(ret);
+ }
+ 
+--- a/src/function/metadata/iceberg_snapshots.cpp
++++ b/src/function/metadata/iceberg_snapshots.cpp
+@@ -51,7 +51,7 @@ public:
+ };
+ 
+ static unique_ptr<FunctionData> IcebergSnapshotsBind(ClientContext &context, TableFunctionBindInput &input,
+-                                                     vector<LogicalType> &return_types, vector<string> &names) {
++                                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	auto bind_data = make_uniq<IcebergSnaphotsBindData>();
+ 	IcebergOptions options;
+ 	for (auto &kv : input.named_parameters) {
+--- a/src/function/metadata/iceberg_table_properties_functions.cpp
++++ b/src/function/metadata/iceberg_table_properties_functions.cpp
+@@ -70,7 +70,7 @@ static void VerifyInputIsNotAFile(ClientContext &context, string &input_string,
+ 
+ static unique_ptr<FunctionData> SetIcebergTablePropertiesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                               vector<LogicalType> &return_types,
+-                                                              vector<string> &names) {
++                                                              vector<Identifier> &names) {
+ 	// return a TableRef that contains the scans for the
+ 	auto ret = make_uniq<SetIcebergTablePropertiesBindData>();
+ 
+@@ -99,13 +99,13 @@ static unique_ptr<FunctionData> SetIcebergTablePropertiesBind(ClientContext &con
+ 	}
+ 
+ 	return_types.insert(return_types.end(), LogicalType::BIGINT);
+-	names.insert(names.end(), string("Success"));
++	names.emplace_back("Success");
+ 	return std::move(ret);
+ }
+ 
+ static unique_ptr<FunctionData> RemoveIcebergTablePropertiesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                                  vector<LogicalType> &return_types,
+-                                                                 vector<string> &names) {
++                                                                 vector<Identifier> &names) {
+ 	// return a TableRef that contains the scans for the
+ 	auto ret = make_uniq<SetIcebergTablePropertiesBindData>();
+ 	auto input_string = input.inputs[0].ToString();
+@@ -131,13 +131,13 @@ static unique_ptr<FunctionData> RemoveIcebergTablePropertiesBind(ClientContext &
+ 	}
+ 
+ 	return_types.insert(return_types.end(), LogicalType::BIGINT);
+-	names.insert(names.end(), string("Success"));
++	names.emplace_back("Success");
+ 	return std::move(ret);
+ }
+ 
+ static unique_ptr<FunctionData> GetIcebergTablePropertiesBind(ClientContext &context, TableFunctionBindInput &input,
+                                                               vector<LogicalType> &return_types,
+-                                                              vector<string> &names) {
++                                                              vector<Identifier> &names) {
+ 	// return a TableRef that contains the scans for the
+ 	auto ret = make_uniq<SetIcebergTablePropertiesBindData>();
+ 	auto input_string = input.inputs[0].ToString();
+@@ -150,8 +150,8 @@ static unique_ptr<FunctionData> GetIcebergTablePropertiesBind(ClientContext &con
+ 
+ 	return_types.insert(return_types.end(), LogicalType::VARCHAR);
+ 	return_types.insert(return_types.end(), LogicalType::VARCHAR);
+-	names.insert(names.end(), string("key"));
+-	names.insert(names.end(), string("value"));
++	names.emplace_back("key");
++	names.emplace_back("value");
+ 	return std::move(ret);
+ }
+ 
+--- a/src/include/planning/metadata_io/avro/avro_scan.hpp
++++ b/src/include/planning/metadata_io/avro/avro_scan.hpp
+@@ -48,7 +48,7 @@ public:
+ 	unique_ptr<FunctionData> bind_data;
+ 	unique_ptr<GlobalTableFunctionState> global_state;
+ 	vector<LogicalType> return_types;
+-	vector<string> return_names;
++	vector<Identifier> return_names;
+ 	vector<column_t> column_ids;
+ 
+ 	shared_ptr<IcebergAvroScanInfo> scan_info;
+--- a/src/planning/iceberg_multi_file_list.cpp
++++ b/src/planning/iceberg_multi_file_list.cpp
+@@ -1635,7 +1635,7 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
+ 	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
+ 	                                  delete_scan_function, empty);
+ 	vector<LogicalType> return_types;
+-	vector<string> return_names;
++	vector<Identifier> return_names;
+ 	auto bind_data = delete_scan_function.bind(context, bind_input, return_types, return_names);
+ 
+ 	DataChunk result;

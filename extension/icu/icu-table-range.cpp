@@ -148,7 +148,7 @@ struct ICUTableRange {
 
 	template <bool GENERATE_SERIES>
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
+	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 		auto result = make_uniq<ICURangeBindData>(context, input.inputs);
 
 		return_types.push_back(LogicalType::TIMESTAMP_TZ);
