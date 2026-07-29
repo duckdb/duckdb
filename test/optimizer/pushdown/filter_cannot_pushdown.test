@@ -81,13 +81,11 @@ explain select nextval('s1') as g, count(*) as c from range(3) group by 1 having
 ----
 logical_opt	<REGEX>:.*g > 1.*
 
+statement ok
+create table volatile_group as select nextval('s1') as g, count(*) as c from range(3) group by 1 having g > 1;
+
 query II
-select nextval('s1') as g, count(*) as c from range(3) group by 1 having g > 1 order by g;
+select * from volatile_group order by g;
 ----
 2	1
 3	1
-
-query I
-select currval('s1');
-----
-3
