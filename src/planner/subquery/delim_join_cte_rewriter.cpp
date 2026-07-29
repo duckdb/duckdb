@@ -13,9 +13,9 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain_candidate.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain_factorer.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain_inliner.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -2175,10 +2175,12 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 			join.join_type = null_rejecting_filter_above ? JoinType::INNER : JoinType::LEFT;
 		}
 		auto selected_candidate =
-		    dedup_ref_count > 0 ? DuplicateEliminatedDomainCandidateFinder::FindBest(binder.context, join) : nullptr;
-		if (selected_candidate &&
-		    DuplicateEliminatedAggregateRewriter::TryRewrite(binder, plan, dedup_cte_index, rewrite_root,
-		                                                     *selected_candidate, output_replacements)) {
+		    dedup_ref_count > 0
+		        ? DuplicateEliminatedDomainCandidateFinder::FindBest(binder.context, join, dedup_cte_index)
+		        : nullptr;
+		if (selected_candidate && DuplicateEliminatedDomainInliner::TryInline(binder, join.children[1], dedup_cte_index,
+		                                                                      dedup_ref_count, *selected_candidate)) {
+			join.duplicate_eliminated_columns.clear();
 			return output_replacements;
 		}
 		if (selected_candidate) {

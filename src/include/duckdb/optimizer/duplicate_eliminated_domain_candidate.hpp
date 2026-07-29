@@ -29,10 +29,8 @@ struct DuplicateEliminatedDomainCandidate {
 //! Finds and costs a subtree that covers every duplicate-eliminated key.
 class DuplicateEliminatedDomainCandidateFinder {
 public:
-	static unique_ptr<DuplicateEliminatedDomainCandidate> FindBest(ClientContext &context, LogicalComparisonJoin &join);
-	static unique_ptr<DuplicateEliminatedDomainCandidate>
-	CreateForSource(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> &source, idx_t joins_above);
-	static bool IsSupportedSource(LogicalOperator &op);
+	static unique_ptr<DuplicateEliminatedDomainCandidate> FindBest(ClientContext &context, LogicalComparisonJoin &join,
+	                                                               TableIndex domain_cte_index);
 };
 
 } // namespace duckdb

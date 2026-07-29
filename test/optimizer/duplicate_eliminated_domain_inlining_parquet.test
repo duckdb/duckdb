@@ -1,5 +1,5 @@
-# name: test/optimizer/duplicate_eliminated_aggregate_parquet.test
-# description: Use native Parquet scan identity for CTE-free correlated aggregates
+# name: test/optimizer/duplicate_eliminated_domain_inlining_parquet.test
+# description: Inline duplicate-free domains for Parquet scans without synthetic row identity
 # group: [optimizer]
 
 require parquet
@@ -21,7 +21,7 @@ statement ok
 COPY (SELECT 1 AS k, 'selected' AS state, 'b' AS tag)
 TO '{TEST_DIR}/direct_identity_b.parquet' (FORMAT PARQUET);
 
-# A single Parquet file uses its native row number without introducing a window.
+# A single Parquet source can provide an inlined duplicate-free domain without introducing a window.
 query II rowsort
 SELECT f.v, d.tag
 FROM parquet_fact f
@@ -49,7 +49,7 @@ WHERE d.state = 'selected'
 ----
 logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
 
-# Both files have file-local row number zero. The composite scan identity must keep both payload rows.
+# Duplicate keys across files are removed only from D; the untouched payload retains both source rows.
 query II rowsort
 SELECT f.v, d.tag
 FROM parquet_fact f

@@ -429,7 +429,7 @@ WHERE d.state = 'selected';
 ----
 logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
 
-# A table function without a native scan identity retains the duplicate-eliminated CTE.
+# A table-function source outside the bounded copy path retains the duplicate-eliminated CTE.
 query II
 EXPLAIN
 SELECT f.k, f.v
@@ -503,7 +503,7 @@ SELECT o.k,
 FROM domain_outer o
 LEFT JOIN domain_dim d ON d.k = o.k AND d.state = 'selected';
 ----
-logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
 # RIGHT and FULL joins are also coverage barriers.
 query II
@@ -515,7 +515,7 @@ RIGHT JOIN (
     SELECT * FROM domain_dim WHERE state = 'selected'
 ) d ON d.k = o.k;
 ----
-logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
 query II
 EXPLAIN
@@ -526,7 +526,7 @@ FULL JOIN (
     SELECT * FROM domain_dim WHERE state = 'selected'
 ) d ON d.k = o.k;
 ----
-logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
 # No proper input covers both independent correlated keys.
 statement ok
@@ -542,7 +542,7 @@ SELECT o.k,
 FROM domain_outer o
 CROSS JOIN domain_other r;
 ----
-logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
 # The outer aggregate is rewritten directly; the nested EXISTS retains its own delimiter CTE.
 query II rowsort

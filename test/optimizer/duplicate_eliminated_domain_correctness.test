@@ -1,0 +1,375 @@
+# name: test/optimizer/duplicate_eliminated_domain_correctness.test
+# description: Preserve scalar and observable-evaluation semantics when substituting duplicate-eliminated domains
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+CREATE TABLE dedup_outer(k INTEGER, payload VARCHAR);
+
+statement ok
+INSERT INTO dedup_outer VALUES (1, 'same'), (1, 'same'), (2, 'other');
+
+statement ok
+CREATE TABLE dedup_dim(k INTEGER, state VARCHAR);
+
+statement ok
+INSERT INTO dedup_dim VALUES (1, 'selected'), (2, 'selected'), (4, 'selected'), (NULL, 'selected');
+
+statement ok
+CREATE TABLE dedup_measure(k INTEGER, v INTEGER, text_value VARCHAR);
+
+statement ok
+INSERT INTO dedup_measure VALUES (1, 2, '2'), (1, 4, '4'), (4, 8, 'invalid'), (NULL, 3, '3');
+
+# Duplicate, byte-identical source rows retain payload multiplicity while the scalar result is computed by D.
+query ITI rowsort
+SELECT o.k, o.payload,
+       (SELECT sum(m.v) FROM dedup_measure m WHERE m.k = d.k)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	same	6
+1	same	6
+2	other	NULL
+
+query IIIII rowsort
+SELECT o.k,
+       (SELECT sum(m.v) FROM dedup_measure m WHERE m.k = d.k),
+       (SELECT avg(m.v) FROM dedup_measure m WHERE m.k = d.k),
+       (SELECT count(*) FROM dedup_measure m WHERE m.k = d.k),
+       (SELECT count(m.v) FROM dedup_measure m WHERE m.k = d.k)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	6	3	2	2
+1	6	3	2	2
+2	NULL	NULL	0	0
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(*) FROM dedup_measure m WHERE m.k = d.k)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+
+# HAVING rejection produces an empty scalar relation and null-extends only the scalar result.
+query II rowsort
+SELECT o.k,
+       (SELECT count(*)
+        FROM dedup_measure m
+        WHERE m.k = d.k
+        HAVING count(*) > 0)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	2
+1	2
+2	NULL
+
+query II rowsort
+SELECT o.k,
+       (SELECT count(*)
+        FROM dedup_measure m
+        WHERE m.k = d.k
+        HAVING NULL::BOOLEAN)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	NULL
+1	NULL
+2	NULL
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(*)
+        FROM dedup_measure m
+        WHERE m.k = d.k
+        HAVING count(*) > 0)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*Join Type: LEFT.*
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT count(*)
+        FROM dedup_measure m
+        WHERE m.k = d.k
+        HAVING count(*) > 0)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+
+# Correlated values remain available above empty static aggregates.
+query IIII rowsort
+SELECT o.k,
+       (SELECT coalesce(sum(m.v), d.k) FROM dedup_measure m WHERE m.k = d.k),
+       (SELECT count(*) + d.k FROM dedup_measure m WHERE m.k = d.k),
+       (SELECT CASE WHEN count(*) = 0 THEN d.k ELSE sum(m.v) END
+        FROM dedup_measure m WHERE m.k = d.k)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	6	3	6
+1	6	3	6
+2	2	2	2
+
+# Filters and projections above the aggregate retain zero-or-one scalar cardinality.
+query II rowsort
+SELECT o.k,
+       (SELECT scalar_value
+        FROM (
+            SELECT coalesce(sum(m.v), d.k) AS scalar_value
+            FROM dedup_measure m
+            WHERE m.k = d.k
+        ) scalar_input
+        WHERE scalar_value > 5)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	6
+1	6
+2	NULL
+
+query II rowsort
+SELECT o.k,
+       (SELECT scalar_value + 10
+        FROM (
+            SELECT coalesce(sum(m.v), d.k) AS scalar_value
+            FROM dedup_measure m
+            WHERE m.k = d.k
+        ) scalar_input
+        WHERE scalar_value > 0
+          AND scalar_value < 3)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	NULL
+1	NULL
+2	12
+
+# Expressions above a rejected aggregate row must not be evaluated.
+query II rowsort
+SELECT o.k,
+       (SELECT CAST('not an integer' AS INTEGER)
+        FROM dedup_measure m
+        WHERE m.k = d.k
+        HAVING count(*) < 0)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	NULL
+1	NULL
+2	NULL
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT CAST('not an integer' AS INTEGER)
+        FROM dedup_measure m
+        WHERE m.k = d.k
+        HAVING count(*) < 0)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Ordinary and null-safe correlation retain their independent NULL behavior.
+statement ok
+CREATE TABLE dedup_null_outer(k INTEGER);
+
+statement ok
+INSERT INTO dedup_null_outer VALUES (NULL);
+
+query II
+SELECT o.k,
+       (SELECT count(*) FROM dedup_measure m WHERE m.k = d.k)
+FROM dedup_null_outer o
+JOIN dedup_dim d ON o.k IS NOT DISTINCT FROM d.k
+WHERE d.state = 'selected';
+----
+NULL	0
+
+query II
+SELECT o.k,
+       (SELECT count(*) FROM dedup_measure m WHERE m.k IS NOT DISTINCT FROM d.k)
+FROM dedup_null_outer o
+JOIN dedup_dim d ON o.k IS NOT DISTINCT FROM d.k
+WHERE d.state = 'selected';
+----
+NULL	1
+
+# Multiple correlated keys remain in canonical order.
+statement ok
+CREATE TABLE dedup_pair_outer(k1 INTEGER, k2 INTEGER);
+
+statement ok
+INSERT INTO dedup_pair_outer VALUES (1, 10), (1, 10), (2, 20);
+
+statement ok
+CREATE TABLE dedup_pair_dim(k1 INTEGER, k2 INTEGER, state VARCHAR);
+
+statement ok
+INSERT INTO dedup_pair_dim VALUES (1, 10, 'selected'), (2, 20, 'selected'), (9, 90, 'selected');
+
+statement ok
+CREATE TABLE dedup_pair_measure(k1 INTEGER, k2 INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO dedup_pair_measure VALUES (1, 10, 3), (1, 10, 7);
+
+query III rowsort
+SELECT o.k1, o.k2,
+       (SELECT coalesce(sum(m.v), d.k1 + d.k2)
+        FROM dedup_pair_measure m
+        WHERE m.k1 = d.k1 AND m.k2 = d.k2)
+FROM dedup_pair_outer o
+JOIN dedup_pair_dim d ON o.k1 = d.k1 AND o.k2 = d.k2
+WHERE d.state = 'selected';
+----
+1	10	10
+1	10	10
+2	20	22
+
+# A safe superset can still drive selective aggregate work.
+statement ok
+CREATE TABLE dedup_unsafe_measure(k INTEGER, text_value VARCHAR);
+
+statement ok
+INSERT INTO dedup_unsafe_measure VALUES (2, '1'), (4, 'invalid');
+
+query I
+SELECT (
+    SELECT sum(length(m.text_value))
+    FROM dedup_unsafe_measure m
+    WHERE m.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_dim d ON o.k * 2 = d.k
+WHERE d.state = 'selected';
+----
+1
+
+query II
+EXPLAIN
+SELECT (
+    SELECT sum(length(m.text_value))
+    FROM dedup_unsafe_measure m
+    WHERE m.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_dim d ON o.k * 2 = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+
+# A throwing aggregate expression cannot be evaluated for unreachable superset keys.
+query I
+SELECT (
+    SELECT sum(CAST(m.text_value AS INTEGER))
+    FROM dedup_unsafe_measure m
+    WHERE m.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_dim d ON o.k * 2 = d.k
+WHERE d.state = 'selected';
+----
+1
+
+query II
+EXPLAIN
+SELECT (
+    SELECT sum(CAST(m.text_value AS INTEGER))
+    FROM dedup_unsafe_measure m
+    WHERE m.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_dim d ON o.k * 2 = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Volatile aggregate input also retains the exact duplicate-eliminated domain.
+query II
+EXPLAIN
+SELECT (
+    SELECT sum(random())
+    FROM dedup_unsafe_measure m
+    WHERE m.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_dim d ON o.k * 2 = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*Delim Join.*
+
+# The same safety rule applies when the available candidate would otherwise be factored.
+query I
+SELECT (
+    SELECT sum(CAST(m.text_value AS INTEGER))
+    FROM dedup_unsafe_measure m
+    WHERE m.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k
+    FROM dedup_dim
+    WHERE state = 'selected'
+    GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+1
+
+query II
+EXPLAIN
+SELECT (
+    SELECT sum(CAST(m.text_value AS INTEGER))
+    FROM dedup_unsafe_measure m
+    WHERE m.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k
+    FROM dedup_dim
+    WHERE state = 'selected'
+    GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Nested correlation continues through the existing FlattenDependentJoins machinery.
+query II rowsort
+SELECT o.k,
+       (SELECT count(*)
+        FROM dedup_measure m
+        WHERE m.k = d.k
+          AND EXISTS (
+              SELECT 1
+              WHERE m.v > o.k
+          ))
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+1	2
+1	2
+2	0

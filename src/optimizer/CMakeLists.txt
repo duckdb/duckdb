@@ -24,9 +24,9 @@ add_library_unity(
   cte_inlining.cpp
   deliminator.cpp
   distinct_aggregate_rewriter.cpp
-  duplicate_eliminated_aggregate_rewriter.cpp
   duplicate_eliminated_domain_candidate.cpp
   duplicate_eliminated_domain_factorer.cpp
+  duplicate_eliminated_domain_inliner.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
   filter_combiner.cpp

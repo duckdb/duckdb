@@ -26,11 +26,12 @@ static vector<Identifier> GenerateColumnNames(idx_t column_count) {
 
 unique_ptr<FactoredDuplicateEliminatedDomain>
 DuplicateEliminatedDomainFactorer::TryFactor(Binder &binder, unique_ptr<LogicalOperator> &join_op,
-                                             DuplicateEliminatedDomainCandidate &candidate) {
+                                             const DuplicateEliminatedDomainCandidate &candidate) {
 	auto &join = join_op->Cast<LogicalComparisonJoin>();
 	if (join.children.size() != 2 || join.duplicate_eliminated_columns.empty()) {
 		return nullptr;
 	}
+	D_ASSERT(candidate.key_indices.size() == join.duplicate_eliminated_columns.size());
 
 	auto &source_location = candidate.source.get();
 	auto old_bindings = source_location->GetColumnBindings();
@@ -68,6 +69,7 @@ DuplicateEliminatedDomainFactorer::TryFactor(Binder &binder, unique_ptr<LogicalO
 	auto domain = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
 	for (idx_t key_idx = 0; key_idx < candidate.key_indices.size(); key_idx++) {
 		auto source_idx = candidate.key_indices[key_idx];
+		D_ASSERT(source_idx < domain_bindings.size());
 		auto &key = join.duplicate_eliminated_columns[key_idx];
 		auto column =
 		    make_uniq<BoundColumnRefExpression>(key->GetName(), key->GetReturnType(), domain_bindings[source_idx]);

@@ -28,7 +28,7 @@ struct FactoredDuplicateEliminatedDomain {
 class DuplicateEliminatedDomainFactorer {
 public:
 	static unique_ptr<FactoredDuplicateEliminatedDomain> TryFactor(Binder &binder, unique_ptr<LogicalOperator> &join,
-	                                                               DuplicateEliminatedDomainCandidate &candidate);
+	                                                               const DuplicateEliminatedDomainCandidate &candidate);
 };
 
 } // namespace duckdb
