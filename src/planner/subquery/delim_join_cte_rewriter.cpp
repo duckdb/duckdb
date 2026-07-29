@@ -2146,10 +2146,10 @@ DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder) : binder(binder) {
 	    config.options.disabled_optimizers.find(OptimizerType::DELIMINATOR) == config.options.disabled_optimizers.end();
 }
 
-BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_ptr<LogicalOperator> &plan,
-                                                                        LogicalOperator &rewrite_root,
-                                                                        bool null_rejecting_filter_above,
-                                                                        bool preserve_evidence_side) {
+BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(unique_ptr<LogicalOperator> &plan,
+                                                                             LogicalOperator &rewrite_root,
+                                                                             bool null_rejecting_filter_above,
+                                                                             bool preserve_evidence_side) {
 	BindingReplacementGraph output_replacements;
 	unique_ptr<FactoredDuplicateEliminatedDomain> factored_domain;
 	{
@@ -2370,9 +2370,9 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		rewritten_delim_join = true;
-		auto materialize_replacements =
-		    MaterializeDelimJoinAsCTE(plan, rewrite_root, null_rejecting_filter_above, preserve_evidence_side);
-		output_replacements.Merge(materialize_replacements);
+		auto rewrite_replacements =
+		    RewriteDuplicateEliminatedJoin(plan, rewrite_root, null_rejecting_filter_above, preserve_evidence_side);
+		output_replacements.Merge(rewrite_replacements);
 	}
 	return output_replacements;
 }

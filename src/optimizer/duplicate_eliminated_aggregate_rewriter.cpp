@@ -864,21 +864,6 @@ private:
 		if (CountDomainCTERefs(*join.children[1], domain_cte_index) != 0) {
 			throw InternalException("CTE-free correlated aggregate retained a generated domain reference");
 		}
-		if (!join.right_projection_map.empty()) {
-			auto rhs_bindings = join.children[1]->GetColumnBindings();
-			for (auto &source_column : output_source_columns) {
-				auto entry = std::find(rhs_bindings.begin(), rhs_bindings.end(), source_column.binding);
-				if (entry == rhs_bindings.end()) {
-					throw InternalException("CTE-free correlated aggregate lost a moved payload binding");
-				}
-				auto projection_index = ProjectionIndex(NumericCast<idx_t>(entry - rhs_bindings.begin()));
-				if (std::find(join.right_projection_map.begin(), join.right_projection_map.end(), projection_index) ==
-				    join.right_projection_map.end()) {
-					join.right_projection_map.push_back(projection_index);
-				}
-			}
-		}
-
 		BindingReplacementGraph source_replacements;
 		for (idx_t binding_idx = 0; binding_idx < source_bindings.size(); binding_idx++) {
 			source_replacements.Add(source_bindings[binding_idx], output_source_columns[binding_idx].binding);
@@ -897,6 +882,10 @@ private:
 		}
 		join.join_type = JoinType::INNER;
 		join.duplicate_eliminated_columns.clear();
+		// These maps are pruning metadata inherited from the delimiter join. Keeping them would prevent the resulting
+		// ordinary comparison join from participating in join-order enumeration.
+		join.left_projection_map.clear();
+		join.right_projection_map.clear();
 
 		CorrelatedColumnBindingReplacer source_replacer;
 		source_replacements.AddTo(source_replacer);

@@ -72,6 +72,21 @@ WHERE d.state = 'selected'
 1	2	b
 2	1	c
 
+query IIIII rowsort
+SELECT f.k, f.v, d.k, d.state, d.tag
+FROM domain_fact f
+JOIN domain_duplicate_dim d ON f.k = d.k
+WHERE d.state = 'selected'
+  AND f.v < (
+      SELECT avg(i.v)
+      FROM domain_fact i
+      WHERE i.k = d.k
+  );
+----
+1	2	1	selected	a
+1	2	1	selected	b
+2	1	2	selected	c
+
 query II
 EXPLAIN
 SELECT f.k, f.v
