@@ -2,6 +2,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
