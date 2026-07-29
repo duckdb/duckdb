@@ -23,10 +23,10 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(
 		info->SetSecretName(*secret_name);
 	}
 	if (secret_storage_specifier) {
-		info->storage_type = Identifier(StringUtil::Lower(secret_storage_specifier->GetIdentifierName()));
+		info->storage_type = Identifier(secret_storage_specifier->Lower());
 	}
 	for (const auto &option : generic_copy_option_list) {
-		auto lower_name = StringUtil::Lower(option.name.GetIdentifierName());
+		auto lower_name = option.name.Lower();
 		if (lower_name == "scope") {
 			info->scope = option.GetFirstChildOrExpression();
 			continue;

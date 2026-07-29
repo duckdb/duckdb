@@ -179,10 +179,10 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 string GetConstraintName(const TableCatalogEntry &table, Constraint &constraint, const ExtraConstraintInfo &info) {
 	string result = table.name + "_";
 	for (auto &col : info.column_names) {
-		result += StringUtil::Lower(col.GetIdentifierName()) + "_";
+		result += col.Lower() + "_";
 	}
 	for (auto &col : info.referenced_columns) {
-		result += StringUtil::Lower(col.GetIdentifierName()) + "_";
+		result += col.Lower() + "_";
 	}
 	switch (constraint.type) {
 	case ConstraintType::CHECK:

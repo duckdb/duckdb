@@ -29,7 +29,7 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 	fields["table"] = "";
 
 	for (idx_t i = 0; i < field_types.size(); i++) {
-		auto field_name = StringUtil::Lower(field_types[i].first.GetIdentifierName());
+		auto field_name = field_types[i].first.Lower();
 
 		if (fields.find(field_name) == fields.end()) {
 			throw BinderException("index_key: unknown field '%s' in path", field_types[i].first.GetIdentifierName());

@@ -116,7 +116,7 @@ static unique_ptr<FunctionData> CreateExternalResourceBind(ClientContext &contex
 	result->type_name = StringValue::Get(input.inputs[0]);
 	result->params = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, vector<Value>(), vector<Value>());
 	for (auto &np : input.named_parameters) {
-		auto key = StringUtil::Lower(np.first.GetIdentifierName());
+		auto key = np.first.Lower();
 		if (key == "params" && !np.second.IsNull()) {
 			result->params = np.second;
 		} else if (key == "resource_name" && !np.second.IsNull()) {

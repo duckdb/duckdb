@@ -690,7 +690,7 @@ vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const 
 
 vector<string> StringUtil::TopNJaroWinkler(const vector<string> &strings, const Identifier &target, idx_t n,
                                            double threshold) {
-	return TopNJaroWinkler(strings, StringUtil::Lower(target.GetIdentifierName()), n, threshold);
+	return TopNJaroWinkler(strings, target.Lower(), n, threshold);
 }
 
 vector<string> StringUtil::TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n,

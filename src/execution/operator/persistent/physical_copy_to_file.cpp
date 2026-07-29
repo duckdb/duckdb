@@ -3559,7 +3559,7 @@ PhysicalCopyToFile::~PhysicalCopyToFile() {
 
 InsertionOrderPreservingMap<string> PhysicalCopyToFile::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["FORMAT"] = StringUtil::Upper(function.name.GetIdentifierName());
+	result["FORMAT"] = function.name.Upper();
 	return result;
 }
 

@@ -635,8 +635,7 @@ void SecretManager::AutoloadExtensionForType(const string &type) {
 }
 
 void SecretManager::ThrowTypeNotFoundError(const Identifier &type, const string &secret_path) {
-	auto entry =
-	    ExtensionHelper::FindExtensionInEntries(StringUtil::Lower(type.GetIdentifierName()), EXTENSION_SECRET_TYPES);
+	auto entry = ExtensionHelper::FindExtensionInEntries(type.Lower(), EXTENSION_SECRET_TYPES);
 	string error_message;
 
 	if (!entry.empty() && db) {

@@ -37,7 +37,7 @@ static unique_ptr<FunctionData> RegisterExternalResourceTypeBind(ClientContext &
 	type.search_path = CatalogSearchEntry::ListToString(ClientData::Get(context).catalog_search_path->GetSetPaths());
 
 	for (auto &np : input.named_parameters) {
-		auto key = StringUtil::Lower(np.first.GetIdentifierName());
+		auto key = np.first.Lower();
 		auto value = np.second.IsNull() ? string() : StringValue::Get(np.second);
 		if (key == "kind") {
 			type.kind = value;

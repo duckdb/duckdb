@@ -81,7 +81,7 @@ GenericCopyOption
 PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, const Identifier &copy_option_name,
                                                   optional<GenericCopyOptionValue> generic_copy_option_value) {
 	GenericCopyOption copy_option;
-	copy_option.name = Identifier(StringUtil::Lower(copy_option_name.GetIdentifierName()));
+	copy_option.name = Identifier(copy_option_name.Lower());
 	if (!generic_copy_option_value || !generic_copy_option_value->has_value) {
 		return copy_option;
 	}

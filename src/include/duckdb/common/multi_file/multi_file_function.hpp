@@ -198,7 +198,7 @@ public:
 
 		MultiFileOptions file_options;
 		for (auto &kv : input.named_parameters) {
-			auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+			auto loption = kv.first.Lower();
 			if (loption == "allow_empty") {
 				multi_file_reader->ParseOption(loption, kv.second, file_options, context);
 				if (file_options.allow_empty) {
@@ -214,7 +214,7 @@ public:
 
 		auto options = interface->InitializeOptions(context, input.info);
 		for (auto &kv : input.named_parameters) {
-			auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+			auto loption = kv.first.Lower();
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
 				continue;
 			}

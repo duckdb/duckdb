@@ -6,6 +6,18 @@
 
 namespace duckdb {
 
+string Identifier::Upper() const {
+	return StringUtil::Upper(value);
+}
+
+string Identifier::Lower() const {
+	return StringUtil::Lower(value);
+}
+
+bool Identifier::StartsWith(const string &prefix) const {
+	return StringUtil::CIStartsWith(value, prefix);
+}
+
 hash_t Identifier::Hash() const {
 	return StringUtil::CIHash(value);
 }

@@ -222,8 +222,8 @@ static const DefaultView internal_views[] = {
 
 static unique_ptr<CreateViewInfo> GetDefaultView(ClientContext &context, const Identifier &input_schema,
                                                  const Identifier &input_name) {
-	auto schema = StringUtil::Lower(input_schema.GetIdentifierName());
-	auto name = StringUtil::Lower(input_name.GetIdentifierName());
+	auto schema = input_schema.Lower();
+	auto name = input_name.Lower();
 	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
 		if (internal_views[index].schema == schema && internal_views[index].name == name) {
 			auto result = make_uniq<CreateViewInfo>();

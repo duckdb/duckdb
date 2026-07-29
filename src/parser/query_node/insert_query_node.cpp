@@ -64,7 +64,7 @@ string InsertQueryNode::ToString() const {
 			result += "(";
 			auto &cols = conflict_info.indexed_columns;
 			for (auto it = cols.begin(); it != cols.end();) {
-				result += StringUtil::Lower(it->GetIdentifierName());
+				result += it->Lower();
 				if (++it != cols.end()) {
 					result += ", ";
 				}
@@ -89,7 +89,7 @@ string InsertQueryNode::ToString() const {
 				if (i) {
 					result += ", ";
 				}
-				result += StringUtil::Lower(column.GetIdentifierName()) + " = " + expr->ToString();
+				result += column.Lower() + " = " + expr->ToString();
 			}
 			// (optional) where clause
 			if (set_info.condition) {

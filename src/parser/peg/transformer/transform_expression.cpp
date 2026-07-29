@@ -175,7 +175,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}
-	auto lowercase_name = StringUtil::Lower(qualified_function.Name().GetIdentifierName());
+	auto lowercase_name = qualified_function.Name().Lower();
 
 	if (over_clause) {
 		if (transformer.in_window_definition) {

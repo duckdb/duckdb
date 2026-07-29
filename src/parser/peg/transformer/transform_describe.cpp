@@ -84,7 +84,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 				}
 			} else if (IsInvalidSchema(base_table.GetQualifiedName().Schema())) {
 				// Logic for unqualified relations (databases, tables, variables)
-				auto table_name = StringUtil::Lower(base_table.Table().GetIdentifierName());
+				auto table_name = base_table.Table().Lower();
 				if (table_name == "databases" || table_name == "tables" || table_name == "schemas" ||
 				    table_name == "variables") {
 					showref->SetTableName(Identifier("\"" + table_name + "\""));

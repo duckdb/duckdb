@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> ExternalResourcesBind(ClientContext &context, Ta
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<ExternalResourcesBindData>();
 	for (auto &np : input.named_parameters) {
-		if (StringUtil::Lower(np.first.GetIdentifierName()) == "discover" && !np.second.IsNull()) {
+		if (np.first.Lower() == "discover" && !np.second.IsNull()) {
 			result->discover = BooleanValue::Get(np.second);
 		}
 	}
@@ -245,7 +245,7 @@ static unique_ptr<FunctionData> RegisterExternalResourceBind(ClientContext &cont
 	resource.handle = input.inputs[2];
 	resource.deleter_payload = input.inputs[2];
 	for (auto &np : input.named_parameters) {
-		auto key = StringUtil::Lower(np.first.GetIdentifierName());
+		auto key = np.first.Lower();
 		if (np.second.IsNull()) {
 			continue;
 		}

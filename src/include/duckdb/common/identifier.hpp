@@ -77,6 +77,13 @@ public:
 		return value.c_str();
 	}
 
+	//! The raw name converted to upper case
+	DUCKDB_API string Upper() const;
+	//! The raw name converted to lower case
+	DUCKDB_API string Lower() const;
+	//! Whether the identifier starts with the given prefix (case-insensitive)
+	DUCKDB_API bool StartsWith(const string &prefix) const;
+
 	//! Case-insensitive hash of the identifier
 	DUCKDB_API hash_t Hash() const;
 

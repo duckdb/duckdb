@@ -384,8 +384,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformColumnCompression(PEGTrans
                                                                         const Identifier &col_id_or_string) {
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "ColumnCompression";
-	entry.compression_type =
-	    EnumUtil::FromString<CompressionType>(StringUtil::Lower(col_id_or_string.GetIdentifierName()));
+	entry.compression_type = EnumUtil::FromString<CompressionType>(col_id_or_string.Lower());
 	return entry;
 }
 
