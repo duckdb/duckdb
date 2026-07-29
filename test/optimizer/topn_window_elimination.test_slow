@@ -51,6 +51,30 @@ WHERE greatest(c.x, p.z) = p.z
 QUALIFY row_number() OVER (PARTITION BY c.id ORDER BY c.k) = 1
 ----
 logical_opt	<REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
+# The duplicate-row-ID regression must exercise join late materialization rather than
+# passing by falling back to struct packing.
+statement ok
+CREATE TABLE topn_dup_l(id INTEGER, k INTEGER, p VARCHAR)
+
+statement ok
+CREATE TABLE topn_dup_r(k INTEGER, s INTEGER)
+
+statement ok
+INSERT INTO topn_dup_l VALUES (1, 1, 'x')
+
+statement ok
+INSERT INTO topn_dup_r VALUES (1, 20), (1, 10)
+
+query II
+EXPLAIN SELECT id, p
+FROM (
+	SELECT topn_dup_l.id, topn_dup_l.p, topn_dup_r.s
+	FROM topn_dup_l
+	JOIN topn_dup_r ON topn_dup_l.k = topn_dup_r.k
+) AS src
+QUALIFY ROW_NUMBER() OVER (ORDER BY s DESC NULLS LAST) <= 2
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*Join Type: INNER.*rowid = rowid.*AGGREGATE.*
 
 # An unpartitioned top-1 window must not turn empty input into a NULL row
 statement ok

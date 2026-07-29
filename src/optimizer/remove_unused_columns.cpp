@@ -45,14 +45,14 @@ static void GatherCTEScans(const idx_t cte_index, const LogicalOperator &op, uno
 	}
 }
 
-RemoveUnusedColumns::RemoveUnusedColumns(Optimizer &optimizer)
+RemoveUnusedColumns::RemoveUnusedColumns(Optimizer &optimizer, bool preserve_projection_map_bindings_p)
     : optimizer(optimizer), binder(optimizer.binder), context(optimizer.context), everything_referenced(true),
-      root(*this) {
+      preserve_projection_map_bindings(preserve_projection_map_bindings_p), root(*this) {
 }
 
 RemoveUnusedColumns::RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root)
     : optimizer(parent.optimizer), binder(parent.binder), context(parent.context), everything_referenced(is_root),
-      root(parent.root) {
+      preserve_projection_map_bindings(parent.preserve_projection_map_bindings), root(parent.root) {
 }
 
 unordered_map<idx_t, MaterializedCTEInfo> &RemoveUnusedColumns::GetCTEMap() {
@@ -188,6 +188,19 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
 			auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
 			auto &rhs_col = cond.right->Cast<BoundColumnRefExpression>();
+			if (preserve_projection_map_bindings && !comp_join.left_projection_map.empty()) {
+				const auto lhs_bindings = comp_join.children[0]->GetColumnBindings();
+				bool lhs_is_projected = false;
+				for (const auto projection_idx : comp_join.left_projection_map) {
+					if (lhs_bindings[projection_idx] == lhs_col.binding) {
+						lhs_is_projected = true;
+						break;
+					}
+				}
+				if (!lhs_is_projected) {
+					continue;
+				}
+			}
 			// if there are any columns that refer to the RHS,
 			auto colrefs = column_references.find(rhs_col.binding);
 			if (colrefs == column_references.end()) {
@@ -449,7 +462,19 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
-	LogicalOperatorVisitor::VisitOperatorChildren(op);
+	if (preserve_projection_map_bindings &&
+	    (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
+	     op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) &&
+	    op.HasProjectionMap()) {
+		// Projection maps contain positional references into the children. A repeated unused-column pass must not
+		// renumber those children without also remapping the projection maps.
+		for (auto &child : op.children) {
+			RemoveUnusedColumns remove(*this, true);
+			remove.VisitOperator(*child);
+		}
+	} else {
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
+	}
 
 	if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
 	    op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
