@@ -72,7 +72,10 @@ EXPLAIN SELECT nextval('s') AS v FROM integers LIMIT 1 OFFSET 1
 ----
 logical_opt	<REGEX>:.*LIMIT.*PROJECTION.*
 
+statement ok
+CREATE TABLE offset_result AS SELECT nextval('s') AS v FROM integers LIMIT 1 OFFSET 1
+
 query I
-SELECT nextval('s') AS v FROM integers LIMIT 1 OFFSET 1
+SELECT v FROM offset_result
 ----
 2
