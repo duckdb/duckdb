@@ -316,15 +316,15 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				column_index_list.push_back(Value::UBIGINT(col_index.index));
 			}
 			for (auto &name : info.column_names) {
-				column_name_list.push_back(Value(std::move(name)));
+				column_name_list.push_back(Value(name));
 			}
 			for (auto &name : info.referenced_columns) {
-				referenced_column_name_list.push_back(Value(std::move(name)));
+				referenced_column_name_list.push_back(Value(name));
 			}
 			constraint_column_indexes.Append(Value::LIST(LogicalType::BIGINT, std::move(column_index_list)));
 			constraint_column_names.Append(Value::LIST(LogicalType::VARCHAR, std::move(column_name_list)));
 			constraint_name_vec.Append(Value(std::move(constraint_name)));
-			referenced_table.Append(info.referenced_table.empty() ? Value() : Value(std::move(info.referenced_table)));
+			referenced_table.Append(info.referenced_table.empty() ? Value() : Value(info.referenced_table));
 			referenced_column_names.Append(Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
 			count++;
 		}
