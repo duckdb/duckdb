@@ -65,7 +65,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 		if (col_ref.IsQualified()) {
 			// the table qualifier is the component directly before the column name
 			auto &names = col_ref.ColumnNames();
-			if (StringUtil::StartsWith(names[names.size() - 2].GetIdentifierName(), DummyBinding::DUMMY_NAME)) {
+			if (names[names.size() - 2].StartsWith(DummyBinding::DUMMY_NAME)) {
 				bind_macro_parameter = true;
 			}
 		} else {
