@@ -13,11 +13,11 @@ import time
 
 
 MAX_CHUNK_CHARS = 100000
-MAX_CHUNK_FILES = 100
-MAX_FAILED_CHUNKS = 4
+MAX_CHUNK_FILES = 200
+MAX_FAILED_CHUNKS = 2
 MAX_RETRIES = 2
 RETRY_BACKOFF_MS = 500
-ERROR_TAIL_LINES = 120
+ERROR_TAIL_LINES = 2000
 RETRY_PATTERNS = (
     'invalid header end',
     'broken pipe',
@@ -187,11 +187,6 @@ def run_chunk_with_retries(base_command, chunk, repo_root, env, log_dir, pch_roo
             else:
                 print_output_tail('stdout', result.stdout)
                 print_output_tail('stderr', result.stderr)
-                print(
-                    f'attempt {attempt_id} failed with a non-retryable error; '
-                    f'not retrying. stdout: {stdout_path}; stderr: {stderr_path}',
-                    flush=True,
-                )
                 reset_pch_dir(pch_dir)
             return {
                 'attempt_id': attempt_id,
