@@ -846,6 +846,170 @@ AdbcStatusCode ConnectionCancel(struct AdbcConnection *connection, struct AdbcEr
 	return ADBC_STATUS_OK;
 }
 
+//===--------------------------------------------------------------------===//
+// Manual ArrowArray/ArrowSchema construction helpers
+//===--------------------------------------------------------------------===//
+// A few ADBC result columns must use Arrow features that DuckDB's Arrow
+// export cannot produce: ConnectionGetInfo's `info_value` and
+// ConnectionGetStatistics' `statistic_value` both have to be dense unions
+// per the ADBC spec, while DuckDB's Arrow export only produces sparse
+// unions. Those result batches cannot be produced with QueryInternal;
+// instead they are built manually with malloc'd buffers and released
+// through a recursive release callback, using the helpers below.
+
+// Recursively frees an ArrowArray tree built by InitManualArrayNode.
+static void ReleaseManualArray(struct ArrowArray *array) {
+	if (!array || !array->release) {
+		return;
+	}
+	if (array->buffers) {
+		for (int64_t i = 0; i < array->n_buffers; i++) {
+			if (array->buffers[i]) {
+				free(const_cast<void *>(array->buffers[i]));
+			}
+		}
+		free(array->buffers);
+	}
+	if (array->children) {
+		for (int64_t i = 0; i < array->n_children; i++) {
+			auto child = array->children[i];
+			if (child) {
+				if (child->release) {
+					child->release(child);
+				}
+				free(child);
+			}
+		}
+		free(array->children);
+	}
+	array->release = nullptr;
+}
+
+// Zero-initializes an ArrowArray node, allocates its buffer/child pointer
+// arrays and installs ReleaseManualArray. Children are zero-initialized;
+// releasing the root frees a partially built tree, so callers only need to
+// release the root on failure.
+static AdbcStatusCode InitManualArrayNode(struct ArrowArray *array, int64_t n_buffers, int64_t n_children,
+                                          struct AdbcError *error) {
+	memset(array, 0, sizeof(*array));
+	array->release = ReleaseManualArray;
+	if (n_buffers > 0) {
+		array->buffers = static_cast<const void **>(malloc(sizeof(void *) * static_cast<size_t>(n_buffers)));
+		if (!array->buffers) {
+			SetError(error, "Failed to allocate buffers for result");
+			return ADBC_STATUS_INTERNAL;
+		}
+		memset(array->buffers, 0, sizeof(void *) * static_cast<size_t>(n_buffers));
+		array->n_buffers = n_buffers;
+	}
+	if (n_children > 0) {
+		array->children =
+		    static_cast<struct ArrowArray **>(malloc(sizeof(struct ArrowArray *) * static_cast<size_t>(n_children)));
+		if (!array->children) {
+			SetError(error, "Failed to allocate children for result");
+			return ADBC_STATUS_INTERNAL;
+		}
+		memset(array->children, 0, sizeof(struct ArrowArray *) * static_cast<size_t>(n_children));
+		array->n_children = n_children;
+		for (int64_t i = 0; i < n_children; i++) {
+			array->children[i] = static_cast<struct ArrowArray *>(malloc(sizeof(struct ArrowArray)));
+			if (!array->children[i]) {
+				SetError(error, "Failed to allocate child array for result");
+				return ADBC_STATUS_INTERNAL;
+			}
+			memset(array->children[i], 0, sizeof(struct ArrowArray));
+		}
+	}
+	return ADBC_STATUS_OK;
+}
+
+// Allocates a zeroed buffer owned by the array node (freed by the release
+// callback). Returns nullptr on allocation failure.
+static void *AllocManualBuffer(struct ArrowArray *array, idx_t buffer_idx, size_t size) {
+	auto alloc_size = size == 0 ? 1 : size;
+	auto buffer = malloc(alloc_size);
+	if (buffer) {
+		memset(buffer, 0, alloc_size);
+		array->buffers[buffer_idx] = buffer;
+	}
+	return buffer;
+}
+
+// Fills a utf8 array node from `values` (no NULL entries).
+static AdbcStatusCode BuildManualVarcharArray(struct ArrowArray *array, const duckdb::vector<duckdb::string> &values,
+                                              struct AdbcError *error) {
+	auto count = values.size();
+	auto status = InitManualArrayNode(array, 3, 0, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	array->length = static_cast<int64_t>(count);
+	auto offsets = static_cast<int32_t *>(AllocManualBuffer(array, 1, sizeof(int32_t) * (count + 1)));
+	size_t total_size = 0;
+	for (auto &value : values) {
+		total_size += value.size();
+	}
+	auto data = static_cast<char *>(AllocManualBuffer(array, 2, total_size));
+	if (!offsets || !data) {
+		SetError(error, "Failed to allocate string buffers for result");
+		return ADBC_STATUS_INTERNAL;
+	}
+	int32_t offset = 0;
+	for (idx_t i = 0; i < count; i++) {
+		offsets[i] = offset;
+		memcpy(data + offset, values[i].data(), values[i].size());
+		offset += static_cast<int32_t>(values[i].size());
+	}
+	offsets[count] = offset;
+	return ADBC_STATUS_OK;
+}
+
+// Fills a utf8 array node where every entry is NULL (used for the table-level
+// `column_name` column of GetStatistics).
+static AdbcStatusCode BuildManualAllNullVarcharArray(struct ArrowArray *array, idx_t count, struct AdbcError *error) {
+	auto status = InitManualArrayNode(array, 3, 0, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	array->length = static_cast<int64_t>(count);
+	array->null_count = static_cast<int64_t>(count);
+	// All-zero validity bitmap (all NULL), all-zero offsets and an empty data buffer.
+	auto validity = AllocManualBuffer(array, 0, (count + 7) / 8);
+	auto offsets = AllocManualBuffer(array, 1, sizeof(int32_t) * (count + 1));
+	auto data = AllocManualBuffer(array, 2, 0);
+	if (!validity || !offsets || !data) {
+		SetError(error, "Failed to allocate string buffers for result");
+		return ADBC_STATUS_INTERNAL;
+	}
+	return ADBC_STATUS_OK;
+}
+
+#define CHECK_MANUAL_NANOARROW(EXPR)                                                                                   \
+	do {                                                                                                               \
+		if ((EXPR) != 0) {                                                                                             \
+			SetError(error, "Failed to build Arrow schema for result");                                                \
+			return ADBC_STATUS_INTERNAL;                                                                               \
+		}                                                                                                              \
+	} while (0)
+
+// Releases a manually built ArrowSchema/ArrowArray pair unless ownership was
+// transferred to a stream (BatchToArrayStream zeroes its inputs on success,
+// which makes this a no-op).
+struct ManualBatchGuard {
+	ManualBatchGuard(struct ArrowSchema &schema_p, struct ArrowArray &array_p) : schema(schema_p), array(array_p) {
+	}
+	~ManualBatchGuard() {
+		if (schema.release) {
+			schema.release(&schema);
+		}
+		if (array.release) {
+			array.release(&array);
+		}
+	}
+	struct ArrowSchema &schema;
+	struct ArrowArray &array;
+};
+
 enum class AdbcInfoCode : uint32_t {
 	VENDOR_NAME,
 	VENDOR_VERSION,
@@ -875,6 +1039,238 @@ static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
 	}
 }
 
+namespace {
+// One resolved GetInfo row. Only one of `string_value` / `int64_value` is
+// meaningful, selected by `type_id` (dense union member index: 0 for
+// string_value, 2 for int64_value -- DuckDB never populates the other
+// union members).
+struct GetInfoEntry {
+	uint32_t info_name;
+	int8_t type_id;
+	duckdb::string string_value;
+	int64_t int64_value;
+};
+} // namespace
+
+// Builds the GetInfo result schema defined in adbc.h: struct<info_name:
+// uint32 not null, info_value: dense union>. `info_value` must be a dense
+// union per the spec (format "+ud:0,1,2,3,4,5"); DuckDB only ever populates
+// the string_value (0) and int64_value (2) members, but all six are
+// declared so consumers can rely on the field names/indices from the spec.
+// The caller is responsible for releasing `schema` on failure.
+static AdbcStatusCode BuildGetInfoSchema(struct ArrowSchema &schema, struct AdbcError *error) {
+	using duckdb_nanoarrow::ArrowSchemaAllocateChildren;
+	using duckdb_nanoarrow::ArrowSchemaInit;
+	using duckdb_nanoarrow::ArrowSchemaSetFormat;
+	using duckdb_nanoarrow::ArrowSchemaSetName;
+
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(&schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(&schema, 2));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(schema.children[0], duckdb_nanoarrow::NANOARROW_TYPE_UINT32));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(schema.children[0], "info_name"));
+	schema.children[0]->flags &= ~ARROW_FLAG_NULLABLE;
+
+	// info_value: dense union (the bundled nanoarrow has no union type
+	// template, so the format string is set directly).
+	auto value_schema = schema.children[1];
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema, duckdb_nanoarrow::NANOARROW_TYPE_UNINITIALIZED));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetFormat(value_schema, "+ud:0,1,2,3,4,5"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema, "info_value"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(value_schema, 6));
+
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema->children[0], "string_value"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema->children[1], duckdb_nanoarrow::NANOARROW_TYPE_BOOL));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema->children[1], "bool_value"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema->children[2], duckdb_nanoarrow::NANOARROW_TYPE_INT64));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema->children[2], "int64_value"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema->children[3], duckdb_nanoarrow::NANOARROW_TYPE_INT32));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema->children[3], "int32_bitmask"));
+
+	// string_list: list<utf8>.
+	auto list_schema = value_schema->children[4];
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(list_schema, duckdb_nanoarrow::NANOARROW_TYPE_LIST));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(list_schema, "string_list"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(list_schema, 1));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(list_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(list_schema->children[0], "item"));
+
+	// int32_to_int32_list_map: map<int32, list<int32>>, encoded as
+	// list<struct<key: int32 not null, value: list<int32>>> per the Arrow map
+	// layout.
+	auto map_schema = value_schema->children[5];
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(map_schema, duckdb_nanoarrow::NANOARROW_TYPE_MAP));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(map_schema, "int32_to_int32_list_map"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(map_schema, 1));
+	auto entries_schema = map_schema->children[0];
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(entries_schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(entries_schema, "entries"));
+	entries_schema->flags &= ~ARROW_FLAG_NULLABLE;
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(entries_schema, 2));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(entries_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_INT32));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(entries_schema->children[0], "key"));
+	entries_schema->children[0]->flags &= ~ARROW_FLAG_NULLABLE;
+	auto map_value_schema = entries_schema->children[1];
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(map_value_schema, duckdb_nanoarrow::NANOARROW_TYPE_LIST));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(map_value_schema, "value"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(map_value_schema, 1));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(map_value_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_INT32));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(map_value_schema->children[0], "item"));
+
+	return ADBC_STATUS_OK;
+}
+
+// Assembles the GetInfo batch from resolved entries. The caller releases
+// `array` on failure.
+static AdbcStatusCode BuildGetInfoArray(struct ArrowArray &array, const duckdb::vector<GetInfoEntry> &entries,
+                                        struct AdbcError *error) {
+	auto count = entries.size();
+
+	// Root struct: one row per requested (and recognized) info code.
+	auto status = InitManualArrayNode(&array, 1, 2, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	array.length = static_cast<int64_t>(count);
+
+	// info_name.
+	auto name_array = array.children[0];
+	status = InitManualArrayNode(name_array, 2, 0, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	name_array->length = static_cast<int64_t>(count);
+	auto names = static_cast<uint32_t *>(AllocManualBuffer(name_array, 1, sizeof(uint32_t) * count));
+	if (!names) {
+		SetError(error, "Failed to allocate name buffer for GetInfo result");
+		return ADBC_STATUS_INTERNAL;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		names[i] = entries[i].info_name;
+	}
+
+	// info_value: dense union. Only members 0 (string_value) and 2
+	// (int64_value) are ever populated by DuckDB; the rest are always empty.
+	auto value_array = array.children[1];
+	status = InitManualArrayNode(value_array, 2, 6, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	value_array->length = static_cast<int64_t>(count);
+	auto type_ids = static_cast<int8_t *>(AllocManualBuffer(value_array, 0, count));
+	auto value_offsets = static_cast<int32_t *>(AllocManualBuffer(value_array, 1, sizeof(int32_t) * count));
+	if (!type_ids || !value_offsets) {
+		SetError(error, "Failed to allocate union buffers for GetInfo result");
+		return ADBC_STATUS_INTERNAL;
+	}
+	duckdb::vector<duckdb::string> string_values;
+	duckdb::vector<int64_t> int64_values;
+	for (idx_t i = 0; i < count; i++) {
+		auto &entry = entries[i];
+		type_ids[i] = entry.type_id;
+		switch (entry.type_id) {
+		case 0:
+			value_offsets[i] = static_cast<int32_t>(string_values.size());
+			string_values.push_back(entry.string_value);
+			break;
+		case 2:
+			value_offsets[i] = static_cast<int32_t>(int64_values.size());
+			int64_values.push_back(entry.int64_value);
+			break;
+		default:
+			// Unreachable: ConnectionGetInfo only ever produces type_id 0 or 2.
+			SetError(error, "Unexpected GetInfo union type id");
+			return ADBC_STATUS_INTERNAL;
+		}
+	}
+
+	// string_value: populated.
+	status = BuildManualVarcharArray(value_array->children[0], string_values, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	// bool_value: always empty.
+	status = InitManualArrayNode(value_array->children[1], 2, 0, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	// int64_value: populated.
+	auto int64_child = value_array->children[2];
+	status = InitManualArrayNode(int64_child, 2, 0, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	int64_child->length = static_cast<int64_t>(int64_values.size());
+	if (!int64_values.empty()) {
+		auto int64_data =
+		    static_cast<int64_t *>(AllocManualBuffer(int64_child, 1, sizeof(int64_t) * int64_values.size()));
+		if (!int64_data) {
+			SetError(error, "Failed to allocate union buffers for GetInfo result");
+			return ADBC_STATUS_INTERNAL;
+		}
+		for (idx_t i = 0; i < int64_values.size(); i++) {
+			int64_data[i] = int64_values[i];
+		}
+	}
+	// int32_bitmask: always empty.
+	status = InitManualArrayNode(value_array->children[3], 2, 0, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	// string_list: always empty, but variable-size layouts need an offsets
+	// buffer with a single zero entry (see BuildGetStatisticsArray's
+	// binary_child for the same requirement).
+	auto list_child = value_array->children[4];
+	status = InitManualArrayNode(list_child, 2, 1, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	if (!AllocManualBuffer(list_child, 1, sizeof(int32_t))) {
+		SetError(error, "Failed to allocate union buffers for GetInfo result");
+		return ADBC_STATUS_INTERNAL;
+	}
+	status = BuildManualVarcharArray(list_child->children[0], duckdb::vector<duckdb::string>(), error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	// int32_to_int32_list_map: always empty; same offsets requirement as
+	// string_list, plus an empty `entries` struct (key int32 / value
+	// list<int32>) beneath it.
+	auto map_child = value_array->children[5];
+	status = InitManualArrayNode(map_child, 2, 1, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	if (!AllocManualBuffer(map_child, 1, sizeof(int32_t))) {
+		SetError(error, "Failed to allocate union buffers for GetInfo result");
+		return ADBC_STATUS_INTERNAL;
+	}
+	auto entries_child = map_child->children[0];
+	status = InitManualArrayNode(entries_child, 1, 2, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = InitManualArrayNode(entries_child->children[0], 2, 0, error); // key
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	auto map_value_child = entries_child->children[1]; // value: list<int32>
+	status = InitManualArrayNode(map_value_child, 2, 1, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	if (!AllocManualBuffer(map_value_child, 1, sizeof(int32_t))) {
+		SetError(error, "Failed to allocate union buffers for GetInfo result");
+		return ADBC_STATUS_INTERNAL;
+	}
+	status = InitManualArrayNode(map_value_child->children[0], 2, 0, error); // item
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
+	return ADBC_STATUS_OK;
+}
+
 AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32_t *info_codes,
                                  size_t info_codes_length, struct ArrowArrayStream *out, struct AdbcError *error) {
 	if (!connection) {
@@ -889,6 +1285,11 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32
 		SetError(error, "Output parameter was not provided");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+	if (!conn_wrapper->connection) {
+		SetError(error, "Connection is not initialized");
+		return ADBC_STATUS_INVALID_STATE;
+	}
 
 	// If 'info_codes' is NULL, we should output all the info codes we recognize
 	static constexpr uint32_t DEFAULT_INFO_CODES[] = {ADBC_INFO_VENDOR_NAME,          ADBC_INFO_VENDOR_VERSION,
@@ -897,85 +1298,66 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32
 	const uint32_t *requested_codes = info_codes ? info_codes : DEFAULT_INFO_CODES;
 	size_t length = info_codes ? info_codes_length : (sizeof(DEFAULT_INFO_CODES) / sizeof(DEFAULT_INFO_CODES[0]));
 
-	duckdb::string q = R"EOF(
-		select
-			name::UINTEGER as info_name,
-			info::UNION(
-				string_value VARCHAR,
-				bool_value BOOL,
-				int64_value BIGINT,
-				int32_bitmask INTEGER,
-				string_list VARCHAR[],
-				int32_to_int32_list_map MAP(INTEGER, INTEGER[])
-			) as info_value from values
-	)EOF";
-
-	duckdb::string results = "";
-	static constexpr const char *INFO_UNION_TYPE = "UNION(string_value VARCHAR, bool_value BOOL, int64_value BIGINT, "
-	                                               "int32_bitmask INTEGER, string_list VARCHAR[], "
-	                                               "int32_to_int32_list_map MAP(INTEGER, INTEGER[]))";
-
+	// The info_value column is a dense union per the ADBC spec, which
+	// DuckDB's Arrow export cannot produce; the batch is built manually
+	// below instead of going through QueryInternal. Resolve the requested
+	// codes into entries first, ignoring unrecognized codes.
+	duckdb::vector<GetInfoEntry> entries;
 	for (size_t i = 0; i < length; i++) {
 		auto code = duckdb::NumericCast<uint32_t>(requested_codes[i]);
 		auto info_code = ConvertToInfoCode(code);
 		switch (info_code) {
-		case AdbcInfoCode::VENDOR_NAME: {
-			results += duckdb::StringUtil::Format("(%u, union_value(string_value := 'duckdb')::%s),",
-			                                      (uint32_t)ADBC_INFO_VENDOR_NAME, INFO_UNION_TYPE);
+		case AdbcInfoCode::VENDOR_NAME:
+			entries.push_back({(uint32_t)ADBC_INFO_VENDOR_NAME, 0, "duckdb", 0});
 			break;
-		}
-		case AdbcInfoCode::VENDOR_VERSION: {
-			results += duckdb::StringUtil::Format("(%u, union_value(string_value := '%s')::%s),",
-			                                      (uint32_t)ADBC_INFO_VENDOR_VERSION, duckdb_library_version(),
-			                                      INFO_UNION_TYPE);
+		case AdbcInfoCode::VENDOR_VERSION:
+			entries.push_back({(uint32_t)ADBC_INFO_VENDOR_VERSION, 0, duckdb_library_version(), 0});
 			break;
-		}
-		case AdbcInfoCode::DRIVER_NAME: {
-			results += duckdb::StringUtil::Format("(%u, union_value(string_value := 'ADBC DuckDB Driver')::%s),",
-			                                      (uint32_t)ADBC_INFO_DRIVER_NAME, INFO_UNION_TYPE);
+		case AdbcInfoCode::DRIVER_NAME:
+			entries.push_back({(uint32_t)ADBC_INFO_DRIVER_NAME, 0, "ADBC DuckDB Driver", 0});
 			break;
-		}
-		case AdbcInfoCode::DRIVER_VERSION: {
-			results += duckdb::StringUtil::Format("(%u, union_value(string_value := '%s')::%s),",
-			                                      (uint32_t)ADBC_INFO_DRIVER_VERSION, duckdb_library_version(),
-			                                      INFO_UNION_TYPE);
+		case AdbcInfoCode::DRIVER_VERSION:
+			entries.push_back({(uint32_t)ADBC_INFO_DRIVER_VERSION, 0, duckdb_library_version(), 0});
 			break;
-		}
-		case AdbcInfoCode::DRIVER_ARROW_VERSION: {
+		case AdbcInfoCode::DRIVER_ARROW_VERSION:
 			// TODO: fill in arrow version
-			results += duckdb::StringUtil::Format("(%u, union_value(string_value := '(unknown)')::%s),",
-			                                      (uint32_t)ADBC_INFO_DRIVER_ARROW_VERSION, INFO_UNION_TYPE);
+			entries.push_back({(uint32_t)ADBC_INFO_DRIVER_ARROW_VERSION, 0, "(unknown)", 0});
 			break;
-		}
-		case AdbcInfoCode::DRIVER_ADBC_VERSION: {
-			results += duckdb::StringUtil::Format("(%u, union_value(int64_value := %lld::BIGINT)::%s),",
-			                                      ADBC_INFO_DRIVER_ADBC_VERSION, (long long)ADBC_VERSION_1_1_0,
-			                                      INFO_UNION_TYPE);
+		case AdbcInfoCode::DRIVER_ADBC_VERSION:
+			entries.push_back(
+			    {(uint32_t)ADBC_INFO_DRIVER_ADBC_VERSION, 2, duckdb::string(), (int64_t)ADBC_VERSION_1_1_0});
 			break;
-		}
-		case AdbcInfoCode::UNRECOGNIZED: {
+		case AdbcInfoCode::UNRECOGNIZED:
 			// Unrecognized codes are not an error, just ignored
 			continue;
-		}
-		default: {
+		default:
 			// Codes that we have implemented but not handled here are a developer error
 			SetError(error, "Info code recognized but not handled");
 			return ADBC_STATUS_INTERNAL;
 		}
-		}
 	}
-	if (results.empty()) {
-		// Add a group of values so the query parses
-		q += "(NULL, NULL)";
-	} else {
-		q += results;
+
+	struct ArrowSchema schema;
+	memset(&schema, 0, sizeof(schema));
+	struct ArrowArray array;
+	memset(&array, 0, sizeof(array));
+	ManualBatchGuard guard(schema, array);
+
+	auto status = BuildGetInfoSchema(schema, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
 	}
-	q += " tbl(name, info)";
-	if (results.empty()) {
-		// Add an impossible where clause to return an empty result set
-		q += " where true = false";
+	status = BuildGetInfoArray(array, entries, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
 	}
-	return QueryInternal(connection, out, q.c_str(), error);
+	// Per ADBC semantics `out` is a pure output parameter that may contain
+	// uninitialized stack garbage, so it must be zeroed rather than letting
+	// BatchToArrayStream inspect `out->release`; see ConnectionGetStatistics.
+	memset(out, 0, sizeof(*out));
+	// On success ownership of schema/array moves into the stream and the guard
+	// becomes a no-op.
+	return BatchToArrayStream(&array, &schema, out, error);
 }
 
 AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
@@ -2637,147 +3019,10 @@ AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct
 // Statistics (ADBC 1.1.0)
 //===--------------------------------------------------------------------===//
 // The `statistic_value` column of GetStatistics must be a dense union per
-// the ADBC spec. DuckDB's Arrow export only produces sparse unions,
-// so the result batch cannot be produced with QueryInternal;
-// instead it is built manually with malloc'd buffers and released through a
-// recursive release callback.
-
-// Recursively frees an ArrowArray tree built by InitStatisticsArrayNode.
-static void ReleaseStatisticsArray(struct ArrowArray *array) {
-	if (!array || !array->release) {
-		return;
-	}
-	if (array->buffers) {
-		for (int64_t i = 0; i < array->n_buffers; i++) {
-			if (array->buffers[i]) {
-				free(const_cast<void *>(array->buffers[i]));
-			}
-		}
-		free(array->buffers);
-	}
-	if (array->children) {
-		for (int64_t i = 0; i < array->n_children; i++) {
-			auto child = array->children[i];
-			if (child) {
-				if (child->release) {
-					child->release(child);
-				}
-				free(child);
-			}
-		}
-		free(array->children);
-	}
-	array->release = nullptr;
-}
-
-// Zero-initializes an ArrowArray node, allocates its buffer/child pointer
-// arrays and installs ReleaseStatisticsArray. Children are zero-initialized;
-// releasing the root frees a partially built tree, so callers only need to
-// release the root on failure.
-static AdbcStatusCode InitStatisticsArrayNode(struct ArrowArray *array, int64_t n_buffers, int64_t n_children,
-                                              struct AdbcError *error) {
-	memset(array, 0, sizeof(*array));
-	array->release = ReleaseStatisticsArray;
-	if (n_buffers > 0) {
-		array->buffers = static_cast<const void **>(malloc(sizeof(void *) * static_cast<size_t>(n_buffers)));
-		if (!array->buffers) {
-			SetError(error, "Failed to allocate buffers for statistics result");
-			return ADBC_STATUS_INTERNAL;
-		}
-		memset(array->buffers, 0, sizeof(void *) * static_cast<size_t>(n_buffers));
-		array->n_buffers = n_buffers;
-	}
-	if (n_children > 0) {
-		array->children =
-		    static_cast<struct ArrowArray **>(malloc(sizeof(struct ArrowArray *) * static_cast<size_t>(n_children)));
-		if (!array->children) {
-			SetError(error, "Failed to allocate children for statistics result");
-			return ADBC_STATUS_INTERNAL;
-		}
-		memset(array->children, 0, sizeof(struct ArrowArray *) * static_cast<size_t>(n_children));
-		array->n_children = n_children;
-		for (int64_t i = 0; i < n_children; i++) {
-			array->children[i] = static_cast<struct ArrowArray *>(malloc(sizeof(struct ArrowArray)));
-			if (!array->children[i]) {
-				SetError(error, "Failed to allocate child array for statistics result");
-				return ADBC_STATUS_INTERNAL;
-			}
-			memset(array->children[i], 0, sizeof(struct ArrowArray));
-		}
-	}
-	return ADBC_STATUS_OK;
-}
-
-// Allocates a zeroed buffer owned by the array node (freed by the release
-// callback). Returns nullptr on allocation failure.
-static void *AllocStatisticsBuffer(struct ArrowArray *array, idx_t buffer_idx, size_t size) {
-	auto alloc_size = size == 0 ? 1 : size;
-	auto buffer = malloc(alloc_size);
-	if (buffer) {
-		memset(buffer, 0, alloc_size);
-		array->buffers[buffer_idx] = buffer;
-	}
-	return buffer;
-}
-
-// Fills a utf8 array node from `values` (no NULL entries).
-static AdbcStatusCode BuildStatisticsVarcharArray(struct ArrowArray *array,
-                                                  const duckdb::vector<duckdb::string> &values,
-                                                  struct AdbcError *error) {
-	auto count = values.size();
-	auto status = InitStatisticsArrayNode(array, 3, 0, error);
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
-	array->length = static_cast<int64_t>(count);
-	auto offsets = static_cast<int32_t *>(AllocStatisticsBuffer(array, 1, sizeof(int32_t) * (count + 1)));
-	size_t total_size = 0;
-	for (auto &value : values) {
-		total_size += value.size();
-	}
-	auto data = static_cast<char *>(AllocStatisticsBuffer(array, 2, total_size));
-	if (!offsets || !data) {
-		SetError(error, "Failed to allocate string buffers for statistics result");
-		return ADBC_STATUS_INTERNAL;
-	}
-	int32_t offset = 0;
-	for (idx_t i = 0; i < count; i++) {
-		offsets[i] = offset;
-		memcpy(data + offset, values[i].data(), values[i].size());
-		offset += static_cast<int32_t>(values[i].size());
-	}
-	offsets[count] = offset;
-	return ADBC_STATUS_OK;
-}
-
-// Fills a utf8 array node where every entry is NULL (used for the table-level
-// `column_name` column).
-static AdbcStatusCode BuildStatisticsAllNullVarcharArray(struct ArrowArray *array, idx_t count,
-                                                         struct AdbcError *error) {
-	auto status = InitStatisticsArrayNode(array, 3, 0, error);
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
-	array->length = static_cast<int64_t>(count);
-	array->null_count = static_cast<int64_t>(count);
-	// All-zero validity bitmap (all NULL), all-zero offsets and an empty data buffer.
-	auto validity = AllocStatisticsBuffer(array, 0, (count + 7) / 8);
-	auto offsets = AllocStatisticsBuffer(array, 1, sizeof(int32_t) * (count + 1));
-	auto data = AllocStatisticsBuffer(array, 2, 0);
-	if (!validity || !offsets || !data) {
-		SetError(error, "Failed to allocate string buffers for statistics result");
-		return ADBC_STATUS_INTERNAL;
-	}
-	return ADBC_STATUS_OK;
-}
-
-#define CHECK_STATISTICS_NANOARROW(EXPR)                                                                               \
-	do {                                                                                                               \
-		if ((EXPR) != 0) {                                                                                             \
-			SetError(error, "Failed to build Arrow schema for statistics result");                                     \
-			return ADBC_STATUS_INTERNAL;                                                                               \
-		}                                                                                                              \
-	} while (0)
+// the ADBC spec. DuckDB's Arrow export only produces sparse unions, so the
+// result batch cannot be produced with QueryInternal; instead it is built
+// manually with malloc'd buffers, using the shared helpers defined above
+// (also used by ConnectionGetInfo for the same reason).
 
 // Builds the GetStatistics result schema defined in adbc.h. The caller is
 // responsible for releasing `schema` on failure.
@@ -2787,60 +3032,58 @@ static AdbcStatusCode BuildGetStatisticsSchema(struct ArrowSchema &schema, struc
 	using duckdb_nanoarrow::ArrowSchemaSetFormat;
 	using duckdb_nanoarrow::ArrowSchemaSetName;
 
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(&schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaAllocateChildren(&schema, 2));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(schema.children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(schema.children[0], "catalog_name"));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(schema.children[1], duckdb_nanoarrow::NANOARROW_TYPE_LIST));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(schema.children[1], "catalog_db_schemas"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(&schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(&schema, 2));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(schema.children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(schema.children[0], "catalog_name"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(schema.children[1], duckdb_nanoarrow::NANOARROW_TYPE_LIST));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(schema.children[1], "catalog_db_schemas"));
 	schema.children[1]->flags &= ~ARROW_FLAG_NULLABLE;
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaAllocateChildren(schema.children[1], 1));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(schema.children[1], 1));
 
 	auto db_schema_schema = schema.children[1]->children[0];
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(db_schema_schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(db_schema_schema, "item"));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaAllocateChildren(db_schema_schema, 2));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(db_schema_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(db_schema_schema->children[0], "db_schema_name"));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(db_schema_schema->children[1], duckdb_nanoarrow::NANOARROW_TYPE_LIST));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(db_schema_schema->children[1], "db_schema_statistics"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(db_schema_schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(db_schema_schema, "item"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(db_schema_schema, 2));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(db_schema_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(db_schema_schema->children[0], "db_schema_name"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(db_schema_schema->children[1], duckdb_nanoarrow::NANOARROW_TYPE_LIST));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(db_schema_schema->children[1], "db_schema_statistics"));
 	db_schema_schema->children[1]->flags &= ~ARROW_FLAG_NULLABLE;
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaAllocateChildren(db_schema_schema->children[1], 1));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(db_schema_schema->children[1], 1));
 
 	auto statistics_schema = db_schema_schema->children[1]->children[0];
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(statistics_schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(statistics_schema, "item"));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaAllocateChildren(statistics_schema, 5));
-	CHECK_STATISTICS_NANOARROW(
-	    ArrowSchemaInit(statistics_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(statistics_schema->children[0], "table_name"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(statistics_schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(statistics_schema, "item"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(statistics_schema, 5));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(statistics_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(statistics_schema->children[0], "table_name"));
 	statistics_schema->children[0]->flags &= ~ARROW_FLAG_NULLABLE;
-	CHECK_STATISTICS_NANOARROW(
-	    ArrowSchemaInit(statistics_schema->children[1], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(statistics_schema->children[1], "column_name"));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(statistics_schema->children[2], duckdb_nanoarrow::NANOARROW_TYPE_INT16));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(statistics_schema->children[2], "statistic_key"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(statistics_schema->children[1], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(statistics_schema->children[1], "column_name"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(statistics_schema->children[2], duckdb_nanoarrow::NANOARROW_TYPE_INT16));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(statistics_schema->children[2], "statistic_key"));
 	statistics_schema->children[2]->flags &= ~ARROW_FLAG_NULLABLE;
 
 	// statistic_value: dense union (the bundled nanoarrow has no union type
 	// template, so the format string is set directly).
 	auto value_schema = statistics_schema->children[3];
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(value_schema, duckdb_nanoarrow::NANOARROW_TYPE_UNINITIALIZED));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetFormat(value_schema, "+ud:0,1,2,3"));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(value_schema, "statistic_value"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema, duckdb_nanoarrow::NANOARROW_TYPE_UNINITIALIZED));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetFormat(value_schema, "+ud:0,1,2,3"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema, "statistic_value"));
 	value_schema->flags &= ~ARROW_FLAG_NULLABLE;
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaAllocateChildren(value_schema, 4));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(value_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_INT64));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(value_schema->children[0], "int64"));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(value_schema->children[1], duckdb_nanoarrow::NANOARROW_TYPE_UINT64));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(value_schema->children[1], "uint64"));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(value_schema->children[2], duckdb_nanoarrow::NANOARROW_TYPE_DOUBLE));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(value_schema->children[2], "float64"));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(value_schema->children[3], duckdb_nanoarrow::NANOARROW_TYPE_BINARY));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(value_schema->children[3], "binary"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(value_schema, 4));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema->children[0], duckdb_nanoarrow::NANOARROW_TYPE_INT64));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema->children[0], "int64"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema->children[1], duckdb_nanoarrow::NANOARROW_TYPE_UINT64));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema->children[1], "uint64"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema->children[2], duckdb_nanoarrow::NANOARROW_TYPE_DOUBLE));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema->children[2], "float64"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(value_schema->children[3], duckdb_nanoarrow::NANOARROW_TYPE_BINARY));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(value_schema->children[3], "binary"));
 
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(statistics_schema->children[4], duckdb_nanoarrow::NANOARROW_TYPE_BOOL));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(statistics_schema->children[4], "statistic_is_approximate"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(statistics_schema->children[4], duckdb_nanoarrow::NANOARROW_TYPE_BOOL));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(statistics_schema->children[4], "statistic_is_approximate"));
 	statistics_schema->children[4]->flags &= ~ARROW_FLAG_NULLABLE;
 	return ADBC_STATUS_OK;
 }
@@ -2852,18 +3095,18 @@ static AdbcStatusCode BuildGetStatisticNamesSchema(struct ArrowSchema &schema, s
 	using duckdb_nanoarrow::ArrowSchemaInit;
 	using duckdb_nanoarrow::ArrowSchemaSetName;
 
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(&schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaAllocateChildren(&schema, 2));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(schema.children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(schema.children[0], "statistic_name"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(&schema, duckdb_nanoarrow::NANOARROW_TYPE_STRUCT));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaAllocateChildren(&schema, 2));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(schema.children[0], duckdb_nanoarrow::NANOARROW_TYPE_STRING));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(schema.children[0], "statistic_name"));
 	schema.children[0]->flags &= ~ARROW_FLAG_NULLABLE;
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaInit(schema.children[1], duckdb_nanoarrow::NANOARROW_TYPE_INT16));
-	CHECK_STATISTICS_NANOARROW(ArrowSchemaSetName(schema.children[1], "statistic_key"));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaInit(schema.children[1], duckdb_nanoarrow::NANOARROW_TYPE_INT16));
+	CHECK_MANUAL_NANOARROW(ArrowSchemaSetName(schema.children[1], "statistic_key"));
 	schema.children[1]->flags &= ~ARROW_FLAG_NULLABLE;
 	return ADBC_STATUS_OK;
 }
 
-#undef CHECK_STATISTICS_NANOARROW
+#undef CHECK_MANUAL_NANOARROW
 
 namespace {
 // Row-count statistics grouped as catalog -> schema -> table, mirroring the
@@ -2880,24 +3123,6 @@ struct StatisticsCatalogGroup {
 	duckdb::string name;
 	duckdb::vector<StatisticsSchemaGroup> schemas;
 };
-
-// Releases a manually built ArrowSchema/ArrowArray pair unless ownership was
-// transferred to a stream (BatchToArrayStream zeroes its inputs on success,
-// which makes this a no-op).
-struct StatisticsBatchGuard {
-	StatisticsBatchGuard(struct ArrowSchema &schema_p, struct ArrowArray &array_p) : schema(schema_p), array(array_p) {
-	}
-	~StatisticsBatchGuard() {
-		if (schema.release) {
-			schema.release(&schema);
-		}
-		if (array.release) {
-			array.release(&array);
-		}
-	}
-	struct ArrowSchema &schema;
-	struct ArrowArray &array;
-};
 } // namespace
 
 // Assembles the nested GetStatistics batch. The caller releases `array` on
@@ -2908,7 +3133,7 @@ static AdbcStatusCode BuildGetStatisticsArray(struct ArrowArray &array,
 	auto catalog_count = catalogs.size();
 
 	// Root struct: one row per catalog.
-	auto status = InitStatisticsArrayNode(&array, 1, 2, error);
+	auto status = InitManualArrayNode(&array, 1, 2, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
@@ -2927,20 +3152,20 @@ static AdbcStatusCode BuildGetStatisticsArray(struct ArrowArray &array,
 		}
 	}
 
-	status = BuildStatisticsVarcharArray(array.children[0], catalog_names, error);
+	status = BuildManualVarcharArray(array.children[0], catalog_names, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 
 	// catalog_db_schemas: list over catalogs.
 	auto schemas_list = array.children[1];
-	status = InitStatisticsArrayNode(schemas_list, 2, 1, error);
+	status = InitManualArrayNode(schemas_list, 2, 1, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	schemas_list->length = static_cast<int64_t>(catalog_count);
 	auto schema_list_offsets =
-	    static_cast<int32_t *>(AllocStatisticsBuffer(schemas_list, 1, sizeof(int32_t) * (catalog_count + 1)));
+	    static_cast<int32_t *>(AllocManualBuffer(schemas_list, 1, sizeof(int32_t) * (catalog_count + 1)));
 	if (!schema_list_offsets) {
 		SetError(error, "Failed to allocate offsets for statistics result");
 		return ADBC_STATUS_INTERNAL;
@@ -2954,26 +3179,26 @@ static AdbcStatusCode BuildGetStatisticsArray(struct ArrowArray &array,
 
 	// DB_SCHEMA_SCHEMA struct: one row per (catalog, schema) pair.
 	auto schema_struct = schemas_list->children[0];
-	status = InitStatisticsArrayNode(schema_struct, 1, 2, error);
+	status = InitManualArrayNode(schema_struct, 1, 2, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	schema_struct->length = static_cast<int64_t>(schema_count);
 
-	status = BuildStatisticsVarcharArray(schema_struct->children[0], schema_names, error);
+	status = BuildManualVarcharArray(schema_struct->children[0], schema_names, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 
 	// db_schema_statistics: list over schemas.
 	auto stats_list = schema_struct->children[1];
-	status = InitStatisticsArrayNode(stats_list, 2, 1, error);
+	status = InitManualArrayNode(stats_list, 2, 1, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	stats_list->length = static_cast<int64_t>(schema_count);
 	auto stats_list_offsets =
-	    static_cast<int32_t *>(AllocStatisticsBuffer(stats_list, 1, sizeof(int32_t) * (schema_count + 1)));
+	    static_cast<int32_t *>(AllocManualBuffer(stats_list, 1, sizeof(int32_t) * (schema_count + 1)));
 	if (!stats_list_offsets) {
 		SetError(error, "Failed to allocate offsets for statistics result");
 		return ADBC_STATUS_INTERNAL;
@@ -2990,30 +3215,30 @@ static AdbcStatusCode BuildGetStatisticsArray(struct ArrowArray &array,
 
 	// STATISTICS_SCHEMA struct: one row per statistic (one ROW_COUNT per table).
 	auto stats_struct = stats_list->children[0];
-	status = InitStatisticsArrayNode(stats_struct, 1, 5, error);
+	status = InitManualArrayNode(stats_struct, 1, 5, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	stats_struct->length = static_cast<int64_t>(stat_count);
 
-	status = BuildStatisticsVarcharArray(stats_struct->children[0], table_names, error);
+	status = BuildManualVarcharArray(stats_struct->children[0], table_names, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	// column_name: all NULL (row counts are table-level statistics).
-	status = BuildStatisticsAllNullVarcharArray(stats_struct->children[1], stat_count, error);
+	status = BuildManualAllNullVarcharArray(stats_struct->children[1], stat_count, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 
 	// statistic_key: always ADBC_STATISTIC_ROW_COUNT_KEY.
 	auto key_array = stats_struct->children[2];
-	status = InitStatisticsArrayNode(key_array, 2, 0, error);
+	status = InitManualArrayNode(key_array, 2, 0, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	key_array->length = static_cast<int64_t>(stat_count);
-	auto keys = static_cast<int16_t *>(AllocStatisticsBuffer(key_array, 1, sizeof(int16_t) * stat_count));
+	auto keys = static_cast<int16_t *>(AllocManualBuffer(key_array, 1, sizeof(int16_t) * stat_count));
 	if (!keys) {
 		SetError(error, "Failed to allocate keys for statistics result");
 		return ADBC_STATUS_INTERNAL;
@@ -3027,13 +3252,13 @@ static AdbcStatusCode BuildGetStatisticsArray(struct ArrowArray &array,
 	// approximate estimates, so every value is stored in the float64 child
 	// (type id 2) and offsets are 0..n-1.
 	auto value_array = stats_struct->children[3];
-	status = InitStatisticsArrayNode(value_array, 2, 4, error);
+	status = InitManualArrayNode(value_array, 2, 4, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	value_array->length = static_cast<int64_t>(stat_count);
-	auto type_ids = static_cast<int8_t *>(AllocStatisticsBuffer(value_array, 0, stat_count));
-	auto value_offsets = static_cast<int32_t *>(AllocStatisticsBuffer(value_array, 1, sizeof(int32_t) * stat_count));
+	auto type_ids = static_cast<int8_t *>(AllocManualBuffer(value_array, 0, stat_count));
+	auto value_offsets = static_cast<int32_t *>(AllocManualBuffer(value_array, 1, sizeof(int32_t) * stat_count));
 	if (!type_ids || !value_offsets) {
 		SetError(error, "Failed to allocate union buffers for statistics result");
 		return ADBC_STATUS_INTERNAL;
@@ -3043,33 +3268,33 @@ static AdbcStatusCode BuildGetStatisticsArray(struct ArrowArray &array,
 		value_offsets[i] = static_cast<int32_t>(i);
 	}
 	// int64 / uint64 children: empty.
-	status = InitStatisticsArrayNode(value_array->children[0], 2, 0, error);
+	status = InitManualArrayNode(value_array->children[0], 2, 0, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	status = InitStatisticsArrayNode(value_array->children[1], 2, 0, error);
+	status = InitManualArrayNode(value_array->children[1], 2, 0, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	// binary child: empty, but variable-size layouts need an offsets buffer
 	// with a single zero entry.
 	auto binary_child = value_array->children[3];
-	status = InitStatisticsArrayNode(binary_child, 3, 0, error);
+	status = InitManualArrayNode(binary_child, 3, 0, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	if (!AllocStatisticsBuffer(binary_child, 1, sizeof(int32_t))) {
+	if (!AllocManualBuffer(binary_child, 1, sizeof(int32_t))) {
 		SetError(error, "Failed to allocate union buffers for statistics result");
 		return ADBC_STATUS_INTERNAL;
 	}
 	// float64 child: carries all row counts.
 	auto float64_child = value_array->children[2];
-	status = InitStatisticsArrayNode(float64_child, 2, 0, error);
+	status = InitManualArrayNode(float64_child, 2, 0, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	float64_child->length = static_cast<int64_t>(stat_count);
-	auto row_counts = static_cast<double *>(AllocStatisticsBuffer(float64_child, 1, sizeof(double) * stat_count));
+	auto row_counts = static_cast<double *>(AllocManualBuffer(float64_child, 1, sizeof(double) * stat_count));
 	if (!row_counts) {
 		SetError(error, "Failed to allocate union buffers for statistics result");
 		return ADBC_STATUS_INTERNAL;
@@ -3085,12 +3310,12 @@ static AdbcStatusCode BuildGetStatisticsArray(struct ArrowArray &array,
 
 	// statistic_is_approximate: all true (row counts come from estimates).
 	auto approximate_array = stats_struct->children[4];
-	status = InitStatisticsArrayNode(approximate_array, 2, 0, error);
+	status = InitManualArrayNode(approximate_array, 2, 0, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
 	approximate_array->length = static_cast<int64_t>(stat_count);
-	auto approximate_bits = static_cast<uint8_t *>(AllocStatisticsBuffer(approximate_array, 1, (stat_count + 7) / 8));
+	auto approximate_bits = static_cast<uint8_t *>(AllocManualBuffer(approximate_array, 1, (stat_count + 7) / 8));
 	if (!approximate_bits) {
 		SetError(error, "Failed to allocate buffers for statistics result");
 		return ADBC_STATUS_INTERNAL;
@@ -3169,7 +3394,7 @@ AdbcStatusCode ConnectionGetStatistics(struct AdbcConnection *connection, const 
 	memset(&schema, 0, sizeof(schema));
 	struct ArrowArray array;
 	memset(&array, 0, sizeof(array));
-	StatisticsBatchGuard guard(schema, array);
+	ManualBatchGuard guard(schema, array);
 
 	auto status = BuildGetStatisticsSchema(schema, error);
 	if (status != ADBC_STATUS_OK) {
@@ -3206,21 +3431,21 @@ AdbcStatusCode ConnectionGetStatisticNames(struct AdbcConnection *connection, st
 	memset(&schema, 0, sizeof(schema));
 	struct ArrowArray array;
 	memset(&array, 0, sizeof(array));
-	StatisticsBatchGuard guard(schema, array);
+	ManualBatchGuard guard(schema, array);
 
 	auto status = BuildGetStatisticNamesSchema(schema, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	status = InitStatisticsArrayNode(&array, 1, 2, error);
+	status = InitManualArrayNode(&array, 1, 2, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	status = BuildStatisticsVarcharArray(array.children[0], duckdb::vector<duckdb::string>(), error);
+	status = BuildManualVarcharArray(array.children[0], duckdb::vector<duckdb::string>(), error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	status = InitStatisticsArrayNode(array.children[1], 2, 0, error);
+	status = InitManualArrayNode(array.children[1], 2, 0, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
