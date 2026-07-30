@@ -31,6 +31,7 @@ public:
 	bool AllowDictionaryScan(idx_t scan_count);
 
 private:
+	void ValidateDictionaryIndex(idx_t index);
 	string_t FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx);
 
 public:
