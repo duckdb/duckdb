@@ -84,6 +84,9 @@ void BaseTableRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<Identifier>>(202, "column_name_alias", column_name_alias);
 	serializer.WritePropertyWithDefault<Identifier>(203, "catalog_name", qualified_name.Catalog());
 	serializer.WritePropertyWithDefault<unique_ptr<AtClause>>(204, "at_clause", at_clause);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(205, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
@@ -93,7 +96,11 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(202, "column_name_alias", result->column_name_alias);
 	auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(203, "catalog_name");
 	deserializer.ReadPropertyWithDefault<unique_ptr<AtClause>>(204, "at_clause", result->at_clause);
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(205, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog_name), std::move(schema_name), std::move(table_name));
+	if (!qualified_name.Path().empty()) {
+		result->SetQualifiedName(std::move(qualified_name));
+	}
 	return std::move(result);
 }
 

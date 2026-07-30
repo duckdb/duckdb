@@ -89,6 +89,19 @@ struct QualifiedName {
 		}
 		path.erase(path.begin());
 	}
+	//! Return a copy of this name qualified with the given catalog, replacing the catalog component it already has
+	QualifiedName WithCatalog(Identifier catalog) const {
+		if (path.size() < 2) {
+			return QualifiedName(std::move(catalog), Identifier(), Name());
+		}
+		vector<Identifier> qualification;
+		qualification.push_back(std::move(catalog));
+		// keep the (possibly nested) schema path, skipping the catalog component when the name is fully qualified
+		for (idx_t i = path.size() >= 3 ? 1 : 0; i + 1 < path.size(); i++) {
+			qualification.push_back(path[i]);
+		}
+		return QualifiedName(std::move(qualification), Name());
+	}
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA

@@ -72,7 +72,15 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			auto schema = Catalog::GetSchema(context, catalog_name, schema_path, stmt.info->if_not_found);
 			optional_ptr<CatalogEntry> entry;
 			if (schema) {
-				entry = schema->GetEntry(schema->catalog.GetCatalogTransaction(context), stmt.info->type, target_name);
+				auto transaction = schema->catalog.GetCatalogTransaction(context);
+				entry = schema->GetEntry(transaction, stmt.info->type, target_name);
+				if (!entry && stmt.info->type == CatalogType::MACRO_ENTRY) {
+					// "DROP MACRO" also drops table macros
+					entry = schema->GetEntry(transaction, CatalogType::TABLE_MACRO_ENTRY, target_name);
+					if (entry) {
+						stmt.info->type = CatalogType::TABLE_MACRO_ENTRY;
+					}
+				}
 			}
 			if (!entry) {
 				if (stmt.info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {

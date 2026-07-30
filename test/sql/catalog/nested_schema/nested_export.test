@@ -112,3 +112,43 @@ statement error
 INSERT INTO s1.s2.t VALUES (1, 'c');
 ----
 <REGEX>:.*primary key.*
+
+# COPY FROM DATABASE carries the nested schema path as well
+
+statement ok
+USE memory;
+
+statement ok
+ATTACH ':memory:' AS copied;
+
+statement ok
+COPY FROM DATABASE memory TO copied;
+
+query II
+SELECT schema_name, parent_schema FROM duckdb_schemas()
+WHERE database_name = 'copied' AND schema_name IN ('s1','s2','s3') ORDER BY schema_name;
+----
+s1	NULL
+s2	s1
+s3	s2
+
+# a dotted name is at most three components, so make the copy the default catalog to query its nested tables
+statement ok
+USE copied;
+
+query II
+SELECT * FROM s1.s2.t ORDER BY i;
+----
+1	a
+2	b
+
+query I
+SELECT * FROM s1.s2.v ORDER BY x;
+----
+10
+20
+
+query I
+SELECT count(*) FROM top;
+----
+1

@@ -232,6 +232,10 @@ DROP SEQUENCE s1.s2.seq CASCADE;
 statement ok
 DROP MACRO s1.s2.double;
 
+# "DROP MACRO" also drops a table macro in a nested schema
+statement ok
+DROP MACRO s1.s2.tbl_macro;
+
 query I
 SELECT count(*) FROM duckdb_views() WHERE view_name = 'v' AND database_name = 'memory';
 ----
@@ -243,7 +247,7 @@ SELECT count(*) FROM duckdb_sequences() WHERE sequence_name = 'seq' AND database
 0
 
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'double';
+SELECT count(*) FROM duckdb_functions() WHERE function_name IN ('double', 'tbl_macro');
 ----
 0
 

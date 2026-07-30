@@ -16,6 +16,7 @@
         "test/sql/catalog/nested_schema/nested_constraints.test",
         "test/sql/catalog/nested_schema/nested_export.test",
         "test/sql/catalog/nested_schema/nested_schema_limits.test",
+        "test/sql/catalog/nested_schema/nested_wal_replay.test",
         "test/sql/show_select/test_describe_all.test",
         "test/sql/catalog/function/attached_macro.test",
         "test/sql/catalog/test_temporary.test",

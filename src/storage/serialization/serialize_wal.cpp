@@ -134,42 +134,48 @@ WALCreateView WALCreateView::Deserialize(Deserializer &deserializer) {
 }
 
 void WALDropIndex::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(102, "name", LegacyName());
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
-	} else {
-		serializer.WriteProperty<Identifier>(102, "name", name);
+		serializer.WritePropertyWithDefault<QualifiedName>(103, "qualified_name", qualified_name, QualifiedName());
 	}
 }
 
 WALDropIndex WALDropIndex::Deserialize(Deserializer &deserializer) {
 	WALDropIndex result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(102, "name");
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(103, "qualified_name", result.qualified_name, QualifiedName());
+	if (result.qualified_name.Path().empty()) {
+		result.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));
+	}
 	return result;
 }
 
 void WALDropMacro::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(102, "name", LegacyName());
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
-	} else {
-		serializer.WriteProperty<Identifier>(102, "name", name);
+		serializer.WritePropertyWithDefault<QualifiedName>(103, "qualified_name", qualified_name, QualifiedName());
 	}
 }
 
 WALDropMacro WALDropMacro::Deserialize(Deserializer &deserializer) {
 	WALDropMacro result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(102, "name");
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(103, "qualified_name", result.qualified_name, QualifiedName());
+	if (result.qualified_name.Path().empty()) {
+		result.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));
+	}
 	return result;
 }
 
@@ -190,22 +196,25 @@ WALDropSchema WALDropSchema::Deserialize(Deserializer &deserializer) {
 }
 
 void WALDropSequence::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(102, "name", LegacyName());
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
-	} else {
-		serializer.WriteProperty<Identifier>(102, "name", name);
+		serializer.WritePropertyWithDefault<QualifiedName>(103, "qualified_name", qualified_name, QualifiedName());
 	}
 }
 
 WALDropSequence WALDropSequence::Deserialize(Deserializer &deserializer) {
 	WALDropSequence result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(102, "name");
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(103, "qualified_name", result.qualified_name, QualifiedName());
+	if (result.qualified_name.Path().empty()) {
+		result.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));
+	}
 	return result;
 }
 
@@ -233,101 +242,105 @@ WALDropTable WALDropTable::Deserialize(Deserializer &deserializer) {
 }
 
 void WALDropTableMacro::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(102, "name", LegacyName());
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
-	} else {
-		serializer.WriteProperty<Identifier>(102, "name", name);
+		serializer.WritePropertyWithDefault<QualifiedName>(103, "qualified_name", qualified_name, QualifiedName());
 	}
 }
 
 WALDropTableMacro WALDropTableMacro::Deserialize(Deserializer &deserializer) {
 	WALDropTableMacro result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(102, "name");
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(103, "qualified_name", result.qualified_name, QualifiedName());
+	if (result.qualified_name.Path().empty()) {
+		result.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));
+	}
 	return result;
 }
 
 void WALDropTrigger::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
 	}
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
-	} else {
-		serializer.WriteProperty<Identifier>(102, "name", name);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(102, "name", LegacyName());
 	}
+	serializer.WritePropertyWithDefault<Identifier>(103, "table", table);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(103, "table", table);
-	} else {
-		serializer.WriteProperty<Identifier>(103, "table", table);
+		serializer.WritePropertyWithDefault<QualifiedName>(104, "qualified_name", qualified_name, QualifiedName());
 	}
 }
 
 WALDropTrigger WALDropTrigger::Deserialize(Deserializer &deserializer) {
 	WALDropTrigger result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(102, "name");
 	deserializer.ReadPropertyWithDefault<Identifier>(103, "table", result.table);
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(104, "qualified_name", result.qualified_name, QualifiedName());
+	if (result.qualified_name.Path().empty()) {
+		result.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));
+	}
 	return result;
 }
 
 void WALDropType::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(102, "name", LegacyName());
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
-	} else {
-		serializer.WriteProperty<Identifier>(102, "name", name);
+		serializer.WritePropertyWithDefault<QualifiedName>(103, "qualified_name", qualified_name, QualifiedName());
 	}
 }
 
 WALDropType WALDropType::Deserialize(Deserializer &deserializer) {
 	WALDropType result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(102, "name");
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(103, "qualified_name", result.qualified_name, QualifiedName());
+	if (result.qualified_name.Path().empty()) {
+		result.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));
+	}
 	return result;
 }
 
 void WALDropView::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(102, "name", LegacyName());
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
-	} else {
-		serializer.WriteProperty<Identifier>(102, "name", name);
+		serializer.WritePropertyWithDefault<QualifiedName>(103, "qualified_name", qualified_name, QualifiedName());
 	}
 }
 
 WALDropView WALDropView::Deserialize(Deserializer &deserializer) {
 	WALDropView result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(102, "name");
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(103, "qualified_name", result.qualified_name, QualifiedName());
+	if (result.qualified_name.Path().empty()) {
+		result.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));
+	}
 	return result;
 }
 
 void WALSequenceValue::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
 	}
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
-		serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
-	} else {
-		serializer.WriteProperty<Identifier>(102, "name", name);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(102, "name", LegacyName());
 	}
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<uint64_t>(103, "usage_count", usage_count);
@@ -342,15 +355,22 @@ void WALSequenceValue::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<optional<int64_t>>(105, "last_value", last_value);
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<QualifiedName>(106, "qualified_name", qualified_name, QualifiedName());
+	}
 }
 
 WALSequenceValue WALSequenceValue::Deserialize(Deserializer &deserializer) {
 	WALSequenceValue result;
-	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<Identifier>(102, "name");
 	deserializer.ReadPropertyWithDefault<uint64_t>(103, "usage_count", result.usage_count);
 	deserializer.ReadPropertyWithDefault<int64_t>(104, "counter", result.counter);
 	deserializer.ReadPropertyWithDefault<optional<int64_t>>(105, "last_value", result.last_value);
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(106, "qualified_name", result.qualified_name, QualifiedName());
+	if (result.qualified_name.Path().empty()) {
+		result.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));
+	}
 	return result;
 }
 
