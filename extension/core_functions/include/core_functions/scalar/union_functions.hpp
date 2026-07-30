@@ -45,4 +45,14 @@ struct UnionValueFun {
 	static ScalarFunction GetFunction();
 };
 
+struct UnionFieldFun {
+	static constexpr const char *Name = "field";
+	static constexpr const char *Parameters = "union,tag";
+	static constexpr const char *Description = "Extract the value with the named tag from the union. NULL if the tag is not currently selected.";
+	static constexpr const char *Example = "field(union_value(k := 42), 'k')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

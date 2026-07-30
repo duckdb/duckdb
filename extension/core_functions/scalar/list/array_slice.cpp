@@ -412,6 +412,10 @@ unique_ptr<BaseStatistics> ArraySlicePropagateStats(ClientContext &context, Func
 }
 
 } // namespace
+ScalarFunctionSet SliceListFun::GetFunctions() {
+	return ListSliceFun::GetFunctions();
+}
+
 ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ArraySliceFunction,

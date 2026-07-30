@@ -114,4 +114,13 @@ ScalarFunction MapExtractFun::GetFunction() {
 	return fun;
 }
 
+// map[key] and map.key both resolve to a key lookup
+ScalarFunction MapElementFun::GetFunction() {
+	return MapExtractValueFun::GetFunction();
+}
+
+ScalarFunction MapFieldFun::GetFunction() {
+	return MapExtractValueFun::GetFunction();
+}
+
 } // namespace duckdb
