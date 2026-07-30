@@ -134,6 +134,7 @@ int main(int argc_in, char *argv[]) {
 		fprintf(stderr, "%s\n", exact_sqllogic_error.c_str());
 		return 1;
 	}
+	string exact_sqllogic_test_filter = "*";
 	if (exact_sqllogic_filter) {
 		int filtered_argc = 0;
 		for (int i = 0; i < new_argc; i++) {
@@ -142,6 +143,7 @@ int main(int argc_in, char *argv[]) {
 			}
 			new_argv[filtered_argc++] = new_argv[i];
 		}
+		new_argv[filtered_argc++] = const_cast<char *>(exact_sqllogic_test_filter.c_str());
 		new_argc = filtered_argc;
 	}
 
