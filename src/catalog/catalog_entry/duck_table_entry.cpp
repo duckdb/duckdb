@@ -10,6 +10,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -333,7 +334,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	}
 	case AlterTableType::ALTER_COLUMN_TYPE: {
 		auto &change_type_info = table_info.Cast<ChangeColumnTypeInfo>();
-		return ChangeColumnType(context, change_type_info);
+		return ChangeColumnType(context, change_type_info, AlterTableType::ALTER_COLUMN_TYPE);
 	}
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
 		auto &foreign_key_constraint_info = table_info.Cast<AlterForeignKeyInfo>();
@@ -389,6 +390,29 @@ static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info
 			colref.ColumnNamesMutable().back() = info.new_name;
 		}
 	});
+}
+
+// Keep struct literal defaults aligned with nested field renames.
+static unique_ptr<ParsedExpression> RemapStructDefault(unique_ptr<ParsedExpression> default_value,
+                                                       const LogicalType &new_type, const Value &mapping) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(default_value));
+	children.push_back(make_uniq<ConstantExpression>(Value(new_type)));
+	children.push_back(make_uniq<ConstantExpression>(mapping.Copy()));
+	children.push_back(make_uniq<ConstantExpression>(Value()));
+	return make_uniq<FunctionExpression>("remap_struct", std::move(children));
+}
+
+static const Value &GetRemapStructMapping(ChangeColumnTypeInfo &info) {
+	D_ASSERT(info.expression);
+	D_ASSERT(info.expression->GetExpressionClass() == ExpressionClass::FUNCTION);
+	auto &function = info.expression->Cast<FunctionExpression>();
+	D_ASSERT(function.FunctionName() == "remap_struct");
+	auto &arguments = function.GetArguments();
+	D_ASSERT(arguments.size() == 4);
+	auto &mapping = arguments[2].GetExpression();
+	D_ASSERT(mapping.GetExpressionClass() == ExpressionClass::CONSTANT);
+	return mapping.Cast<ConstantExpression>().GetValue();
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
@@ -674,7 +698,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFie
 
 	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
 	                                        std::move(function));
-	return ChangeColumnType(context, change_column_type);
+	return ChangeColumnType(context, change_column_type, AlterTableType::ADD_FIELD);
 }
 
 void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index,
@@ -930,7 +954,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, Rem
 
 	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
 	                                        std::move(function));
-	return ChangeColumnType(context, change_column_type);
+	return ChangeColumnType(context, change_column_type, AlterTableType::REMOVE_FIELD);
 }
 
 DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<Identifier> &column_path,
@@ -1024,7 +1048,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
 	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
 	                                        std::move(function));
-	return ChangeColumnType(context, change_column_type);
+	return ChangeColumnType(context, change_column_type, AlterTableType::RENAME_FIELD);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
@@ -1112,7 +1136,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
-unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
+unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info,
+                                                          AlterTableType alter_table_type) {
 	// Bind type
 	auto type_binder = Binder::CreateBinder(context);
 	type_binder->SetSearchPath(catalog, schema.name);
@@ -1148,6 +1173,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 				throw NotImplementedException("Changing types of generated columns is not supported yet");
 			}
 			copy.SetType(info.target_type);
+			if (alter_table_type == AlterTableType::RENAME_FIELD && copy.HasDefaultValue()) {
+				copy.SetDefaultValue(
+				    RemapStructDefault(copy.DefaultValue().Copy(), info.target_type, GetRemapStructMapping(info)));
+			}
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
 		if (copy.Generated() && column_dependency_manager.IsDependencyOf(col.Logical(), change_idx)) {
