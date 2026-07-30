@@ -342,6 +342,11 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		partition_stats = std::move(precomputed_partition_stats);
 	}
 
+	if (partition_stats.empty()) {
+		// no partitions can be pre-computed
+		return;
+	}
+
 	if (!min_max_columns.empty()) {
 		// Execute min/max aggregates on partition statistics
 		for (idx_t agg_idx = 0; agg_idx < min_max_storage_indexes.size(); agg_idx++) {

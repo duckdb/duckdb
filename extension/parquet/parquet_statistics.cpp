@@ -21,9 +21,11 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "reader/uuid_column_reader.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -674,6 +676,51 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	return row_group_stats;
 }
 
+// Optional filters store the expression used for pruning in their bind data.
+static optional_ptr<const Expression> GetOptionalFilterChild(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	auto &func = expr.Cast<BoundFunctionExpression>();
+	if (!func.BindInfo()) {
+		return nullptr;
+	}
+	if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+		return func.BindInfo()->Cast<OptionalFilterFunctionData>().child_filter_expr.get();
+	}
+	if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+		return func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>().child_filter_expr.get();
+	}
+	return nullptr;
+}
+
+// Bloom filters can only probe IN lists over this column and constants of the same type.
+static optional_ptr<const BoundOperatorExpression> GetBloomFilterInExpression(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
+	    expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return nullptr;
+	}
+	auto &in_expr = expr.Cast<BoundOperatorExpression>();
+	auto &children = in_expr.GetChildren();
+	if (children.size() <= 1 || children[0]->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+		return nullptr;
+	}
+	auto &column = children[0]->Cast<BoundReferenceExpression>();
+	if (column.Index() != 0) {
+		return nullptr;
+	}
+	for (idx_t child_idx = 1; child_idx < children.size(); ++child_idx) {
+		if (children[child_idx]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+			return nullptr;
+		}
+		auto &constant = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
+		if (constant.IsNull() || column.GetReturnType() != constant.type()) {
+			return nullptr;
+		}
+	}
+	return in_expr;
+}
+
 static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const Expression &expr) {
 	if (!BoundComparisonExpression::IsComparison(expr)) {
 		return nullptr;
@@ -708,6 +755,13 @@ static optional_ptr<const BoundConstantExpression> GetBloomFilterConstant(const 
 static bool HasFilterConstants(const Expression &expr) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
 		return GetBloomFilterConstant(expr) != nullptr;
+	}
+	if (GetBloomFilterInExpression(expr)) {
+		return true;
+	}
+	auto optional_filter_child = GetOptionalFilterChild(expr);
+	if (optional_filter_child) {
+		return HasFilterConstants(*optional_filter_child);
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
@@ -877,19 +931,30 @@ static optional<uint64_t> ValueXXH64(const Value &constant, const ParquetColumnS
 static bool BloomFilterExcludes(const Value &constant, ParquetBloomFilter &bloom_filter,
                                 const ParquetColumnSchema &schema) {
 	// Floating-point equality treats positive and negative zero as equal, but Parquet hashes their bit patterns.
+	// Likewise, all NaN payloads compare equal, so no single hash can rule out a row group containing one.
 	switch (constant.type().InternalType()) {
-	case PhysicalType::FLOAT:
-		if (constant.GetValue<float>() == 0.0f) {
+	case PhysicalType::FLOAT: {
+		auto float_value = constant.GetValue<float>();
+		if (Value::IsNan(float_value)) {
+			return false;
+		}
+		if (float_value == 0.0f) {
 			return !bloom_filter.FilterCheck(ValueXH64FixedWidth(0.0f)) &&
 			       !bloom_filter.FilterCheck(ValueXH64FixedWidth(-0.0f));
 		}
 		break;
-	case PhysicalType::DOUBLE:
-		if (constant.GetValue<double>() == 0.0) {
+	}
+	case PhysicalType::DOUBLE: {
+		auto double_value = constant.GetValue<double>();
+		if (Value::IsNan(double_value)) {
+			return false;
+		}
+		if (double_value == 0.0) {
 			return !bloom_filter.FilterCheck(ValueXH64FixedWidth(0.0)) &&
 			       !bloom_filter.FilterCheck(ValueXH64FixedWidth(-0.0));
 		}
 		break;
+	}
 	default:
 		break;
 	}
@@ -906,6 +971,22 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 			return false;
 		}
 		return BloomFilterExcludes(constant->GetValue(), bloom_filter, schema);
+	}
+	auto in_expr = GetBloomFilterInExpression(expr);
+	if (in_expr) {
+		auto &children = in_expr->GetChildren();
+		// An IN filter is excluded only when every candidate is absent.
+		for (idx_t child_idx = 1; child_idx < children.size(); ++child_idx) {
+			auto &constant = children[child_idx]->Cast<BoundConstantExpression>().GetValue();
+			if (!BloomFilterExcludes(constant, bloom_filter, schema)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	auto optional_filter_child = GetOptionalFilterChild(expr);
+	if (optional_filter_child) {
+		return ApplyBloomFilter(*optional_filter_child, bloom_filter, schema);
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;

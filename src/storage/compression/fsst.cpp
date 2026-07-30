@@ -559,8 +559,9 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	auto block_size = segment.GetBlockSize();
 	auto block_offset = segment.GetBlockOffset();
 	if (block_offset > block_size) {
-		throw IOException("Failed to read FSST string segment - header was out of range. Database file appears to be "
-		                  "corrupted.");
+		throw DataCorruptionException(
+		    "Failed to read FSST string segment - header was out of range. Database file appears to be "
+		    "corrupted.");
 	}
 	auto segment_capacity = block_size - block_offset;
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
@@ -731,8 +732,9 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	auto block_size = segment.GetBlockSize();
 	auto block_offset = segment.GetBlockOffset();
 	if (block_offset > block_size) {
-		throw IOException("Failed to read FSST string segment - header was out of range. Database file appears to be "
-		                  "corrupted.");
+		throw DataCorruptionException(
+		    "Failed to read FSST string segment - header was out of range. Database file appears to be "
+		    "corrupted.");
 	}
 	auto segment_capacity = block_size - block_offset;
 	auto base_ptr = handle.GetDataMutable() + block_offset;
@@ -818,7 +820,8 @@ char *FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t
 }
 
 static void ThrowInvalidFSSTSegment(const char *reason) {
-	throw IOException("Failed to read FSST string segment - %s. Database file appears to be corrupted.", reason);
+	throw DataCorruptionException("Failed to read FSST string segment - %s. Database file appears to be corrupted.",
+	                              reason);
 }
 
 // Returns false if no symbol table was found. This means all strings are either empty or null

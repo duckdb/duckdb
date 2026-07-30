@@ -18,6 +18,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -245,9 +246,20 @@ void DependencyManager::CreateDependent(CatalogTransaction transaction, const De
 	set.CreateEntry(transaction, entry_name, std::move(dep));
 }
 
+static string CatalogEntryInfoToString(const CatalogEntryInfo &entry) {
+	auto schema = StringUtil::Join(entry.schema_path, entry.schema_path.size(), ".", [](const Identifier &id) {
+		return SQLIdentifier::ToString(id.GetIdentifierName());
+	});
+	return schema + "." + SQLIdentifier::ToString(entry.name.GetIdentifierName()) +
+	       StringUtil::Format("(%s)", CatalogTypeToString(entry.type));
+}
+
 void DependencyManager::CreateDependency(CatalogTransaction transaction, DependencyInfo &info) {
 	auto subject_entry = LookupEntry(transaction, info.subject.entry);
 	info.subject.oid = subject_entry ? subject_entry->oid : optional_idx();
+	if (!subject_entry) {
+		throw InternalException("Couldn't locate entry: '%s'", CatalogEntryInfoToString(info.subject.entry));
+	}
 
 	DependencyCatalogSet subjects(Subjects(), info.dependent.entry);
 	DependencyCatalogSet dependents(Dependents(), info.subject.entry);

@@ -54,11 +54,77 @@ EXPLAIN ANALYZE SELECT count(*) FROM '{TEST_DIR}/bloom1.parquet' WHERE r >= 201 
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
 
+statement ok
+COPY (
+	SELECT
+		((i % 100) * 2)::INTEGER AS r,
+		i::BIGINT AS payload
+	FROM range(20480) t(i)
+) TO '{TEST_DIR}/bloom_in.parquet' (
+	FORMAT PARQUET,
+	ROW_GROUP_SIZE 2048,
+	WRITE_BLOOM_FILTER TRUE
+);
+
+# Both values are absent but within the min/max range of every row group
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_in.parquet')
+WHERE r IN (101, 103);
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Optional OR filters should also use the bloom filter
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_in.parquet')
+WHERE r = 101 OR r = 103;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# A row group cannot be pruned when any IN value might be present
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_in.parquet')
+WHERE r IN (100, 103);
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 10 / 10.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_in.parquet')
+WHERE r IN (100, 103);
+----
+205
+
 # this value is outside min/max
 query I
 SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('{TEST_DIR}/bloom1.parquet', 'r', '112121212');
 ----
 true
+
+statement ok
+COPY (
+    SELECT
+        [v, v + 2] AS list_value,
+        [[[v, v + 2]]] AS deep_list,
+        {
+            'level_1': {'level_2': {'value': v}}
+        } AS struct_value,
+        i::BIGINT AS payload
+    FROM (
+        SELECT i, ((i % 100) * 2)::INTEGER AS v
+        FROM range(20480) t(i)
+    ) data
+) TO '{TEST_DIR}/bloom_list.parquet' (
+    FORMAT PARQUET,
+    ROW_GROUP_SIZE 2048,
+    DICTIONARY_SIZE_LIMIT 1000,
+    WRITE_BLOOM_FILTER TRUE
+);
 
 statement ok
 COPY (
@@ -72,6 +138,86 @@ COPY (
     DICTIONARY_SIZE_LIMIT 1000,
     WRITE_BLOOM_FILTER TRUE
 );
+
+# A projected list still uses its primitive leaf Bloom filter
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_value[1] = 101;
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT list_value, payload
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_value[1] = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Explicit list_extract follows the same leaf
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_extract(list_value, 1) = 101;
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT list_value, payload
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_extract(list_value, 1) = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Deeply nested lists
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE deep_list[1][1][1] = 101;
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT deep_list, payload
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE deep_list[1][1][1] = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Deeply nested structs
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE struct_value.level_1.level_2.value = 101;
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT struct_value, payload
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE struct_value.level_1.level_2.value = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# A possible deep-list leaf match must retain its row groups
+query I
+SELECT count(deep_list)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE deep_list[1][1][1] = 100;
+----
+205
+
+# A match in a non-first list element must not be pruned
+query I
+SELECT count(list_value)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE list_value[2] = 102;
+----
+205
 
 # The UUID is absent from every row group but falls within every min/max range
 query I
@@ -649,5 +795,35 @@ query I
 SELECT count(*)
 FROM read_parquet('{TEST_DIR}/bloom_ndf_signed_zero.parquet')
 WHERE x IS NOT DISTINCT FROM -0.0;
+----
+2048
+
+statement ok
+COPY (
+	SELECT CASE
+		WHEN i < 2048 THEN '-NaN'::DOUBLE
+		WHEN i % 2 = 0 THEN -1.0::DOUBLE
+		ELSE 1.0::DOUBLE
+	END AS x
+	FROM range(4096) t(i)
+	ORDER BY i
+) TO '{TEST_DIR}/bloom_nan.parquet' (
+	FORMAT PARQUET,
+	ROW_GROUP_SIZE 2048,
+	WRITE_BLOOM_FILTER TRUE,
+	DICTIONARY_SIZE_LIMIT 1000
+);
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_nan.parquet')
+WHERE x = 'NaN'::DOUBLE;
+----
+2048
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_nan.parquet')
+WHERE x IS NOT DISTINCT FROM 'NaN'::DOUBLE;
 ----
 2048

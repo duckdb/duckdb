@@ -11,7 +11,9 @@
         "test/sql/table_function/external_resource_types.test",
         "test/sql/table_function/create_external_resource.test",
         "test/sql/table_function/register_external_resource.test",
-        "test/sql/table_function/external_resource_logging.test"
+        "test/sql/table_function/external_resource_logging.test",
+        "test/sql/table_function/external_resource_discovery.test",
+        "test/sql/table_function/external_resource_discovery_error.test"
       ]
     },
     {
@@ -96,14 +98,6 @@
         "test/sql/storage/total_string_length_repeated_insert.test",
         "test/sql/storage/compression/dictionary/total_string_length_dictionary.test",
         "test/sql/storage/extended_string_stats.test"
-      ]
-    },
-    {
-      "reason": "Test checks which columns are loaded",
-      "paths": [
-        "test/sql/storage/metadata/partial_column_metadata_reuse.test",
-        "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
-        "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
       ]
     },
     {

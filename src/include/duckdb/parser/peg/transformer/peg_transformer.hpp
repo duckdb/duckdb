@@ -230,14 +230,14 @@ public:
 			auto bridged = TryBridgeTransformResult<T>(*base_result);
 			if (bridged) {
 				auto bridged_result = std::move(bridged->value);
-				SetResultLocation(bridged_result, parse_result.offset);
+				SetResultLocation(bridged_result, parse_result.GetLocation());
 				return bridged_result;
 			}
 			throw InternalException("Transformer for rule '" + parse_result.name + "' returned an unexpected type.");
 		}
 
 		auto result = std::move(typed_result_ptr->value);
-		SetResultLocation(result, parse_result.offset);
+		SetResultLocation(result, parse_result.GetLocation());
 		return result;
 	}
 
@@ -281,27 +281,27 @@ public:
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 	bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end);
 	unique_ptr<WindowExpression> GetWindowClause(const Identifier &window_name);
-	void SetQueryLocation(ParsedExpression &expr, optional_idx query_location);
-	void SetQueryLocation(TableRef &ref, optional_idx query_location);
+	void SetQueryLocation(ParsedExpression &expr, QueryLocation query_location);
+	void SetQueryLocation(TableRef &ref, QueryLocation query_location);
 
 private:
 	template <typename T>
-	void SetResultLocation(T &, optional_idx) {
+	void SetResultLocation(T &, QueryLocation) {
 	}
-	void SetResultLocation(unique_ptr<ParsedExpression> &expr, optional_idx offset) {
+	void SetResultLocation(unique_ptr<ParsedExpression> &expr, QueryLocation location) {
 		if (!expr) {
 			return;
 		}
-		if (offset.IsValid() && !expr->GetQueryLocation().IsValid()) {
-			SetQueryLocation(*expr, offset);
+		if (location.IsValid() && !expr->HasQueryLocation()) {
+			SetQueryLocation(*expr, location);
 		}
 	}
-	void SetResultLocation(unique_ptr<TableRef> &ref, optional_idx offset) {
+	void SetResultLocation(unique_ptr<TableRef> &ref, QueryLocation location) {
 		if (!ref) {
 			return;
 		}
-		if (offset.IsValid() && !ref->query_location.IsValid()) {
-			SetQueryLocation(*ref, offset.GetIndex());
+		if (location.IsValid() && !ref->query_location.IsValid()) {
+			SetQueryLocation(*ref, location);
 		}
 	}
 
@@ -3413,6 +3413,35 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeExtractDatePartTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExternalResourceStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeExternalResourceStatementTrampoline(PEGTransformer &transformer,
+	                                                                                    TransformStack &stack,
+	                                                                                    TransformStackFrame &frame);
+	static void InitializeCreateExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCreateExternalResourceStmtTrampoline(PEGTransformer &transformer,
+	                                                                                     TransformStack &stack,
+	                                                                                     TransformStackFrame &frame);
+	static void InitializeRegisterExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeRegisterExternalResourceStmtTrampoline(PEGTransformer &transformer,
+	                                                                                       TransformStack &stack,
+	                                                                                       TransformStackFrame &frame);
+	static void InitializeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeDestroyExternalResourceStmtTrampoline(PEGTransformer &transformer,
+	                                                                                      TransformStack &stack,
+	                                                                                      TransformStackFrame &frame);
+	static void InitializeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeShowExternalResourcesStmtTrampoline(PEGTransformer &transformer,
+	                                                                                    TransformStack &stack,
+	                                                                                    TransformStackFrame &frame);
+	static void InitializeShowAllModifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeShowAllModifierTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeInsertStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -4085,6 +4114,73 @@ public:
 	                                           TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeJoinClauseTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNearestJoinClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNearestJoinClauseTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNearestJoinAliasedTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeNearestJoinAliasedTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
+	static void InitializeNearestJoinBareTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNearestJoinBareTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNearestBareTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeNearestBareTableRefTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeNearestValuesRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNearestValuesRefTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNearestTableFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeNearestTableFunctionTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
+	static void InitializeNearestTableSubqueryTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeNearestTableSubqueryTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
+	static void InitializeNearestBaseTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeNearestBaseTableRefTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeNearestParensTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeNearestParensTableRefTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeApproxOrExactTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeApproxOrExactTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNearestApproxTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNearestApproxTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNearestExactTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNearestExactTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDistanceOrSimilarityTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeDistanceOrSimilarityTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
+	static void InitializeNearestDistanceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNearestDistanceTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNearestSimilarityTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNearestSimilarityTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeRegularJoinClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -7168,6 +7264,31 @@ public:
 	                                                                   const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformExtractDatePartInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExternalResourceStatementInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCreateExternalResourceStmtInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static unique_ptr<SQLStatement>
+	TransformCreateExternalResourceStmt(PEGTransformer &transformer, const string &string_literal,
+	                                    const optional<Identifier> &attach_alias,
+	                                    const optional<vector<GenericCopyOption>> &attach_options);
+	static unique_ptr<TransformResultValue> TransformRegisterExternalResourceStmtInternal(PEGTransformer &transformer,
+	                                                                                      ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformRegisterExternalResourceStmt(PEGTransformer &transformer,
+	                                                                      const string &string_literal,
+	                                                                      const optional<Identifier> &attach_alias,
+	                                                                      unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformDestroyExternalResourceStmtInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDestroyExternalResourceStmt(PEGTransformer &transformer,
+	                                                                     const Identifier &col_id);
+	static unique_ptr<TransformResultValue> TransformShowExternalResourcesStmtInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformShowExternalResourcesStmt(PEGTransformer &transformer,
+	                                                                   const optional<bool> &show_all_modifier);
+	static unique_ptr<TransformResultValue> TransformShowAllModifierInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static bool TransformShowAllModifier(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformInsertStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
@@ -7762,6 +7883,67 @@ public:
 	static string TransformTimestampAtUnit(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformJoinClauseInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformNearestJoinClauseInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformNearestJoinAliasedInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<TableRef>
+	TransformNearestJoinAliased(PEGTransformer &transformer, const optional<JoinType> &join_type,
+	                            unique_ptr<TableRef> table_ref, const optional<bool> &approx_or_exact,
+	                            optional<unique_ptr<ParsedExpression>> number_literal,
+	                            const OrderType &distance_or_similarity, unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformNearestJoinBareInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<TableRef>
+	TransformNearestJoinBare(PEGTransformer &transformer, const optional<JoinType> &join_type,
+	                         unique_ptr<TableRef> nearest_bare_table_ref, const optional<bool> &approx_or_exact,
+	                         optional<unique_ptr<ParsedExpression>> number_literal,
+	                         const OrderType &distance_or_similarity, unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformNearestBareTableRefInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformNearestValuesRefInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformNearestValuesRef(PEGTransformer &transformer,
+	                                                      unique_ptr<SelectStatement> values_clause);
+	static unique_ptr<TransformResultValue> TransformNearestTableFunctionInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformNearestTableFunction(PEGTransformer &transformer,
+	                                                          const optional<bool> &lateral,
+	                                                          const QualifiedName &qualified_table_function,
+	                                                          vector<FunctionArgument> table_function_arguments,
+	                                                          const optional<bool> &with_ordinality);
+	static unique_ptr<TransformResultValue> TransformNearestTableSubqueryInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformNearestTableSubquery(PEGTransformer &transformer,
+	                                                          const optional<bool> &lateral,
+	                                                          unique_ptr<TableRef> subquery_reference);
+	static unique_ptr<TransformResultValue> TransformNearestBaseTableRefInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformNearestBaseTableRef(PEGTransformer &transformer,
+	                                                         unique_ptr<BaseTableRef> base_table_name,
+	                                                         optional<unique_ptr<AtClause>> at_clause,
+	                                                         optional<unique_ptr<SampleOptions>> sample_clause);
+	static unique_ptr<TransformResultValue> TransformNearestParensTableRefInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformNearestParensTableRef(PEGTransformer &transformer,
+	                                                           unique_ptr<TableRef> table_ref,
+	                                                           optional<unique_ptr<SampleOptions>> sample_clause);
+	static unique_ptr<TransformResultValue> TransformApproxOrExactInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformNearestApproxInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static bool TransformNearestApprox(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformNearestExactInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static bool TransformNearestExact(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDistanceOrSimilarityInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformNearestDistanceInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static OrderType TransformNearestDistance(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformNearestSimilarityInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static OrderType TransformNearestSimilarity(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformRegularJoinClauseInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformRegularJoinClause(PEGTransformer &transformer, const optional<bool> &asof,

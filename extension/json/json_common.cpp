@@ -134,14 +134,14 @@ static inline idx_t ReadInteger(const char *ptr, const char *const end, idx_t &i
 static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) {
 	D_ASSERT(ptr != end);
 	if (*ptr == '*') { // Wildcard
-		if (*(ptr + 1) == '*') {
+		if (ptr + 1 != end && *(ptr + 1) == '*') {
 			return JSONKeyReadResult::RecWildCard();
 		}
 		return JSONKeyReadResult::WildCard();
 	}
 	bool recursive = false;
 	if (*ptr == '.') {
-		char next = *(ptr + 1);
+		const char next = ptr + 1 == end ? '\0' : *(ptr + 1);
 		if (next == '*') {
 			return JSONKeyReadResult::RecWildCard();
 		}
@@ -150,6 +150,10 @@ static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) 
 		}
 		ptr++;
 		recursive = true;
+	}
+	if (ptr == end) {
+		// recursive '.' with no key following it
+		return JSONKeyReadResult::Empty();
 	}
 	bool escaped = false;
 	if (*ptr == '"') {

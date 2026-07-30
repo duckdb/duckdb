@@ -49,7 +49,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
       has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
-		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
+		throw DataCorruptionException("Row group column count is unaligned with table column count. Corrupt file?");
 	}
 	this->column_pointers = std::move(pointer.data_pointers);
 	this->columns.resize(column_pointers.size());
@@ -519,7 +519,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	}
 	if (has_per_column_metadata_blocks) {
 		row_group->per_column_metadata_blocks = per_column_metadata_blocks;
-		row_group->per_column_metadata_blocks.RemoveColumn(changed_idx);
+		row_group->per_column_metadata_blocks.ClearColumn(changed_idx);
 	}
 	lock.unlock();
 	row_group->Verify();
@@ -613,6 +613,8 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 	}
 	if (has_per_column_metadata_blocks) {
 		row_group->per_column_metadata_blocks = per_column_metadata_blocks;
+		// the columns after the removed one shift down by one position, so their
+		// metadata block entries (keyed by column index) must shift down as well
 		row_group->per_column_metadata_blocks.RemoveColumn(removed_column);
 	}
 	lock.unlock();
@@ -698,11 +700,14 @@ static idx_t IntersectSelections(const SelectionVector &left, idx_t left_count, 
 }
 
 FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row) {
+	if (end_row <= beg_row) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
 	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
 	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
 	dummy_stats.SetHasNoNullFast();
 	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
-	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row));
+	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row - 1));
 
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
 	return expr_filter.CheckStatistics(dummy_stats);
@@ -1178,7 +1183,9 @@ void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
-		col_data.InitializeAppend(append_state.states[i]);
+		auto &state = append_state.states[i];
+		state.transient = &append_state.transient;
+		col_data.InitializeAppend(state);
 	}
 }
 
