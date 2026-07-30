@@ -23,12 +23,12 @@ string ParseStringOption(const Value &value, const Identifier &option_name) {
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		if (children.size() != 1) {
-			throw BinderException("\"%s\" expects a single argument as a string value", option_name);
+			throw BinderException("%s expects a single argument as a string value", option_name);
 		}
 		return ParseStringOption(children[0], option_name);
 	}
 	if (value.type().id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("\"%s\" expects a string argument!", option_name);
+		throw BinderException("%s expects a string argument!", option_name);
 	}
 	return value.GetValue<string>();
 }
@@ -46,7 +46,7 @@ unique_ptr<FunctionData> WriteBlobBind(ClientContext &context, CopyFunctionBindI
 			auto compression_str = ParseStringOption(option_values[0], option_name);
 			result->compression_type = FileCompressionTypeFromString(compression_str);
 		} else {
-			throw BinderException("Unrecognized option for COPY (FORMAT BLOB): \"%s\"", option_name);
+			throw BinderException("Unrecognized option for COPY (FORMAT BLOB): %s", option_name);
 		}
 	}
 

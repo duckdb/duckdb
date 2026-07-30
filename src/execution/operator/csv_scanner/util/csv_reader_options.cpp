@@ -50,14 +50,14 @@ static bool ParseBoolean(const vector<Value> &set, const Identifier &loption) {
 		return true;
 	}
 	if (set.size() > 1) {
-		throw BinderException("\"%s\" expects a single argument as a boolean value (e.g. TRUE or 1)", loption);
+		throw BinderException("%s expects a single argument as a boolean value (e.g. TRUE or 1)", loption);
 	}
 	return ParseBoolean(set[0], loption);
 }
 
 static bool ParseBoolean(const Value &value, const Identifier &loption) {
 	if (value.IsNull()) {
-		throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", loption);
+		throw BinderException("%s expects a non-null boolean value (e.g. TRUE or 1)", loption);
 	}
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
@@ -65,7 +65,7 @@ static bool ParseBoolean(const Value &value, const Identifier &loption) {
 	}
 	if (value.type() == LogicalType::FLOAT || value.type() == LogicalType::DOUBLE ||
 	    value.type().id() == LogicalTypeId::DECIMAL) {
-		throw BinderException("\"%s\" expects a boolean value (e.g. TRUE or 1)", loption);
+		throw BinderException("%s expects a boolean value (e.g. TRUE or 1)", loption);
 	}
 	return BooleanValue::Get(value.DefaultCastAs(LogicalType::BOOLEAN));
 }
@@ -77,25 +77,25 @@ static string ParseString(const Value &value, const Identifier &loption) {
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		if (children.size() != 1) {
-			throw BinderException("\"%s\" expects a single argument as a string value", loption);
+			throw BinderException("%s expects a single argument as a string value", loption);
 		}
 		return ParseString(children[0], loption);
 	}
 	if (value.type().id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("\"%s\" expects a string argument!", loption);
+		throw BinderException("%s expects a string argument!", loption);
 	}
 	return value.GetValue<string>();
 }
 
 static int64_t ParseInteger(const Value &value, const Identifier &loption) {
 	if (value.IsNull()) {
-		throw BinderException("\"%s\" expects a non-null integer value", loption);
+		throw BinderException("%s expects a non-null integer value", loption);
 	}
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		if (children.size() != 1) {
 			// no option specified or multiple options specified
-			throw BinderException("\"%s\" expects a single argument as an integer value", loption);
+			throw BinderException("%s expects a single argument as an integer value", loption);
 		}
 		return ParseInteger(children[0], loption);
 	}
@@ -376,7 +376,7 @@ void CSVReaderOptions::SetReadOption(const Identifier &loption, const Value &val
 			}
 		}
 	} else {
-		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
+		throw BinderException("Unrecognized option for CSV reader %s", loption);
 	}
 }
 
@@ -408,7 +408,7 @@ void CSVReaderOptions::SetWriteOption(const Identifier &loption, const Value &va
 	} else if (loption == "suffix") {
 		suffix = ParseString(value, loption);
 	} else {
-		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
+		throw BinderException("Unrecognized option CSV writer %s", loption);
 	}
 }
 

@@ -27,7 +27,7 @@ vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, co
 	vector<bool> result;
 
 	if (set.empty()) {
-		throw BinderException("\"%s\" expects a column list or * as parameter", option_name);
+		throw BinderException("%s expects a column list or * as parameter", option_name);
 	}
 	// list of options: parse the list
 	case_insensitive_map_t<bool> option_map;
@@ -44,7 +44,7 @@ vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, co
 	}
 	for (auto &entry : option_map) {
 		if (!entry.second) {
-			throw BinderException("\"%s\" expected to find %s, but it was not found in the table", option_name,
+			throw BinderException("%s expected to find %s, but it was not found in the table", option_name,
 			                      entry.first.c_str());
 		}
 	}
@@ -61,10 +61,10 @@ vector<bool> ParseColumnList(const Value &value, vector<string> &names, const Id
 			result.resize(names.size(), true);
 			return result;
 		}
-		throw BinderException("\"%s\" expects a column list or * as parameter", option_name);
+		throw BinderException("%s expects a column list or * as parameter", option_name);
 	}
 	if (value.IsNull()) {
-		throw BinderException("\"%s\" expects a column list or * as parameter, it can't be a NULL value", option_name);
+		throw BinderException("%s expects a column list or * as parameter, it can't be a NULL value", option_name);
 	}
 	auto &children = ListValue::GetChildren(value);
 	// accept '*' as single argument
@@ -81,7 +81,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<Identif
 	vector<idx_t> result;
 
 	if (set.empty()) {
-		throw BinderException("\"%s\" expects a column list or * as parameter", option_name);
+		throw BinderException("%s expects a column list or * as parameter", option_name);
 	}
 
 	// Maps option to bool indicating if its found and the index in the original set
@@ -89,8 +89,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<Identif
 	for (idx_t i = 0; i < set.size(); i++) {
 		const auto [it, inserted] = option_map.emplace(make_pair(set[i].ToString(), make_pair(false, i)));
 		if (!inserted) {
-			throw BinderException("\"%s\" does now allow duplicate columns (found: %s)", option_name,
-			                      set[i].ToString());
+			throw BinderException("%s does now allow duplicate columns (found: %s)", option_name, set[i].ToString());
 		}
 	}
 	result.resize(option_map.size());
@@ -104,7 +103,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<Identif
 	}
 	for (auto &entry : option_map) {
 		if (!entry.second.first) {
-			throw BinderException("\"%s\" expected to find %s, but it was not found in the table", option_name,
+			throw BinderException("%s expected to find %s, but it was not found in the table", option_name,
 			                      entry.first.c_str());
 		}
 	}
@@ -122,7 +121,7 @@ vector<idx_t> ParseColumnsOrdered(const Value &value, const vector<Identifier> &
 			std::iota(std::begin(result), std::end(result), 0);
 			return result;
 		}
-		throw BinderException("\"%s\" expects a column list or * as parameter", option_name);
+		throw BinderException("%s expects a column list or * as parameter", option_name);
 	}
 	auto &children = ListValue::GetChildren(value);
 	// accept '*' as single argument

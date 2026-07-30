@@ -212,7 +212,7 @@ static bool GetBooleanArgument(const Identifier &key, const vector<Value> &optio
 	Value boolean_value;
 	string error_message;
 	if (!option_values[0].DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
-		throw InvalidInputException("Unable to cast \"%s\" to BOOLEAN for Parquet option \"%s\"",
+		throw InvalidInputException("Unable to cast \"%s\" to BOOLEAN for Parquet option %s",
 		                            option_values[0].ToString(), key);
 	}
 	return BooleanValue::Get(boolean_value);

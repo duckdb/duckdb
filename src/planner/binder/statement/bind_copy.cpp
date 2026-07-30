@@ -712,13 +712,13 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 				string candidate_str = StringUtil::CandidatesMessage(
 				    StringUtil::TopNJaroWinkler(candidates, provided_option), "Candidate options");
 
-				throw NotImplementedException("Unrecognized option \"%s\" for %s\n%s", provided_option,
-				                              stmt.info->format, candidate_str);
+				throw NotImplementedException("Unrecognized option %s for %s\n%s", provided_option, stmt.info->format,
+				                              candidate_str);
 			}
 			auto &copy_option = option_entry->second;
 			// check if this matches the mode
 			if (copy_option.mode != CopyOptionMode::READ_WRITE && copy_option.mode != copy_mode) {
-				throw InvalidInputException("Option \"%s\" is not supported for %s - only for %s", provided_option,
+				throw InvalidInputException("Option %s is not supported for %s - only for %s", provided_option,
 				                            stmt.info->is_from ? "reading" : "writing",
 				                            stmt.info->is_from ? "writing" : "reading");
 			}
@@ -728,16 +728,15 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 						// boolean can be empty (e.g. "HEADER")
 						continue;
 					}
-					throw InvalidInputException("Copy option \"%s\" requires an argument of type %s", provided_option,
+					throw InvalidInputException("Copy option %s requires an argument of type %s", provided_option,
 					                            copy_option.type.ToString());
 				}
 				if (provided_values.size() > 1) {
-					throw InvalidInputException("Copy option \"%s\" did not expect a list as argument",
-					                            provided_option);
+					throw InvalidInputException("Copy option %s did not expect a list as argument", provided_option);
 				}
 				auto &original_value = provided_values[0];
 				if (original_value.IsNull()) {
-					throw BinderException("NULL is not supported as a valid option for COPY option \"%s\"",
+					throw BinderException("NULL is not supported as a valid option for COPY option %s",
 					                      provided_option);
 				}
 				if (copy_option.type == original_value.type()) {
@@ -760,7 +759,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 
 				Value new_value;
 				if (!can_cast || !original_value.TryCastAs(context, copy_option.type, new_value, nullptr)) {
-					throw InvalidInputException("Copy option \"%s\" expected an argument of type %s - the argument "
+					throw InvalidInputException("Copy option %s expected an argument of type %s - the argument "
 					                            "\"%s\" of type %s could not be cast as this type",
 					                            provided_option, copy_option.type, original_value.ToString(),
 					                            original_value.type());

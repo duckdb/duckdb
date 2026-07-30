@@ -137,7 +137,7 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
                                   ClientContext &context) {
 	if (key == "filename") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type() == LogicalType::VARCHAR) {
 			// If not, we interpret it as the name of the column containing the filename
@@ -153,28 +153,28 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		}
 	} else if (key == "hive_partitioning") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
 	} else if (key == "union_by_name") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (key == "allow_empty") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.allow_empty = BooleanValue::Get(val);
 	} else if (key == "hive_types_autocast" || key == "hive_type_autocast") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (key == "hive_types" || key == "hive_type") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(

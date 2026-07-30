@@ -26,11 +26,11 @@ static void ThrowJSONCopyParameterException(const Identifier &option_name) {
 }
 
 static void ThrowJSONCopyNullException(const Identifier &option_name) {
-	throw BinderException("COPY (FORMAT JSON) parameter \"%s\" cannot be NULL.", option_name);
+	throw BinderException("COPY (FORMAT JSON) parameter %s cannot be NULL.", option_name);
 }
 
 static void ThrowJSONCopyTypeException(const Identifier &option_name, const Value &value, const string &expected_type) {
-	throw BinderException("COPY (FORMAT JSON) parameter \"%s\" expects a %s argument, but got %s.", option_name,
+	throw BinderException("COPY (FORMAT JSON) parameter %s expects a %s argument, but got %s.", option_name,
 	                      expected_type, value.type());
 }
 
@@ -54,7 +54,7 @@ static string GetSingleJSONCopyString(const Identifier &option_name, const vecto
 
 static bool GetJSONCopyBoolean(Binder &binder, const Identifier &option_name, const vector<Value> &values) {
 	if (values.size() > 1) {
-		throw InvalidInputException("Copy option \"%s\" did not expect a list as argument", option_name);
+		throw InvalidInputException("Copy option %s did not expect a list as argument", option_name);
 	}
 	if (values.empty()) {
 		return true;
@@ -206,7 +206,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 			// We support these base options
 			csv_copy_options.insert(kv);
 		} else {
-			throw BinderException("Unknown option for COPY ... TO ... (FORMAT JSON): \"%s\".", option_name);
+			throw BinderException("Unknown option for COPY ... TO ... (FORMAT JSON): %s.", option_name);
 		}
 	}
 	if (!write_partition_columns && !partition_columns.empty() &&
