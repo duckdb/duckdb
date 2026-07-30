@@ -1,0 +1,78 @@
+# name: test/sql/feature/test_feature_explain.test
+# description: EXPLAIN works on REFRESH FEATURE and on SERVE FEATURE used as a table reference
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE users (user_id VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO users VALUES ('alice'), ('bob');
+
+statement ok
+CREATE TABLE events (user_id VARCHAR, region_id INTEGER, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO events VALUES
+    ('alice', 1, '2024-01-01 10:00:00'),
+    ('bob', 2, '2024-01-01 11:00:00');
+
+statement ok
+CREATE FEATURE act ENTITY users TIMESTAMP event_time WINDOW 7 DAYS RETAIN 3 AS (SELECT user_id, COUNT(*) AS event_count FROM events GROUP BY user_id);
+
+# REFRESH is a mutation, so it is explained the same way INSERT/UPDATE/DELETE are: by being listed in the
+# grammar's ExplainableStatements. It has no table-reference form, so there is no SELECT wrapper involved.
+statement ok
+EXPLAIN REFRESH FEATURE act;
+
+statement ok
+EXPLAIN REFRESH FEATURE act AT '2024-01-04 00:00:00';
+
+# The feature is still at version 0: a plain EXPLAIN builds the child plan only to format it and then discards
+# it, so explaining a mutation must not perform the mutation.
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'act';
+----
+0
+
+statement ok
+REFRESH FEATURE act AT '2024-01-04 00:00:00';
+
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'act';
+----
+1
+
+# Explaining a REFRESH against a feature that already has versions still must not add one.
+statement ok
+EXPLAIN REFRESH FEATURE act AT '2024-01-06 00:00:00';
+
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'act';
+----
+1
+
+statement ok
+CREATE TABLE spine (user_id VARCHAR, request_time TIMESTAMP);
+
+statement ok
+INSERT INTO spine VALUES ('alice', '2024-01-05 00:00:00');
+
+# SERVE is a relation, so it is explained through its table-reference form rather than as a bare statement.
+statement ok
+EXPLAIN SELECT * FROM SERVE FEATURE act FOR spine;
+
+statement ok
+EXPLAIN SELECT * FROM SERVE FEATURE act FOR spine ASOF request_time;
+
+# A bare SERVE is not in ExplainableStatements -- only a SELECT that references it is.
+statement error
+EXPLAIN SERVE FEATURE act FOR spine;
+----
+<REGEX>:Parser Error.*syntax error.*
+
+statement ok
+DROP FEATURE act;

@@ -997,6 +997,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"    MergeIntoStatement /\n"
 	"    PragmaStatement /\n"
 	"    PrepareStatement /\n"
+	"    RefreshFeatureStatement /\n"
 	"    SelectStatementInternal /\n"
 	"    TransactionStatement /\n"
 	"    UpdateStatement /\n"

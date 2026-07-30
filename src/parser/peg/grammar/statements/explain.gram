@@ -19,6 +19,7 @@ ExplainableStatements <-
     MergeIntoStatement /
     PragmaStatement /
     PrepareStatement /
+    RefreshFeatureStatement /
     SelectStatementInternal /
     TransactionStatement /
     UpdateStatement /
