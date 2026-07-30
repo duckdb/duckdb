@@ -29,6 +29,7 @@ blacklist = [
     "ClaimState",
     "MoveBufferResult",
     "CSVBufferResidency",
+    "DuplicateEliminatedDomainCoverage",
     "AppendAdmission",
     "AppendReservationState",
     "BufferedPushState",

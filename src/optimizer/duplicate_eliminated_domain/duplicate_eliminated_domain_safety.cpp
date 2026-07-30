@@ -1,12 +1,12 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/duplicate_eliminated_domain_safety.cpp
+// duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.cpp
 //
 //
 //===----------------------------------------------------------------------===//
 
-#include "duckdb/optimizer/duplicate_eliminated_domain_safety.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
 
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"

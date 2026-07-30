@@ -1,15 +1,15 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/duplicate_eliminated_domain_inliner.cpp
+// duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_inliner.cpp
 //
 //
 //===----------------------------------------------------------------------===//
 
-#include "duckdb/optimizer/duplicate_eliminated_domain_inliner.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_inliner.hpp"
 
-#include "duckdb/optimizer/duplicate_eliminated_domain_candidate.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_domain_safety.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"

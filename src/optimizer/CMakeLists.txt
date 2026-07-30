@@ -1,4 +1,5 @@
 add_subdirectory(compressed_materialization)
+add_subdirectory(duplicate_eliminated_domain)
 add_subdirectory(join_order)
 add_subdirectory(matcher)
 add_subdirectory(pullup)
@@ -24,10 +25,6 @@ add_library_unity(
   cte_inlining.cpp
   deliminator.cpp
   distinct_aggregate_rewriter.cpp
-  duplicate_eliminated_domain_candidate.cpp
-  duplicate_eliminated_domain_factorer.cpp
-  duplicate_eliminated_domain_inliner.cpp
-  duplicate_eliminated_domain_safety.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
   filter_combiner.cpp

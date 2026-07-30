@@ -1,0 +1,11 @@
+add_library_unity(
+  duckdb_optimizer_duplicate_eliminated_domain
+  OBJECT
+  duplicate_eliminated_domain_candidate.cpp
+  duplicate_eliminated_domain_factorer.cpp
+  duplicate_eliminated_domain_inliner.cpp
+  duplicate_eliminated_domain_safety.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES}
+    $<TARGET_OBJECTS:duckdb_optimizer_duplicate_eliminated_domain>
+    PARENT_SCOPE)
