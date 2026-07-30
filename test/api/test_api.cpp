@@ -139,9 +139,8 @@ TEST_CASE("Test closing database with open prepared statements", "[api]") {
 	db.reset();
 	conn.reset();
 
-	// the prepared statements are still valid
-	// the database is only destroyed when the prepared statements are destroyed
-	REQUIRE_NO_FAIL(p2->Execute());
+	// the prepared statements live in the connection - they can no longer be executed once it is gone
+	REQUIRE_FAIL(p2->Execute());
 	p1.reset();
 	p2.reset();
 }

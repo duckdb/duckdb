@@ -160,19 +160,9 @@ void LocalTableStorage::FlushBlocks() {
 ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
                                              TableIndexList &index_list, const vector<LogicalType> &table_types,
                                              row_t &start_row) {
-	// mapped_column_ids contains the physical column indices of each Indexed column in the table.
-	// This mapping is used to retrieve the physical column index for the corresponding vector of an index chunk scan.
-	// For example, if we are processing data for index_chunk.data[i], we can retrieve the physical column index
-	// by getting the value at mapped_column_ids[i].
-	// An important note is that the index_chunk orderings are created in accordance with this mapping, not the other
-	// way around. (Check the scan code below, where the mapped_column_ids is passed as a parameter to the scan.
-	// The index_chunk inside of that lambda is ordered according to the mapping that is a parameter to the scan).
-
-	// mapped_column_ids is used in two places:
-	// 1) To create the physical table chunk in this function.
-	// 2) If we are in an unbound state (i.e., WAL replay is happening right now), this mapping and the index_chunk
-	//	  are buffered in unbound_index. However, there can also be buffered deletes happening, so it is important
-	//    to maintain a canonical representation of the mapping, which is just sorting.
+	// We only scan the indexed columns: mapped_column_ids lists them (sorted for a deterministic order),
+	// and the scan below produces index_chunk in that order, i.e., index_chunk.data[i] holds the data of
+	// the table's physical column mapped_column_ids[i].
 	D_ASSERT(!index_list.Empty());
 	auto indexed_columns = index_list.GetRequiredColumns();
 	vector<StorageIndex> mapped_column_ids;
@@ -183,14 +173,12 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
 
-	// However, because the bound expressions of the indexes (and their bound
-	// column references) are in relation to ALL table columns, we create an
-	// empty table chunk based on the table types. It references the indexed columns,
-	// and contains nothing for all non-indexed columns.
+	// The bound expressions of the indexes (and their bound column references) are in relation to
+	// ALL table columns, so we create an empty table chunk based on the table types. It references
+	// the indexed columns, and contains nothing for all non-indexed columns.
 	DataChunk table_chunk;
 	table_chunk.InitializeEmpty(table_types);
 
-	// index_chunk scans are created here in the mapped_column_ids ordering (see note above).
 	ErrorData error;
 	for (auto &index_chunk : source.Chunks(transaction, mapped_column_ids)) {
 		D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
@@ -199,11 +187,8 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 			table_chunk.data[col_id].Reference(index_chunk.data[i]);
 		}
 
-		// Pass both the table and the index chunk.
-		// We need the table chunk for the bound indexes,
-		// and the index chunk for the unbound indexes (to buffer it).
-		error = DataTable::AppendToIndexes(index_list, delete_indexes, table_chunk, index_chunk, mapped_column_ids,
-		                                   start_row, index_append_mode, checkpoint_id);
+		error = DataTable::AppendToIndexes(index_list, delete_indexes, table_chunk, start_row, index_append_mode,
+		                                   checkpoint_id);
 		if (error.HasError()) {
 			break;
 		}
@@ -476,27 +461,16 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	}
 }
 
-void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk,
-                          DataTableInfo &data_table_info) {
+void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk) {
 	auto storage = state.storage;
 	storage->table_entry = &table_entry;
 	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->GetCollection().GetNextRowId();
 	idx_t base_id = offset + state.append_state.total_append_count;
 
 	if (!storage->append_indexes.Empty()) {
-		DataChunk index_chunk;
-		vector<StorageIndex> mapped_column_ids;
-
-		// Only initialize the index_chunk, if there are unbound indexes.
-		if (storage->append_indexes.HasUnbound() || storage->delete_indexes.HasUnbound()) {
-			TableIndexList::InitializeIndexChunk(index_chunk, table_chunk.GetTypes(), mapped_column_ids,
-			                                     data_table_info);
-			TableIndexList::ReferenceIndexChunk(table_chunk, index_chunk, mapped_column_ids);
-		}
-
-		auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk,
-		                                        index_chunk, mapped_column_ids, NumericCast<row_t>(base_id),
-		                                        storage->index_append_mode, optional_idx());
+		auto error =
+		    DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, table_chunk,
+		                               NumericCast<row_t>(base_id), storage->index_append_mode, optional_idx());
 		if (error.HasError()) {
 			error.Throw();
 		}

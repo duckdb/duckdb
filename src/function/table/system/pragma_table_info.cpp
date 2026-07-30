@@ -170,7 +170,8 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
-	Binder::BindSchemaOrCatalog(context, qname);
+	CatalogEntryRetriever retriever(context);
+	qname = Binder::BindTableName(retriever, qname);
 	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname);
 	return make_uniq<PragmaTableFunctionData>(entry, IS_PRAGMA_TABLE_INFO);
 }

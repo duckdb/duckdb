@@ -52,6 +52,8 @@ class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
 class LogicalGet;
+class LogicalUpdate;
+class CopyQueryNode;
 class LogicalVacuum;
 
 class ColumnList;
@@ -192,6 +194,13 @@ struct GlobalBinderState {
 	optional_ptr<BoundParameterMap> parameters;
 	//! Tables whose triggers have already been expanded in this query (recursion detection)
 	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
+	//! Generated base-UPDATE nodes that must capture the pre-update (OLD) row image (the capture request),
+	//! keyed by node identity. Internal trigger-expansion state; never set by SQL parsing and never serialized.
+	reference_set_t<QueryNode> trigger_old_capture;
+	//! Optional presentation detail for the statement-trigger CTE consumer: the reserved column names, in physical
+	//! table order, under which the captured OLD image is exposed via SQL aliases. Only populated for capture
+	//! requests presented through a CTE; a consumer that reads the OLD image directly leaves it absent.
+	reference_map_t<QueryNode, vector<Identifier>> trigger_old_capture_cte_names;
 	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
 	optional_ptr<TableCatalogEntry> trigger_creation_table;
 	//! Name of the trigger being created (for error messages)
@@ -275,6 +284,13 @@ public:
 	//! left empty (the caller applies its own default), which lets it distinguish "no catalog given" from an explicit
 	//! catalog.
 	QualifiedName ResolveCatalog(ClientContext &context, const QualifiedName &name, bool default_catalog = true);
+	static QualifiedName ResolveCatalog(CatalogEntryRetriever &retriever, const QualifiedName &name,
+	                                    bool default_catalog = true);
+	//! Resolve the (possibly nested) name of a table into a name that can be looked up in the catalog. Unqualified
+	//! names and names with a single schema level keep the (catalog, schema, name) shape so that the search path
+	//! applies; a nested schema path yields a fully resolved [catalog, schema path..., name].
+	static QualifiedName BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name);
+	QualifiedName BindTableName(const QualifiedName &name);
 	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
 	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
@@ -337,6 +353,9 @@ public:
 	optional_ptr<Binding> GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
 	                                         const Identifier &table_name, const Identifier &column_name,
 	                                         ErrorData &error);
+	//! Look up a binding for a (possibly nested) table qualification
+	optional_ptr<Binding> GetMatchingBinding(const BindingAlias &alias, const Identifier &column_name,
+	                                         ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
@@ -381,8 +400,6 @@ private:
 	shared_ptr<GlobalBinderState> global_binder_state;
 	//! Active binders
 	vector<reference<ExpressionBinder>> active_binders;
-	//! Whether or not the binder has any unplanned dependent joins that still need to be planned/flattened
-	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
 	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
@@ -448,11 +465,15 @@ private:
 	BoundStatement Bind(MergeIntoStatement &stmt);
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
+	BoundStatement Bind(ExternalResourceStatement &stmt);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
 	void BindDropTrigger(DropStatement &stmt, StatementProperties &properties);
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
+	//! Append references to the scanned pre-update (OLD) value of every physical column, in table order, to the
+	//! UPDATE child projection (before rowid). Records the input-chunk offset of the OLD block on the update.
+	void BindOldRowCapture(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update);
 	//! Build a mapping from storage column index to scan chunk index for RETURNING.
 	//! Ensures all physical columns are present in the scan.
 	//! return_columns[storage_idx] = scan_chunk_idx
@@ -506,6 +527,7 @@ private:
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);
+	BoundStatement BindNode(CopyQueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
@@ -518,6 +540,8 @@ private:
 	BoundStatement Bind(BaseTableRef &ref);
 	BoundStatement Bind(BoundRefWrapper &ref);
 	BoundStatement Bind(JoinRef &ref);
+	//! Rewrites a NEAREST BY join into a lateral join over a top-k subquery and binds the result
+	BoundStatement BindNearestJoin(JoinRef &ref);
 	BoundStatement Bind(SubqueryRef &ref);
 	BoundStatement Bind(TableFunctionRef &ref);
 	BoundStatement Bind(EmptyTableRef &ref);
@@ -602,7 +626,8 @@ private:
 	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
-	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name);
+	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name,
+	                                         bool default_schema_precedence = false);
 
 	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 

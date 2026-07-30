@@ -1088,8 +1088,8 @@ class UseGramPreviewEmitter:
                 lines.append("\t}")
                 arg_names.append(arg.var_name)
             elif isinstance(arg, DirectOptionalMatcherArg):
-                cpp_type = self.cpp_type(arg.rule_name)
-                lines.append(f"\toptional<{cpp_type}> {arg.var_name} {{}};")
+                arg_cpp_type = self.cpp_type(arg.rule_name)
+                lines.append(f"\toptional<{arg_cpp_type}> {arg.var_name} {{}};")
                 lines.append(f"\tauto &{arg.var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
                 lines.append(f"\tif ({arg.var_name}_opt.HasResult()) {{")
                 child_expr = arg.result_expr_template.format(opt=f"{arg.var_name}_opt")

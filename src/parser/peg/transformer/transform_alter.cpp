@@ -28,6 +28,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	    add_column.new_column.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
 		return std::move(result);
 	}
+	if (add_column.if_column_not_exists) {
+		// IF NOT EXISTS is not supported by the multi-statement rewrite - keep the plain ALTER
+		return std::move(result);
+	}
 	auto &column_entry = add_column.new_column;
 	auto null_column = column_entry.Copy();
 	null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));

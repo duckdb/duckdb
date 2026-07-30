@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.5...3.29)
 
 project(CoreFunctionsExtension)
 
+# Before any subdirectory or target, which would otherwise inherit the
+# directory-wide definition
+set_extension_version_sources(core_functions core_functions_extension.cpp)
+
 include_directories(include)
 add_subdirectory(aggregate)
 add_subdirectory(scalar)

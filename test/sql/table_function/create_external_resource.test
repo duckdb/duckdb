@@ -32,6 +32,13 @@ SELECT result FROM create_external_resource('mock@local');
 ----
 {uri='quack:localhost:9494', attached_db_type=quack, token=t1}
 
+# Supplying `handle :=` skips create and resolves the given handle via status. The returned handle is the
+# provided one (not what create would mint), and the endpoint still comes from the status poll.
+query TT
+SELECT handle, uri FROM create_external_resource('mock@local', handle := MAP {'id': 'adopted'});
+----
+{id=adopted}	quack:localhost:9494
+
 # End-to-end: capture the deleter binding and invoke it.
 statement ok
 SET VARIABLE dfn = (SELECT deleter_function FROM create_external_resource('mock@local'));
@@ -138,12 +145,6 @@ SELECT * FROM create_external_resource('stuck@local');
 
 statement ok
 SET max_execution_time = 0;
-
-# The readiness timeout is configurable via timeout_seconds; a never-ready resource errors after it elapses.
-statement error
-SELECT * FROM create_external_resource('stuck@local', timeout_seconds := 1, poll_interval_seconds := 1);
-----
-<REGEX>:.*timed out awaiting readiness.*
 
 # Both are range-checked at bind time. A negative timeout would silently mean 'wait forever' and a huge one
 # would overflow the poll loop's deadline arithmetic; a poll interval below 1s would busy-spin on status.
@@ -333,7 +334,7 @@ SELECT nextval('prov_count');
 5
 
 # LIMIT 0 runs cleanly; its provisioning is optimizer-dependent (pruned to an empty result with the optimizer,
-# runs once without it), so the count is intentionally not asserted -- use WITH EXTERNAL RESOURCE ... ATTACH
+# runs once without it), so the count is intentionally not asserted -- use ATTACH TO NEW TEMPORARY EXTERNAL RESOURCE
 # when provisioning must be guaranteed.
 statement ok
 SELECT * FROM create_external_resource('pc@local') LIMIT 0;

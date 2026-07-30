@@ -150,6 +150,15 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
+idx_t StringUtil::GetCommonPrefixSize(const string &left, const string &right) {
+	auto common_size = MinValue<idx_t>(left.size(), right.size());
+	idx_t prefix_size = 0;
+	while (prefix_size < common_size && left[prefix_size] == right[prefix_size]) {
+		prefix_size++;
+	}
+	return prefix_size;
+}
+
 string StringUtil::Repeat(const string &str, idx_t n) {
 	std::ostringstream os;
 	for (idx_t i = 0; i < n; i++) {

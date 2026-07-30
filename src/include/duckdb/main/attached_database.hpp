@@ -170,6 +170,8 @@ public:
 	// Invoke Close() on an attached database, if its use count is 1.
 	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
 	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database, ClientContext &context);
+	//! Obtain a reference unless closing the database has already started.
+	static shared_ptr<AttachedDatabase> TryGetReference(const weak_ptr<AttachedDatabase> &attached_database);
 
 private:
 	DatabaseInstance &db;
@@ -186,6 +188,7 @@ private:
 	bool ephemeral = false;
 	bool is_initial_database = false;
 	bool is_closed = false;
+	bool is_closing = false;
 	shared_ptr<mutex> close_lock;
 	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;

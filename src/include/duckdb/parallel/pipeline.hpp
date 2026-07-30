@@ -42,6 +42,7 @@ public:
 
 	Pipeline &pipeline;
 	unique_ptr<PipelineExecutor> pipeline_executor;
+	optional_idx reserved_batch_index;
 
 	string TaskType() const override {
 		return "PipelineTask";
@@ -148,10 +149,18 @@ public:
 	bool IsExternalInput() const {
 		return input_mode == PipelineInputMode::EXTERNAL_INPUT;
 	}
+	void SetExternalStreamingResultProducer() {
+		external_streaming_result_producer = true;
+	}
+	bool IsStreamingResultPipeline() const;
 	void SetExternalInputEvent(const shared_ptr<Event> &event);
 	void CompleteExternalInput();
-	bool CanUseExternalInput() const;
+	bool CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const;
 	bool CanStopSourceEarly() const;
+
+	idx_t GetBaseBatchIndex() const {
+		return base_batch_index;
+	}
 
 	//! Registers a new batch index for a pipeline executor - returns the current minimum batch index
 	idx_t RegisterNewBatchIndex();
@@ -189,6 +198,8 @@ private:
 	idx_t base_batch_index = 0;
 	//! How this pipeline receives input chunks
 	PipelineInputMode input_mode = PipelineInputMode::SCHEDULED_SOURCE;
+	//! Whether this pipeline directly feeds a streaming result collector
+	bool external_streaming_result_producer = false;
 	//! Event that represents execution of an externally fed pipeline
 	weak_ptr<Event> external_input_event DUCKDB_GUARDED_BY(external_input_lock);
 	ExternalInputEventState external_input_event_state DUCKDB_GUARDED_BY(external_input_lock) =

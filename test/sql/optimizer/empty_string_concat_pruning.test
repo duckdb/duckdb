@@ -1,0 +1,58 @@
+# name: test/sql/optimizer/empty_string_concat_pruning.test
+# description: Remove empty-string concatenation to enable row-group pruning
+# group: [optimizer]
+
+# 500k rows -> 5 row groups with non-overlapping string ranges.
+statement ok
+CREATE TABLE empty_concat_pruning AS
+SELECT i::INTEGER AS i, 'p' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM empty_concat_pruning WHERE s || '' = 'p495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM empty_concat_pruning WHERE '' || s = 'p495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+# Concatenation is binary and nested; bottom-up rewriting removes every empty operand.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM empty_concat_pruning WHERE '' || s || '' = 'p495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM empty_concat_pruning WHERE '' || ('' || (s || '')) = 'p495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM empty_concat_pruning WHERE s || '' = 'p495000';
+----
+1
+
+query I
+SELECT count(*) FROM empty_concat_pruning WHERE '' || s = 'p495000';
+----
+1
+
+query I
+SELECT count(*) FROM empty_concat_pruning WHERE '' || ('' || (s || '')) = 'p495000';
+----
+1
+
+# Removing the empty operand preserves NULL behavior.
+query TTTT
+SELECT NULL::VARCHAR || '', '' || NULL::VARCHAR, 'duck' || '', '' || 'duck';
+----
+NULL	NULL	duck	duck
+
+# The rewrite also accepts a foldable expression that evaluates to an empty string.
+query T
+SELECT s || lower('') FROM (VALUES ('duck'), (NULL)) t(s) ORDER BY s NULLS LAST;
+----
+duck
+NULL

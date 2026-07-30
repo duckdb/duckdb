@@ -72,6 +72,7 @@ public:
 
 public:
 	unique_ptr<CopyInfo> Copy() const;
+	bool Equals(const CopyInfo &other) const;
 	string ToString() const;
 	string TablePartToString() const;
 

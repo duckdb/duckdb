@@ -178,7 +178,7 @@ SELECT regexp_matches(v, 'h.*', 'c') FROM test ORDER BY v
 statement error
 SELECT regexp_matches(v, 'h.*', v) FROM test ORDER BY v
 ----
-<REGEX>:.*Invalid Input Error.*must be a constant.*
+<REGEX>:.*Binder Error.*must be a constant expression.*
 
 # throw on invalid options
 statement error

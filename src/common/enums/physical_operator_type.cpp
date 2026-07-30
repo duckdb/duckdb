@@ -175,6 +175,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CONNECT";
 	case PhysicalOperatorType::DISCONNECT:
 		return "DISCONNECT";
+	case PhysicalOperatorType::EXTERNAL_RESOURCE:
+		return "EXTERNAL_RESOURCE";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}

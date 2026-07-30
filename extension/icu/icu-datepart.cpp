@@ -450,16 +450,12 @@ struct ICUDatePart : public ICUDateFunc {
 
 		//	If we are only looking for Julian Days, then patch in the unary function.
 		do {
-			if (arguments[0]->HasParameter() || !arguments[0]->IsFoldable()) {
+			auto part_constant = input.TryGetConstant(0);
+			if (!part_constant || part_constant->IsNull()) {
 				break;
 			}
 
-			Value part_value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-			if (part_value.IsNull()) {
-				break;
-			}
-
-			const auto part_name = part_value.ToString();
+			const auto part_name = part_constant->ToString();
 			const auto part_code = GetDatePartSpecifier(part_name);
 			if (IsBigintDatepart(part_code)) {
 				break;
@@ -484,18 +480,11 @@ struct ICUDatePart : public ICUDateFunc {
 		auto &arguments = input.GetArguments();
 
 		// collect names and deconflict, construct return type
-		if (arguments[0]->HasParameter()) {
-			throw ParameterNotResolvedException();
-		}
-		if (!arguments[0]->IsFoldable()) {
-			throw BinderException("%s can only take constant lists of part names", bound_function.GetName());
-		}
+		auto parts_list = input.GetConstant(0);
 
 		case_insensitive_set_t name_collision_set;
 		child_list_t<LogicalType> struct_children;
 		BindStructData::part_codes_t part_codes;
-
-		Value parts_list = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
 			auto &list_children = ListValue::GetChildren(parts_list);
 			if (list_children.empty()) {
@@ -574,7 +563,8 @@ struct ICUDatePart : public ICUDateFunc {
 	static ScalarFunction GetStructFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		ScalarFunction result({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, BindStruct);
+		ScalarFunction result({{"part_list", part_type}, {"ts", temporal_type}}, result_type,
+		                      StructFunction<INPUT_TYPE>, BindStruct);
 		result.SetSerializeCallback(SerializeStructFunction);
 		result.SetDeserializeCallback(DeserializeStructFunction);
 		return result;

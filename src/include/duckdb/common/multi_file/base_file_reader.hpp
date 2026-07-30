@@ -59,9 +59,9 @@ public:
 	vector<ColumnIndex> column_indexes;
 	//! The set of table filters (adjusted to local indexes)
 	unique_ptr<TableFilterSet> filters;
-	//! Expression to execute for a given column (BEFORE executing the filter)
+	//! Expression to execute for a local scan-column position (BEFORE executing the filter)
 	//! NOTE: this is only set when we have filters - it can be ignored for readers that don't have filter pushdown
-	unordered_map<column_t, BaseFileReaderExpression> expression_map;
+	unordered_map<ProjectionIndex, BaseFileReaderExpression> expression_map;
 	//! The final types for various expressions - this is ONLY used if UseCastMap() is explicitly enabled
 	unordered_map<column_t, LogicalType> cast_map;
 
