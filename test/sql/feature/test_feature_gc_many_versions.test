@@ -1,0 +1,127 @@
+# name: test/sql/feature/test_feature_gc_many_versions.test
+# description: GC stays exact across many refreshes, where evicted-but-not-yet-checkpointed row groups accumulate
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO customers VALUES ('x'), ('y'), ('z');
+
+statement ok
+CREATE TABLE sales (customer VARCHAR, value INTEGER, sold_at TIMESTAMP);
+
+statement ok
+INSERT INTO sales VALUES
+    ('x', 10, '2024-01-01 00:00:00'),
+    ('y', 20, '2024-01-01 00:00:00'),
+    ('z', 30, '2024-01-01 00:00:00');
+
+statement ok
+CREATE FEATURE gc_many ENTITY customers TIMESTAMP sold_at WINDOW 3650 DAYS RETAIN 2 AS (SELECT customer, SUM(value) AS total FROM sales GROUP BY customer);
+
+# Eight refreshes with RETAIN 2. From refresh 3 onward every refresh evicts one version, so by the end the
+# store physically holds six versions' worth of deleted rows that no CHECKPOINT has reclaimed. Their row
+# groups keep stale below-cutoff zonemap stats, which is exactly the state the eviction scan's lower bound
+# is meant to prune -- and exactly where a bound that is too narrow would silently stop evicting.
+statement ok
+REFRESH FEATURE gc_many AT '2024-02-01 00:00:00';
+
+statement ok
+REFRESH FEATURE gc_many AT '2024-02-02 00:00:00';
+
+statement ok
+REFRESH FEATURE gc_many AT '2024-02-03 00:00:00';
+
+statement ok
+REFRESH FEATURE gc_many AT '2024-02-04 00:00:00';
+
+statement ok
+REFRESH FEATURE gc_many AT '2024-02-05 00:00:00';
+
+statement ok
+REFRESH FEATURE gc_many AT '2024-02-06 00:00:00';
+
+statement ok
+REFRESH FEATURE gc_many AT '2024-02-07 00:00:00';
+
+statement ok
+REFRESH FEATURE gc_many AT '2024-02-08 00:00:00';
+
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'gc_many';
+----
+8
+
+# The catalog must advertise exactly the two retained versions.
+query I
+SELECT retained_versions FROM duckdb_features() WHERE feature_name = 'gc_many';
+----
+7,8
+
+# Every version outside the retain window must be physically gone, not merely unadvertised. A lower bound
+# that excluded a still-live version would leave one of these non-empty.
+query I
+SELECT COUNT(*) FROM FEATURE gc_many AT VERSION 1;
+----
+0
+
+query I
+SELECT COUNT(*) FROM FEATURE gc_many AT VERSION 5;
+----
+0
+
+query I
+SELECT COUNT(*) FROM FEATURE gc_many AT VERSION 6;
+----
+0
+
+# The two retained versions are intact and still carry their own snapshots.
+query I
+SELECT COUNT(*) FROM FEATURE gc_many AT VERSION 7;
+----
+3
+
+query I
+SELECT COUNT(*) FROM FEATURE gc_many AT VERSION 8;
+----
+3
+
+query TI
+SELECT customer, total FROM gc_many ORDER BY customer;
+----
+x	10
+y	20
+z	30
+
+# Same store, optimizations off: the eviction scan runs unbounded, and must reach the identical end state.
+statement ok
+SET feature_disable_optimizations = true;
+
+statement ok
+REFRESH FEATURE gc_many AT '2024-02-09 00:00:00';
+
+query I
+SELECT retained_versions FROM duckdb_features() WHERE feature_name = 'gc_many';
+----
+8,9
+
+query I
+SELECT COUNT(*) FROM FEATURE gc_many AT VERSION 7;
+----
+0
+
+query I
+SELECT COUNT(*) FROM FEATURE gc_many AT VERSION 9;
+----
+3
+
+statement ok
+RESET feature_disable_optimizations;
+
+statement ok
+DROP FEATURE gc_many;

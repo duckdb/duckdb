@@ -168,7 +168,7 @@ unique_ptr<LocalSinkState> PhysicalRefreshFeature::GetLocalSinkState(ExecutionCo
 //! Delete every row of the store whose __feature_version has fallen at or below the retain cutoff.
 //! Collect the matching row ids in a first pass, then delete them — never delete while scanning.
 static void EvictOldVersions(ClientContext &context, DuckTableEntry &table, idx_t version_column_index,
-                             int64_t cutoff) {
+                             int64_t cutoff, const vector<int64_t> &retained_versions) {
 	auto &storage = table.GetStorage();
 	auto &transaction = DuckTransaction::Get(context, table.catalog);
 
@@ -193,6 +193,28 @@ static void EvictOldVersions(ClientContext &context, DuckTableEntry &table, idx_
 		auto version_filter = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO,
 		                                                        std::move(version_ref), std::move(cutoff_value));
 		filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(version_filter)));
+
+		// The upper bound alone only prunes row groups whose versions are entirely above the cutoff
+		// (min > cutoff). It cannot prune the row groups holding versions an *earlier* refresh already
+		// evicted: DuckDB deletes are logical until checkpoint, so those rows are still physically present
+		// and their zonemaps still advertise the old, below-cutoff values -- min < cutoff, so the group is
+		// scanned and yields nothing. Adding the oldest still-live version as a lower bound prunes exactly
+		// those: NumericStats returns FILTER_ALWAYS_FALSE for `>= C` once max < C.
+		// The catalog's retained-version map is maintained with the same cutoff formula as this eviction
+		// (see FeatureCatalogEntry::Alter), so it never lists a version whose rows are gone, which is what
+		// makes the bound safe -- no live row can sit below it. A feature last refreshed before that map
+		// existed has an empty one; then no lower bound is pushed and behaviour is unchanged.
+		if (!retained_versions.empty()) {
+			int64_t min_live_version = retained_versions[0];
+			for (auto &version : retained_versions) {
+				min_live_version = MinValue<int64_t>(min_live_version, version);
+			}
+			auto lower_ref = make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, storage_t(0));
+			auto lower_value = make_uniq<BoundConstantExpression>(Value::BIGINT(min_live_version));
+			auto lower_filter = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                                                      std::move(lower_ref), std::move(lower_value));
+			filters.PushFilter(ProjectionIndex(0), make_uniq<ExpressionFilter>(std::move(lower_filter)));
+		}
 	}
 
 	TableScanState scan_state;
@@ -249,7 +271,15 @@ SourceResultType PhysicalRefreshFeature::GetDataInternal(ExecutionContext &conte
 	// column is the second-to-last column of the store schema.
 	int64_t cutoff = gstate.new_version - gstate.retain_versions;
 	if (cutoff >= 1) {
-		EvictOldVersions(context.client, *gstate.table, result_types.size() - 2, cutoff);
+		// Read the retained-version map before the catalog Alter below advances it, so it still describes the
+		// store as it is right now: the versions the previous refresh left live. That is what bounds the scan
+		// from below. Missing entry or empty map -> no lower bound, unchanged behaviour.
+		auto feature_entry = LookupFeature(context.client, feature_name);
+		vector<int64_t> retained_versions;
+		if (feature_entry) {
+			retained_versions = feature_entry->retained_version_numbers;
+		}
+		EvictOldVersions(context.client, *gstate.table, result_types.size() - 2, cutoff, retained_versions);
 	}
 
 	// Bump the feature's current version through the catalog so it is recorded transactionally (WAL /
