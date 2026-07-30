@@ -9,34 +9,33 @@
 #pragma once
 
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
 
-//! Registers the first `count` row-ids of `row_ids` into `seen`, handling any vector layout. When `sel` is
-//! provided, records the input position of each first-seen row-id (keep-first deduplication). Returns the number
-//! of distinct (first-seen) row-ids. The caller owns its locking and duplicate policy: keep-first by slicing with
-//! `sel`, or raise its own error when the returned count is less than `count`. Shared by UPDATE, MERGE, and
-//! ON CONFLICT DO UPDATE, which otherwise duplicated this row-id iteration.
-inline idx_t RegisterRowIds(unordered_set<row_t> &seen, const Vector &row_ids, idx_t count,
-                            optional_ptr<SelectionVector> sel = nullptr) {
-	idx_t distinct_count = 0;
-	for (const auto &entry : row_ids.Values<row_t>()) {
-		// the caller may pass fewer meaningful entries than the vector holds (e.g. conflict row-ids)
-		if (entry.GetIndex() >= count) {
-			break;
-		}
-		if (seen.insert(entry.GetValue()).second) {
-			if (sel) {
-				sel->set_index(distinct_count, entry.GetIndex());
-			}
-			distinct_count++;
-		}
-	}
-	return distinct_count;
-}
+class ClientContext;
+class GroupedAggregateHashTable;
+
+//! Registers row IDs across chunks. The caller owns locking and decides whether duplicates are kept or rejected.
+class RowIdDeduplicator {
+public:
+	RowIdDeduplicator(ClientContext &context, vector<LogicalType> row_id_types);
+	~RowIdDeduplicator();
+
+	//! Registers the trailing row-ID columns in input, starting at row_id_start.
+	idx_t Register(DataChunk &input, idx_t row_id_start, optional_ptr<SelectionVector> sel = nullptr);
+	//! Registers the first count entries of a single-column row-ID vector.
+	idx_t Register(const Vector &row_ids, idx_t count, optional_ptr<SelectionVector> sel = nullptr);
+
+private:
+	idx_t Register(DataChunk &row_ids, optional_ptr<SelectionVector> sel);
+
+private:
+	vector<LogicalType> row_id_types;
+	unique_ptr<GroupedAggregateHashTable> hash_table;
+	Vector addresses;
+	SelectionVector new_groups;
+	DataChunk row_id_chunk;
+};
 
 } // namespace duckdb

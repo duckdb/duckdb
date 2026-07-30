@@ -459,6 +459,9 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<Vector> &va
 	auto end_char = buf[pos] == '{' ? '}' : ')';
 	pos++;
 	SkipWhitespace(input_state);
+	if (pos == len) {
+		return false;
+	}
 	if (buf[pos] == end_char) {
 		pos++;
 		SkipWhitespace(input_state);

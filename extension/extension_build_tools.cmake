@@ -634,6 +634,25 @@ endforeach()
 
 
 
+# Declares which of an extension's sources read EXT_VERSION_<NAME>. DuckDB defines it for the whole extension
+# directory by default; this narrows it down to just the listed sources, so that a version change recompiles
+# those instead of the entire extension and anything it vendors. Worth doing because the version defaults to a
+# git commit hash - DuckDB's for in-tree extensions, the extension's own otherwise - and so changes constantly.
+# Must be called from the extension's own CMakeLists before it declares any targets or subdirectories, as those
+# inherit the directory-wide definition at the point they are created.
+function(set_extension_version_sources EXT_NAME)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+    if ("${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
+        return()
+    endif()
+    set(DEFINITION EXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
+    remove_definitions(-D${DEFINITION})
+    if (NOT ARGN)
+        return()
+    endif()
+    set_property(SOURCE ${ARGN} APPEND PROPERTY COMPILE_DEFINITIONS ${DEFINITION})
+endfunction()
+
 # Add subdirectories for registered extensions
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
