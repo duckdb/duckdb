@@ -2,7 +2,7 @@ module: cast_function
 functions:
   create_cast_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
     belongs_to: cast_function
     parameters: {}
@@ -12,7 +12,7 @@ functions:
     return_description: The cast function object.
   cast_function_set_source_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       cast_function:
         type: cast_function
@@ -25,7 +25,7 @@ functions:
       Sets the source type of the cast function.
   cast_function_set_target_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       cast_function:
         type: cast_function
@@ -38,7 +38,7 @@ functions:
       Sets the target type of the cast function.
   cast_function_set_implicit_cast_cost:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       cast_function:
         type: cast_function
@@ -51,7 +51,7 @@ functions:
       Sets the "cost" of implicitly casting the source type to the target type using this function.
   cast_function_set_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       cast_function:
         type: cast_function
@@ -64,7 +64,7 @@ functions:
       Sets the actual cast function to use.
   cast_function_set_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       cast_function:
         type: cast_function
@@ -80,7 +80,7 @@ functions:
       Assigns extra information to the cast function that can be fetched during execution, etc.
   cast_function_get_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -92,7 +92,7 @@ functions:
     return_description: The extra info.
   cast_function_get_cast_mode:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -103,7 +103,7 @@ functions:
     return_description: The cast mode.
   cast_function_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -118,7 +118,7 @@ functions:
       Report that an error has occurred while executing the cast function.
   cast_function_set_row_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -139,7 +139,7 @@ functions:
       Report that an error has occurred while executing the cast function, setting the corresponding output row to NULL.
   register_cast_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       con:
         type: connection
@@ -153,7 +153,7 @@ functions:
     return_description: Whether or not the registration was successful.
   destroy_cast_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
     belongs_to: cast_function
     parameters:

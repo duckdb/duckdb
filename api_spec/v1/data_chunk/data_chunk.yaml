@@ -2,7 +2,7 @@ module: data_chunk
 functions:
   create_data_chunk:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     role: constructor
     belongs_to: data_chunk
     parameters:
@@ -20,7 +20,7 @@ functions:
     return_description: The data chunk.
   destroy_data_chunk:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     role: destructor
     belongs_to: data_chunk
     parameters:
@@ -33,7 +33,7 @@ functions:
       Destroys the data chunk and de-allocates all memory allocated for that chunk.
   data_chunk_reset:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       chunk:
         type: data_chunk
@@ -45,7 +45,7 @@ functions:
       data and validity pointers
   data_chunk_get_column_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       chunk:
         type: data_chunk
@@ -56,7 +56,7 @@ functions:
     return_description: The number of columns in the data chunk
   data_chunk_get_vector:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       chunk:
         type: data_chunk
@@ -72,7 +72,7 @@ functions:
     return_description: The vector
   data_chunk_get_size:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       chunk:
         type: data_chunk
@@ -83,7 +83,7 @@ functions:
     return_description: The number of tuples in the data chunk
   data_chunk_set_size:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       chunk:
         type: data_chunk

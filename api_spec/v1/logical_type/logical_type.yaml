@@ -2,7 +2,7 @@ module: logical_type
 functions:
   create_logical_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     role: constructor
     belongs_to: logical_type
     parameters:
@@ -19,7 +19,7 @@ functions:
     return_description: The logical type.
   logical_type_get_alias:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       type:
         type: logical_type
@@ -32,7 +32,7 @@ functions:
     return_description: The alias or `nullptr`
   logical_type_set_alias:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       type:
         type: logical_type
@@ -47,7 +47,7 @@ functions:
       Sets the alias of a duckdb_logical_type.
   create_list_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
       type:
         type: logical_type
@@ -59,7 +59,7 @@ functions:
     return_description: The logical type.
   create_array_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.1", "2024-03-18"]
     parameters:
       type:
         type: logical_type
@@ -74,7 +74,7 @@ functions:
     return_description: The logical type.
   create_map_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
       key_type:
         type: logical_type
@@ -89,7 +89,7 @@ functions:
     return_description: The logical type.
   create_union_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       member_types:
         type: logical_type
@@ -110,7 +110,7 @@ functions:
     return_description: The logical type.
   create_struct_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       member_types:
         type: logical_type
@@ -131,7 +131,7 @@ functions:
     return_description: The logical type.
   create_enum_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       member_names:
         type: char
@@ -148,7 +148,7 @@ functions:
     return_description: The logical type.
   create_decimal_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       width:
         type: u8
@@ -163,7 +163,7 @@ functions:
     return_description: The logical type.
   get_type_id:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -174,7 +174,7 @@ functions:
     return_description: The `duckdb_type` id.
   decimal_width:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -185,7 +185,7 @@ functions:
     return_description: The width of the decimal type
   decimal_scale:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -196,7 +196,7 @@ functions:
     return_description: The scale of the decimal type
   decimal_internal_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -207,7 +207,7 @@ functions:
     return_description: The internal type of the decimal type
   enum_internal_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -218,7 +218,7 @@ functions:
     return_description: The internal type of the enum type
   enum_dictionary_size:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -229,7 +229,7 @@ functions:
     return_description: The dictionary size of the enum type
   enum_dictionary_value:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -246,7 +246,7 @@ functions:
     return_description: The string value of the enum type. Must be freed with `duckdb_free`.
   list_type_child_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -258,7 +258,7 @@ functions:
     return_description: The child type of the LIST or MAP type.
   array_type_child_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.1", "2024-03-18"]
     parameters:
       type:
         type: logical_type
@@ -271,7 +271,7 @@ functions:
     return_description: The child type of the ARRAY type.
   array_type_array_size:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.1", "2024-03-18"]
     parameters:
       type:
         type: logical_type
@@ -282,7 +282,7 @@ functions:
     return_description: The fixed number of elements the values of this array type can store.
   map_type_key_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
       type:
         type: logical_type
@@ -295,7 +295,7 @@ functions:
     return_description: The key type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
   map_type_value_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
       type:
         type: logical_type
@@ -308,7 +308,7 @@ functions:
     return_description: The value type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
   struct_type_child_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -319,7 +319,7 @@ functions:
     return_description: The number of children of a struct type.
   struct_type_child_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -336,7 +336,7 @@ functions:
     return_description: The name of the struct type. Must be freed with `duckdb_free`.
   struct_type_child_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       type:
         type: logical_type
@@ -352,7 +352,7 @@ functions:
     return_description: The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
   union_type_member_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       type:
         type: logical_type
@@ -363,7 +363,7 @@ functions:
     return_description: The number of members of a union type.
   union_type_member_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       type:
         type: logical_type
@@ -380,7 +380,7 @@ functions:
     return_description: The name of the union member. Must be freed with `duckdb_free`.
   union_type_member_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       type:
         type: logical_type
@@ -396,7 +396,7 @@ functions:
     return_description: The child type of the union member. Must be destroyed with `duckdb_destroy_logical_type`.
   destroy_logical_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     role: destructor
     belongs_to: logical_type
     parameters:
@@ -409,7 +409,7 @@ functions:
       Destroys the logical type and de-allocates all memory allocated for that type.
   register_logical_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       con:
         type: connection
@@ -426,7 +426,8 @@ functions:
     return_description: Whether or not the registration was successful.
   geometry_type_get_crs:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.2", "2026-04-10"]
     parameters:
       type:
         type: logical_type

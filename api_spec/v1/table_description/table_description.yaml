@@ -2,7 +2,7 @@ module: table_description
 functions:
   table_description_create:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
     belongs_to: table_description
     parameters:
@@ -30,7 +30,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   table_description_create_ext:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     role: constructor
     belongs_to: table_description
     parameters:
@@ -63,7 +63,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   table_description_destroy:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
     belongs_to: table_description
     parameters:
@@ -76,7 +76,7 @@ functions:
       Destroy the TableDescription object.
   table_description_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       table_description:
         type: table_description
@@ -91,7 +91,7 @@ functions:
     return_description: The error message, or `nullptr` if there is none.
   column_has_default:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       table_description:
         type: table_description
@@ -110,7 +110,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   table_description_get_column_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       table_description:
         type: table_description
@@ -121,7 +122,7 @@ functions:
     return_description: The column count.
   table_description_get_column_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
       table_description:
         type: table_description
@@ -137,7 +138,8 @@ functions:
     return_description: The column name.
   table_description_get_column_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       table_description:
         type: table_description

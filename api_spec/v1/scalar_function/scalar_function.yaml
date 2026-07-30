@@ -2,7 +2,7 @@ module: scalar_function
 functions:
   create_scalar_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
     belongs_to: scalar_function
     parameters: {}
@@ -14,7 +14,7 @@ functions:
     return_description: The scalar function object.
   destroy_scalar_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
     belongs_to: scalar_function
     parameters:
@@ -27,7 +27,7 @@ functions:
       Destroys the given scalar function object.
   scalar_function_set_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -42,7 +42,7 @@ functions:
       Sets the name of the given scalar function.
   scalar_function_set_varargs:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -57,7 +57,7 @@ functions:
     return_description: The parameter type. Cannot contain INVALID.
   scalar_function_set_special_handling:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -67,7 +67,7 @@ functions:
       Sets the scalar function's null-handling behavior to special.
   scalar_function_set_volatile:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -78,7 +78,7 @@ functions:
       This limits optimization that can be performed for the function.
   scalar_function_add_parameter:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -91,7 +91,7 @@ functions:
       Adds a parameter to the scalar function.
   scalar_function_set_return_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -104,7 +104,7 @@ functions:
       Sets the return type of the scalar function.
   scalar_function_set_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -121,7 +121,8 @@ functions:
       Assigns extra information to the scalar function that can be fetched during binding, etc.
   scalar_function_set_bind:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -134,7 +135,8 @@ functions:
       Sets the (optional) bind function of the scalar function.
   scalar_function_set_bind_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       info:
         type: bind_info
@@ -153,7 +155,8 @@ functions:
       In most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy.
   scalar_function_set_bind_data_copy:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       info:
         type: bind_info
@@ -166,7 +169,8 @@ functions:
       Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.
   scalar_function_bind_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       info:
         type: bind_info
@@ -181,7 +185,7 @@ functions:
       Report that an error has occurred while calling bind on a scalar function.
   scalar_function_set_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -194,7 +198,7 @@ functions:
       Sets the main function of the scalar function.
   register_scalar_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       con:
         type: connection
@@ -212,7 +216,7 @@ functions:
     return_description: Whether or not the registration was successful.
   scalar_function_get_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -224,7 +228,8 @@ functions:
     return_description: The extra info.
   scalar_function_bind_get_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       info:
         type: bind_info
@@ -236,7 +241,8 @@ functions:
     return_description: The extra info.
   scalar_function_get_bind_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       info:
         type: function_info
@@ -249,7 +255,8 @@ functions:
     return_description: The bind data object.
   scalar_function_get_client_context:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       info:
         type: bind_info
@@ -264,7 +271,7 @@ functions:
       Retrieves the client context of the bind info of a scalar function.
   scalar_function_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -279,7 +286,7 @@ functions:
       Report that an error has occurred while executing the scalar function.
   create_scalar_function_set:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
     belongs_to: scalar_function_set
     parameters:
@@ -295,7 +302,7 @@ functions:
     return_description: The scalar function set object.
   destroy_scalar_function_set:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
     belongs_to: scalar_function_set
     parameters:
@@ -307,7 +314,7 @@ functions:
       Destroys the given scalar function set object.
   add_scalar_function_to_set:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       set:
         type: scalar_function_set
@@ -322,7 +329,7 @@ functions:
       Returns DuckDBError if the function could not be added, for example if the overload already exists.
   register_scalar_function_set:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       con:
         type: connection
@@ -340,7 +347,8 @@ functions:
     return_description: Whether or not the registration was successful.
   scalar_function_bind_get_argument_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       info:
         type: bind_info
@@ -351,7 +359,8 @@ functions:
     return_description: The number of input arguments.
   scalar_function_bind_get_argument:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       info:
         type: bind_info
@@ -365,7 +374,8 @@ functions:
     return_description: The input argument at index. Must be destroyed with `duckdb_destroy_expression`.
   scalar_function_get_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: function_info
@@ -377,7 +387,8 @@ functions:
     return_description: The state pointer.
   scalar_function_set_init:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       scalar_function:
         type: scalar_function
@@ -391,7 +402,8 @@ functions:
       This is called once for each worker thread that begins executing the function
   scalar_function_init_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: init_info
@@ -406,7 +418,8 @@ functions:
       Report that an error has occurred while calling init on a scalar function.
   scalar_function_init_set_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: init_info
@@ -423,7 +436,8 @@ functions:
       Sets the state pointer in the init info of the scalar function.
   scalar_function_init_get_client_context:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: init_info
@@ -438,7 +452,8 @@ functions:
       Retrieves the client context of the init info of a scalar function.
   scalar_function_init_get_bind_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: init_info
@@ -451,7 +466,8 @@ functions:
     return_description: The bind data object.
   scalar_function_init_get_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: init_info

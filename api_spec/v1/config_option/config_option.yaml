@@ -2,7 +2,8 @@ module: config_option
 functions:
   create_config_option:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: constructor
     belongs_to: config_option
     parameters: {}
@@ -12,7 +13,8 @@ functions:
     return_description: The resulting configuration option instance. Must be destroyed with `duckdb_destroy_config_option`.
   destroy_config_option:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: destructor
     belongs_to: config_option
     parameters:
@@ -25,7 +27,8 @@ functions:
       Destroys the given configuration option instance.
   config_option_set_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -40,7 +43,8 @@ functions:
       Sets the name of the configuration option.
   config_option_set_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -53,7 +57,8 @@ functions:
       Sets the type of the configuration option.
   config_option_set_default_value:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -68,7 +73,8 @@ functions:
       Otherwise, the type is inferred from the value.
   config_option_set_default_scope:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -82,7 +88,8 @@ functions:
       If not set, this defaults to `DUCKDB_CONFIG_OPTION_SCOPE_SESSION`.
   config_option_set_description:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       option:
         type: config_option
@@ -97,7 +104,8 @@ functions:
       Sets the description of the configuration option.
   register_config_option:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       connection:
         type: connection
@@ -111,7 +119,8 @@ functions:
     return_description: A duckdb_state indicating success or failure.
   client_context_get_config_option:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       context:
         type: client_context
@@ -135,7 +144,7 @@ functions:
     return_description: The value of the configuration option. Returns `nullptr` if the option does not exist.
   get_profiling_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       connection:
         type: connection
@@ -146,7 +155,7 @@ functions:
     return_description: A profiling information object.
   profiling_info_get_value:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: profiling_info
@@ -164,7 +173,7 @@ functions:
     return_description: The value of the metric. Must be freed with `duckdb_destroy_value`
   profiling_info_get_metrics:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: profiling_info
@@ -176,7 +185,7 @@ functions:
     return_description: The key-value metric map as a MAP duckdb_value.
   profiling_info_get_child_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: profiling_info
@@ -187,7 +196,7 @@ functions:
     return_description: The number of children in the current node.
   profiling_info_get_child:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: profiling_info

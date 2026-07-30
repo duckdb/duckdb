@@ -2,7 +2,7 @@ module: appender
 functions:
   appender_create:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     role: constructor
     belongs_to: appender
     parameters:
@@ -32,7 +32,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_create_ext:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     role: constructor
     belongs_to: appender
     parameters:
@@ -67,7 +67,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_create_query:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     role: constructor
     belongs_to: appender
     parameters:
@@ -109,7 +110,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_column_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       appender:
         type: appender
@@ -121,7 +122,7 @@ functions:
     return_description: The number of columns in the data chunks.
   appender_column_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       appender:
         type: appender
@@ -137,7 +138,8 @@ functions:
     return_description: The `duckdb_logical_type` of the column.
   appender_error_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       appender:
         type: appender
@@ -149,7 +151,7 @@ functions:
     return_description: The error data.
   appender_flush:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -163,7 +165,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_clear:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       appender:
         type: appender
@@ -174,7 +177,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_close:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -188,7 +191,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_destroy:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     role: destructor
     belongs_to: appender
     parameters:
@@ -206,7 +209,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_add_column:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
       appender:
         type: appender
@@ -223,7 +226,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_clear_columns:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
       appender:
         type: appender
@@ -234,7 +237,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_begin_row:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -243,7 +246,7 @@ functions:
       A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
   appender_end_row:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -254,7 +257,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   append_default:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       appender:
         type: appender
@@ -263,7 +266,8 @@ functions:
       Append a DEFAULT value (NULL if DEFAULT not available for column) to the appender.
   append_default_to_chunk:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.2.0", "2025-02-05"]
     parameters:
       appender:
         type: appender
@@ -284,7 +288,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   append_bool:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -295,7 +299,7 @@ functions:
       Append a bool value to the appender.
   append_int8:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -306,7 +310,7 @@ functions:
       Append an int8_t value to the appender.
   append_int16:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -317,7 +321,7 @@ functions:
       Append an int16_t value to the appender.
   append_int32:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -328,7 +332,7 @@ functions:
       Append an int32_t value to the appender.
   append_int64:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -339,7 +343,7 @@ functions:
       Append an int64_t value to the appender.
   append_hugeint:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       appender:
         type: appender
@@ -350,7 +354,7 @@ functions:
       Append a duckdb_hugeint value to the appender.
   append_uint8:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -361,7 +365,7 @@ functions:
       Append a uint8_t value to the appender.
   append_uint16:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -372,7 +376,7 @@ functions:
       Append a uint16_t value to the appender.
   append_uint32:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -383,7 +387,7 @@ functions:
       Append a uint32_t value to the appender.
   append_uint64:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -394,7 +398,7 @@ functions:
       Append a uint64_t value to the appender.
   append_uhugeint:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       appender:
         type: appender
@@ -405,7 +409,7 @@ functions:
       Append a duckdb_uhugeint value to the appender.
   append_float:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -416,7 +420,7 @@ functions:
       Append a float value to the appender.
   append_double:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -427,7 +431,7 @@ functions:
       Append a double value to the appender.
   append_date:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       appender:
         type: appender
@@ -438,7 +442,7 @@ functions:
       Append a duckdb_date value to the appender.
   append_time:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       appender:
         type: appender
@@ -449,7 +453,7 @@ functions:
       Append a duckdb_time value to the appender.
   append_timestamp:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       appender:
         type: appender
@@ -460,7 +464,7 @@ functions:
       Append a duckdb_timestamp value to the appender.
   append_interval:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       appender:
         type: appender
@@ -471,7 +475,7 @@ functions:
       Append a duckdb_interval value to the appender.
   append_varchar:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -484,7 +488,7 @@ functions:
       Append a varchar value to the appender.
   append_varchar_length:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -499,7 +503,7 @@ functions:
       Append a varchar value to the appender.
   append_blob:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -514,7 +518,7 @@ functions:
       Append a blob value to the appender.
   append_null:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       appender:
         type: appender
@@ -523,7 +527,7 @@ functions:
       Append a NULL value to the appender (of any type).
   append_value:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
       appender:
         type: appender
@@ -534,7 +538,7 @@ functions:
       Append a duckdb_value to the appender.
   append_data_chunk:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       appender:
         type: appender
@@ -549,8 +553,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   appender_error:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.4.0", "2025-09-15"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       appender:
         type: appender

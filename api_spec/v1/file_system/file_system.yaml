@@ -2,7 +2,8 @@ module: file_system
 functions:
   client_context_get_file_system:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       context:
         type: client_context
@@ -13,7 +14,8 @@ functions:
     return_description: The resulting file system instance. Must be destroyed with `duckdb_destroy_file_system`.
   destroy_file_system:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: destructor
     belongs_to: file_system
     parameters:
@@ -26,7 +28,8 @@ functions:
       Destroys the given file system instance.
   file_system_error_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_system:
         type: file_system
@@ -37,7 +40,8 @@ functions:
     return_description: The error data.
   file_system_open:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_system:
         type: file_system
@@ -61,7 +65,8 @@ functions:
     return_description: Whether the operation was successful. If not, the error data can be retrieved using `duckdb_file_system_error_data`.
   create_file_open_options:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: constructor
     belongs_to: file_open_options
     parameters: {}
@@ -71,7 +76,8 @@ functions:
     return_description: The new file open options instance. Must be destroyed with `duckdb_destroy_file_open_options`.
   file_open_options_set_flag:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       options:
         type: file_open_options
@@ -88,7 +94,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` if the flag is unrecognized or unsupported by this version of DuckDB.'
   destroy_file_open_options:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: destructor
     belongs_to: file_open_options
     parameters:
@@ -101,7 +108,8 @@ functions:
       Destroys the given file open options instance.
   destroy_file_handle:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: destructor
     belongs_to: file_handle
     parameters:
@@ -115,7 +123,8 @@ functions:
       This will also close the file if it is still open.
   file_handle_error_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_handle:
         type: file_handle
@@ -126,7 +135,8 @@ functions:
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`
   file_handle_read:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_handle:
         type: file_handle
@@ -144,7 +154,8 @@ functions:
     return_description: The number of bytes actually read, or negative on error.
   file_handle_write:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_handle:
         type: file_handle
@@ -163,7 +174,8 @@ functions:
     return_description: The number of bytes actually written, or negative on error.
   file_handle_tell:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_handle:
         type: file_handle
@@ -174,7 +186,8 @@ functions:
     return_description: The current position in the file, or negative on error.
   file_handle_size:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_handle:
         type: file_handle
@@ -185,7 +198,8 @@ functions:
     return_description: The size of the file in bytes, or negative on error.
   file_handle_seek:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_handle:
         type: file_handle
@@ -198,7 +212,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using `duckdb_file_handle_error_data`.'
   file_handle_sync:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_handle:
         type: file_handle
@@ -209,7 +224,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using `duckdb_file_handle_error_data`.'
   file_handle_close:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       file_handle:
         type: file_handle

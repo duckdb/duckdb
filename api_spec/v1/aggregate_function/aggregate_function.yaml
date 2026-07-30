@@ -2,7 +2,7 @@ module: aggregate_function
 functions:
   create_aggregate_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
     belongs_to: aggregate_function
     parameters: {}
@@ -14,7 +14,7 @@ functions:
     return_description: The aggregate function object.
   destroy_aggregate_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
     belongs_to: aggregate_function
     parameters:
@@ -26,7 +26,7 @@ functions:
       Destroys the given aggregate function object.
   aggregate_function_set_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -41,7 +41,7 @@ functions:
       Sets the name of the given aggregate function.
   aggregate_function_add_parameter:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -54,7 +54,7 @@ functions:
       Adds a parameter to the aggregate function.
   aggregate_function_set_return_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -67,7 +67,7 @@ functions:
       Sets the return type of the aggregate function.
   aggregate_function_set_functions:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -92,7 +92,7 @@ functions:
       Sets the main functions of the aggregate function.
   aggregate_function_set_destructor:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -105,7 +105,7 @@ functions:
       Sets the state destructor callback of the aggregate function (optional)
   register_aggregate_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       con:
         type: connection
@@ -122,7 +122,7 @@ functions:
     return_description: Whether or not the registration was successful.
   aggregate_function_set_special_handling:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -132,7 +132,7 @@ functions:
       Sets the NULL handling of the aggregate function to SPECIAL_HANDLING.
   aggregate_function_set_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       aggregate_function:
         type: aggregate_function
@@ -149,7 +149,7 @@ functions:
       Assigns extra information to the scalar function that can be fetched during binding, etc.
   aggregate_function_get_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -161,7 +161,7 @@ functions:
     return_description: The extra info
   aggregate_function_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       info:
         type: function_info
@@ -176,7 +176,7 @@ functions:
       Report that an error has occurred while executing the aggregate function.
   create_aggregate_function_set:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
     belongs_to: aggregate_function_set
     parameters:
@@ -192,7 +192,7 @@ functions:
     return_description: The aggregate function set object.
   destroy_aggregate_function_set:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
     belongs_to: aggregate_function_set
     parameters:
@@ -204,7 +204,7 @@ functions:
       Destroys the given aggregate function set object.
   add_aggregate_function_to_set:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       set:
         type: aggregate_function_set
@@ -219,7 +219,7 @@ functions:
       Returns DuckDBError if the function could not be added, for example if the overload already exists.
   register_aggregate_function_set:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       con:
         type: connection
