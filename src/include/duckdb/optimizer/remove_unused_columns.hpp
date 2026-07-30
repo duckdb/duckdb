@@ -22,6 +22,7 @@ namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
+class LogicalColumnDataGet;
 class Optimizer;
 
 struct ReferencedExtractComponent {
@@ -148,6 +149,7 @@ private:
 private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace = true);
+	void RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get);
 	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);

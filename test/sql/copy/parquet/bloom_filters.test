@@ -111,6 +111,9 @@ COPY (
     SELECT
         [v, v + 2] AS list_value,
         [[[v, v + 2]]] AS deep_list,
+        {
+            'level_1': {'level_2': {'value': v}}
+        } AS struct_value,
         i::BIGINT AS payload
     FROM (
         SELECT i, ((i % 100) * 2)::INTEGER AS v
@@ -181,6 +184,22 @@ EXPLAIN ANALYZE
 SELECT deep_list, payload
 FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
 WHERE deep_list[1][1][1] = 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Deeply nested structs
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE struct_value.level_1.level_2.value = 101;
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT struct_value, payload
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE struct_value.level_1.level_2.value = 101;
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
 

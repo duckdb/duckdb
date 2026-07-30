@@ -137,6 +137,13 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct ArrowArrayStream *out,
                                        struct AdbcError *error);
 
+AdbcStatusCode ConnectionGetStatistics(struct AdbcConnection *connection, const char *catalog, const char *db_schema,
+                                       const char *table_name, char approximate, struct ArrowArrayStream *out,
+                                       struct AdbcError *error);
+
+AdbcStatusCode ConnectionGetStatisticNames(struct AdbcConnection *connection, struct ArrowArrayStream *out,
+                                           struct AdbcError *error);
+
 AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const uint8_t *serialized_partition,
                                        size_t serialized_length, struct ArrowArrayStream *out, struct AdbcError *error);
 

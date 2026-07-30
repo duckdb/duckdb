@@ -34,3 +34,41 @@ SELECT * FROM test
 ----
 {'x': {'i': 1, 'v2': 1}}
 {'x': {'i': 2, 'v2': 2}}
+
+# rename updates nested struct default field names
+statement ok
+CREATE TABLE test_default(s STRUCT(s2 STRUCT(a INTEGER, b INTEGER)) DEFAULT {'s2': {'a': 1, 'b': 2}})
+
+statement ok
+INSERT INTO test_default DEFAULT VALUES
+
+statement ok
+ALTER TABLE test_default RENAME s.s2.a TO c
+
+statement ok
+INSERT INTO test_default DEFAULT VALUES
+
+query I
+SELECT s FROM test_default
+----
+{'s2': {'c': 1, 'b': 2}}
+{'s2': {'c': 1, 'b': 2}}
+
+# rename updates intermediate struct default field names
+statement ok
+CREATE TABLE test_default_parent(s STRUCT(s2 STRUCT(a INTEGER, b INTEGER)) DEFAULT {'s2': {'a': 1, 'b': 2}})
+
+statement ok
+INSERT INTO test_default_parent DEFAULT VALUES
+
+statement ok
+ALTER TABLE test_default_parent RENAME s.s2 TO x
+
+statement ok
+INSERT INTO test_default_parent DEFAULT VALUES
+
+query I
+SELECT s FROM test_default_parent
+----
+{'x': {'a': 1, 'b': 2}}
+{'x': {'a': 1, 'b': 2}}
