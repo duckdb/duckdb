@@ -1282,9 +1282,9 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		}
 	} else {
 		metadata = std::move(metadata_p);
-		if (parquet_options.encryption_config) {
-			encryption_util = context_p.db->GetEncryptionUtil(true);
-		}
+	}
+	if (parquet_options.encryption_config && !encryption_util) {
+		encryption_util = context_p.db->GetEncryptionUtil(true);
 	}
 	InitializeSchema(context_p);
 	// Length-pushdown rewrites these columns to BIGINT, update the local schema
