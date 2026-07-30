@@ -11,6 +11,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
@@ -19,17 +20,22 @@ static idx_t ColumnDataScanBatchCount(idx_t count, idx_t batch_size) {
 	return MaxValue<idx_t>(count / batch_size + (count % batch_size != 0), 1);
 }
 
-static idx_t GetColumnDataScanBatchSize(ClientContext &context, const OperatorPartitionInfo &partition_info) {
+static idx_t GetColumnDataScanBatchSize(ClientContext &context, idx_t collection_count,
+                                        const OperatorPartitionInfo &partition_info) {
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		return STANDARD_VECTOR_SIZE;
 	}
 	if (!partition_info.RequiresBatchIndex()) {
 		return STANDARD_VECTOR_SIZE;
 	}
+	idx_t preferred_batch_size = DEFAULT_ROW_GROUP_SIZE;
 	if (partition_info.preferred_batch_size.IsValid() && partition_info.preferred_batch_size.GetIndex() > 0) {
-		return partition_info.preferred_batch_size.GetIndex();
+		preferred_batch_size = partition_info.preferred_batch_size.GetIndex();
 	}
-	return DEFAULT_ROW_GROUP_SIZE;
+	auto thread_count = MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads(), 1);
+	auto rows_per_thread = collection_count / thread_count + (collection_count % thread_count != 0);
+	auto parallelism_cap = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, rows_per_thread);
+	return MinValue(preferred_batch_size, parallelism_cap);
 }
 
 static vector<column_t> GenerateColumnDataColumnIds(const vector<LogicalType> &types) {
@@ -68,7 +74,7 @@ class PhysicalColumnDataGlobalScanState : public GlobalSourceState {
 public:
 	PhysicalColumnDataGlobalScanState(ClientContext &context, const ColumnDataCollection &collection,
 	                                  const vector<column_t> &column_ids, const OperatorPartitionInfo &partition_info)
-	    : batch_size(GetColumnDataScanBatchSize(context, partition_info)),
+	    : batch_size(GetColumnDataScanBatchSize(context, collection.Count(), partition_info)),
 	      max_threads(ColumnDataScanBatchCount(collection.Count(), batch_size)) {
 		collection.InitializeScan(global_scan_state, column_ids);
 	}
