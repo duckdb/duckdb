@@ -147,3 +147,53 @@ WITH RECURSIVE t(i, unused) AS (
 SELECT max(i), currval('recursive_member_pruning_sequence') FROM t;
 ----
 3	2
+
+# Analysis and mutation use the same traversal through projections, aggregates, UNIONs, and materialized CTE readers.
+statement ok
+PRAGMA explain_output='optimized_only';
+
+query II
+EXPLAIN WITH RECURSIVE t(i, payload, unused) AS (
+	SELECT 1, 10, repeat('x', 1000)
+	UNION ALL
+	(
+		WITH materialized_state AS MATERIALIZED (
+			SELECT i, payload, unused FROM t
+		),
+		union_state AS (
+			SELECT * FROM materialized_state
+			UNION ALL
+			SELECT * FROM materialized_state WHERE false
+		)
+		SELECT max(i) + 1, max(payload) + 10, max(unused) || 'y'
+		FROM union_state
+		HAVING max(i) < 3
+	)
+)
+SELECT payload FROM t;
+----
+logical_opt	<!REGEX>:.*repeat.*
+
+query II
+WITH RECURSIVE t(i, payload, unused) AS (
+	SELECT 1, 10, repeat('x', 1000)
+	UNION ALL
+	(
+		WITH materialized_state AS MATERIALIZED (
+			SELECT i, payload, unused FROM t
+		),
+		union_state AS (
+			SELECT * FROM materialized_state
+			UNION ALL
+			SELECT * FROM materialized_state WHERE false
+		)
+		SELECT max(i) + 1, max(payload) + 10, max(unused) || 'y'
+		FROM union_state
+		HAVING max(i) < 3
+	)
+)
+SELECT i, payload FROM t ORDER BY i;
+----
+1	10
+2	20
+3	30

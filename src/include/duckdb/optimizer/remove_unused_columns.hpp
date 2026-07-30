@@ -84,6 +84,8 @@ public:
 	bool everything_referenced = true;
 };
 
+enum class RemoveUnusedColumnsMode : uint8_t { APPLY, ANALYZE };
+
 class BaseColumnPruner : public LogicalOperatorVisitor {
 protected:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
@@ -144,13 +146,12 @@ private:
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
 	bool allow_missing_cte_references = false;
-	bool analyze_only = false;
+	RemoveUnusedColumnsMode mode = RemoveUnusedColumnsMode::APPLY;
 
 	RemoveUnusedColumns &root;
 	unique_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> root_cte_map;
 
 private:
-	void AnalyzeOperator(unique_ptr<LogicalOperator> &op);
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace = true);
 	void RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get);

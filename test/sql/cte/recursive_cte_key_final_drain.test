@@ -58,3 +58,14 @@ WITH RECURSIVE t(k, v) USING KEY (k) AS (
 SELECT count(*), min(k), max(k) FROM t;
 ----
 2049	0	2048
+
+# An empty keyed state still follows the same recursion-to-final-drain transition.
+query I
+WITH RECURSIVE t(k, v) USING KEY (k) AS (
+	SELECT i, 0 FROM range(0) r(i)
+	UNION ALL
+	SELECT k, v + 1 FROM t WHERE v < 0
+)
+SELECT count(*) FROM t;
+----
+0

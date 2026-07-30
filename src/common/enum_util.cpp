@@ -171,6 +171,7 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
+#include "duckdb/parallel/pipeline_schedule.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
@@ -4470,6 +4471,45 @@ PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value) {
 	return static_cast<PipelineInputMode>(StringUtil::StringToEnum(GetPipelineInputModeValues(), 2, "PipelineInputMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetPipelineScheduleModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PipelineScheduleMode::COMPLETE), "COMPLETE" },
+		{ static_cast<uint32_t>(PipelineScheduleMode::ACTIVE_SUBSET), "ACTIVE_SUBSET" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PipelineScheduleMode>(PipelineScheduleMode value) {
+	return StringUtil::EnumToString(GetPipelineScheduleModeValues(), 2, "PipelineScheduleMode", static_cast<uint32_t>(value));
+}
+
+template<>
+PipelineScheduleMode EnumUtil::FromString<PipelineScheduleMode>(const char *value) {
+	return static_cast<PipelineScheduleMode>(StringUtil::StringToEnum(GetPipelineScheduleModeValues(), 2, "PipelineScheduleMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPipelineScheduleStageTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PipelineScheduleStageType::INITIALIZE), "INITIALIZE" },
+		{ static_cast<uint32_t>(PipelineScheduleStageType::EXECUTE), "EXECUTE" },
+		{ static_cast<uint32_t>(PipelineScheduleStageType::PREPARE_FINISH), "PREPARE_FINISH" },
+		{ static_cast<uint32_t>(PipelineScheduleStageType::FINISH), "FINISH" },
+		{ static_cast<uint32_t>(PipelineScheduleStageType::COMPLETE), "COMPLETE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PipelineScheduleStageType>(PipelineScheduleStageType value) {
+	return StringUtil::EnumToString(GetPipelineScheduleStageTypeValues(), 5, "PipelineScheduleStageType", static_cast<uint32_t>(value));
+}
+
+template<>
+PipelineScheduleStageType EnumUtil::FromString<PipelineScheduleStageType>(const char *value) {
+	return static_cast<PipelineScheduleStageType>(StringUtil::StringToEnum(GetPipelineScheduleStageTypeValues(), 5, "PipelineScheduleStageType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetPragmaTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PragmaType::PRAGMA_STATEMENT), "PRAGMA_STATEMENT" },
@@ -4743,42 +4783,25 @@ RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value) {
 	return static_cast<RecoveryMode>(StringUtil::StringToEnum(GetRecoveryModeValues(), 2, "RecoveryMode", value));
 }
 
-const StringUtil::EnumStringLiteral *GetRecursiveCTEInlineStageTypeValues() {
+const StringUtil::EnumStringLiteral *GetRecursiveCTESourcePhaseValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(RecursiveCTEInlineStageType::EXECUTE), "EXECUTE" },
-		{ static_cast<uint32_t>(RecursiveCTEInlineStageType::PREPARE_FINISH), "PREPARE_FINISH" },
-		{ static_cast<uint32_t>(RecursiveCTEInlineStageType::FINISH), "FINISH" }
+		{ static_cast<uint32_t>(RecursiveCTESourcePhase::INITIAL), "INITIAL" },
+		{ static_cast<uint32_t>(RecursiveCTESourcePhase::SCANNING_UNION), "SCANNING_UNION" },
+		{ static_cast<uint32_t>(RecursiveCTESourcePhase::RECURSING_KEY), "RECURSING_KEY" },
+		{ static_cast<uint32_t>(RecursiveCTESourcePhase::DRAINING_FINAL_KEY_STATE), "DRAINING_FINAL_KEY_STATE" },
+		{ static_cast<uint32_t>(RecursiveCTESourcePhase::FINISHED), "FINISHED" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineStageType value) {
-	return StringUtil::EnumToString(GetRecursiveCTEInlineStageTypeValues(), 3, "RecursiveCTEInlineStageType", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<RecursiveCTESourcePhase>(RecursiveCTESourcePhase value) {
+	return StringUtil::EnumToString(GetRecursiveCTESourcePhaseValues(), 5, "RecursiveCTESourcePhase", static_cast<uint32_t>(value));
 }
 
 template<>
-RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(const char *value) {
-	return static_cast<RecursiveCTEInlineStageType>(StringUtil::StringToEnum(GetRecursiveCTEInlineStageTypeValues(), 3, "RecursiveCTEInlineStageType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetRecursiveCTEKeySourcePhaseValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(RecursiveCTEKeySourcePhase::RECURSING), "RECURSING" },
-		{ static_cast<uint32_t>(RecursiveCTEKeySourcePhase::DRAINING_FINAL_STATE), "DRAINING_FINAL_STATE" },
-		{ static_cast<uint32_t>(RecursiveCTEKeySourcePhase::FINISHED), "FINISHED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<RecursiveCTEKeySourcePhase>(RecursiveCTEKeySourcePhase value) {
-	return StringUtil::EnumToString(GetRecursiveCTEKeySourcePhaseValues(), 3, "RecursiveCTEKeySourcePhase", static_cast<uint32_t>(value));
-}
-
-template<>
-RecursiveCTEKeySourcePhase EnumUtil::FromString<RecursiveCTEKeySourcePhase>(const char *value) {
-	return static_cast<RecursiveCTEKeySourcePhase>(StringUtil::StringToEnum(GetRecursiveCTEKeySourcePhaseValues(), 3, "RecursiveCTEKeySourcePhase", value));
+RecursiveCTESourcePhase EnumUtil::FromString<RecursiveCTESourcePhase>(const char *value) {
+	return static_cast<RecursiveCTESourcePhase>(StringUtil::StringToEnum(GetRecursiveCTESourcePhaseValues(), 5, "RecursiveCTESourcePhase", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRecursiveProbeSidePreferenceValues() {
@@ -4880,6 +4903,24 @@ const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value) {
 template<>
 RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value) {
 	return static_cast<RemoteCapability>(StringUtil::StringToEnum(GetRemoteCapabilityValues(), 3, "RemoteCapability", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRemoveUnusedColumnsModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RemoveUnusedColumnsMode::APPLY), "APPLY" },
+		{ static_cast<uint32_t>(RemoveUnusedColumnsMode::ANALYZE), "ANALYZE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RemoveUnusedColumnsMode>(RemoveUnusedColumnsMode value) {
+	return StringUtil::EnumToString(GetRemoveUnusedColumnsModeValues(), 2, "RemoveUnusedColumnsMode", static_cast<uint32_t>(value));
+}
+
+template<>
+RemoveUnusedColumnsMode EnumUtil::FromString<RemoveUnusedColumnsMode>(const char *value) {
+	return static_cast<RemoveUnusedColumnsMode>(StringUtil::StringToEnum(GetRemoveUnusedColumnsModeValues(), 2, "RemoveUnusedColumnsMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRenderModeValues() {

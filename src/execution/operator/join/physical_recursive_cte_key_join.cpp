@@ -214,10 +214,11 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbeCompleteKey(DataChunk &
 		lookup_keys.Slice(probe_keys, non_null_sel, current_non_null_count);
 	}
 	auto &lookup_state = hash_table_state->lookup_state;
-	const auto match_count = recursive_state.ht->LookupGroups(lookup_keys, lookup_state, found_key_sel);
-	if (recursive_state.metrics.Enabled()) {
-		recursive_state.metrics.RecordDirectProbeRows(current_non_null_count);
-		recursive_state.metrics.RecordDirectProbeMatches(match_count);
+	auto &hash_table = recursive_state.GetHashTable();
+	const auto match_count = hash_table.LookupGroups(lookup_keys, lookup_state, found_key_sel);
+	if (recursive_state.GetMetrics().Enabled()) {
+		recursive_state.GetMetrics().RecordDirectProbeRows(current_non_null_count);
+		recursive_state.GetMetrics().RecordDirectProbeMatches(match_count);
 	}
 	if (match_count == 0) {
 		return {0, OperatorResultType::NEED_MORE_INPUT};
@@ -234,7 +235,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbeCompleteKey(DataChunk &
 		matched_address_data[match_idx] = lookup_addresses[lookup_idx];
 	}
 	FlatVector::SetSize(matched_addresses, match_count);
-	recursive_state.ht->GatherGroups(lookup_state, found_key_sel, match_count, state_keys);
+	hash_table.GatherGroups(lookup_state, found_key_sel, match_count, state_keys);
 	return {match_count, OperatorResultType::NEED_MORE_INPUT};
 }
 
@@ -260,8 +261,8 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 		non_null_position = 0;
 		active_probe = false;
 		partial_input_initialized = true;
-		if (recursive_state.metrics.Enabled()) {
-			recursive_state.metrics.RecordDirectProbeRows(non_null_count);
+		if (recursive_state.GetMetrics().Enabled()) {
+			recursive_state.GetMetrics().RecordDirectProbeRows(non_null_count);
 		}
 	}
 	if (!hash_table_state->partial_matcher_initialized) {
@@ -271,7 +272,7 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 			columns.push_back(key_idx);
 		}
 		TupleDataCollection::InitializeChunkState(match_chunk_state, layout.KeyTypes(), columns);
-		partial_matcher.Initialize(false, recursive_state.ht->GetLayout(), predicates, std::move(columns));
+		partial_matcher.Initialize(false, recursive_state.GetHashTable().GetLayout(), predicates, std::move(columns));
 		hash_table_state->partial_matcher_initialized = true;
 	}
 
@@ -295,8 +296,8 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 			}
 			const auto &entry = index.GetEntry(current_entry);
 			current_entry = entry.next;
-			if (recursive_state.metrics.Enabled()) {
-				recursive_state.metrics.RecordPartialProbeChainVisit();
+			if (recursive_state.GetMetrics().Enabled()) {
+				recursive_state.GetMetrics().RecordPartialProbeChainVisit();
 			}
 			if (entry.hash != hash_data[current_probe_input].GetValue()) {
 				continue;
@@ -344,10 +345,10 @@ RecursiveCTEKeyJoinResult RecursiveCTEKeyJoinState::ProbePartialKey(DataChunk &i
 			matched_address_data[match_idx] = candidate_address_data[candidate_idx];
 		}
 		FlatVector::SetSize(matched_addresses, match_count);
-		recursive_state.ht->GatherGroups(hash_table_state->lookup_state, matched_addresses,
-		                                 *FlatVector::IncrementalSelectionVector(), match_count, state_keys);
-		if (recursive_state.metrics.Enabled()) {
-			recursive_state.metrics.RecordDirectProbeMatches(match_count);
+		recursive_state.GetHashTable().GatherGroups(hash_table_state->lookup_state, matched_addresses,
+		                                            *FlatVector::IncrementalSelectionVector(), match_count, state_keys);
+		if (recursive_state.GetMetrics().Enabled()) {
+			recursive_state.GetMetrics().RecordDirectProbeMatches(match_count);
 		}
 		if (!has_more) {
 			partial_input_initialized = false;
@@ -363,9 +364,7 @@ void RecursiveCTEKeyJoinState::FinalizePayload(const RecursiveCTEKeyJoinLayout &
 	if (layout.PayloadTypes().empty()) {
 		return;
 	}
-	lock_guard<mutex> guard(recursive_state.ht_finalize_lock);
-	auto row_layout = recursive_state.ht->GetLayoutPtr();
-	RowOperations::FinalizeStates(row_state, *row_layout, matched_addresses, payload_rows, 0);
+	recursive_state.FinalizePayload(row_state, matched_addresses, payload_rows, 0);
 }
 
 void RecursiveCTEKeyJoinState::EmitResult(DataChunk &input, DataChunk &output, const RecursiveCTEKeyJoinLayout &layout,
@@ -405,8 +404,7 @@ void RecursiveCTEKeyJoinState::EmitResult(DataChunk &input, DataChunk &output, c
 OperatorResultType RecursiveCTEKeyJoinState::Execute(DataChunk &input, DataChunk &output,
                                                      const RecursiveCTEKeyJoinLayout &layout,
                                                      RecursiveCTEState &recursive_state) {
-	D_ASSERT(recursive_state.ht);
-	BindHashTable(*recursive_state.ht);
+	BindHashTable(recursive_state.GetHashTable());
 	auto result = layout.IsPartial() ? ProbePartialKey(input, layout, recursive_state)
 	                                 : ProbeCompleteKey(input, layout, recursive_state);
 	if (result.match_count == 0) {

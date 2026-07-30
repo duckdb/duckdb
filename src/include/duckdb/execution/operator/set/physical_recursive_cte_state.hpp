@@ -5,10 +5,12 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/parallel/pipeline_schedule.hpp"
 
 namespace duckdb {
 
 class Logger;
+class RecursiveCTELocalState;
 struct RecursiveCTEDistinctPartition;
 
 struct RecursiveExecutorPool {
@@ -16,9 +18,13 @@ struct RecursiveExecutorPool {
 	PhysicalRecursiveCTE::executor_cache_t executors;
 };
 
-enum class RecursiveCTEInlineStageType : uint8_t { EXECUTE, PREPARE_FINISH, FINISH };
-
-enum class RecursiveCTEKeySourcePhase : uint8_t { RECURSING, DRAINING_FINAL_STATE, FINISHED };
+enum class RecursiveCTESourcePhase : uint8_t {
+	INITIAL,
+	SCANNING_UNION,
+	RECURSING_KEY,
+	DRAINING_FINAL_KEY_STATE,
+	FINISHED
+};
 
 //! Epoch-stable secondary index over a proper subset of USING KEY columns.
 class RecursiveCTEPartialKeyIndex {
@@ -52,11 +58,11 @@ private:
 };
 
 struct RecursiveCTEScheduleStage {
-	RecursiveCTEScheduleStage(RecursiveCTEInlineStageType type_p, Pipeline &pipeline_p, bool has_source_tasks_p)
+	RecursiveCTEScheduleStage(PipelineScheduleStageType type_p, Pipeline &pipeline_p, bool has_source_tasks_p)
 	    : type(type_p), pipeline(pipeline_p), has_source_tasks(has_source_tasks_p), dependency_count(0) {
 	}
 
-	RecursiveCTEInlineStageType type;
+	PipelineScheduleStageType type;
 	reference<Pipeline> pipeline;
 	bool has_source_tasks;
 	vector<idx_t> dependents;
@@ -156,19 +162,63 @@ public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op);
 	~RecursiveCTEState() override;
 
-	void InitializeIntermediateAppend();
-	ColumnDataCollection &CurrentOutputTable();
-	ColumnDataCollection &CurrentInputTable();
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk);
 	const ColumnDataCollection &CurrentInputTable() const;
-	ColumnDataAppendState &CurrentOutputAppendState();
-	void AdvanceIterationBuffers();
-	void ResetCurrentOutputTableForReuse();
-	void RebindRecursiveScans();
+	void InitializeSharedOutputAppend();
 	void CommitUsingKeyUpdates();
 	void PromoteDistinctState(ClientContext &context, idx_t partition_count);
 	void RecordSinkMetrics(idx_t wait_ns, idx_t work_ns, idx_t rows);
-	RecursiveCTEPartialKeyIndex &GetPartialKeyIndex(const vector<idx_t> &key_indices);
+	const RecursiveCTEPartialKeyIndex &GetPartialKeyIndex(const vector<idx_t> &key_indices) const;
+	void AppendOutput(DataChunk &chunk);
+	void CombineOutput(ColumnDataCollection &output);
+	void SinkSerialDistinct(DataChunk &chunk, RecursiveCTELocalState &local_state);
+	void SinkDistinct(DataChunk &chunk, RecursiveCTELocalState &local_state, bool emit_rows = true,
+	                  bool record_sink_metrics = true);
+	void FinalizePayload(RowOperationsState &row_state, Vector &addresses, DataChunk &payload, idx_t payload_idx);
 
+	const PhysicalRecursiveCTE &GetOperator() const {
+		return op;
+	}
+	GroupedAggregateHashTable &GetHashTable() {
+		D_ASSERT(ht);
+		return *ht;
+	}
+	const GroupedAggregateHashTable &GetHashTable() const {
+		D_ASSERT(ht);
+		return *ht;
+	}
+	RecursiveCTEMetrics &GetMetrics() {
+		return metrics;
+	}
+	const RecursiveCTEMetrics &GetMetrics() const {
+		return metrics;
+	}
+	RecursiveCTESchedulerState &GetScheduler() {
+		return scheduler;
+	}
+	const RecursiveCTESchedulerState &GetScheduler() const {
+		return scheduler;
+	}
+	bool AllowsExecutorReuse() const {
+		return allow_executor_reuse;
+	}
+	bool UsesLocalUnionAllOutput() const {
+		return use_local_union_all_output;
+	}
+	void SetUseLocalUnionAllOutput(bool value) {
+		use_local_union_all_output = value;
+	}
+	bool HasDistinctPartitions() const {
+		return !distinct_partitions.empty();
+	}
+	bool HasMaterializedInvariantPipelines() const {
+		return invariant_meta_pipelines_materialized;
+	}
+	void MarkInvariantPipelinesMaterialized() {
+		invariant_meta_pipelines_materialized = true;
+	}
+
+private:
 	unique_ptr<GroupedAggregateHashTable> ht;
 	vector<unique_ptr<RecursiveCTEPartialKeyIndex>> partial_key_indexes;
 	vector<unique_ptr<RecursiveCTEDistinctPartition>> distinct_partitions;
@@ -188,9 +238,7 @@ public:
 	ColumnDataAppendState working_append_state;
 	ColumnDataAppendState recurring_append_state;
 	ColumnDataScanState scan_state;
-	bool initialized = false;
-	bool finished_scan = false;
-	RecursiveCTEKeySourcePhase key_source_phase = RecursiveCTEKeySourcePhase::RECURSING;
+	RecursiveCTESourcePhase source_phase = RecursiveCTESourcePhase::INITIAL;
 	bool output_is_working = false;
 	//! Cached chunk for distinct key extraction in the using_key Sink path
 	DataChunk distinct_rows;
@@ -204,6 +252,16 @@ public:
 	bool use_local_union_all_output = true;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
+
+	SourceResultType GetUsingKeyData(ExecutionContext &context, DataChunk &chunk);
+	SourceResultType GetUnionData(ExecutionContext &context, DataChunk &chunk);
+	void InitializeIntermediateAppend();
+	ColumnDataCollection &CurrentOutputTable();
+	ColumnDataCollection &CurrentInputTable();
+	ColumnDataAppendState &CurrentOutputAppendState();
+	void AdvanceIterationBuffers();
+	void ResetCurrentOutputTableForReuse();
+	void RebindRecursiveScans();
 };
 
 } // namespace duckdb
