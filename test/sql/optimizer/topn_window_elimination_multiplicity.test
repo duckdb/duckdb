@@ -33,8 +33,8 @@ ORDER BY ALL
 1	x
 
 # Partitioned TopN has the same multiplicity requirement.
-query II
-SELECT id, p
+query III
+SELECT id, k, p
 FROM (
 	SELECT l_topn_dup.id, l_topn_dup.k, l_topn_dup.p, r_topn_dup.s
 	FROM l_topn_dup
@@ -43,8 +43,8 @@ FROM (
 QUALIFY ROW_NUMBER() OVER (PARTITION BY k ORDER BY s DESC NULLS LAST) <= 2
 ORDER BY ALL
 ----
-1	x
-1	x
+1	1	x
+1	1	x
 
 # Projecting row_number already requires an inner reconstruction join and must
 # continue to associate each duplicate row ID with its position.

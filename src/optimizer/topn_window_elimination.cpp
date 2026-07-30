@@ -264,7 +264,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_UNNEST);
 
 	if (late_mat_lhs) {
-		op = ConstructJoin(std::move(late_mat_lhs), std::move(op), group_projection_idxs, params);
+		op = ConstructJoin(std::move(late_mat_lhs), std::move(op), group_projection_idxs.size(), params);
 	}
 
 	op = UpdateTopmostBindings(window_idx, std::move(op), topmost_types, group_projection_idxs, topmost_bindings,
@@ -1207,12 +1207,11 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructLHS(LogicalGet &rhs,
 
 unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<LogicalOperator> lhs,
                                                                  unique_ptr<LogicalOperator> rhs,
-                                                                 const map<idx_t, idx_t> &group_projection_idxs,
+                                                                 const idx_t aggregate_offset,
                                                                  const TopNWindowEliminationParameters &params) {
 	lhs->ResolveOperatorTypes();
 	rhs->ResolveOperatorTypes();
 
-	const idx_t aggregate_offset = group_projection_idxs.size();
 	const idx_t rowid_column_count =
 	    params.include_row_number ? rhs->types.size() - (aggregate_offset + 1) : rhs->types.size() - aggregate_offset;
 
@@ -1267,42 +1266,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	}
 
 	// Project the semantic LHS columns, excluding the row IDs used for reconstruction.
-	const idx_t semantic_column_count = lhs->types.size() - rowid_column_count;
-	if (params.row_ids_may_have_duplicates && !params.include_row_number) {
-		vector<bool> projected_partitions(params.partition_count, false);
-		for (const auto &entry : group_projection_idxs) {
-			projected_partitions[entry.second] = true;
-		}
-		for (idx_t partition_idx = 0; partition_idx < projected_partitions.size(); ++partition_idx) {
-			if (projected_partitions[partition_idx]) {
-				join->left_projection_map.push_back(partition_idx);
-			}
-		}
-		for (idx_t i = params.partition_count; i < semantic_column_count; ++i) {
-			join->left_projection_map.push_back(i);
-		}
-	} else {
-		for (idx_t i = 0; i < semantic_column_count; ++i) {
-			join->left_projection_map.push_back(i);
-		}
+	for (idx_t i = 0; i < lhs->types.size() - rowid_column_count; ++i) {
+		join->left_projection_map.push_back(i);
 	}
 
 	join->children.push_back(std::move(lhs));
 	join->children.push_back(std::move(rhs));
-
-	if (params.row_ids_may_have_duplicates && !params.include_row_number) {
-		join->ResolveOperatorTypes();
-		const auto join_bindings = join->GetColumnBindings();
-		vector<unique_ptr<Expression>> expressions;
-		expressions.reserve(join->left_projection_map.size());
-		for (idx_t i = 0; i < join->left_projection_map.size(); ++i) {
-			expressions.push_back(make_uniq<BoundColumnRefExpression>(join->types[i], join_bindings[i]));
-		}
-		auto projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(expressions));
-		projection->children.push_back(std::move(join));
-		projection->ResolveOperatorTypes();
-		return unique_ptr<LogicalOperator>(std::move(projection));
-	}
 
 	return unique_ptr<LogicalOperator>(std::move(join));
 }
