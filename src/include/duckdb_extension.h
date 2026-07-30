@@ -44,8 +44,8 @@
 #if !defined(DUCKDB_EXTENSION_API_VERSION_MAJOR) && !defined(DUCKDB_EXTENSION_API_VERSION_MINOR) &&                    \
     !defined(DUCKDB_EXTENSION_API_VERSION_PATCH)
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR 1
-#define DUCKDB_EXTENSION_API_VERSION_MINOR 2
-#define DUCKDB_EXTENSION_API_VERSION_PATCH 0
+#define DUCKDB_EXTENSION_API_VERSION_MINOR 5
+#define DUCKDB_EXTENSION_API_VERSION_PATCH 6
 #elif !(defined(DUCKDB_EXTENSION_API_VERSION_MAJOR) && defined(DUCKDB_EXTENSION_API_VERSION_MINOR) &&                  \
         defined(DUCKDB_EXTENSION_API_VERSION_PATCH))
 #error "either all or none of the  DUCKDB_EXTENSION_API_VERSION_ defines should be defined"
@@ -62,6 +62,27 @@
 
 #if DUCKDB_EXTENSION_API_VERSION_MAJOR != 1
 #error "This version of the extension API header only supports API VERSION v1.x.x"
+#endif
+
+//===--------------------------------------------------------------------===//
+// Deprecated handle types
+//===--------------------------------------------------------------------===//
+// duckdb.h omits these under DUCKDB_API_NO_DEPRECATED, but the function pointer struct below names them and its
+// layout must not depend on the macro. Re-declare them here in that case. They stay unusable: every function taking
+// one is gated out of both duckdb.h and the mappings below.
+#ifdef DUCKDB_API_NO_DEPRECATED
+typedef struct _duckdb_arrow {
+	void *internal_ptr;
+} * duckdb_arrow;
+typedef struct _duckdb_arrow_stream {
+	void *internal_ptr;
+} * duckdb_arrow_stream;
+typedef struct _duckdb_arrow_schema {
+	void *internal_ptr;
+} * duckdb_arrow_schema;
+typedef struct _duckdb_arrow_array {
+	void *internal_ptr;
+} * duckdb_arrow_array;
 #endif
 
 //===--------------------------------------------------------------------===//
@@ -472,7 +493,8 @@ typedef struct {
 #endif
 
 // These functions have been deprecated and may be removed in future versions of DuckDB
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	idx_t (*duckdb_row_count)(duckdb_result *result);
 	void *(*duckdb_column_data)(duckdb_result *result, idx_t col);
 	bool *(*duckdb_nullmask_data)(duckdb_result *result, idx_t col);
@@ -528,7 +550,8 @@ typedef struct {
 #endif
 
 // Exposing the instance cache
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_instance_cache (*duckdb_create_instance_cache)(void);
 	duckdb_state (*duckdb_get_or_create_from_cache)(duckdb_instance_cache instance_cache, const char *path,
 	                                                duckdb_database *out_database, duckdb_config config,
@@ -537,7 +560,8 @@ typedef struct {
 #endif
 
 // New append functions that are added
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
@@ -548,7 +572,8 @@ typedef struct {
 #endif
 
 // New arrow interface functions
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
 	                                            const char **names, idx_t column_count, struct ArrowSchema *out_schema);
 	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_arrow_options arrow_options, duckdb_data_chunk chunk,
@@ -562,7 +587,8 @@ typedef struct {
 #endif
 
 // New functions for interacting with catalog entries
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_catalog (*duckdb_client_context_get_catalog)(duckdb_client_context context, const char *catalog_name);
 	const char *(*duckdb_catalog_get_type_name)(duckdb_catalog catalog);
 	duckdb_catalog_entry (*duckdb_catalog_get_entry)(duckdb_catalog catalog, duckdb_client_context context,
@@ -575,7 +601,8 @@ typedef struct {
 #endif
 
 // New configuration options functions
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_config_option (*duckdb_create_config_option)(void);
 	void (*duckdb_destroy_config_option)(duckdb_config_option *option);
 	void (*duckdb_config_option_set_name)(duckdb_config_option option, const char *name);
@@ -590,7 +617,8 @@ typedef struct {
 #endif
 
 // API to define custom copy functions
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_copy_function (*duckdb_create_copy_function)(void);
 	void (*duckdb_copy_function_set_name)(duckdb_copy_function copy_function, const char *name);
 	void (*duckdb_copy_function_set_extra_info)(duckdb_copy_function copy_function, void *extra_info,
@@ -638,7 +666,8 @@ typedef struct {
 #endif
 
 // New functions for duckdb error data
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
 	void (*duckdb_destroy_error_data)(duckdb_error_data *error_data);
 	duckdb_error_type (*duckdb_error_data_error_type)(duckdb_error_data error_data);
@@ -647,7 +676,8 @@ typedef struct {
 #endif
 
 // API to create and manipulate expressions
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	void (*duckdb_destroy_expression)(duckdb_expression *expr);
 	duckdb_logical_type (*duckdb_expression_return_type)(duckdb_expression expr);
 	bool (*duckdb_expression_is_foldable)(duckdb_expression expr);
@@ -656,7 +686,8 @@ typedef struct {
 #endif
 
 // API to manage file system operations
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_file_system (*duckdb_client_context_get_file_system)(duckdb_client_context context);
 	void (*duckdb_destroy_file_system)(duckdb_file_system *file_system);
 	duckdb_state (*duckdb_file_system_open)(duckdb_file_system file_system, const char *path,
@@ -678,12 +709,14 @@ typedef struct {
 #endif
 
 // API to operate on GEOMETRY types.
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	char *(*duckdb_geometry_type_get_crs)(duckdb_logical_type type);
 #endif
 
 // API to register a custom log storage.
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_log_storage (*duckdb_create_log_storage)(void);
 	void (*duckdb_destroy_log_storage)(duckdb_log_storage *log_storage);
 	void (*duckdb_log_storage_set_write_log_entry)(duckdb_log_storage log_storage,
@@ -695,7 +728,8 @@ typedef struct {
 #endif
 
 // New functions around the client context
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
 	void (*duckdb_destroy_client_context)(duckdb_client_context *context);
 	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
@@ -705,7 +739,8 @@ typedef struct {
 #endif
 
 // API to get information about the results of a prepared statement
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	idx_t (*duckdb_prepared_statement_column_count)(duckdb_prepared_statement prepared_statement);
 	const char *(*duckdb_prepared_statement_column_name)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
 	duckdb_logical_type (*duckdb_prepared_statement_column_logical_type)(duckdb_prepared_statement prepared_statement,
@@ -714,12 +749,14 @@ typedef struct {
 #endif
 
 // New query execution functions
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
 #endif
 
 // New functions around scalar function binding
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
 	void (*duckdb_scalar_function_bind_set_error)(duckdb_bind_info info, const char *error);
 	void (*duckdb_scalar_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
@@ -733,7 +770,8 @@ typedef struct {
 #endif
 
 // New functions to configure local states for scalar functions
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	void *(*duckdb_scalar_function_get_state)(duckdb_function_info info);
 	void (*duckdb_scalar_function_set_init)(duckdb_scalar_function scalar_function, duckdb_scalar_function_init_t init);
 	void (*duckdb_scalar_function_init_set_error)(duckdb_init_info info, const char *error);
@@ -744,36 +782,39 @@ typedef struct {
 #endif
 
 // New string functions that are added
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	char *(*duckdb_value_to_string)(duckdb_value value);
 	duckdb_error_data (*duckdb_valid_utf8_check)(const char *str, idx_t len);
 #endif
 
 // New functions around the table description
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	idx_t (*duckdb_table_description_get_column_count)(duckdb_table_description table_description);
 	duckdb_logical_type (*duckdb_table_description_get_column_type)(duckdb_table_description table_description,
 	                                                                idx_t index);
 #endif
 
 // New functions around table function binding
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
 #endif
 
 // New value functions that are added
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
 	                                        idx_t entry_count);
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
-	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
-	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 #endif
 
 // API to create and manipulate vector types
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 5 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 5 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 6) // v1.5.6
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
 	void (*duckdb_destroy_vector)(duckdb_vector *vector);
 	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector sel, idx_t len);
@@ -795,9 +836,6 @@ typedef struct {
 //===--------------------------------------------------------------------===//
 // Typedefs mapping functions to struct entries
 //===--------------------------------------------------------------------===//
-// When building as a static extension, DuckDB symbols are resolved directly at link time.
-// The vtable (duckdb_ext_api) is not used - skip these macro redirections.
-#ifndef DUCKDB_BUILD_STATIC_EXTENSION
 // Version v1.2.0
 #define duckdb_open                                    duckdb_ext_api.duckdb_open
 #define duckdb_open_ext                                duckdb_ext_api.duckdb_open_ext
@@ -1064,41 +1102,43 @@ typedef struct {
 #define duckdb_table_function_set_function             duckdb_ext_api.duckdb_table_function_set_function
 #define duckdb_table_function_supports_projection_pushdown                                                             \
 	duckdb_ext_api.duckdb_table_function_supports_projection_pushdown
-#define duckdb_register_table_function              duckdb_ext_api.duckdb_register_table_function
-#define duckdb_bind_get_extra_info                  duckdb_ext_api.duckdb_bind_get_extra_info
-#define duckdb_bind_add_result_column               duckdb_ext_api.duckdb_bind_add_result_column
-#define duckdb_bind_get_parameter_count             duckdb_ext_api.duckdb_bind_get_parameter_count
-#define duckdb_bind_get_parameter                   duckdb_ext_api.duckdb_bind_get_parameter
-#define duckdb_bind_get_named_parameter             duckdb_ext_api.duckdb_bind_get_named_parameter
-#define duckdb_bind_set_bind_data                   duckdb_ext_api.duckdb_bind_set_bind_data
-#define duckdb_bind_set_cardinality                 duckdb_ext_api.duckdb_bind_set_cardinality
-#define duckdb_bind_set_error                       duckdb_ext_api.duckdb_bind_set_error
-#define duckdb_init_get_extra_info                  duckdb_ext_api.duckdb_init_get_extra_info
-#define duckdb_init_get_bind_data                   duckdb_ext_api.duckdb_init_get_bind_data
-#define duckdb_init_set_init_data                   duckdb_ext_api.duckdb_init_set_init_data
-#define duckdb_init_get_column_count                duckdb_ext_api.duckdb_init_get_column_count
-#define duckdb_init_get_column_index                duckdb_ext_api.duckdb_init_get_column_index
-#define duckdb_init_set_max_threads                 duckdb_ext_api.duckdb_init_set_max_threads
-#define duckdb_init_set_error                       duckdb_ext_api.duckdb_init_set_error
-#define duckdb_function_get_extra_info              duckdb_ext_api.duckdb_function_get_extra_info
-#define duckdb_function_get_bind_data               duckdb_ext_api.duckdb_function_get_bind_data
-#define duckdb_function_get_init_data               duckdb_ext_api.duckdb_function_get_init_data
-#define duckdb_function_get_local_init_data         duckdb_ext_api.duckdb_function_get_local_init_data
-#define duckdb_function_set_error                   duckdb_ext_api.duckdb_function_set_error
-#define duckdb_add_replacement_scan                 duckdb_ext_api.duckdb_add_replacement_scan
-#define duckdb_replacement_scan_set_function_name   duckdb_ext_api.duckdb_replacement_scan_set_function_name
-#define duckdb_replacement_scan_add_parameter       duckdb_ext_api.duckdb_replacement_scan_add_parameter
-#define duckdb_replacement_scan_set_error           duckdb_ext_api.duckdb_replacement_scan_set_error
-#define duckdb_get_profiling_info                   duckdb_ext_api.duckdb_get_profiling_info
-#define duckdb_profiling_info_get_value             duckdb_ext_api.duckdb_profiling_info_get_value
-#define duckdb_profiling_info_get_metrics           duckdb_ext_api.duckdb_profiling_info_get_metrics
-#define duckdb_profiling_info_get_child_count       duckdb_ext_api.duckdb_profiling_info_get_child_count
-#define duckdb_profiling_info_get_child             duckdb_ext_api.duckdb_profiling_info_get_child
-#define duckdb_appender_create                      duckdb_ext_api.duckdb_appender_create
-#define duckdb_appender_create_ext                  duckdb_ext_api.duckdb_appender_create_ext
-#define duckdb_appender_column_count                duckdb_ext_api.duckdb_appender_column_count
-#define duckdb_appender_column_type                 duckdb_ext_api.duckdb_appender_column_type
-#define duckdb_appender_error                       duckdb_ext_api.duckdb_appender_error
+#define duckdb_register_table_function            duckdb_ext_api.duckdb_register_table_function
+#define duckdb_bind_get_extra_info                duckdb_ext_api.duckdb_bind_get_extra_info
+#define duckdb_bind_add_result_column             duckdb_ext_api.duckdb_bind_add_result_column
+#define duckdb_bind_get_parameter_count           duckdb_ext_api.duckdb_bind_get_parameter_count
+#define duckdb_bind_get_parameter                 duckdb_ext_api.duckdb_bind_get_parameter
+#define duckdb_bind_get_named_parameter           duckdb_ext_api.duckdb_bind_get_named_parameter
+#define duckdb_bind_set_bind_data                 duckdb_ext_api.duckdb_bind_set_bind_data
+#define duckdb_bind_set_cardinality               duckdb_ext_api.duckdb_bind_set_cardinality
+#define duckdb_bind_set_error                     duckdb_ext_api.duckdb_bind_set_error
+#define duckdb_init_get_extra_info                duckdb_ext_api.duckdb_init_get_extra_info
+#define duckdb_init_get_bind_data                 duckdb_ext_api.duckdb_init_get_bind_data
+#define duckdb_init_set_init_data                 duckdb_ext_api.duckdb_init_set_init_data
+#define duckdb_init_get_column_count              duckdb_ext_api.duckdb_init_get_column_count
+#define duckdb_init_get_column_index              duckdb_ext_api.duckdb_init_get_column_index
+#define duckdb_init_set_max_threads               duckdb_ext_api.duckdb_init_set_max_threads
+#define duckdb_init_set_error                     duckdb_ext_api.duckdb_init_set_error
+#define duckdb_function_get_extra_info            duckdb_ext_api.duckdb_function_get_extra_info
+#define duckdb_function_get_bind_data             duckdb_ext_api.duckdb_function_get_bind_data
+#define duckdb_function_get_init_data             duckdb_ext_api.duckdb_function_get_init_data
+#define duckdb_function_get_local_init_data       duckdb_ext_api.duckdb_function_get_local_init_data
+#define duckdb_function_set_error                 duckdb_ext_api.duckdb_function_set_error
+#define duckdb_add_replacement_scan               duckdb_ext_api.duckdb_add_replacement_scan
+#define duckdb_replacement_scan_set_function_name duckdb_ext_api.duckdb_replacement_scan_set_function_name
+#define duckdb_replacement_scan_add_parameter     duckdb_ext_api.duckdb_replacement_scan_add_parameter
+#define duckdb_replacement_scan_set_error         duckdb_ext_api.duckdb_replacement_scan_set_error
+#define duckdb_get_profiling_info                 duckdb_ext_api.duckdb_get_profiling_info
+#define duckdb_profiling_info_get_value           duckdb_ext_api.duckdb_profiling_info_get_value
+#define duckdb_profiling_info_get_metrics         duckdb_ext_api.duckdb_profiling_info_get_metrics
+#define duckdb_profiling_info_get_child_count     duckdb_ext_api.duckdb_profiling_info_get_child_count
+#define duckdb_profiling_info_get_child           duckdb_ext_api.duckdb_profiling_info_get_child
+#define duckdb_appender_create                    duckdb_ext_api.duckdb_appender_create
+#define duckdb_appender_create_ext                duckdb_ext_api.duckdb_appender_create_ext
+#define duckdb_appender_column_count              duckdb_ext_api.duckdb_appender_column_count
+#define duckdb_appender_column_type               duckdb_ext_api.duckdb_appender_column_type
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_appender_error duckdb_ext_api.duckdb_appender_error
+#endif
 #define duckdb_appender_flush                       duckdb_ext_api.duckdb_appender_flush
 #define duckdb_appender_close                       duckdb_ext_api.duckdb_appender_close
 #define duckdb_appender_destroy                     duckdb_ext_api.duckdb_appender_destroy
@@ -1158,74 +1198,168 @@ typedef struct {
 #define duckdb_register_cast_function               duckdb_ext_api.duckdb_register_cast_function
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
 
-// Version unstable_deprecated
-#define duckdb_row_count                  duckdb_ext_api.duckdb_row_count
-#define duckdb_column_data                duckdb_ext_api.duckdb_column_data
-#define duckdb_nullmask_data              duckdb_ext_api.duckdb_nullmask_data
-#define duckdb_result_get_chunk           duckdb_ext_api.duckdb_result_get_chunk
-#define duckdb_result_is_streaming        duckdb_ext_api.duckdb_result_is_streaming
-#define duckdb_result_chunk_count         duckdb_ext_api.duckdb_result_chunk_count
-#define duckdb_value_boolean              duckdb_ext_api.duckdb_value_boolean
-#define duckdb_value_int8                 duckdb_ext_api.duckdb_value_int8
-#define duckdb_value_int16                duckdb_ext_api.duckdb_value_int16
-#define duckdb_value_int32                duckdb_ext_api.duckdb_value_int32
-#define duckdb_value_int64                duckdb_ext_api.duckdb_value_int64
-#define duckdb_value_hugeint              duckdb_ext_api.duckdb_value_hugeint
-#define duckdb_value_uhugeint             duckdb_ext_api.duckdb_value_uhugeint
-#define duckdb_value_decimal              duckdb_ext_api.duckdb_value_decimal
-#define duckdb_value_uint8                duckdb_ext_api.duckdb_value_uint8
-#define duckdb_value_uint16               duckdb_ext_api.duckdb_value_uint16
-#define duckdb_value_uint32               duckdb_ext_api.duckdb_value_uint32
-#define duckdb_value_uint64               duckdb_ext_api.duckdb_value_uint64
-#define duckdb_value_float                duckdb_ext_api.duckdb_value_float
-#define duckdb_value_double               duckdb_ext_api.duckdb_value_double
-#define duckdb_value_date                 duckdb_ext_api.duckdb_value_date
-#define duckdb_value_time                 duckdb_ext_api.duckdb_value_time
-#define duckdb_value_timestamp            duckdb_ext_api.duckdb_value_timestamp
-#define duckdb_value_interval             duckdb_ext_api.duckdb_value_interval
-#define duckdb_value_varchar              duckdb_ext_api.duckdb_value_varchar
-#define duckdb_value_string               duckdb_ext_api.duckdb_value_string
-#define duckdb_value_varchar_internal     duckdb_ext_api.duckdb_value_varchar_internal
-#define duckdb_value_string_internal      duckdb_ext_api.duckdb_value_string_internal
-#define duckdb_value_blob                 duckdb_ext_api.duckdb_value_blob
-#define duckdb_value_is_null              duckdb_ext_api.duckdb_value_is_null
+// Version v1.5.6 (deprecated)
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_row_count duckdb_ext_api.duckdb_row_count
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_column_data duckdb_ext_api.duckdb_column_data
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_nullmask_data duckdb_ext_api.duckdb_nullmask_data
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_result_get_chunk duckdb_ext_api.duckdb_result_get_chunk
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_result_is_streaming duckdb_ext_api.duckdb_result_is_streaming
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_result_chunk_count duckdb_ext_api.duckdb_result_chunk_count
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_boolean duckdb_ext_api.duckdb_value_boolean
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_int8 duckdb_ext_api.duckdb_value_int8
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_int16 duckdb_ext_api.duckdb_value_int16
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_int32 duckdb_ext_api.duckdb_value_int32
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_int64 duckdb_ext_api.duckdb_value_int64
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_hugeint duckdb_ext_api.duckdb_value_hugeint
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_uhugeint duckdb_ext_api.duckdb_value_uhugeint
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_decimal duckdb_ext_api.duckdb_value_decimal
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_uint8 duckdb_ext_api.duckdb_value_uint8
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_uint16 duckdb_ext_api.duckdb_value_uint16
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_uint32 duckdb_ext_api.duckdb_value_uint32
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_uint64 duckdb_ext_api.duckdb_value_uint64
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_float duckdb_ext_api.duckdb_value_float
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_double duckdb_ext_api.duckdb_value_double
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_date duckdb_ext_api.duckdb_value_date
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_time duckdb_ext_api.duckdb_value_time
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_timestamp duckdb_ext_api.duckdb_value_timestamp
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_interval duckdb_ext_api.duckdb_value_interval
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_varchar duckdb_ext_api.duckdb_value_varchar
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_string duckdb_ext_api.duckdb_value_string
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_varchar_internal duckdb_ext_api.duckdb_value_varchar_internal
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_string_internal duckdb_ext_api.duckdb_value_string_internal
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_blob duckdb_ext_api.duckdb_value_blob
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_value_is_null duckdb_ext_api.duckdb_value_is_null
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
 #define duckdb_execute_prepared_streaming duckdb_ext_api.duckdb_execute_prepared_streaming
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
 #define duckdb_pending_prepared_streaming duckdb_ext_api.duckdb_pending_prepared_streaming
-#define duckdb_query_arrow                duckdb_ext_api.duckdb_query_arrow
-#define duckdb_query_arrow_schema         duckdb_ext_api.duckdb_query_arrow_schema
-#define duckdb_prepared_arrow_schema      duckdb_ext_api.duckdb_prepared_arrow_schema
-#define duckdb_result_arrow_array         duckdb_ext_api.duckdb_result_arrow_array
-#define duckdb_query_arrow_array          duckdb_ext_api.duckdb_query_arrow_array
-#define duckdb_arrow_column_count         duckdb_ext_api.duckdb_arrow_column_count
-#define duckdb_arrow_row_count            duckdb_ext_api.duckdb_arrow_row_count
-#define duckdb_arrow_rows_changed         duckdb_ext_api.duckdb_arrow_rows_changed
-#define duckdb_query_arrow_error          duckdb_ext_api.duckdb_query_arrow_error
-#define duckdb_destroy_arrow              duckdb_ext_api.duckdb_destroy_arrow
-#define duckdb_destroy_arrow_stream       duckdb_ext_api.duckdb_destroy_arrow_stream
-#define duckdb_execute_prepared_arrow     duckdb_ext_api.duckdb_execute_prepared_arrow
-#define duckdb_arrow_scan                 duckdb_ext_api.duckdb_arrow_scan
-#define duckdb_arrow_array_scan           duckdb_ext_api.duckdb_arrow_array_scan
-#define duckdb_stream_fetch_chunk         duckdb_ext_api.duckdb_stream_fetch_chunk
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_query_arrow duckdb_ext_api.duckdb_query_arrow
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_query_arrow_schema duckdb_ext_api.duckdb_query_arrow_schema
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_prepared_arrow_schema duckdb_ext_api.duckdb_prepared_arrow_schema
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_result_arrow_array duckdb_ext_api.duckdb_result_arrow_array
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_query_arrow_array duckdb_ext_api.duckdb_query_arrow_array
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_arrow_column_count duckdb_ext_api.duckdb_arrow_column_count
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_arrow_row_count duckdb_ext_api.duckdb_arrow_row_count
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_arrow_rows_changed duckdb_ext_api.duckdb_arrow_rows_changed
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_query_arrow_error duckdb_ext_api.duckdb_query_arrow_error
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_destroy_arrow duckdb_ext_api.duckdb_destroy_arrow
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_destroy_arrow_stream duckdb_ext_api.duckdb_destroy_arrow_stream
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_execute_prepared_arrow duckdb_ext_api.duckdb_execute_prepared_arrow
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_arrow_scan duckdb_ext_api.duckdb_arrow_scan
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_arrow_array_scan duckdb_ext_api.duckdb_arrow_array_scan
+#endif
+#ifndef DUCKDB_API_NO_DEPRECATED
+#define duckdb_stream_fetch_chunk duckdb_ext_api.duckdb_stream_fetch_chunk
+#endif
 
-// Version unstable_instance_cache
+// Version v1.5.6 (instance_cache)
 #define duckdb_create_instance_cache    duckdb_ext_api.duckdb_create_instance_cache
 #define duckdb_get_or_create_from_cache duckdb_ext_api.duckdb_get_or_create_from_cache
 #define duckdb_destroy_instance_cache   duckdb_ext_api.duckdb_destroy_instance_cache
 
-// Version unstable_new_append_functions
+// Version v1.5.6 (new_append_functions)
 #define duckdb_appender_create_query   duckdb_ext_api.duckdb_appender_create_query
 #define duckdb_appender_error_data     duckdb_ext_api.duckdb_appender_error_data
 #define duckdb_appender_clear          duckdb_ext_api.duckdb_appender_clear
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
 
-// Version unstable_new_arrow_functions
+// Version v1.5.6 (new_arrow_functions)
 #define duckdb_to_arrow_schema                duckdb_ext_api.duckdb_to_arrow_schema
 #define duckdb_data_chunk_to_arrow            duckdb_ext_api.duckdb_data_chunk_to_arrow
 #define duckdb_schema_from_arrow              duckdb_ext_api.duckdb_schema_from_arrow
 #define duckdb_data_chunk_from_arrow          duckdb_ext_api.duckdb_data_chunk_from_arrow
 #define duckdb_destroy_arrow_converted_schema duckdb_ext_api.duckdb_destroy_arrow_converted_schema
 
-// Version unstable_new_catalog_interface
+// Version v1.5.6 (new_catalog_interface)
 #define duckdb_client_context_get_catalog duckdb_ext_api.duckdb_client_context_get_catalog
 #define duckdb_catalog_get_type_name      duckdb_ext_api.duckdb_catalog_get_type_name
 #define duckdb_catalog_get_entry          duckdb_ext_api.duckdb_catalog_get_entry
@@ -1234,7 +1368,7 @@ typedef struct {
 #define duckdb_catalog_entry_get_name     duckdb_ext_api.duckdb_catalog_entry_get_name
 #define duckdb_destroy_catalog_entry      duckdb_ext_api.duckdb_destroy_catalog_entry
 
-// Version unstable_new_config_options_functions
+// Version v1.5.6 (new_config_options_functions)
 #define duckdb_create_config_option             duckdb_ext_api.duckdb_create_config_option
 #define duckdb_destroy_config_option            duckdb_ext_api.duckdb_destroy_config_option
 #define duckdb_config_option_set_name           duckdb_ext_api.duckdb_config_option_set_name
@@ -1245,7 +1379,7 @@ typedef struct {
 #define duckdb_register_config_option           duckdb_ext_api.duckdb_register_config_option
 #define duckdb_client_context_get_config_option duckdb_ext_api.duckdb_client_context_get_config_option
 
-// Version unstable_new_copy_functions_api
+// Version v1.5.6 (new_copy_functions_api)
 #define duckdb_create_copy_function                     duckdb_ext_api.duckdb_create_copy_function
 #define duckdb_copy_function_set_name                   duckdb_ext_api.duckdb_copy_function_set_name
 #define duckdb_copy_function_set_extra_info             duckdb_ext_api.duckdb_copy_function_set_extra_info
@@ -1288,20 +1422,20 @@ typedef struct {
 #define duckdb_table_function_bind_get_result_column_type                                                              \
 	duckdb_ext_api.duckdb_table_function_bind_get_result_column_type
 
-// Version unstable_new_error_data_functions
+// Version v1.5.6 (new_error_data_functions)
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data
 #define duckdb_destroy_error_data    duckdb_ext_api.duckdb_destroy_error_data
 #define duckdb_error_data_error_type duckdb_ext_api.duckdb_error_data_error_type
 #define duckdb_error_data_message    duckdb_ext_api.duckdb_error_data_message
 #define duckdb_error_data_has_error  duckdb_ext_api.duckdb_error_data_has_error
 
-// Version unstable_new_expression_functions
+// Version v1.5.6 (new_expression_functions)
 #define duckdb_destroy_expression     duckdb_ext_api.duckdb_destroy_expression
 #define duckdb_expression_return_type duckdb_ext_api.duckdb_expression_return_type
 #define duckdb_expression_is_foldable duckdb_ext_api.duckdb_expression_is_foldable
 #define duckdb_expression_fold        duckdb_ext_api.duckdb_expression_fold
 
-// Version unstable_new_file_system_api
+// Version v1.5.6 (new_file_system_api)
 #define duckdb_client_context_get_file_system duckdb_ext_api.duckdb_client_context_get_file_system
 #define duckdb_destroy_file_system            duckdb_ext_api.duckdb_destroy_file_system
 #define duckdb_file_system_error_data         duckdb_ext_api.duckdb_file_system_error_data
@@ -1319,10 +1453,10 @@ typedef struct {
 #define duckdb_file_handle_sync               duckdb_ext_api.duckdb_file_handle_sync
 #define duckdb_file_handle_close              duckdb_ext_api.duckdb_file_handle_close
 
-// Version unstable_new_geo_functions
+// Version v1.5.6 (new_geo_functions)
 #define duckdb_geometry_type_get_crs duckdb_ext_api.duckdb_geometry_type_get_crs
 
-// Version unstable_new_logger_functions
+// Version v1.5.6 (new_logger_functions)
 #define duckdb_create_log_storage              duckdb_ext_api.duckdb_create_log_storage
 #define duckdb_destroy_log_storage             duckdb_ext_api.duckdb_destroy_log_storage
 #define duckdb_log_storage_set_write_log_entry duckdb_ext_api.duckdb_log_storage_set_write_log_entry
@@ -1330,7 +1464,7 @@ typedef struct {
 #define duckdb_log_storage_set_name            duckdb_ext_api.duckdb_log_storage_set_name
 #define duckdb_register_log_storage            duckdb_ext_api.duckdb_register_log_storage
 
-// Version unstable_new_open_connect_functions
+// Version v1.5.6 (new_open_connect_functions)
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
 #define duckdb_connection_get_arrow_options     duckdb_ext_api.duckdb_connection_get_arrow_options
 #define duckdb_client_context_get_connection_id duckdb_ext_api.duckdb_client_context_get_connection_id
@@ -1338,16 +1472,16 @@ typedef struct {
 #define duckdb_destroy_arrow_options            duckdb_ext_api.duckdb_destroy_arrow_options
 #define duckdb_get_table_names                  duckdb_ext_api.duckdb_get_table_names
 
-// Version unstable_new_prepared_statement_functions
+// Version v1.5.6 (new_prepared_statement_functions)
 #define duckdb_prepared_statement_column_count        duckdb_ext_api.duckdb_prepared_statement_column_count
 #define duckdb_prepared_statement_column_name         duckdb_ext_api.duckdb_prepared_statement_column_name
 #define duckdb_prepared_statement_column_logical_type duckdb_ext_api.duckdb_prepared_statement_column_logical_type
 #define duckdb_prepared_statement_column_type         duckdb_ext_api.duckdb_prepared_statement_column_type
 
-// Version unstable_new_query_execution_functions
+// Version v1.5.6 (new_query_execution_functions)
 #define duckdb_result_get_arrow_options duckdb_ext_api.duckdb_result_get_arrow_options
 
-// Version unstable_new_scalar_function_functions
+// Version v1.5.6 (new_scalar_function_functions)
 #define duckdb_scalar_function_set_bind                duckdb_ext_api.duckdb_scalar_function_set_bind
 #define duckdb_scalar_function_set_bind_data           duckdb_ext_api.duckdb_scalar_function_set_bind_data
 #define duckdb_scalar_function_set_bind_data_copy      duckdb_ext_api.duckdb_scalar_function_set_bind_data_copy
@@ -1358,7 +1492,7 @@ typedef struct {
 #define duckdb_scalar_function_bind_get_argument_count duckdb_ext_api.duckdb_scalar_function_bind_get_argument_count
 #define duckdb_scalar_function_bind_get_argument       duckdb_ext_api.duckdb_scalar_function_bind_get_argument
 
-// Version unstable_new_scalar_function_state_functions
+// Version v1.5.6 (new_scalar_function_state_functions)
 #define duckdb_scalar_function_get_state               duckdb_ext_api.duckdb_scalar_function_get_state
 #define duckdb_scalar_function_set_init                duckdb_ext_api.duckdb_scalar_function_set_init
 #define duckdb_scalar_function_init_set_error          duckdb_ext_api.duckdb_scalar_function_init_set_error
@@ -1367,26 +1501,24 @@ typedef struct {
 #define duckdb_scalar_function_init_get_bind_data      duckdb_ext_api.duckdb_scalar_function_init_get_bind_data
 #define duckdb_scalar_function_init_get_extra_info     duckdb_ext_api.duckdb_scalar_function_init_get_extra_info
 
-// Version unstable_new_string_functions
+// Version v1.5.6 (new_string_functions)
 #define duckdb_valid_utf8_check duckdb_ext_api.duckdb_valid_utf8_check
 #define duckdb_value_to_string  duckdb_ext_api.duckdb_value_to_string
 
-// Version unstable_new_table_description_functions
+// Version v1.5.6 (new_table_description_functions)
 #define duckdb_table_description_get_column_count duckdb_ext_api.duckdb_table_description_get_column_count
 #define duckdb_table_description_get_column_type  duckdb_ext_api.duckdb_table_description_get_column_type
 
-// Version unstable_new_table_function_functions
+// Version v1.5.6 (new_table_function_functions)
 #define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context
 
-// Version unstable_new_value_functions
-#define duckdb_create_time_ns         duckdb_ext_api.duckdb_create_time_ns
-#define duckdb_create_timestamp_tz_ns duckdb_ext_api.duckdb_create_timestamp_tz_ns
-#define duckdb_get_time_ns            duckdb_ext_api.duckdb_get_time_ns
-#define duckdb_get_timestamp_tz_ns    duckdb_ext_api.duckdb_get_timestamp_tz_ns
-#define duckdb_create_map_value       duckdb_ext_api.duckdb_create_map_value
-#define duckdb_create_union_value     duckdb_ext_api.duckdb_create_union_value
+// Version v1.5.6 (new_value_functions)
+#define duckdb_create_time_ns     duckdb_ext_api.duckdb_create_time_ns
+#define duckdb_get_time_ns        duckdb_ext_api.duckdb_get_time_ns
+#define duckdb_create_map_value   duckdb_ext_api.duckdb_create_map_value
+#define duckdb_create_union_value duckdb_ext_api.duckdb_create_union_value
 
-// Version unstable_new_vector_functions
+// Version v1.5.6 (new_vector_functions)
 #define duckdb_create_vector                           duckdb_ext_api.duckdb_create_vector
 #define duckdb_destroy_vector                          duckdb_ext_api.duckdb_destroy_vector
 #define duckdb_unsafe_vector_assign_string_element_len duckdb_ext_api.duckdb_unsafe_vector_assign_string_element_len
@@ -1400,16 +1532,9 @@ typedef struct {
 
 // capigen:begin appended
 // capigen:end appended
-#endif // DUCKDB_BUILD_STATIC_EXTENSION
-
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
 //===--------------------------------------------------------------------===//
-#ifdef DUCKDB_BUILD_STATIC_EXTENSION
-// No vtable global needed for static builds - DuckDB symbols are resolved directly at link time
-#define DUCKDB_EXTENSION_GLOBAL
-#define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)
-#else
 // This goes in the c/c++ file containing the entrypoint (handle
 #define DUCKDB_EXTENSION_GLOBAL duckdb_ext_api_v1 duckdb_ext_api = {0};
 // Initializes the C Extension API: First thing to call in the extension entrypoint
@@ -1419,7 +1544,6 @@ typedef struct {
 		return false;                                                                                                  \
 	};                                                                                                                 \
 	duckdb_ext_api = *res;
-#endif // DUCKDB_BUILD_STATIC_EXTENSION
 
 // Place in global scope of any C/C++ file that needs to access the extension API
 #define DUCKDB_EXTENSION_EXTERN extern duckdb_ext_api_v1 duckdb_ext_api;
