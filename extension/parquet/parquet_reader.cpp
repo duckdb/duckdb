@@ -48,6 +48,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -1483,8 +1484,8 @@ static FilterPropagateResult CheckParquetFloatFilter(ClientContext &context, Col
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-static bool TryGetListBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
-                                      optional_ptr<ColumnReader> &leaf_reader) {
+static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expression &expr,
+                                        optional_ptr<ColumnReader> &leaf_reader) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 		if (expr.Cast<BoundReferenceExpression>().Index() != 0) {
 			return false;
@@ -1498,14 +1499,31 @@ static bool TryGetListBloomFilterLeaf(ColumnReader &column_reader, const Express
 
 	auto &function = expr.Cast<BoundFunctionExpression>();
 	if (function.GetChildren().empty() ||
-	    !TryGetListBloomFilterLeaf(column_reader, *function.GetChildren()[0], leaf_reader)) {
+	    !TryGetNestedBloomFilterLeaf(column_reader, *function.GetChildren()[0], leaf_reader)) {
 		return false;
 	}
+
+	// Handle LIST type.
 	if (leaf_reader->Type().id() == LogicalTypeId::LIST &&
 	    (function.Function().GetName() == "list_extract" || function.Function().GetName() == "array_extract")) {
 		leaf_reader = &leaf_reader->Cast<ListColumnReader>().GetChildReader();
 		return true;
 	}
+
+	// Handle STRUCT type.
+	if (leaf_reader->Type().id() == LogicalTypeId::STRUCT) {
+		idx_t child_idx;
+		if (!TryGetStructExtractChildIndex(function, child_idx)) {
+			return false;
+		}
+		auto &struct_reader = leaf_reader->Cast<StructColumnReader>();
+		if (child_idx >= struct_reader.child_readers.size() || !struct_reader.child_readers[child_idx]) {
+			return false;
+		}
+		leaf_reader = struct_reader.child_readers[child_idx].get();
+		return true;
+	}
+
 	return false;
 }
 
@@ -1553,7 +1571,7 @@ static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter
 		return false;
 	}
 
-	if (!TryGetListBloomFilterLeaf(column_reader, *column_expr, leaf_reader) ||
+	if (!TryGetNestedBloomFilterLeaf(column_reader, *column_expr, leaf_reader) ||
 	    leaf_reader->Type() != constant->GetValue().type()) {
 		return false;
 	}

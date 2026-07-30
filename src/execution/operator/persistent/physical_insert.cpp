@@ -82,11 +82,15 @@ InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<Logica
 }
 
 InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
-                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints)
+                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+                                   OnConflictAction action_type)
     : collection_index(DConstants::INVALID_INDEX), bound_constraints(bound_constraints) {
 	auto &allocator = Allocator::Get(context);
 	update_chunk.Initialize(allocator, types);
 	append_chunk.Initialize(allocator, types);
+	if (action_type == OnConflictAction::UPDATE) {
+		updated_rows = make_uniq<RowIdDeduplicator>(context, vector<LogicalType> {LogicalType::ROW_TYPE});
+	}
 }
 
 ConstraintState &InsertLocalState::GetConstraintState(DataTable &table, TableCatalogEntry &table_ref) {
@@ -122,7 +126,7 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<InsertLocalState>(context.client, insert_types, bound_constraints);
+	return make_uniq<InsertLocalState>(context.client, insert_types, bound_constraints, action_type);
 }
 
 bool AllConflictsMeetCondition(DataChunk &result) {
@@ -291,7 +295,8 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 
 static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) {
 	// Register all row-ids; a distinct count below `count` means a row-id repeated, which we reject.
-	auto distinct = RegisterRowIds(lstate.updated_rows, row_ids, count);
+	D_ASSERT(lstate.updated_rows);
+	auto distinct = lstate.updated_rows->Register(row_ids, count);
 	if (distinct != count) {
 		// This is following postgres behavior:
 		throw InvalidInputException(
@@ -486,8 +491,9 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 	VerifyOnConflictCondition<GLOBAL>(context, combined_chunk, on_conflict_condition, constraint_state, tuples,
 	                                  data_table, local_storage);
 
-	if (&tuples == &lstate.update_chunk) {
-		// Allow updating duplicate rows for the 'update_chunk'
+	if (RefersToSameObject(tuples, lstate.update_chunk)) {
+		D_ASSERT(op.action_type == OnConflictAction::UPDATE);
+		// Reject updating the same target row more than once.
 		RegisterUpdatedRows(lstate, row_ids, conflict_count);
 	}
 	auto affected_tuples = PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);
