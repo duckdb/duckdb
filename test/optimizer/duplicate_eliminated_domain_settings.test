@@ -32,6 +32,14 @@ FROM mode_outer o;
 1	30
 2	NULL
 
+statement ok
+PRAGMA enable_optimizer;
+
+# Disabling only the optional domain optimizer still honors the configured
+# materialized-CTE execution strategy.
+statement ok
+SET disabled_optimizers='duplicate_eliminated_domain';
+
 query II
 EXPLAIN
 SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
@@ -39,10 +47,49 @@ FROM mode_outer o;
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
+
+# Disabling generated-domain elimination also retains baseline CTE lowering.
+statement ok
+SET disabled_optimizers='deliminator';
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
+
+statement ok
+SET disabled_optimizers='';
+
+# With both constituent optimizers enabled, this unselective domain is removed.
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
+
 # The regular duplicate-eliminated physical path remains available when the
-# materialized-CTE strategy is explicitly disabled.
+# materialized-CTE strategy and optional optimizers are explicitly disabled.
 statement ok
 SET delim_join_as_cte=false;
+
+statement ok
+PRAGMA disable_optimizer;
 
 query II rowsort
 SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
@@ -70,4 +117,3 @@ FROM mode_outer o;
 ----
 1	30
 2	NULL
-

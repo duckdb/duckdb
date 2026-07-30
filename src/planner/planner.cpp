@@ -198,8 +198,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		RewriteTriggersToDependent(*this->binder, *this->plan);
 		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
-		if (!Settings::Get<EnableOptimizerSetting>(context) && Settings::Get<DelimJoinAsCteSetting>(context)) {
-			DelimJoinCTERewriter::Rewrite(*this->binder, this->plan);
+		if (Settings::Get<DelimJoinAsCteSetting>(context) &&
+		    Optimizer::OptimizerDisabled(context, OptimizerType::DUPLICATE_ELIMINATED_DOMAIN)) {
+			DelimJoinCTERewriter::RewriteForExecution(*this->binder, this->plan);
 		}
 		D_ASSERT(!ContainsDependentJoin(*this->plan));
 		D_ASSERT(VerifyPlannedExpressions(*this->plan));

@@ -518,7 +518,7 @@
     },
     {
         "name": "delim_join_as_cte",
-        "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
+        "description": "Rewrite duplicate-eliminated joins to CTEs before optional duplicate-eliminated domain optimization",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"

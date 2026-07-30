@@ -91,6 +91,7 @@
     {
       "reason": "FIXME: correlated COUNT(*) subqueries return NULL instead of 0 - empty groups produce NULL aggregate states",
       "paths": [
+        "test/optimizer/duplicate_eliminated_domain_correctness.test",
         "test/optimizer/duplicate_eliminated_domain_factoring.test",
         "test/sql/subquery/scalar/test_count_star_subquery.test"
       ]

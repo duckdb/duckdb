@@ -1,0 +1,452 @@
+# name: test/optimizer/duplicate_eliminated_domain_quantified.test
+# description: Preserve observable evaluation and NULL semantics for quantified correlated subqueries
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+CREATE TABLE quantified_domain(k BIGINT);
+
+statement ok
+INSERT INTO quantified_domain VALUES (2), (4);
+
+# Unreachable domain keys must not evaluate throwing quantified RHS expressions.
+statement ok
+CREATE TABLE quantified_values(k BIGINT, text_value VARCHAR);
+
+statement ok
+INSERT INTO quantified_values VALUES (2, '1'), (4, 'x');
+
+query IIII
+SELECT d.k IN (
+           SELECT CAST(text_value AS BIGINT)
+           FROM quantified_values v
+           WHERE v.k = d.k
+       ),
+       d.k NOT IN (
+           SELECT CAST(text_value AS BIGINT)
+           FROM quantified_values v
+           WHERE v.k = d.k
+       ),
+       d.k = ANY (
+           SELECT CAST(text_value AS BIGINT)
+           FROM quantified_values v
+           WHERE v.k = d.k
+       ),
+       d.k <> ALL (
+           SELECT CAST(text_value AS BIGINT)
+           FROM quantified_values v
+           WHERE v.k = d.k
+       )
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+false	true	false	true
+
+query II
+SELECT 2 > ANY (
+           SELECT CAST(text_value AS BIGINT)
+           FROM quantified_values v
+           WHERE v.k = d.k
+       ),
+       0 < ALL (
+           SELECT CAST(text_value AS BIGINT)
+           FROM quantified_values v
+           WHERE v.k = d.k
+       )
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+true	true
+
+query II
+EXPLAIN
+SELECT d.k IN (
+    SELECT CAST(text_value AS BIGINT)
+    FROM quantified_values v
+    WHERE v.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Filtered quantified predicates take the evidence-side SEMI/ANTI paths.
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE 1 IN (
+    SELECT CAST(text_value AS BIGINT)
+    FROM quantified_values v
+    WHERE v.k = d.k
+);
+----
+2
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE 2 NOT IN (
+    SELECT CAST(text_value AS BIGINT)
+    FROM quantified_values v
+    WHERE v.k = d.k
+);
+----
+2
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE 1 = ANY (
+    SELECT CAST(text_value AS BIGINT)
+    FROM quantified_values v
+    WHERE v.k = d.k
+);
+----
+2
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE 2 <> ALL (
+    SELECT CAST(text_value AS BIGINT)
+    FROM quantified_values v
+    WHERE v.k = d.k
+);
+----
+2
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE 2 > ANY (
+    SELECT CAST(text_value AS BIGINT)
+    FROM quantified_values v
+    WHERE v.k = d.k
+);
+----
+2
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE 0 < ALL (
+    SELECT CAST(text_value AS BIGINT)
+    FROM quantified_values v
+    WHERE v.k = d.k
+);
+----
+2
+
+# Throwing work can also live in an expression-backed table filter after filter pushdown.
+query II
+SELECT d.k IN (
+           SELECT 1
+           FROM quantified_values v
+           WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
+       ),
+       0 < ALL (
+           SELECT 1
+           FROM quantified_values v
+           WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
+       )
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+false	true
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE 1 = ANY (
+    SELECT 1
+    FROM quantified_values v
+    WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
+);
+----
+2
+
+query II
+EXPLAIN
+SELECT d.k IN (
+    SELECT 1
+    FROM quantified_values v
+    WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
+)
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Lambda bodies are stored in function bind data rather than ordinary expression children.
+query I
+SELECT d.k IN (
+    SELECT list_transform([text_value], lambda x: CAST(x AS BIGINT))[1]
+    FROM quantified_values v
+    WHERE v.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k;
+----
+false
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE 1 = ANY (
+    SELECT list_transform([text_value], lambda x: CAST(x AS BIGINT))[1]
+    FROM quantified_values v
+    WHERE v.k = d.k
+);
+----
+2
+
+# The same exact-domain requirement applies to nested scalar cardinality checks.
+statement ok
+CREATE TABLE quantified_scalar(k BIGINT, v BIGINT);
+
+statement ok
+INSERT INTO quantified_scalar VALUES (2, 1), (4, 2), (4, 3);
+
+query IIII
+SELECT d.k IN (
+           SELECT (
+               SELECT v
+               FROM quantified_scalar s
+               WHERE s.k = q.k
+           )
+           FROM quantified_domain q
+           WHERE q.k = d.k
+       ),
+       d.k NOT IN (
+           SELECT (
+               SELECT v
+               FROM quantified_scalar s
+               WHERE s.k = q.k
+           )
+           FROM quantified_domain q
+           WHERE q.k = d.k
+       ),
+       d.k = ANY (
+           SELECT (
+               SELECT v
+               FROM quantified_scalar s
+               WHERE s.k = q.k
+           )
+           FROM quantified_domain q
+           WHERE q.k = d.k
+       ),
+       d.k <> ALL (
+           SELECT (
+               SELECT v
+               FROM quantified_scalar s
+               WHERE s.k = q.k
+           )
+           FROM quantified_domain q
+           WHERE q.k = d.k
+       )
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+false	true	false	true
+
+query II
+SELECT 2 > ANY (
+           SELECT (
+               SELECT v
+               FROM quantified_scalar s
+               WHERE s.k = q.k
+           )
+           FROM quantified_domain q
+           WHERE q.k = d.k
+       ),
+       0 < ALL (
+           SELECT (
+               SELECT v
+               FROM quantified_scalar s
+               WHERE s.k = q.k
+           )
+           FROM quantified_domain q
+           WHERE q.k = d.k
+       )
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+true	true
+
+query II
+EXPLAIN
+SELECT d.k IN (
+    SELECT (
+        SELECT v
+        FROM quantified_scalar s
+        WHERE s.k = q.k
+    )
+    FROM quantified_domain q
+    WHERE q.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE 1 IN (
+    SELECT (
+        SELECT v
+        FROM quantified_scalar s
+        WHERE s.k = q.k
+    )
+    FROM quantified_domain q
+    WHERE q.k = d.k
+);
+----
+2
+
+# Every correlated key participates in the exact-domain restriction.
+statement ok
+CREATE TABLE quantified_pair_domain(a BIGINT, b BIGINT);
+
+statement ok
+INSERT INTO quantified_pair_domain VALUES (2, 20), (4, 40);
+
+statement ok
+CREATE TABLE quantified_pair_values(a BIGINT, b BIGINT, text_value VARCHAR);
+
+statement ok
+INSERT INTO quantified_pair_values VALUES (2, 20, '1'), (4, 40, 'x');
+
+query I
+SELECT d.a IN (
+    SELECT CAST(text_value AS BIGINT)
+    FROM quantified_pair_values v
+    WHERE v.a = d.a AND v.b = d.b
+)
+FROM (VALUES (1, 10)) o(a, b)
+JOIN quantified_pair_domain d ON o.a * 2 = d.a AND o.b * 2 = d.b;
+----
+false
+
+# Additional non-throwing groups remain isolated from quantified NULL evidence.
+statement ok
+CREATE TABLE quantified_null_values(k BIGINT, v BIGINT);
+
+statement ok
+INSERT INTO quantified_null_values VALUES (2, 1), (2, NULL), (4, 2);
+
+query IIII
+SELECT d.k IN (
+           SELECT v FROM quantified_null_values n WHERE n.k = d.k
+       ),
+       d.k NOT IN (
+           SELECT v FROM quantified_null_values n WHERE n.k = d.k
+       ),
+       d.k = ANY (
+           SELECT v FROM quantified_null_values n WHERE n.k = d.k
+       ),
+       d.k <> ALL (
+           SELECT v FROM quantified_null_values n WHERE n.k = d.k
+       )
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k;
+----
+NULL	NULL	NULL	NULL
+
+# Ordinary and null-safe correlation retain their distinct behavior for a NULL key.
+statement ok
+CREATE TABLE quantified_nullable_domain(k BIGINT);
+
+statement ok
+INSERT INTO quantified_nullable_domain VALUES (NULL), (2);
+
+statement ok
+CREATE TABLE quantified_nullable_values(k BIGINT, v BIGINT);
+
+statement ok
+INSERT INTO quantified_nullable_values VALUES (NULL, 1), (NULL, NULL), (2, 2);
+
+query II
+SELECT 2 IN (
+           SELECT v
+           FROM quantified_nullable_values n
+           WHERE n.k = d.k
+       ),
+       2 IN (
+           SELECT v
+           FROM quantified_nullable_values n
+           WHERE n.k IS NOT DISTINCT FROM d.k
+       )
+FROM (VALUES (NULL::BIGINT)) o(k)
+JOIN quantified_nullable_domain d ON o.k IS NOT DISTINCT FROM d.k;
+----
+false	NULL
+
+# Volatile quantified work stays on the physical delimiter path and runs only for reachable keys.
+statement ok
+CREATE TABLE quantified_volatile_values(k BIGINT);
+
+statement ok
+INSERT INTO quantified_volatile_values VALUES (2), (4);
+
+statement ok
+CREATE SEQUENCE quantified_domain_sequence START 1;
+
+query II
+EXPLAIN
+SELECT d.k IN (
+    SELECT nextval('quantified_domain_sequence')
+    FROM quantified_volatile_values v
+    WHERE v.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*Delim Join.*
+
+query II
+SELECT d.k IN (
+           SELECT nextval('quantified_domain_sequence')
+           FROM quantified_volatile_values v
+           WHERE v.k = d.k
+       ),
+       currval('quantified_domain_sequence')
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k;
+----
+false	1
+
+query I
+SELECT d.k
+FROM (VALUES (1)) o(k)
+JOIN quantified_domain d ON o.k * 2 = d.k
+WHERE d.k IN (
+    SELECT nextval('quantified_domain_sequence')
+    FROM quantified_volatile_values v
+    WHERE v.k = d.k
+);
+----
+2
+
+query I
+SELECT currval('quantified_domain_sequence');
+----
+2

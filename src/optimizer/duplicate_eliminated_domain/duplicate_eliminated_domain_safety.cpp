@@ -8,12 +8,15 @@
 
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
 
+#include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
@@ -58,6 +61,38 @@ static bool CanThrowForAdditionalGroups(const Expression &expr) {
 	return child_can_throw;
 }
 
+template <class PREDICATE>
+static bool EmbeddedExpressionsAreSafe(const Expression &expr, const PREDICATE &predicate) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function = expr.Cast<BoundFunctionExpression>();
+		if (function.Function().HasBindLambdaCallback() && function.BindInfo()) {
+			auto lambda_expression = function.BindInfo()->Cast<LambdaFunctionData>().GetLambdaExpression();
+			if (lambda_expression &&
+			    (!predicate(*lambda_expression) || !EmbeddedExpressionsAreSafe(*lambda_expression, predicate))) {
+				return false;
+			}
+		}
+		if (function.Function().GetName() == OptionalFilterScalarFun::NAME && function.BindInfo()) {
+			auto &data = function.BindInfo()->Cast<OptionalFilterFunctionData>();
+			if (data.child_filter_expr && (!predicate(*data.child_filter_expr) ||
+			                               !EmbeddedExpressionsAreSafe(*data.child_filter_expr, predicate))) {
+				return false;
+			}
+		}
+		if (function.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && function.BindInfo()) {
+			auto &data = function.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
+			if (data.child_filter_expr && (!predicate(*data.child_filter_expr) ||
+			                               !EmbeddedExpressionsAreSafe(*data.child_filter_expr, predicate))) {
+				return false;
+			}
+		}
+	}
+	bool safe = true;
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { safe &= EmbeddedExpressionsAreSafe(child, predicate); });
+	return safe;
+}
+
 static bool ExpressionsCanEvaluateAdditionalGroups(const LogicalOperator &op) {
 	bool safe = true;
 	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expression) {
@@ -65,7 +100,10 @@ static bool ExpressionsCanEvaluateAdditionalGroups(const LogicalOperator &op) {
 			return;
 		}
 		auto &expr = **expression;
-		if (CanThrowForAdditionalGroups(expr) || expr.IsVolatile() || expr.HasSubquery()) {
+		auto predicate = [](const Expression &candidate) {
+			return !CanThrowForAdditionalGroups(candidate) && !candidate.IsVolatile() && !candidate.HasSubquery();
+		};
+		if (!predicate(expr) || !EmbeddedExpressionsAreSafe(expr, predicate)) {
 			safe = false;
 		}
 	});
@@ -78,11 +116,26 @@ static bool ExpressionsCanBeDuplicated(const LogicalOperator &op) {
 		if (!expression || !*expression) {
 			return;
 		}
-		if ((*expression)->CanThrow() || (*expression)->IsVolatile() || (*expression)->HasSubquery()) {
+		auto predicate = [](const Expression &candidate) {
+			return !candidate.CanThrow() && !candidate.IsVolatile() && !candidate.HasSubquery();
+		};
+		if (!predicate(**expression) || !EmbeddedExpressionsAreSafe(**expression, predicate)) {
 			safe = false;
 		}
 	});
 	return safe;
+}
+
+template <class PREDICATE>
+static bool TableFiltersAreSafe(const LogicalGet &get, const PREDICATE &predicate) {
+	for (const auto &entry : get.table_filters) {
+		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(),
+		                                                     "DuplicateEliminatedDomainSafety::TableFiltersAreSafe");
+		if (!predicate(*filter.expr) || !EmbeddedExpressionsAreSafe(*filter.expr, predicate)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 static bool CanEvaluateAdditionalGroupsInternal(const LogicalOperator &op, TableIndex domain_cte_index);
@@ -104,9 +157,13 @@ static bool CanEvaluateAdditionalGroupsInternal(const LogicalOperator &op, Table
 		return false;
 	}
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_GET: {
 		// A table-in/out function can be invoked once per domain group.
-		return !op.Cast<LogicalGet>().HasTableInOutInput();
+		auto &get = op.Cast<LogicalGet>();
+		return !get.HasTableInOutInput() && TableFiltersAreSafe(get, [](const Expression &expr) {
+			return !CanThrowForAdditionalGroups(expr) && !expr.IsVolatile() && !expr.HasSubquery();
+		});
+	}
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -159,8 +216,12 @@ static bool CanDuplicateSourceInternal(const LogicalOperator &op) {
 		return false;
 	}
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-		return IsCopyableScan(op.Cast<LogicalGet>());
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op.Cast<LogicalGet>();
+		return IsCopyableScan(get) && TableFiltersAreSafe(get, [](const Expression &expr) {
+			       return !expr.CanThrow() && !expr.IsVolatile() && !expr.HasSubquery();
+		       });
+	}
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		return op.children.size() == 1 && CanDuplicateSourceInternal(*op.children[0]);

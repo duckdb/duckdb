@@ -19,12 +19,17 @@ DuplicateEliminatedDomainOptimizer::DuplicateEliminatedDomainOptimizer(Optimizer
 }
 
 unique_ptr<LogicalOperator> DuplicateEliminatedDomainOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	if (!Settings::Get<DelimJoinAsCteSetting>(optimizer.context) ||
-	    !DelimJoinCTERewriter::Rewrite(optimizer.binder, plan)) {
+	if (!Settings::Get<DelimJoinAsCteSetting>(optimizer.context)) {
+		return plan;
+	}
+	auto rewritten = optimizer.OptimizerDisabled(OptimizerType::DELIMINATOR)
+	                     ? DelimJoinCTERewriter::RewriteForExecution(optimizer.binder, plan)
+	                     : DelimJoinCTERewriter::RewriteAndOptimize(optimizer.binder, plan);
+	if (!rewritten) {
 		return plan;
 	}
 
-	// Rewriting exposes ordinary MARK joins after the main filter-pushdown pass.
+	// This constituent cleanup handles ordinary MARK joins exposed after the scheduled filter-pushdown pass.
 	FilterPushdown filter_pushdown(optimizer);
 	unordered_set<TableIndex> top_bindings;
 	filter_pushdown.CheckMarkToSemi(*plan, top_bindings);

@@ -14,13 +14,20 @@
 
 namespace duckdb {
 
+enum class DuplicateEliminatedDomainExpansion : uint8_t { UNSAFE, SAFE };
+
 //! Rewrites fully decorrelated DelimJoins into materialized CTEs.
 class DelimJoinCTERewriter {
 public:
-	static bool Rewrite(Binder &binder, unique_ptr<LogicalOperator> &plan);
+	//! Lower fully decorrelated DelimJoins to the baseline materialized-CTE representation.
+	static bool RewriteForExecution(Binder &binder, unique_ptr<LogicalOperator> &plan);
+	//! Lower DelimJoins and optimize their generated duplicate-eliminated domains.
+	static bool RewriteAndOptimize(Binder &binder, unique_ptr<LogicalOperator> &plan);
 
 private:
-	explicit DelimJoinCTERewriter(Binder &binder);
+	enum class DuplicateEliminatedJoinRewriteMode : uint8_t { EXECUTION, OPTIMIZED };
+
+	DelimJoinCTERewriter(Binder &binder, DuplicateEliminatedJoinRewriteMode mode);
 
 	bool Rewrite(unique_ptr<LogicalOperator> &plan);
 	BindingReplacementGraph RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
@@ -33,9 +40,9 @@ private:
 
 private:
 	Binder &binder;
-	bool cte_deliminator_enabled;
+	DuplicateEliminatedJoinRewriteMode mode;
 	bool rewritten_delim_join = false;
-	vector<TableIndex> generated_dedup_cte_indexes;
+	unordered_map<TableIndex, DuplicateEliminatedDomainExpansion> generated_dedup_ctes;
 };
 
 } // namespace duckdb
