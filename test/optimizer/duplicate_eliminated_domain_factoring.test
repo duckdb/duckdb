@@ -427,7 +427,7 @@ FROM domain_outer o
 JOIN domain_dim d ON d.k = o.k
 WHERE d.state = 'selected';
 ----
-logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
 # A table-function source outside the bounded copy path retains the duplicate-eliminated CTE.
 query II
@@ -544,7 +544,7 @@ CROSS JOIN domain_other r;
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
-# The outer aggregate is rewritten directly; the nested EXISTS retains its own delimiter CTE.
+# Multiple outer domain references share a factored source; the nested EXISTS retains its own delimiter CTE.
 query II rowsort
 SELECT o.k,
        (SELECT count(*)
@@ -569,7 +569,7 @@ FROM domain_outer o
 JOIN domain_dim d ON d.k = o.k
 WHERE d.state = 'selected';
 ----
-logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*__duckdb_delim_[0-9]+.*
 
 # A volatile correlated key cannot be moved into a shared factor.
 query II

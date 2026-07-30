@@ -9,103 +9,29 @@
 #include "duckdb/optimizer/duplicate_eliminated_domain_candidate.hpp"
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/function/window_function.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
 
-enum class DomainCoverage : uint8_t { EXACT, SUPERSET };
 enum class KeyMatch : uint8_t { IDENTICAL, NULL_SAFE_EQUALITY, EQUALITY };
 
 struct Candidate {
 	Candidate(unique_ptr<LogicalOperator> &source_p, vector<idx_t> key_indices_p, idx_t joins_above_p,
-	          DomainCoverage coverage_p)
+	          DuplicateEliminatedDomainCoverage coverage_p)
 	    : source(source_p), key_indices(std::move(key_indices_p)), joins_above(joins_above_p), coverage(coverage_p) {
 	}
 
 	reference<unique_ptr<LogicalOperator>> source;
 	vector<idx_t> key_indices;
 	idx_t joins_above;
-	DomainCoverage coverage;
+	DuplicateEliminatedDomainCoverage coverage;
 };
-
-static bool CanThrowForSupersetDomain(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE &&
-	    expr.Cast<BoundAggregateExpression>().Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-		return true;
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_WINDOW) {
-		auto &window = expr.Cast<BoundWindowExpression>();
-		if ((window.AggregateFunction() &&
-		     window.AggregateFunction()->GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) ||
-		    (window.WindowFunction() &&
-		     window.WindowFunction()->GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR)) {
-			return true;
-		}
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		auto &function = expr.Cast<BoundFunctionExpression>();
-		if (BoundCastExpression::IsCast(function)) {
-			if (BoundCastExpression::CastCanThrow(BoundCastExpression::SourceType(function),
-			                                      BoundCastExpression::TargetType(function),
-			                                      BoundCastExpression::IsTryCast(function))) {
-				return true;
-			}
-		} else if (function.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-			auto return_type = function.GetReturnType().id();
-			auto &name = function.Function().GetName();
-			bool floating_point_arithmetic =
-			    (return_type == LogicalTypeId::FLOAT || return_type == LogicalTypeId::DOUBLE) &&
-			    (name == "+" || name == "-" || name == "*" || name == "/");
-			if (!floating_point_arithmetic) {
-				return true;
-			}
-		}
-	}
-	bool child_can_throw = false;
-	ExpressionIterator::EnumerateChildren(
-	    expr, [&](const Expression &child) { child_can_throw |= CanThrowForSupersetDomain(child); });
-	return child_can_throw;
-}
-
-static bool CanEvaluateForSupersetDomain(const LogicalOperator &op, TableIndex domain_cte_index) {
-	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == domain_cte_index) {
-		return true;
-	}
-	if (op.HasSideEffects()) {
-		return false;
-	}
-	bool safe = true;
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expression) {
-		if (!expression || !*expression) {
-			return;
-		}
-		auto &expr = **expression;
-		if (CanThrowForSupersetDomain(expr) || expr.IsVolatile() || expr.HasSubquery()) {
-			safe = false;
-		}
-	});
-	if (!safe) {
-		return false;
-	}
-	for (auto &child : op.children) {
-		if (!CanEvaluateForSupersetDomain(*child, domain_cte_index)) {
-			return false;
-		}
-	}
-	return true;
-}
 
 struct EquivalentBinding {
 	EquivalentBinding(ColumnBinding left_p, ColumnBinding right_p, bool null_safe_p)
@@ -380,8 +306,9 @@ static bool CandidateKeysAreSupported(LogicalOperator &op, const vector<idx_t> &
 }
 
 static void FindCandidates(unique_ptr<LogicalOperator> &op, const vector<unique_ptr<Expression>> &keys,
-                           const BindingEquivalence &equivalence, idx_t joins_above, DomainCoverage coverage,
-                           vector<Candidate> &candidates, bool is_root = false) {
+                           const BindingEquivalence &equivalence, idx_t joins_above,
+                           DuplicateEliminatedDomainCoverage coverage, vector<Candidate> &candidates,
+                           bool is_root = false) {
 	if (!is_root && IsSupportedSource(*op)) {
 		vector<idx_t> candidate_key_indices;
 		if (FindCandidateKeys(*op, keys, equivalence, candidate_key_indices) &&
@@ -398,15 +325,18 @@ static void FindCandidates(unique_ptr<LogicalOperator> &op, const vector<unique_
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		if (op->children.size() == 1) {
-			FindCandidates(op->children[0], keys, equivalence, joins_above, DomainCoverage::SUPERSET, candidates);
+			FindCandidates(op->children[0], keys, equivalence, joins_above, DuplicateEliminatedDomainCoverage::SUPERSET,
+			               candidates);
 		}
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		if (!IsSafeInnerJoin(*op)) {
 			break;
 		}
-		FindCandidates(op->children[0], keys, equivalence, joins_above + 1, DomainCoverage::SUPERSET, candidates);
-		FindCandidates(op->children[1], keys, equivalence, joins_above + 1, DomainCoverage::SUPERSET, candidates);
+		FindCandidates(op->children[0], keys, equivalence, joins_above + 1, DuplicateEliminatedDomainCoverage::SUPERSET,
+		               candidates);
+		FindCandidates(op->children[1], keys, equivalence, joins_above + 1, DuplicateEliminatedDomainCoverage::SUPERSET,
+		               candidates);
 		break;
 	}
 	default:
@@ -520,7 +450,7 @@ static optional_idx FindBestCandidate(ClientContext &context, LogicalOperator &p
 	double best_work = 0;
 	for (idx_t candidate_idx = 0; candidate_idx < candidates.size(); candidate_idx++) {
 		auto &candidate = candidates[candidate_idx];
-		if (!allow_superset && candidate.coverage == DomainCoverage::SUPERSET) {
+		if (!allow_superset && candidate.coverage == DuplicateEliminatedDomainCoverage::SUPERSET) {
 			continue;
 		}
 		optional_idx estimated_rows;
@@ -560,12 +490,13 @@ DuplicateEliminatedDomainCandidateFinder::FindBest(ClientContext &context, Logic
 	BindingEquivalence equivalence;
 	CollectEquivalences(*join.children[0], equivalence);
 	vector<Candidate> candidates;
-	FindCandidates(join.children[0], join.duplicate_eliminated_columns, equivalence, 0, DomainCoverage::EXACT,
-	               candidates, true);
+	FindCandidates(join.children[0], join.duplicate_eliminated_columns, equivalence, 0,
+	               DuplicateEliminatedDomainCoverage::EXACT, candidates, true);
 	if (candidates.empty()) {
 		return nullptr;
 	}
-	auto allow_superset = CanEvaluateForSupersetDomain(*join.children[1], domain_cte_index);
+	auto allow_superset =
+	    DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(*join.children[1], domain_cte_index);
 	auto selected_index =
 	    FindBestCandidate(context, *join.children[0], join.duplicate_eliminated_columns, candidates, allow_superset);
 	if (!selected_index.IsValid()) {
@@ -573,7 +504,7 @@ DuplicateEliminatedDomainCandidateFinder::FindBest(ClientContext &context, Logic
 	}
 	auto &selected = candidates[selected_index.GetIndex()];
 	return make_uniq<DuplicateEliminatedDomainCandidate>(selected.source.get(), std::move(selected.key_indices),
-	                                                     selected.joins_above);
+	                                                     selected.joins_above, selected.coverage);
 }
 
 } // namespace duckdb

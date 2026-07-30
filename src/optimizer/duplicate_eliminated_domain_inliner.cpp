@@ -9,57 +9,35 @@
 #include "duckdb/optimizer/duplicate_eliminated_domain_inliner.hpp"
 
 #include "duckdb/optimizer/duplicate_eliminated_domain_candidate.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
 
 using operator_location_list_t = vector<reference<unique_ptr<LogicalOperator>>>;
 
-static constexpr idx_t MAX_COPIED_DOMAIN_REFERENCES = 2;
+struct DomainAggregateUse {
+	bool contains_domain = false;
+	bool feeds_aggregate = false;
+};
 
-static bool CanDuplicateDomainSource(const LogicalOperator &op) {
-	if (op.HasSideEffects() || op.HasVolatileExpressions()) {
-		return false;
+static DomainAggregateUse FindDomainAggregateUse(const LogicalOperator &op, TableIndex domain_cte_index) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == domain_cte_index) {
+		return {true, false};
 	}
-	bool safe = true;
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expression) {
-		if (!expression || !*expression) {
-			return;
-		}
-		if ((*expression)->CanThrow() || (*expression)->HasSubquery()) {
-			safe = false;
-		}
-	});
-	if (!safe) {
-		return false;
-	}
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-		return op.children.empty();
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		return op.children.size() == 1 && CanDuplicateDomainSource(*op.children[0]);
-	default:
-		return false;
-	}
-}
-
-static bool HasAggregateExpression(const LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY &&
-	    !op.Cast<LogicalAggregate>().expressions.empty()) {
-		return true;
-	}
+	DomainAggregateUse result;
 	for (auto &child : op.children) {
-		if (HasAggregateExpression(*child)) {
-			return true;
-		}
+		auto child_use = FindDomainAggregateUse(*child, domain_cte_index);
+		result.contains_domain |= child_use.contains_domain;
+		result.feeds_aggregate |= child_use.feeds_aggregate;
 	}
-	return false;
+	if (result.contains_domain && op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		result.feeds_aggregate = true;
+	}
+	return result;
 }
 
 static optional_ptr<TableCatalogEntry> GetScannedTable(const LogicalOperator &op) {
@@ -145,8 +123,10 @@ static unique_ptr<LogicalOperator> CreateDuplicateFreeDomain(Binder &binder, uni
 bool DuplicateEliminatedDomainInliner::TryInline(Binder &binder, unique_ptr<LogicalOperator> &rhs,
                                                  TableIndex domain_cte_index, idx_t domain_ref_count,
                                                  const DuplicateEliminatedDomainCandidate &candidate) {
-	if (domain_ref_count == 0 || domain_ref_count > MAX_COPIED_DOMAIN_REFERENCES || !HasAggregateExpression(*rhs) ||
-	    !CanDuplicateDomainSource(*candidate.source.get())) {
+	D_ASSERT(candidate.coverage == DuplicateEliminatedDomainCoverage::EXACT ||
+	         DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(*rhs, domain_cte_index));
+	if (domain_ref_count != 1 || !FindDomainAggregateUse(*rhs, domain_cte_index).feeds_aggregate ||
+	    !DuplicateEliminatedDomainSafety::CanDuplicateSource(*candidate.source.get())) {
 		return false;
 	}
 	auto scanned_table = GetScannedTable(*candidate.source.get());

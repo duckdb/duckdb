@@ -2184,7 +2184,8 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 			return output_replacements;
 		}
 		if (selected_candidate) {
-			factored_domain = DuplicateEliminatedDomainFactorer::TryFactor(binder, plan, *selected_candidate);
+			factored_domain =
+			    DuplicateEliminatedDomainFactorer::TryFactor(binder, plan, dedup_cte_index, *selected_candidate);
 		}
 	}
 	auto &join = plan->Cast<LogicalComparisonJoin>();

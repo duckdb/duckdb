@@ -57,7 +57,7 @@ FROM dedup_outer o
 JOIN dedup_dim d ON o.k = d.k
 WHERE d.state = 'selected';
 ----
-logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
 # HAVING rejection produces an empty scalar relation and null-extends only the scalar result.
 query II rowsort
@@ -373,3 +373,99 @@ WHERE d.state = 'selected';
 1	2
 1	2
 2	0
+
+# Additional domain groups must not invoke a correlated table function for unreachable keys.
+statement ok
+CREATE TABLE dedup_function_domain(k BIGINT, step BIGINT);
+
+statement ok
+INSERT INTO dedup_function_domain VALUES (2, 1), (4, 0);
+
+query I
+SELECT (
+    SELECT count(*)
+    FROM generate_series(0, d.k, d.step)
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_function_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+3
+
+query II
+EXPLAIN
+SELECT (
+    SELECT count(*)
+    FROM generate_series(0, d.k, d.step)
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_function_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Domain-dependent table functions take the conservative path even when every argument is valid.
+statement ok
+CREATE TABLE dedup_valid_function_domain(k BIGINT, step BIGINT);
+
+statement ok
+INSERT INTO dedup_valid_function_domain VALUES (2, 1), (4, 1);
+
+query I
+SELECT (
+    SELECT count(*)
+    FROM generate_series(0, d.k, d.step)
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_valid_function_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+3
+
+query II
+EXPLAIN
+SELECT (
+    SELECT count(*)
+    FROM generate_series(0, d.k, d.step)
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_valid_function_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Additional groups must not expose scalar-subquery cardinality errors from unreachable keys.
+statement ok
+CREATE TABLE dedup_scalar_domain(k BIGINT);
+
+statement ok
+INSERT INTO dedup_scalar_domain VALUES (2), (4);
+
+statement ok
+CREATE TABLE dedup_scalar_values(k BIGINT, v BIGINT);
+
+statement ok
+INSERT INTO dedup_scalar_values VALUES (2, 10), (4, 20), (4, 30);
+
+query I
+SELECT (
+    SELECT sum((SELECT v FROM dedup_scalar_values s WHERE s.k = d.k))
+    FROM (VALUES (1)) unused(x)
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_scalar_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+10
+
+query II
+EXPLAIN
+SELECT (
+    SELECT sum((SELECT v FROM dedup_scalar_values s WHERE s.k = d.k))
+    FROM (VALUES (1)) unused(x)
+)
+FROM (VALUES (1)) o(k)
+JOIN dedup_scalar_domain d ON o.k * 2 = d.k
+WHERE d.k > 0;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*

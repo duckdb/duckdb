@@ -27,6 +27,7 @@ add_library_unity(
   duplicate_eliminated_domain_candidate.cpp
   duplicate_eliminated_domain_factorer.cpp
   duplicate_eliminated_domain_inliner.cpp
+  duplicate_eliminated_domain_safety.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
   filter_combiner.cpp

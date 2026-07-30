@@ -9,6 +9,7 @@
 #include "duckdb/optimizer/duplicate_eliminated_domain_factorer.hpp"
 
 #include "duckdb/optimizer/duplicate_eliminated_domain_candidate.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -26,12 +27,15 @@ static vector<Identifier> GenerateColumnNames(idx_t column_count) {
 
 unique_ptr<FactoredDuplicateEliminatedDomain>
 DuplicateEliminatedDomainFactorer::TryFactor(Binder &binder, unique_ptr<LogicalOperator> &join_op,
+                                             TableIndex domain_cte_index,
                                              const DuplicateEliminatedDomainCandidate &candidate) {
 	auto &join = join_op->Cast<LogicalComparisonJoin>();
 	if (join.children.size() != 2 || join.duplicate_eliminated_columns.empty()) {
 		return nullptr;
 	}
 	D_ASSERT(candidate.key_indices.size() == join.duplicate_eliminated_columns.size());
+	D_ASSERT(candidate.coverage == DuplicateEliminatedDomainCoverage::EXACT ||
+	         DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(*join.children[1], domain_cte_index));
 
 	auto &source_location = candidate.source.get();
 	auto old_bindings = source_location->GetColumnBindings();
