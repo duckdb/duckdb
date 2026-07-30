@@ -5,6 +5,7 @@ versions:
   - "v1.4.0"
   - "v1.5.0"
   - "v1.5.4"
+  - "v1.5.6"
 prefix: "duckdb_"
 lifecycle_states:
   frozen:
@@ -13,7 +14,8 @@ lifecycle_states:
     visibility: opt_out
     guard: DUCKDB_API_NO_DEPRECATED
   # Required by the extension_header adapter for gating appended members.
-  # No v1 construct is currently unstable.
+  # No v1 construct is unstable: the members that were previously opt-in behind
+  # DUCKDB_EXTENSION_API_VERSION_UNSTABLE are stabilized into v1.5.6.
   unstable:
     visibility: opt_in
     guard: DUCKDB_EXTENSION_API_VERSION_UNSTABLE

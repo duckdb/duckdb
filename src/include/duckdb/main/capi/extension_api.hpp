@@ -406,8 +406,7 @@ typedef struct {
 	duckdb_state (*duckdb_append_varchar_length)(duckdb_appender appender, const char *val, idx_t length);
 	duckdb_state (*duckdb_append_blob)(duckdb_appender appender, const void *data, idx_t length);
 	duckdb_state (*duckdb_append_null)(duckdb_appender appender);
-	// These functions have been deprecated and may be removed in future versions of DuckDB
-
+	// v1.5.6
 	idx_t (*duckdb_row_count)(duckdb_result *result);
 	void *(*duckdb_column_data)(duckdb_result *result, idx_t col);
 	bool *(*duckdb_nullmask_data)(duckdb_result *result, idx_t col);
@@ -460,15 +459,13 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
-	// Exposing the instance cache
-
+	// v1.5.6
 	duckdb_instance_cache (*duckdb_create_instance_cache)(void);
 	duckdb_state (*duckdb_get_or_create_from_cache)(duckdb_instance_cache instance_cache, const char *path,
 	                                                duckdb_database *out_database, duckdb_config config,
 	                                                char **out_error);
 	void (*duckdb_destroy_instance_cache)(duckdb_instance_cache *instance_cache);
-	// New append functions that are added
-
+	// v1.5.6
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 	duckdb_error_data (*duckdb_appender_error_data)(duckdb_appender appender);
@@ -476,8 +473,7 @@ typedef struct {
 	                                             duckdb_logical_type *types, const char *table_name,
 	                                             const char **column_names, duckdb_appender *out_appender);
 	duckdb_state (*duckdb_appender_clear)(duckdb_appender appender);
-	// New arrow interface functions
-
+	// v1.5.6
 	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
 	                                            const char **names, idx_t column_count, struct ArrowSchema *out_schema);
 	duckdb_error_data (*duckdb_data_chunk_to_arrow)(duckdb_arrow_options arrow_options, duckdb_data_chunk chunk,
@@ -488,8 +484,7 @@ typedef struct {
 	                                                  duckdb_arrow_converted_schema converted_schema,
 	                                                  duckdb_data_chunk *out_chunk);
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
-	// New functions for interacting with catalog entries
-
+	// v1.5.6
 	duckdb_catalog (*duckdb_client_context_get_catalog)(duckdb_client_context context, const char *catalog_name);
 	const char *(*duckdb_catalog_get_type_name)(duckdb_catalog catalog);
 	duckdb_catalog_entry (*duckdb_catalog_get_entry)(duckdb_catalog catalog, duckdb_client_context context,
@@ -499,8 +494,7 @@ typedef struct {
 	duckdb_catalog_entry_type (*duckdb_catalog_entry_get_type)(duckdb_catalog_entry entry);
 	const char *(*duckdb_catalog_entry_get_name)(duckdb_catalog_entry entry);
 	void (*duckdb_destroy_catalog_entry)(duckdb_catalog_entry *entry);
-	// New configuration options functions
-
+	// v1.5.6
 	duckdb_config_option (*duckdb_create_config_option)(void);
 	void (*duckdb_destroy_config_option)(duckdb_config_option *option);
 	void (*duckdb_config_option_set_name)(duckdb_config_option option, const char *name);
@@ -512,8 +506,7 @@ typedef struct {
 	duckdb_state (*duckdb_register_config_option)(duckdb_connection connection, duckdb_config_option option);
 	duckdb_value (*duckdb_client_context_get_config_option)(duckdb_client_context context, const char *name,
 	                                                        duckdb_config_option_scope *out_scope);
-	// API to define custom copy functions
-
+	// v1.5.6
 	duckdb_copy_function (*duckdb_create_copy_function)(void);
 	void (*duckdb_copy_function_set_name)(duckdb_copy_function copy_function, const char *name);
 	void (*duckdb_copy_function_set_extra_info)(duckdb_copy_function copy_function, void *extra_info,
@@ -558,22 +551,19 @@ typedef struct {
 	idx_t (*duckdb_table_function_bind_get_result_column_count)(duckdb_bind_info info);
 	const char *(*duckdb_table_function_bind_get_result_column_name)(duckdb_bind_info info, idx_t col_idx);
 	duckdb_logical_type (*duckdb_table_function_bind_get_result_column_type)(duckdb_bind_info info, idx_t col_idx);
-	// New functions for duckdb error data
-
+	// v1.5.6
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
 	void (*duckdb_destroy_error_data)(duckdb_error_data *error_data);
 	duckdb_error_type (*duckdb_error_data_error_type)(duckdb_error_data error_data);
 	const char *(*duckdb_error_data_message)(duckdb_error_data error_data);
 	bool (*duckdb_error_data_has_error)(duckdb_error_data error_data);
-	// API to create and manipulate expressions
-
+	// v1.5.6
 	void (*duckdb_destroy_expression)(duckdb_expression *expr);
 	duckdb_logical_type (*duckdb_expression_return_type)(duckdb_expression expr);
 	bool (*duckdb_expression_is_foldable)(duckdb_expression expr);
 	duckdb_error_data (*duckdb_expression_fold)(duckdb_client_context context, duckdb_expression expr,
 	                                            duckdb_value *out_value);
-	// API to manage file system operations
-
+	// v1.5.6
 	duckdb_file_system (*duckdb_client_context_get_file_system)(duckdb_client_context context);
 	void (*duckdb_destroy_file_system)(duckdb_file_system *file_system);
 	duckdb_state (*duckdb_file_system_open)(duckdb_file_system file_system, const char *path,
@@ -592,11 +582,9 @@ typedef struct {
 	int64_t (*duckdb_file_handle_tell)(duckdb_file_handle file_handle);
 	duckdb_state (*duckdb_file_handle_sync)(duckdb_file_handle file_handle);
 	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
-	// API to operate on GEOMETRY types.
-
+	// v1.5.6
 	char *(*duckdb_geometry_type_get_crs)(duckdb_logical_type type);
-	// API to register a custom log storage.
-
+	// v1.5.6
 	duckdb_log_storage (*duckdb_create_log_storage)(void);
 	void (*duckdb_destroy_log_storage)(duckdb_log_storage *log_storage);
 	void (*duckdb_log_storage_set_write_log_entry)(duckdb_log_storage log_storage,
@@ -605,26 +593,22 @@ typedef struct {
 	                                          duckdb_delete_callback_t delete_callback);
 	void (*duckdb_log_storage_set_name)(duckdb_log_storage log_storage, const char *name);
 	duckdb_state (*duckdb_register_log_storage)(duckdb_database database, duckdb_log_storage log_storage);
-	// New functions around the client context
-
+	// v1.5.6
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
 	void (*duckdb_destroy_client_context)(duckdb_client_context *context);
 	void (*duckdb_connection_get_client_context)(duckdb_connection connection, duckdb_client_context *out_context);
 	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
 	void (*duckdb_connection_get_arrow_options)(duckdb_connection connection, duckdb_arrow_options *out_arrow_options);
 	void (*duckdb_destroy_arrow_options)(duckdb_arrow_options *arrow_options);
-	// API to get information about the results of a prepared statement
-
+	// v1.5.6
 	idx_t (*duckdb_prepared_statement_column_count)(duckdb_prepared_statement prepared_statement);
 	const char *(*duckdb_prepared_statement_column_name)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
 	duckdb_logical_type (*duckdb_prepared_statement_column_logical_type)(duckdb_prepared_statement prepared_statement,
 	                                                                     idx_t col_idx);
 	duckdb_type (*duckdb_prepared_statement_column_type)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
-	// New query execution functions
-
+	// v1.5.6
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
-	// New functions around scalar function binding
-
+	// v1.5.6
 	void (*duckdb_scalar_function_set_bind)(duckdb_scalar_function scalar_function, duckdb_scalar_function_bind_t bind);
 	void (*duckdb_scalar_function_bind_set_error)(duckdb_bind_info info, const char *error);
 	void (*duckdb_scalar_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
@@ -635,8 +619,7 @@ typedef struct {
 	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
 	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
 	void (*duckdb_scalar_function_set_bind_data_copy)(duckdb_bind_info info, duckdb_copy_callback_t copy);
-	// New functions to configure local states for scalar functions
-
+	// v1.5.6
 	void *(*duckdb_scalar_function_get_state)(duckdb_function_info info);
 	void (*duckdb_scalar_function_set_init)(duckdb_scalar_function scalar_function, duckdb_scalar_function_init_t init);
 	void (*duckdb_scalar_function_init_set_error)(duckdb_init_info info, const char *error);
@@ -644,27 +627,22 @@ typedef struct {
 	void (*duckdb_scalar_function_init_get_client_context)(duckdb_init_info info, duckdb_client_context *out_context);
 	void *(*duckdb_scalar_function_init_get_bind_data)(duckdb_init_info info);
 	void *(*duckdb_scalar_function_init_get_extra_info)(duckdb_init_info info);
-	// New string functions that are added
-
+	// v1.5.6
 	char *(*duckdb_value_to_string)(duckdb_value value);
 	duckdb_error_data (*duckdb_valid_utf8_check)(const char *str, idx_t len);
-	// New functions around the table description
-
+	// v1.5.6
 	idx_t (*duckdb_table_description_get_column_count)(duckdb_table_description table_description);
 	duckdb_logical_type (*duckdb_table_description_get_column_type)(duckdb_table_description table_description,
 	                                                                idx_t index);
-	// New functions around table function binding
-
+	// v1.5.6
 	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
-	// New value functions that are added
-
+	// v1.5.6
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
 	                                        idx_t entry_count);
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
-	// API to create and manipulate vector types
-
+	// v1.5.6
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
 	void (*duckdb_destroy_vector)(duckdb_vector *vector);
 	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector sel, idx_t len);
@@ -1234,6 +1212,6 @@ inline duckdb_ext_api_v1 CreateAPIv1(void) {
 }
 
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR  1
-#define DUCKDB_EXTENSION_API_VERSION_MINOR  2
-#define DUCKDB_EXTENSION_API_VERSION_PATCH  0
-#define DUCKDB_EXTENSION_API_VERSION_STRING "v1.2.0"
+#define DUCKDB_EXTENSION_API_VERSION_MINOR  5
+#define DUCKDB_EXTENSION_API_VERSION_PATCH  6
+#define DUCKDB_EXTENSION_API_VERSION_STRING "v1.5.6"
