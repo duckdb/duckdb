@@ -162,6 +162,23 @@ SELECT list_transform([1,2], lambda "x y": "x y" * 2), {'a b': 1}['a b'], MAP{'k
 statement ok
 SELECT * FROM (VALUES (1)) AS "v v"("c c")
 
+# a qualified star: the relation name is the one part of StarExpression::ToString that was raw
+# (EXCLUDE / RENAME / REPLACE already quoted their identifiers)
+statement ok
+SELECT "weird name".* FROM "weird name"
+
+statement ok
+SELECT "weird name".* EXCLUDE ("select") FROM "weird name"
+
+statement ok
+SELECT * EXCLUDE ("select") RENAME ("odder col" AS "renamed col") FROM "weird name"
+
+statement ok
+SELECT * REPLACE ("odder col" + 1 AS "odder col") FROM "weird name"
+
+statement ok
+SELECT COLUMNS('od.*') FROM "weird name"
+
 statement ok
 SELECT * FROM (PIVOT "weird name" ON "select" USING sum("odder col"))
 
