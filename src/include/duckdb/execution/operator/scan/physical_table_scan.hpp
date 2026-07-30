@@ -91,6 +91,8 @@ public:
 	void GetMetrics(ClientContext &context, GlobalSourceState &gstate_p, LocalSourceState &lstate,
 	                OperatorMetrics &operator_metrics) const;
 
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
+
 private:
 	string GetFilterInfo(const TableFilterSet &filter_set) const;
 };

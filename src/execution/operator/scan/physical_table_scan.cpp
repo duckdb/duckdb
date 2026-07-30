@@ -10,6 +10,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 #include <utility>
 
@@ -435,6 +437,42 @@ void PhysicalTableScan::GetMetrics(ClientContext &context, GlobalSourceState &gs
 	TableFunctionGetMetricsInput input(context, bind_data.get(), state.local_state.get(), gstate.global_state.get(),
 	                                   operator_metrics);
 	function.get_metrics(input);
+}
+
+void PhysicalTableScan::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
+	PhysicalOperator::BuildPipelines(current, meta_pipeline);
+	if (!dynamic_filters || function.global_initialization == TableFunctionInitialization::INITIALIZE_ON_SCHEDULE) {
+		// no filters, or the source snapshots filters at schedule time - before any producer can publish
+		return;
+	}
+	if (meta_pipeline.HasRecursiveCTE()) {
+		// the recursive CTE scheduler has no eager-finalize exemption - an ordering edge would deadlock
+		return;
+	}
+	auto &state = meta_pipeline.GetState();
+	auto producers = state.filter_set_producers.find(*dynamic_filters);
+	if (producers == state.filter_set_producers.end()) {
+		return;
+	}
+	for (auto &producer_ref : producers->second) {
+		auto &producer = producer_ref.get();
+		// only order behind a producer whose sibling build hosts this scan - the TemporaryMemoryManager
+		// barrier otherwise finalizes the producer after this scan, so its filters would arrive too late
+		bool inside_sibling_build = false;
+		for (auto &enclosing_ref : state.join_build_stack) {
+			auto &enclosing = enclosing_ref.get();
+			if (!RefersToSameObject(enclosing, producer) &&
+			    RefersToSameObject(*enclosing.GetParent(), *producer.GetParent())) {
+				inside_sibling_build = true;
+				break;
+			}
+		}
+		if (!inside_sibling_build) {
+			continue;
+		}
+		current.AddDependency(producer.GetBasePipeline());
+		producer.SetEagerBuildFinalize();
+	}
 }
 
 } // namespace duckdb

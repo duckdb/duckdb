@@ -264,6 +264,12 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			auto child1_entry = event_map.find(child1_base);
 			D_ASSERT(child1_entry != event_map.end());
 
+			if (child1->HasEagerBuildFinalize()) {
+				// must Finalize before a sibling's scans consume its filters - cannot wait on any sibling
+				// (consumers instead wait on its completion through their pipeline dependencies)
+				continue;
+			}
+
 			for (auto &child2 : children) {
 				if (child2->Type() != MetaPipelineType::JOIN_BUILD || RefersToSameObject(*child1, *child2)) {
 					continue; // We don't want to depend on itself

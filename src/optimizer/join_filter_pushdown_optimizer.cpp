@@ -156,9 +156,31 @@ static void PushdownProjectionColumns(LogicalProjection &proj, const vector<Join
 	}
 }
 
+static bool CanPushdownNestedBuildSide(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+		return true;
+	}
+	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	switch (op.Cast<LogicalComparisonJoin>().join_type) {
+	case JoinType::INNER:
+	case JoinType::RIGHT:
+	case JoinType::RIGHT_SEMI:
+	case JoinType::RIGHT_ANTI:
+		// the right child's rows pass through unmodified - removing a right row only removes output rows
+		// carrying its column values, and those cannot pass the producing join's filter anyway
+		return true;
+	default:
+		// left/outer null-extend the right child, mark/single/semi/anti use it to select left rows
+		return false;
+	}
+}
+
 void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
                                                            vector<JoinFilterPushdownColumn> columns,
-                                                           vector<PushdownFilterTarget> &targets) {
+                                                           vector<PushdownFilterTarget> &targets,
+                                                           bool include_nested_build_targets) {
 	auto &probe_child = op;
 	switch (probe_child.type) {
 	case LogicalOperatorType::LOGICAL_LIMIT:
@@ -166,16 +188,20 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		// LIMIT/TOP_N determines which rows are part of the probe side before the join.
 		// Pushing a join filter below it can change which rows survive the limit/offset.
 		break;
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_DISTINCT:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		// does not affect probe side - recurse into left child
-		// FIXME: we can probably recurse into more operators here (e.g. window, unnest)
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		if (include_nested_build_targets && CanPushdownNestedBuildSide(probe_child)) {
+			// nested joins do not remap bindings - filters that resolve in the build side can be pushed there
+			GetPushdownFilterTargets(*probe_child.children[1], columns, targets, include_nested_build_targets);
+		}
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, include_nested_build_targets);
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		// does not affect probe side - recurse into left child
+		// FIXME: we can probably recurse into more operators here (e.g. window, unnest)
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, include_nested_build_targets);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		auto &unnest = probe_child.Cast<LogicalUnnest>();
@@ -186,7 +212,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				return;
 			}
 		}
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, include_nested_build_targets);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_EXCEPT:
@@ -213,7 +239,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				continue;
 			}
 			// then recurse into the child
-			GetPushdownFilterTargets(*child, std::move(child_columns), targets);
+			GetPushdownFilterTargets(*child, std::move(child_columns), targets, include_nested_build_targets);
 
 			// for EXCEPT we can only recurse into the first (left) child
 			if (probe_child.type == LogicalOperatorType::LOGICAL_EXCEPT) {
@@ -264,7 +290,8 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		if (projected_columns.empty()) {
 			return;
 		}
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(projected_columns), targets);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(projected_columns), targets,
+		                         include_nested_build_targets);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -281,7 +308,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				return;
 			}
 		}
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets, include_nested_build_targets);
 		break;
 	}
 	default:
@@ -313,6 +340,8 @@ bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> 
 }
 
 void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &join) {
+	static constexpr idx_t INCLUDE_NESTED_BUILD_TARGETS_ROW_THRESHOLD = 8192;
+
 	if (!JoinFilterPushdownUtil::JoinTypeIsSupported(join.join_type)) {
 		return;
 	}
@@ -353,9 +382,15 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		// could not generate any filters - bail-out
 		return;
 	}
+	// nested-build targets make this build finalize early (see PhysicalTableScan::BuildPipelines), committing
+	// memory before sibling builds report theirs to the TemporaryMemoryManager - only allow small builds
+	const auto build_estimate = join.children[1]->EstimateCardinality(optimizer.GetContext());
+	const bool include_nested_build_targets = build_estimate <= INCLUDE_NESTED_BUILD_TARGETS_ROW_THRESHOLD;
+
 	// recurse the query tree to find the LogicalGets in which we can push the filter info
 	vector<PushdownFilterTarget> pushdown_filter_targets;
-	GetPushdownFilterTargets(*join.children[0], pushdown_columns, pushdown_filter_targets);
+	GetPushdownFilterTargets(*join.children[0], pushdown_columns, pushdown_filter_targets,
+	                         include_nested_build_targets);
 	for (auto &target : pushdown_filter_targets) {
 		auto &get = target.get;
 		// pushdown info can be applied to this LogicalGet - push the dynamic table filter set
