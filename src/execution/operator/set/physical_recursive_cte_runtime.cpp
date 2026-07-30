@@ -817,15 +817,16 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		gstate.GetScheduler().ClearExecutors();
 	}
 
-	auto &schedule_plan = gstate.GetScheduler().GetSchedulePlan(gstate.HasMaterializedInvariantPipelines());
-	const auto prepare_cached_executor_entries = !allow_reuse || !schedule_plan;
+	const auto &schedule_plan =
+	    gstate.HasMaterializedInvariantPipelines() ? invariant_recursive_schedule_plan : recursive_schedule_plan;
 	if (!schedule_plan) {
-		schedule_plan = BuildRecursivePipelineSchedulePlan(active_meta_pipelines, *this);
+		throw InternalException("Missing recursive pipeline schedule");
 	}
+	const auto prepare_cached_executor_entries = !allow_reuse || !gstate.GetScheduler().HasExecutorEntries();
 
 	// Materialize every state-local cache entry before events can run concurrently. Individual
 	// pipelines grow their stable executor vector after their source state has been reset. Reusable
-	// entries only need to be registered when their immutable schedule plan is first constructed.
+	// entries only need to be registered once for each recursive state.
 	if (prepare_cached_executor_entries) {
 		reference_set_t<Pipeline> prepared_pipelines;
 		for (auto &meta_pipeline : active_meta_pipelines) {
@@ -968,6 +969,8 @@ static void CountRecursiveReferences(const PhysicalOperator &op, TableIndex cte_
 void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
+	recursive_schedule_plan.reset();
+	invariant_recursive_schedule_plan.reset();
 	recursive_meta_pipeline.reset();
 	{
 		D_ASSERT(shared_executor_pool);
@@ -1005,11 +1008,23 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 			break;
 		}
 	}
+	vector<shared_ptr<MetaPipeline>> recursive_meta_pipelines;
+	recursive_meta_pipeline->GetMetaPipelines(recursive_meta_pipelines, true, false);
 	if (!has_delim_scan) {
-		vector<shared_ptr<MetaPipeline>> recursive_meta_pipelines;
-		recursive_meta_pipeline->GetMetaPipelines(recursive_meta_pipelines, true, false);
 		invariant_meta_pipelines =
 		    FindInvariantRecursiveMetaPipelines(recursive_meta_pipelines, table_index, non_repeatable_operators);
+	}
+
+	recursive_schedule_plan = BuildRecursivePipelineSchedulePlan(recursive_meta_pipelines, *this);
+	if (!invariant_meta_pipelines.empty()) {
+		vector<shared_ptr<MetaPipeline>> active_meta_pipelines;
+		active_meta_pipelines.reserve(recursive_meta_pipelines.size() - invariant_meta_pipelines.size());
+		for (auto &meta_pipeline_entry : recursive_meta_pipelines) {
+			if (invariant_meta_pipelines.find(*meta_pipeline_entry) == invariant_meta_pipelines.end()) {
+				active_meta_pipelines.push_back(meta_pipeline_entry);
+			}
+		}
+		invariant_recursive_schedule_plan = BuildRecursivePipelineSchedulePlan(active_meta_pipelines, *this);
 	}
 
 	for (auto op : ops) {

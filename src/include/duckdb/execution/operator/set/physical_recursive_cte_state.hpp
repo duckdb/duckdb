@@ -137,8 +137,8 @@ public:
 	void PrepareExecutorEntry(Pipeline &pipeline);
 	void PrepareExecutors(Pipeline &pipeline, idx_t max_threads);
 	vector<unique_ptr<PipelineExecutor>> &GetExecutors(Pipeline &pipeline);
+	bool HasExecutorEntries() const;
 	void ClearExecutors();
-	unique_ptr<RecursiveCTEPipelineSchedulePlan> &GetSchedulePlan(bool invariant);
 	void InitializeInlinePlan(const RecursiveCTEPipelineSchedulePlan &plan);
 	idx_t ReadyStageCount() const;
 	idx_t ReadyStage(idx_t index) const;
@@ -150,8 +150,6 @@ private:
 	shared_ptr<RecursiveExecutorPool> executor_pool;
 	bool allow_executor_reuse;
 	PhysicalRecursiveCTE::executor_cache_t cached_executors;
-	unique_ptr<RecursiveCTEPipelineSchedulePlan> schedule_plan;
-	unique_ptr<RecursiveCTEPipelineSchedulePlan> invariant_schedule_plan;
 	vector<idx_t> remaining_schedule_dependencies;
 	vector<idx_t> ready_schedule_stages;
 	idx_t recursive_epoch_thread_limit = 1;

@@ -196,10 +196,6 @@ RecursiveCTESchedulerState::~RecursiveCTESchedulerState() {
 	ClearExecutors();
 }
 
-unique_ptr<RecursiveCTEPipelineSchedulePlan> &RecursiveCTESchedulerState::GetSchedulePlan(bool invariant) {
-	return invariant ? invariant_schedule_plan : schedule_plan;
-}
-
 void RecursiveCTESchedulerState::InitializeInlinePlan(const RecursiveCTEPipelineSchedulePlan &plan) {
 	remaining_schedule_dependencies.clear();
 	remaining_schedule_dependencies.reserve(plan.stages.size());
@@ -288,6 +284,10 @@ vector<unique_ptr<PipelineExecutor>> &RecursiveCTESchedulerState::GetExecutors(P
 		throw InternalException("Missing recursive pipeline executor cache entry");
 	}
 	return entry->second;
+}
+
+bool RecursiveCTESchedulerState::HasExecutorEntries() const {
+	return !cached_executors.empty();
 }
 
 void RecursiveCTESchedulerState::ClearExecutors() {

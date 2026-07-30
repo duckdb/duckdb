@@ -18,6 +18,7 @@ namespace duckdb {
 
 class RecursiveCTEState;
 struct RecursiveExecutorPool;
+struct RecursiveCTEPipelineSchedulePlan;
 class PhysicalColumnDataScan;
 class Pipeline;
 class PipelineExecutor;
@@ -120,6 +121,9 @@ private:
 
 private:
 	mutable shared_ptr<RecursiveExecutorPool> shared_executor_pool;
+	//! Immutable recursive projections of the generic pipeline schedule.
+	unique_ptr<RecursiveCTEPipelineSchedulePlan> recursive_schedule_plan;
+	unique_ptr<RecursiveCTEPipelineSchedulePlan> invariant_recursive_schedule_plan;
 };
 
 //! Scans the frozen USING KEY state during a recursive epoch.
