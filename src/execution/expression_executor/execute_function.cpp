@@ -35,7 +35,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
     : ExpressionState(expr, root) {
 	// a `ref <op> const` comparison can be selected straight into a bitmap (autovec) in the fast path below
 	select_bitmap_capable =
-	    BitmapSelectionEnabled() && IsBitmapComparisonCandidate(expr) && TryGetBitmapComparisonInfo(expr, cmp_info);
+	    CpuBenefitsFromAutoVec() && IsBitmapComparisonCandidate(expr) && TryGetBitmapComparisonInfo(expr, cmp_info);
 	// Check if the expression is eligible for dictionary optimization
 	if (!expr.IsConsistent() || expr.IsVolatile() || expr.CanThrow()) {
 		return; // Needs to be consistent, non-volatile, and non-throwing
