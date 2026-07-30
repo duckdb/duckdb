@@ -21,11 +21,11 @@ order by all;
 1	NULL	NULL	NULL
 two	1	false	true
 two	two	true	false
-two	NULL	NULL	NULL
+two	NULL	true	false
 two	NULL	NULL	NULL
 NULL	1	false	true
-NULL	two	NULL	NULL
-NULL	NULL	NULL	NULL
+NULL	two	true	false
+NULL	NULL	true	false
 NULL	NULL	NULL	NULL
 NULL	1	NULL	NULL
 NULL	two	NULL	NULL
@@ -35,4 +35,4 @@ NULL	NULL	NULL	NULL
 query I
 select union_value(str := NULL) = union_value(str := NULL);
 ----
-NULL
+true
