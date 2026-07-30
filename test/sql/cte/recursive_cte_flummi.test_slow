@@ -325,6 +325,85 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 1
 
 statement ok
+CALL enable_logging('PhysicalOperator', storage='memory');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Materialized fan-out work justifies two workers, but not four.
+statement ok
+SET VARIABLE flummi_sql = (
+	SELECT replace(
+	           replace(
+	               replace(content,
+	                       'CAST((50) AS INTEGER) AS "height"',
+	                       'CAST((CASE WHEN current_setting(''standard_vector_size'')::UBIGINT < 1024 THEN 10 ELSE 50 END) AS INTEGER) AS "height"'),
+	               'CAST((50) AS INTEGER) AS "width"',
+	               'CAST((CASE WHEN current_setting(''standard_vector_size'')::UBIGINT < 1024 THEN 10 ELSE 50 END) AS INTEGER) AS "width"'),
+	           'CAST((50) AS INTEGER) AS "iterations"',
+	           'CAST((3) AS INTEGER) AS "iterations"')
+	FROM read_text('benchmark/recursive_cte/queries/performance/flummi_generations.sql')
+);
+
+query III
+WITH result AS (SELECT * FROM query(getvariable('flummi_sql')))
+SELECT outputs,
+       output_bytes = CASE WHEN current_setting('standard_vector_size')::UBIGINT < 1024 THEN 476 ELSE 10396 END,
+       output_md5 = CASE WHEN current_setting('standard_vector_size')::UBIGINT < 1024
+                         THEN 'bd8910442ccf5092381413e278421dd0'
+                         ELSE 'b219e422e83fc2ca892f7edeb1a22c00'
+                    END
+FROM result;
+----
+8	1	1
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
+       OR current_setting('standard_vector_size')::UBIGINT < 1024
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+SET threads=4;
+
+statement ok
+CALL enable_logging('PhysicalOperator', storage='memory');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query III
+WITH result AS (SELECT * FROM query(getvariable('flummi_sql')))
+SELECT outputs,
+       output_bytes = CASE WHEN current_setting('standard_vector_size')::UBIGINT < 1024 THEN 476 ELSE 10396 END,
+       output_md5 = CASE WHEN current_setting('standard_vector_size')::UBIGINT < 1024
+                         THEN 'bd8910442ccf5092381413e278421dd0'
+                         ELSE 'b219e422e83fc2ca892f7edeb1a22c00'
+                    END
+FROM result;
+----
+8	1	1
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT = info.epochs::UBIGINT
+       OR current_setting('standard_vector_size')::UBIGINT < 1024
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+SET threads=2;
+
+statement ok
 SET VARIABLE flummi_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/flummi_life.sql'));
 
 query IIT

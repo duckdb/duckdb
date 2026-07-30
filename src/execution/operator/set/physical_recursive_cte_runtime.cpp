@@ -116,7 +116,10 @@ static RecursiveCTEParallelism GetRecursiveParallelism(const RecursiveCTEState &
 			// scheduled work instead of treating all of their pipelines as pure scheduling overhead.
 			estimated_work_units += state.CurrentInputTable().ChunkCount() * schedule_plan.cte_scan_pipeline_count;
 		}
-		const auto minimum_work_units_per_worker = MaxValue<idx_t>(schedule_plan.execute_pipeline_count, 2);
+		D_ASSERT(schedule_plan.execute_pipeline_count >= schedule_plan.cte_scan_pipeline_count);
+		// The scan pipelines contribute the fan-out work above, so only the remaining pipelines are fixed overhead.
+		const auto fixed_pipeline_count = schedule_plan.execute_pipeline_count - schedule_plan.cte_scan_pipeline_count;
+		const auto minimum_work_units_per_worker = MaxValue<idx_t>(fixed_pipeline_count, 2);
 		if (estimated_work_units / worker_count < minimum_work_units_per_worker) {
 			if (schedule_plan.has_source_tasks) {
 				// Source tasks can expose work that is not represented by recursive frontier chunks.
