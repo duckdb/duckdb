@@ -20,6 +20,31 @@ static void RewriteJoinCondition(unique_ptr<Expression> &root_expr, idx_t offset
 	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.IndexMutable() += offset; });
 }
 
+//! Range comparisons on nested types cannot use the sort-based joins (piecewise merge / IE join).
+//! Those joins reduce a key to a single sort position with NULLS LAST, but for a nested value the
+//! comparison can be NULL or non-NULL depending on the other operand (e.g. [1, NULL] >= [0, 5] is
+//! TRUE while [1, NULL] >= [1, 5] is NULL), which a single sort position cannot represent.
+static bool HasNestedRangeCondition(const vector<JoinCondition> &conditions) {
+	for (auto &cond : conditions) {
+		if (!cond.IsComparison()) {
+			continue;
+		}
+		switch (cond.GetComparisonType()) {
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			if (cond.GetLHS().GetReturnType().IsNested() || cond.GetRHS().GetReturnType().IsNested()) {
+				return true;
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	return false;
+}
+
 PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
@@ -39,6 +64,11 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	bool has_equality = op.HasEquality(has_range);
 	bool can_merge = has_range > 0;
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
+	if (HasNestedRangeCondition(op.conditions)) {
+		// sort-based joins cannot represent nested range comparisons - use a nested loop join instead
+		can_merge = false;
+		can_iejoin = false;
+	}
 	switch (op.join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:
