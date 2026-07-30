@@ -104,6 +104,15 @@ bool LogicalOperator::HasSideEffects() const {
 	default:
 		break;
 	}
+	bool has_side_effects = false;
+	LogicalOperatorVisitor::EnumerateExpressions(*this, [&](const unique_ptr<Expression> *expression) {
+		if ((*expression)->HasSideEffects()) {
+			has_side_effects = true;
+		}
+	});
+	if (has_side_effects) {
+		return true;
+	}
 	for (auto &child : children) {
 		if (child && child->HasSideEffects()) {
 			return true;

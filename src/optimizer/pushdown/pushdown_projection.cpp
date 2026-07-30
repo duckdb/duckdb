@@ -45,6 +45,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	// There are some expressions can not be pushed down. We should keep them
 	// and add an extra filter operator.
 	vector<unique_ptr<Expression>> remain_expressions;
+	if (proj.HasSideEffects()) {
+		remain_expressions.reserve(filters.size());
+		for (auto &filter : filters) {
+			remain_expressions.emplace_back(std::move(filter->filter));
+		}
+		return AddLogicalFilter(std::move(op), std::move(remain_expressions));
+	}
 	for (auto &filter : filters) {
 		auto &f = *filter;
 		D_ASSERT(f.bindings.size() <= 1);

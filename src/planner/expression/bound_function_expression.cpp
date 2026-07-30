@@ -34,6 +34,10 @@ bool BoundFunctionExpression::IsConsistent() const {
 	return function.GetStability() != FunctionStability::CONSISTENT ? false : Expression::IsConsistent();
 }
 
+bool BoundFunctionExpression::HasSideEffects() const {
+	return function.HasModifiedDatabasesCallback() || Expression::HasSideEffects();
+}
+
 bool BoundFunctionExpression::IsFoldable() const {
 	// functions with side effects cannot be folded: they have to be executed once for every row
 	if (function.HasBindLambdaCallback()) {

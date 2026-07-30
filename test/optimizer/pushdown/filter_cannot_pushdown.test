@@ -75,3 +75,22 @@ GROUP BY result;
 False
 
 endloop
+
+statement ok
+CREATE SEQUENCE pushdown_projection_side_effect_seq START 1;
+
+# A filter below this projection would skip nextval calls for filtered-out rows.
+query III
+SELECT i, v, currval('pushdown_projection_side_effect_seq') AS after_seq
+FROM (
+    SELECT i, nextval('pushdown_projection_side_effect_seq') AS v
+    FROM range(10) t(i)
+)
+WHERE i = 0;
+----
+0	1	10
+
+query I
+SELECT currval('pushdown_projection_side_effect_seq');
+----
+10

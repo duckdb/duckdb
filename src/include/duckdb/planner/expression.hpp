@@ -50,6 +50,7 @@ public:
 
 	virtual bool IsVolatile() const;
 	virtual bool IsConsistent() const;
+	virtual bool HasSideEffects() const;
 	virtual bool PropagatesNullValues() const;
 	virtual bool IsFoldable() const;
 	virtual bool CanThrow() const;

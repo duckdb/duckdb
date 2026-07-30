@@ -58,6 +58,16 @@ bool Expression::IsConsistent() const {
 	return is_consistent;
 }
 
+bool Expression::HasSideEffects() const {
+	bool has_side_effects = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (child.HasSideEffects()) {
+			has_side_effects = true;
+		}
+	});
+	return has_side_effects;
+}
+
 bool Expression::CanThrow() const {
 	bool can_throw = false;
 	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { can_throw |= child.CanThrow(); });

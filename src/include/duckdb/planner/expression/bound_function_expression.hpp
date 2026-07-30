@@ -51,6 +51,7 @@ public:
 
 	bool IsVolatile() const override;
 	bool IsConsistent() const override;
+	bool HasSideEffects() const override;
 	bool IsFoldable() const override;
 	bool CanThrow() const override;
 	string ToString() const override;
