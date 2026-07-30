@@ -280,7 +280,8 @@ struct ArrowJson {
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 		schema.metadata = root_holder.metadata_info.back().get();
 		const auto options = context.GetClientProperties();
-		if (options.produce_arrow_string_view) {
+		// view layout only when string_view + >= 1.4; declare it to match.
+		if (options.produce_arrow_string_view && options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 			schema.format = "vu";
 		} else {
 			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
@@ -301,6 +302,8 @@ struct ArrowBit {
 		} else if (format == "Z") {
 			return make_uniq<ArrowType>(LogicalType::BIT,
 			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		} else if (format == "vz") {
+			return make_uniq<ArrowType>(LogicalType::BIT, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
 		}
 		throw InvalidInputException("Arrow extension type \"%s\" not supported for BIT type", format.c_str());
 	}
@@ -312,7 +315,10 @@ struct ArrowBit {
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 		schema.metadata = root_holder.metadata_info.back().get();
 		const auto options = context.GetClientProperties();
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+		if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+			// >= 1.4 appends the binary view (4-buffer) layout; declare it to match.
+			schema.format = "vz";
+		} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			schema.format = "Z";
 		} else {
 			schema.format = "z";
@@ -329,6 +335,8 @@ struct ArrowBignum {
 		} else if (format == "Z") {
 			return make_uniq<ArrowType>(LogicalType::BIGNUM,
 			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		} else if (format == "vz") {
+			return make_uniq<ArrowType>(LogicalType::BIGNUM, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
 		}
 		throw InvalidInputException("Arrow extension type \"%s\" not supported for Bignum", format.c_str());
 	}
@@ -340,7 +348,10 @@ struct ArrowBignum {
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 		schema.metadata = root_holder.metadata_info.back().get();
 		const auto options = context.GetClientProperties();
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+		if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+			// >= 1.4 appends the binary view (4-buffer) layout; declare it to match.
+			schema.format = "vz";
+		} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			schema.format = "Z";
 		} else {
 			schema.format = "z";
@@ -493,7 +504,10 @@ struct ArrowGeometry {
 		schema.metadata = root_holder.metadata_info.back().get();
 
 		const auto options = context.GetClientProperties();
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+		if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+			// >= 1.4 appends the binary view (4-buffer) layout; declare it to match.
+			schema.format = "vz";
+		} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			schema.format = "Z";
 		} else {
 			schema.format = "z";

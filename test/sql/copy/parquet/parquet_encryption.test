@@ -96,3 +96,25 @@ query I
 SELECT * FROM read_parquet('{TEST_DIR}/encrypted256.parquet', encryption_config={footer_key: 'key256base64'})
 ----
 42
+
+# encrypted parquet metadata cache hits must initialize the reader encryption state
+statement ok
+SET parquet_metadata_cache=true
+
+statement ok
+COPY (SELECT 84 i) TO '{TEST_DIR}/encrypted_metadata_cache.parquet' (ENCRYPTION_CONFIG {footer_key: 'key256'})
+
+query I
+SELECT * FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet', encryption_config={footer_key: 'key256'})
+----
+84
+
+query I
+SELECT * FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet', encryption_config={footer_key: 'key256'})
+----
+84
+
+statement error
+SELECT * FROM read_parquet('{TEST_DIR}/encrypted_metadata_cache.parquet', encryption_config={footer_key: 'key192'})
+----
+Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?

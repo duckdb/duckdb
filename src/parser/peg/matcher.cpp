@@ -75,10 +75,11 @@ public:
 		}
 		auto &token_text = state.tokens[state.token_index].text;
 		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
+		auto token_length = optional_idx(state.tokens[state.token_index].length);
 		if (!MatchKeyword(state)) {
 			return nullptr;
 		}
-		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(token_text, start_offset));
+		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(token_text, start_offset, token_length));
 		result->name = name;
 		return result;
 	}
@@ -526,6 +527,7 @@ public:
 		}
 		const auto &token_text = state.tokens[state.token_index].text;
 		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
+		auto token_length = optional_idx(state.tokens[state.token_index].length);
 		if (!MatchIdentifier(state)) {
 			return nullptr;
 		}
@@ -541,7 +543,7 @@ public:
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "''", "'");
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset));
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset, token_length));
 	}
 
 	TokenType GetTokenType() const {
@@ -700,6 +702,7 @@ public:
 		}
 		auto &token_text = state.tokens[state.token_index].text;
 		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
+		auto token_length = optional_idx(state.tokens[state.token_index].length);
 		if (!MatchReservedIdentifier(state)) {
 			return nullptr;
 		}
@@ -710,7 +713,7 @@ public:
 		} else if (!state.preserve_identifier_case) {
 			result_text = StringUtil::Lower(result_text);
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset));
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset, token_length));
 	}
 
 private:
@@ -759,6 +762,7 @@ public:
 
 		auto &token = state.tokens[state.token_index];
 		auto start_offset = optional_idx(token.offset);
+		auto token_length = optional_idx(token.length);
 		auto string_info = GetSpecialStringInfo(token.text);
 
 		if (!MatchStringLiteral(state, string_info)) {
@@ -775,7 +779,7 @@ public:
 		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
 
 		auto result = state.allocator.Allocate(
-		    make_uniq<StringLiteralParseResult>(stripped_string, string_info.type, start_offset));
+		    make_uniq<StringLiteralParseResult>(stripped_string, string_info.type, start_offset, token_length));
 		result->name = name;
 		return result;
 	}
@@ -831,10 +835,11 @@ public:
 		}
 		auto &token_text = state.tokens[state.token_index].text;
 		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
+		auto token_length = optional_idx(state.tokens[state.token_index].length);
 		if (!MatchNumberLiteral(state)) {
 			return nullptr;
 		}
-		auto result = state.allocator.Allocate(make_uniq<NumberParseResult>(token_text, start_offset));
+		auto result = state.allocator.Allocate(make_uniq<NumberParseResult>(token_text, start_offset, token_length));
 		result->name = name;
 		return result;
 	}
@@ -937,10 +942,11 @@ public:
 		}
 		auto &token_text = state.tokens[state.token_index].text;
 		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
+		auto token_length = optional_idx(state.tokens[state.token_index].length);
 		if (!MatchOperator(state)) {
 			return nullptr;
 		}
-		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text, start_offset));
+		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text, start_offset, token_length));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -1007,10 +1013,11 @@ public:
 		}
 		auto &token_text = state.tokens[state.token_index].text;
 		auto start_offset = optional_idx(state.tokens[state.token_index].offset);
+		auto token_length = optional_idx(state.tokens[state.token_index].length);
 		if (!MatchArithmeticOperator(state)) {
 			return nullptr;
 		}
-		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text, start_offset));
+		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text, start_offset, token_length));
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {

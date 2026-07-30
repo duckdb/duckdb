@@ -513,12 +513,16 @@ private:
 	                                                       OnEntryNotFound if_not_found);
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
 	                                         const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-	                                         bool allow_default_table_lookup);
+	                                         bool allow_default_lookup);
 
 	//! Looks for a Catalog with a DefaultTable that matches the lookup
 	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever,
 	                                                const EntryLookupInfo &lookup_info,
 	                                                bool allow_ignore_at_clause = false);
+
+	//! Looks for a non-table entry in the default schema of any implicit search catalog
+	static CatalogEntryLookup TryLookupDefaultSchema(CatalogEntryRetriever &retriever,
+	                                                 const EntryLookupInfo &lookup_info);
 
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(CatalogEntryRetriever &retriever,

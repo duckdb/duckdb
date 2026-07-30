@@ -2,7 +2,6 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/main/prepared_statement_data.hpp"
 #include "fmt/format.h"
 
 using duckdb::ArrowConverter;
@@ -191,14 +190,18 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 		return DuckDBSuccess;
 	}
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared);
-	if (!wrapper || !wrapper->statement || !wrapper->statement->data) {
+	if (!wrapper || !wrapper->statement) {
 		return DuckDBError;
 	}
-	auto properties = wrapper->statement->context->GetClientProperties();
+	auto context = wrapper->statement->TryGetContext();
+	if (!context) {
+		return DuckDBError;
+	}
+	auto properties = context->GetClientProperties();
 	duckdb::vector<duckdb::LogicalType> prepared_types;
 	duckdb::vector<duckdb::string> prepared_names;
 
-	auto count = wrapper->statement->data->properties.parameter_count;
+	auto count = wrapper->statement->GetParameterCount();
 	for (idx_t i = 0; i < count; i++) {
 		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of
 		// 'AdbcStatementGetParameterSchema'

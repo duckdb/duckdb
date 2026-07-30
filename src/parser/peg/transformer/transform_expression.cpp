@@ -159,7 +159,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
     MethodArguments function_expression_arguments, optional<vector<OrderByNode>> within_group_clause,
     optional<unique_ptr<ParsedExpression>> filter_clause, const bool &has_result,
     optional<unique_ptr<WindowExpression>> over_clause) {
-	auto qualified_function = function_identifier;
+	const auto &qualified_function = function_identifier;
 	bool export_clause = has_result;
 	auto distinct = function_expression_arguments.distinct;
 	auto function_children = std::move(function_expression_arguments.arguments);

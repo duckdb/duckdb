@@ -20,32 +20,51 @@
 
 namespace duckdb {
 class ClientContext;
-class PreparedStatementData;
+class SQLStatement;
 
-//! A prepared statement
+//! The metadata of a prepared statement, as it was prepared
+struct PreparedStatementInfo {
+	//! The result names of the prepared statement
+	vector<Identifier> names;
+	//! The result types of the prepared statement
+	vector<LogicalType> types;
+	//! The type of the statement that was prepared
+	StatementType statement_type = StatementType::INVALID_STATEMENT;
+	//! The properties of the statement that was prepared
+	StatementProperties properties;
+	//! The mapping of parameter identifier to parameter index
+	identifier_map_t<idx_t> named_param_map;
+	//! The expected type of each parameter whose type could be resolved when preparing
+	identifier_map_t<LogicalType> parameter_types;
+};
+
+//! A handle to a prepared statement that lives in the client context. The statement itself is prepared through
+//! `PREPARE <name> AS ...` and executed through `EXECUTE <name>(...)` - this class only holds the name.
 class PreparedStatement {
 public:
-	//! Create a successfully prepared prepared statement object with the given name
-	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
-	                             string query, identifier_map_t<idx_t> named_param_map);
+	//! Create a handle to the prepared statement with the given name in the client context
+	DUCKDB_API PreparedStatement(const shared_ptr<ClientContext> &context, string name, string query,
+	                             PreparedStatementInfo info);
 	//! Create a prepared statement that was not successfully prepared
 	DUCKDB_API explicit PreparedStatement(ErrorData error);
 
 	DUCKDB_API ~PreparedStatement();
 
+	//! Destroying this object deallocates the prepared statement - so it cannot be copied
+	PreparedStatement(const PreparedStatement &) = delete;
+	PreparedStatement &operator=(const PreparedStatement &) = delete;
+
 public:
 	//! The client context this prepared statement belongs to
-	shared_ptr<ClientContext> context;
-	//! The prepared statement data
-	shared_ptr<PreparedStatementData> data;
+	weak_ptr<ClientContext> context;
+	//! The name of the prepared statement within the client context
+	string name;
 	//! The query that is being prepared
 	string query;
 	//! Whether or not the statement was successfully prepared
 	bool success;
 	//! The error message (if success = false)
 	ErrorData error;
-	//! The parameter mapping
-	identifier_map_t<idx_t> named_param_map;
 
 public:
 	//! Returns the stored error message
@@ -54,16 +73,24 @@ public:
 	DUCKDB_API ErrorData &GetErrorObject();
 	//! Returns whether or not an error occurred
 	DUCKDB_API bool HasError() const;
+	//! Returns the client context this statement was prepared in - or nullptr if it has been destroyed
+	DUCKDB_API shared_ptr<ClientContext> TryGetContext() const;
 	//! Returns the number of columns in the result
-	DUCKDB_API idx_t ColumnCount();
+	DUCKDB_API idx_t ColumnCount() const;
 	//! Returns the statement type of the underlying prepared statement object
-	DUCKDB_API StatementType GetStatementType();
+	DUCKDB_API StatementType GetStatementType() const;
 	//! Returns the underlying statement properties
-	DUCKDB_API StatementProperties GetStatementProperties();
+	DUCKDB_API const StatementProperties &GetStatementProperties() const;
 	//! Returns the result SQL types of the prepared statement
-	DUCKDB_API const vector<LogicalType> &GetTypes();
+	DUCKDB_API const vector<LogicalType> &GetTypes() const;
 	//! Returns the result names of the prepared statement
-	DUCKDB_API const vector<Identifier> &GetNames();
+	DUCKDB_API const vector<Identifier> &GetNames() const;
+	//! Returns the mapping of parameter identifier to parameter index
+	DUCKDB_API const identifier_map_t<idx_t> &GetNamedParameterMap() const;
+	//! Returns the number of parameters of the prepared statement
+	DUCKDB_API idx_t GetParameterCount() const;
+	//! Try to get the expected type of the parameter with the given identifier
+	DUCKDB_API bool TryGetParameterType(const Identifier &identifier, LogicalType &result) const;
 	//! Returns the map of parameter index to the expected type of parameter
 	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
@@ -168,10 +195,14 @@ public:
 		}
 	}
 
-	//! Returns whether or not we can / want to cache a logical plan
-	static bool CanCachePlan(const LogicalOperator &op);
+private:
+	//! The metadata of the statement, as it was prepared
+	PreparedStatementInfo info;
 
 private:
+	//! Create the `EXECUTE <name>(...)` statement that runs this prepared statement with the given values
+	unique_ptr<SQLStatement> CreateExecuteStatement(const identifier_map_t<BoundParameterData> &named_values) const;
+
 	unique_ptr<PendingQueryResult> PendingQueryRecursive(vector<Value> &values) {
 		return PendingQuery(values);
 	}

@@ -46,7 +46,7 @@ ifndef CMAKE_BUILD_PARALLEL_LEVEL
 CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
 endif
 export CMAKE_BUILD_PARALLEL_LEVEL
-export CI_TIDY_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 25 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
+export CI_TIDY_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 50 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
 
 # Assume Ninja is the default generator (if missing), but verify ninja exists.
 # Cache Ninja detection so we only probe `ninja --version` once.
@@ -854,10 +854,12 @@ coverage-check:
 	./scripts/coverage_check.sh
 
 generate-files-deps:
-	pip install cxxheaderparser pcpp
+	$(PYTHON) -m pip install -U pip
+	$(PYTHON) -m pip install --group api_spec/pyproject.toml:generate
+	$(PYTHON) -m pip install cxxheaderparser pcpp
 
 generate-files:
-	$(PYTHON) scripts/generate_c_api.py
+	./scripts/capi_v1_regen.sh
 	$(PYTHON) scripts/generate_functions.py
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py

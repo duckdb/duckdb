@@ -29,7 +29,7 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 				}
 				vector<unique_ptr<ParsedExpression>> func_children;
 				for (const auto &partition : option.children) {
-					func_children.push_back(make_uniq<ColumnRefExpression>(Identifier(partition.GetValue<string>())));
+					func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<Identifier>()));
 				}
 				auto row_func = make_uniq<FunctionExpression>("row", std::move(func_children));
 				info->parsed_options[option.name.GetIdentifierName()] = std::move(row_func);

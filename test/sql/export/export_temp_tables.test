@@ -1,0 +1,15 @@
+# name: test/sql/export/export_temp_tables.test
+# description: Test that EXPORT DATABASE ignores temporary tables
+# group: [export]
+
+# Temporary tables are session-local and should not be referenced by the export load script
+statement ok
+CREATE TEMP TABLE temp_only AS SELECT 42 AS i
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_temp_only' (FORMAT CSV)
+
+query I
+SELECT count(*) FROM read_text('{TEST_DIR}/export_temp_only/load.sql') WHERE content LIKE '%temp_only%'
+----
+0

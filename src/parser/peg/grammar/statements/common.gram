@@ -3,6 +3,7 @@ Program <- TopLevelStatement*
 TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
+	ExternalResourceStatement /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /
