@@ -32,7 +32,7 @@ SELECT typeof(bar) FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/1
 Unsupported parameter for files_to_sniff: value must be -1 for all files or higher than one.
 
 query I
-SELECT typeof(bar) FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/2.csv','{DATA_DIR}/csv/17451/extra/3.csv'], files_to_sniff = 5) limit 1
+SELECT column_type FROM (DESCRIBE FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/2.csv','{DATA_DIR}/csv/17451/extra/3.csv'], files_to_sniff = 5)) WHERE column_name = 'bar'
 ----
 DATE
 
