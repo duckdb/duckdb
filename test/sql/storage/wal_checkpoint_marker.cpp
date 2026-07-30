@@ -45,21 +45,25 @@ static void WriteTornLegacyCheckpointMarker(FileSystem &fs, const string &path) 
 	writer.Sync();
 }
 
-static void WriteCheckpointMarkers(DuckDB &db, Connection &con, idx_t count) {
+static idx_t WriteCheckpointMarkers(DuckDB &db, Connection &con, idx_t count) {
 	auto database_name = DatabaseManager::GetDefaultDatabase(*con.context);
 	auto attached_database = db.instance->GetDatabaseManager().GetDatabase(database_name);
 	REQUIRE(attached_database);
 	auto wal = attached_database->GetStorageManager().GetWAL();
 	REQUIRE(wal);
+	REQUIRE(count > 0);
 
+	idx_t marker_end = 0;
 	for (idx_t marker_idx = 0; marker_idx < count; marker_idx++) {
 		// These deliberately do not match the current database root, which models an unsuccessful checkpoint.
 		wal->WriteCheckpoint(MetaBlockPointer(1000000 + marker_idx, 0));
+		marker_end = wal->Initialize().GetFileSize();
 		wal->Flush();
 	}
+	return marker_end;
 }
 
-TEST_CASE("Remove a failed checkpoint marker before making its WAL writable", "[storage][wal]") {
+TEST_CASE("Truncate a failed checkpoint marker before making its WAL writable", "[storage][wal]") {
 	auto config = GetTestConfig();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->options.checkpoint_on_shutdown = false;
@@ -77,7 +81,6 @@ TEST_CASE("Remove a failed checkpoint marker before making its WAL writable", "[
 		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (42)"));
 		WriteCheckpointMarkers(db, con, 1);
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (84)"));
 	}
 
 	REQUIRE(fs.FileExists(wal_path));
@@ -89,7 +92,7 @@ TEST_CASE("Remove a failed checkpoint marker before making its WAL writable", "[
 		Connection con(db);
 		auto result = con.Query("SELECT * FROM integers ORDER BY i");
 		REQUIRE_FALSE(result->HasError());
-		REQUIRE(CHECK_COLUMN(result, 0, {42, 84}));
+		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	}
 
 	auto wal_size_without_marker = fs.GetFileSize(*fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ));
@@ -98,6 +101,90 @@ TEST_CASE("Remove a failed checkpoint marker before making its WAL writable", "[
 
 	DeleteDatabase(database_path);
 	RemoveCheckpointRecoveryFiles(fs, database_path);
+}
+
+TEST_CASE("Reject a checkpoint marker that is not at the end of the WAL", "[storage][wal]") {
+	auto config = GetTestConfig();
+	config->options.checkpoint_wal_size = idx_t(-1);
+	config->options.checkpoint_on_shutdown = false;
+
+	auto database_path = TestCreatePath("checkpoint_marker_not_at_end");
+	auto wal_path = database_path + ".wal";
+	LocalFileSystem fs;
+	DeleteDatabase(database_path);
+	RemoveCheckpointRecoveryFiles(fs, database_path);
+
+	{
+		DuckDB db(database_path, config.get());
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (42)"));
+		WriteCheckpointMarkers(db, con, 1);
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (84)"));
+	}
+	auto wal_contents = ReadFile(fs, wal_path);
+
+	bool threw = false;
+	try {
+		DuckDB db(database_path, config.get());
+	} catch (std::exception &ex) {
+		threw = true;
+		REQUIRE(ErrorData(ex).Type() == ExceptionType::DATA_CORRUPTION);
+		REQUIRE(StringUtil::Contains(ex.what(), "WAL checkpoint marker must be at the end of the WAL"));
+	}
+	REQUIRE(threw);
+
+	REQUIRE(ReadFile(fs, wal_path) == wal_contents);
+	REQUIRE_FALSE(fs.FileExists(database_path + ".wal.recovery"));
+
+	DeleteDatabase(database_path);
+	RemoveCheckpointRecoveryFiles(fs, database_path);
+}
+
+TEST_CASE("Recover a missing or torn WAL flush following a checkpoint marker", "[storage][wal]") {
+	auto config = GetTestConfig();
+	config->options.checkpoint_wal_size = idx_t(-1);
+	config->options.checkpoint_on_shutdown = false;
+	config->options.abort_on_wal_failure = false;
+
+	LocalFileSystem fs;
+	for (idx_t flush_bytes = 0; flush_bytes <= 1; flush_bytes++) {
+		auto database_path = TestCreatePath("torn_checkpoint_flush_" + to_string(flush_bytes));
+		auto wal_path = database_path + ".wal";
+		DeleteDatabase(database_path);
+		RemoveCheckpointRecoveryFiles(fs, database_path);
+
+		idx_t marker_end;
+		{
+			DuckDB db(database_path, config.get());
+			Connection con(db);
+			REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+			REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (42)"));
+			marker_end = WriteCheckpointMarkers(db, con, 1);
+		}
+
+		auto wal_handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_WRITE);
+		REQUIRE(marker_end + flush_bytes < wal_handle->GetFileSize());
+		fs.Truncate(*wal_handle, marker_end + flush_bytes);
+		wal_handle->Sync();
+		wal_handle.reset();
+
+		{
+			DuckDB db(database_path, config.get());
+			Connection con(db);
+			auto result = con.Query("SELECT * FROM integers ORDER BY i");
+			REQUIRE_FALSE(result->HasError());
+			REQUIRE(CHECK_COLUMN(result, 0, {42}));
+		}
+
+		REQUIRE(fs.GetFileSize(*fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ)) < marker_end);
+		REQUIRE_FALSE(fs.FileExists(database_path + ".wal.recovery"));
+
+		DeleteDatabase(database_path);
+		RemoveCheckpointRecoveryFiles(fs, database_path);
+	}
 }
 
 TEST_CASE("Treat an incomplete checkpoint marker as a torn WAL entry", "[storage][wal]") {
@@ -136,7 +223,7 @@ TEST_CASE("Treat an incomplete checkpoint marker as a torn WAL entry", "[storage
 	RemoveCheckpointRecoveryFiles(fs, database_path);
 }
 
-TEST_CASE("Reject a mismatched WAL generation before removing its checkpoint marker", "[storage][wal]") {
+TEST_CASE("Reject a mismatched WAL generation before truncating its checkpoint marker", "[storage][wal]") {
 	auto config = GetTestConfig();
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->options.checkpoint_on_shutdown = false;
