@@ -1605,7 +1605,7 @@ def parse_args(argv: list[str] | None = None):
     )
     parser.add_argument(
         "--track-runtime",
-        type=int,
+        type=float,
         nargs="?",
         const=DEFAULT_RUNTIME_THRESHOLD_SECONDS,
         default=None,
