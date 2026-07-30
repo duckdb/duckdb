@@ -1,0 +1,24 @@
+# name: test/sql/aggregate/aggregates/bitstring_agg_memory_limit.test
+# description: Test BITSTRING_AGG memory limit enforcement
+# group: [aggregates]
+
+statement ok
+SET temp_directory='{TEST_DIR}/bitstring_agg_memory_limit';
+
+statement ok
+SET memory_limit='256MB';
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE TABLE src AS
+SELECT (i // 2)::BIGINT AS g, ((i * 7) % 96)::INTEGER AS v
+FROM range(2000000) t(i);
+
+# Correctly throw an error instead of OOM when the memory limit is exceeded
+statement error
+SELECT count(*) AS groups, max(length(bm)) AS bits
+FROM (SELECT g, bitstring_agg(v, 0, 6096) AS bm FROM src GROUP BY g);
+----
+Out of Memory Error
