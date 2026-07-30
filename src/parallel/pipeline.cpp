@@ -5,6 +5,7 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -22,12 +23,15 @@ static shared_ptr<GlobalSourceState> ToSharedSourceState(unique_ptr<GlobalSource
 
 PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
     : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p) {
+	auto sink = pipeline.GetSink();
+	if (sink && sink->RequiredPartitionInfo().AnyRequired()) {
+		// Account for every task before lazy executor construction can advance the batch minimum.
+		reserved_batch_index = pipeline.RegisterNewBatchIndex();
+	}
 }
 
 bool PipelineTask::TaskBlockedOnResult() const {
-	// If this returns true, it means the pipeline this task belongs to has a cached chunk
-	// that was the result of the Sink method returning BLOCKED
-	return pipeline_executor->RemainingSinkChunk();
+	return pipeline.IsStreamingResultPipeline() && pipeline_executor->RemainingSinkChunk();
 }
 
 const PipelineExecutor &PipelineTask::GetPipelineExecutor() const {
@@ -36,7 +40,7 @@ const PipelineExecutor &PipelineTask::GetPipelineExecutor() const {
 
 TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
 	if (!pipeline_executor) {
-		pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
+		pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline, reserved_batch_index);
 	}
 
 	pipeline_executor->SetTaskForInterrupts(shared_from_this());
@@ -164,7 +168,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	// Handle partition requirements specific to scheduling
 	auto partition_info = sink->RequiredPartitionInfo();
 	if (partition_info.batch_index) {
-		if (!source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
+		if (!source->SupportsPartitioning(partition_info)) {
 			throw InternalException(
 			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
 		}
@@ -218,14 +222,30 @@ void Pipeline::SetExternalInput() {
 	external_input_event_state = ExternalInputEventState::EXTERNAL_INPUT_UNSET;
 }
 
-bool Pipeline::CanUseExternalInput() const {
+bool Pipeline::IsStreamingResultPipeline() const {
+	if (external_streaming_result_producer) {
+		return true;
+	}
+	return sink && sink->type == PhysicalOperatorType::RESULT_COLLECTOR &&
+	       sink->Cast<PhysicalResultCollector>().IsStreaming();
+}
+
+bool Pipeline::CanUseExternalInput(const OperatorPartitionInfo &source_partition_info) const {
 	if (!sink || !sink->ParallelSink() || sink->SinkOrderDependent()) {
 		return false;
 	}
 	if (sink->GetExternalInputSupport() != PipelineExternalInputSupport::SUPPORTED) {
 		return false;
 	}
-	if (sink->RequiredPartitionInfo().AnyRequired()) {
+	auto required_partition_info = sink->RequiredPartitionInfo();
+	if (required_partition_info.RequiresPartitionColumns()) {
+		return false;
+	}
+	if (required_partition_info.RequiresBatchIndex() && base_batch_index != 0) {
+		// Later ordered sink pipelines rely on pipeline dependencies to sequence their batch ranges.
+		return false;
+	}
+	if (required_partition_info.RequiresBatchIndex() && !source_partition_info.RequiresBatchIndex()) {
 		return false;
 	}
 	for (auto &op_ref : operators) {
@@ -363,10 +383,11 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
 	auto source_state = GetSourceState();
+	auto partition_info = sink ? sink->RequiredPartitionInfo() : OperatorPartitionInfo::NoPartitionInfo();
 	if (allow_reuse && source_state && source_state->SupportsReuse()) {
 		source_state->Reset(client);
 	} else {
-		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(client)));
+		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(client, partition_info)));
 	}
 	initialized = true;
 }
@@ -377,7 +398,8 @@ void Pipeline::ResetSource(bool force) {
 	}
 	auto source_state = GetSourceState();
 	if (force || !source_state) {
-		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(GetClientContext())));
+		auto partition_info = sink ? sink->RequiredPartitionInfo() : OperatorPartitionInfo::NoPartitionInfo();
+		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(GetClientContext(), partition_info)));
 	}
 }
 

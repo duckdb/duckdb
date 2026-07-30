@@ -256,6 +256,59 @@ TEST_CASE("Interrupt is observed by PendingQueryResult::ExecuteTask", "[api]") {
 	REQUIRE(saw_error);
 }
 
+TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
+	DuckDB db;
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers AS SELECT i FROM range(1000000) t(i)"));
+
+	SECTION("Direct batch-indexed exchange") {
+		auto pending = con.PendingQuery("WITH c AS MATERIALIZED (SELECT i FROM integers) SELECT i FROM c", true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
+			count += chunk->size();
+		}
+		REQUIRE(count == 1000000);
+	}
+	SECTION("Buffered unordered exchange") {
+		REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
+		auto pending = con.PendingQuery("WITH c AS MATERIALIZED (SELECT i FROM integers) SELECT i FROM c", true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			count += chunk->size();
+		}
+		REQUIRE(count == 1000000);
+	}
+	SECTION("Ordered sink pipeline sequencing") {
+		auto pending = con.PendingQuery("WITH c1 AS MATERIALIZED (SELECT i FROM range(10000) t(i)), "
+		                                "c2 AS MATERIALIZED (SELECT i FROM c1), "
+		                                "c3 AS MATERIALIZED (SELECT i + 10000 AS i FROM c1) "
+		                                "SELECT i FROM c2 UNION ALL SELECT i FROM c3",
+		                                true);
+		REQUIRE(!pending->HasError());
+
+		auto result = pending->Execute();
+		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		idx_t count = 0;
+		while (auto chunk = result->Fetch()) {
+			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
+			count += chunk->size();
+		}
+		REQUIRE(count == 20000);
+	}
+}
+
 static void parallel_pending_query(Connection *conn, bool *correct, size_t threadnr) {
 	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {
