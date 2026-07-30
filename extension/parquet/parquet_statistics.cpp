@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "parquet_decimal_utils.hpp"
+#include "parquet_interval.hpp"
 #include "parquet_timestamp.hpp"
 #include "parquet_float16.hpp"
 #include "reader/string_column_reader.hpp"
@@ -880,12 +881,7 @@ static optional<uint64_t> TryHashTimestamp(const Value &constant, const ParquetC
 }
 
 static uint64_t HashNormalizedInterval(const Value &constant) {
-	auto interval = constant.GetValue<interval_t>().Normalize();
-	data_t bytes[12];
-	Store<uint32_t>(static_cast<uint32_t>(interval.months), bytes);
-	Store<uint32_t>(static_cast<uint32_t>(interval.days), bytes + sizeof(uint32_t));
-	Store<uint32_t>(static_cast<uint32_t>(interval.micros / Interval::MICROS_PER_MSEC), bytes + sizeof(uint32_t) * 2);
-	return duckdb_zstd::XXH64(bytes, sizeof(bytes), 0);
+	return ParquetIntervalUtils::HashNormalized(constant.GetValue<interval_t>());
 }
 
 // TODO we can only this if the parquet representation of the type exactly matches the duckdb rep!

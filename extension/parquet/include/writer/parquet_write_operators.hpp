@@ -9,6 +9,7 @@
 #pragma once
 
 #include "writer/parquet_write_stats.hpp"
+#include "parquet_interval.hpp"
 #include "parquet_timestamp.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -248,7 +249,7 @@ struct ParquetStringOperator : public ParquetBaseStringOperator {
 };
 
 struct ParquetIntervalTargetType {
-	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
+	static constexpr const idx_t PARQUET_INTERVAL_SIZE = ParquetIntervalUtils::PARQUET_INTERVAL_SIZE;
 	data_t bytes[PARQUET_INTERVAL_SIZE];
 };
 
@@ -259,9 +260,7 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 			throw IOException("Parquet files do not support negative intervals");
 		}
 		TGT result;
-		Store<uint32_t>(input.months, result.bytes);
-		Store<uint32_t>(input.days, result.bytes + sizeof(uint32_t));
-		Store<uint32_t>(input.micros / 1000, result.bytes + sizeof(uint32_t) * 2);
+		ParquetIntervalUtils::Encode(input, result.bytes);
 		return result;
 	}
 
@@ -288,8 +287,7 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static optional<uint64_t> GetExtraBloomFilterHash(const SRC &source_value, const TGT &) {
 		// Preserve the Parquet plain-encoding hash and add the hash used by DuckDB comparisons.
-		auto normalized_value = Operation<SRC, TGT>(source_value.Normalize());
-		return XXHash64<SRC, TGT>(normalized_value);
+		return ParquetIntervalUtils::HashNormalized(source_value);
 	}
 };
 
