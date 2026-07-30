@@ -1403,8 +1403,6 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           REPOSITORY: ${{ github.repository }}
-          GIT_REF: ${{ github.ref }}
-          INPUT_GIT_REF: ${{ inputs.git_ref }}
           OVERRIDE_GIT_DESCRIBE: ${{ needs.prepare.outputs.effective_git_describe }}
           RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
         run: |
@@ -1418,29 +1416,9 @@ jobs:
             is_duckdb_repo=true
           fi
 
-          target_branch="$GIT_REF"
-          if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "$INPUT_GIT_REF" ]]; then
-            target_branch="$INPUT_GIT_REF"
-          fi
-
           has_no_override=false
           if [[ "$EVENT_NAME" != "workflow_dispatch" || -z "$OVERRIDE_GIT_DESCRIBE" ]]; then
             has_no_override=true
-          fi
-
-          run_vendor=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && "$has_no_override" == "true" ]]; then
-            run_vendor=true
-          fi
-
-          run_nightly=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" ]]; then
-            run_nightly=true
-          fi
-
-          run_python=false
-          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$has_no_override" == "true" ]]; then
-            run_python=true
           fi
 
           run_release_dispatch=false
@@ -1451,24 +1429,14 @@ jobs:
           echo "summary dispatch context:"
           echo "  event_name=$EVENT_NAME"
           echo "  repository=$REPOSITORY"
-          echo "  git_ref=$GIT_REF"
-          echo "  input_git_ref=$INPUT_GIT_REF"
-          echo "  target_branch=$target_branch"
           echo "  override_git_describe=$OVERRIDE_GIT_DESCRIBE"
           echo "  release_status_success=$RELEASE_STATUS_SUCCESS"
           echo "  is_release_event=$is_release_event"
           echo "  is_duckdb_repo=$is_duckdb_repo"
           echo "  has_no_override=$has_no_override"
-          echo "  run_vendor=$run_vendor"
-          echo "  run_nightly=$run_nightly"
-          echo "  run_python=$run_python"
           echo "  run_release_dispatch=$run_release_dispatch"
 
           {
-            echo "target_branch=$target_branch"
-            echo "run_vendor=$run_vendor"
-            echo "run_nightly=$run_nightly"
-            echo "run_python=$run_python"
             echo "run_release_dispatch=$run_release_dispatch"
           } >> "$GITHUB_OUTPUT"
 
@@ -1488,50 +1456,6 @@ jobs:
             --field status=success \
             --field source_run_url="$SOURCE_RUN_URL" \
             --field message="DuckDB Main CI release artifacts are ready"
-
-      - name: Run ODBC Vendor
-        if: ${{ always() && steps.summary-context.outputs.run_vendor == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}"}}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
-
-      - name: Run JDBC Vendor
-        if: ${{ always() && steps.summary-context.outputs.run_vendor == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}"}}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
-
-      - name: Run Nightly build status
-        if: ${{ always() && steps.summary-context.outputs.run_nightly == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"event": "${{ github.event_name }}", "should_publish": "true"}}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
-
-      - name: Call /dispatch
-        if: ${{ always() && steps.summary-context.outputs.run_python == 'true' }}
-        shell: bash
-        env:
-          PAT_USER: ${{ secrets.PAT_USERNAME }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-python/actions/workflows/release.yml/dispatches
-          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}", "pypi-index": "prod" }}'
-          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
 
       - name: Check CI status
         shell: bash
