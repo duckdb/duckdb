@@ -81,6 +81,24 @@ SERVE FEATURE <name> ENTITY (card_no = customer_id) FOR <spine> ASOF request_tim
 
 `SERVE` matches each spine row to the entity's latest snapshot **at or before** the spine timestamp (an ASOF join), so there is no label leakage. Unmatched spine rows are kept with `NULL` feature values (LEFT join). If a `TTL` is set, a matched snapshot older than the spine timestamp by more than the TTL is served as `NULL` (a staleness guard); a zero/absent TTL never nulls on age.
 
+### Inspecting query plans with `EXPLAIN`
+
+`SERVE FEATURE` doubles as a table reference (it's valid inside a `FROM` clause, not just as a top-level statement), so it can be `EXPLAIN`ed by wrapping it in a `SELECT *`:
+
+```sql
+EXPLAIN SELECT * FROM SERVE FEATURE <name> FOR <spine>;
+EXPLAIN SELECT * FROM SERVE FEATURE <name> FOR <spine> ASOF <spine_ts_col>;
+```
+
+`REFRESH FEATURE` is a mutation rather than a relation, so it has no table-reference form and is explained directly — the same way `INSERT`, `UPDATE` and `DELETE` are:
+
+```sql
+EXPLAIN REFRESH FEATURE <name>;
+EXPLAIN REFRESH FEATURE <name> AT '2024-01-04 00:00:00';
+```
+
+A plain `EXPLAIN` never performs the refresh: the plan is built only to be formatted, then discarded. `EXPLAIN ANALYZE REFRESH FEATURE <name>` **does** execute it and appends a real version, exactly as `EXPLAIN ANALYZE INSERT` writes real rows.
+
 ### `DROP FEATURE`
 
 ```sql
