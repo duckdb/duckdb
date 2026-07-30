@@ -28,7 +28,6 @@ struct FactoredDuplicateEliminatedDomain {
 class DuplicateEliminatedDomainFactorer {
 public:
 	static unique_ptr<FactoredDuplicateEliminatedDomain> TryFactor(Binder &binder, unique_ptr<LogicalOperator> &join,
-	                                                               TableIndex domain_cte_index,
 	                                                               const DuplicateEliminatedDomainCandidate &candidate);
 };
 

@@ -85,27 +85,28 @@ static bool ExpressionsCanBeDuplicated(const LogicalOperator &op) {
 	return safe;
 }
 
+static bool CanEvaluateAdditionalGroupsInternal(const LogicalOperator &op, TableIndex domain_cte_index);
+
 static bool ChildrenCanEvaluateAdditionalGroups(const LogicalOperator &op, TableIndex domain_cte_index) {
 	for (auto &child : op.children) {
-		if (!DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(*child, domain_cte_index)) {
+		if (!CanEvaluateAdditionalGroupsInternal(*child, domain_cte_index)) {
 			return false;
 		}
 	}
 	return true;
 }
 
-bool DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(const LogicalOperator &op,
-                                                                  TableIndex domain_cte_index) {
+static bool CanEvaluateAdditionalGroupsInternal(const LogicalOperator &op, TableIndex domain_cte_index) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == domain_cte_index) {
 		return true;
 	}
-	if (op.HasSideEffects() || !ExpressionsCanEvaluateAdditionalGroups(op)) {
+	if (!ExpressionsCanEvaluateAdditionalGroups(op)) {
 		return false;
 	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		// A table-in/out function can be invoked once per domain group.
-		return op.children.empty() && op.Cast<LogicalGet>().projected_input.empty();
+		return !op.Cast<LogicalGet>().HasTableInOutInput();
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -120,8 +121,10 @@ bool DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(const LogicalO
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 		return ChildrenCanEvaluateAdditionalGroups(op, domain_cte_index);
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		if (op.Cast<LogicalComparisonJoin>().join_type == JoinType::SINGLE) {
+		if (op.Cast<LogicalJoin>().join_type == JoinType::SINGLE) {
 			return false;
 		}
 		return ChildrenCanEvaluateAdditionalGroups(op, domain_cte_index);
@@ -138,16 +141,21 @@ bool DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(const LogicalO
 	}
 }
 
+bool DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(const LogicalOperator &op,
+                                                                  TableIndex domain_cte_index) {
+	return !op.HasSideEffects() && CanEvaluateAdditionalGroupsInternal(op, domain_cte_index);
+}
+
 static bool IsCopyableScan(const LogicalGet &get) {
-	if (!get.children.empty() || !get.projected_input.empty() || !get.function.get_bind_info) {
+	if (get.HasTableInOutInput() || !get.function.get_bind_info) {
 		return false;
 	}
 	auto bind_info = get.function.get_bind_info(get.bind_data.get());
 	return bind_info.type == ScanType::TABLE || bind_info.type == ScanType::PARQUET;
 }
 
-bool DuplicateEliminatedDomainSafety::CanDuplicateSource(const LogicalOperator &op) {
-	if (op.HasSideEffects() || !ExpressionsCanBeDuplicated(op)) {
+static bool CanDuplicateSourceInternal(const LogicalOperator &op) {
+	if (!ExpressionsCanBeDuplicated(op)) {
 		return false;
 	}
 	switch (op.type) {
@@ -155,10 +163,14 @@ bool DuplicateEliminatedDomainSafety::CanDuplicateSource(const LogicalOperator &
 		return IsCopyableScan(op.Cast<LogicalGet>());
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		return op.children.size() == 1 && CanDuplicateSource(*op.children[0]);
+		return op.children.size() == 1 && CanDuplicateSourceInternal(*op.children[0]);
 	default:
 		return false;
 	}
+}
+
+bool DuplicateEliminatedDomainSafety::CanDuplicateSource(const LogicalOperator &op) {
+	return !op.HasSideEffects() && CanDuplicateSourceInternal(op);
 }
 
 } // namespace duckdb

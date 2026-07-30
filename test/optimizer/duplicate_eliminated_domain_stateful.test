@@ -1,0 +1,331 @@
+# name: test/optimizer/duplicate_eliminated_domain_stateful.test
+# description: Preserve domain isolation across stateful operators when factoring a safe-superset domain
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+CREATE TABLE state_domain(k INTEGER, selected BOOLEAN);
+
+statement ok
+INSERT INTO state_domain VALUES (2, true), (4, true);
+
+statement ok
+CREATE TABLE state_values(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO state_values VALUES (2, 10), (2, 20), (4, 40);
+
+statement ok
+CREATE TABLE state_extra(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO state_extra VALUES (2, 20), (2, 30), (4, 50);
+
+statement ok
+CREATE TABLE state_events(k INTEGER, ts INTEGER);
+
+statement ok
+INSERT INTO state_events VALUES (2, 5), (2, 15), (4, 5);
+
+statement ok
+CREATE TABLE state_thresholds(k INTEGER, ts INTEGER);
+
+statement ok
+INSERT INTO state_thresholds VALUES (2, 1), (2, 10), (4, 1);
+
+# The grouped source contains k=4, but the outer join only emits k=2. It therefore
+# forces a factored safe-superset domain for each correlated subquery below.
+
+# Windows must partition independently for every duplicate-eliminated key.
+query I
+SELECT (
+    SELECT max(rn)
+    FROM (
+        SELECT row_number() OVER (ORDER BY v) rn
+        FROM state_values s
+        WHERE s.k = d.k
+    ) windowed
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k
+    FROM state_domain
+    WHERE selected
+    GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+2
+
+query II
+EXPLAIN
+SELECT (
+    SELECT max(rn)
+    FROM (
+        SELECT row_number() OVER (ORDER BY v) rn
+        FROM state_values s
+        WHERE s.k = d.k
+    ) windowed
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k
+    FROM state_domain
+    WHERE selected
+    GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Window.*
+
+# Set operations must compare rows only within the same key domain.
+query I
+SELECT (
+    SELECT count(*)
+    FROM (
+        SELECT v FROM state_values s WHERE s.k = d.k
+        UNION
+        SELECT v FROM state_extra e WHERE e.k = d.k
+    ) unioned
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+3
+
+query II
+EXPLAIN
+SELECT (
+    SELECT count(*)
+    FROM (
+        SELECT v FROM state_values s WHERE s.k = d.k
+        UNION
+        SELECT v FROM state_extra e WHERE e.k = d.k
+    ) unioned
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+query I
+SELECT (
+    SELECT count(*)
+    FROM (
+        SELECT v FROM state_values s WHERE s.k = d.k
+        EXCEPT
+        SELECT v FROM state_extra e WHERE e.k = d.k
+    ) excepted
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+1
+
+query II
+EXPLAIN
+SELECT (
+    SELECT count(*)
+    FROM (
+        SELECT v FROM state_values s WHERE s.k = d.k
+        EXCEPT
+        SELECT v FROM state_extra e WHERE e.k = d.k
+    ) excepted
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+query I
+SELECT (
+    SELECT count(*)
+    FROM (
+        SELECT v FROM state_values s WHERE s.k = d.k
+        INTERSECT
+        SELECT v FROM state_extra e WHERE e.k = d.k
+    ) intersected
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+1
+
+query II
+EXPLAIN
+SELECT (
+    SELECT count(*)
+    FROM (
+        SELECT v FROM state_values s WHERE s.k = d.k
+        INTERSECT
+        SELECT v FROM state_extra e WHERE e.k = d.k
+    ) intersected
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+# A domain-dependent UNNEST with potentially throwing list construction takes
+# the exact-domain fallback and still keeps generated rows isolated.
+query I
+SELECT (
+    SELECT sum(x)
+    FROM UNNEST([d.k, d.k + 1]) values(x)
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+5
+
+query II
+EXPLAIN
+SELECT (
+    SELECT sum(x)
+    FROM UNNEST([d.k, d.k + 1]) values(x)
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Every grouping set must include the duplicate-eliminated key.
+query I
+SELECT (
+    SELECT sum(group_count)
+    FROM (
+        SELECT count(*) group_count
+        FROM state_values s
+        WHERE s.k = d.k
+        GROUP BY GROUPING SETS ((s.v), ())
+    ) grouped
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+4
+
+query II
+EXPLAIN
+SELECT (
+    SELECT sum(group_count)
+    FROM (
+        SELECT count(*) group_count
+        FROM state_values s
+        WHERE s.k = d.k
+        GROUP BY GROUPING SETS ((s.v), ())
+    ) grouped
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+# A materialized CTE must carry the active key through its definition and references.
+query I
+SELECT (
+    WITH materialized_values AS MATERIALIZED (
+        SELECT v FROM state_values s WHERE s.k = d.k
+    )
+    SELECT sum(v) FROM materialized_values
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+30
+
+query II
+EXPLAIN
+SELECT (
+    WITH materialized_values AS MATERIALIZED (
+        SELECT v FROM state_values s WHERE s.k = d.k
+    )
+    SELECT sum(v) FROM materialized_values
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+# Non-inner joins must match rows independently for each duplicate-eliminated key.
+query I
+SELECT (
+    SELECT count(*)
+    FROM state_values a
+    FULL JOIN state_extra b ON a.k = b.k AND a.v = b.v
+    WHERE coalesce(a.k, b.k) = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+3
+
+query II
+EXPLAIN
+SELECT (
+    SELECT count(*)
+    FROM state_values a
+    FULL JOIN state_extra b ON a.k = b.k AND a.v = b.v
+    WHERE coalesce(a.k, b.k) = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+query I
+SELECT (
+    SELECT count(*)
+    FROM state_events e
+    ASOF LEFT JOIN state_thresholds t ON e.k = t.k AND e.ts >= t.ts
+    WHERE e.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+2
+
+query II
+EXPLAIN
+SELECT (
+    SELECT count(*)
+    FROM state_events e
+    ASOF LEFT JOIN state_thresholds t ON e.k = t.k AND e.ts >= t.ts
+    WHERE e.k = d.k
+)
+FROM (VALUES (1)) o(k)
+JOIN (
+    SELECT k FROM state_domain WHERE selected GROUP BY k
+) d ON o.k * 2 = d.k;
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*

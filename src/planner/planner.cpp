@@ -21,6 +21,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_trigger.hpp"
@@ -197,6 +198,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		RewriteTriggersToDependent(*this->binder, *this->plan);
 		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
+		if (!Settings::Get<EnableOptimizerSetting>(context) && Settings::Get<DelimJoinAsCteSetting>(context)) {
+			DelimJoinCTERewriter::Rewrite(*this->binder, this->plan);
+		}
 		D_ASSERT(!ContainsDependentJoin(*this->plan));
 		D_ASSERT(VerifyPlannedExpressions(*this->plan));
 		D_ASSERT(VerifyCanonicalComparisonJoins(*this->plan));

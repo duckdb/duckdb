@@ -15,6 +15,8 @@ namespace duckdb {
 class LogicalOperator;
 
 //! Proves whether duplicate-eliminated domain rewrites can evaluate or copy a logical subtree.
+//! Additional-group safety assumes the input was produced by FlattenDependentJoins. In particular, its active
+//! duplicate-eliminated bindings must isolate every grouping, window partition, set operation, and join boundary.
 class DuplicateEliminatedDomainSafety {
 public:
 	//! Returns whether evaluating the plan for additional domain groups is unobservable.

@@ -152,6 +152,10 @@ const ColumnIndex &LogicalGet::GetColumnIndex(ProjectionIndex proj_index) const 
 	return GetColumnIndex(ColumnBinding(table_index, proj_index));
 }
 
+bool LogicalGet::HasTableInOutInput() const {
+	return !children.empty();
+}
+
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	if (column_ids.empty()) {
 		return {ColumnBinding(table_index, ProjectionIndex(0))};
@@ -167,9 +171,10 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 		}
 	}
 	if (!projected_input.empty()) {
-		if (children.size() != 1) {
+		if (!HasTableInOutInput()) {
 			throw InternalException("LogicalGet::project_input can only be set for table-in-out functions");
 		}
+		D_ASSERT(children.size() == 1);
 		auto child_bindings = children[0]->GetColumnBindings();
 		for (auto entry : projected_input) {
 			D_ASSERT(entry < child_bindings.size());
@@ -236,9 +241,10 @@ void LogicalGet::ResolveTypes() {
 		}
 	}
 	if (!projected_input.empty()) {
-		if (children.size() != 1) {
+		if (!HasTableInOutInput()) {
 			throw InternalException("LogicalGet::project_input can only be set for table-in-out functions");
 		}
+		D_ASSERT(children.size() == 1);
 		for (auto entry : projected_input) {
 			D_ASSERT(entry < children[0]->types.size());
 			types.push_back(children[0]->types[entry]);

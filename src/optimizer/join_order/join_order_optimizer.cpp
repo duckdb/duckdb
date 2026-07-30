@@ -76,9 +76,9 @@ static bool CanEstimateWithoutReordering(LogicalOperator &op) {
 	}
 }
 
-bool JoinOrderOptimizer::EstimateCardinalitiesWithoutReordering(LogicalOperator &plan,
-                                                                const vector<reference<LogicalOperator>> &operators,
-                                                                vector<idx_t> &cardinalities) {
+bool JoinOrderOptimizer::EstimateCardinalitiesWithoutReordering(
+    LogicalOperator &plan, const vector<reference<LogicalOperator>> &operators,
+    reference_map_t<LogicalOperator, idx_t> &cardinalities) {
 	if (!CanEstimateWithoutReordering(plan) || !query_graph_manager.Build(*this, plan)) {
 		return false;
 	}
@@ -86,7 +86,6 @@ bool JoinOrderOptimizer::EstimateCardinalitiesWithoutReordering(LogicalOperator 
 	estimator.Initialize(query_graph_manager.relation_manager.GetRelationStats());
 
 	cardinalities.clear();
-	cardinalities.reserve(operators.size());
 	for (auto operator_ref : operators) {
 		auto relations =
 		    query_graph_manager.relation_manager.GetRelationSet(operator_ref, query_graph_manager.set_manager);
@@ -94,7 +93,7 @@ bool JoinOrderOptimizer::EstimateCardinalitiesWithoutReordering(LogicalOperator 
 			cardinalities.clear();
 			return false;
 		}
-		cardinalities.push_back(estimator.EstimateCardinality(*relations));
+		cardinalities[operator_ref] = estimator.EstimateCardinality(*relations);
 	}
 	return true;
 }

@@ -8,6 +8,7 @@
 
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_inliner.hpp"
 
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_builder.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -81,28 +82,11 @@ static unique_ptr<LogicalOperator> CreateDuplicateFreeDomain(Binder &binder, uni
                                                              LogicalCTERef &domain_ref) {
 	LogicalOperatorDeepCopy deep_copy(binder, nullptr);
 	auto source_copy = deep_copy.DeepCopy(source);
-	source_copy->ResolveOperatorTypes();
-	auto source_bindings = source_copy->GetColumnBindings();
-	if (candidate.key_indices.size() != domain_ref.chunk_types.size()) {
+	auto distinct_domain = DuplicateEliminatedDomainBuilder::TryBuild(binder, std::move(source_copy),
+	                                                                  candidate.KeyIndices(), domain_ref.chunk_types);
+	if (!distinct_domain) {
 		return nullptr;
 	}
-
-	auto group_index = binder.GenerateTableIndex();
-	auto aggregate_index = binder.GenerateTableIndex();
-	vector<unique_ptr<Expression>> aggregates;
-	auto distinct_domain = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
-	for (idx_t key_idx = 0; key_idx < candidate.key_indices.size(); key_idx++) {
-		auto source_idx = candidate.key_indices[key_idx];
-		if (source_idx >= source_bindings.size() || source_idx >= source_copy->types.size() ||
-		    source_copy->types[source_idx] != domain_ref.chunk_types[key_idx]) {
-			return nullptr;
-		}
-		ColumnBinding::PushExpression(
-		    distinct_domain->groups,
-		    make_uniq<BoundColumnRefExpression>(domain_ref.chunk_types[key_idx], source_bindings[source_idx]));
-	}
-	distinct_domain->children.push_back(std::move(source_copy));
-	distinct_domain->ResolveOperatorTypes();
 
 	vector<unique_ptr<Expression>> expressions;
 	auto domain_bindings = distinct_domain->GetColumnBindings();
@@ -123,13 +107,11 @@ static unique_ptr<LogicalOperator> CreateDuplicateFreeDomain(Binder &binder, uni
 bool DuplicateEliminatedDomainInliner::TryInline(Binder &binder, unique_ptr<LogicalOperator> &rhs,
                                                  TableIndex domain_cte_index, idx_t domain_ref_count,
                                                  const DuplicateEliminatedDomainCandidate &candidate) {
-	D_ASSERT(candidate.coverage == DuplicateEliminatedDomainCoverage::EXACT ||
-	         DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(*rhs, domain_cte_index));
 	if (domain_ref_count != 1 || !FindDomainAggregateUse(*rhs, domain_cte_index).feeds_aggregate ||
-	    !DuplicateEliminatedDomainSafety::CanDuplicateSource(*candidate.source.get())) {
+	    !DuplicateEliminatedDomainSafety::CanDuplicateSource(*candidate.Source())) {
 		return false;
 	}
-	auto scanned_table = GetScannedTable(*candidate.source.get());
+	auto scanned_table = GetScannedTable(*candidate.Source());
 	if (scanned_table && ScansTable(*rhs, *scanned_table, domain_cte_index)) {
 		return false;
 	}
@@ -145,7 +127,7 @@ bool DuplicateEliminatedDomainInliner::TryInline(Binder &binder, unique_ptr<Logi
 	try {
 		for (auto &location : locations) {
 			auto &domain_ref = location.get()->Cast<LogicalCTERef>();
-			auto replacement = CreateDuplicateFreeDomain(binder, candidate.source.get(), candidate, domain_ref);
+			auto replacement = CreateDuplicateFreeDomain(binder, candidate.Source(), candidate, domain_ref);
 			if (!replacement) {
 				return false;
 			}

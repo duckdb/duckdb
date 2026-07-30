@@ -9,6 +9,7 @@
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_properties.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
@@ -20,17 +21,19 @@
 namespace duckdb {
 
 enum class KeyMatch : uint8_t { IDENTICAL, NULL_SAFE_EQUALITY, EQUALITY };
+enum class DomainCoverage : uint8_t { EXACT, SUPERSET };
 
 struct Candidate {
-	Candidate(unique_ptr<LogicalOperator> &source_p, vector<idx_t> key_indices_p, idx_t joins_above_p,
-	          DuplicateEliminatedDomainCoverage coverage_p)
-	    : source(source_p), key_indices(std::move(key_indices_p)), joins_above(joins_above_p), coverage(coverage_p) {
+	Candidate(unique_ptr<LogicalOperator> &source_p, vector<idx_t> key_indices_p, bool omits_join_input_p,
+	          DomainCoverage coverage_p)
+	    : source(source_p), key_indices(std::move(key_indices_p)), omits_join_input(omits_join_input_p),
+	      coverage(coverage_p) {
 	}
 
 	reference<unique_ptr<LogicalOperator>> source;
 	vector<idx_t> key_indices;
-	idx_t joins_above;
-	DuplicateEliminatedDomainCoverage coverage;
+	bool omits_join_input;
+	DomainCoverage coverage;
 };
 
 struct EquivalentBinding {
@@ -230,6 +233,7 @@ static bool IsSupportedSource(LogicalOperator &op) {
 	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
+		return !op.Cast<LogicalGet>().HasTableInOutInput();
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -306,37 +310,33 @@ static bool CandidateKeysAreSupported(LogicalOperator &op, const vector<idx_t> &
 }
 
 static void FindCandidates(unique_ptr<LogicalOperator> &op, const vector<unique_ptr<Expression>> &keys,
-                           const BindingEquivalence &equivalence, idx_t joins_above,
-                           DuplicateEliminatedDomainCoverage coverage, vector<Candidate> &candidates,
-                           bool is_root = false) {
+                           const BindingEquivalence &equivalence, bool omits_join_input, DomainCoverage coverage,
+                           vector<Candidate> &candidates, bool is_root = false) {
 	if (!is_root && IsSupportedSource(*op)) {
 		vector<idx_t> candidate_key_indices;
 		if (FindCandidateKeys(*op, keys, equivalence, candidate_key_indices) &&
 		    CandidateKeysAreSupported(*op, candidate_key_indices)) {
-			candidates.emplace_back(op, std::move(candidate_key_indices), joins_above, coverage);
+			candidates.emplace_back(op, std::move(candidate_key_indices), omits_join_input, coverage);
 		}
 	}
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		if (op->children.size() == 1) {
-			FindCandidates(op->children[0], keys, equivalence, joins_above, coverage, candidates);
+			FindCandidates(op->children[0], keys, equivalence, omits_join_input, coverage, candidates);
 		}
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		if (op->children.size() == 1) {
-			FindCandidates(op->children[0], keys, equivalence, joins_above, DuplicateEliminatedDomainCoverage::SUPERSET,
-			               candidates);
+			FindCandidates(op->children[0], keys, equivalence, omits_join_input, DomainCoverage::SUPERSET, candidates);
 		}
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		if (!IsSafeInnerJoin(*op)) {
 			break;
 		}
-		FindCandidates(op->children[0], keys, equivalence, joins_above + 1, DuplicateEliminatedDomainCoverage::SUPERSET,
-		               candidates);
-		FindCandidates(op->children[1], keys, equivalence, joins_above + 1, DuplicateEliminatedDomainCoverage::SUPERSET,
-		               candidates);
+		FindCandidates(op->children[0], keys, equivalence, true, DomainCoverage::SUPERSET, candidates);
+		FindCandidates(op->children[1], keys, equivalence, true, DomainCoverage::SUPERSET, candidates);
 		break;
 	}
 	default:
@@ -370,41 +370,20 @@ static double EstimateDomainWork(LogicalOperator &source, idx_t rows, double key
 	return LossyNumericCast<double>(rows) * (GetOutputWidth(source) + key_width);
 }
 
-static bool HasSelection(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
-		return true;
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_GET && op.Cast<LogicalGet>().table_filters.HasFilters()) {
-		return true;
-	}
-	if ((op.type == LogicalOperatorType::LOGICAL_PROJECTION ||
-	     op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) &&
-	    op.children.size() == 1) {
-		return HasSelection(*op.children[0]);
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		if (join.join_type == JoinType::SEMI && !op.children.empty()) {
-			return HasSelection(*op.children[0]);
-		}
-	}
-	return false;
-}
-
-static optional_idx EstimateSimpleCardinality(ClientContext &context, LogicalOperator &op) {
+static optional_idx EstimateFallbackCardinality(ClientContext &context, LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		return RelationStatisticsHelper::ExtractGetStats(op.Cast<LogicalGet>(), context).cardinality;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		if (op.children.size() == 1) {
-			return EstimateSimpleCardinality(context, *op.children[0]);
+			return EstimateFallbackCardinality(context, *op.children[0]);
 		}
 		return optional_idx();
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		if (op.children.size() != 1) {
 			return optional_idx();
 		}
-		auto child_cardinality = EstimateSimpleCardinality(context, *op.children[0]);
+		auto child_cardinality = EstimateFallbackCardinality(context, *op.children[0]);
 		if (!child_cardinality.IsValid()) {
 			return optional_idx();
 		}
@@ -414,13 +393,13 @@ static optional_idx EstimateSimpleCardinality(ClientContext &context, LogicalOpe
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		if (op.children.size() == 1) {
-			return EstimateSimpleCardinality(context, *op.children[0]);
+			return EstimateFallbackCardinality(context, *op.children[0]);
 		}
 		return optional_idx();
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		if (join.join_type == JoinType::SEMI && !op.children.empty()) {
-			return EstimateSimpleCardinality(context, *op.children[0]);
+			return EstimateFallbackCardinality(context, *op.children[0]);
 		}
 		return optional_idx();
 	}
@@ -439,10 +418,12 @@ static optional_idx FindBestCandidate(ClientContext &context, LogicalOperator &p
 	}
 	estimated_operators.push_back(payload);
 
-	vector<idx_t> estimates;
+	reference_map_t<LogicalOperator, idx_t> estimates;
 	JoinOrderOptimizer estimator(context);
 	bool has_join_estimates = estimator.EstimateCardinalitiesWithoutReordering(payload, estimated_operators, estimates);
-	idx_t payload_rows = has_join_estimates ? estimates.back() : 0;
+	auto payload_estimate = estimates.find(payload);
+	D_ASSERT(!has_join_estimates || payload_estimate != estimates.end());
+	idx_t payload_rows = has_join_estimates ? payload_estimate->second : 0;
 	auto key_width = GetKeyWidth(keys);
 	double payload_work = EstimateDomainWork(payload, payload_rows, key_width);
 
@@ -450,14 +431,17 @@ static optional_idx FindBestCandidate(ClientContext &context, LogicalOperator &p
 	double best_work = 0;
 	for (idx_t candidate_idx = 0; candidate_idx < candidates.size(); candidate_idx++) {
 		auto &candidate = candidates[candidate_idx];
-		if (!allow_superset && candidate.coverage == DuplicateEliminatedDomainCoverage::SUPERSET) {
+		if (!allow_superset && candidate.coverage == DomainCoverage::SUPERSET) {
 			continue;
 		}
 		optional_idx estimated_rows;
 		if (has_join_estimates) {
-			estimated_rows = estimates[candidate_idx];
+			auto estimate = estimates.find(*candidate.source.get());
+			D_ASSERT(estimate != estimates.end());
+			estimated_rows = estimate->second;
 		} else {
-			estimated_rows = EstimateSimpleCardinality(context, *candidate.source.get());
+			// Join-order estimates are unavailable for simple aggregate and semi-join candidates.
+			estimated_rows = EstimateFallbackCardinality(context, *candidate.source.get());
 		}
 		if (!estimated_rows.IsValid()) {
 			continue;
@@ -467,8 +451,8 @@ static optional_idx FindBestCandidate(ClientContext &context, LogicalOperator &p
 
 		bool clearly_cheaper =
 		    has_join_estimates && payload_rows > 0 && candidate_rows <= payload_rows && candidate_work < payload_work;
-		bool bounded_small_domain = candidate_rows <= STANDARD_VECTOR_SIZE && candidate.joins_above > 0 &&
-		                            HasSelection(*candidate.source.get());
+		bool bounded_small_domain = candidate_rows <= STANDARD_VECTOR_SIZE && candidate.omits_join_input &&
+		                            DuplicateEliminatedDomainProperties::HasSelection(*candidate.source.get());
 		if (!clearly_cheaper && !bounded_small_domain) {
 			continue;
 		}
@@ -490,8 +474,8 @@ DuplicateEliminatedDomainCandidateFinder::FindBest(ClientContext &context, Logic
 	BindingEquivalence equivalence;
 	CollectEquivalences(*join.children[0], equivalence);
 	vector<Candidate> candidates;
-	FindCandidates(join.children[0], join.duplicate_eliminated_columns, equivalence, 0,
-	               DuplicateEliminatedDomainCoverage::EXACT, candidates, true);
+	FindCandidates(join.children[0], join.duplicate_eliminated_columns, equivalence, false, DomainCoverage::EXACT,
+	               candidates, true);
 	if (candidates.empty()) {
 		return nullptr;
 	}
@@ -503,8 +487,7 @@ DuplicateEliminatedDomainCandidateFinder::FindBest(ClientContext &context, Logic
 		return nullptr;
 	}
 	auto &selected = candidates[selected_index.GetIndex()];
-	return make_uniq<DuplicateEliminatedDomainCandidate>(selected.source.get(), std::move(selected.key_indices),
-	                                                     selected.joins_above, selected.coverage);
+	return make_uniq<DuplicateEliminatedDomainCandidate>(selected.source.get(), std::move(selected.key_indices));
 }
 
 } // namespace duckdb

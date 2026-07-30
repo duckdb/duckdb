@@ -13,16 +13,17 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_builder.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_factorer.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_inliner.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_properties.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression_nullability.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
@@ -286,73 +287,6 @@ static bool PushEligibleFiltersIntoDelimJoinInputs(unique_ptr<LogicalOperator> &
 		changed = PushEligibleFilterExpressionsIntoDelimJoinInputs(plan) || changed;
 	}
 	return changed;
-}
-
-static bool IsColumnEqualityPredicate(Expression &expr) {
-	if (!BoundComparisonExpression::IsComparison(expr)) {
-		return false;
-	}
-	switch (expr.GetExpressionType()) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		break;
-	default:
-		return false;
-	}
-	auto &comparison = expr.Cast<BoundFunctionExpression>();
-	auto &lhs = BoundComparisonExpression::Left(comparison);
-	auto &rhs = BoundComparisonExpression::Right(comparison);
-	if (lhs.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
-	    rhs.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-		return false;
-	}
-	return lhs.Cast<BoundColumnRefExpression>().Depth() == 0 && rhs.Cast<BoundColumnRefExpression>().Depth() == 0;
-}
-
-static bool IsNonSelectiveJoinPredicate(Expression &expr) {
-	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		bool all_children_non_selective = true;
-		ExpressionIterator::EnumerateChildren(
-		    expr, [&](Expression &child) { all_children_non_selective &= IsNonSelectiveJoinPredicate(child); });
-		return all_children_non_selective;
-	}
-	return IsColumnEqualityPredicate(expr);
-}
-
-static bool HasSelection(const LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET: {
-		auto &get = op.Cast<LogicalGet>();
-		for (const auto &entry : get.table_filters) {
-			auto &expr_filter =
-			    ExpressionFilter::GetExpressionFilter(entry.Filter(), "DelimJoinCTERewriter::HasSelection");
-			auto &expr = *expr_filter.expr;
-			if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
-			    expr.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) {
-				return true;
-			}
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto &filter = op.Cast<LogicalFilter>();
-		for (auto &expr : filter.expressions) {
-			if (!IsNonSelectiveJoinPredicate(*expr)) {
-				return true;
-			}
-		}
-		break;
-	}
-	default:
-		break;
-	}
-
-	for (auto &child : op.children) {
-		if (HasSelection(*child)) {
-			return true;
-		}
-	}
-	return false;
 }
 
 static bool IsEvidenceSide(LogicalOperator &op, idx_t child_idx) {
@@ -1444,7 +1378,7 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 }
 
 idx_t GeneratedDedupRefEliminator::Remove() {
-	auto preserve_selected_domain = HasSelection(*delim_join.children[0]);
+	auto preserve_selected_domain = DuplicateEliminatedDomainProperties::HasSelection(*delim_join.children[0]);
 	auto selected_evidence_side = preserve_selected_domain && preserve_evidence_side &&
 	                              HasEvidenceSide(delim_join.join_type) &&
 	                              !ContainsSubqueryJoin(*delim_join.children[0]);
@@ -1541,7 +1475,7 @@ bool GeneratedDomainJoinEliminator::CTEHasSelection(TableIndex cte_index, vector
 }
 
 bool GeneratedDomainJoinEliminator::OperatorHasSelection(LogicalOperator &op, vector<TableIndex> &seen_ctes) const {
-	if (HasSelection(op)) {
+	if (DuplicateEliminatedDomainProperties::HasSelection(op)) {
 		return true;
 	}
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
@@ -2184,8 +2118,7 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 			return output_replacements;
 		}
 		if (selected_candidate) {
-			factored_domain =
-			    DuplicateEliminatedDomainFactorer::TryFactor(binder, plan, dedup_cte_index, *selected_candidate);
+			factored_domain = DuplicateEliminatedDomainFactorer::TryFactor(binder, plan, *selected_candidate);
 		}
 	}
 	auto &join = plan->Cast<LogicalComparisonJoin>();
@@ -2228,11 +2161,9 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 
 	vector<idx_t> dedup_column_indices;
 	vector<LogicalType> dedup_types;
-	vector<Identifier> dedup_names;
 	vector<unique_ptr<Expression>> extra_left_expressions;
 	dedup_column_indices.reserve(join.duplicate_eliminated_columns.size());
 	dedup_types.reserve(join.duplicate_eliminated_columns.size());
-	dedup_names.reserve(join.duplicate_eliminated_columns.size());
 	for (auto &expr : join.duplicate_eliminated_columns) {
 		optional_idx binding_index;
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
@@ -2246,7 +2177,6 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 			extra_left_expressions.push_back(expr->Copy());
 		}
 		dedup_types.push_back(expr->GetReturnType());
-		dedup_names.push_back(expr->GetName());
 	}
 
 	if (!extra_left_expressions.empty()) {
@@ -2312,23 +2242,14 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 
 	join.duplicate_eliminated_columns.clear();
 
-	auto dedup_group_index = binder.GenerateTableIndex();
-	auto dedup_aggregate_index = binder.GenerateTableIndex();
-	vector<unique_ptr<Expression>> dedup_aggrs;
-	auto dedup = make_uniq<LogicalAggregate>(dedup_group_index, dedup_aggregate_index, std::move(dedup_aggrs));
 	auto dedup_child_index = binder.GenerateTableIndex();
 	auto dedup_child = make_uniq<LogicalCTERef>(dedup_child_index, cte_index, left_types,
 	                                            GenerateCTEColumnNames(left_column_count, "__duckdb_delim_col_"));
-	auto dedup_child_bindings = dedup_child->GetColumnBindings();
-	for (idx_t i = 0; i < dedup_column_indices.size(); i++) {
-		auto colref = make_uniq<BoundColumnRefExpression>(dedup_names[i], dedup_types[i],
-		                                                  dedup_child_bindings[dedup_column_indices[i]]);
-		auto new_group_index = ColumnBinding::PushExpression(dedup->groups, std::move(colref));
-		for (auto &set : dedup->grouping_sets) {
-			set.insert(new_group_index);
-		}
+	auto dedup =
+	    DuplicateEliminatedDomainBuilder::TryBuild(binder, std::move(dedup_child), dedup_column_indices, dedup_types);
+	if (!dedup) {
+		throw InternalException("Failed to construct duplicate-eliminated domain");
 	}
-	dedup->children.push_back(std::move(dedup_child));
 
 	auto dedup_cte_name = Identifier("__duckdb_delim_dedup_" + to_string(dedup_cte_index.index));
 	BindingReplacementGraph dedup_output_replacements;

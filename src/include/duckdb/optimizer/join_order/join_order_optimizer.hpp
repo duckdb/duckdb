@@ -27,7 +27,7 @@ public:
 	//! Estimate operator subtrees in a reorderable join region without enumerating or reconstructing join plans.
 	bool EstimateCardinalitiesWithoutReordering(LogicalOperator &plan,
 	                                            const vector<reference<LogicalOperator>> &operators,
-	                                            vector<idx_t> &cardinalities);
+	                                            reference_map_t<LogicalOperator, idx_t> &cardinalities);
 	//! Adds/gets materialized CTE stats
 	void AddMaterializedCTEStats(TableIndex index, RelationStats &&stats);
 	RelationStats GetMaterializedCTEStats(TableIndex index);

@@ -1,0 +1,73 @@
+# name: test/optimizer/duplicate_eliminated_domain_settings.test
+# description: Lower duplicate-eliminated joins correctly with optional optimization enabled or disabled
+# group: [optimizer]
+
+statement ok
+CREATE TABLE mode_outer(k INTEGER);
+
+statement ok
+INSERT INTO mode_outer VALUES (1), (2);
+
+statement ok
+CREATE TABLE mode_inner(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO mode_inner VALUES (1, 10), (1, 20);
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+# With the optional optimizer disabled, the planner still performs the configured
+# baseline materialized-CTE lowering after FlattenDependentJoins.
+statement ok
+SET delim_join_as_cte=true;
+
+statement ok
+PRAGMA disable_optimizer;
+
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# The regular duplicate-eliminated physical path remains available when the
+# materialized-CTE strategy is explicitly disabled.
+statement ok
+SET delim_join_as_cte=false;
+
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+logical_opt	<REGEX>:.*Delim Join.*
+
+statement ok
+PRAGMA enable_optimizer;
+
+statement ok
+SET delim_join_as_cte=true;
+
+query II rowsort
+SELECT k, (SELECT sum(v) FROM mode_inner i WHERE i.k = o.k)
+FROM mode_outer o;
+----
+1	30
+2	NULL
+

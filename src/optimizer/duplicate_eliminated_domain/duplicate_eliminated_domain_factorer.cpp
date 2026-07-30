@@ -8,8 +8,8 @@
 
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_factorer.hpp"
 
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_builder.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -27,17 +27,14 @@ static vector<Identifier> GenerateColumnNames(idx_t column_count) {
 
 unique_ptr<FactoredDuplicateEliminatedDomain>
 DuplicateEliminatedDomainFactorer::TryFactor(Binder &binder, unique_ptr<LogicalOperator> &join_op,
-                                             TableIndex domain_cte_index,
                                              const DuplicateEliminatedDomainCandidate &candidate) {
 	auto &join = join_op->Cast<LogicalComparisonJoin>();
 	if (join.children.size() != 2 || join.duplicate_eliminated_columns.empty()) {
 		return nullptr;
 	}
-	D_ASSERT(candidate.key_indices.size() == join.duplicate_eliminated_columns.size());
-	D_ASSERT(candidate.coverage == DuplicateEliminatedDomainCoverage::EXACT ||
-	         DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(*join.children[1], domain_cte_index));
+	D_ASSERT(candidate.KeyIndices().size() == join.duplicate_eliminated_columns.size());
 
-	auto &source_location = candidate.source.get();
+	auto &source_location = candidate.Source();
 	auto old_bindings = source_location->GetColumnBindings();
 	auto source_types = source_location->types;
 
@@ -66,24 +63,17 @@ DuplicateEliminatedDomainFactorer::TryFactor(Binder &binder, unique_ptr<LogicalO
 	auto domain_ref_index = binder.GenerateTableIndex();
 	auto domain_ref = make_uniq<LogicalCTERef>(domain_ref_index, factor->cte_index, source_types,
 	                                           GenerateColumnNames(factor->column_count));
-	auto domain_bindings = domain_ref->GetColumnBindings();
-	auto group_index = binder.GenerateTableIndex();
-	auto aggregate_index = binder.GenerateTableIndex();
-	vector<unique_ptr<Expression>> aggregates;
-	auto domain = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
-	for (idx_t key_idx = 0; key_idx < candidate.key_indices.size(); key_idx++) {
-		auto source_idx = candidate.key_indices[key_idx];
-		D_ASSERT(source_idx < domain_bindings.size());
+	vector<LogicalType> key_types;
+	key_types.reserve(join.duplicate_eliminated_columns.size());
+	for (idx_t key_idx = 0; key_idx < join.duplicate_eliminated_columns.size(); key_idx++) {
 		auto &key = join.duplicate_eliminated_columns[key_idx];
-		auto column =
-		    make_uniq<BoundColumnRefExpression>(key->GetName(), key->GetReturnType(), domain_bindings[source_idx]);
-		auto new_group = ColumnBinding::PushExpression(domain->groups, std::move(column));
-		for (auto &grouping_set : domain->grouping_sets) {
-			grouping_set.insert(new_group);
-		}
+		key_types.push_back(key->GetReturnType());
 	}
-	domain->children.push_back(std::move(domain_ref));
-	factor->domain = std::move(domain);
+	factor->domain =
+	    DuplicateEliminatedDomainBuilder::TryBuild(binder, std::move(domain_ref), candidate.KeyIndices(), key_types);
+	if (!factor->domain) {
+		throw InternalException("Failed to construct factored duplicate-eliminated domain");
+	}
 	return factor;
 }
 
