@@ -167,6 +167,10 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	catalog_entry_vector_t tables;
 	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {
+		auto &schema_entry = schema.get();
+		if (schema_entry.ParentCatalog().IsTemporaryCatalog()) {
+			continue;
+		}
 		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.type == CatalogType::TABLE_ENTRY) {
 				tables.push_back(entry.Cast<TableCatalogEntry>());
@@ -224,7 +228,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->SetQualifiedName(QualifiedName(Identifier(catalog), table.schema.name, table.name));
+		info->SetQualifiedName(QualifiedName(table.ParentCatalog().GetName(), table.schema.name, table.name));
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
