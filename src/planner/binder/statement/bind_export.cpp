@@ -228,7 +228,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->SetQualifiedName(QualifiedName(table.ParentCatalog().GetName(), table.schema.name, table.name));
+		info->SetQualifiedName(QualifiedName(Identifier(catalog), table.schema.name, table.name));
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
