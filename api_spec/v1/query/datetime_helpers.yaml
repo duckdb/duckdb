@@ -2,7 +2,7 @@ module: datetime_helpers
 functions:
   from_date:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       date:
         type: date
@@ -13,7 +13,7 @@ functions:
     return_description: The `duckdb_date_struct` with the decomposed elements.
   to_date:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       date:
         type: date_struct
@@ -24,7 +24,7 @@ functions:
     return_description: The `duckdb_date` element.
   is_finite_date:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       date:
         type: date
@@ -35,7 +35,7 @@ functions:
     return_description: True if the date is finite, false if it is ±infinity.
   from_time:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       time:
         type: time
@@ -46,7 +46,7 @@ functions:
     return_description: The `duckdb_time_struct` with the decomposed elements.
   create_time_tz:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       micros:
         type: i64
@@ -60,7 +60,7 @@ functions:
     return_description: The `duckdb_time_tz` element.
   from_time_tz:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       micros:
         type: time_tz
@@ -72,7 +72,7 @@ functions:
       Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
   to_time:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       time:
         type: time_struct
@@ -83,7 +83,7 @@ functions:
     return_description: The `duckdb_time` element.
   from_timestamp:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       ts:
         type: timestamp
@@ -94,7 +94,7 @@ functions:
     return_description: The `duckdb_timestamp_struct` with the decomposed elements.
   to_timestamp:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       ts:
         type: timestamp_struct
@@ -105,7 +105,7 @@ functions:
     return_description: The `duckdb_timestamp` element.
   is_finite_timestamp:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       ts:
         type: timestamp
@@ -116,7 +116,7 @@ functions:
     return_description: True if the timestamp is finite, false if it is ±infinity.
   is_finite_timestamp_s:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
       ts:
         type: timestamp_s
@@ -127,7 +127,7 @@ functions:
     return_description: True if the timestamp is finite, false if it is ±infinity.
   is_finite_timestamp_ms:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
       ts:
         type: timestamp_ms
@@ -138,7 +138,7 @@ functions:
     return_description: True if the timestamp is finite, false if it is ±infinity.
   is_finite_timestamp_ns:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
       ts:
         type: timestamp_ns
@@ -149,7 +149,7 @@ functions:
     return_description: True if the timestamp is finite, false if it is ±infinity.
   hugeint_to_double:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       val:
         type: hugeint
@@ -160,7 +160,7 @@ functions:
     return_description: The converted `double` element.
   double_to_hugeint:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       val:
         type: f64
@@ -173,7 +173,7 @@ functions:
     return_description: The converted `duckdb_hugeint` element.
   uhugeint_to_double:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       val:
         type: uhugeint
@@ -184,7 +184,7 @@ functions:
     return_description: The converted `double` element.
   double_to_uhugeint:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       val:
         type: f64
@@ -197,7 +197,7 @@ functions:
     return_description: The converted `duckdb_uhugeint` element.
   double_to_decimal:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.6.0", "2022-11-14"]
     parameters:
       val:
         type: f64
@@ -214,7 +214,7 @@ functions:
     return_description: The converted `duckdb_decimal` element.
   decimal_to_double:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       val:
         type: decimal

@@ -2,7 +2,8 @@ module: arrow
 functions:
   to_arrow_schema:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       arrow_options:
         type: arrow_options
@@ -30,7 +31,8 @@ functions:
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
   data_chunk_to_arrow:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       arrow_options:
         type: arrow_options
@@ -49,7 +51,8 @@ functions:
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
   schema_from_arrow:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       connection:
         type: connection
@@ -69,7 +72,8 @@ functions:
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
   data_chunk_from_arrow:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       connection:
         type: connection
@@ -92,7 +96,8 @@ functions:
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
   destroy_arrow_converted_schema:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     role: destructor
     belongs_to: arrow_converted_schema
     parameters:
@@ -105,8 +110,8 @@ functions:
       Destroys the arrow converted schema and de-allocates all memory allocated for that arrow converted schema.
   query_arrow:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       connection:
         type: connection
@@ -134,8 +139,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   query_arrow_schema:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       result:
         type: arrow
@@ -154,8 +159,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   prepared_arrow_schema:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       prepared:
         type: prepared_statement
@@ -174,8 +179,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   result_arrow_array:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       result:
         type: result
@@ -196,8 +201,8 @@ functions:
       ArrowArray object.
   query_arrow_array:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       result:
         type: arrow
@@ -219,8 +224,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   arrow_column_count:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       result:
         type: arrow
@@ -233,8 +238,8 @@ functions:
     return_description: The number of columns present in the result object.
   arrow_row_count:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       result:
         type: arrow
@@ -247,8 +252,8 @@ functions:
     return_description: The number of rows present in the result object.
   arrow_rows_changed:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       result:
         type: arrow
@@ -262,8 +267,8 @@ functions:
     return_description: The number of rows changed.
   query_arrow_error:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       result:
         type: arrow
@@ -281,8 +286,8 @@ functions:
     return_description: The error of the result.
   destroy_arrow:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     role: destructor
     belongs_to: arrow
     parameters:
@@ -297,8 +302,8 @@ functions:
       Closes the result and de-allocates all memory allocated for the arrow result.
   destroy_arrow_stream:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     role: destructor
     belongs_to: arrow_stream
     parameters:
@@ -313,8 +318,8 @@ functions:
       Releases the arrow array stream and de-allocates its memory.
   execute_prepared_arrow:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -333,8 +338,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   arrow_scan:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       connection:
         type: connection
@@ -355,8 +360,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   arrow_array_scan:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       connection:
         type: connection

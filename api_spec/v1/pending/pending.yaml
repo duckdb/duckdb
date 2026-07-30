@@ -2,7 +2,7 @@ module: pending
 functions:
   pending_prepared:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -23,7 +23,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   destroy_pending:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     role: destructor
     belongs_to: pending_result
     parameters:
@@ -36,7 +36,7 @@ functions:
       Closes the pending result and de-allocates all memory allocated for the result.
   pending_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       pending_result:
         type: pending_result
@@ -51,7 +51,7 @@ functions:
     return_description: The error of the pending result.
   pending_execute_task:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       pending_result:
         type: pending_result
@@ -68,7 +68,7 @@ functions:
     return_description: The state of the pending result after the execution.
   pending_execute_check_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       pending_result:
         type: pending_result
@@ -83,7 +83,7 @@ functions:
     return_description: The state of the pending result.
   execute_pending:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       pending_result:
         type: pending_result
@@ -104,7 +104,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   pending_execution_is_finished:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       pending_state:
         type: pending_state

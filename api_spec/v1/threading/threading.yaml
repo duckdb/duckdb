@@ -2,7 +2,7 @@ module: threading
 functions:
   execute_tasks:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
       database:
         type: database
@@ -17,7 +17,7 @@ functions:
       Will return after `max_tasks` have been executed, or if there are no more tasks present.
   create_task_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     role: constructor
     belongs_to: task_state
     parameters:
@@ -33,7 +33,7 @@ functions:
     return_description: The task state that can be used with duckdb_execute_tasks_state.
   execute_tasks_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       state:
         type: task_state
@@ -46,7 +46,7 @@ functions:
       Multiple threads can share the same duckdb_task_state.
   execute_n_tasks_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       state:
         type: task_state
@@ -65,7 +65,7 @@ functions:
     return_description: The amount of tasks that have actually been executed
   finish_execution:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       state:
         type: task_state
@@ -75,7 +75,7 @@ functions:
       Finish execution on a specific task.
   task_state_is_finished:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       state:
         type: task_state
@@ -86,7 +86,7 @@ functions:
     return_description: Whether or not duckdb_finish_execution has been called on the task state
   destroy_task_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     role: destructor
     belongs_to: task_state
     parameters:
@@ -101,7 +101,7 @@ functions:
       on the task state.
   execution_is_finished:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       con:
         type: connection

@@ -1,14 +1,34 @@
 schema_version: "0.5"
 versions:
+  - "v0.1.0"
+  - "v0.1.1"
+  - "v0.1.2"
+  - "v0.2.1"
+  - "v0.2.5"
+  - "v0.2.7"
+  - "v0.2.8"
+  - "v0.2.9"
+  - "v0.3.3"
+  - "v0.4.0"
+  - "v0.5.0"
+  - "v0.6.0"
+  - "v0.7.0"
+  - "v0.8.0"
+  - "v0.9.0"
+  - "v0.10.0"
+  - "v0.10.1"
+  - "v1.0.0"
+  - "v1.1.0"
   - "v1.2.0"
   - "v1.3.0"
   - "v1.4.0"
   - "v1.5.0"
+  - "v1.5.2"
   - "v1.5.4"
   - "v1.5.6"
 prefix: "duckdb_"
 lifecycle_states:
-  frozen:
+  stable:
     visibility: always
   deprecated:
     visibility: opt_out

@@ -2,7 +2,7 @@ module: connection
 functions:
   connect:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     role: constructor
     belongs_to: connection
     parameters:
@@ -22,7 +22,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   interrupt:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       connection:
         type: connection
@@ -32,7 +32,7 @@ functions:
       Interrupt running query
   query_progress:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       connection:
         type: connection
@@ -43,7 +43,7 @@ functions:
     return_description: The query progress type containing progress information.
   disconnect:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     role: destructor
     belongs_to: connection
     parameters:
@@ -56,7 +56,8 @@ functions:
       Closes the specified connection and de-allocates all memory allocated for that connection.
   connection_get_client_context:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       connection:
         type: connection
@@ -71,7 +72,8 @@ functions:
       Retrieves the client context of the connection.
   connection_get_arrow_options:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       connection:
         type: connection
@@ -85,7 +87,8 @@ functions:
       Retrieves the arrow options of the connection.
   client_context_get_connection_id:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       context:
         type: client_context
@@ -96,7 +99,8 @@ functions:
     return_description: The connection id of the client context.
   destroy_client_context:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     role: destructor
     belongs_to: client_context
     parameters:
@@ -109,7 +113,8 @@ functions:
       Destroys the client context and deallocates its memory.
   destroy_arrow_options:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     role: destructor
     belongs_to: arrow_options
     parameters:
@@ -122,7 +127,8 @@ functions:
       Destroys the arrow options and deallocates its memory.
   get_table_names:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.3.0", "2025-05-21"]
     parameters:
       connection:
         type: connection

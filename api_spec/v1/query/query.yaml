@@ -2,7 +2,7 @@ module: query
 functions:
   query:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       connection:
         type: connection
@@ -28,7 +28,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   destroy_result:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       result:
         type: result
@@ -39,7 +39,7 @@ functions:
       Closes the result and de-allocates all memory allocated for that result.
   column_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.1", "2020-08-29"]
     parameters:
       result:
         type: result
@@ -59,7 +59,7 @@ functions:
     return_description: The column name of the specified column.
   column_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       result:
         type: result
@@ -76,7 +76,7 @@ functions:
     return_description: The column type of the specified column.
   result_statement_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       result:
         type: result
@@ -87,7 +87,7 @@ functions:
     return_description: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
   column_logical_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       result:
         type: result
@@ -106,7 +106,8 @@ functions:
     return_description: The logical column type of the specified column.
   result_get_arrow_options:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       result:
         type: result
@@ -118,7 +119,7 @@ functions:
     return_description: The arrow options associated with the given result. This must be destroyed with `duckdb_destroy_arrow_options`.
   column_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       result:
         type: result
@@ -130,7 +131,7 @@ functions:
     return_description: The number of columns present in the result object.
   rows_changed:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       result:
         type: result
@@ -143,7 +144,7 @@ functions:
     return_description: The number of rows changed.
   result_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       result:
         type: result
@@ -159,7 +160,7 @@ functions:
     return_description: The error of the result.
   result_error_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       result:
         type: result
@@ -172,7 +173,7 @@ functions:
     return_description: The error type of the result.
   result_return_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       result:
         type: result
@@ -183,7 +184,7 @@ functions:
     return_description: The return_type
   fetch_chunk:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.0.0", "2024-05-29"]
     parameters:
       result:
         type: result
@@ -198,7 +199,8 @@ functions:
     return_description: The resulting data chunk. Returns `NULL` if the result has an error.
   create_error_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     role: constructor
     belongs_to: error_data
     parameters:
@@ -217,7 +219,8 @@ functions:
     return_description: The error data.
   destroy_error_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     role: destructor
     belongs_to: error_data
     parameters:
@@ -230,7 +233,8 @@ functions:
       Destroys the error data and deallocates its memory.
   error_data_error_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       error_data:
         type: error_data
@@ -241,7 +245,8 @@ functions:
     return_description: The error type.
   error_data_message:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       error_data:
         type: error_data
@@ -254,7 +259,8 @@ functions:
     return_description: The error message.
   error_data_has_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       error_data:
         type: error_data
@@ -265,7 +271,7 @@ functions:
     return_description: True, if the error data contains an exception, else false.
   malloc:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.7", "2021-06-13"]
     parameters:
       size:
         type: size
@@ -278,7 +284,7 @@ functions:
     return_description: A pointer to the allocated memory region.
   free:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.7", "2021-06-13"]
     parameters:
       ptr:
         type: opaque
@@ -290,7 +296,7 @@ functions:
       `duckdb_value_string`.
   vector_size:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters: {}
     return_type: idx
     description: |
@@ -299,7 +305,7 @@ functions:
     return_description: The vector size.
   string_is_inlined:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.8.0", "2023-05-17"]
     parameters:
       string:
         type: duckdb_string_t
@@ -309,7 +315,7 @@ functions:
       This means that the data of the string does not have a separate allocation.
   string_t_length:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       string:
         type: duckdb_string_t
@@ -320,7 +326,7 @@ functions:
     return_description: The length.
   string_t_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       string:
         type: duckdb_string_t
@@ -334,7 +340,8 @@ functions:
     return_description: The pointer.
   valid_utf8_check:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       str:
         type: char
@@ -350,8 +357,8 @@ functions:
     return_description: nullptr if the string is valid UTF-8. Otherwise, a duckdb_error_data containing error information. Must be destroyed with `duckdb_destroy_error_data`.
   row_count:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       result:
         type: result
@@ -365,8 +372,8 @@ functions:
     return_description: The number of rows present in the result object.
   column_data:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       result:
         type: result
@@ -394,8 +401,8 @@ functions:
     return_description: The column data of the specified column.
   nullmask_data:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       result:
         type: result
@@ -425,8 +432,8 @@ functions:
     return_description: The nullmask of the specified column.
   result_get_chunk:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       result:
         type: result
@@ -452,8 +459,8 @@ functions:
     return_description: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
   result_is_streaming:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.8.0", "2023-05-17"]
     parameters:
       result:
         type: result
@@ -466,8 +473,8 @@ functions:
     return_description: Whether or not the result object is of the type StreamQueryResult
   result_chunk_count:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       result:
         type: result
@@ -480,8 +487,8 @@ functions:
     return_description: Number of data chunks present in the result.
   stream_fetch_chunk:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.8.0", "2023-05-17"]
     parameters:
       result:
         type: result

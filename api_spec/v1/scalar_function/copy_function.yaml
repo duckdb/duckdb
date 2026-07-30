@@ -2,7 +2,8 @@ module: copy_function
 functions:
   create_copy_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: constructor
     belongs_to: copy_function
     parameters: {}
@@ -14,7 +15,8 @@ functions:
     return_description: The copy function object.
   copy_function_set_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       copy_function:
         type: copy_function
@@ -29,7 +31,8 @@ functions:
       Sets the name of the copy function.
   copy_function_set_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       copy_function:
         type: copy_function
@@ -46,7 +49,8 @@ functions:
       Sets the extra info pointer of the copy function, which can be used to store arbitrary data.
   register_copy_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       connection:
         type: connection
@@ -59,7 +63,8 @@ functions:
       Registers the given copy function on the database connection under the specified name.
   destroy_copy_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: destructor
     belongs_to: copy_function
     parameters:
@@ -72,7 +77,8 @@ functions:
       Destroys the given copy function object.
   copy_function_set_bind:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       copy_function:
         type: copy_function
@@ -84,7 +90,8 @@ functions:
       Sets the bind function of the copy function, to use when binding `COPY ... TO`.
   copy_function_bind_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_bind_info
@@ -99,7 +106,8 @@ functions:
       Report that an error occurred during the binding-phase of a `COPY ... TO` function.
   copy_function_bind_get_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_bind_info
@@ -111,7 +119,8 @@ functions:
     return_description: The extra info pointer.
   copy_function_bind_get_client_context:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_bind_info
@@ -124,7 +133,8 @@ functions:
     return_description: The client context.
   copy_function_bind_get_column_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_bind_info
@@ -135,7 +145,8 @@ functions:
     return_description: The number of columns.
   copy_function_bind_get_column_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_bind_info
@@ -149,7 +160,8 @@ functions:
     return_description: The type of the column. Must be destroyed with `duckdb_destroy_logical_type`.
   copy_function_bind_get_options:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_bind_info
@@ -160,7 +172,8 @@ functions:
     return_description: A STRUCT value containing all options as fields. Must be destroyed with `duckdb_destroy_value`.
   copy_function_bind_set_bind_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_bind_info
@@ -177,7 +190,8 @@ functions:
       Sets the bind data of the copy function, to be provided to the init, sink and finalize functions.
   copy_function_set_global_init:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       copy_function:
         type: copy_function
@@ -189,7 +203,8 @@ functions:
       Sets the initialization function of the copy function, called right before executing `COPY ... TO`.
   copy_function_global_init_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_global_init_info
@@ -204,7 +219,8 @@ functions:
       Report that an error occurred during the initialization-phase of a `COPY ... TO` function.
   copy_function_global_init_get_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_global_init_info
@@ -216,7 +232,8 @@ functions:
     return_description: The extra info pointer.
   copy_function_global_init_get_client_context:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_global_init_info
@@ -229,7 +246,8 @@ functions:
     return_description: The client context.
   copy_function_global_init_get_bind_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_global_init_info
@@ -241,7 +259,8 @@ functions:
     return_description: The bind data pointer.
   copy_function_global_init_get_file_path:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_global_init_info
@@ -256,7 +275,8 @@ functions:
     return_description: The file path.
   copy_function_global_init_set_global_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_global_init_info
@@ -273,7 +293,8 @@ functions:
       Sets the global state of the copy function, to be provided to all subsequent local init, sink and finalize functions.
   copy_function_set_sink:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       copy_function:
         type: copy_function
@@ -285,7 +306,8 @@ functions:
       Sets the sink function of the copy function, called during `COPY ... TO`.
   copy_function_sink_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_sink_info
@@ -300,7 +322,8 @@ functions:
       Report that an error occurred during the sink-phase of a `COPY ... TO` function.
   copy_function_sink_get_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_sink_info
@@ -312,7 +335,8 @@ functions:
     return_description: The extra info pointer.
   copy_function_sink_get_client_context:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_sink_info
@@ -325,7 +349,8 @@ functions:
     return_description: The client context.
   copy_function_sink_get_bind_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_sink_info
@@ -337,7 +362,8 @@ functions:
     return_description: The bind data pointer.
   copy_function_sink_get_global_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_sink_info
@@ -349,7 +375,8 @@ functions:
     return_description: The global state pointer.
   copy_function_set_finalize:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       copy_function:
         type: copy_function
@@ -361,7 +388,8 @@ functions:
       Sets the finalize function of the copy function, called at the end of `COPY ... TO`.
   copy_function_finalize_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_finalize_info
@@ -376,7 +404,8 @@ functions:
       Report that an error occurred during the finalize-phase of a `COPY ... TO` function
   copy_function_finalize_get_extra_info:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_finalize_info
@@ -388,7 +417,8 @@ functions:
     return_description: The extra info pointer.
   copy_function_finalize_get_client_context:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_finalize_info
@@ -401,7 +431,8 @@ functions:
     return_description: The client context.
   copy_function_finalize_get_bind_data:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_finalize_info
@@ -413,7 +444,8 @@ functions:
     return_description: The bind data pointer.
   copy_function_finalize_get_global_state:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: copy_function_finalize_info
@@ -425,7 +457,8 @@ functions:
     return_description: The global state pointer.
   copy_function_set_copy_from_function:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       copy_function:
         type: copy_function

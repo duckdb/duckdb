@@ -2,7 +2,7 @@ module: replacement_scan
 functions:
   add_replacement_scan:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       db:
         type: database
@@ -22,7 +22,7 @@ functions:
       Add a replacement scan definition to the specified database.
   replacement_scan_set_function_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: replacement_scan_info
@@ -38,7 +38,7 @@ functions:
       the replacement scan is performed. If it is not called, the replacement callback is not performed.
   replacement_scan_add_parameter:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: replacement_scan_info
@@ -51,7 +51,7 @@ functions:
       Adds a parameter to the replacement scan function.
   replacement_scan_set_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.6.0", "2022-11-14"]
     parameters:
       info:
         type: replacement_scan_info

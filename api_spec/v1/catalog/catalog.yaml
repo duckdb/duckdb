@@ -2,7 +2,8 @@ module: catalog
 functions:
   client_context_get_catalog:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       context:
         type: client_context
@@ -19,7 +20,8 @@ functions:
     return_description: The resulting catalog instance, or `nullptr` if called from outside an active transaction or if a catalog with the specified name does not exist. Must be destroyed with `duckdb_destroy_catalog`
   catalog_get_type_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       catalog:
         type: catalog
@@ -34,7 +36,8 @@ functions:
     return_description: The type name of the catalog.
   catalog_get_entry:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       catalog:
         type: catalog
@@ -62,7 +65,8 @@ functions:
     return_description: The resulting catalog entry, or `nullptr` if no such entry exists. Must be destroyed with `duckdb_destroy_catalog_entry`. Remains valid for the duration of the current transaction.
   destroy_catalog:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: destructor
     belongs_to: catalog
     parameters:
@@ -77,7 +81,8 @@ functions:
       Note that this does not actually "drop" the contents of the catalog; it merely frees the C API handle.
   catalog_entry_get_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       entry:
         type: catalog_entry
@@ -88,7 +93,8 @@ functions:
     return_description: The type of the catalog entry.
   catalog_entry_get_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       entry:
         type: catalog_entry
@@ -101,7 +107,8 @@ functions:
     return_description: The name of the catalog entry. The returned string is owned by the catalog entry and remains valid until the catalog entry is destroyed.
   destroy_catalog_entry:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: destructor
     belongs_to: catalog_entry
     parameters:

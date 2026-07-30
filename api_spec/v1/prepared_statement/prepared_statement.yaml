@@ -2,7 +2,7 @@ module: prepared_statement
 functions:
   prepare:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     role: constructor
     belongs_to: prepared_statement
     parameters:
@@ -30,7 +30,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   destroy_prepare:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     role: destructor
     belongs_to: prepared_statement
     parameters:
@@ -43,7 +43,7 @@ functions:
       Closes the prepared statement and de-allocates all memory allocated for the statement.
   prepare_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.8", "2021-07-30"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -59,7 +59,7 @@ functions:
     return_description: The error message, or `nullptr` if there is none.
   nparams:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.1", "2019-09-24"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -71,7 +71,7 @@ functions:
       Returns 0 if the query was not successfully prepared.
   parameter_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -88,7 +88,7 @@ functions:
       Returns NULL if the index is out of range for the provided prepared statement.
   param_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -104,7 +104,7 @@ functions:
     return_description: The parameter type
   param_logical_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -122,7 +122,7 @@ functions:
     return_description: The logical type of the parameter
   clear_bindings:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -131,7 +131,7 @@ functions:
       Clear the params bind to the prepared statement.
   prepared_statement_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       statement:
         type: prepared_statement
@@ -142,7 +142,8 @@ functions:
     return_description: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
   prepared_statement_column_count:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -153,7 +154,8 @@ functions:
     return_description: The number of columns present in the result of the prepared statement.
   prepared_statement_column_name:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -172,7 +174,8 @@ functions:
     return_description: The column name of the specified column.
   prepared_statement_column_logical_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -189,7 +192,8 @@ functions:
     return_description: The logical type of the specified column.
   prepared_statement_column_type:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -205,7 +209,7 @@ functions:
     return_description: The type of the specified column.
   bind_value:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -220,7 +224,7 @@ functions:
       Supersedes all type-specific bind functions (e.g., `duckdb_bind_varchar`, `duckdb_bind_int64`, etc.).
   bind_parameter_index:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -237,7 +241,7 @@ functions:
       Retrieve the index of the parameter for the prepared statement, identified by name
   bind_boolean:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -250,7 +254,7 @@ functions:
       Binds a bool value to the prepared statement at the specified index.
   bind_int8:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -263,7 +267,7 @@ functions:
       Binds an int8_t value to the prepared statement at the specified index.
   bind_int16:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -276,7 +280,7 @@ functions:
       Binds an int16_t value to the prepared statement at the specified index.
   bind_int32:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -289,7 +293,7 @@ functions:
       Binds an int32_t value to the prepared statement at the specified index.
   bind_int64:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -302,7 +306,7 @@ functions:
       Binds an int64_t value to the prepared statement at the specified index.
   bind_hugeint:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -315,7 +319,7 @@ functions:
       Binds a duckdb_hugeint value to the prepared statement at the specified index.
   bind_uhugeint:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -328,7 +332,7 @@ functions:
       Binds a duckdb_uhugeint value to the prepared statement at the specified index.
   bind_decimal:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.6.0", "2022-11-14"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -341,7 +345,7 @@ functions:
       Binds a duckdb_decimal value to the prepared statement at the specified index.
   bind_uint8:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -354,7 +358,7 @@ functions:
       Binds a uint8_t value to the prepared statement at the specified index.
   bind_uint16:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -367,7 +371,7 @@ functions:
       Binds a uint16_t value to the prepared statement at the specified index.
   bind_uint32:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -380,7 +384,7 @@ functions:
       Binds a uint32_t value to the prepared statement at the specified index.
   bind_uint64:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -393,7 +397,7 @@ functions:
       Binds a uint64_t value to the prepared statement at the specified index.
   bind_float:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -406,7 +410,7 @@ functions:
       Binds a float value to the prepared statement at the specified index.
   bind_double:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -419,7 +423,7 @@ functions:
       Binds a double value to the prepared statement at the specified index.
   bind_date:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -432,7 +436,7 @@ functions:
       Binds a duckdb_date value to the prepared statement at the specified index.
   bind_time:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -445,7 +449,7 @@ functions:
       Binds a duckdb_time value to the prepared statement at the specified index.
   bind_timestamp:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -458,7 +462,7 @@ functions:
       Binds a duckdb_timestamp value to the prepared statement at the specified index.
   bind_timestamp_tz:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -471,7 +475,7 @@ functions:
       Binds a duckdb_timestamp value to the prepared statement at the specified index.
   bind_interval:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -484,7 +488,7 @@ functions:
       Binds a duckdb_interval value to the prepared statement at the specified index.
   bind_varchar:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -501,7 +505,7 @@ functions:
       Superseded by `duckdb_bind_value`.
   bind_varchar_length:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -520,7 +524,7 @@ functions:
       Superseded by `duckdb_bind_value`.
   bind_blob:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.2.5", "2021-03-10"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -537,7 +541,7 @@ functions:
       Binds a blob value to the prepared statement at the specified index.
   bind_null:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.2", "2020-01-03"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -548,7 +552,7 @@ functions:
       Binds a NULL value to the prepared statement at the specified index.
   execute_prepared:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.1.0", "2019-06-27"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -569,7 +573,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   extract_statements:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       connection:
         type: connection
@@ -594,7 +598,7 @@ functions:
     return_description: The number of extracted statements or 0 on failure.
   prepare_extracted_statement:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       connection:
         type: connection
@@ -620,7 +624,7 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   extract_statements_error:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
       extracted_statements:
         type: extracted_statements
@@ -634,7 +638,7 @@ functions:
     return_description: The error of the extracted statements.
   destroy_extracted:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.7.0", "2023-02-13"]
     role: destructor
     belongs_to: extracted_statements
     parameters:
@@ -647,8 +651,8 @@ functions:
       De-allocates all memory allocated for the extracted statements.
   execute_prepared_streaming:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
       prepared_statement:
         type: prepared_statement
@@ -672,8 +676,8 @@ functions:
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   pending_prepared_streaming:
     lifecycle:
-      - ["deprecated", "v1.5.4", "2026-05-19"]
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["deprecated", "v1.0.0", "2024-05-29"]
+      - ["stable", "v0.8.0", "2023-05-17"]
     parameters:
       prepared_statement:
         type: prepared_statement
