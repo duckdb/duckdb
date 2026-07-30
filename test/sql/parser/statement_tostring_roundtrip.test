@@ -221,6 +221,30 @@ ATTACH IF NOT EXISTS ':memory:' AS "db two"
 statement ok
 DETACH "db two"
 
+# option KEYS need quoting too, on all three surfaces that take a (key value) list. An unknown
+# option is rejected at bind time, so the point is that the message is the bind error and not a
+# parser/catalog error from re-parsing mangled SQL.
+statement error
+ATTACH ':memory:' AS "db three" ("odd opt" 'v')
+----
+Binder Error: Unrecognized option for attach "odd opt"
+
+statement error
+COPY "weird name" TO '{TEST_DIR}/rt_opt.csv' ("odd opt" 'v')
+----
+Not implemented Error: Unrecognized option "odd opt" for csv
+
+statement error
+CONNECT 'some_target' ("odd opt" 'v')
+----
+Binder Error: Unrecognized option for attach "odd opt"
+
+statement ok
+ATTACH IF NOT EXISTS ':memory:' AS "db four" (READ_ONLY false)
+
+statement ok
+DETACH "db four"
+
 statement ok
 DESCRIBE SELECT "odder col" AS "a b" FROM "weird name"
 

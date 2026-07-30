@@ -1,4 +1,6 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
@@ -71,7 +73,7 @@ string CopyInfo::CopyOptionsToString() const {
 	for (auto &opt : parsed_options) {
 		auto &name = opt.first;
 		auto &expr = opt.second;
-		string option_string = name.GetIdentifierName();
+		string option_string = SQLIdentifier::ToString(name);
 		if (expr) {
 			option_string += " " + expr->ToString();
 		}
@@ -81,7 +83,7 @@ string CopyInfo::CopyOptionsToString() const {
 		auto &name = opt.first;
 		auto &values = opt.second;
 
-		auto option = name + " ";
+		auto option = SQLIdentifier::ToString(name) + " ";
 		if (values.empty()) {
 			// Options like HEADER don't need an explicit value
 			// just providing the name already sets it to true
