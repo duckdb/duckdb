@@ -49,7 +49,8 @@
         "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/pivot/pivot_operator_expression.test",
         "test/sql/types/struct/struct_equality_bug.test",
-        "test/sql/types/timestamp/test_infinite_time.test"
+        "test/sql/types/timestamp/test_infinite_time.test",
+        "test/sql/window/test_window_agg_stats_propagation.test"
       ]
     },
     {
