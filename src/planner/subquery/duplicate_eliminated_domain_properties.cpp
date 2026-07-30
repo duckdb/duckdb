@@ -47,13 +47,13 @@ static bool IsNonSelectiveJoinPredicate(Expression &expr) {
 	return IsColumnEqualityPredicate(expr);
 }
 
-bool DuplicateEliminatedDomainProperties::HasSelection(const LogicalOperator &op) {
+bool DuplicateEliminatedDomainProperties::HasNonJoinSelection(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
 		for (const auto &entry : get.table_filters) {
-			auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(),
-			                                                     "DuplicateEliminatedDomainProperties::HasSelection");
+			auto &filter = ExpressionFilter::GetExpressionFilter(
+			    entry.Filter(), "DuplicateEliminatedDomainProperties::HasNonJoinSelection");
 			auto &expr = *filter.expr;
 			if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
 			    expr.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) {
@@ -76,7 +76,7 @@ bool DuplicateEliminatedDomainProperties::HasSelection(const LogicalOperator &op
 	}
 
 	for (auto &child : op.children) {
-		if (HasSelection(*child)) {
+		if (HasNonJoinSelection(*child)) {
 			return true;
 		}
 	}

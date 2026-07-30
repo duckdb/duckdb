@@ -148,48 +148,6 @@ WHERE 0 < ALL (
 ----
 2
 
-# Throwing work can also live in an expression-backed table filter after filter pushdown.
-query II
-SELECT d.k IN (
-           SELECT 1
-           FROM quantified_values v
-           WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
-       ),
-       0 < ALL (
-           SELECT 1
-           FROM quantified_values v
-           WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
-       )
-FROM (VALUES (1)) o(k)
-JOIN quantified_domain d ON o.k * 2 = d.k
-WHERE d.k > 0;
-----
-false	true
-
-query I
-SELECT d.k
-FROM (VALUES (1)) o(k)
-JOIN quantified_domain d ON o.k * 2 = d.k
-WHERE 1 = ANY (
-    SELECT 1
-    FROM quantified_values v
-    WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
-);
-----
-2
-
-query II
-EXPLAIN
-SELECT d.k IN (
-    SELECT 1
-    FROM quantified_values v
-    WHERE v.k = d.k AND CAST(text_value AS BIGINT) > 0
-)
-FROM (VALUES (1)) o(k)
-JOIN quantified_domain d ON o.k * 2 = d.k;
-----
-logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
-
 # Lambda bodies are stored in function bind data rather than ordinary expression children.
 query I
 SELECT d.k IN (

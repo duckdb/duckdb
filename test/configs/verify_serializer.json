@@ -11,9 +11,9 @@
       ]
     },
     {
-      "reason": "FIXME: logical plan serialization can evaluate throwing table filters before correlated domain filters",
+      "reason": "FIXME: pre-existing logical plan serialization can evaluate throwing table filters before correlated domain filters",
       "paths": [
-        "test/optimizer/duplicate_eliminated_domain_quantified.test"
+        "test/optimizer/duplicate_eliminated_domain_quantified_table_filter.test"
       ]
     }
   ]

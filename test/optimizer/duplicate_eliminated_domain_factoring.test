@@ -584,3 +584,73 @@ JOIN (
 ) d ON f.k = d.k;
 ----
 logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+# Factoring must not make a throwing projection observable before an empty payload join.
+statement ok
+CREATE TABLE domain_throwing_source(k INTEGER, text_value VARCHAR);
+
+statement ok
+INSERT INTO domain_throwing_source VALUES (1, 'not an integer');
+
+statement ok
+CREATE TABLE domain_runtime_empty(k INTEGER);
+
+# Preserve a non-zero estimate while leaving the table empty at execution.
+statement ok
+INSERT INTO domain_runtime_empty VALUES (1);
+
+statement ok
+DELETE FROM domain_runtime_empty;
+
+query I
+SELECT d.value
+FROM (
+    SELECT k, CAST(text_value AS INTEGER) AS value
+    FROM domain_throwing_source
+    WHERE k > 0
+) d
+JOIN domain_runtime_empty e USING (k)
+WHERE d.value < (
+    SELECT avg(m.v)
+    FROM domain_measure m
+    WHERE m.k = d.k
+);
+----
+
+query II
+EXPLAIN
+SELECT d.value
+FROM (
+    SELECT k, CAST(text_value AS INTEGER) AS value
+    FROM domain_throwing_source
+    WHERE k > 0
+) d
+JOIN domain_runtime_empty e USING (k)
+WHERE d.value < (
+    SELECT avg(m.v)
+    FROM domain_measure m
+    WHERE m.k = d.k
+);
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+statement ok
+SET disabled_optimizers='duplicate_eliminated_domain';
+
+query I
+SELECT d.value
+FROM (
+    SELECT k, CAST(text_value AS INTEGER) AS value
+    FROM domain_throwing_source
+    WHERE k > 0
+) d
+JOIN domain_runtime_empty e USING (k)
+WHERE d.value < (
+    SELECT avg(m.v)
+    FROM domain_measure m
+    WHERE m.k = d.k
+);
+----
+
+statement ok
+SET disabled_optimizers='';

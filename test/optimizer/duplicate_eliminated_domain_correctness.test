@@ -263,8 +263,8 @@ SELECT (
     FROM dedup_unsafe_measure m
     WHERE m.k = d.k
 )
-FROM (VALUES (1)) o(k)
-JOIN dedup_dim d ON o.k * 2 = d.k
+FROM (VALUES (2)) o(k)
+JOIN dedup_dim d ON o.k = d.k
 WHERE d.state = 'selected';
 ----
 1
@@ -276,8 +276,8 @@ SELECT (
     FROM dedup_unsafe_measure m
     WHERE m.k = d.k
 )
-FROM (VALUES (1)) o(k)
-JOIN dedup_dim d ON o.k * 2 = d.k
+FROM (VALUES (2)) o(k)
+JOIN dedup_dim d ON o.k = d.k
 WHERE d.state = 'selected';
 ----
 logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*

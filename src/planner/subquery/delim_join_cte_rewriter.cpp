@@ -1375,7 +1375,7 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 }
 
 idx_t GeneratedDedupRefEliminator::Remove() {
-	auto preserve_selected_domain = DuplicateEliminatedDomainProperties::HasSelection(*delim_join.children[0]);
+	auto preserve_selected_domain = DuplicateEliminatedDomainProperties::HasNonJoinSelection(*delim_join.children[0]);
 	auto selected_evidence_side = preserve_selected_domain && preserve_evidence_side &&
 	                              HasEvidenceSide(delim_join.join_type) &&
 	                              !ContainsSubqueryJoin(*delim_join.children[0]);
@@ -1480,7 +1480,7 @@ bool GeneratedDomainJoinEliminator::CTEHasSelection(TableIndex cte_index, vector
 }
 
 bool GeneratedDomainJoinEliminator::OperatorHasSelection(LogicalOperator &op, vector<TableIndex> &seen_ctes) const {
-	if (DuplicateEliminatedDomainProperties::HasSelection(op)) {
+	if (DuplicateEliminatedDomainProperties::HasNonJoinSelection(op)) {
 		return true;
 	}
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
@@ -2141,7 +2141,8 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 	auto dedup_ref_count = RewriteDelimScanReferences(plan->children[1], dedup_cte_index);
 	auto &join = plan->Cast<LogicalComparisonJoin>();
 	bool can_evaluate_additional_groups = false;
-	if (optimization) {
+	auto apply_optimization = optimization && optimization->CanOptimizePayload(*join.children[0]);
+	if (apply_optimization) {
 		can_evaluate_additional_groups = optimization->CanEvaluateAdditionalGroups(*join.children[1], dedup_cte_index);
 		auto cte_deliminator_timer =
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
@@ -2151,21 +2152,28 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 		if (SingleJoinRHSIsDeduplicated(join)) {
 			join.join_type = null_rejecting_filter_above ? JoinType::INNER : JoinType::LEFT;
 		}
-		bool domain_inlined = false;
 		if (dedup_ref_count > 0) {
-			factored_domain = optimization->TryOptimize(binder, plan, dedup_cte_index, dedup_ref_count,
-			                                            can_evaluate_additional_groups, domain_inlined);
-		}
-		if (domain_inlined) {
-			join.duplicate_eliminated_columns.clear();
-			return output_replacements;
+			auto result = optimization->TryOptimize(binder, plan, dedup_cte_index, dedup_ref_count,
+			                                        can_evaluate_additional_groups);
+			switch (result.Type()) {
+			case DelimJoinCTEOptimizationType::UNCHANGED:
+				break;
+			case DelimJoinCTEOptimizationType::INLINED:
+				join.duplicate_eliminated_columns.clear();
+				return output_replacements;
+			case DelimJoinCTEOptimizationType::FACTORED:
+				factored_domain = result.TakeFactoredDomain();
+				break;
+			default:
+				throw InternalException("Unknown duplicate-eliminated domain optimization result");
+			}
 		}
 	}
 	if (dedup_ref_count == 0) {
 		join.duplicate_eliminated_columns.clear();
 		return {};
 	}
-	if (optimization) {
+	if (apply_optimization) {
 		auto expansion = can_evaluate_additional_groups ? DuplicateEliminatedDomainExpansion::SAFE
 		                                                : DuplicateEliminatedDomainExpansion::UNSAFE;
 		auto inserted = generated_dedup_ctes.emplace(dedup_cte_index, expansion);
@@ -2344,7 +2352,7 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 	return output_replacements;
 }
 
-void DelimJoinCTERewriter::NormalizeInputs(unique_ptr<LogicalOperator> &plan) {
+static void NormalizeInputs(unique_ptr<LogicalOperator> &plan) {
 	bool filters_pushed;
 	do {
 		filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);
@@ -2353,6 +2361,7 @@ void DelimJoinCTERewriter::NormalizeInputs(unique_ptr<LogicalOperator> &plan) {
 
 void DelimJoinCTERewriter::Rewrite(Binder &binder, unique_ptr<LogicalOperator> &plan,
                                    optional_ptr<DelimJoinCTEOptimization> optimization) {
+	NormalizeInputs(plan);
 	DelimJoinCTERewriter rewriter(binder, optimization);
 	rewriter.RewriteInternal(plan);
 }

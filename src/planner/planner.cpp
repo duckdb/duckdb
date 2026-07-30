@@ -200,7 +200,6 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 		if (Settings::Get<DelimJoinAsCteSetting>(context) &&
 		    Optimizer::OptimizerDisabled(context, OptimizerType::DUPLICATE_ELIMINATED_DOMAIN)) {
-			DelimJoinCTERewriter::NormalizeInputs(this->plan);
 			DelimJoinCTERewriter::Rewrite(*this->binder, this->plan);
 		}
 		D_ASSERT(!ContainsDependentJoin(*this->plan));

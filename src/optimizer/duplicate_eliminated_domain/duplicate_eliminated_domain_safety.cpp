@@ -20,8 +20,6 @@
 
 namespace duckdb {
 
-enum class EvaluationMode : uint8_t { ADDITIONAL_GROUPS, FACTOR_SOURCE, DUPLICATE_SOURCE };
-
 static bool IsFloatingPointArithmetic(const BoundFunctionExpression &function) {
 	auto return_type = function.GetReturnType().id();
 	auto &name = function.Function().GetName();
@@ -29,7 +27,7 @@ static bool IsFloatingPointArithmetic(const BoundFunctionExpression &function) {
 	       (name == "+" || name == "-" || name == "*" || name == "/");
 }
 
-static bool ExpressionIsSafe(const Expression &expr, EvaluationMode mode) {
+static bool ExpressionIsSafe(const Expression &expr) {
 	if (expr.IsVolatile() || expr.HasSubquery()) {
 		return false;
 	}
@@ -39,8 +37,7 @@ static bool ExpressionIsSafe(const Expression &expr, EvaluationMode mode) {
 		if (aggregate.BindInfo()) {
 			return false;
 		}
-		if (mode != EvaluationMode::FACTOR_SOURCE &&
-		    aggregate.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+		if (aggregate.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 			return false;
 		}
 		break;
@@ -48,8 +45,7 @@ static bool ExpressionIsSafe(const Expression &expr, EvaluationMode mode) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &function = expr.Cast<BoundFunctionExpression>();
 		if (BoundCastExpression::IsCast(function)) {
-			if (mode != EvaluationMode::FACTOR_SOURCE &&
-			    BoundCastExpression::CastCanThrow(BoundCastExpression::SourceType(function),
+			if (BoundCastExpression::CastCanThrow(BoundCastExpression::SourceType(function),
 			                                      BoundCastExpression::TargetType(function),
 			                                      BoundCastExpression::IsTryCast(function))) {
 				return false;
@@ -58,8 +54,7 @@ static bool ExpressionIsSafe(const Expression &expr, EvaluationMode mode) {
 			if (function.BindInfo()) {
 				return false;
 			}
-			if (mode != EvaluationMode::FACTOR_SOURCE &&
-			    function.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR &&
+			if (function.Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR &&
 			    !IsFloatingPointArithmetic(function)) {
 				return false;
 			}
@@ -71,11 +66,10 @@ static bool ExpressionIsSafe(const Expression &expr, EvaluationMode mode) {
 		if (window.BindInfo()) {
 			return false;
 		}
-		if (mode != EvaluationMode::FACTOR_SOURCE &&
-		    ((window.AggregateFunction() &&
-		      window.AggregateFunction()->GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) ||
-		     (window.WindowFunction() &&
-		      window.WindowFunction()->GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR))) {
+		if ((window.AggregateFunction() &&
+		     window.AggregateFunction()->GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) ||
+		    (window.WindowFunction() &&
+		     window.WindowFunction()->GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR)) {
 			return false;
 		}
 		break;
@@ -85,25 +79,24 @@ static bool ExpressionIsSafe(const Expression &expr, EvaluationMode mode) {
 	}
 
 	bool safe = true;
-	ExpressionIterator::EnumerateChildren(expr,
-	                                      [&](const Expression &child) { safe &= ExpressionIsSafe(child, mode); });
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) { safe &= ExpressionIsSafe(child); });
 	return safe;
 }
 
-static bool OperatorExpressionsAreSafe(const LogicalOperator &op, EvaluationMode mode) {
+static bool OperatorExpressionsAreSafe(const LogicalOperator &op) {
 	bool safe = true;
 	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *expression) {
 		if (expression && *expression) {
-			safe &= ExpressionIsSafe(**expression, mode);
+			safe &= ExpressionIsSafe(**expression);
 		}
 	});
 	return safe;
 }
 
-static bool TableFiltersAreSafe(const LogicalGet &get, EvaluationMode mode) {
+static bool TableFiltersAreSafe(const LogicalGet &get) {
 	for (const auto &entry : get.table_filters) {
 		auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "DuplicateEliminatedDomainSafety");
-		if (!ExpressionIsSafe(*filter.expr, mode)) {
+		if (!ExpressionIsSafe(*filter.expr)) {
 			return false;
 		}
 	}
@@ -118,17 +111,39 @@ static bool IsSupportedScan(const LogicalGet &get) {
 	return bind_info.type == ScanType::TABLE || bind_info.type == ScanType::PARQUET;
 }
 
+static bool CanOptimizePayloadInternal(const LogicalOperator &op) {
+	if (!OperatorExpressionsAreSafe(op)) {
+		return false;
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		if (!TableFiltersAreSafe(get)) {
+			return false;
+		}
+	}
+	for (auto &child : op.children) {
+		if (!CanOptimizePayloadInternal(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool DuplicateEliminatedDomainSafety::CanOptimizePayload(const LogicalOperator &op) {
+	return !op.HasSideEffects() && CanOptimizePayloadInternal(op);
+}
+
 static bool CanEvaluateAdditionalGroupsInternal(const LogicalOperator &op, TableIndex domain_cte_index) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == domain_cte_index) {
 		return true;
 	}
-	if (!OperatorExpressionsAreSafe(op, EvaluationMode::ADDITIONAL_GROUPS)) {
+	if (!OperatorExpressionsAreSafe(op)) {
 		return false;
 	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		if (!IsSupportedScan(get) || !TableFiltersAreSafe(get, EvaluationMode::ADDITIONAL_GROUPS)) {
+		if (!IsSupportedScan(get) || !TableFiltersAreSafe(get)) {
 			return false;
 		}
 		break;
@@ -175,14 +190,14 @@ bool DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(const LogicalO
 	return !op.HasSideEffects() && CanEvaluateAdditionalGroupsInternal(op, domain_cte_index);
 }
 
-static bool CanFactorSourceInternal(const LogicalOperator &op) {
-	if (!OperatorExpressionsAreSafe(op, EvaluationMode::FACTOR_SOURCE)) {
+bool DuplicateEliminatedDomainSafety::CanFactorOperator(const LogicalOperator &op) {
+	if (!OperatorExpressionsAreSafe(op)) {
 		return false;
 	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		return IsSupportedScan(get) && TableFiltersAreSafe(get, EvaluationMode::FACTOR_SOURCE);
+		return IsSupportedScan(get) && TableFiltersAreSafe(get);
 	}
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_PROJECTION:
@@ -202,26 +217,17 @@ static bool CanFactorSourceInternal(const LogicalOperator &op) {
 	default:
 		return false;
 	}
-	for (auto &child : op.children) {
-		if (!CanFactorSourceInternal(*child)) {
-			return false;
-		}
-	}
 	return true;
 }
 
-bool DuplicateEliminatedDomainSafety::CanFactorSource(const LogicalOperator &op) {
-	return !op.HasSideEffects() && CanFactorSourceInternal(op);
-}
-
 static bool CanDuplicateSourceInternal(const LogicalOperator &op) {
-	if (!OperatorExpressionsAreSafe(op, EvaluationMode::DUPLICATE_SOURCE)) {
+	if (!OperatorExpressionsAreSafe(op)) {
 		return false;
 	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		return IsSupportedScan(get) && TableFiltersAreSafe(get, EvaluationMode::DUPLICATE_SOURCE);
+		return IsSupportedScan(get) && TableFiltersAreSafe(get);
 	}
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_PROJECTION:

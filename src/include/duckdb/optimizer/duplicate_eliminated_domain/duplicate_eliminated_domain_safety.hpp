@@ -19,8 +19,11 @@ class LogicalOperator;
 //! Unsupported operators and opaque function bind data always decline the optimization.
 class DuplicateEliminatedDomainSafety {
 public:
+	//! Whether optional rewrites may remove the full-payload CTE without exposing expression evaluation.
+	static bool CanOptimizePayload(const LogicalOperator &op);
 	static bool CanEvaluateAdditionalGroups(const LogicalOperator &op, TableIndex domain_cte_index);
-	static bool CanFactorSource(const LogicalOperator &op);
+	//! Local factor eligibility, combined bottom-up by the candidate analyzer.
+	static bool CanFactorOperator(const LogicalOperator &op);
 	static bool CanDuplicateSource(const LogicalOperator &op);
 };
 

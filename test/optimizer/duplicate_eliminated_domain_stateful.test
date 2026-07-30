@@ -48,13 +48,13 @@ SELECT (
         WHERE s.k = d.k
     ) windowed
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k
     FROM state_domain
     WHERE selected
     GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 2
 
@@ -68,13 +68,13 @@ SELECT (
         WHERE s.k = d.k
     ) windowed
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k
     FROM state_domain
     WHERE selected
     GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Window.*
 
@@ -88,10 +88,10 @@ SELECT (
         SELECT v FROM state_extra e WHERE e.k = d.k
     ) unioned
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 3
 
@@ -105,10 +105,10 @@ SELECT (
         SELECT v FROM state_extra e WHERE e.k = d.k
     ) unioned
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
@@ -121,10 +121,10 @@ SELECT (
         SELECT v FROM state_extra e WHERE e.k = d.k
     ) excepted
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 1
 
@@ -138,10 +138,10 @@ SELECT (
         SELECT v FROM state_extra e WHERE e.k = d.k
     ) excepted
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
@@ -154,10 +154,10 @@ SELECT (
         SELECT v FROM state_extra e WHERE e.k = d.k
     ) intersected
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 1
 
@@ -171,10 +171,10 @@ SELECT (
         SELECT v FROM state_extra e WHERE e.k = d.k
     ) intersected
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
@@ -185,10 +185,10 @@ SELECT (
     SELECT sum(x)
     FROM UNNEST([d.k, d.k + 1]) values(x)
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 5
 
@@ -198,10 +198,10 @@ SELECT (
     SELECT sum(x)
     FROM UNNEST([d.k, d.k + 1]) values(x)
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
@@ -216,10 +216,10 @@ SELECT (
         GROUP BY GROUPING SETS ((s.v), ())
     ) grouped
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 4
 
@@ -234,10 +234,10 @@ SELECT (
         GROUP BY GROUPING SETS ((s.v), ())
     ) grouped
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
@@ -249,10 +249,10 @@ SELECT (
     )
     SELECT sum(v) FROM materialized_values
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 30
 
@@ -264,10 +264,10 @@ SELECT (
     )
     SELECT sum(v) FROM materialized_values
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
@@ -279,10 +279,10 @@ SELECT (
     FULL JOIN state_extra b ON a.k = b.k AND a.v = b.v
     WHERE coalesce(a.k, b.k) = d.k
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 3
 
@@ -294,10 +294,10 @@ SELECT (
     FULL JOIN state_extra b ON a.k = b.k AND a.v = b.v
     WHERE coalesce(a.k, b.k) = d.k
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
@@ -308,10 +308,10 @@ SELECT (
     ASOF LEFT JOIN state_thresholds t ON e.k = t.k AND e.ts >= t.ts
     WHERE e.k = d.k
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 2
 
@@ -323,9 +323,9 @@ SELECT (
     ASOF LEFT JOIN state_thresholds t ON e.k = t.k AND e.ts >= t.ts
     WHERE e.k = d.k
 )
-FROM (VALUES (1)) o(k)
+FROM (VALUES (2)) o(k)
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
-) d ON o.k * 2 = d.k;
+) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*

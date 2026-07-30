@@ -221,10 +221,6 @@ static bool FindCandidateKeys(LogicalOperator &op, const vector<unique_ptr<Expre
 	return true;
 }
 
-static bool EffectsPermitFactoring(const LogicalOperator &op) {
-	return DuplicateEliminatedDomainSafety::CanFactorSource(op);
-}
-
 class CandidateAnalyzer {
 public:
 	CandidateAnalyzer(const vector<unique_ptr<Expression>> &keys_p, const BindingEquivalence &equivalence_p)
@@ -239,6 +235,7 @@ public:
 private:
 	OperatorAnalysis Visit(unique_ptr<LogicalOperator> &op, DuplicateEliminatedDomainCoverage coverage, bool discover,
 	                       idx_t depth, bool is_root = false) {
+		auto can_factor_operator = DuplicateEliminatedDomainSafety::CanFactorOperator(*op);
 		vector<OperatorAnalysis> children;
 		children.reserve(op->children.size());
 		for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
@@ -246,14 +243,14 @@ private:
 			auto discover_child = false;
 			switch (op->type) {
 			case LogicalOperatorType::LOGICAL_PROJECTION:
-				discover_child = discover;
+				discover_child = discover && can_factor_operator;
 				break;
 			case LogicalOperatorType::LOGICAL_FILTER:
-				discover_child = discover;
+				discover_child = discover && can_factor_operator;
 				child_coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
 				break;
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-				discover_child = discover && IsUnprojectedInnerJoin(*op);
+				discover_child = discover && can_factor_operator && IsUnprojectedInnerJoin(*op);
 				if (discover_child) {
 					child_coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
 				}
@@ -270,8 +267,7 @@ private:
 		}
 		switch (op->type) {
 		case LogicalOperatorType::LOGICAL_GET: {
-			auto &get = op->Cast<LogicalGet>();
-			result.supported_source = !get.HasTableInOutInput() && op->children.empty();
+			result.supported_source = can_factor_operator;
 			auto bindings = op->GetColumnBindings();
 			result.source_bindings.insert(bindings.begin(), bindings.end());
 			result.base_relation_count = 1;
@@ -303,7 +299,7 @@ private:
 			for (idx_t group_idx = 0; group_idx < aggregate.groups.size(); group_idx++) {
 				result.source_bindings.insert(bindings[group_idx]);
 			}
-			result.supported_source = op->children.size() == 1;
+			result.supported_source = children.size() == 1 && children[0].supported_source;
 			break;
 		}
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
@@ -317,7 +313,7 @@ private:
 				result.supported_source = children[0].supported_source && children[1].supported_source;
 			} else if (join.join_type == JoinType::SEMI) {
 				result.source_bindings = children[0].source_bindings;
-				result.supported_source = children[0].supported_source;
+				result.supported_source = children[0].supported_source && children[1].supported_source;
 			}
 			break;
 		}
@@ -325,7 +321,7 @@ private:
 			break;
 		}
 
-		result.supported_source &= EffectsPermitFactoring(*op);
+		result.supported_source &= can_factor_operator;
 		if (discover && !is_root && result.supported_source) {
 			vector<idx_t> key_indices;
 			if (FindCandidateKeys(*op, keys, equivalence, result.source_bindings, key_indices)) {
@@ -359,7 +355,7 @@ static optional_idx FindBestCandidate(ClientContext &context, LogicalOperator &p
 		auto estimate = MaxValue<idx_t>(candidate.source.get()->EstimateCardinality(context), 1);
 		if (estimate > payload_estimate ||
 		    (estimate == payload_estimate &&
-		     !DuplicateEliminatedDomainProperties::HasSelection(*candidate.source.get()))) {
+		     !DuplicateEliminatedDomainProperties::HasNonJoinSelection(*candidate.source.get()))) {
 			continue;
 		}
 		auto better = !best.IsValid() || estimate < best_rows ||
