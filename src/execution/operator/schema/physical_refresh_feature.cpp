@@ -167,8 +167,8 @@ unique_ptr<LocalSinkState> PhysicalRefreshFeature::GetLocalSinkState(ExecutionCo
 
 //! Delete every row of the store whose __feature_version has fallen at or below the retain cutoff.
 //! Collect the matching row ids in a first pass, then delete them — never delete while scanning.
-static void EvictOldVersions(ClientContext &context, DuckTableEntry &table, idx_t version_column_index,
-                             int64_t cutoff, const vector<int64_t> &retained_versions) {
+static void EvictOldVersions(ClientContext &context, DuckTableEntry &table, idx_t version_column_index, int64_t cutoff,
+                             const vector<int64_t> &retained_versions) {
 	auto &storage = table.GetStorage();
 	auto &transaction = DuckTransaction::Get(context, table.catalog);
 
