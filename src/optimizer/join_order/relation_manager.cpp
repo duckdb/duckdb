@@ -263,26 +263,6 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 	return false;
 }
 
-optional_ptr<JoinRelationSet> RelationManager::GetRelationSet(LogicalOperator &op,
-                                                              JoinRelationSetManager &set_manager) {
-	auto relation_entry = operator_relations.find(op);
-	if (relation_entry != operator_relations.end()) {
-		return set_manager.GetJoinRelation(relation_entry->second);
-	}
-	if (op.children.size() == 1) {
-		return GetRelationSet(*op.children[0], set_manager);
-	}
-	if (op.children.size() != 2 || !JoinIsReorderable(op)) {
-		return nullptr;
-	}
-	auto left = GetRelationSet(*op.children[0], set_manager);
-	auto right = GetRelationSet(*op.children[1], set_manager);
-	if (!left || !right) {
-		return nullptr;
-	}
-	return set_manager.Union(*left, *right);
-}
-
 static bool RecursiveCTERefCanReorder(optional_ptr<LogicalOperator> parent) {
 	if (!parent || parent->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return false;

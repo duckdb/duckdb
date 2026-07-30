@@ -57,47 +57,6 @@ JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
 	return child_optimizer;
 }
 
-static bool CanEstimateWithoutReordering(LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_FILTER:
-		return op.children.size() == 1 && CanEstimateWithoutReordering(*op.children[0]);
-	case LogicalOperatorType::LOGICAL_GET:
-		return op.children.empty();
-	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		return op.children.size() == 2 && CanEstimateWithoutReordering(*op.children[0]) &&
-		       CanEstimateWithoutReordering(*op.children[1]);
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		return join.join_type == JoinType::INNER && !join.HasProjectionMap() && op.children.size() == 2 &&
-		       CanEstimateWithoutReordering(*op.children[0]) && CanEstimateWithoutReordering(*op.children[1]);
-	}
-	default:
-		return false;
-	}
-}
-
-bool JoinOrderOptimizer::EstimateCardinalitiesWithoutReordering(
-    LogicalOperator &plan, const vector<reference<LogicalOperator>> &operators,
-    reference_map_t<LogicalOperator, idx_t> &cardinalities) {
-	if (!CanEstimateWithoutReordering(plan) || !query_graph_manager.Build(*this, plan)) {
-		return false;
-	}
-	CardinalityEstimator estimator(query_graph_manager.set_manager, query_graph_manager.GetPredicateModel());
-	estimator.Initialize(query_graph_manager.relation_manager.GetRelationStats());
-
-	cardinalities.clear();
-	for (auto operator_ref : operators) {
-		auto relations =
-		    query_graph_manager.relation_manager.GetRelationSet(operator_ref, query_graph_manager.set_manager);
-		if (!relations) {
-			cardinalities.clear();
-			return false;
-		}
-		cardinalities[operator_ref] = estimator.EstimateCardinality(*relations);
-	}
-	return true;
-}
-
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
                                                          optional_ptr<RelationStats> stats) {
 	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(query_graph_manager.context);

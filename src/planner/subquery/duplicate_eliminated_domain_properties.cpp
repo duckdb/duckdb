@@ -1,12 +1,12 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_properties.cpp
+// duckdb/planner/subquery/duplicate_eliminated_domain_properties.cpp
 //
 //
 //===----------------------------------------------------------------------===//
 
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_properties.hpp"
+#include "duckdb/planner/subquery/duplicate_eliminated_domain_properties.hpp"
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -52,9 +52,9 @@ bool DuplicateEliminatedDomainProperties::HasSelection(const LogicalOperator &op
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
 		for (const auto &entry : get.table_filters) {
-			auto &expr_filter =
-			    ExpressionFilter::GetExpressionFilter(entry.Filter(), "DuplicateEliminatedDomainProperties");
-			auto &expr = *expr_filter.expr;
+			auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(),
+			                                                     "DuplicateEliminatedDomainProperties::HasSelection");
+			auto &expr = *filter.expr;
 			if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
 			    expr.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) {
 				return true;

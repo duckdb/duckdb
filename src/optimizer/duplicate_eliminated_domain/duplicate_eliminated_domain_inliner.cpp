@@ -8,7 +8,7 @@
 
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_inliner.hpp"
 
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_builder.hpp"
+#include "duckdb/planner/subquery/duplicate_eliminated_domain_builder.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/planner/binder.hpp"

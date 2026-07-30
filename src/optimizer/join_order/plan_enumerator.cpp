@@ -546,16 +546,19 @@ void PlanEnumerator::InitLeafPlans() {
 	// first initialize equivalent relations based on the filters
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 
-	cost_model.GetCardinalityEstimator().Initialize(relation_stats);
+	cost_model.GetCardinalityEstimator().InitEquivalentRelations();
+	cost_model.GetCardinalityEstimator().AddRelationNamesToRelationStats(relation_stats);
 
 	// then update the total domains based on the cardinalities of each relation.
 	for (idx_t i = 0; i < relation_stats.size(); i++) {
+		auto stats = relation_stats.at(i);
 		auto &relation_set = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(i));
 		auto join_node = make_uniq<DPJoinNode>(relation_set);
 		join_node->cost = 0;
-		join_node->cardinality = relation_stats[i].cardinality;
+		join_node->cardinality = stats.cardinality;
 		D_ASSERT(join_node->set.count == 1);
 		plans[relation_set] = std::move(join_node);
+		cost_model.GetCardinalityEstimator().InitCardinalityEstimatorProps(&relation_set, stats);
 	}
 }
 

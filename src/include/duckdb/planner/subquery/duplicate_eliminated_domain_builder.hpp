@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_builder.hpp
+// duckdb/planner/subquery/duplicate_eliminated_domain_builder.hpp
 //
 //
 //===----------------------------------------------------------------------===//

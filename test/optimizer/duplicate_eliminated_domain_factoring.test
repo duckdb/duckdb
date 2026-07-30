@@ -207,7 +207,7 @@ WHERE f.v < (
     WHERE i.k = d.k
 );
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: memory.main.domain_dim.*Groups: k.*
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Table: .*domain_dim.*Groups: k.*
 
 # Aggregate results themselves are not proven key-domain sources.
 query II

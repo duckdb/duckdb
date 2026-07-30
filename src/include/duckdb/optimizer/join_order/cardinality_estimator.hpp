@@ -35,14 +35,11 @@ public:
 	void InitEquivalentRelations();
 
 	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats);
-	//! Initialize relation domains and leaf cardinalities without constructing join plans.
-	void Initialize(vector<RelationStats> relation_stats);
 
 	//! cost model needs estimated cardinalities to the fraction since the formula captures
 	//! distinct count selectivities and multiplicities. Hence the template
 	template <class T>
 	T EstimateCardinalityWithSet(JoinRelationSet &new_set);
-	idx_t EstimateCardinality(JoinRelationSet &new_set);
 
 	//! used for debugging.
 	void AddRelationNamesToRelationStats(vector<RelationStats> &stats);

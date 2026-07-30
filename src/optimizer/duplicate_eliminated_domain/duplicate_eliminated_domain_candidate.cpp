@@ -8,11 +8,10 @@
 
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
 
-#include "duckdb/common/constants.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_properties.hpp"
-#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/subquery/duplicate_eliminated_domain_properties.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
@@ -20,18 +19,6 @@
 namespace duckdb {
 
 enum class KeyMatch : uint8_t { IDENTICAL, NULL_SAFE_EQUALITY, EQUALITY };
-struct Candidate {
-	Candidate(unique_ptr<LogicalOperator> &source_p, vector<idx_t> key_indices_p, bool omits_join_input_p,
-	          DuplicateEliminatedDomainCoverage coverage_p)
-	    : source(source_p), key_indices(std::move(key_indices_p)), omits_join_input(omits_join_input_p),
-	      coverage(coverage_p) {
-	}
-
-	reference<unique_ptr<LogicalOperator>> source;
-	vector<idx_t> key_indices;
-	bool omits_join_input;
-	DuplicateEliminatedDomainCoverage coverage;
-};
 
 struct EquivalentBinding {
 	EquivalentBinding(ColumnBinding left_p, ColumnBinding right_p, bool null_safe_p)
@@ -101,7 +88,29 @@ private:
 	vector<EquivalentBinding> edges;
 };
 
-static bool GetCandidateBinding(const Expression &expr, ColumnBinding &binding) {
+struct AnalyzedCandidate {
+	AnalyzedCandidate(unique_ptr<LogicalOperator> &source_p, vector<idx_t> key_indices_p,
+	                  DuplicateEliminatedDomainCoverage coverage_p, idx_t base_relation_count_p, idx_t depth_p,
+	                  idx_t order_p)
+	    : source(source_p), key_indices(std::move(key_indices_p)), coverage(coverage_p),
+	      base_relation_count(base_relation_count_p), depth(depth_p), order(order_p) {
+	}
+
+	reference<unique_ptr<LogicalOperator>> source;
+	vector<idx_t> key_indices;
+	DuplicateEliminatedDomainCoverage coverage;
+	idx_t base_relation_count;
+	idx_t depth;
+	idx_t order;
+};
+
+struct OperatorAnalysis {
+	column_binding_set_t source_bindings;
+	bool supported_source = false;
+	idx_t base_relation_count = 0;
+};
+
+static bool GetBinding(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return false;
 	}
@@ -113,20 +122,20 @@ static bool GetCandidateBinding(const Expression &expr, ColumnBinding &binding) 
 	return true;
 }
 
-static bool IsCandidateEquivalenceComparison(const JoinCondition &condition) {
-	if (!condition.IsComparison()) {
-		return false;
-	}
-	auto comparison = condition.GetComparisonType();
-	return comparison == ExpressionType::COMPARE_EQUAL || comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-}
-
-static bool IsSafeInnerJoin(const LogicalOperator &op) {
+static bool IsUnprojectedInnerJoin(const LogicalOperator &op) {
 	if (op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return false;
 	}
 	auto &join = op.Cast<LogicalComparisonJoin>();
 	return join.join_type == JoinType::INNER && !join.HasProjectionMap();
+}
+
+static bool IsEquivalenceCondition(const JoinCondition &condition) {
+	if (!condition.IsComparison()) {
+		return false;
+	}
+	auto comparison = condition.GetComparisonType();
+	return comparison == ExpressionType::COMPARE_EQUAL || comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 }
 
 static void CollectEquivalences(LogicalOperator &op, BindingEquivalence &equivalence) {
@@ -135,40 +144,26 @@ static void CollectEquivalences(LogicalOperator &op, BindingEquivalence &equival
 		auto output_bindings = projection.GetColumnBindings();
 		for (idx_t expression_idx = 0; expression_idx < projection.expressions.size(); expression_idx++) {
 			ColumnBinding child_binding;
-			if (GetCandidateBinding(*projection.expressions[expression_idx], child_binding)) {
+			if (GetBinding(*projection.expressions[expression_idx], child_binding)) {
 				equivalence.Add(output_bindings[expression_idx], child_binding);
 			}
 		}
-	} else if (IsSafeInnerJoin(op)) {
+	} else if (IsUnprojectedInnerJoin(op)) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		for (auto &condition : join.conditions) {
-			if (!IsCandidateEquivalenceComparison(condition)) {
+			if (!IsEquivalenceCondition(condition)) {
 				continue;
 			}
 			ColumnBinding left;
 			ColumnBinding right;
-			if (GetCandidateBinding(condition.GetLHS(), left) && GetCandidateBinding(condition.GetRHS(), right)) {
+			if (GetBinding(condition.GetLHS(), left) && GetBinding(condition.GetRHS(), right)) {
 				equivalence.Add(left, right,
 				                condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 			}
 		}
 	}
-
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-	case LogicalOperatorType::LOGICAL_FILTER:
-		if (op.children.size() == 1) {
-			CollectEquivalences(*op.children[0], equivalence);
-		}
-		break;
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		if (IsSafeInnerJoin(op)) {
-			CollectEquivalences(*op.children[0], equivalence);
-			CollectEquivalences(*op.children[1], equivalence);
-		}
-		break;
-	default:
-		break;
+	for (auto &child : op.children) {
+		CollectEquivalences(*child, equivalence);
 	}
 }
 
@@ -186,7 +181,8 @@ static idx_t MatchRank(KeyMatch match) {
 }
 
 static bool FindCandidateKeys(LogicalOperator &op, const vector<unique_ptr<Expression>> &keys,
-                              const BindingEquivalence &equivalence, vector<idx_t> &candidate_key_indices) {
+                              const BindingEquivalence &equivalence, const column_binding_set_t &source_bindings,
+                              vector<idx_t> &candidate_key_indices) {
 	auto bindings = op.GetColumnBindings();
 	if (bindings.empty() || bindings.size() != op.types.size()) {
 		return false;
@@ -195,13 +191,14 @@ static bool FindCandidateKeys(LogicalOperator &op, const vector<unique_ptr<Expre
 	candidate_key_indices.reserve(keys.size());
 	for (auto &key : keys) {
 		ColumnBinding key_binding;
-		if (!GetCandidateBinding(*key, key_binding)) {
+		if (!GetBinding(*key, key_binding)) {
 			return false;
 		}
 		optional_idx match;
 		KeyMatch best_match = KeyMatch::EQUALITY;
 		for (idx_t binding_idx = 0; binding_idx < bindings.size(); binding_idx++) {
-			if (op.types[binding_idx] != key->GetReturnType()) {
+			if (op.types[binding_idx] != key->GetReturnType() ||
+			    source_bindings.find(bindings[binding_idx]) == source_bindings.end()) {
 				continue;
 			}
 			KeyMatch current_match;
@@ -224,264 +221,176 @@ static bool FindCandidateKeys(LogicalOperator &op, const vector<unique_ptr<Expre
 	return true;
 }
 
-static bool IsSupportedSource(LogicalOperator &op) {
-	if (op.HasSideEffects() || op.HasVolatileExpressions()) {
-		return false;
-	}
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-		return !op.Cast<LogicalGet>().HasTableInOutInput();
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		return true;
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		return (join.join_type == JoinType::INNER || join.join_type == JoinType::SEMI) && !join.HasProjectionMap();
-	}
-	default:
-		return false;
-	}
+static bool EffectsPermitFactoring(const LogicalOperator &op) {
+	return DuplicateEliminatedDomainSafety::CanFactorSource(op);
 }
 
-static bool OperatorOutputsBinding(LogicalOperator &op, ColumnBinding binding) {
-	auto bindings = op.GetColumnBindings();
-	return std::find(bindings.begin(), bindings.end(), binding) != bindings.end();
-}
-
-static bool HasSupportedKeyProvenance(LogicalOperator &op, ColumnBinding binding) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-		return OperatorOutputsBinding(op, binding);
-	case LogicalOperatorType::LOGICAL_FILTER:
-		return op.children.size() == 1 && HasSupportedKeyProvenance(*op.children[0], binding);
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		if (op.children.size() != 1) {
-			return false;
-		}
-		auto &projection = op.Cast<LogicalProjection>();
-		auto bindings = projection.GetColumnBindings();
-		auto binding_index = std::find(bindings.begin(), bindings.end(), binding);
-		if (binding_index == bindings.end()) {
-			return false;
-		}
-		auto expression_index = NumericCast<idx_t>(binding_index - bindings.begin());
-		ColumnBinding child_binding;
-		return GetCandidateBinding(*projection.expressions[expression_index], child_binding) &&
-		       HasSupportedKeyProvenance(*projection.children[0], child_binding);
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggregate = op.Cast<LogicalAggregate>();
-		auto bindings = aggregate.GetColumnBindings();
-		auto binding_index = std::find(bindings.begin(), bindings.end(), binding);
-		return binding_index != bindings.end() &&
-		       NumericCast<idx_t>(binding_index - bindings.begin()) < aggregate.groups.size();
-	}
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		if (op.children.size() != 2) {
-			return false;
-		}
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		if (join.join_type == JoinType::INNER) {
-			return HasSupportedKeyProvenance(*op.children[0], binding) ||
-			       HasSupportedKeyProvenance(*op.children[1], binding);
-		}
-		if (join.join_type == JoinType::SEMI) {
-			return HasSupportedKeyProvenance(*op.children[0], binding);
-		}
-		return false;
-	}
-	default:
-		return false;
-	}
-}
-
-static bool CandidateKeysAreSupported(LogicalOperator &op, const vector<idx_t> &candidate_key_indices) {
-	auto bindings = op.GetColumnBindings();
-	for (auto source_index : candidate_key_indices) {
-		if (source_index >= bindings.size() || !HasSupportedKeyProvenance(op, bindings[source_index])) {
-			return false;
-		}
-	}
-	return true;
-}
-
-static void FindCandidates(unique_ptr<LogicalOperator> &op, const vector<unique_ptr<Expression>> &keys,
-                           const BindingEquivalence &equivalence, bool omits_join_input,
-                           DuplicateEliminatedDomainCoverage coverage, vector<Candidate> &candidates,
-                           bool is_root = false) {
-	if (!is_root && IsSupportedSource(*op)) {
-		vector<idx_t> candidate_key_indices;
-		if (FindCandidateKeys(*op, keys, equivalence, candidate_key_indices) &&
-		    CandidateKeysAreSupported(*op, candidate_key_indices)) {
-			candidates.emplace_back(op, std::move(candidate_key_indices), omits_join_input, coverage);
-		}
+class CandidateAnalyzer {
+public:
+	CandidateAnalyzer(const vector<unique_ptr<Expression>> &keys_p, const BindingEquivalence &equivalence_p)
+	    : keys(keys_p), equivalence(equivalence_p) {
 	}
 
-	switch (op->type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		if (op->children.size() == 1) {
-			FindCandidates(op->children[0], keys, equivalence, omits_join_input, coverage, candidates);
+	vector<AnalyzedCandidate> Analyze(unique_ptr<LogicalOperator> &root) {
+		Visit(root, DuplicateEliminatedDomainCoverage::EXACT, true, 0, true);
+		return std::move(candidates);
+	}
+
+private:
+	OperatorAnalysis Visit(unique_ptr<LogicalOperator> &op, DuplicateEliminatedDomainCoverage coverage, bool discover,
+	                       idx_t depth, bool is_root = false) {
+		vector<OperatorAnalysis> children;
+		children.reserve(op->children.size());
+		for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
+			auto child_coverage = coverage;
+			auto discover_child = false;
+			switch (op->type) {
+			case LogicalOperatorType::LOGICAL_PROJECTION:
+				discover_child = discover;
+				break;
+			case LogicalOperatorType::LOGICAL_FILTER:
+				discover_child = discover;
+				child_coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
+				break;
+			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+				discover_child = discover && IsUnprojectedInnerJoin(*op);
+				if (discover_child) {
+					child_coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
+				}
+				break;
+			default:
+				break;
+			}
+			children.push_back(Visit(op->children[child_idx], child_coverage, discover_child, depth + 1));
 		}
-		break;
-	case LogicalOperatorType::LOGICAL_FILTER:
-		if (op->children.size() == 1) {
-			FindCandidates(op->children[0], keys, equivalence, omits_join_input,
-			               DuplicateEliminatedDomainCoverage::SUPERSET, candidates);
+
+		OperatorAnalysis result;
+		for (auto &child : children) {
+			result.base_relation_count += child.base_relation_count;
 		}
-		break;
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		if (!IsSafeInnerJoin(*op)) {
+		switch (op->type) {
+		case LogicalOperatorType::LOGICAL_GET: {
+			auto &get = op->Cast<LogicalGet>();
+			result.supported_source = !get.HasTableInOutInput() && op->children.empty();
+			auto bindings = op->GetColumnBindings();
+			result.source_bindings.insert(bindings.begin(), bindings.end());
+			result.base_relation_count = 1;
 			break;
 		}
-		FindCandidates(op->children[0], keys, equivalence, true, DuplicateEliminatedDomainCoverage::SUPERSET,
-		               candidates);
-		FindCandidates(op->children[1], keys, equivalence, true, DuplicateEliminatedDomainCoverage::SUPERSET,
-		               candidates);
-		break;
-	}
-	default:
-		break;
-	}
-}
-
-static double GetTypeWidth(const LogicalType &type) {
-	return LossyNumericCast<double>(MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), 1));
-}
-
-static double GetOutputWidth(LogicalOperator &op) {
-	double width = 0;
-	for (auto &type : op.types) {
-		width += GetTypeWidth(type);
-	}
-	return MaxValue<double>(width, 1);
-}
-
-static double GetKeyWidth(const vector<unique_ptr<Expression>> &keys) {
-	double width = 0;
-	for (auto &key : keys) {
-		width += GetTypeWidth(key->GetReturnType());
-	}
-	return MaxValue<double>(width, 1);
-}
-
-static double EstimateDomainWork(LogicalOperator &source, idx_t rows, double key_width) {
-	// The key-width term treats every input row as a possible distinct RHS group. This charges safe-superset
-	// candidates for the additional groups they can introduce without requiring undeclared uniqueness.
-	return LossyNumericCast<double>(rows) * (GetOutputWidth(source) + key_width);
-}
-
-static optional_idx EstimateFallbackCardinality(ClientContext &context, LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-		return RelationStatisticsHelper::ExtractGetStats(op.Cast<LogicalGet>(), context).cardinality;
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		if (op.children.size() == 1) {
-			return EstimateFallbackCardinality(context, *op.children[0]);
+		case LogicalOperatorType::LOGICAL_FILTER:
+			if (children.size() == 1) {
+				result = std::move(children[0]);
+			}
+			break;
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			if (children.size() == 1) {
+				auto &projection = op->Cast<LogicalProjection>();
+				auto output_bindings = projection.GetColumnBindings();
+				for (idx_t expression_idx = 0; expression_idx < projection.expressions.size(); expression_idx++) {
+					ColumnBinding child_binding;
+					if (GetBinding(*projection.expressions[expression_idx], child_binding) &&
+					    children[0].source_bindings.find(child_binding) != children[0].source_bindings.end()) {
+						result.source_bindings.insert(output_bindings[expression_idx]);
+					}
+				}
+				result.supported_source = children[0].supported_source;
+				result.base_relation_count = children[0].base_relation_count;
+			}
+			break;
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			auto &aggregate = op->Cast<LogicalAggregate>();
+			auto bindings = aggregate.GetColumnBindings();
+			for (idx_t group_idx = 0; group_idx < aggregate.groups.size(); group_idx++) {
+				result.source_bindings.insert(bindings[group_idx]);
+			}
+			result.supported_source = op->children.size() == 1;
+			break;
 		}
-		return optional_idx();
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		if (op.children.size() != 1) {
-			return optional_idx();
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			auto &join = op->Cast<LogicalComparisonJoin>();
+			if (children.size() != 2 || join.HasProjectionMap()) {
+				break;
+			}
+			if (join.join_type == JoinType::INNER) {
+				result.source_bindings = children[0].source_bindings;
+				result.source_bindings.insert(children[1].source_bindings.begin(), children[1].source_bindings.end());
+				result.supported_source = children[0].supported_source && children[1].supported_source;
+			} else if (join.join_type == JoinType::SEMI) {
+				result.source_bindings = children[0].source_bindings;
+				result.supported_source = children[0].supported_source;
+			}
+			break;
 		}
-		auto child_cardinality = EstimateFallbackCardinality(context, *op.children[0]);
-		if (!child_cardinality.IsValid()) {
-			return optional_idx();
+		default:
+			break;
 		}
-		auto filtered =
-		    static_cast<double>(child_cardinality.GetIndex()) * RelationStatisticsHelper::DEFAULT_SELECTIVITY;
-		return MaxValue<idx_t>(LossyNumericCast<idx_t>(filtered), 1);
+
+		result.supported_source &= EffectsPermitFactoring(*op);
+		if (discover && !is_root && result.supported_source) {
+			vector<idx_t> key_indices;
+			if (FindCandidateKeys(*op, keys, equivalence, result.source_bindings, key_indices)) {
+				candidates.emplace_back(op, std::move(key_indices), coverage, result.base_relation_count, depth,
+				                        next_order++);
+			}
+		}
+		return result;
 	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		if (op.children.size() == 1) {
-			return EstimateFallbackCardinality(context, *op.children[0]);
-		}
-		return optional_idx();
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		if (join.join_type == JoinType::SEMI && !op.children.empty()) {
-			return EstimateFallbackCardinality(context, *op.children[0]);
-		}
-		return optional_idx();
-	}
-	default:
-		return optional_idx();
-	}
-}
+
+private:
+	const vector<unique_ptr<Expression>> &keys;
+	const BindingEquivalence &equivalence;
+	vector<AnalyzedCandidate> candidates;
+	idx_t next_order = 0;
+};
 
 static optional_idx FindBestCandidate(ClientContext &context, LogicalOperator &payload,
-                                      const vector<unique_ptr<Expression>> &keys, vector<Candidate> &candidates,
-                                      bool allow_superset) {
-	vector<reference<LogicalOperator>> estimated_operators;
-	estimated_operators.reserve(candidates.size() + 1);
-	for (auto &candidate : candidates) {
-		estimated_operators.push_back(*candidate.source.get());
-	}
-	estimated_operators.push_back(payload);
-
-	reference_map_t<LogicalOperator, idx_t> estimates;
-	JoinOrderOptimizer estimator(context);
-	bool has_join_estimates = estimator.EstimateCardinalitiesWithoutReordering(payload, estimated_operators, estimates);
-	auto payload_estimate = estimates.find(payload);
-	D_ASSERT(!has_join_estimates || payload_estimate != estimates.end());
-	idx_t payload_rows = has_join_estimates ? payload_estimate->second : 0;
-	auto key_width = GetKeyWidth(keys);
-	double payload_work = EstimateDomainWork(payload, payload_rows, key_width);
-
+                                      vector<AnalyzedCandidate> &candidates, bool allow_superset) {
+	auto payload_estimate = MaxValue<idx_t>(payload.EstimateCardinality(context), 1);
 	optional_idx best;
-	double best_work = 0;
+	idx_t best_rows = 0;
+	idx_t best_base_relations = 0;
+	idx_t best_depth = 0;
+	idx_t best_order = 0;
 	for (idx_t candidate_idx = 0; candidate_idx < candidates.size(); candidate_idx++) {
 		auto &candidate = candidates[candidate_idx];
 		if (!allow_superset && candidate.coverage == DuplicateEliminatedDomainCoverage::SUPERSET) {
 			continue;
 		}
-		optional_idx estimated_rows;
-		if (has_join_estimates) {
-			auto estimate = estimates.find(*candidate.source.get());
-			D_ASSERT(estimate != estimates.end());
-			estimated_rows = estimate->second;
-		} else {
-			// Join-order estimates are unavailable for simple aggregate and semi-join candidates.
-			estimated_rows = EstimateFallbackCardinality(context, *candidate.source.get());
-		}
-		if (!estimated_rows.IsValid()) {
+		auto estimate = MaxValue<idx_t>(candidate.source.get()->EstimateCardinality(context), 1);
+		if (estimate > payload_estimate ||
+		    (estimate == payload_estimate &&
+		     !DuplicateEliminatedDomainProperties::HasSelection(*candidate.source.get()))) {
 			continue;
 		}
-		auto candidate_rows = estimated_rows.GetIndex();
-		auto candidate_work = EstimateDomainWork(*candidate.source.get(), candidate_rows, key_width);
-
-		bool clearly_cheaper =
-		    has_join_estimates && payload_rows > 0 && candidate_rows <= payload_rows && candidate_work < payload_work;
-		bool bounded_small_domain = candidate_rows <= STANDARD_VECTOR_SIZE && candidate.omits_join_input &&
-		                            DuplicateEliminatedDomainProperties::HasSelection(*candidate.source.get());
-		if (!clearly_cheaper && !bounded_small_domain) {
-			continue;
-		}
-		if (!best.IsValid() || candidate_work < best_work) {
+		auto better = !best.IsValid() || estimate < best_rows ||
+		              (estimate == best_rows && candidate.depth < best_depth) ||
+		              (estimate == best_rows && candidate.depth == best_depth &&
+		               candidate.base_relation_count < best_base_relations) ||
+		              (estimate == best_rows && candidate.depth == best_depth &&
+		               candidate.base_relation_count == best_base_relations && candidate.order < best_order);
+		if (better) {
 			best = candidate_idx;
-			best_work = candidate_work;
+			best_rows = estimate;
+			best_base_relations = candidate.base_relation_count;
+			best_depth = candidate.depth;
+			best_order = candidate.order;
 		}
 	}
 	return best;
 }
 
 optional<DuplicateEliminatedDomainCandidate>
-DuplicateEliminatedDomainCandidateFinder::FindBest(ClientContext &context, LogicalComparisonJoin &join,
-                                                   bool can_evaluate_additional_groups) {
+DuplicateEliminatedDomainAnalyzer::FindBest(ClientContext &context, LogicalComparisonJoin &join,
+                                            bool can_evaluate_additional_groups) {
 	if (join.children.empty() || join.duplicate_eliminated_columns.empty()) {
 		return {};
 	}
 	join.children[0]->ResolveOperatorTypes();
 	BindingEquivalence equivalence;
 	CollectEquivalences(*join.children[0], equivalence);
-	vector<Candidate> candidates;
-	FindCandidates(join.children[0], join.duplicate_eliminated_columns, equivalence, false,
-	               DuplicateEliminatedDomainCoverage::EXACT, candidates, true);
-	if (candidates.empty()) {
-		return {};
-	}
-	auto selected_index = FindBestCandidate(context, *join.children[0], join.duplicate_eliminated_columns, candidates,
-	                                        can_evaluate_additional_groups);
+	CandidateAnalyzer analyzer(join.duplicate_eliminated_columns, equivalence);
+	auto candidates = analyzer.Analyze(join.children[0]);
+	auto selected_index = FindBestCandidate(context, *join.children[0], candidates, can_evaluate_additional_groups);
 	if (!selected_index.IsValid()) {
 		return {};
 	}

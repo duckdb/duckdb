@@ -18,7 +18,6 @@ blacklist = [
     "ComplexJSONType",
     "DuplicateEliminatedDomainCoverage",
     "DuplicateEliminatedDomainExpansion",
-    "DuplicateEliminatedJoinRewriteMode",
     "UnavailableReason",
     "VirtualColumnBindingType",
     "Slot",

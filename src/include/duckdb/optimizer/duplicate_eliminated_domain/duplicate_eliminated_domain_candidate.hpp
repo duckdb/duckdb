@@ -31,7 +31,7 @@ public:
 	}
 
 private:
-	friend class DuplicateEliminatedDomainCandidateFinder;
+	friend class DuplicateEliminatedDomainAnalyzer;
 
 	DuplicateEliminatedDomainCandidate(unique_ptr<LogicalOperator> &source_p, vector<idx_t> key_indices_p,
 	                                   DuplicateEliminatedDomainCoverage coverage_p)
@@ -43,8 +43,8 @@ private:
 	DuplicateEliminatedDomainCoverage coverage;
 };
 
-//! Finds and costs a subtree that covers every duplicate-eliminated key.
-class DuplicateEliminatedDomainCandidateFinder {
+//! Analyzes the payload and selects a subtree that covers every duplicate-eliminated key.
+class DuplicateEliminatedDomainAnalyzer {
 public:
 	//! A SUPERSET candidate is returned only when evaluating the complete RHS for additional groups is proven safe.
 	static optional<DuplicateEliminatedDomainCandidate> FindBest(ClientContext &context, LogicalComparisonJoin &join,

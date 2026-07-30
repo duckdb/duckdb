@@ -8,21 +8,12 @@
 
 #pragma once
 
-#include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 
 namespace duckdb {
 
 class Binder;
-struct DuplicateEliminatedDomainCandidate;
-
-struct FactoredDuplicateEliminatedDomain {
-	TableIndex cte_index;
-	Identifier cte_name;
-	idx_t column_count;
-	unique_ptr<LogicalOperator> source;
-	unique_ptr<LogicalOperator> domain;
-	BindingReplacementGraph output_replacements;
-};
+class DuplicateEliminatedDomainCandidate;
 
 //! Factors a duplicate-eliminated domain from a cheaper, covering subtree of a join's outer payload.
 class DuplicateEliminatedDomainFactorer {

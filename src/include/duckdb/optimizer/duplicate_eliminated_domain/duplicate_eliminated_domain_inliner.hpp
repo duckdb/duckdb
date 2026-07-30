@@ -15,7 +15,7 @@ namespace duckdb {
 
 class Binder;
 class LogicalOperator;
-struct DuplicateEliminatedDomainCandidate;
+class DuplicateEliminatedDomainCandidate;
 
 //! Replaces generated domain references with duplicate-free copies of a cheap, deterministic source.
 class DuplicateEliminatedDomainInliner {

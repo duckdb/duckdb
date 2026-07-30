@@ -8,6 +8,9 @@
       "paths": [
         "test/optimizer/deliminator.test",
         "test/optimizer/duplicate_eliminated_domain_factoring_tpcds.test",
+        "test/optimizer/duplicate_eliminated_domain_inlining_parquet.test",
+        "test/optimizer/duplicate_eliminated_domain_settings.test",
+        "test/optimizer/duplicate_eliminated_domain_stateful.test",
         "test/optimizer/eager_aggregate_execution.test",
         "test/optimizer/eager_aggregate_execution_parquet.test",
         "test/optimizer/partial_aggregate_precomputation.test",

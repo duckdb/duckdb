@@ -1,12 +1,12 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_builder.cpp
+// duckdb/planner/subquery/duplicate_eliminated_domain_builder.cpp
 //
 //
 //===----------------------------------------------------------------------===//
 
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_builder.hpp"
+#include "duckdb/planner/subquery/duplicate_eliminated_domain_builder.hpp"
 
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"

@@ -24,10 +24,6 @@ public:
 	JoinOrderOptimizer CreateChildOptimizer();
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<RelationStats> stats = nullptr);
-	//! Estimate operator subtrees in a reorderable join region without enumerating or reconstructing join plans.
-	bool EstimateCardinalitiesWithoutReordering(LogicalOperator &plan,
-	                                            const vector<reference<LogicalOperator>> &operators,
-	                                            reference_map_t<LogicalOperator, idx_t> &cardinalities);
 	//! Adds/gets materialized CTE stats
 	void AddMaterializedCTEStats(TableIndex index, RelationStats &&stats);
 	RelationStats GetMaterializedCTEStats(TableIndex index);

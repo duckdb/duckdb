@@ -10,12 +10,8 @@
 
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_builder.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_factorer.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_inliner.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_properties.hpp"
-#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
+#include "duckdb/planner/subquery/duplicate_eliminated_domain_builder.hpp"
+#include "duckdb/planner/subquery/duplicate_eliminated_domain_properties.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -2121,8 +2117,8 @@ static bool SingleJoinRHSIsDeduplicated(LogicalComparisonJoin &join) {
 	return true;
 }
 
-DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder, DuplicateEliminatedJoinRewriteMode mode_p)
-    : binder(binder), mode(mode_p) {
+DelimJoinCTERewriter::DelimJoinCTERewriter(Binder &binder, optional_ptr<DelimJoinCTEOptimization> optimization_p)
+    : binder(binder), optimization(optimization_p) {
 }
 
 BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(unique_ptr<LogicalOperator> &plan,
@@ -2145,9 +2141,8 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 	auto dedup_ref_count = RewriteDelimScanReferences(plan->children[1], dedup_cte_index);
 	auto &join = plan->Cast<LogicalComparisonJoin>();
 	bool can_evaluate_additional_groups = false;
-	if (mode == DuplicateEliminatedJoinRewriteMode::OPTIMIZED) {
-		can_evaluate_additional_groups =
-		    DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(*join.children[1], dedup_cte_index);
+	if (optimization) {
+		can_evaluate_additional_groups = optimization->CanEvaluateAdditionalGroups(*join.children[1], dedup_cte_index);
 		auto cte_deliminator_timer =
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
 		GeneratedDedupRefEliminator eliminator(binder.context, plan, dedup_cte_index, dedup_ref_count, rewrite_root,
@@ -2156,27 +2151,21 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDuplicateEliminatedJoin(uni
 		if (SingleJoinRHSIsDeduplicated(join)) {
 			join.join_type = null_rejecting_filter_above ? JoinType::INNER : JoinType::LEFT;
 		}
-		optional<DuplicateEliminatedDomainCandidate> selected_candidate;
+		bool domain_inlined = false;
 		if (dedup_ref_count > 0) {
-			selected_candidate = DuplicateEliminatedDomainCandidateFinder::FindBest(binder.context, join,
-			                                                                        can_evaluate_additional_groups);
+			factored_domain = optimization->TryOptimize(binder, plan, dedup_cte_index, dedup_ref_count,
+			                                            can_evaluate_additional_groups, domain_inlined);
 		}
-		D_ASSERT(!selected_candidate || can_evaluate_additional_groups ||
-		         selected_candidate->Coverage() == DuplicateEliminatedDomainCoverage::EXACT);
-		if (selected_candidate && DuplicateEliminatedDomainInliner::TryInline(binder, join.children[1], dedup_cte_index,
-		                                                                      dedup_ref_count, *selected_candidate)) {
+		if (domain_inlined) {
 			join.duplicate_eliminated_columns.clear();
 			return output_replacements;
-		}
-		if (selected_candidate) {
-			factored_domain = DuplicateEliminatedDomainFactorer::TryFactor(binder, plan, *selected_candidate);
 		}
 	}
 	if (dedup_ref_count == 0) {
 		join.duplicate_eliminated_columns.clear();
 		return {};
 	}
-	if (mode == DuplicateEliminatedJoinRewriteMode::OPTIMIZED) {
+	if (optimization) {
 		auto expansion = can_evaluate_additional_groups ? DuplicateEliminatedDomainExpansion::SAFE
 		                                                : DuplicateEliminatedDomainExpansion::UNSAFE;
 		auto inserted = generated_dedup_ctes.emplace(dedup_cte_index, expansion);
@@ -2348,7 +2337,6 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 		output_replacements.Merge(child_replacements);
 	}
 	if (plan->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		rewritten_delim_join = true;
 		auto rewrite_replacements =
 		    RewriteDuplicateEliminatedJoin(plan, rewrite_root, null_rejecting_filter_above, preserve_evidence_side);
 		output_replacements.Merge(rewrite_replacements);
@@ -2356,30 +2344,28 @@ BindingReplacementGraph DelimJoinCTERewriter::RewriteDelimJoinsToCTEs(unique_ptr
 	return output_replacements;
 }
 
-bool DelimJoinCTERewriter::RewriteForExecution(Binder &binder, unique_ptr<LogicalOperator> &plan) {
-	DelimJoinCTERewriter rewriter(binder, DuplicateEliminatedJoinRewriteMode::EXECUTION);
-	return rewriter.Rewrite(plan);
-}
-
-bool DelimJoinCTERewriter::RewriteAndOptimize(Binder &binder, unique_ptr<LogicalOperator> &plan) {
-	DelimJoinCTERewriter rewriter(binder, DuplicateEliminatedJoinRewriteMode::OPTIMIZED);
-	return rewriter.Rewrite(plan);
-}
-
-bool DelimJoinCTERewriter::Rewrite(unique_ptr<LogicalOperator> &plan) {
+void DelimJoinCTERewriter::NormalizeInputs(unique_ptr<LogicalOperator> &plan) {
 	bool filters_pushed;
 	do {
 		filters_pushed = PushEligibleFiltersIntoDelimJoinInputs(plan);
 	} while (filters_pushed);
+}
+
+void DelimJoinCTERewriter::Rewrite(Binder &binder, unique_ptr<LogicalOperator> &plan,
+                                   optional_ptr<DelimJoinCTEOptimization> optimization) {
+	DelimJoinCTERewriter rewriter(binder, optimization);
+	rewriter.RewriteInternal(plan);
+}
+
+void DelimJoinCTERewriter::RewriteInternal(unique_ptr<LogicalOperator> &plan) {
 	RewriteDelimJoinsToCTEs(plan, *plan);
-	if (mode == DuplicateEliminatedJoinRewriteMode::OPTIMIZED) {
+	if (optimization) {
 		auto cte_deliminator_timer =
 		    QueryProfiler::Get(binder.context).StartTimerInternal(CTE_DELIMINATOR_PROFILER_KEY);
 		GeneratedDomainJoinEliminator generated_domain_join_eliminator(plan, generated_dedup_ctes);
 		generated_domain_join_eliminator.Rewrite();
 	}
 	VerifyNoRewriteableDelim(*plan);
-	return rewritten_delim_join;
 }
 
 } // namespace duckdb

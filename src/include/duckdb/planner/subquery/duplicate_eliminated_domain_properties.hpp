@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_properties.hpp
+// duckdb/planner/subquery/duplicate_eliminated_domain_properties.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,10 +12,9 @@ namespace duckdb {
 
 class LogicalOperator;
 
-//! Properties used when choosing between duplicate-eliminated domain implementations.
 class DuplicateEliminatedDomainProperties {
 public:
-	//! Returns whether a subtree contains a predicate that can reduce its input domain.
+	//! Returns whether a subtree contains a predicate that can reduce a duplicate-eliminated domain.
 	static bool HasSelection(const LogicalOperator &op);
 };
 

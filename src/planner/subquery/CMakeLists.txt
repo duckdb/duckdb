@@ -2,6 +2,8 @@ add_library_unity(
   duckdb_planner_subquery
   OBJECT
   delim_join_cte_rewriter.cpp
+  duplicate_eliminated_domain_builder.cpp
+  duplicate_eliminated_domain_properties.cpp
   flatten_dependent_join.cpp
   pair_dependent_join.cpp
   pair_dependent_full_outer_join.cpp

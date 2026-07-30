@@ -8,20 +8,19 @@
 
 #pragma once
 
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/table_index.hpp"
 
 namespace duckdb {
 
 class LogicalOperator;
 
-//! Proves whether duplicate-eliminated domain rewrites can evaluate or copy a logical subtree.
-//! Additional-group safety assumes the input was produced by FlattenDependentJoins. In particular, its active
-//! duplicate-eliminated bindings must isolate every grouping, window partition, set operation, and join boundary.
+//! Conservative eligibility checks for duplicate-eliminated domain rewrites.
+//! Unsupported operators and opaque function bind data always decline the optimization.
 class DuplicateEliminatedDomainSafety {
 public:
-	//! Returns whether evaluating the plan for additional domain groups is unobservable.
 	static bool CanEvaluateAdditionalGroups(const LogicalOperator &op, TableIndex domain_cte_index);
-	//! Returns whether the source can be copied without changing its observable behavior.
+	static bool CanFactorSource(const LogicalOperator &op);
 	static bool CanDuplicateSource(const LogicalOperator &op);
 };
 

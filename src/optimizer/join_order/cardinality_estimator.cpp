@@ -930,10 +930,6 @@ idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set)
 	return (idx_t)cardinality_as_double;
 }
 
-idx_t CardinalityEstimator::EstimateCardinality(JoinRelationSet &new_set) {
-	return EstimateCardinalityWithSet<idx_t>(new_set);
-}
-
 bool SortTdoms(const RelationsSetToStats &a, const RelationsSetToStats &b) {
 	return a.domain_estimate.GetDistinctCount() > b.domain_estimate.GetDistinctCount();
 }
@@ -950,15 +946,6 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 
 	// sort relations from greatest tdom to lowest tdom.
 	std::sort(state->relation_set_stats.begin(), state->relation_set_stats.end(), SortTdoms);
-}
-
-void CardinalityEstimator::Initialize(vector<RelationStats> relation_stats) {
-	InitEquivalentRelations();
-	AddRelationNamesToRelationStats(relation_stats);
-	for (idx_t relation_idx = 0; relation_idx < relation_stats.size(); relation_idx++) {
-		auto &relation_set = set_manager.GetJoinRelation(RelationIndex(relation_idx));
-		InitCardinalityEstimatorProps(relation_set, relation_stats[relation_idx]);
-	}
 }
 
 void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
