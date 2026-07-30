@@ -48,7 +48,6 @@ namespace duckdb {
 static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyType alter_fk_type,
                                       vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
 	auto &constraints = table.GetConstraints();
-	auto &catalog = table.ParentCatalog();
 	auto &name = table.name;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto &cond = constraints[i];
