@@ -9,6 +9,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
@@ -264,9 +265,23 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 			attached_db.reset();
 			return;
 		}
+		attached_db->is_closing = true;
 	}
 	attached_db->Close(close_action);
 	attached_db.reset();
+}
+
+shared_ptr<AttachedDatabase> AttachedDatabase::TryGetReference(const weak_ptr<AttachedDatabase> &attached_db) {
+	auto result = attached_db.lock();
+	if (!result) {
+		return nullptr;
+	}
+	auto close_lock = result->close_lock;
+	lock_guard<mutex> guard(*close_lock);
+	if (result->is_closing) {
+		result.reset();
+	}
+	return result;
 }
 
 void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {

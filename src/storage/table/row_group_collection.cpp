@@ -149,6 +149,7 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
 		if (TypeVisitor::Contains(type, LogicalTypeId::VARIANT) ||
 		    TypeVisitor::Contains(type, LogicalTypeId::GEOMETRY)) {
 			row_group_append_mode = RowGroupAppendMode::REQUIRE_NEW;
+			can_append_to_checkpointed_row_group = false;
 			break;
 		}
 	}
@@ -233,6 +234,10 @@ void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 }
 
 void RowGroupCollection::SetRowGroupAppendMode(RowGroupAppendMode mode) {
+	if (mode == RowGroupAppendMode::SUGGEST_NEW && !can_append_to_checkpointed_row_group) {
+		// if we cannot append to existing (checkpointed) row groups we need to promote SUGGEST_NEW to REQUIRE_NEW
+		mode = RowGroupAppendMode::REQUIRE_NEW;
+	}
 	if (mode > row_group_append_mode) {
 		// We never downgrade the mode, i.e. if REQUIRE_NEW was already set then we do not set it back to SUGGEST_NEW
 		row_group_append_mode = mode;
@@ -1130,8 +1135,8 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		indexed_column_id_set.insert(set.begin(), set.end());
 	}
 
-	// If we are in WAL replay, delete data will be buffered, and so we sort the column_ids
-	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
+	// Sorted so that the fetched columns align with the ascending physical order used when
+	// referencing them into result_chunk below.
 	vector<StorageIndex> column_ids {indexed_column_id_set.begin(), indexed_column_id_set.end()};
 	sort(column_ids.begin(), column_ids.end());
 
@@ -1222,15 +1227,9 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			}
 			continue;
 		}
-		// Buffering takes only the indexed columns in ordering of the column_ids mapping.
-		DataChunk index_column_chunk;
-		index_column_chunk.InitializeEmpty(column_types);
-		for (idx_t i = 0; i < column_types.size(); i++) {
-			auto col_id = column_ids[i].GetPrimaryIndex();
-			index_column_chunk.data[i].Reference(result_chunk.data[col_id]);
-		}
+		// Buffer the delete: result_chunk is in table layout with all indexed columns populated.
 		auto &unbound_index = index.Cast<UnboundIndex>();
-		unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids, BufferedIndexReplay::DEL_ENTRY);
+		unbound_index.BufferChunk(result_chunk, row_identifiers, BufferedIndexReplay::DEL_ENTRY);
 	}
 }
 

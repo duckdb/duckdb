@@ -51,19 +51,9 @@ bool ColumnRefExpression::IsQualified() const {
 }
 
 const Identifier &ColumnRefExpression::GetColumnName() const {
-	D_ASSERT(column_names.size() <= 4);
+	D_ASSERT(!column_names.empty());
+	// the column name is always the last component
 	return column_names.back();
-}
-
-const Identifier &ColumnRefExpression::GetTableName() const {
-	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 4);
-	if (column_names.size() == 4) {
-		return column_names[2];
-	}
-	if (column_names.size() == 3) {
-		return column_names[1];
-	}
-	return column_names[0];
 }
 
 Identifier ColumnRefExpression::GetName() const {

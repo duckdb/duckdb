@@ -136,6 +136,7 @@ public:
 	bool IsFoldable() const override {
 		return false;
 	}
+	bool IsVolatile() const override;
 
 	string ToString() const override;
 

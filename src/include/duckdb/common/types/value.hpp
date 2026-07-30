@@ -609,6 +609,10 @@ template <>
 DUCKDB_API interval_t Value::GetValue() const;
 template <>
 DUCKDB_API Value Value::GetValue() const;
+// Not a logical type like the specializations above, but a semantic wrapper around the string value. It mirrors the
+// implicit Value(const Identifier &) constructor, so identifiers can round-trip through a Value.
+template <>
+DUCKDB_API Identifier Value::GetValue() const;
 
 template <>
 DUCKDB_API bool Value::GetValueUnsafe() const;

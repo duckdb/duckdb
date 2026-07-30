@@ -179,6 +179,14 @@ static Value NumericStatsValue(const LogicalType &type, T value) {
 	}
 }
 
+static Value NumericStatsValue(const LogicalType &type, hugeint_t value) {
+	D_ASSERT(type.IsNumeric());
+	if (type.id() == LogicalTypeId::DECIMAL) {
+		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
+	}
+	return Value::Numeric(type, value);
+}
+
 template <class T>
 static bool WidenFloatingBounds(const LogicalType &type, Value &new_min, Value &new_max) {
 	auto min = new_min.GetValue<T>();
@@ -294,6 +302,10 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			potential_overflow =
 			    PROPAGATE::template Operation<int64_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
+		case PhysicalType::INT128:
+			potential_overflow =
+			    PROPAGATE::template Operation<hugeint_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
+			break;
 		default:
 			return nullptr;
 		}
@@ -382,7 +394,9 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 			throw InternalException("Could not convert type %s to a decimal.",
 			                        arguments[i]->GetReturnType().ToString());
 		}
-		max_width = MaxValue<uint8_t>(width, max_width);
+		if (width > max_width) {
+			max_width = width;
+		}
 		max_scale = MaxValue<uint8_t>(scale, max_scale);
 		max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 	}
@@ -391,11 +405,6 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 	if (!IS_MODULO) {
 		// for addition/subtraction, we add 1 to the width to ensure we don't overflow
 		required_width = NumericCast<uint8_t>(required_width + 1);
-		if (required_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
-			// we don't automatically promote past the hugeint boundary to avoid the large hugeint performance penalty
-			bind_data->check_overflow = true;
-			required_width = Decimal::MAX_WIDTH_INT64;
-		}
 	}
 	if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
 		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
@@ -435,14 +444,11 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(BindScalarFunctionInput &input) 
 		bound_function.SetFunctionCallback(GetFORArithmeticFunction<OP>(result_type.InternalType()));
 		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
-	if (result_type.InternalType() != PhysicalType::INT128 && result_type.InternalType() != PhysicalType::UINT128) {
-		if (IS_SUBTRACT) {
-			bound_function.SetStatisticsCallback(
-			    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>);
-		} else {
-			bound_function.SetStatisticsCallback(
-			    PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>);
-		}
+	if (IS_SUBTRACT) {
+		bound_function.SetStatisticsCallback(
+		    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>);
+	} else {
+		bound_function.SetStatisticsCallback(PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>);
 	}
 	return std::move(bind_data);
 }
@@ -1063,9 +1069,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 			throw InternalException("Could not convert type %s to a decimal?",
 			                        arguments[i]->GetReturnType().ToString());
 		}
-		if (width > max_width) {
-			max_width = width;
-		}
+		max_width = MaxValue<uint8_t>(width, max_width);
 		result_width += width;
 		result_scale += scale;
 	}
@@ -1112,10 +1116,8 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 		bound_function.SetFunctionCallback(GetFORArithmeticFunction<MultiplyOperator>(result_type.InternalType()));
 		bound_function.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 	}
-	if (result_type.InternalType() != PhysicalType::INT128) {
-		bound_function.SetStatisticsCallback(
-		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
-	}
+	bound_function.SetStatisticsCallback(
+	    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
 	return std::move(bind_data);
 }
 

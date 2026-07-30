@@ -119,9 +119,9 @@ static inline void UnpackBuffer(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, O
                                 std::size_t groups, OUT_T frame = 0) {
 	std::size_t start = 0; // groups the autovec shuffle path already unpacked (0 when it is unavailable/ineligible)
 #if DUCKDB_AUTOVEC
-	if constexpr (UseShuffleUnpack<WIDTH, OUT_T>()) {
+	if constexpr (::duckdb::UseShuffleUnpack<WIDTH, OUT_T>()) {
 		if (::duckdb::CpuBenefitsFromAutoVec()) {
-			start = ShuffleUnpack<WIDTH, OUT_T>(in, out, groups, frame);
+			start = ::duckdb::ShuffleUnpack<WIDTH, OUT_T>(in, out, groups, frame);
 		}
 	}
 #endif

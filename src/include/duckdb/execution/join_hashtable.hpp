@@ -268,6 +268,12 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
+	//! Enable selective NULL refinement for an uncorrelated multi-column MARK join
+	void InitializeUncorrelatedMarkJoin();
+	bool HasUncorrelatedMarkJoin() const;
+	//! Construct a MARK result, including selective UNKNOWN refinement when enabled
+	void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
+	                             optional_ptr<const bool> found_match = nullptr);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
@@ -302,7 +308,11 @@ public:
 		return data_collection ? data_collection->Count() : 0;
 	}
 	idx_t SizeInBytes() const {
-		return data_collection ? data_collection->SizeInBytes() : 0;
+		idx_t size = data_collection ? data_collection->SizeInBytes() : 0;
+		if (mark_join_info.uncorrelated_condition_rows) {
+			size += mark_join_info.uncorrelated_condition_rows->SizeInBytes();
+		}
+		return size;
 	}
 
 	PartitionedTupleData &GetSinkCollection() {
@@ -429,7 +439,11 @@ public:
 		DataChunk correlated_payload;
 		//! Result chunk used for aggregating into correlated_counts
 		DataChunk result_chunk;
-	} correlated_mark_join_info;
+		//! Whether an RHS condition can produce UNKNOWN during equality comparison
+		bool uncorrelated_has_null = false;
+		//! All RHS condition rows, used only for uncorrelated row equality NULL refinement
+		unique_ptr<ColumnDataCollection> uncorrelated_condition_rows;
+	} mark_join_info;
 
 private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,

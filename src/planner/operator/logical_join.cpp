@@ -83,4 +83,14 @@ void LogicalJoin::GetExpressionBindings(const Expression &root_expr, unordered_s
 	                                                              });
 }
 
+void LogicalJoin::MoveJoinState(LogicalJoin &source, LogicalJoin &target) {
+	D_ASSERT(source.join_type == target.join_type);
+	target.mark_index = source.mark_index;
+	target.left_projection_map = std::move(source.left_projection_map);
+	target.right_projection_map = std::move(source.right_projection_map);
+	if (source.has_estimated_cardinality) {
+		target.SetEstimatedCardinality(source.estimated_cardinality);
+	}
+}
+
 } // namespace duckdb

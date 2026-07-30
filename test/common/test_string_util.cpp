@@ -104,6 +104,16 @@ TEST_CASE("Test strcmp() to ensure platform sanity", "[comparison]") {
 	REQUIRE_FALSE(nut != nut);
 }
 
+TEST_CASE("Test common prefix size", "[string_util]") {
+	REQUIRE(StringUtil::GetCommonPrefixSize("", "") == 0);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abc", "") == 0);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abc", "xyz") == 0);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abc", "abc") == 3);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abc", "abcdef") == 3);
+	REQUIRE(StringUtil::GetCommonPrefixSize("abcdef", "abcxyz") == 3);
+	REQUIRE(StringUtil::GetCommonPrefixSize("🦆ab", "🦆ac") == 5);
+}
+
 TEST_CASE("Test join vector items", "[string_util]") {
 	SECTION("Three string items") {
 		duckdb::vector<std::string> str_items = {"abc", "def", "ghi"};

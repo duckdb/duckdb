@@ -55,38 +55,35 @@ FOR_INSTANTIATE(uhugeint_t)
 // buffers are safe when processed back-to-front. Unsigned lanes are bit-identical to the signed widen.
 template <class S, class L>
 DUCKDB_AUTOVEC_TARGET static inline void WidenBlock8(const S *src, L *dst) {
-	using duckdb_bitpacking::internal::duckdb_bp_u16x8;
-	using duckdb_bitpacking::internal::duckdb_bp_u32x8;
-	using duckdb_bitpacking::internal::duckdb_bp_u64x4;
-	using duckdb_bitpacking::internal::duckdb_bp_u8x8;
+	typedef uint8_t duckdb_av_u8x8 __attribute__((vector_size(8)));
 	if constexpr (sizeof(S) == 1) {
-		duckdb_bp_u8x8 v;
+		duckdb_av_u8x8 v;
 		std::memcpy(&v, src, 8);
 		if constexpr (sizeof(L) == 2) {
-			auto w = __builtin_convertvector(v, duckdb_bp_u16x8);
+			auto w = __builtin_convertvector(v, duckdb_av_u16x8);
 			std::memcpy(dst, &w, 16);
 			return;
 		}
-		auto w = __builtin_convertvector(v, duckdb_bp_u32x8);
+		auto w = __builtin_convertvector(v, duckdb_av_u32x8);
 		if constexpr (sizeof(L) == 4) {
 			std::memcpy(dst, &w, 32);
 			return;
 		}
 		WidenBlock8<uint32_t, uint64_t>(reinterpret_cast<const uint32_t *>(&w), reinterpret_cast<uint64_t *>(dst));
 	} else if constexpr (sizeof(S) == 2) {
-		duckdb_bp_u16x8 v;
+		duckdb_av_u16x8 v;
 		std::memcpy(&v, src, 16);
-		auto w = __builtin_convertvector(v, duckdb_bp_u32x8);
+		auto w = __builtin_convertvector(v, duckdb_av_u32x8);
 		if constexpr (sizeof(L) == 4) {
 			std::memcpy(dst, &w, 32);
 			return;
 		}
 		WidenBlock8<uint32_t, uint64_t>(reinterpret_cast<const uint32_t *>(&w), reinterpret_cast<uint64_t *>(dst));
 	} else {
-		duckdb_bp_u32x8 v;
+		duckdb_av_u32x8 v;
 		std::memcpy(&v, src, 32);
-		auto lo = __builtin_convertvector(__builtin_shufflevector(v, v, 0, 1, 2, 3), duckdb_bp_u64x4);
-		auto hi = __builtin_convertvector(__builtin_shufflevector(v, v, 4, 5, 6, 7), duckdb_bp_u64x4);
+		auto lo = __builtin_convertvector(__builtin_shufflevector(v, v, 0, 1, 2, 3), duckdb_av_u64x4);
+		auto hi = __builtin_convertvector(__builtin_shufflevector(v, v, 4, 5, 6, 7), duckdb_av_u64x4);
 		std::memcpy(dst + 0, &lo, 32);
 		std::memcpy(dst + 4, &hi, 32);
 	}

@@ -330,7 +330,7 @@ void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const
 	}
 	view_binder->SetCanContainNulls(true);
 
-	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name);
+	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name, true);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
 	auto copy = stmt.Copy();
@@ -357,6 +357,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		if (t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
 		    t == QueryNodeType::DELETE_QUERY_NODE) {
 			throw BinderException("DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a VIEW");
+		}
+		if (t == QueryNodeType::COPY_QUERY_NODE) {
+			throw BinderException("COPY statements are not allowed as CTE bodies inside a VIEW");
 		}
 	}
 	optional_ptr<LogicalDependencyList> dependencies;
@@ -649,6 +652,10 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.0.0)";
 			throw BinderException(msg);
 		}
+	}
+
+	if (create_trigger_info.timing == TriggerTiming::INSTEAD_OF) {
+		throw NotImplementedException("INSTEAD OF triggers are not yet supported");
 	}
 
 	// Validate UPDATE OF columns exist

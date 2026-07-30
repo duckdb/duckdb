@@ -222,6 +222,8 @@ enum class ExtensionLoadResult : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
 
+enum class ExternalResourceOperation : uint8_t;
+
 enum class ExtraDropInfoType : uint8_t;
 
 enum class ExtraPersistentColumnDataType : uint8_t;
@@ -277,6 +279,8 @@ enum class InsertColumnOrder : uint8_t;
 enum class InterruptMode : uint8_t;
 
 enum class JoinFilterPushdownMode : uint8_t;
+
+enum class JoinOrderOperatorType : uint8_t;
 
 enum class JoinRefType : uint8_t;
 
@@ -392,6 +396,8 @@ enum class PhysicalType : uint8_t;
 
 enum class PipelineBroadcastExchangeConsumerMode : uint8_t;
 
+enum class PipelineBroadcastExchangeOrderMode : uint8_t;
+
 enum class PipelineInputMode : uint8_t;
 
 enum class PragmaType : uint8_t;
@@ -439,6 +445,8 @@ enum class RequestType : uint8_t;
 enum class ResultModifierType : uint8_t;
 
 enum class RowGroupAppendMode : uint8_t;
+
+enum class RowIdHandling : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
@@ -875,6 +883,9 @@ template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
+const char* EnumUtil::ToChars<ExternalResourceOperation>(ExternalResourceOperation value);
+
+template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
 
 template<>
@@ -957,6 +968,9 @@ const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value);
 
 template<>
 const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode value);
+
+template<>
+const char* EnumUtil::ToChars<JoinOrderOperatorType>(JoinOrderOperatorType value);
 
 template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
@@ -1130,6 +1144,9 @@ template<>
 const char* EnumUtil::ToChars<PipelineBroadcastExchangeConsumerMode>(PipelineBroadcastExchangeConsumerMode value);
 
 template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeOrderMode>(PipelineBroadcastExchangeOrderMode value);
+
+template<>
 const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value);
 
 template<>
@@ -1200,6 +1217,9 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
 
 template<>
 const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
+
+template<>
+const char* EnumUtil::ToChars<RowIdHandling>(RowIdHandling value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
@@ -1710,6 +1730,9 @@ template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
+ExternalResourceOperation EnumUtil::FromString<ExternalResourceOperation>(const char *value);
+
+template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
 
 template<>
@@ -1792,6 +1815,9 @@ InterruptMode EnumUtil::FromString<InterruptMode>(const char *value);
 
 template<>
 JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value);
+
+template<>
+JoinOrderOperatorType EnumUtil::FromString<JoinOrderOperatorType>(const char *value);
 
 template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);
@@ -1965,6 +1991,9 @@ template<>
 PipelineBroadcastExchangeConsumerMode EnumUtil::FromString<PipelineBroadcastExchangeConsumerMode>(const char *value);
 
 template<>
+PipelineBroadcastExchangeOrderMode EnumUtil::FromString<PipelineBroadcastExchangeOrderMode>(const char *value);
+
+template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value);
 
 template<>
@@ -2035,6 +2064,9 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
 
 template<>
 RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
+
+template<>
+RowIdHandling EnumUtil::FromString<RowIdHandling>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);

@@ -549,7 +549,7 @@ static T DeltaDecode(T *data, T previous_value, const size_t size) {
 #if DUCKDB_AUTOVEC
 	if (sizeof(T) == 4) {
 		// 4-lane prefix sum: the carried chain is one add+splat per 4 values, ~2x the serial loop
-		typedef duckdb_bitpacking::internal::duckdb_bp_u32x4 v4su;
+		typedef duckdb_av_u32x4 v4su;
 		auto d32 = reinterpret_cast<uint32_t *>(data);
 		const v4su zero = {};
 		v4su run = zero + static_cast<uint32_t>(previous_value);

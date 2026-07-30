@@ -17,7 +17,7 @@ struct ConjunctionState : public ExpressionState {
 			dense_child.push_back(IsBitmapComparisonCandidate(*child));
 			bitmap_capable = bitmap_capable || dense_child.back();
 		}
-		bitmap_capable = bitmap_capable && BitmapSelectionEnabled();
+		bitmap_capable = bitmap_capable && CpuBenefitsFromAutoVec();
 		adaptive_filter = make_uniq<AdaptiveFilter>(expr);
 		if (HasContext()) {
 			adaptive_filter->SetLogger(GetContext().logger);
