@@ -11,6 +11,14 @@ include benchmark/feature/clickstream/data/clickstream_load.benchmark.in
 name ${BENCH_NAME}
 group feature
 
+# Runs on every Initialize(), even when load/reload is skipped by the source-data cache, so this
+# is the one place to force a session setting for a benchmarking comparison run.
+# This matters for REFRESH as much as for SERVE: the setting gates the GC zonemap row-group filter in
+# EvictOldVersions and the entity-spine DISTINCT elision, both of which the timed REFRESH exercises
+# (`users` is declared with a PRIMARY KEY, so the DISTINCT is elided by default).
+init
+SET feature_disable_optimizations = false;
+
 # Only the source needs to exist before timing; the feature may be at version 0 when PRIOR_VERSIONS=0,
 # so the assert deliberately does not read the feature store.
 assert I
