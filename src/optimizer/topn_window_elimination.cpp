@@ -1248,12 +1248,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 		condition.left = make_uniq<BoundColumnRefExpression>(lhs_column.name, lhs_column.type, lhs_column.binding);
 		if (use_inner_reconstruction) {
 			D_ASSERT(rhs_table_idx != DConstants::INVALID_INDEX);
-			condition.right = make_uniq<BoundColumnRefExpression>(
-			    lhs_column.name, rhs->types[i], ColumnBinding {rhs_table_idx, i});
+			condition.right =
+			    make_uniq<BoundColumnRefExpression>(lhs_column.name, rhs->types[i], ColumnBinding {rhs_table_idx, i});
 		} else {
 			const idx_t rhs_rowid_idx = aggregate_offset + i;
-			condition.right = make_uniq<BoundColumnRefExpression>(
-			    lhs_column.name, rhs->types[rhs_rowid_idx], rhs_bindings[rhs_rowid_idx]);
+			condition.right = make_uniq<BoundColumnRefExpression>(lhs_column.name, rhs->types[rhs_rowid_idx],
+			                                                      rhs_bindings[rhs_rowid_idx]);
 		}
 		join->conditions.push_back(std::move(condition));
 	}
