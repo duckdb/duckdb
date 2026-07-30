@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
@@ -215,6 +216,7 @@ TEST_CASE("Reject multiple checkpoint markers before changing WAL files", "[stor
 		DuckDB db(database_path, config.get());
 	} catch (std::exception &ex) {
 		threw = true;
+		REQUIRE(ErrorData(ex).Type() == ExceptionType::DATA_CORRUPTION);
 		REQUIRE(StringUtil::Contains(ex.what(), "WAL cannot contain more than one checkpoint marker"));
 	}
 	REQUIRE(threw);

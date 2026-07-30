@@ -1359,7 +1359,7 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 
 void WriteAheadLogDeserializer::ReplayCheckpoint() {
 	if (state.checkpoint_position.IsValid()) {
-		throw InvalidInputException("WAL cannot contain more than one checkpoint marker");
+		throw DataCorruptionException("WAL cannot contain more than one checkpoint marker");
 	}
 	auto entry = WALCheckpoint::Deserialize(deserializer);
 	state.checkpoint_id = entry.meta_block;
