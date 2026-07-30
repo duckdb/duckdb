@@ -62,7 +62,8 @@ public:
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const Identifier &table_schema,
 		                const Identifier &table_name)
-		    : index_list(index_list), index(std::move(index)), table_schema(table_schema), table_name(table_name) {};
+		    : index_list(index_list), index(std::move(index)), table_schema(table_schema), table_name(table_name) {
+		}
 
 		reference<TableIndexList> index_list;
 		unique_ptr<Index> index;
@@ -795,6 +796,16 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			auto data_ptr = buffer_handle.GetDataMutable();
 
 			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
+
+			// For read-only mode, retain the transient block handle and release the pin held by the buffer handle. The
+			// buffer can then be evicted to temporary storage until the index is bound.
+			if (db.IsReadOnly()) {
+				if (!data_info.transient_block_handles) {
+					data_info.transient_block_handles = make_shared_ptr<vector<shared_ptr<BlockHandle>>>();
+				}
+				data_info.transient_block_handles->push_back(std::move(block_handle));
+				continue;
+			}
 
 			// Convert the buffer handle to a persistent block and store the block id.
 			if (!deserialize_only) {
