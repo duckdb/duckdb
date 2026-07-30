@@ -136,6 +136,8 @@ public:
 	vector<RecursiveCTEPartialKeySpec> partial_key_index_specs;
 
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context,
+	                                                   const OperatorPartitionInfo &partition_info) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,

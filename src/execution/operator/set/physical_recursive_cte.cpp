@@ -477,6 +477,13 @@ PhysicalRecursiveCTEStateScan::PhysicalRecursiveCTEStateScan(PhysicalPlan &physi
 }
 
 unique_ptr<GlobalSourceState> PhysicalRecursiveCTEStateScan::GetGlobalSourceState(ClientContext &context) const {
+	return GetGlobalSourceState(context, OperatorPartitionInfo::NoPartitionInfo());
+}
+
+unique_ptr<GlobalSourceState>
+PhysicalRecursiveCTEStateScan::GetGlobalSourceState(ClientContext &context,
+                                                    const OperatorPartitionInfo &partition_info) const {
+	(void)partition_info;
 	return make_uniq<RecursiveCTEStateScanGlobalState>();
 }
 
