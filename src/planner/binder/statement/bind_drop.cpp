@@ -58,50 +58,10 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
-		// resolve the catalog + (possibly nested) schema path. ResolveCatalog (via BindSchemaOrCatalog) decides which
-		// leading components form the catalog; default_catalog=false leaves the catalog empty when none is given.
-		auto resolved = ResolveCatalog(context, stmt.info->GetQualifiedName(), false);
-		auto &rpath = resolved.Path();
-		vector<Identifier> schema_path(rpath.begin() + 1, rpath.end() - 1);
-		if (schema_path.size() > 1) {
-			// a nested schema was given - navigate to it and drop from it. Keep the full resolved path so execution
-			// navigates the same nested schema (and no-ops for IF EXISTS).
-			auto catalog_name = rpath.front();
-			auto target_name = resolved.Name();
-			stmt.info->SetQualifiedName(std::move(resolved));
-			auto schema = Catalog::GetSchema(context, catalog_name, schema_path, stmt.info->if_not_found);
-			optional_ptr<CatalogEntry> entry;
-			if (schema) {
-				auto transaction = schema->catalog.GetCatalogTransaction(context);
-				entry = schema->GetEntry(transaction, stmt.info->type, target_name);
-				if (!entry && stmt.info->type == CatalogType::MACRO_ENTRY) {
-					// "DROP MACRO" also drops table macros
-					entry = schema->GetEntry(transaction, CatalogType::TABLE_MACRO_ENTRY, target_name);
-					if (entry) {
-						stmt.info->type = CatalogType::TABLE_MACRO_ENTRY;
-					}
-				}
-			}
-			if (!entry) {
-				if (stmt.info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-					throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(stmt.info->type),
-					                       target_name.GetIdentifierName());
-				}
-				break;
-			}
-			if (entry->internal) {
-				throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetIdentifierName());
-			}
-			properties.RegisterDBRead(schema->catalog, context);
-			if (!entry->temporary) {
-				properties.RegisterDBModify(schema->catalog, context, DatabaseModificationType::DROP_CATALOG_ENTRY);
-			}
-			break;
-		}
-		// unqualified or single-level: look the entry up through the search path. Feed the resolved (catalog, schema,
-		// name) to the lookup - no second BindSchemaOrCatalog call is needed.
-		stmt.info->SetQualifiedName(
-		    QualifiedName(rpath.front(), schema_path.empty() ? Identifier() : schema_path[0], resolved.Name()));
+		// Resolve the catalog + (possibly nested) schema path. A leading component is the catalog when it names an
+		// attached database, and otherwise the outermost schema of a nested schema path. The entry lookup below
+		// navigates whatever qualification comes out of this.
+		stmt.info->SetQualifiedName(BindTableName(stmt.info->GetQualifiedName()));
 		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->GetQualifiedName().Catalog());
 		if (catalog) {
 			// mark catalog as accessed
@@ -137,8 +97,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (entry->internal) {
 			throw CatalogException("Cannot drop internal catalog entry \"%s\"!", entry->name.GetIdentifierName());
 		}
-		stmt.info->SetQualifiedName(QualifiedName(entry->ParentCatalog().GetName(), entry->ParentSchema().name,
-		                                          stmt.info->GetQualifiedName().Name()));
+		// keep the entry's full (possibly nested) schema path so execution navigates the same schema
+		stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 		if (!entry->temporary) {
 			// we can only drop temporary schema entries in read-only mode
 			properties.RegisterDBModify(entry->ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);

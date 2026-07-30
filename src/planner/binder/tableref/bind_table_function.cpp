@@ -372,25 +372,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-	Identifier catalog = fexpr.GetQualifiedName().Catalog();
-	Identifier schema = fexpr.GetQualifiedName().Schema();
-	Binder::BindSchemaOrCatalog(context, catalog, schema);
-
-	// fetch the function from the catalog
-
+	// fetch the function from the catalog. Resolve the qualification first: a leading component is the catalog when
+	// it names an attached database, and otherwise the outermost schema of a (possibly nested) schema path.
 	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(fexpr.FunctionName()),
 	                                      error_context);
-	optional_ptr<CatalogEntry> func_entry;
-	// the function can be qualified with a nested schema path (e.g. "s1.s2.my_macro()") - that is unambiguous, so
-	// we look it up directly
 	auto bound_name = BindTableName(fexpr.GetQualifiedName());
-	if (bound_name.Path().size() > 3) {
-		func_entry =
-		    GetCatalogEntry(EntryLookupInfo(table_function_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
-	} else {
-		func_entry = GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
-	}
-	auto &func_catalog = *func_entry;
+	auto &func_catalog =
+	    *GetCatalogEntry(EntryLookupInfo(table_function_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
