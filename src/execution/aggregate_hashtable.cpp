@@ -695,9 +695,8 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 		return;
 	}
 
-	// find the groups associated with the addresses
-	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
-	FindOrCreateGroups(groups, state.addresses);
+	groups.Hash(state.hashes);
+	FindGroupsInternal(groups, state.hashes, state.addresses);
 	// now fetch the aggregates
 	RowOperations::FinalizeStates(state.row_state, *layout_ptr, state.addresses, result, 0);
 }
@@ -735,6 +734,117 @@ static void GroupedAggregateHashTableInnerLoop(ht_entry_t *const entries, const 
 			throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
 		}
 	}
+}
+
+template <bool HAS_SEL>
+static void GroupedAggregateHashTableFindInnerLoop(ht_entry_t *const entries, const idx_t capacity,
+                                                   const hash_t bitmask, const hash_t *const hash_salts,
+                                                   uint64_t *const ht_offsets, const SelectionVector *const sel_vector,
+                                                   const idx_t remaining_entries, SelectionVector &compare_vector,
+                                                   idx_t &compare_count) {
+	for (idx_t i = 0; i < remaining_entries; i++) {
+		const auto index = HAS_SEL ? sel_vector->get_index_unsafe(i) : i;
+		const auto salt = hash_salts[index];
+		auto &ht_offset = ht_offsets[index];
+
+		idx_t inner_iteration_count;
+		for (inner_iteration_count = 0; inner_iteration_count < capacity; inner_iteration_count++) {
+			auto &entry = entries[ht_offset];
+			if (!entry.IsOccupied()) {
+				throw InternalException("Could not find group in GroupedAggregateHashTable");
+			}
+			if (DUCKDB_LIKELY(entry.GetSalt() == salt)) {
+				compare_vector.set_index(compare_count++, index);
+				break;
+			}
+			SaltIncrementAndWrap(ht_offset, salt, bitmask);
+		}
+		if (DUCKDB_UNLIKELY(inner_iteration_count == capacity)) {
+			throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
+		}
+	}
+}
+
+void GroupedAggregateHashTable::FindGroupsInternal(DataChunk &groups, Vector &group_hashes_v, Vector &addresses_v) {
+	D_ASSERT(groups.ColumnCount() + 1 == layout_ptr->ColumnCount());
+	D_ASSERT(group_hashes_v.GetType() == LogicalType::HASH);
+	D_ASSERT(state.ht_offsets.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(state.ht_offsets.GetType() == LogicalType::UBIGINT);
+	D_ASSERT(addresses_v.GetType() == LogicalType::POINTER);
+	D_ASSERT(state.hash_salts.GetType() == LogicalType::HASH);
+
+	const auto chunk_size = groups.size();
+	if (skip_lookups) {
+		FindOrCreateGroups(groups, group_hashes_v, addresses_v, state.new_groups);
+		return;
+	}
+
+	if (state.group_chunk.ColumnCount() == 0) {
+		state.group_chunk.InitializeEmpty(layout_ptr->GetTypes());
+	}
+	D_ASSERT(state.group_chunk.ColumnCount() == layout_ptr->GetTypes().size());
+	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
+		state.group_chunk.data[grp_idx].Reference(groups.data[grp_idx]);
+	}
+	state.group_chunk.data[groups.ColumnCount()].Reference(group_hashes_v);
+
+	TupleDataCollection::ToUnifiedFormat(state.partitioned_append_state.chunk_state, state.group_chunk);
+
+	const auto hashes = group_hashes_v.Values<hash_t>();
+	addresses_v.Flatten();
+	const auto addresses = FlatVector::GetDataMutable<data_ptr_t>(addresses_v);
+	const auto ht_offsets = FlatVector::GetDataMutable<uint64_t>(state.ht_offsets);
+	const auto hash_salts = FlatVector::GetDataMutable<hash_t>(state.hash_salts);
+
+	for (idx_t r = 0; r < chunk_size; r++) {
+		const auto &hash = hashes[r].GetValue();
+		auto &ht_offset = ht_offsets[r];
+		ht_offset = ApplyBitMask(hash);
+		D_ASSERT(ht_offset == hash % capacity);
+		hash_salts[r] = ht_entry_t::ExtractSalt(hash);
+	}
+
+	const SelectionVector *sel_vector = FlatVector::IncrementalSelectionVector();
+	idx_t remaining_entries = chunk_size;
+	idx_t iteration_count;
+	for (iteration_count = 0; remaining_entries > 0 && iteration_count < capacity; iteration_count++) {
+		idx_t need_compare_count = 0;
+		idx_t no_match_count = 0;
+
+		if (sel_vector->IsSet()) {
+			GroupedAggregateHashTableFindInnerLoop<true>(entries, capacity, bitmask, hash_salts, ht_offsets, sel_vector,
+			                                             remaining_entries, state.group_compare_vector,
+			                                             need_compare_count);
+		} else {
+			GroupedAggregateHashTableFindInnerLoop<false>(entries, capacity, bitmask, hash_salts, ht_offsets, sel_vector,
+			                                              remaining_entries, state.group_compare_vector,
+			                                              need_compare_count);
+		}
+
+		for (idx_t need_compare_idx = 0; need_compare_idx < need_compare_count; need_compare_idx++) {
+			const auto index = state.group_compare_vector.get_index_unsafe(need_compare_idx);
+			const auto &entry = entries[ht_offsets[index]];
+			addresses[index] = entry.GetPointer();
+		}
+
+		row_matcher.Match(state.group_chunk, state.partitioned_append_state.chunk_state.vector_data,
+		                  state.group_compare_vector, need_compare_count, addresses_v, &state.no_match_vector,
+		                  no_match_count);
+
+		for (idx_t i = 0; i < no_match_count; i++) {
+			const auto index = state.no_match_vector.get_index_unsafe(i);
+			auto &ht_offset = ht_offsets[index];
+			const auto salt = hash_salts[index];
+			SaltIncrementAndWrap(ht_offset, salt, bitmask);
+		}
+		sel_vector = &state.no_match_vector;
+		remaining_entries = no_match_count;
+	}
+	if (iteration_count == capacity) {
+		throw InternalException("Maximum outer iteration count reached in GroupedAggregateHashTable");
+	}
+
+	FlatVector::SetSize(addresses_v, chunk_size);
 }
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
