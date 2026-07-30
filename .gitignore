@@ -297,7 +297,9 @@ cmake-build-relwithdebinfo
 CMakeUserPresets.json
 
 # Generated documentation
-docs
+docs/*
+!docs/images/
+!docs/images/**
 
 # tests
 test/test.sql

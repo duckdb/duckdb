@@ -30,7 +30,7 @@ CREATE FEATURE [IF NOT EXISTS] <name>
     AS (<select_query>);                        -- the aggregate that produces feature values
 ```
 
-`CREATE FEATURE` only registers **metadata** — no data is materialised until the first `REFRESH`. The entity keys are resolved in this order: the explicit `ENTITY t (cols)` list if given, else the entity table's `PRIMARY KEY`, else whichever entity-table columns the query projects. If the query projects **no** entity column, the feature is *global* (a single aggregate row). Intervals accept `INTERVAL '2 days'`, `INTERVAL 2 DAYS`, or the `2 DAYS` shorthand (units: `SECOND(S)`, `MINUTE(S)`, `HOUR(S)`, `DAY(S)`).
+`CREATE FEATURE` only registers **metadata** — no data is materialised until the first `REFRESH`. The entity keys are resolved in this order: the explicit `ENTITY t (cols)` list if given, else the entity table's `PRIMARY KEY`, else whichever entity-table columns the query projects. If the query projects **no** entity column, the feature is _global_ (a single aggregate row). Intervals accept `INTERVAL '2 days'`, `INTERVAL 2 DAYS`, or the `2 DAYS` shorthand (units: `SECOND(S)`, `MINUTE(S)`, `HOUR(S)`, `DAY(S)`).
 
 ### `REFRESH FEATURE` — materialise a version
 
@@ -165,6 +165,7 @@ make debug
 ### Testing
 
 To access shell environment:
+
 ```bash
 build/reldebug/duckdb
 ```
@@ -184,8 +185,12 @@ build/reldebug/test/unittest "*"
 ### Benchmarks
 
 Feature store benchmarks live under `benchmark/feature/clickstream/`, in three families: `serve/`
-(point-in-time SERVE), `refresh/` (windowed REFRESH snapshots), `cases/` (multi-step workflows).
-ClickBench data downloads automatically on first run and is cached per scale.
+(point-in-time SERVE), `refresh/` (windowed REFRESH snapshots), `cases/` (multi-step workflows, e.g.
+GC pressure or interleaved refresh+serve). Each is a **point in a knob space** — source scale,
+aggregation complexity, version depth, retention, serve mode, TTL, and more — sampled by a seeded
+pairwise generator rather than hand-written per scenario, so the exact set is reproducible from its
+seed and provably covers every pairwise interaction of knob values. ClickBench data downloads
+automatically on first run and is cached per scale (1, 10, or 100 source files).
 
 ```bash
 build/reldebug/benchmark/benchmark_runner "benchmark/feature/.*"                        # everything
@@ -203,15 +208,34 @@ python3 scripts/generate_feature_benchmarks.py --seed 7         # a different re
 python3 scripts/generate_feature_benchmarks.py --verify         # assert full pairwise coverage
 ```
 
-See [benchmark/feature/clickstream/README.md](benchmark/feature/clickstream/README.md) for the
-sampling methodology.
+The exact scenario list — every family, every knob value, per scenario — is checked in at
+[benchmark/feature/clickstream/scenarios.manifest](benchmark/feature/clickstream/scenarios.manifest),
+regenerated alongside the benchmark files themselves; it's the fastest way to see precisely what a
+given benchmark run covers without reading every `.benchmark` stub. See
+[benchmark/feature/clickstream/README.md](benchmark/feature/clickstream/README.md) for the full
+sampling methodology, the `cases/` scenario descriptions, and how to run a family with
+`feature_disable_optimizations` toggled to measure the optimized vs. unoptimized baseline.
 
-Run standard DuckDB benchmarks:
+#### Viewing results
 
-```bash
-build/reldebug/benchmark/benchmark_runner
-```
+Benchmark results (optimized vs. unoptimized, across scales) and references are tracked here:
+[Benchmark Results](https://docs.google.com/document/d/1mtmizUy1UohX_ehGZ7x3nsh6R1PTP12Y6em4hqEnsCk/edit?usp=sharing "TODO: replace with the real Google Doc link").
 
-See [Benchmark Guide](benchmark/README.md) for details.
+<table>
+<tr><td align="center">
 
-Please also refer to our [Build Guide](https://duckdb.org/docs/current/dev/building/overview) and [Contribution Guide](CONTRIBUTING.md).
+<img src="docs/images/total_time_by_category.png" width="280" alt="Total time per category, optimized vs unoptimized"><br>
+Total time per category<br>(optimized vs. unoptimized)
+
+</td><td align="center">
+
+<img src="docs/images/speedup_by_benchmark.png" width="280" alt="Per-benchmark speedup by test case"><br>
+Per-benchmark speedup<br>(by test case)
+
+</td><td align="center">
+
+<img src="docs/images/cases_time_vs_scale.png" width="280" alt="Cases: time vs scale, log-log"><br>
+Cases: time vs. scale<br>(log-log)
+
+</td></tr>
+</table>

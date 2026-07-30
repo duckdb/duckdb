@@ -23,10 +23,36 @@ scenario). All three reuse the same mechanism: a `template` block injects `BENCH
 - **serve/** — timed statement is a `SELECT ... FROM SERVE FEATURE ...`; pairwise over 10 knobs.
 - **refresh/** — timed statement is a single `REFRESH FEATURE f AT ...` (WINDOW is a live knob here);
   pairwise over 5 knobs.
-- **cases/** — curated multi-step scenarios whose `RUN_QUERY` is a multi-statement sequence on one
-  line (interleaved refresh+serve, GC pressure, concurrent multi-feature refresh, refresh-then-serve),
-  emitted at each source scale. These set `require_reinit` so each hot run starts from a clean,
-  freshly-rebuilt feature store (the timed sequence mutates state).
+- **cases/** — curated (not sampled) multi-step scenarios whose `RUN_QUERY` is a multi-statement
+  sequence on one line, emitted at each source scale (`PARQUET_COUNT` = 1, 10, 100 — see
+  [scenarios.manifest](scenarios.manifest) for the full, generated list of every scenario in every
+  family, with its exact knob values):
+  - `multi_version_refresh` — 8 refreshes, `RETAIN 20` (no eviction; a pure version-append baseline)
+  - `gc_pressure_refresh` — 8 refreshes, `RETAIN 2` (eviction fires on almost every call)
+  - `high_retain_gc_pressure` — 8 refreshes against a store pre-built to `RETAIN 10` versions, so
+    every timed refresh evicts from an already-large, steady-state-sized store rather than one that
+    grew from empty. This is the regime the eviction scan's row-group filter targets: each call
+    should scan only the ~1 version being evicted, not all ~10 live versions.
+  - `refresh_then_serve` — one `REFRESH` immediately followed by one `SERVE ... ASOF`
+  - `concurrent_feature_refresh` — three features sharing one entity key, refreshed in one timed unit
+  - `refresh_serve_interleaved` — three interleaved refresh+serve cycles (steady-state multi-version
+    serving)
+
+  Each hot run must start from a clean, freshly-rebuilt feature store, since the timed sequence
+  mutates state; `cases/` gets there via an untimed `cleanup` block that re-runs the (idempotent)
+  `SETUP_SQL`, not `require_reinit` — see "How the template wires the knobs" below for why.
+
+### Measuring with optimizations disabled
+
+Every family's template carries `SET feature_disable_optimizations = false;` in an `init` block,
+which always runs (even when `load`/`reload` is skipped by the source-data cache). Flip it to `true`
+in [serve/serve.benchmark.in](serve/serve.benchmark.in), [refresh/refresh.benchmark.in](refresh/refresh.benchmark.in)
+and [cases/cases.benchmark.in](cases/cases.benchmark.in) to measure the unoptimized baseline: SERVE
+falls back to the legacy ASOF join instead of the version-table equi-join and its store scan is left
+unbounded, REFRESH's GC eviction scan drops its zonemap row-group filter, and REFRESH's entity-spine
+`DISTINCT` is no longer elided. None of this changes results — every optimization it disables is
+result-preserving — only timings and plan shape. Run once with `false`, once with `true`, and diff the
+`benchmark_runner` output to isolate what the optimizations are worth.
 
 ## Why a scenario space?
 
@@ -87,7 +113,7 @@ downloaded a scale, the others reuse it.
   of an external `load file.sql`** (that file is read raw). So the source build and the
   scenario-specific feature setup are **inline** in `serve.benchmark.in`, where `${VAR}` expands.
 - **The source is cached per scale** via `cache feature_src_${PARQUET_COUNT}.db`; the key must include
-  the scale or the 20-file and 100-file datasets would collide.
+  the scale or the 1-, 10- and 100-file datasets would collide.
 - **Feature setup is idempotent and split across `load`/`reload`.** The runner runs `init` _before_
   `load`, so feature DDL cannot live in `init` (the source tables don't exist yet). Instead the
   first run per scale builds source + features in `load` (and caches the source); subsequent runs
@@ -100,8 +126,8 @@ downloaded a scale, the others reuse it.
   (bounded by `RETAIN`).
 - **`cases/` uses `cleanup`, not `require_reinit`.** Both give a clean store per run, but
   `require_reinit` reopens the whole cached database before every hot run — a full close + checkpoint
-  + reopen of a multi-GB file. That is ~14s of untimed work per run at s20 (and minutes at s100)
-  against ~1s of measurement, and because the runner prints the run number *before* re-initialising,
+  + reopen of a multi-GB file. That is untimed work of several seconds per run at s10 (and minutes at
+  s100) against ~1s of measurement, and because the runner prints the run number *before* re-initialising,
   the wait looks like the next run hanging. Re-running the idempotent `SETUP_SQL` in `cleanup`
   reaches the same state ~6x faster. The trailing `CHECKPOINT` matters: it reclaims the blocks freed
   by `DROP FEATURE`, without which the cache grows ~1GB per run and timings drift slower.
