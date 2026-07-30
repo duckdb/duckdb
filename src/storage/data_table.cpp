@@ -126,8 +126,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the removed column
-	for (auto guard : info->indexes.ReadLockedIndexes()) {
-		for (auto &column_id : guard.Invoke(&Index::GetColumnIds)) {
+	for (const auto index : info->indexes.IndexHandles()) {
+		for (auto &column_id : index->GetColumnIds()) {
 			if (column_id == removed_column) {
 				throw CatalogException("Cannot drop this column: an index depends on it!");
 			} else if (column_id > removed_column) {
@@ -195,8 +195,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	info->BindIndexes(context);
 
 	// first check if there are any indexes that exist that point to the changed column
-	for (auto guard : info->indexes.ReadLockedIndexes()) {
-		for (auto &column_id : guard.Invoke(&Index::GetColumnIds)) {
+	for (const auto index : info->indexes.IndexHandles()) {
+		for (auto &column_id : index->GetColumnIds()) {
 			if (column_id == changed_idx) {
 				throw CatalogException("Cannot change the type of this column: an index depends on it!");
 			}
@@ -346,8 +346,8 @@ bool DataTable::HasUniqueIndexes() const {
 	if (!HasIndexes()) {
 		return false;
 	}
-	for (auto guard : info->indexes.ReadLockedIndexes()) {
-		if (guard.Invoke(&Index::IsUnique)) {
+	for (const auto index : info->indexes.IndexHandles()) {
+		if (index->IsUnique()) {
 			return true;
 		}
 	}
@@ -368,9 +368,10 @@ void DataTable::SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info)
 }
 
 void DataTable::VacuumIndexes() {
-	for (auto guard : info->indexes.WriteLockedIndexes()) {
-		if (guard.Invoke(&Index::IsBound)) {
-			guard.Invoke(static_cast<void (BoundIndex::*)()>(&BoundIndex::Vacuum));
+	for (auto index : info->indexes.MutableIndexHandles()) {
+		if (index->IsBound()) {
+			auto bound_index = index.Into<BoundIndex>();
+			bound_index->Vacuum();
 		}
 	}
 }
@@ -378,13 +379,14 @@ void DataTable::VacuumIndexes() {
 void DataTable::RebuildIndexes() {
 	auto &types = row_groups->GetTypes();
 
-	for (auto guard : info->indexes.WriteLockedIndexes()) {
-		if (!guard.Invoke(&Index::IsBound)) {
+	for (auto index : info->indexes.MutableIndexHandles()) {
+		if (!index->IsBound()) {
 			throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
 		}
-		guard.Invoke(&Index::ResetStorage);
+		auto bound_index = index.Into<BoundIndex>();
+		bound_index->ResetStorage();
 
-		auto col_ids = guard.Invoke(&Index::GetColumnIds);
+		auto col_ids = bound_index->GetColumnIds();
 
 		vector<StorageIndex> scan_column_ids;
 		vector<LogicalType> scan_types;
@@ -419,15 +421,13 @@ void DataTable::RebuildIndexes() {
 			}
 			Vector &row_ids = scan_chunk.data[col_ids.size()];
 
-			auto error =
-			    guard.Invoke(static_cast<ErrorData (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Append),
-			                 table_chunk, row_ids);
+			auto error = bound_index->Append(table_chunk, row_ids);
 			if (error.HasError()) {
-				throw InternalException("Failed to rebuild index '%s' after vacuum: %s",
-				                        guard.Invoke(&Index::GetIndexName), error.Message());
+				throw InternalException("Failed to rebuild index '%s' after vacuum: %s", bound_index->GetIndexName(),
+				                        error.Message());
 			}
 		}
-		guard.Invoke(static_cast<void (BoundIndex::*)()>(&BoundIndex::Verify));
+		bound_index->Verify();
 	}
 }
 
@@ -436,13 +436,13 @@ void DataTable::VerifyIndexBuffers() const {
 }
 
 void DataTableInfo::VerifyIndexBuffers() const {
-	for (auto guard : indexes.WriteLockedIndexes()) {
-		if (guard.Invoke(&Index::IsBound)) {
-			guard.Invoke(static_cast<void (BoundIndex::*)()>(&BoundIndex::VerifyBuffers));
+	for (auto index : indexes.MutableIndexHandles()) {
+		if (index.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+			index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE).VerifyBuffers();
 		}
-		if (guard.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
-			guard.InvokeDelta(IndexEntryDelta::DELETED_ROWS_IN_USE,
-			                  static_cast<void (BoundIndex::*)()>(&BoundIndex::VerifyBuffers));
+		if (index->IsBound()) {
+			auto bound_index = index.Into<BoundIndex>();
+			bound_index->VerifyBuffers();
 		}
 	}
 }
@@ -484,12 +484,12 @@ void DataTable::SetTableName(Identifier new_name) {
 TableStorageInfo DataTable::GetStorageInfo() const {
 	TableStorageInfo result;
 	result.cardinality = GetTotalRows();
-	for (auto guard : info->indexes.ReadLockedIndexes()) {
+	for (const auto index : info->indexes.IndexHandles()) {
 		IndexInfo index_info;
-		index_info.is_primary = guard.Invoke(&Index::IsPrimary);
-		index_info.is_unique = guard.Invoke(&Index::IsUnique) || index_info.is_primary;
-		index_info.is_foreign = guard.Invoke(&Index::IsForeign);
-		index_info.column_set = guard.Invoke(&Index::GetColumnIdSet);
+		index_info.is_primary = index->IsPrimary();
+		index_info.is_unique = index->IsUnique() || index_info.is_primary;
+		index_info.is_foreign = index->IsForeign();
+		index_info.column_set = index->GetColumnIdSet();
 		result.index_info.push_back(std::move(index_info));
 	}
 	return result;
@@ -658,10 +658,9 @@ idx_t LocateErrorIndex(ConflictManager &manager, const bool is_append, const idx
 
 static string ConstructForeignKeyError(optional_idx conflict, bool is_append, const shared_ptr<IndexEntry> &entry,
                                        DataChunk &input) {
-	auto guard = entry->WriteLock();
-	D_ASSERT(guard.Invoke(&Index::IsBound));
-	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
-	return guard.Invoke(&BoundIndex::GetConstraintViolationMessage, verify_type, conflict.GetIndex(), input);
+	auto index = entry->GetMutableHandle<BoundIndex>();
+	const auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
+	return index->GetConstraintViolationMessage(verify_type, conflict.GetIndex(), input);
 }
 
 bool IsForeignKeyConstraintError(const ConflictManager &manager, const bool is_append, const idx_t input_count) {
@@ -830,26 +829,27 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
                                     DataChunk &chunk, optional_ptr<ConflictManager> manager) {
 	// Verify the constraint without a conflict manager.
 	if (!manager) {
-		for (auto guard : indexes.WriteLockedIndexes()) {
-			if (!guard.Invoke(&Index::IsUnique) || guard.Invoke(&Index::GetIndexType) != ART::TYPE_NAME) {
+		for (auto index : indexes.MutableIndexHandles()) {
+			if (!index->IsUnique() || index->GetIndexType() != ART::TYPE_NAME) {
 				continue;
 			}
-			D_ASSERT(guard.Invoke(&Index::IsBound));
+			D_ASSERT(index->IsBound());
+			auto bound_index = index.Into<BoundIndex>();
 
 			IndexAppendInfo index_append_info;
-			unique_ptr<IndexEntryReadGuard> delete_guard;
+			unique_ptr<IndexHandle<BoundIndex>> delete_handle;
 			if (storage) {
-				auto delete_entry = storage->delete_indexes.FindEntry(guard.Invoke(&Index::GetIndexName));
+				auto delete_entry = storage->delete_indexes.FindEntry(bound_index->GetIndexName());
 				if (delete_entry) {
-					delete_guard = make_uniq<IndexEntryReadGuard>(delete_entry->ReadLock());
-					delete_guard->Invoke(&BoundIndex::AddToDeleteIndexes, index_append_info);
+					delete_handle = make_uniq<IndexHandle<BoundIndex>>(delete_entry->GetHandle<BoundIndex>());
+					(*delete_handle)->AddToDeleteIndexes(index_append_info);
 				}
 			}
-			if (guard.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
-				guard.InvokeDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT, &BoundIndex::AddToDeleteIndexes,
-				                  index_append_info);
+			if (bound_index.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+				bound_index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)
+				    .AddToDeleteIndexes(index_append_info);
 			}
-			guard.Invoke(&BoundIndex::VerifyAppend, chunk, index_append_info, nullptr);
+			bound_index->VerifyAppend(chunk, index_append_info, nullptr);
 		}
 		return;
 	}
@@ -860,20 +860,19 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 
 	// Find all indexes matching the conflict target.
 	for (const auto &entry : index_entries) {
-		auto guard = entry->ReadLock();
-		if (!guard.Invoke(&Index::IsUnique) || guard.Invoke(&Index::GetIndexType) != ART::TYPE_NAME) {
+		auto index = entry->GetHandle();
+		if (!index->IsUnique() || index->GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}
-		if (!conflict_info.ConflictTargetMatches(guard.Invoke(&Index::IsUnique),
-		                                         guard.Invoke(&Index::GetColumnIdSet))) {
+		if (!conflict_info.ConflictTargetMatches(index->IsUnique(), index->GetColumnIdSet())) {
 			continue;
 		}
-		D_ASSERT(guard.Invoke(&Index::IsBound));
+		D_ASSERT(index->IsBound());
 		if (storage) {
-			auto delete_entry = storage->delete_indexes.FindEntry(guard.Invoke(&Index::GetIndexName));
-			manager->AddIndex(entry, guard.Invoke(&Index::GetIndexName), std::move(delete_entry));
+			auto delete_entry = storage->delete_indexes.FindEntry(index->GetIndexName());
+			manager->AddIndex(entry, index->GetIndexName(), std::move(delete_entry));
 		} else {
-			manager->AddIndex(entry, guard.Invoke(&Index::GetIndexName), nullptr);
+			manager->AddIndex(entry, index->GetIndexName(), nullptr);
 		}
 	}
 
@@ -882,39 +881,40 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 	auto &matching_indexes = manager->MatchingIndexes();
 	auto &matching_delete_indexes = manager->MatchingDeleteIndexes();
 	for (idx_t i = 0; i < matching_indexes.size(); i++) {
-		auto guard = matching_indexes[i]->WriteLock();
-		unique_ptr<IndexEntryReadGuard> delete_guard;
+		auto bound_index = matching_indexes[i]->GetMutableHandle<BoundIndex>();
+		unique_ptr<IndexHandle<BoundIndex>> delete_handle;
 		IndexAppendInfo index_append_info;
 		if (matching_delete_indexes[i]) {
-			delete_guard = make_uniq<IndexEntryReadGuard>(matching_delete_indexes[i]->ReadLock());
-			delete_guard->Invoke(&BoundIndex::AddToDeleteIndexes, index_append_info);
+			delete_handle = make_uniq<IndexHandle<BoundIndex>>(matching_delete_indexes[i]->GetHandle<BoundIndex>());
+			(*delete_handle)->AddToDeleteIndexes(index_append_info);
 		}
-		guard.Invoke(&BoundIndex::VerifyAppend, chunk, index_append_info, *manager);
+		bound_index->VerifyAppend(chunk, index_append_info, *manager);
 	}
 
 	// Scan the other indexes and throw, if there are any conflicts.
 	manager->SetMode(ConflictManagerMode::THROW);
 	for (const auto &entry : index_entries) {
-		auto guard = entry->WriteLock();
-		if (!guard.Invoke(&Index::IsUnique) || guard.Invoke(&Index::GetIndexType) != ART::TYPE_NAME) {
+		auto index = entry->GetMutableHandle();
+		if (!index->IsUnique() || index->GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}
-		if (manager->IndexMatches(guard.Invoke(&Index::GetIndexName))) {
+		if (manager->IndexMatches(index->GetIndexName())) {
 			continue;
 		}
-		D_ASSERT(guard.Invoke(&Index::IsBound));
+		D_ASSERT(index->IsBound());
+		auto bound_index = index.Into<BoundIndex>();
 		if (storage) {
-			auto delete_entry = storage->delete_indexes.FindEntry(guard.Invoke(&Index::GetIndexName));
-			unique_ptr<IndexEntryReadGuard> delete_guard;
+			auto delete_entry = storage->delete_indexes.FindEntry(bound_index->GetIndexName());
+			unique_ptr<IndexHandle<BoundIndex>> delete_handle;
 			IndexAppendInfo index_append_info;
 			if (delete_entry) {
-				delete_guard = make_uniq<IndexEntryReadGuard>(delete_entry->ReadLock());
-				delete_guard->Invoke(&BoundIndex::AddToDeleteIndexes, index_append_info);
+				delete_handle = make_uniq<IndexHandle<BoundIndex>>(delete_entry->GetHandle<BoundIndex>());
+				(*delete_handle)->AddToDeleteIndexes(index_append_info);
 			}
-			guard.Invoke(&BoundIndex::VerifyAppend, chunk, index_append_info, *manager);
+			bound_index->VerifyAppend(chunk, index_append_info, *manager);
 		} else {
 			IndexAppendInfo index_append_info;
-			guard.Invoke(&BoundIndex::VerifyAppend, chunk, index_append_info, *manager);
+			bound_index->VerifyAppend(chunk, index_append_info, *manager);
 		}
 	}
 }
@@ -1351,18 +1351,17 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_id_writer.WriteValue(NumericCast<row_t>(current_row_base + i));
 			}
-			for (auto guard : info->indexes.WriteLockedIndexes()) {
-				if (guard.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
-					guard.InvokeDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT,
-					                  static_cast<void (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Delete),
-					                  chunk, row_identifiers);
+			for (auto index : info->indexes.MutableIndexHandles()) {
+				if (index.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+					index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
+					    .Delete(chunk, row_identifiers);
 				} else {
-					if (!guard.Invoke(&Index::IsBound)) {
+					if (!index->IsBound()) {
 						// We cannot add to unbound indexes, so there is no need to revert them.
 						continue;
 					}
-					guard.Invoke(static_cast<void (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Delete), chunk,
-					             row_identifiers);
+					auto bound_index = index.Into<BoundIndex>();
+					bound_index->Delete(chunk, row_identifiers);
 				}
 			}
 			current_row_base += chunk.size();
@@ -1371,9 +1370,10 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 
 #ifdef DEBUG
 	// Verify that our index memory is stable.
-	for (auto guard : info->indexes.WriteLockedIndexes()) {
-		if (guard.Invoke(&Index::IsBound)) {
-			guard.Invoke(static_cast<void (BoundIndex::*)()>(&BoundIndex::VerifyBuffers));
+	for (auto index : info->indexes.MutableIndexHandles()) {
+		if (index->IsBound()) {
+			auto bound_index = index.Into<BoundIndex>();
+			bound_index->VerifyBuffers();
 		}
 	}
 #endif
@@ -1403,32 +1403,34 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 	// Append the entries to the indexes.
 	ErrorData error;
 	for (auto &entry : index_entries) {
-		auto guard = entry.WriteLock();
-		if (!guard.Invoke(&Index::IsBound)) {
+		auto index = entry.GetMutableHandle();
+		if (!index->IsBound()) {
 			// Buffer the append: the unbound index buffers its own columns of the table chunk.
-			guard.Invoke(&UnboundIndex::BufferChunk, table_chunk, row_ids, BufferedIndexReplay::INSERT_ENTRY);
+			auto unbound_index = index.Into<UnboundIndex>();
+			unbound_index->BufferChunk(table_chunk, row_ids, BufferedIndexReplay::INSERT_ENTRY);
 			continue;
 		}
+		auto bound_index = index.Into<BoundIndex>();
 
 		// Find the matching delete index.
-		unique_ptr<IndexEntryReadGuard> delete_guard;
-		if (guard.Invoke(&Index::IsUnique)) {
+		unique_ptr<IndexHandle<BoundIndex>> delete_handle;
+		if (bound_index->IsUnique()) {
 			if (delete_indexes) {
-				auto delete_entry = delete_indexes->FindEntry(guard.Invoke(&Index::GetIndexName));
+				auto delete_entry = delete_indexes->FindEntry(bound_index->GetIndexName());
 				if (delete_entry) {
-					delete_guard = make_uniq<IndexEntryReadGuard>(delete_entry->ReadLock());
+					delete_handle = make_uniq<IndexHandle<BoundIndex>>(delete_entry->GetHandle<BoundIndex>());
 				}
 			}
 		}
 		bool lookup_main_index = false;
 		bool append_to_delta = false;
 
-		if (guard.Invoke(&BoundIndex::SupportsDeltaIndexes) && guard.ShouldUseDeltaIndexes(active_checkpoint)) {
-			if (!guard.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
-				guard.SetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT,
-				               guard.Invoke(&BoundIndex::CreateDeltaIndex, DeltaIndexType::ADDED_DURING_CHECKPOINT));
+		if (bound_index->SupportsDeltaIndexes() && bound_index.ShouldUseDeltaIndexes(active_checkpoint)) {
+			if (!bound_index.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+				bound_index.SetDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT,
+				                     bound_index->CreateDeltaIndex(DeltaIndexType::ADDED_DURING_CHECKPOINT));
 			}
-			if (guard.Invoke(&Index::IsUnique)) {
+			if (bound_index->IsUnique()) {
 				// before appending we still need to look-up in the main index to verify there are no conflicts
 				lookup_main_index = true;
 			}
@@ -1440,32 +1442,26 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 				// if there's a look-up index - first verify we can append to that index before actually appending to
 				// the main index
 				IndexAppendInfo lookup_append_info;
-				if (delete_guard) {
-					delete_guard->Invoke(&BoundIndex::AddToDeleteIndexes, lookup_append_info);
+				if (delete_handle) {
+					(*delete_handle)->AddToDeleteIndexes(lookup_append_info);
 				}
-				if (guard.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
-					guard.InvokeDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT, &BoundIndex::AddToDeleteIndexes,
-					                  lookup_append_info);
+				if (bound_index.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+					bound_index.GetDelta<BoundIndex>(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)
+					    .AddToDeleteIndexes(lookup_append_info);
 				}
-				guard.Invoke(&BoundIndex::VerifyAppend, table_chunk, lookup_append_info,
-				             optional_ptr<ConflictManager>());
+				bound_index->VerifyAppend(table_chunk, lookup_append_info, optional_ptr<ConflictManager>());
 			}
 
 			// Append the mock chunk containing empty columns for non-key columns.
 			IndexAppendInfo index_append_info(index_append_mode, nullptr);
-			if (delete_guard) {
-				delete_guard->Invoke(&BoundIndex::AddToDeleteIndexes, index_append_info);
+			if (delete_handle) {
+				(*delete_handle)->AddToDeleteIndexes(index_append_info);
 			}
 			if (append_to_delta) {
-				error =
-				    guard.InvokeDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT,
-				                      static_cast<ErrorData (BoundIndex::*)(DataChunk &, Vector &, IndexAppendInfo &)>(
-				                          &BoundIndex::Append),
-				                      table_chunk, row_ids, index_append_info);
+				error = bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
+				            .Append(table_chunk, row_ids, index_append_info);
 			} else {
-				error = guard.Invoke(static_cast<ErrorData (BoundIndex::*)(DataChunk &, Vector &, IndexAppendInfo &)>(
-				                         &BoundIndex::Append),
-				                     table_chunk, row_ids, index_append_info);
+				error = bound_index->Append(table_chunk, row_ids, index_append_info);
 			}
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
@@ -1482,14 +1478,12 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 	if (append_failed) {
 		// Constraint violation: remove any appended entries from previous indexes (if any).
 		for (auto &appended : already_appended) {
-			auto guard = appended.entry.get().WriteLock();
+			auto bound_index = appended.entry.get().GetMutableHandle<BoundIndex>();
 			if (appended.is_delta) {
-				guard.InvokeDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT,
-				                  static_cast<void (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Delete),
-				                  table_chunk, row_ids);
+				bound_index.GetDelta<BoundIndex>(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)
+				    .Delete(table_chunk, row_ids);
 			} else {
-				guard.Invoke(static_cast<void (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Delete), table_chunk,
-				             row_ids);
+				bound_index->Delete(table_chunk, row_ids);
 			}
 		}
 	}
@@ -1519,9 +1513,9 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row
 
 void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
 	D_ASSERT(IsMainTable());
-	for (auto guard : info->indexes.WriteLockedIndexes()) {
-		guard.Invoke(static_cast<void (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Delete), chunk,
-		             row_identifiers);
+	for (auto index : info->indexes.MutableIndexHandles()) {
+		auto bound_index = index.Into<BoundIndex>();
+		bound_index->Delete(chunk, row_identifiers);
 	}
 }
 
@@ -1734,9 +1728,10 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 #ifdef DEBUG
 	// Ensure that we never call UPDATE for indexed columns.
 	// Instead, we must rewrite these updates into DELETE + INSERT.
-	for (auto guard : info->indexes.ReadLockedIndexes()) {
-		D_ASSERT(guard.Invoke(&Index::IsBound));
-		D_ASSERT(!guard.Invoke(&BoundIndex::IndexIsUpdated, column_ids));
+	for (auto index : info->indexes.IndexHandles()) {
+		D_ASSERT(index->IsBound());
+		auto bound_index = index.Into<BoundIndex>();
+		D_ASSERT(!bound_index->IndexIsUpdated(column_ids));
 	}
 #endif
 }

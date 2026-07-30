@@ -360,8 +360,8 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 	auto &column_ids = info.column_ids;
 	if (column_ids.empty()) {
 		for (const auto &entry : matched_indexes) {
-			auto guard = entry->ReadLock();
-			auto index_column_ids = guard.Invoke(&Index::GetColumnIdSet);
+			auto index = entry->GetHandle();
+			auto index_column_ids = index->GetColumnIdSet();
 			PrepareSortKeys(input, sort_keys, index_column_ids);
 			vector<reference<Vector>> columns;
 			for (auto &idx : index_column_ids) {
@@ -527,32 +527,30 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 		const auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
 		for (const auto &entry : global_indexes.GetEntries()) {
-			auto guard = entry->ReadLock();
+			auto index = entry->GetHandle();
 
-			if (!guard.Invoke(&Index::IsUnique)) {
+			if (!index->IsUnique()) {
 				continue;
 			}
-			if (!conflict_info.ConflictTargetMatches(guard.Invoke(&Index::IsUnique),
-			                                         guard.Invoke(&Index::GetColumnIdSet))) {
+			if (!conflict_info.ConflictTargetMatches(index->IsUnique(), index->GetColumnIdSet())) {
 				continue;
 			}
-			D_ASSERT(guard.Invoke(&Index::IsBound));
+			D_ASSERT(index->IsBound());
 
 			matching_indexes.push_back(entry);
 		}
 
 		const auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
 		for (const auto &entry : local_indexes.GetEntries()) {
-			auto guard = entry->ReadLock();
+			auto index = entry->GetHandle();
 
-			if (!guard.Invoke(&Index::IsUnique)) {
+			if (!index->IsUnique()) {
 				continue;
 			}
-			if (!conflict_info.ConflictTargetMatches(guard.Invoke(&Index::IsUnique),
-			                                         guard.Invoke(&Index::GetColumnIdSet))) {
+			if (!conflict_info.ConflictTargetMatches(index->IsUnique(), index->GetColumnIdSet())) {
 				continue;
 			}
-			D_ASSERT(guard.Invoke(&Index::IsBound));
+			D_ASSERT(index->IsBound());
 
 			matching_indexes.push_back(entry);
 		}

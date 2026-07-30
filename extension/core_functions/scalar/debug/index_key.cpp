@@ -86,8 +86,8 @@ static shared_ptr<IndexEntry> FindBoundIndex(const TableIndexList &index_list, c
 
 	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	vector<Identifier> available;
-	for (auto guard : index_list.ReadLockedIndexes()) {
-		available.push_back(guard.Invoke(&Index::GetIndexName));
+	for (const auto index : index_list.IndexHandles()) {
+		available.push_back(index->GetIndexName());
 	}
 
 	if (available.empty()) {
@@ -144,15 +144,15 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 
 	const auto &index_list = data_table_info.GetIndexes();
 	const auto index_entry = FindBoundIndex(index_list, Identifier(index_name), path);
-	auto guard = index_entry->ReadLock();
+	const auto index = index_entry->GetHandle<BoundIndex>();
 
-	const auto index_type = guard.Invoke(&Index::GetIndexType);
+	const auto &index_type = index->GetIndexType();
 	if (index_type != ART::TYPE_NAME) {
 		throw NotImplementedException(
 		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
 	}
 
-	auto key_types = guard.Invoke(&BoundIndex::GetLogicalTypes);
+	auto key_types = index->GetLogicalTypes();
 
 	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
 	if (num_key_args != key_types.size()) {
@@ -188,10 +188,10 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
 	}
 
-	auto guard = bind_data.index_entry->ReadLock();
+	const auto art_handle = bind_data.index_entry->GetHandle<ART>();
 	unsafe_vector<ARTKey> keys(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	guard.Invoke(&ART::GenerateKeys<>, allocator, key_chunk, keys);
+	art_handle->GenerateKeys(allocator, key_chunk, keys);
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {

@@ -25,7 +25,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
@@ -654,19 +653,20 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 
 bool TryScanIndex(IndexEntry &entry, const ColumnList &column_list, TableFunctionInitInput &input,
                   TableFilterSet &filter_set, idx_t max_count, set<row_t> &row_ids) {
-	auto guard = entry.ReadLock();
-	if (!guard.Invoke(&Index::IsBound) || guard.Invoke(&Index::GetIndexType) != ART::TYPE_NAME) {
+	auto index = entry.GetHandle();
+	if (!index->IsBound() || index->GetIndexType() != ART::TYPE_NAME) {
 		return false;
 	}
+	const auto art = index.Into<ART>();
 
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
-	if (guard.Invoke(&BoundIndex::UnboundExpressionCount) > 1) {
+	if (art->UnboundExpressionCount() > 1) {
 		return false;
 	}
 
-	auto index_expr = guard.Invoke(&BoundIndex::CopyUnboundExpression, 0);
-	auto indexed_columns = guard.Invoke(&Index::GetColumnIds);
+	auto index_expr = art->CopyUnboundExpression(0);
+	auto indexed_columns = art->GetColumnIds();
 
 	// NOTE: We do not push down multi-column filters, e.g., 42 = a + b.
 	if (indexed_columns.size() != 1) {
@@ -728,26 +728,26 @@ bool TryScanIndex(IndexEntry &entry, const ColumnList &column_list, TableFunctio
 
 	auto expressions = ExtractFilterExpressions(col, *filter, storage_index.GetIndex());
 	for (const auto &filter_expr : expressions) {
-		auto scan_state = guard.Invoke(&ART::TryInitializeScan, *index_expr, *filter_expr);
+		auto scan_state = art->TryInitializeScan(*index_expr, *filter_expr);
 		if (!scan_state) {
 			return false;
 		}
 
-		if (!guard.Invoke(&ART::Scan, *scan_state, max_count, row_ids)) {
+		if (!art->Scan(*scan_state, max_count, row_ids)) {
 			row_ids.clear();
 			return false;
 		}
 		for (auto delta : {IndexEntryDelta::DELETED_ROWS_IN_USE, IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT}) {
-			if (!guard.HasDelta(delta)) {
+			if (!art.HasDelta(delta)) {
 				continue;
 			}
-			auto delta_scan_state = guard.InvokeDelta(delta, &ART::TryInitializeScan, *index_expr, *filter_expr);
+			auto delta_scan_state = art.GetDelta<ART>(delta).TryInitializeScan(*index_expr, *filter_expr);
 			if (!delta_scan_state) {
 				return false;
 			}
 
 			// Check if we can use an index scan, and already retrieve the matching row ids.
-			if (!guard.InvokeDelta(delta, &ART::Scan, *delta_scan_state, max_count, row_ids)) {
+			if (!art.GetDelta<ART>(delta).Scan(*delta_scan_state, max_count, row_ids)) {
 				row_ids.clear();
 				return false;
 			}

@@ -162,8 +162,8 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	} else {
 		// Ensure that there are no other indexes with that name on this table.
 		const auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-		for (auto guard : indexes.ReadLockedIndexes()) {
-			if (guard.Invoke(&Index::GetIndexName) == info->GetIndexName()) {
+		for (const auto index : indexes.IndexHandles()) {
+			if (index->GetIndexName() == info->GetIndexName()) {
 				throw CatalogException("an index with that name already exists for this table: %s",
 				                       info->GetIndexName());
 			}

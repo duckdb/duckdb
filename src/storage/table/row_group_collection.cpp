@@ -58,15 +58,16 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 	bool any_index = false;
 	for (auto &entry : table_info.GetIndexes().GetEntries()) {
 		any_index = true;
-		auto guard = entry->ReadLock();
-		if (!guard.Invoke(&Index::IsBound) || guard.Invoke(&Index::GetIndexType) != ART::TYPE_NAME) {
+		auto index = entry->GetHandle();
+		if (!index->IsBound() || index->GetIndexType() != ART::TYPE_NAME) {
 			if (remap_indexes) {
 				remap_indexes->clear();
 			}
 			return false;
 		}
+		const auto art = index.Into<ART>();
 		// Remap regenerates keys from column values, which cannot reproduce legacy-encoded geometry keys.
-		if (guard.Invoke(&ART::HasLegacyGeometryKeys)) {
+		if (art->HasLegacyGeometryKeys()) {
 			if (remap_indexes) {
 				remap_indexes->clear();
 			}
@@ -1016,17 +1017,17 @@ struct IndexRemovalTargets {
 	bool remove_from_main = false;
 };
 
-void GetIndexRemovalTargetsActiveCheckpoint(IndexEntryWriteGuard &guard, IndexRemovalType removal_type,
+void GetIndexRemovalTargetsActiveCheckpoint(MutableIndexHandle<BoundIndex> &index, IndexRemovalType removal_type,
                                             IndexRemovalTargets &targets) {
 	// create "removed_data_during_checkpoint" if it does not exist
-	if (!guard.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
-		guard.SetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT,
-		               guard.Invoke(&BoundIndex::CreateDeltaIndex, DeltaIndexType::REMOVED_DURING_CHECKPOINT));
+	if (!index.HasDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT)) {
+		index.SetDelta(IndexEntryDelta::REMOVED_DATA_DURING_CHECKPOINT,
+		               index->CreateDeltaIndex(DeltaIndexType::REMOVED_DURING_CHECKPOINT));
 	}
 	if (removal_type == IndexRemovalType::MAIN_INDEX_ONLY || removal_type == IndexRemovalType::MAIN_INDEX) {
 		// removing from main index - but we cannot remove directly due to the concurrent checkpoint
 		// add removal to delta index
-		if (guard.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+		if (index.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 			// if we have also added data during this checkpoint - we might need to remove from there instead
 			// we FIRST try to remove from "added_data_during_checkpoint"
 			// any rows that are not there we add to "removed_data_during_checkpoint"
@@ -1041,10 +1042,10 @@ void GetIndexRemovalTargetsActiveCheckpoint(IndexEntryWriteGuard &guard, IndexRe
 		}
 		if (removal_type == IndexRemovalType::MAIN_INDEX) {
 			// we also need to append to "deleted_rows_in_use"
-			if (!guard.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+			if (!index.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 				// create "deleted_rows_in_use" if it does not exist yet
-				guard.SetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE,
-				               guard.Invoke(&BoundIndex::CreateDeltaIndex, DeltaIndexType::DELETED_ROWS_IN_USE));
+				index.SetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE,
+				               index->CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE));
 			}
 			targets.append_target = IndexEntryDelta::DELETED_ROWS_IN_USE;
 			targets.has_append_target = true;
@@ -1054,7 +1055,7 @@ void GetIndexRemovalTargetsActiveCheckpoint(IndexEntryWriteGuard &guard, IndexRe
 	if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY ||
 	    removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
 		// revert adding to main index
-		if (guard.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
+		if (index.HasDelta(IndexEntryDelta::ADDED_DATA_DURING_CHECKPOINT)) {
 			// we have added data during this checkpoint as well, remove might have EITHER:
 			// (1) added to "removed_data_during_checkpoint"
 			// (2) removed data from "added_data_during_checkpoint"
@@ -1070,21 +1071,22 @@ void GetIndexRemovalTargetsActiveCheckpoint(IndexEntryWriteGuard &guard, IndexRe
 		}
 		if (removal_type == IndexRemovalType::REVERT_MAIN_INDEX) {
 			// we also need to remove from "deleted_rows_in_use"
-			if (guard.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+			if (index.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 				targets.remove_target = IndexEntryDelta::DELETED_ROWS_IN_USE;
 				targets.has_remove_target = true;
 			}
 		}
 	}
 }
-void GetIndexRemovalTargets(IndexEntryWriteGuard &guard, IndexRemovalType removal_type, IndexRemovalTargets &targets,
-                            const optional_idx active_checkpoint) {
-	const auto supports_delta_indexes = guard.Invoke(&BoundIndex::SupportsDeltaIndexes);
+
+void GetIndexRemovalTargets(MutableIndexHandle<BoundIndex> &index, IndexRemovalType removal_type,
+                            IndexRemovalTargets &targets, const optional_idx active_checkpoint) {
+	const auto supports_delta_indexes = index->SupportsDeltaIndexes();
 	// not all indexes require delta indexes - this is tracked through BoundIndex::RequiresTransactionality
 	// if an index does not require this we skip creating to and appending to "deleted_rows_in_use"
 	if (removal_type != IndexRemovalType::DELETED_ROWS_IN_USE) {
-		if (supports_delta_indexes && guard.ShouldUseDeltaIndexes(active_checkpoint)) {
-			GetIndexRemovalTargetsActiveCheckpoint(guard, removal_type, targets);
+		if (supports_delta_indexes && index.ShouldUseDeltaIndexes(active_checkpoint)) {
+			GetIndexRemovalTargetsActiveCheckpoint(index, removal_type, targets);
 			return;
 		}
 	}
@@ -1101,10 +1103,10 @@ void GetIndexRemovalTargets(IndexEntryWriteGuard &guard, IndexRemovalType remova
 	case IndexRemovalType::MAIN_INDEX:
 		// regular removal from main index - add rows to delta index if required
 		if (supports_delta_indexes) {
-			if (!guard.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+			if (!index.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 				// create "deleted_rows_in_use" if it does not exist yet
-				guard.SetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE,
-				               guard.Invoke(&BoundIndex::CreateDeltaIndex, DeltaIndexType::DELETED_ROWS_IN_USE));
+				index.SetDelta(IndexEntryDelta::DELETED_ROWS_IN_USE,
+				               index->CreateDeltaIndex(DeltaIndexType::DELETED_ROWS_IN_USE));
 			}
 			targets.append_target = IndexEntryDelta::DELETED_ROWS_IN_USE;
 			targets.has_append_target = true;
@@ -1114,16 +1116,14 @@ void GetIndexRemovalTargets(IndexEntryWriteGuard &guard, IndexRemovalType remova
 	case IndexRemovalType::REVERT_MAIN_INDEX:
 		// revert regular append to main index - remove from deleted_rows_in_use if we appended there before
 		targets.append_to_main = true;
-		if (supports_delta_indexes) {
-			if (guard.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
-				targets.remove_target = IndexEntryDelta::DELETED_ROWS_IN_USE;
-				targets.has_remove_target = true;
-			}
+		if (supports_delta_indexes && index.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+			targets.remove_target = IndexEntryDelta::DELETED_ROWS_IN_USE;
+			targets.has_remove_target = true;
 		}
 		break;
 	case IndexRemovalType::DELETED_ROWS_IN_USE:
 		// remove from removal index if we appended any rows
-		if (supports_delta_indexes && guard.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
+		if (supports_delta_indexes && index.HasDelta(IndexEntryDelta::DELETED_ROWS_IN_USE)) {
 			targets.remove_target = IndexEntryDelta::DELETED_ROWS_IN_USE;
 			targets.has_remove_target = true;
 		}
@@ -1139,8 +1139,8 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	// Collect all Indexed columns on the table.
 	unordered_set<column_t> indexed_column_id_set;
 
-	for (auto guard : indexes.ReadLockedIndexes()) {
-		auto set = guard.Invoke(&Index::GetColumnIdSet);
+	for (auto index : indexes.IndexHandles()) {
+		auto set = index->GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
 	}
 
@@ -1183,23 +1183,21 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
 	}
 
-	for (auto guard : indexes.WriteLockedIndexes()) {
-		if (guard.Invoke(&Index::IsBound)) {
+	for (auto index : indexes.MutableIndexHandles()) {
+		if (index->IsBound()) {
+			auto bound_index = index.Into<BoundIndex>();
 			// check which indexes we should append to or remove from
 			// note that this method might also involve appending to indexes
 			// the reason for that is that we have "delta" indexes that we must fill with data we are removing
 			// OR because we are actually reverting a previous removal
 			IndexRemovalTargets targets;
-			GetIndexRemovalTargets(guard, removal_type, targets, active_checkpoint);
+			GetIndexRemovalTargets(bound_index, removal_type, targets, active_checkpoint);
 
 			bool removal_succeeded = false;
 			if (targets.has_conditional_remove_target) {
 				// if we have an conditional remove target, we first try to remove the chunk from there
-				idx_t delete_count = guard.InvokeDelta(
-				    targets.conditional_remove_target,
-				    static_cast<idx_t (BoundIndex::*)(DataChunk &, Vector &, optional_ptr<SelectionVector>,
-				                                      optional_ptr<SelectionVector>)>(&BoundIndex::TryDelete),
-				    result_chunk, row_identifiers, nullptr, nullptr);
+				idx_t delete_count = bound_index.GetDelta<BoundIndex>(targets.conditional_remove_target)
+				                         .TryDelete(result_chunk, row_identifiers, nullptr, nullptr);
 				if (delete_count > 0) {
 					if (delete_count != result_chunk.size()) {
 						// it should not be possible to get here
@@ -1218,53 +1216,39 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			if (targets.has_conditional_append_target && !removal_succeeded) {
 				// for any rows that were not removed - append them to the conditional append target instead
 				IndexAppendInfo append_info;
-				auto error =
-				    guard.InvokeDelta(targets.conditional_append_target,
-				                      static_cast<ErrorData (BoundIndex::*)(DataChunk &, Vector &, IndexAppendInfo &)>(
-				                          &BoundIndex::Append),
-				                      result_chunk, row_identifiers, append_info);
+				auto error = bound_index.GetDelta<BoundIndex>(targets.conditional_append_target)
+				                 .Append(result_chunk, row_identifiers, append_info);
 				if (error.HasError()) {
-					throw InternalException("Failed to append to %s: %s", guard.Invoke(&Index::GetIndexName),
-					                        error.Message());
+					throw InternalException("Failed to append to %s: %s", bound_index->GetIndexName(), error.Message());
 				}
 			}
 			// perform the targeted append / removal
 			if (targets.has_append_target) {
 				IndexAppendInfo append_info;
-				auto error =
-				    guard.InvokeDelta(targets.append_target,
-				                      static_cast<ErrorData (BoundIndex::*)(DataChunk &, Vector &, IndexAppendInfo &)>(
-				                          &BoundIndex::Append),
-				                      result_chunk, row_identifiers, append_info);
+				auto error = bound_index.GetDelta<BoundIndex>(targets.append_target)
+				                 .Append(result_chunk, row_identifiers, append_info);
 				if (error.HasError()) {
-					throw InternalException("Failed to append to %s: %s", guard.Invoke(&Index::GetIndexName),
-					                        error.Message());
+					throw InternalException("Failed to append to %s: %s", bound_index->GetIndexName(), error.Message());
 				}
 			}
 			if (targets.append_to_main) {
 				IndexAppendInfo append_info;
-				auto error =
-				    guard.Invoke(static_cast<ErrorData (BoundIndex::*)(DataChunk &, Vector &, IndexAppendInfo &)>(
-				                     &BoundIndex::Append),
-				                 result_chunk, row_identifiers, append_info);
+				auto error = bound_index->Append(result_chunk, row_identifiers, append_info);
 				if (error.HasError()) {
-					throw InternalException("Failed to append to %s: %s", guard.Invoke(&Index::GetIndexName),
-					                        error.Message());
+					throw InternalException("Failed to append to %s: %s", bound_index->GetIndexName(), error.Message());
 				}
 			}
 			if (targets.has_remove_target) {
-				guard.InvokeDelta(targets.remove_target,
-				                  static_cast<void (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Delete),
-				                  result_chunk, row_identifiers);
+				bound_index.GetDelta<BoundIndex>(targets.remove_target).Delete(result_chunk, row_identifiers);
 			}
 			if (targets.remove_from_main) {
-				guard.Invoke(static_cast<void (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Delete),
-				             result_chunk, row_identifiers);
+				bound_index->Delete(result_chunk, row_identifiers);
 			}
 			continue;
 		}
 		// Buffer the delete: result_chunk is in table layout with all indexed columns populated.
-		guard.Invoke(&UnboundIndex::BufferChunk, result_chunk, row_identifiers, BufferedIndexReplay::DEL_ENTRY);
+		auto unbound_index = index.Into<UnboundIndex>();
+		unbound_index->BufferChunk(result_chunk, row_identifiers, BufferedIndexReplay::DEL_ENTRY);
 	}
 }
 
@@ -1387,9 +1371,9 @@ public:
 		DataChunk index_chunk;
 		TableIndexList::InitializeIndexChunk(index_chunk, table_types, mapped_column_ids, collection.GetTableInfo());
 
-		guards.reserve(entries.size());
+		index_handles.reserve(entries.size());
 		for (const auto &entry : entries) {
-			guards.push_back(entry->WriteLock());
+			index_handles.push_back(entry->GetMutableHandle<BoundIndex>());
 		}
 		old_rowid_idx = mapped_column_ids.size();
 		new_rowid_idx = old_rowid_idx + 1;
@@ -1441,14 +1425,13 @@ public:
 			}
 		};
 
-		for (auto &guard : guards) {
+		for (auto &index : index_handles) {
 			// Delete old rowids first to avoid same-key rowid collisions within the task.
 			ColumnDataScanState scan_state;
 			buffer->InitializeScan(scan_state);
 			while (buffer->Scan(scan_state, scan_chunk)) {
 				reference_table_chunk();
-				guard.Invoke(static_cast<void (BoundIndex::*)(DataChunk &, Vector &)>(&BoundIndex::Delete), table_chunk,
-				             scan_chunk.data[old_rowid_idx]);
+				index->Delete(table_chunk, scan_chunk.data[old_rowid_idx]);
 			}
 
 			// Remapping must not re-run uniqueness checks for already-validated rows.
@@ -1456,10 +1439,7 @@ public:
 			while (buffer->Scan(scan_state, scan_chunk)) {
 				reference_table_chunk();
 				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
-				auto error =
-				    guard.Invoke(static_cast<ErrorData (BoundIndex::*)(DataChunk &, Vector &, IndexAppendInfo &)>(
-				                     &BoundIndex::Append),
-				                 table_chunk, scan_chunk.data[new_rowid_idx], append_info);
+				auto error = index->Append(table_chunk, scan_chunk.data[new_rowid_idx], append_info);
 				if (error.HasError()) {
 					error.Throw();
 				}
@@ -1498,7 +1478,7 @@ private:
 
 private:
 	//! Keep every physical index stable while this task remaps its row IDs.
-	vector<IndexEntryWriteGuard> guards;
+	vector<MutableIndexHandle<BoundIndex>> index_handles;
 	const vector<LogicalType> &table_types;
 	//! Buffer slot -> table column id for the indexed key columns.
 	vector<StorageIndex> mapped_column_ids;

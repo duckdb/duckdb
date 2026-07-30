@@ -23,23 +23,24 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	auto &collection = *row_groups->collection;
 	collection.InitializeEmpty();
 
-	for (auto guard : data_table_info->GetIndexes().ReadLockedIndexes()) {
-		const auto constraint = guard.Invoke(&Index::GetConstraintType);
+	for (auto index : data_table_info->GetIndexes().IndexHandles()) {
+		const auto constraint = index->GetConstraintType();
 		if (constraint == IndexConstraintType::NONE) {
 			continue;
 		}
-		if (!guard.Invoke(&Index::IsBound)) {
+		if (!index->IsBound()) {
 			continue;
 		}
-		if (!guard.Invoke(&BoundIndex::SupportsDeltaIndexes)) {
+		const auto bound_index = index.Into<BoundIndex>();
+		if (!bound_index->SupportsDeltaIndexes()) {
 			continue;
 		}
 
 		// Create a delete index and a local index.
-		auto delete_index = guard.Invoke(&BoundIndex::CreateDeltaIndex, DeltaIndexType::LOCAL_DELETE);
+		auto delete_index = bound_index->CreateDeltaIndex(DeltaIndexType::LOCAL_DELETE);
 		delete_indexes.AddIndex(std::move(delete_index));
 
-		auto append_index = guard.Invoke(&BoundIndex::CreateDeltaIndex, DeltaIndexType::LOCAL_APPEND);
+		auto append_index = bound_index->CreateDeltaIndex(DeltaIndexType::LOCAL_APPEND);
 		append_indexes.AddIndex(std::move(append_index));
 	}
 }
@@ -127,11 +128,12 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	// get the index size
 	idx_t index_sizes = 0;
-	for (auto guard : append_indexes.WriteLockedIndexes()) {
-		if (!guard.Invoke(&Index::IsBound)) {
+	for (auto index : append_indexes.MutableIndexHandles()) {
+		if (!index->IsBound()) {
 			continue;
 		}
-		index_sizes += guard.Invoke(static_cast<idx_t (BoundIndex::*)()>(&BoundIndex::GetInMemorySize));
+		auto bound_index = index.Into<BoundIndex>();
+		index_sizes += bound_index->GetInMemorySize();
 	}
 
 	// return the size of the appended rows and the index size
@@ -447,15 +449,14 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	Vector committed_row_ids(row_ids, committed_sel, committed_count);
 	committed_row_ids.Flatten();
 
-	for (auto guard : delete_indexes.WriteLockedIndexes()) {
-		D_ASSERT(guard.Invoke(&Index::IsBound));
-		if (!guard.Invoke(&Index::IsUnique)) {
+	for (auto index : delete_indexes.MutableIndexHandles()) {
+		D_ASSERT(index->IsBound());
+		if (!index->IsUnique()) {
 			continue;
 		}
+		auto bound_index = index.Into<BoundIndex>();
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		auto result = guard.Invoke(
-		    static_cast<ErrorData (BoundIndex::*)(DataChunk &, Vector &, IndexAppendInfo &)>(&BoundIndex::Append),
-		    committed_chunk, committed_row_ids, index_append_info);
+		auto result = bound_index->Append(committed_chunk, committed_row_ids, index_append_info);
 		if (result.HasError()) {
 			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 		}
