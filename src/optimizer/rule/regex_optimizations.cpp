@@ -155,6 +155,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
 	D_ASSERT(root.GetChildrenMutable().size() == 2 || root.GetChildrenMutable().size() == 3);
+	bool is_full_match = (root.Function().GetName() == "regexp_full_match");
 	auto regexp_bind_data = root.BindInfo().get()->Cast<RegexpMatchesBindData>();
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
@@ -177,53 +178,38 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		return nullptr; // this should fail somewhere else
 	}
 
-	// if the regex is a simple literal string, we can just convert it to an equality check
-	if (root.Function().GetName() == "regexp_full_match") {
-		if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
-		    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral ||
-		    pattern.Regexp()->op() == duckdb_re2::kRegexpEmptyMatch) {
-			string exact_string = "";
-			if (pattern.Regexp()->op() != duckdb_re2::kRegexpEmptyMatch) {
-				// contains=true extracts the unescaped literal string and permits % and _
-				LikeString escaped_like_string = GetLikeStringEscaped(pattern.Regexp(), true);
-				if (!escaped_like_string.exists) {
-					// bail out if the regex has unsupported options (e.g., case insensitivity)
-					return nullptr;
-				}
-				exact_string = escaped_like_string.like_string;
-			}
-			auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(exact_string)));
-			return BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
-			                                         std::move(root.GetChildrenMutable()[0]), std::move(parameter));
-		}
-		// if it's a full match but not a literal, we can't optimize it into a contains/like
-		return nullptr;
-	}
-
 	LikeString like_string;
 	// check for a like string. If we can convert it to a like string, the like string
 	// optimizer will further optimize suffix and prefix things.
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
 	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
-		// convert to contains.
+		// extract the raw literal string.
 		LikeString escaped_like_string = GetLikeStringEscaped(pattern.Regexp(), true);
 		if (!escaped_like_string.exists) {
 			return nullptr;
 		}
 
-		// if regexp had options, remove them so the new Contains Expression can be matched for other optimizers.
+		// if regexp had options, remove them so the new Contains/Equality Expression can be matched for other
+		// optimizers.
 		if (root.GetChildrenMutable().size() == 3) {
 			root.GetChildrenMutable().pop_back();
 			D_ASSERT(root.GetChildrenMutable().size() == 2);
 		}
 
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
-		auto contains = GetStringContains().Bind(GetContext(), std::move(root.GetChildrenMutable()));
 
-		contains->GetChildrenMutable()[1] = std::move(parameter);
+		if (is_full_match) {
+			// Build an EQUALITY node
+			return BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL,
+			                                         std::move(root.GetChildrenMutable()[0]), std::move(parameter));
+		} else {
+			// Build a CONTAINS node
+			auto contains = GetStringContains().Bind(GetContext(), std::move(root.GetChildrenMutable()));
+			contains->GetChildrenMutable()[1] = std::move(parameter);
+			return std::move(contains);
+		}
 
-		return std::move(contains);
-	} else if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
+	} else if (!is_full_match && pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
 		like_string = LikeMatchFromRegex(pattern);
 	} else {
 		like_string.exists = false;
