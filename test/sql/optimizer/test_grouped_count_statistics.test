@@ -1,0 +1,87 @@
+# name: test/sql/optimizer/test_grouped_count_statistics.test
+# description: Test statistics propagation for grouped count_star
+# group: [optimizer]
+
+# A grouped count(*) is always at least 1, so this must become Empty Result
+query TT
+EXPLAIN
+SELECT i % 1000 AS k
+FROM range(10000000) t(i)
+GROUP BY k
+HAVING count(*) = 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# count(*) < 1 is also impossible for an emitted group
+query TT
+EXPLAIN
+SELECT i % 10 AS k
+FROM range(100) t(i)
+GROUP BY k
+HAVING count(*) < 1;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# count(*) <= 0 is also impossible
+query TT
+EXPLAIN
+SELECT i % 10 AS k
+FROM range(100) t(i)
+GROUP BY k
+HAVING count(*) <= 0;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+# Normal grouped count predicates must still work
+query I
+SELECT i % 3 AS k
+FROM range(9) t(i)
+GROUP BY k
+HAVING count(*) > 0
+ORDER BY k;
+----
+0
+1
+2
+
+# Ungrouped count(*) can be zero
+query I
+SELECT count(*)
+FROM range(0)
+HAVING count(*) = 0;
+----
+0
+
+# Filtered count(*) can be zero inside an existing group
+query I
+SELECT i % 2 AS k
+FROM range(4) t(i)
+GROUP BY k
+HAVING count(*) FILTER (WHERE false) = 0
+ORDER BY k;
+----
+0
+1
+
+# count(column) can be zero when all values are NULL
+query I
+SELECT k
+FROM (
+	SELECT i % 2 AS k, NULL::INTEGER AS value
+	FROM range(4) t(i)
+)
+GROUP BY k
+HAVING count(value) = 0
+ORDER BY k;
+----
+0
+1
+
+# An empty grouping set can produce count(*) = 0
+query I
+SELECT count(*)
+FROM range(0)
+GROUP BY GROUPING SETS (())
+HAVING count(*) = 0;
+----
+0

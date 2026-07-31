@@ -506,6 +506,25 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		}
 
 		auto stats = PropagateExpression(expr);
+		auto &aggr_expr = expr->Cast<BoundAggregateExpression>();
+
+		if (!aggr.groups.empty() && !aggr_expr.GetFilter() && aggr_expr.Function().GetName() == "count_star") {
+			bool has_empty_grouping_set = false;
+			for (const auto &grouping_set : aggr.grouping_sets) {
+				if (grouping_set.empty()) {
+					has_empty_grouping_set = true;
+					break;
+				}
+			}
+
+			if (!has_empty_grouping_set) {
+				stats = make_uniq<BaseStatistics>(NumericStats::CreateUnknown(LogicalType::BIGINT));
+				NumericStats::SetMin(*stats, Value::BIGINT(1));
+				NumericStats::SetMax(*stats, Value::BIGINT(NumericLimits<int64_t>::Maximum()));
+				stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+			}
+		}
+
 		if (!stats) {
 			continue;
 		}
