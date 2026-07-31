@@ -1,9 +1,29 @@
 #include "duckdb/function/scalar_function.hpp"
+#include <mutex>
+#include <set>
+#include <cstdio>
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
+
+void ThrowNonFallibleFunctionError(const Identifier &name, std::exception &ex) {
+	ErrorData error(ex);
+	if (!Exception::IsExecutionError(error.Type())) {
+		throw;
+	}
+	{
+		static std::mutex violation_lock;
+		static std::set<std::string> violations;
+		std::lock_guard<std::mutex> guard(violation_lock);
+		auto entry = name.GetIdentifierName() + " | " + error.RawMessage().substr(0, 100);
+		if (violations.insert(entry).second) {
+			fprintf(stderr, "\nFALLIBLE_VIOLATION: %s\n", entry.c_str());
+		}
+	}
+	throw;
+}
 
 bool ScalarFunctionCallbacks::operator==(const ScalarFunctionCallbacks &rhs) const {
 	return bind == rhs.bind && init_local_state == rhs.init_local_state && statistics == rhs.statistics &&

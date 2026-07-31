@@ -28,6 +28,22 @@ static void SetCastNullHandling(FUNC &function, const LogicalType &target_type) 
 	}
 }
 
+//! Whether the cast can throw a runtime error - either because the types allow for it, or because no cast exists
+//! between the types at all, in which case the cast throws for every non-NULL value
+static bool BoundCastCanThrow(const BoundCastInfo &bound_cast, const LogicalType &source_type,
+                         const LogicalType &target_type, bool try_cast) {
+	if (try_cast) {
+		return false;
+	}
+	if (bound_cast.IsNopCast()) {
+		return false; // The cast does not do anything
+	}
+	if (bound_cast.IsNullCast()) {
+		return true; // No cast exists between these types - it throws for every non-NULL value
+	}
+	return BoundCastExpression::CastCanThrow(source_type, target_type, try_cast);
+}
+
 struct CastFunctionData : public FunctionData {
 	CastFunctionData(LogicalType source_type_p, LogicalType target_type_p, BoundCastInfo bound_cast_p, bool try_cast_p)
 	    : source_type(std::move(source_type_p)), target_type(std::move(target_type_p)),
@@ -112,7 +128,7 @@ static unique_ptr<FunctionData> CastFunctionDeserialize(Deserializer &deserializ
 	auto target_type = deserializer.Get<const LogicalType &>();
 	auto source_type = function.GetArguments()[0];
 	auto bound_cast = BindCastScalarFunction(context, source_type, target_type);
-	if (BoundCastExpression::CastCanThrow(source_type, target_type, try_cast)) {
+	if (BoundCastCanThrow(bound_cast, source_type, target_type, try_cast)) {
 		function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	}
 	SetCastNullHandling(function, target_type);
@@ -145,7 +161,7 @@ unique_ptr<Expression> BoundCastExpression::Create(unique_ptr<Expression> child,
 
 	auto scalar_function = CastFun::GetFunction();
 	scalar_function.SetReturnType(target_type);
-	if (BoundCastExpression::CastCanThrow(source_type, target_type, try_cast)) {
+	if (BoundCastCanThrow(bound_cast, source_type, target_type, try_cast)) {
 		scalar_function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	}
 	SetCastNullHandling(scalar_function, target_type);

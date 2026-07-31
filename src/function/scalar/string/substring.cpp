@@ -390,6 +390,8 @@ ScalarFunctionSet SubstringFun::GetFunctions() {
 	                                  SubstringPropagateStats));
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, SubstringPropagateStats));
+	// throws if the offset or length are out of the supported range
+	substr.SetFallible();
 	return (substr);
 }
 
@@ -401,6 +403,8 @@ ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                           SubstringFunction<SubstringGraphemeOp>, nullptr,
 	                                           SubstringGraphemePropagateStats));
+	// throws if the offset or length are out of the supported range
+	substr_grapheme.SetFallible();
 	return (substr_grapheme);
 }
 

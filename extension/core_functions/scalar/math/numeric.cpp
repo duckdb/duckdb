@@ -1089,6 +1089,8 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 		round.AddFunction(
 		    ScalarFunction({{"x", type}, {"precision", LogicalType::INTEGER}}, type, round_prec_func, bind_prec_func));
 	}
+	// rounding a DECIMAL can overflow
+	round.SetFallible();
 	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;
 }

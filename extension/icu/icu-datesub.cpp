@@ -135,6 +135,8 @@ struct ICUCalendarSub : public ICUDateFunc {
 	static void AddFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		// throws for unrecognized part specifiers and for dates that overflow the timestamp range
+		set.SetFallible();
 		set.SetArgProperties(1, ArgProperties().NonIncreasing());
 		set.SetArgProperties(2, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
@@ -278,6 +280,8 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetFunction<timestamp_tz_ns_t>(LogicalType::TIMESTAMP_TZ_NS));
+		// throws for unrecognized part specifiers and for dates that overflow the timestamp range
+		set.SetFallible();
 		set.SetArgProperties(1, ArgProperties().NonIncreasing());
 		set.SetArgProperties(2, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);

@@ -299,6 +299,8 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 	value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	set.AddFunction(value_fun);
 
+	// throws if the values cannot be cast to the child type, e.g. for fixed-size arrays of a different size
+	set.SetFallible();
 	return set;
 }
 

@@ -174,6 +174,8 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 	array_extract_set.AddFunction(sfun);
 	array_extract_set.AddFunction(GetKeyExtractFunction());
 	array_extract_set.AddFunction(GetIndexExtractFunction());
+	// throws if the index is outside of the supported range
+	array_extract_set.SetFallible();
 	return array_extract_set;
 }
 

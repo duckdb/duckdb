@@ -271,6 +271,8 @@ struct ICUDateAdd : public ICUDateFunc {
 		                                                                               LogicalType::INTERVAL));
 		set.AddFunction(GetDateAddFunction<interval_t, timestamp_tz_t, ICUCalendarAdd>(LogicalType::INTERVAL,
 		                                                                               LogicalType::TIMESTAMP_TZ));
+		// throws for dates that overflow the timestamp range
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -293,6 +295,8 @@ struct ICUDateAdd : public ICUDateFunc {
 		//	temporal - temporal
 		set.AddFunction(GetBinaryAgeFunction<timestamp_tz_t, timestamp_tz_t, ICUCalendarSub>(
 		    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ));
+		// throws for dates that overflow the timestamp range
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -302,6 +306,8 @@ struct ICUDateAdd : public ICUDateFunc {
 		set.AddFunction(GetBinaryAgeFunction<timestamp_tz_t, timestamp_tz_t, ICUCalendarAge>(
 		    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetUnaryAgeFunction<timestamp_tz_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
+		// throws for dates that overflow the timestamp range
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 };

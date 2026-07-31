@@ -34,3 +34,20 @@ statement error
 select url_decode('%FF%FF%FF');
 ----
 decoded value is invalid UTF8
+
+# TRY over a dictionary-encoded column that throws for every value (internal issue #24268)
+statement ok
+CREATE TABLE strings AS SELECT '%c0' AS s FROM range(4096);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT DISTINCT TRY(url_decode(s)) FROM strings
+----
+NULL
+
+statement error
+SELECT url_decode(s) FROM strings
+----
+decoded value is invalid UTF8
