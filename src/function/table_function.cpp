@@ -104,4 +104,22 @@ bool TableFunction::Equal(const TableFunction &rhs) const {
 	return true; // they are equal
 }
 
+bool TableFunctionInput::HandleBlocked(AsyncResult &blocked_result) {
+	D_ASSERT(blocked_result.GetResultType() == AsyncResultType::BLOCKED);
+	switch (results_execution_mode) {
+	case AsyncResultsExecutionMode::TASK_EXECUTOR:
+		async_result = std::move(blocked_result);
+		return true;
+	case AsyncResultsExecutionMode::SYNCHRONOUS:
+		// run the I/O synchronously, then loop again to resume
+		blocked_result.ExecuteTasksSynchronously();
+		if (blocked_result.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
+			throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
+		}
+		return false;
+	default:
+		throw InternalException("Unexpected AsyncResultsExecutionMode in HandleBlocked");
+	}
+}
+
 } // namespace duckdb
