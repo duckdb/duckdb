@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -33,7 +34,7 @@ static bool ReferencesComputedExpression(LogicalProjection &proj, const Expressi
 }
 
 static unique_ptr<Expression> CreateColumnReference(const Expression &expr, ColumnBinding binding) {
-	auto result = make_uniq<BoundColumnRefExpression>(expr.GetReturnType(), binding);
+	unique_ptr<Expression> result = make_uniq<BoundColumnRefExpression>(expr.GetReturnType(), binding);
 	if (!expr.GetAlias().empty()) {
 		result->SetAlias(expr.GetAlias());
 	}
