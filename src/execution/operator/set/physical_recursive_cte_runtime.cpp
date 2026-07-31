@@ -897,10 +897,16 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	}
 	idx_t frontier_rows = 0;
 	idx_t frontier_chunks = 0;
+	idx_t frontier_storage_bytes = 0;
+	idx_t frontier_allocation_bytes = 0;
+	idx_t epoch_task_start = 0;
 	if (collect_metrics) {
 		const auto &frontier = static_cast<const RecursiveCTEState &>(gstate).CurrentInputTable();
 		frontier_rows = frontier.Count();
 		frontier_chunks = frontier.ChunkCount();
+		frontier_storage_bytes = frontier.SizeInBytes();
+		frontier_allocation_bytes = frontier.AllocationSize();
+		epoch_task_start = gstate.GetMetrics().TaskCount();
 	}
 	if (!using_key && union_all) {
 		const auto source_tasks_write_recursive_output = parallelism.frontier_worker_count == 1 &&
@@ -938,6 +944,9 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(epoch_end - epoch_start).count());
 		gstate.GetMetrics().RecordEpoch(max_worker_count, elapsed_us, frontier_rows, frontier_chunks,
 		                                scheduler_input_rows);
+		const auto epoch_tasks = gstate.GetMetrics().TaskCount() - epoch_task_start;
+		gstate.GetEpochMetrics().Record(frontier_rows, parallelism.worker_count, epoch_tasks, elapsed_us,
+		                                frontier_storage_bytes, frontier_allocation_bytes);
 	}
 	if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
 		if (collect_metrics && !gstate.HasMaterializedInvariantPipelines()) {

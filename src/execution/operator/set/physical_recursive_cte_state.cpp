@@ -75,6 +75,51 @@ idx_t RecursiveCTEPartialKeyIndex::SizeInBytes() const {
 	return heads.capacity() * sizeof(idx_t) + entries.capacity() * sizeof(Entry);
 }
 
+void RecursiveCTEMetricDistribution::Add(idx_t value) {
+	auto bucket = idx_t(0);
+	for (auto remaining = value; remaining > 0; remaining >>= 1) {
+		bucket++;
+	}
+	D_ASSERT(bucket < buckets.size());
+	buckets[bucket]++;
+	count++;
+	maximum = MaxValue(maximum, value);
+}
+
+idx_t RecursiveCTEMetricDistribution::MedianUpperBound() const {
+	if (count == 0) {
+		return 0;
+	}
+	const auto target = count / 2 + count % 2;
+	idx_t cumulative = 0;
+	for (idx_t bucket = 0; bucket < buckets.size(); bucket++) {
+		cumulative += buckets[bucket];
+		if (cumulative < target) {
+			continue;
+		}
+		if (bucket == 0) {
+			return 0;
+		}
+		if (bucket == NumericLimits<idx_t>::Digits()) {
+			return NumericLimits<idx_t>::Maximum();
+		}
+		return (idx_t(1) << bucket) - 1;
+	}
+	throw InternalException("Recursive CTE metric distribution is inconsistent");
+}
+
+void RecursiveCTEEpochMetrics::Record(idx_t frontier_rows_p, idx_t workers_p, idx_t tasks_p, idx_t elapsed_us_p,
+                                      idx_t frontier_storage_bytes, idx_t frontier_allocation_bytes) {
+	frontier_rows.Add(frontier_rows_p);
+	workers.Add(workers_p);
+	tasks.Add(tasks_p);
+	elapsed_us.Add(elapsed_us_p);
+	frontier_storage_byte_epochs += frontier_storage_bytes;
+	peak_frontier_storage_bytes = MaxValue(peak_frontier_storage_bytes, frontier_storage_bytes);
+	frontier_allocation_byte_epochs += frontier_allocation_bytes;
+	peak_frontier_allocation_bytes = MaxValue(peak_frontier_allocation_bytes, frontier_allocation_bytes);
+}
+
 RecursiveCTEMetrics::RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op_p)
     : op(op_p), logger(context.logger),
       enabled(logger && logger->ShouldLog(PhysicalOperatorLogType::NAME, PhysicalOperatorLogType::LEVEL)) {
@@ -82,6 +127,10 @@ RecursiveCTEMetrics::RecursiveCTEMetrics(ClientContext &context, const PhysicalR
 
 void RecursiveCTEMetrics::RecordTasks(idx_t count) {
 	scheduled_tasks.fetch_add(count);
+}
+
+idx_t RecursiveCTEMetrics::TaskCount() const {
+	return scheduled_tasks.load();
 }
 
 void RecursiveCTEMetrics::RecordEpoch(idx_t workers, idx_t elapsed_us_p, idx_t frontier_rows_p, idx_t frontier_chunks_p,
@@ -185,6 +234,26 @@ void RecursiveCTEMetrics::Log(const vector<unique_ptr<RecursiveCTEPartialKeyInde
 	            {"retained_build_executions", to_string(retained_build_executions)},
 	            {"retained_cte_materializations", to_string(retained_cte_materializations)},
 	            {"retained_cte_reuses", to_string(retained_cte_reuses)}});
+}
+
+void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_metrics) const {
+	if (!enabled) {
+		return;
+	}
+	DUCKDB_LOG(logger, PhysicalOperatorLogType, op, "PhysicalRecursiveCTE", "EpochSummary",
+	           {{"epochs", to_string(epoch_metrics.frontier_rows.count)},
+	            {"frontier_rows_p50_upper_bound", to_string(epoch_metrics.frontier_rows.MedianUpperBound())},
+	            {"frontier_rows_max", to_string(epoch_metrics.frontier_rows.maximum)},
+	            {"workers_p50_upper_bound", to_string(epoch_metrics.workers.MedianUpperBound())},
+	            {"workers_max", to_string(epoch_metrics.workers.maximum)},
+	            {"tasks_p50_upper_bound", to_string(epoch_metrics.tasks.MedianUpperBound())},
+	            {"tasks_max", to_string(epoch_metrics.tasks.maximum)},
+	            {"elapsed_us_p50_upper_bound", to_string(epoch_metrics.elapsed_us.MedianUpperBound())},
+	            {"elapsed_us_max", to_string(epoch_metrics.elapsed_us.maximum)},
+	            {"frontier_storage_byte_epochs", to_string(epoch_metrics.frontier_storage_byte_epochs)},
+	            {"peak_frontier_storage_bytes", to_string(epoch_metrics.peak_frontier_storage_bytes)},
+	            {"frontier_allocation_byte_epochs", to_string(epoch_metrics.frontier_allocation_byte_epochs)},
+	            {"peak_frontier_allocation_bytes", to_string(epoch_metrics.peak_frontier_allocation_bytes)}});
 }
 
 RecursiveCTESchedulerState::RecursiveCTESchedulerState(shared_ptr<RecursiveExecutorPool> executor_pool_p,

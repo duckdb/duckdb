@@ -47,6 +47,9 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
       allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)), metrics(context, op),
       scheduler(op.shared_executor_pool, allow_executor_reuse),
       intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()) {
+	if (metrics.Enabled()) {
+		epoch_metrics = make_uniq<RecursiveCTEEpochMetrics>();
+	}
 	vector<LogicalType> aggr_input_types;
 	vector<AggregateObject> payload_aggregates;
 	for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
@@ -89,6 +92,9 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 
 RecursiveCTEState::~RecursiveCTEState() {
 	metrics.Log(partial_key_indexes);
+	if (epoch_metrics) {
+		metrics.LogEpochSummary(*epoch_metrics);
+	}
 }
 
 const RecursiveCTEPartialKeyIndex &RecursiveCTEState::GetPartialKeyIndex(const vector<idx_t> &key_indices) const {

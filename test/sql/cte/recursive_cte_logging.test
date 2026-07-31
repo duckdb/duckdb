@@ -59,6 +59,24 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 1	1	1
 
+query IIIIIIIIIIII
+SELECT info.epochs::UBIGINT = 2,
+       info.frontier_rows_p50_upper_bound::UBIGINT = 3,
+       info.frontier_rows_max::UBIGINT = 2,
+       info.workers_p50_upper_bound::UBIGINT <= info.workers_max::UBIGINT,
+       info.workers_max::UBIGINT >= 1,
+       info.tasks_p50_upper_bound::UBIGINT <= info.tasks_max::UBIGINT,
+       info.tasks_max::UBIGINT >= 1,
+       info.elapsed_us_p50_upper_bound::UBIGINT <= info.elapsed_us_max::UBIGINT,
+       info.frontier_storage_byte_epochs::UBIGINT >= info.peak_frontier_storage_bytes::UBIGINT,
+       info.peak_frontier_storage_bytes::UBIGINT > 0,
+       info.frontier_allocation_byte_epochs::UBIGINT >= info.peak_frontier_allocation_bytes::UBIGINT,
+       info.peak_frontier_allocation_bytes::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1	1	1	1	1	1	1	1	1
+
 statement ok
 CALL enable_logging('PhysicalOperator');
 

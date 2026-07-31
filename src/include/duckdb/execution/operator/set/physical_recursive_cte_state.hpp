@@ -1,6 +1,8 @@
 #pragma once
 
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
@@ -78,6 +80,31 @@ struct RecursiveCTEPipelineSchedulePlan {
 	bool source_tasks_write_recursive_output = false;
 };
 
+struct RecursiveCTEMetricDistribution {
+	static constexpr idx_t BUCKET_COUNT = NumericLimits<idx_t>::Digits() + 1;
+
+	void Add(idx_t value);
+	idx_t MedianUpperBound() const;
+
+	array<idx_t, BUCKET_COUNT> buckets {};
+	idx_t count = 0;
+	idx_t maximum = 0;
+};
+
+struct RecursiveCTEEpochMetrics {
+	void Record(idx_t frontier_rows, idx_t workers, idx_t tasks, idx_t elapsed_us, idx_t frontier_storage_bytes,
+	            idx_t frontier_allocation_bytes);
+
+	RecursiveCTEMetricDistribution frontier_rows;
+	RecursiveCTEMetricDistribution workers;
+	RecursiveCTEMetricDistribution tasks;
+	RecursiveCTEMetricDistribution elapsed_us;
+	idx_t frontier_storage_byte_epochs = 0;
+	idx_t peak_frontier_storage_bytes = 0;
+	idx_t frontier_allocation_byte_epochs = 0;
+	idx_t peak_frontier_allocation_bytes = 0;
+};
+
 class RecursiveCTEMetrics {
 public:
 	RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op);
@@ -86,6 +113,7 @@ public:
 		return enabled;
 	}
 	void RecordTasks(idx_t count);
+	idx_t TaskCount() const;
 	void RecordEpoch(idx_t workers, idx_t elapsed_us, idx_t frontier_rows, idx_t frontier_chunks,
 	                 idx_t scheduler_input_rows);
 	void RecordSink(idx_t wait_ns, idx_t work_ns, idx_t rows);
@@ -101,6 +129,7 @@ public:
 	void RecordRetainedCTEReuse();
 	void LogDistinctPromotion(idx_t partitions, idx_t migrated_rows, idx_t elapsed_us) const;
 	void Log(const vector<unique_ptr<RecursiveCTEPartialKeyIndex>> &partial_key_indexes) const;
+	void LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_metrics) const;
 
 private:
 	const PhysicalRecursiveCTE &op;
@@ -188,6 +217,10 @@ public:
 	const RecursiveCTEMetrics &GetMetrics() const {
 		return metrics;
 	}
+	RecursiveCTEEpochMetrics &GetEpochMetrics() {
+		D_ASSERT(epoch_metrics);
+		return *epoch_metrics;
+	}
 	RecursiveCTESchedulerState &GetScheduler() {
 		return scheduler;
 	}
@@ -247,6 +280,8 @@ private:
 	bool use_local_union_all_output = true;
 	//! Whether invariant recursive meta-pipelines have already been materialized for this state
 	bool invariant_meta_pipelines_materialized = false;
+	//! Optional epoch distributions and capacity metrics, allocated only when structured logging is active
+	unique_ptr<RecursiveCTEEpochMetrics> epoch_metrics;
 
 	SourceResultType GetUsingKeyData(ExecutionContext &context, DataChunk &chunk);
 	SourceResultType GetUnionData(ExecutionContext &context, DataChunk &chunk);
