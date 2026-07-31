@@ -147,13 +147,14 @@ CALL truncate_duckdb_logs();
 # This broad CPU-heavy recursion uses multiple workers and promotes the distinct sink.
 query II
 WITH RECURSIVE t(i, digest, level) AS (
-	SELECT i, md5(i::VARCHAR), 0 FROM range(50000) r(i)
+	SELECT i, md5(i::VARCHAR), 0
+	FROM range(current_setting('standard_vector_size')::BIGINT * 24) r(i)
 	UNION
 	SELECT i, md5(md5(md5(md5(digest)))), level + 1 FROM t WHERE level < 7
 )
-SELECT count(*), max(level) FROM t;
+SELECT count(*) = current_setting('standard_vector_size')::BIGINT * 24 * 8, max(level) FROM t;
 ----
-400000	7
+1	7
 
 statement ok
 CALL disable_logging();
@@ -168,7 +169,7 @@ query IIII
 SELECT info.epochs::UBIGINT > 0,
        info.scheduled_workers::UBIGINT > info.epochs::UBIGINT,
        info.scheduled_tasks::UBIGINT >= info.epochs::UBIGINT,
-       info.hash_rows::UBIGINT >= 400000
+       info.hash_rows::UBIGINT >= current_setting('standard_vector_size')::UBIGINT * 24 * 8
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
@@ -184,8 +185,8 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'DistinctPromoted'
 
 query IIIII
 SELECT info.distinct_grouping_work_ns::UBIGINT > 0,
-       info.distinct_candidate_rows::UBIGINT = 400000,
-       info.distinct_inserted_rows::UBIGINT = 400000,
+       info.distinct_candidate_rows::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 24 * 8,
+       info.distinct_inserted_rows::UBIGINT = current_setting('standard_vector_size')::UBIGINT * 24 * 8,
        info.distinct_duplicate_rows::UBIGINT = 0,
        info.recursive_pipeline_execute_work_ns::UBIGINT > 0
 FROM duckdb_logs_parsed('PhysicalOperator')
