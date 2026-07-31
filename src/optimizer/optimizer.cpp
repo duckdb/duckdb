@@ -13,7 +13,7 @@
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
-#include "duckdb/optimizer/distinct_aggregate_rewriter.hpp"
+#include "duckdb/optimizer/multi_stage_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
@@ -269,10 +269,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		grouping_sets_optimizer.VisitOperator(plan);
 	});
 
-	// rewrite eligible DISTINCT aggregates into explicit aggregate plans
-	RunOptimizer(OptimizerType::DISTINCT_AGGREGATE_REWRITE, [&]() {
-		DistinctAggregateRewriter distinct_aggregate_rewriter(*this);
-		distinct_aggregate_rewriter.VisitOperator(plan);
+	// rewrite eligible multi-stage aggregates into explicit aggregate plans
+	RunOptimizer(OptimizerType::MULTI_STAGE_AGGREGATE_REWRITE, [&]() {
+		MultiStageAggregateRewriter aggregate_rewriter(*this,
+		                                               !OptimizerDisabled(OptimizerType::DISTINCT_AGGREGATE_REWRITE),
+		                                               !OptimizerDisabled(OptimizerType::FREQUENCY_AGGREGATE_REWRITE));
+		aggregate_rewriter.VisitOperator(plan);
 	});
 
 	// try to inline CTEs instead of materialization

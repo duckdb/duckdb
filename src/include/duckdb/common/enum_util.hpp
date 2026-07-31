@@ -52,6 +52,8 @@ enum class AggregateHandling : uint8_t;
 
 enum class AggregateOrderDependent : uint8_t;
 
+enum class AggregateRewriteType : uint8_t;
+
 enum class AggregateStateExportMode : uint8_t;
 
 enum class AggregateType : uint8_t;
@@ -636,6 +638,9 @@ const char* EnumUtil::ToChars<AggregateHandling>(AggregateHandling value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateRewriteType>(AggregateRewriteType value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateStateExportMode>(AggregateStateExportMode value);
@@ -1498,6 +1503,9 @@ AggregateHandling EnumUtil::FromString<AggregateHandling>(const char *value);
 
 template<>
 AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char *value);
+
+template<>
+AggregateRewriteType EnumUtil::FromString<AggregateRewriteType>(const char *value);
 
 template<>
 AggregateStateExportMode EnumUtil::FromString<AggregateStateExportMode>(const char *value);

@@ -185,6 +185,16 @@ struct CountifFun {
 	static constexpr const char *Name = "countif";
 };
 
+struct InternalEntropyFromCountsFun {
+	static constexpr const char *Name = "__internal_entropy_from_counts";
+	static constexpr const char *Parameters = "frequency";
+	static constexpr const char *Description = "Internal finalizer for entropy over precomputed frequencies.";
+	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunction GetFunction();
+};
+
 struct EntropyFun {
 	static constexpr const char *Name = "entropy";
 	static constexpr const char *Parameters = "x";

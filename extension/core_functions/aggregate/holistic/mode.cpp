@@ -1,5 +1,7 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/smaller_binary.hpp"
@@ -7,6 +9,8 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 // MODE( <expr1> )
 // Returns the most frequent value for the values within expr1.
@@ -17,6 +21,41 @@ namespace std {} // namespace std
 namespace duckdb {
 
 namespace {
+
+class ModeAggregateRewriteInfo : public AggregateRewriteInfo {
+public:
+	AggregateRewriteType GetType() const override {
+		return AggregateRewriteType::FREQUENCY;
+	}
+	bool IgnoreNulls() const override {
+		return true;
+	}
+
+	unique_ptr<BoundAggregateExpression> CreateFinalAggregate(ClientContext &context,
+	                                                          const BoundAggregateExpression &source,
+	                                                          vector<unique_ptr<Expression>> children,
+	                                                          unique_ptr<Expression> filter,
+	                                                          unique_ptr<BoundOrderModifier> order_bys) const override {
+		D_ASSERT(children.size() == 2);
+		auto &catalog = Catalog::GetSystemCatalog(context);
+		auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+		    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "arg_max"));
+		const auto &function = entry.functions.GetFunctionByArguments(
+		    context, {children[0]->GetReturnType(), children[1]->GetReturnType()});
+
+		FunctionBinder function_binder(context);
+		auto result = function_binder.BindAggregateFunction(function, std::move(children), std::move(filter));
+		result->GetOrderBysMutable() = std::move(order_bys);
+		D_ASSERT(result->GetReturnType() == source.GetReturnType());
+		return result;
+	}
+};
+
+const AggregateRewriteInfo &GetModeAggregateRewriteInfo() {
+	static ModeAggregateRewriteInfo info;
+	return info;
+}
+
 struct ModeAttr {
 	ModeAttr() : count(0), first_row(std::numeric_limits<idx_t>::max()) {
 	}
@@ -511,6 +550,7 @@ unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	function.ReplaceImplementation(GetModeAggregate(arguments[0]->GetReturnType()));
 	function.SetName("mode");
+	function.SetRewriteCallback(GetModeAggregateRewriteInfo);
 	return nullptr;
 }
 
@@ -528,6 +568,84 @@ AggregateFunctionSet ModeFun::GetFunctions() {
 // Entropy
 //===--------------------------------------------------------------------===//
 namespace {
+
+struct EntropyCountsState {
+	uint64_t count;
+	double weighted_count;
+};
+
+struct EntropyCountsFunction {
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
+		const auto count = static_cast<double>(input);
+		state.count += static_cast<uint64_t>(input);
+		state.weighted_count += count * log2(count);
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t input_count) {
+		const auto count = static_cast<double>(input);
+		state.count += static_cast<uint64_t>(input) * input_count;
+		state.weighted_count += count * log2(count) * static_cast<double>(input_count);
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target.count += source.count;
+		target.weighted_count += source.weighted_count;
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &) {
+		if (state.count == 0) {
+			target = 0;
+			return;
+		}
+		const auto count = static_cast<double>(state.count);
+		target = log2(count) - state.weighted_count / count;
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+AggregateFunction GetEntropyCountsAggregate() {
+	auto function = AggregateFunction::UnaryAggregate<EntropyCountsState, int64_t, double, EntropyCountsFunction>(
+	    LogicalType::BIGINT, LogicalType::DOUBLE);
+	function.SetName(InternalEntropyFromCountsFun::Name);
+	return function;
+}
+
+class EntropyAggregateRewriteInfo : public AggregateRewriteInfo {
+public:
+	AggregateRewriteType GetType() const override {
+		return AggregateRewriteType::FREQUENCY;
+	}
+	bool IgnoreNulls() const override {
+		return true;
+	}
+
+	unique_ptr<BoundAggregateExpression> CreateFinalAggregate(ClientContext &context,
+	                                                          const BoundAggregateExpression &source,
+	                                                          vector<unique_ptr<Expression>> children,
+	                                                          unique_ptr<Expression> filter,
+	                                                          unique_ptr<BoundOrderModifier> order_bys) const override {
+		D_ASSERT(children.size() == 2);
+		children.erase(children.begin());
+		FunctionBinder function_binder(context);
+		auto result =
+		    function_binder.BindAggregateFunction(GetEntropyCountsAggregate(), std::move(children), std::move(filter));
+		result->GetOrderBysMutable() = std::move(order_bys);
+		D_ASSERT(result->GetReturnType() == source.GetReturnType());
+		return result;
+	}
+};
+
+const AggregateRewriteInfo &GetEntropyAggregateRewriteInfo() {
+	static EntropyAggregateRewriteInfo info;
+	return info;
+}
 
 template <class STATE>
 double FinalizeEntropy(STATE &state) {
@@ -614,10 +732,15 @@ unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input)
 	auto &arguments = input.GetArguments();
 	function.ReplaceImplementation(GetEntropyFunction(arguments[0]->GetReturnType()));
 	function.SetName("entropy");
+	function.SetRewriteCallback(GetEntropyAggregateRewriteInfo);
 	return nullptr;
 }
 
 } // namespace
+
+AggregateFunction InternalEntropyFromCountsFun::GetFunction() {
+	return GetEntropyCountsAggregate();
+}
 
 AggregateFunctionSet EntropyFun::GetFunctions() {
 	AggregateFunctionSet entropy("entropy");
