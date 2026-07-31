@@ -235,9 +235,10 @@ bool Iterator::LowerBound(Node current, const ARTKey &key, const bool equal) {
 			continue;
 		}
 
-		// Push back all prefix bytes and compare with key bytes.
+		// Copy the prefix bytes and child while the prefix is pinned.
 		uint8_t prefix_count;
 		Node prefix_child;
+		const auto prefix_offset = current_key.Size();
 		{
 			ConstNodeHandle handle(art, current);
 			auto data = handle.GetPtr();
@@ -248,29 +249,28 @@ bool Iterator::LowerBound(Node current, const ARTKey &key, const bool equal) {
 				current_key.Push(data[i]);
 			}
 			nodes.emplace(current, 0);
-
-			// We compare the prefix bytes with the key bytes.
-			for (idx_t i = 0; i < prefix_count; i++) {
-				// We found a prefix byte that is less than its corresponding key byte.
-				// I.e., the subsequent node is lesser than the key. Thus, the next node
-				// is the lower bound.
-				if (data[i] < key[depth + i]) {
-					return Next();
-				}
-
-				// We found a prefix byte that is greater than its corresponding key byte.
-				// I.e., the subsequent node is greater than the key. Thus, the minimum is
-				// the lower bound.
-				if (data[i] > key[depth + i]) {
-					prefix_child = child;
-					FindMinimum(prefix_child);
-					return true;
-				}
-			}
-
-			// The prefix matches the key.
 			prefix_child = child;
 		}
+
+		// Compare the copied prefix bytes with the key bytes.
+		for (idx_t i = 0; i < prefix_count; i++) {
+			// We found a prefix byte that is less than its corresponding key byte.
+			// I.e., the subsequent node is lesser than the key. Thus, the next node
+			// is the lower bound.
+			if (current_key[prefix_offset + i] < key[depth + i]) {
+				return Next();
+			}
+
+			// We found a prefix byte that is greater than its corresponding key byte.
+			// I.e., the subsequent node is greater than the key. Thus, the minimum is
+			// the lower bound.
+			if (current_key[prefix_offset + i] > key[depth + i]) {
+				FindMinimum(prefix_child);
+				return true;
+			}
+		}
+
+		// The prefix matches the key.
 		depth += prefix_count;
 		current = prefix_child;
 	}
