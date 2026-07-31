@@ -1,6 +1,7 @@
 module: aggregate_function
 functions:
   create_aggregate_function:
+    offset: 226
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
@@ -13,6 +14,7 @@ functions:
       The return value should be destroyed with `duckdb_destroy_aggregate_function`.
     return_description: The aggregate function object.
   destroy_aggregate_function:
+    offset: 227
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
@@ -25,6 +27,7 @@ functions:
     description: |
       Destroys the given aggregate function object.
   aggregate_function_set_name:
+    offset: 228
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -40,6 +43,7 @@ functions:
     description: |
       Sets the name of the given aggregate function.
   aggregate_function_add_parameter:
+    offset: 229
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -53,6 +57,7 @@ functions:
     description: |
       Adds a parameter to the aggregate function.
   aggregate_function_set_return_type:
+    offset: 230
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -66,6 +71,7 @@ functions:
     description: |
       Sets the return type of the aggregate function.
   aggregate_function_set_functions:
+    offset: 231
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -91,6 +97,7 @@ functions:
     description: |
       Sets the main functions of the aggregate function.
   aggregate_function_set_destructor:
+    offset: 232
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -104,6 +111,7 @@ functions:
     description: |
       Sets the state destructor callback of the aggregate function (optional)
   register_aggregate_function:
+    offset: 233
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -121,6 +129,7 @@ functions:
       If the function is incomplete or a function with this name already exists DuckDBError is returned.
     return_description: Whether or not the registration was successful.
   aggregate_function_set_special_handling:
+    offset: 234
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -131,6 +140,7 @@ functions:
     description: |
       Sets the NULL handling of the aggregate function to SPECIAL_HANDLING.
   aggregate_function_set_extra_info:
+    offset: 235
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -148,6 +158,7 @@ functions:
     description: |
       Assigns extra information to the scalar function that can be fetched during binding, etc.
   aggregate_function_get_extra_info:
+    offset: 236
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -160,6 +171,7 @@ functions:
       Retrieves the extra info of the function as set in `duckdb_aggregate_function_set_extra_info`.
     return_description: The extra info
   aggregate_function_set_error:
+    offset: 237
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -175,6 +187,7 @@ functions:
     description: |
       Report that an error has occurred while executing the aggregate function.
   create_aggregate_function_set:
+    offset: 238
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
@@ -191,6 +204,7 @@ functions:
       The return value should be destroyed with `duckdb_destroy_aggregate_function_set`.
     return_description: The aggregate function set object.
   destroy_aggregate_function_set:
+    offset: 239
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
@@ -203,6 +217,7 @@ functions:
     description: |
       Destroys the given aggregate function set object.
   add_aggregate_function_to_set:
+    offset: 240
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -218,6 +233,7 @@ functions:
 
       Returns DuckDBError if the function could not be added, for example if the overload already exists.
   register_aggregate_function_set:
+    offset: 241
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:

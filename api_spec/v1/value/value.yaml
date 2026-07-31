@@ -1,6 +1,7 @@
 module: value
 functions:
   destroy_value:
+    offset: 92
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     role: destructor
@@ -14,6 +15,7 @@ functions:
     description: |
       Destroys the value and de-allocates all memory allocated for that type.
   create_varchar:
+    offset: 93
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     role: constructor
@@ -31,6 +33,7 @@ functions:
       Superseded by `duckdb_create_varchar_length`.
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_varchar_length:
+    offset: 94
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     role: constructor
@@ -49,6 +52,7 @@ functions:
       Creates a value from a string. Returns nullptr if the string is not valid UTF-8 or other invalid input.
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_bool:
+    offset: 95
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -60,6 +64,7 @@ functions:
       Creates a value from a boolean
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_int8:
+    offset: 96
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -71,6 +76,7 @@ functions:
       Creates a value from an int8_t (a tinyint)
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_uint8:
+    offset: 97
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -82,6 +88,7 @@ functions:
       Creates a value from a uint8_t (a utinyint)
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_int16:
+    offset: 98
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -93,6 +100,7 @@ functions:
       Creates a value from an int16_t (a smallint)
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_uint16:
+    offset: 99
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -104,6 +112,7 @@ functions:
       Creates a value from a uint16_t (a usmallint)
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_int32:
+    offset: 100
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -115,6 +124,7 @@ functions:
       Creates a value from an int32_t (an integer)
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_uint32:
+    offset: 101
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -126,6 +136,7 @@ functions:
       Creates a value from a uint32_t (a uinteger)
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_uint64:
+    offset: 102
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -137,6 +148,7 @@ functions:
       Creates a value from a uint64_t (a ubigint)
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_int64:
+    offset: 103
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -147,6 +159,7 @@ functions:
       Creates a value from an int64
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_hugeint:
+    offset: 104
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -158,6 +171,7 @@ functions:
       Creates a value from a hugeint
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_uhugeint:
+    offset: 105
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -169,6 +183,8 @@ functions:
       Creates a value from a uhugeint
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_bignum:
+    renamed_from: { name: create_varint, version: "v1.4.0" }
+    offset: 114
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -180,6 +196,7 @@ functions:
       Creates a BIGNUM value from a duckdb_bignum
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_decimal:
+    offset: 115
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -191,6 +208,7 @@ functions:
       Creates a DECIMAL value from a duckdb_decimal
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_float:
+    offset: 106
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -202,6 +220,7 @@ functions:
       Creates a value from a float
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_double:
+    offset: 107
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -213,6 +232,7 @@ functions:
       Creates a value from a double
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_date:
+    offset: 108
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -224,6 +244,7 @@ functions:
       Creates a value from a date
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_time:
+    offset: 109
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -235,6 +256,7 @@ functions:
       Creates a value from a time
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_time_ns:
+    offset: 534
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -247,6 +269,7 @@ functions:
       Creates a value from a time_ns
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_time_tz_value:
+    offset: 110
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -259,6 +282,7 @@ functions:
       Not to be confused with `duckdb_create_time_tz`, which creates a duckdb_time_tz_t.
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_timestamp:
+    offset: 111
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -270,6 +294,7 @@ functions:
       Creates a TIMESTAMP value from a duckdb_timestamp
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_timestamp_tz:
+    offset: 322
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -281,6 +306,7 @@ functions:
       Creates a TIMESTAMP_TZ value from a duckdb_timestamp
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_timestamp_s:
+    offset: 323
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -292,6 +318,7 @@ functions:
       Creates a TIMESTAMP_S value from a duckdb_timestamp_s
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_timestamp_ms:
+    offset: 324
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -303,6 +330,7 @@ functions:
       Creates a TIMESTAMP_MS value from a duckdb_timestamp_ms
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_timestamp_ns:
+    offset: 325
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -314,6 +342,7 @@ functions:
       Creates a TIMESTAMP_NS value from a duckdb_timestamp_ns
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_interval:
+    offset: 112
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -325,6 +354,7 @@ functions:
       Creates a value from an interval
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_blob:
+    offset: 113
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -341,6 +371,7 @@ functions:
       Creates a value from a blob
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_bit:
+    offset: 116
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -352,6 +383,7 @@ functions:
       Creates a BIT value from a duckdb_bit
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_uuid:
+    offset: 117
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -363,6 +395,7 @@ functions:
       Creates a UUID value from a uhugeint
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   get_bool:
+    offset: 118
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -374,6 +407,7 @@ functions:
       Returns the boolean value of the given value.
     return_description: A boolean, or false if the value cannot be converted
   get_int8:
+    offset: 119
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -385,6 +419,7 @@ functions:
       Returns the int8_t value of the given value.
     return_description: A int8_t, or MinValue<int8> if the value cannot be converted
   get_uint8:
+    offset: 120
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -396,6 +431,7 @@ functions:
       Returns the uint8_t value of the given value.
     return_description: A uint8_t, or MinValue<uint8> if the value cannot be converted
   get_int16:
+    offset: 121
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -407,6 +443,7 @@ functions:
       Returns the int16_t value of the given value.
     return_description: A int16_t, or MinValue<int16> if the value cannot be converted
   get_uint16:
+    offset: 122
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -418,6 +455,7 @@ functions:
       Returns the uint16_t value of the given value.
     return_description: A uint16_t, or MinValue<uint16> if the value cannot be converted
   get_int32:
+    offset: 123
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -429,6 +467,7 @@ functions:
       Returns the int32_t value of the given value.
     return_description: A int32_t, or MinValue<int32> if the value cannot be converted
   get_uint32:
+    offset: 124
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -440,6 +479,7 @@ functions:
       Returns the uint32_t value of the given value.
     return_description: A uint32_t, or MinValue<uint32> if the value cannot be converted
   get_int64:
+    offset: 125
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -451,6 +491,7 @@ functions:
       Returns the int64_t value of the given value.
     return_description: A int64_t, or MinValue<int64> if the value cannot be converted
   get_uint64:
+    offset: 126
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -462,6 +503,7 @@ functions:
       Returns the uint64_t value of the given value.
     return_description: A uint64_t, or MinValue<uint64> if the value cannot be converted
   get_hugeint:
+    offset: 127
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -473,6 +515,7 @@ functions:
       Returns the hugeint value of the given value.
     return_description: A duckdb_hugeint, or MinValue<hugeint> if the value cannot be converted
   get_uhugeint:
+    offset: 128
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -484,6 +527,8 @@ functions:
       Returns the uhugeint value of the given value.
     return_description: A duckdb_uhugeint, or MinValue<uhugeint> if the value cannot be converted
   get_bignum:
+    renamed_from: { name: get_varint, version: "v1.4.0" }
+    offset: 138
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -496,6 +541,7 @@ functions:
       The `data` field must be destroyed with `duckdb_free`.
     return_description: A duckdb_bignum. The `data` field must be destroyed with `duckdb_free`.
   get_decimal:
+    offset: 139
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -507,6 +553,7 @@ functions:
       Returns the duckdb_decimal value of the given value.
     return_description: A duckdb_decimal, or MinValue<decimal> if the value cannot be converted
   get_float:
+    offset: 129
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -518,6 +565,7 @@ functions:
       Returns the float value of the given value.
     return_description: A float, or NAN if the value cannot be converted
   get_double:
+    offset: 130
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -529,6 +577,7 @@ functions:
       Returns the double value of the given value.
     return_description: A double, or NAN if the value cannot be converted
   get_date:
+    offset: 131
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -540,6 +589,7 @@ functions:
       Returns the date value of the given value.
     return_description: A duckdb_date, or MinValue<date> if the value cannot be converted
   get_time:
+    offset: 132
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -551,6 +601,7 @@ functions:
       Returns the time value of the given value.
     return_description: A duckdb_time, or MinValue<time> if the value cannot be converted
   get_time_ns:
+    offset: 535
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -563,6 +614,7 @@ functions:
       Returns the time_ns value of the given value.
     return_description: A duckdb_time_ns, or MinValue<time_ns> if the value cannot be converted
   get_time_tz:
+    offset: 133
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -574,6 +626,7 @@ functions:
       Returns the time_tz value of the given value.
     return_description: A duckdb_time_tz, or MinValue<time_tz> if the value cannot be converted
   get_timestamp:
+    offset: 134
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -585,6 +638,7 @@ functions:
       Returns the TIMESTAMP value of the given value.
     return_description: A duckdb_timestamp, or MinValue<timestamp> if the value cannot be converted
   get_timestamp_tz:
+    offset: 326
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -596,6 +650,7 @@ functions:
       Returns the TIMESTAMP_TZ value of the given value.
     return_description: A duckdb_timestamp, or MinValue<timestamp_tz> if the value cannot be converted
   get_timestamp_s:
+    offset: 327
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -607,6 +662,7 @@ functions:
       Returns the duckdb_timestamp_s value of the given value.
     return_description: A duckdb_timestamp_s, or MinValue<timestamp_s> if the value cannot be converted
   get_timestamp_ms:
+    offset: 328
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -618,6 +674,7 @@ functions:
       Returns the duckdb_timestamp_ms value of the given value.
     return_description: A duckdb_timestamp_ms, or MinValue<timestamp_ms> if the value cannot be converted
   get_timestamp_ns:
+    offset: 329
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -629,6 +686,7 @@ functions:
       Returns the duckdb_timestamp_ns value of the given value.
     return_description: A duckdb_timestamp_ns, or MinValue<timestamp_ns> if the value cannot be converted
   get_interval:
+    offset: 135
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -640,6 +698,7 @@ functions:
       Returns the interval value of the given value.
     return_description: A duckdb_interval, or MinValue<interval> if the value cannot be converted
   get_value_type:
+    offset: 136
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -652,6 +711,7 @@ functions:
       The type itself must not be destroyed.
     return_description: A duckdb_logical_type.
   get_blob:
+    offset: 137
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -663,6 +723,7 @@ functions:
       Returns the blob value of the given value.
     return_description: A duckdb_blob
   get_bit:
+    offset: 140
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -675,6 +736,7 @@ functions:
       The `data` field must be destroyed with `duckdb_free`.
     return_description: A duckdb_bit
   get_uuid:
+    offset: 141
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -686,6 +748,7 @@ functions:
       Returns a duckdb_uhugeint representing the UUID value of the given value.
     return_description: A duckdb_uhugeint representing the UUID value
   get_varchar:
+    offset: 142
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -699,6 +762,7 @@ functions:
       The result must be destroyed with `duckdb_free`.
     return_description: The string value. This must be destroyed with `duckdb_free`.
   create_struct_value:
+    offset: 143
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -714,6 +778,7 @@ functions:
       Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.
     return_description: The struct value, or nullptr, if any child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
   create_list_value:
+    offset: 144
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -733,6 +798,7 @@ functions:
       Must be destroyed with `duckdb_destroy_value`.
     return_description: The list value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
   create_array_value:
+    offset: 145
     lifecycle:
       - ["stable", "v0.10.1", "2024-03-18"]
     parameters:
@@ -752,6 +818,7 @@ functions:
       Must be destroyed with `duckdb_destroy_value`.
     return_description: The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
   create_map_value:
+    offset: 532
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.3.0", "2025-05-21"]
@@ -776,6 +843,7 @@ functions:
       Must be destroyed with `duckdb_destroy_value`.
     return_description: The map value, or nullptr, if the parameters are invalid.
   create_union_value:
+    offset: 533
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.3.0", "2025-05-21"]
@@ -795,6 +863,7 @@ functions:
       Must be destroyed with `duckdb_destroy_value`.
     return_description: The union value, or nullptr, if the parameters are invalid.
   get_map_size:
+    offset: 146
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -806,6 +875,7 @@ functions:
       Returns the number of elements in a MAP value.
     return_description: The number of elements in the map.
   get_map_key:
+    offset: 147
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -820,6 +890,7 @@ functions:
       Returns the MAP key at index as a duckdb_value.
     return_description: The key as a duckdb_value.
   get_map_value:
+    offset: 148
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -834,6 +905,7 @@ functions:
       Returns the MAP value at index as a duckdb_value.
     return_description: The value as a duckdb_value.
   is_null_value:
+    offset: 149
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -845,6 +917,7 @@ functions:
       Returns whether the value's type is SQLNULL or not.
     return_description: True, if the value's type is SQLNULL, otherwise false.
   create_null_value:
+    offset: 150
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters: {}
@@ -853,6 +926,7 @@ functions:
       Creates a value of type SQLNULL.
     return_description: The duckdb_value representing SQLNULL. This must be destroyed with `duckdb_destroy_value`.
   get_list_size:
+    offset: 151
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -864,6 +938,7 @@ functions:
       Returns the number of elements in a LIST value.
     return_description: The number of elements in the list.
   get_list_child:
+    offset: 152
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -878,6 +953,7 @@ functions:
       Returns the LIST child at index as a duckdb_value.
     return_description: The child as a duckdb_value.
   create_enum_value:
+    offset: 153
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -892,6 +968,7 @@ functions:
       Creates an enum value from a type and a value. Must be destroyed with `duckdb_destroy_value`.
     return_description: The enum value, or nullptr.
   get_enum_value:
+    offset: 154
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -903,6 +980,7 @@ functions:
       Returns the enum value of the given value.
     return_description: A uint64_t, or MinValue<uint64> if the value cannot be converted
   get_struct_child:
+    offset: 155
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -917,6 +995,7 @@ functions:
       Returns the STRUCT child at index as a duckdb_value.
     return_description: The child as a duckdb_value.
   value_to_string:
+    offset: 527
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.3.0", "2025-05-21"]
@@ -930,6 +1009,7 @@ functions:
       Returns the SQL string representation of the given value.
     return_description: The SQL string representation as a null-terminated string. The result must be freed with `duckdb_free`.
   value_boolean:
+    offset: 363
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.1.0", "2019-06-27"]
@@ -946,6 +1026,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The boolean value at the specified location, or false if the value cannot be converted.
   value_int8:
+    offset: 364
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.1.0", "2019-06-27"]
@@ -962,6 +1043,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The int8_t value at the specified location, or 0 if the value cannot be converted.
   value_int16:
+    offset: 365
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.1.0", "2019-06-27"]
@@ -978,6 +1060,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The int16_t value at the specified location, or 0 if the value cannot be converted.
   value_int32:
+    offset: 366
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.1.0", "2019-06-27"]
@@ -994,6 +1077,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The int32_t value at the specified location, or 0 if the value cannot be converted.
   value_int64:
+    offset: 367
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.1.0", "2019-06-27"]
@@ -1010,6 +1094,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The int64_t value at the specified location, or 0 if the value cannot be converted.
   value_hugeint:
+    offset: 368
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.9", "2021-09-06"]
@@ -1026,6 +1111,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The duckdb_hugeint value at the specified location, or 0 if the value cannot be converted.
   value_uhugeint:
+    offset: 369
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.10.0", "2024-02-13"]
@@ -1042,6 +1128,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted.
   value_decimal:
+    offset: 370
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.3.3", "2022-04-11"]
@@ -1058,6 +1145,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The duckdb_decimal value at the specified location, or 0 if the value cannot be converted.
   value_uint8:
+    offset: 371
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.5", "2021-03-10"]
@@ -1074,6 +1162,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The uint8_t value at the specified location, or 0 if the value cannot be converted.
   value_uint16:
+    offset: 372
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.5", "2021-03-10"]
@@ -1090,6 +1179,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The uint16_t value at the specified location, or 0 if the value cannot be converted.
   value_uint32:
+    offset: 373
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.5", "2021-03-10"]
@@ -1106,6 +1196,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The uint32_t value at the specified location, or 0 if the value cannot be converted.
   value_uint64:
+    offset: 374
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.5", "2021-03-10"]
@@ -1122,6 +1213,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The uint64_t value at the specified location, or 0 if the value cannot be converted.
   value_float:
+    offset: 375
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.1.0", "2019-06-27"]
@@ -1138,6 +1230,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The float value at the specified location, or 0 if the value cannot be converted.
   value_double:
+    offset: 376
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.1.0", "2019-06-27"]
@@ -1154,6 +1247,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The double value at the specified location, or 0 if the value cannot be converted.
   value_date:
+    offset: 377
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.9", "2021-09-06"]
@@ -1170,6 +1264,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The duckdb_date value at the specified location, or 0 if the value cannot be converted.
   value_time:
+    offset: 378
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.9", "2021-09-06"]
@@ -1186,6 +1281,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The duckdb_time value at the specified location, or 0 if the value cannot be converted.
   value_timestamp:
+    offset: 379
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.9", "2021-09-06"]
@@ -1202,6 +1298,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The duckdb_timestamp value at the specified location, or 0 if the value cannot be converted.
   value_interval:
+    offset: 380
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.9", "2021-09-06"]
@@ -1218,6 +1315,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The duckdb_interval value at the specified location, or 0 if the value cannot be converted.
   value_varchar:
+    offset: 381
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.1.0", "2019-06-27"]
@@ -1237,6 +1335,7 @@ functions:
       The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
       converted. The result must be freed with `duckdb_free`.
   value_string:
+    offset: 382
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.6.0", "2022-11-14"]
@@ -1253,6 +1352,7 @@ functions:
       **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
     return_description: The string value at the specified location. Attempts to cast the result value to string.
   value_varchar_internal:
+    offset: 383
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.9", "2021-09-06"]
@@ -1274,6 +1374,7 @@ functions:
 
       The result must NOT be freed.
   value_string_internal:
+    offset: 384
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.6.0", "2022-11-14"]
@@ -1294,6 +1395,7 @@ functions:
 
       The result must NOT be freed.
   value_blob:
+    offset: 385
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.5", "2021-03-10"]
@@ -1312,6 +1414,7 @@ functions:
       The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the
       value cannot be converted. The resulting field "blob.data" must be freed with `duckdb_free.`
   value_is_null:
+    offset: 386
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.9", "2021-09-06"]

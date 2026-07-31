@@ -1,6 +1,7 @@
 module: replacement_scan
 functions:
   add_replacement_scan:
+    offset: 274
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -21,6 +22,7 @@ functions:
     description: |
       Add a replacement scan definition to the specified database.
   replacement_scan_set_function_name:
+    offset: 275
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -37,6 +39,7 @@ functions:
       Sets the replacement function name. If this function is called in the replacement callback,
       the replacement scan is performed. If it is not called, the replacement callback is not performed.
   replacement_scan_add_parameter:
+    offset: 276
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -50,6 +53,7 @@ functions:
     description: |
       Adds a parameter to the replacement scan function.
   replacement_scan_set_error:
+    offset: 277
     lifecycle:
       - ["stable", "v0.6.0", "2022-11-14"]
     parameters:

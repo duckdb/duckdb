@@ -1,6 +1,7 @@
 module: file_system
 functions:
   client_context_get_file_system:
+    offset: 477
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -13,6 +14,7 @@ functions:
       Get a file system instance associated with the given client context.
     return_description: The resulting file system instance. Must be destroyed with `duckdb_destroy_file_system`.
   destroy_file_system:
+    offset: 478
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -27,6 +29,7 @@ functions:
     description: |
       Destroys the given file system instance.
   file_system_error_data:
+    offset: 480
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -39,6 +42,7 @@ functions:
       Retrieves the last error that occurred on the given file system instance.
     return_description: The error data.
   file_system_open:
+    offset: 479
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -64,6 +68,7 @@ functions:
       Opens a file at the given path with the specified options.
     return_description: Whether the operation was successful. If not, the error data can be retrieved using `duckdb_file_system_error_data`.
   create_file_open_options:
+    offset: 481
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -75,6 +80,7 @@ functions:
       Creates a new file open options instance with blank settings.
     return_description: The new file open options instance. Must be destroyed with `duckdb_destroy_file_open_options`.
   file_open_options_set_flag:
+    offset: 482
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -93,6 +99,7 @@ functions:
       Sets a specific flag in the file open options.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` if the flag is unrecognized or unsupported by this version of DuckDB.'
   destroy_file_open_options:
+    offset: 483
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -107,6 +114,7 @@ functions:
     description: |
       Destroys the given file open options instance.
   destroy_file_handle:
+    offset: 484
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -122,6 +130,7 @@ functions:
       Destroys the given file handle and deallocates all associated resources.
       This will also close the file if it is still open.
   file_handle_error_data:
+    offset: 485
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -134,6 +143,7 @@ functions:
       Retrieves the last error that occurred on the given file handle.
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`
   file_handle_read:
+    offset: 487
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -153,6 +163,7 @@ functions:
       Reads data from the file into the buffer.
     return_description: The number of bytes actually read, or negative on error.
   file_handle_write:
+    offset: 488
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -173,6 +184,7 @@ functions:
       Writes data from the buffer to the file.
     return_description: The number of bytes actually written, or negative on error.
   file_handle_tell:
+    offset: 490
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -185,6 +197,7 @@ functions:
       Tells the current position in the file.
     return_description: The current position in the file, or negative on error.
   file_handle_size:
+    offset: 492
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -197,6 +210,7 @@ functions:
       Gets the size of the file.
     return_description: The size of the file in bytes, or negative on error.
   file_handle_seek:
+    offset: 489
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -211,6 +225,7 @@ functions:
       Seeks to a specific position in the file.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using `duckdb_file_handle_error_data`.'
   file_handle_sync:
+    offset: 491
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -223,6 +238,7 @@ functions:
       Synchronizes the file's state with the underlying storage.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using `duckdb_file_handle_error_data`.'
   file_handle_close:
+    offset: 486
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]

@@ -1,6 +1,7 @@
 module: data_chunk
 functions:
   create_data_chunk:
+    offset: 186
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     role: constructor
@@ -19,6 +20,7 @@ functions:
       The result must be destroyed with `duckdb_destroy_data_chunk`.
     return_description: The data chunk.
   destroy_data_chunk:
+    offset: 187
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     role: destructor
@@ -32,6 +34,7 @@ functions:
     description: |
       Destroys the data chunk and de-allocates all memory allocated for that chunk.
   data_chunk_reset:
+    offset: 188
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -44,6 +47,7 @@ functions:
       After calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current
       data and validity pointers
   data_chunk_get_column_count:
+    offset: 189
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -55,6 +59,7 @@ functions:
       Retrieves the number of columns in a data chunk.
     return_description: The number of columns in the data chunk
   data_chunk_get_vector:
+    offset: 190
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -71,6 +76,7 @@ functions:
       It does NOT need to be destroyed.
     return_description: The vector
   data_chunk_get_size:
+    offset: 191
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -82,6 +88,7 @@ functions:
       Retrieves the current number of tuples in a data chunk.
     return_description: The number of tuples in the data chunk
   data_chunk_set_size:
+    offset: 192
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:

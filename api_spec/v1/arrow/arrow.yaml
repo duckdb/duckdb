@@ -1,6 +1,7 @@
 module: arrow
 functions:
   to_arrow_schema:
+    offset: 411
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -30,6 +31,7 @@ functions:
       Transforms a DuckDB Schema into an Arrow Schema
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
   data_chunk_to_arrow:
+    offset: 412
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -50,6 +52,7 @@ functions:
       Transforms a DuckDB data chunk into an Arrow array.
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
   schema_from_arrow:
+    offset: 413
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -71,6 +74,7 @@ functions:
       Transforms an Arrow Schema into a DuckDB Schema.
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
   data_chunk_from_arrow:
+    offset: 414
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -95,6 +99,7 @@ functions:
       Transforms an Arrow array into a DuckDB data chunk. The data chunk will retain ownership of the underlying Arrow data.
     return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.
   destroy_arrow_converted_schema:
+    offset: 415
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -109,6 +114,7 @@ functions:
     description: |
       Destroys the arrow converted schema and de-allocates all memory allocated for that arrow converted schema.
   query_arrow:
+    offset: 389
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.8", "2021-07-30"]
@@ -138,6 +144,7 @@ functions:
       query fails, otherwise the error stored within the result will not be freed correctly.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   query_arrow_schema:
+    offset: 390
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.8", "2021-07-30"]
@@ -158,6 +165,7 @@ functions:
       ArrowSchema object.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   prepared_arrow_schema:
+    offset: 391
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.9.0", "2023-09-26"]
@@ -178,6 +186,7 @@ functions:
       ArrowSchema object.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   result_arrow_array:
+    offset: 392
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.10.0", "2024-02-13"]
@@ -200,6 +209,7 @@ functions:
       Convert a data chunk into an arrow struct array. Remember to call release on the respective
       ArrowArray object.
   query_arrow_array:
+    offset: 393
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.8", "2021-07-30"]
@@ -223,6 +233,7 @@ functions:
       So consume the out_array before calling this function again.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   arrow_column_count:
+    offset: 394
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.8", "2021-07-30"]
@@ -237,6 +248,7 @@ functions:
       Returns the number of columns present in the arrow result object.
     return_description: The number of columns present in the result object.
   arrow_row_count:
+    offset: 395
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.8", "2021-07-30"]
@@ -251,6 +263,7 @@ functions:
       Returns the number of rows present in the arrow result object.
     return_description: The number of rows present in the result object.
   arrow_rows_changed:
+    offset: 396
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.8", "2021-07-30"]
@@ -266,6 +279,7 @@ functions:
       INSERT/UPDATE/DELETE queries. For other queries the rows_changed will be 0.
     return_description: The number of rows changed.
   query_arrow_error:
+    offset: 397
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.8", "2021-07-30"]
@@ -285,6 +299,7 @@ functions:
       The error message should not be freed. It will be de-allocated when `duckdb_destroy_arrow` is called.
     return_description: The error of the result.
   destroy_arrow:
+    offset: 398
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.8", "2021-07-30"]
@@ -301,6 +316,7 @@ functions:
 
       Closes the result and de-allocates all memory allocated for the arrow result.
   destroy_arrow_stream:
+    offset: 399
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.10.0", "2024-02-13"]
@@ -317,6 +333,7 @@ functions:
 
       Releases the arrow array stream and de-allocates its memory.
   execute_prepared_arrow:
+    offset: 400
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.2.8", "2021-07-30"]
@@ -337,6 +354,7 @@ functions:
       Note that after running `duckdb_execute_prepared_arrow`, `duckdb_destroy_arrow` must be called on the result object.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   arrow_scan:
+    offset: 401
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.9.0", "2023-09-26"]
@@ -359,6 +377,7 @@ functions:
       Scans the Arrow stream and creates a view with the given name.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   arrow_array_scan:
+    offset: 402
     lifecycle:
       - ["deprecated", "v1.0.0", "2024-05-29"]
       - ["stable", "v0.9.0", "2023-09-26"]

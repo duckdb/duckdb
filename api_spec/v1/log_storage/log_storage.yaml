@@ -1,6 +1,7 @@
 module: log_storage
 functions:
   create_log_storage:
+    offset: 494
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -12,6 +13,7 @@ functions:
       Creates a new log storage object.
     return_description: A log storage object. Must be destroyed with `duckdb_destroy_log_storage`.
   destroy_log_storage:
+    offset: 495
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -26,6 +28,7 @@ functions:
     description: |
       Destroys a log storage object.
   log_storage_set_write_log_entry:
+    offset: 496
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -40,6 +43,7 @@ functions:
     description: |
       Sets the callback function for writing log entries.
   log_storage_set_extra_data:
+    offset: 497
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -57,6 +61,7 @@ functions:
     description: |
       Sets the extra data of the custom log storage.
   log_storage_set_name:
+    offset: 498
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -73,6 +78,7 @@ functions:
     description: |
       Sets the name of the log storage.
   register_log_storage:
+    offset: 499
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]

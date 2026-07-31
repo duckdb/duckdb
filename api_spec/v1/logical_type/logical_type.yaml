@@ -1,6 +1,7 @@
 module: logical_type
 functions:
   create_logical_type:
+    offset: 156
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     role: constructor
@@ -18,6 +19,7 @@ functions:
       `DUCKDB_TYPE_LIST`, `DUCKDB_TYPE_STRUCT`, `DUCKDB_TYPE_MAP`, `DUCKDB_TYPE_ARRAY`, or `DUCKDB_TYPE_UNION`.
     return_description: The logical type.
   logical_type_get_alias:
+    offset: 157
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -31,6 +33,7 @@ functions:
       The result must be destroyed with `duckdb_free`.
     return_description: The alias or `nullptr`
   logical_type_set_alias:
+    offset: 158
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -46,6 +49,7 @@ functions:
     description: |
       Sets the alias of a duckdb_logical_type.
   create_list_type:
+    offset: 159
     lifecycle:
       - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
@@ -58,6 +62,7 @@ functions:
       The return type must be destroyed with `duckdb_destroy_logical_type`.
     return_description: The logical type.
   create_array_type:
+    offset: 160
     lifecycle:
       - ["stable", "v0.10.1", "2024-03-18"]
     parameters:
@@ -73,6 +78,7 @@ functions:
       The return type must be destroyed with `duckdb_destroy_logical_type`.
     return_description: The logical type.
   create_map_type:
+    offset: 161
     lifecycle:
       - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
@@ -88,6 +94,7 @@ functions:
       The return type must be destroyed with `duckdb_destroy_logical_type`.
     return_description: The logical type.
   create_union_type:
+    offset: 162
     lifecycle:
       - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
@@ -109,6 +116,7 @@ functions:
       The return type must be destroyed with `duckdb_destroy_logical_type`.
     return_description: The logical type.
   create_struct_type:
+    offset: 163
     lifecycle:
       - ["stable", "v0.9.0", "2023-09-26"]
     parameters:
@@ -130,6 +138,7 @@ functions:
       The resulting type must be destroyed with `duckdb_destroy_logical_type`.
     return_description: The logical type.
   create_enum_type:
+    offset: 164
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -147,6 +156,7 @@ functions:
       The resulting type should be destroyed with `duckdb_destroy_logical_type`.
     return_description: The logical type.
   create_decimal_type:
+    offset: 165
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -162,6 +172,7 @@ functions:
       The resulting type should be destroyed with `duckdb_destroy_logical_type`.
     return_description: The logical type.
   get_type_id:
+    offset: 166
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -173,6 +184,7 @@ functions:
       Retrieves the enum `duckdb_type` of a `duckdb_logical_type`.
     return_description: The `duckdb_type` id.
   decimal_width:
+    offset: 167
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -184,6 +196,7 @@ functions:
       Retrieves the width of a decimal type.
     return_description: The width of the decimal type
   decimal_scale:
+    offset: 168
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -195,6 +208,7 @@ functions:
       Retrieves the scale of a decimal type.
     return_description: The scale of the decimal type
   decimal_internal_type:
+    offset: 169
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -206,6 +220,7 @@ functions:
       Retrieves the internal storage type of a decimal type.
     return_description: The internal type of the decimal type
   enum_internal_type:
+    offset: 170
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -217,6 +232,7 @@ functions:
       Retrieves the internal storage type of an enum type.
     return_description: The internal type of the enum type
   enum_dictionary_size:
+    offset: 171
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -228,6 +244,7 @@ functions:
       Retrieves the dictionary size of the enum type.
     return_description: The dictionary size of the enum type
   enum_dictionary_value:
+    offset: 172
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -245,6 +262,7 @@ functions:
       The result must be freed with `duckdb_free`.
     return_description: The string value of the enum type. Must be freed with `duckdb_free`.
   list_type_child_type:
+    offset: 173
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -257,6 +275,7 @@ functions:
       The result must be freed with `duckdb_destroy_logical_type`.
     return_description: The child type of the LIST or MAP type.
   array_type_child_type:
+    offset: 174
     lifecycle:
       - ["stable", "v0.10.1", "2024-03-18"]
     parameters:
@@ -270,6 +289,7 @@ functions:
       The result must be freed with `duckdb_destroy_logical_type`.
     return_description: The child type of the ARRAY type.
   array_type_array_size:
+    offset: 175
     lifecycle:
       - ["stable", "v0.10.1", "2024-03-18"]
     parameters:
@@ -281,6 +301,7 @@ functions:
       Retrieves the array size of the given array type.
     return_description: The fixed number of elements the values of this array type can store.
   map_type_key_type:
+    offset: 176
     lifecycle:
       - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
@@ -294,6 +315,7 @@ functions:
       The result must be freed with `duckdb_destroy_logical_type`.
     return_description: The key type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
   map_type_value_type:
+    offset: 177
     lifecycle:
       - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
@@ -307,6 +329,7 @@ functions:
       The result must be freed with `duckdb_destroy_logical_type`.
     return_description: The value type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
   struct_type_child_count:
+    offset: 178
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -318,6 +341,7 @@ functions:
       Returns the number of children of a struct type.
     return_description: The number of children of a struct type.
   struct_type_child_name:
+    offset: 179
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -335,6 +359,7 @@ functions:
       The result must be freed with `duckdb_free`.
     return_description: The name of the struct type. Must be freed with `duckdb_free`.
   struct_type_child_type:
+    offset: 180
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
@@ -351,6 +376,7 @@ functions:
       The result must be freed with `duckdb_destroy_logical_type`.
     return_description: The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
   union_type_member_count:
+    offset: 181
     lifecycle:
       - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
@@ -362,6 +388,7 @@ functions:
       Returns the number of members that the union type has.
     return_description: The number of members of a union type.
   union_type_member_name:
+    offset: 182
     lifecycle:
       - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
@@ -379,6 +406,7 @@ functions:
       The result must be freed with `duckdb_free`.
     return_description: The name of the union member. Must be freed with `duckdb_free`.
   union_type_member_type:
+    offset: 183
     lifecycle:
       - ["stable", "v0.7.0", "2023-02-13"]
     parameters:
@@ -395,6 +423,7 @@ functions:
       The result must be freed with `duckdb_destroy_logical_type`.
     return_description: The child type of the union member. Must be destroyed with `duckdb_destroy_logical_type`.
   destroy_logical_type:
+    offset: 184
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     role: destructor
@@ -408,6 +437,7 @@ functions:
     description: |
       Destroys the logical type and de-allocates all memory allocated for that type.
   register_logical_type:
+    offset: 185
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -425,6 +455,7 @@ functions:
       The type must have an alias
     return_description: Whether or not the registration was successful.
   geometry_type_get_crs:
+    offset: 493
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.2", "2026-04-10"]

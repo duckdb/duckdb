@@ -1,6 +1,7 @@
 module: config_option
 functions:
   create_config_option:
+    offset: 423
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -12,6 +13,7 @@ functions:
       Creates a configuration option instance.
     return_description: The resulting configuration option instance. Must be destroyed with `duckdb_destroy_config_option`.
   destroy_config_option:
+    offset: 424
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -26,6 +28,7 @@ functions:
     description: |
       Destroys the given configuration option instance.
   config_option_set_name:
+    offset: 425
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -42,6 +45,7 @@ functions:
     description: |
       Sets the name of the configuration option.
   config_option_set_type:
+    offset: 426
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -56,6 +60,7 @@ functions:
     description: |
       Sets the type of the configuration option.
   config_option_set_default_value:
+    offset: 427
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -72,6 +77,7 @@ functions:
       If the type of this option has already been set with `duckdb_config_option_set_type`, the value is cast to the type.
       Otherwise, the type is inferred from the value.
   config_option_set_default_scope:
+    offset: 428
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -87,6 +93,7 @@ functions:
       Sets the default scope of the configuration option.
       If not set, this defaults to `DUCKDB_CONFIG_OPTION_SCOPE_SESSION`.
   config_option_set_description:
+    offset: 429
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -103,6 +110,7 @@ functions:
     description: |
       Sets the description of the configuration option.
   register_config_option:
+    offset: 430
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -118,6 +126,7 @@ functions:
       Registers the given configuration option on the specified connection.
     return_description: A duckdb_state indicating success or failure.
   client_context_get_config_option:
+    offset: 431
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -143,6 +152,7 @@ functions:
       Retrieves the value of a configuration option by name from the given client context.
     return_description: The value of the configuration option. Returns `nullptr` if the option does not exist.
   get_profiling_info:
+    offset: 331
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -154,6 +164,7 @@ functions:
       Returns the root node of the profiling information. Returns nullptr, if profiling is not enabled.
     return_description: A profiling information object.
   profiling_info_get_value:
+    offset: 332
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -172,6 +183,7 @@ functions:
        by calling the corresponding function: char *duckdb_get_varchar(duckdb_value value).
     return_description: The value of the metric. Must be freed with `duckdb_destroy_value`
   profiling_info_get_metrics:
+    offset: 278
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -184,6 +196,7 @@ functions:
       The individual elements are accessible via the duckdb_value MAP functions.
     return_description: The key-value metric map as a MAP duckdb_value.
   profiling_info_get_child_count:
+    offset: 279
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -195,6 +208,7 @@ functions:
       Returns the number of children in the current profiling info node.
     return_description: The number of children in the current node.
   profiling_info_get_child:
+    offset: 280
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
