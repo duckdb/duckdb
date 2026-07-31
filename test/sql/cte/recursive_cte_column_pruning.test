@@ -197,3 +197,19 @@ SELECT i, payload FROM t ORDER BY i;
 1	10
 2	20
 3	30
+
+# Recursive liveness analysis must not prune a SHOW-backed chunk scan before reaching its fixed point.
+query I
+WITH RECURSIVE t(i, payload) AS (
+	SELECT 1, 'x'
+	UNION ALL
+	SELECT i + length(payload), columns.column_type
+	FROM t
+	CROSS JOIN (SHOW SELECT 42::INTEGER AS value) columns
+	WHERE i < 3
+)
+SELECT i FROM t ORDER BY i;
+----
+1
+2
+9

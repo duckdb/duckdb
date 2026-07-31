@@ -123,6 +123,7 @@ bool RemoveUnusedColumns::ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &r
 
 void RemoveUnusedColumns::ApplyRecursiveProjections(LogicalRecursiveCTE &rec,
                                                     const unordered_set<ProjectionIndex> &required_columns) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	for (auto column_idx : required_columns) {
 		column_references.emplace(ColumnBinding(rec.table_index, column_idx), ReferencedColumn());
 	}
@@ -158,6 +159,7 @@ void RemoveUnusedColumns::ApplyRecursiveProjections(LogicalRecursiveCTE &rec,
 
 void RemoveUnusedColumns::RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
                                                         const unordered_set<ProjectionIndex> &required_columns) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	CTERefPruner cte_ref_pruner(rec.table_index, required_columns);
 	cte_ref_pruner.VisitOperator(*rec.children[1]);
 	ColumnBindingReplacer column_binding_replacer;
@@ -166,6 +168,7 @@ void RemoveUnusedColumns::RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec
 }
 
 bool RemoveUnusedColumns::TryPruneRecursiveCTE(LogicalRecursiveCTE &rec) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	GetCTEMap().insert({rec.table_index, MaterializedCTEInfo()});
 	if (!rec.union_all || !rec.key_targets.empty() || everything_referenced ||
 	    !LogicalSubtreeIsRepeatable(*rec.children[0]) || !LogicalSubtreeIsRepeatable(*rec.children[1])) {
@@ -211,6 +214,7 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 
 template <class T>
 void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	idx_t offset = 0;
 	idx_t new_col_idx = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
@@ -503,8 +507,10 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	}
 	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		auto &get = op.Cast<LogicalColumnDataGet>();
-		RemoveColumnsFromLogicalColumnDataGet(get);
+		if (!analyze) {
+			auto &get = op.Cast<LogicalColumnDataGet>();
+			RemoveColumnsFromLogicalColumnDataGet(get);
+		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
@@ -757,6 +763,7 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
     ReferencedColumn &col,
     const std::function<ProjectionIndex(const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type)>
         &callback) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	//! For each struct extract, replace the expression with a BoundColumnRefExpression
 	//! The expression references a binding created for the extracted path, 1 per unique path
 	for (auto &struct_extract : col.struct_extracts) {
@@ -818,6 +825,7 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 }
 
 void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expression_count) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	vector<unique_ptr<Expression>> expressions;
 	auto &context = this->context;
 
@@ -872,6 +880,7 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 }
 
 void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
@@ -947,6 +956,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 }
 
 void RemoveUnusedColumns::RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	if (everything_referenced) {
 		return;
 	}
@@ -957,6 +967,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDat
 }
 
 void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	if (everything_referenced) {
 		return;
 	}
