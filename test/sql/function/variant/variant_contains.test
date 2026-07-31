@@ -117,7 +117,7 @@ SELECT
 ----
 true	true	true	true
 
-query III
+query IIII
 SELECT
     variant_contains('550e8400-e29b-41d4-a716-446655440000'::UUID::VARIANT,
                      '550e8400-e29b-41d4-a716-446655440001'::UUID::VARIANT),
@@ -299,7 +299,7 @@ SELECT
 ----
 NULL	NULL	NULL	NULL
 
-# Varying haystacks and needles exercise vectorized execution and SQL NULLs.
+# Varying haystacks and needles exercise vectorized execution.
 statement ok
 CREATE TABLE contains_data(id INTEGER, haystack VARIANT, needle VARIANT);
 
