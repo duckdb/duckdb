@@ -103,6 +103,13 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntry &entry) {
 	return MangleName(GetLookupProperties(entry));
 }
 
+void DependencyManager::AddDependency(CatalogTransaction transaction, CatalogEntry &entry,
+                                      CatalogEntry &dependency) {
+	LogicalDependencyList list;
+	list.AddDependency(dependency);
+	AddObject(transaction, entry, list);
+}
+
 DependencyInfo DependencyInfo::FromSubject(DependencyEntry &dep) {
 	return DependencyInfo {/*dependent = */ dep.Dependent(),
 	                       /*subject = */ dep.Subject()};

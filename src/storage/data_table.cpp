@@ -171,7 +171,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
-	if (constraint.type != ConstraintType::UNIQUE) {
+	if ((constraint.type != ConstraintType::UNIQUE) && (constraint.type != ConstraintType::FOREIGN_KEY)) {
 		VerifyNewConstraint(local_storage, parent, constraint);
 	}
 	local_storage.MoveStorage(parent, *this);
@@ -778,6 +778,12 @@ void DataTable::VerifyAppendForeignKeyConstraint(optional_ptr<LocalTableStorage>
                                                  ClientContext &context, DataChunk &chunk) {
 	VerifyForeignKeyConstraint(storage, bound_foreign_key, context, chunk, VerifyExistenceType::APPEND_FK);
 }
+
+void DataTable::VerifyFKReferentialIntegrity(const BoundForeignKeyConstraint &bound_fk, ClientContext &context,
+                                             DataChunk &chunk) {
+	VerifyAppendForeignKeyConstraint(nullptr, bound_fk, context, chunk);
+}
+
 
 void DataTable::VerifyDeleteForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
                                                  const BoundForeignKeyConstraint &bound_foreign_key,

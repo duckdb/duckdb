@@ -177,6 +177,10 @@ ExtraConstraintInfo GetExtraConstraintInfo(const TableCatalogEntry &table, const
 }
 
 string GetConstraintName(const TableCatalogEntry &table, Constraint &constraint, const ExtraConstraintInfo &info) {
+	if (constraint.type == ConstraintType::FOREIGN_KEY) {
+		auto &fk = constraint.Cast<ForeignKeyConstraint>();
+		return fk.GetName(table.name);
+	}
 	string result = table.name + "_";
 	for (auto &col : info.column_names) {
 		result += StringUtil::Lower(col.GetIdentifierName()) + "_";

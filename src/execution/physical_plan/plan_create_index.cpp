@@ -153,8 +153,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	}
 
 	// Determine if this is a fresh index creation or an ALTER TABLE ADD INDEX
-	auto need_filter = op.alter_table_info == nullptr;
-
+	// need filter if fresh creation or 
+	// ALTER TABLE ADD FOREIGN KEY (to filter out rows with NULLs in the foreign key columns)
+	auto is_fresh = op.alter_table_info == nullptr;
+	auto is_fk = !is_fresh && op.alter_table_info->IsAddForeignKey(); 
+	auto need_filter = is_fresh || is_fk;
 	// Construct the plan
 	auto plan = &scan;
 	plan = &AddProjection(*this, op, *plan);

@@ -1369,28 +1369,44 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 
 	identifier_set_t names;
 	for (const auto &constraint : prev_table.GetConstraints()) {
-		if (constraint->type != ConstraintType::UNIQUE) {
-			continue;
+		if (constraint->type == ConstraintType::UNIQUE) {
+			const auto &unique = constraint->Cast<UniqueConstraint>();
+			if (unique.is_primary_key) {
+				auto index_name = unique.GetName(prev_table.name);
+				names.insert(index_name);
+			}
 		}
-		const auto &unique = constraint->Cast<UniqueConstraint>();
-		if (unique.is_primary_key) {
-			auto index_name = unique.GetName(prev_table.name);
-			names.insert(index_name);
+		else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			const auto &fk = constraint->Cast<ForeignKeyConstraint>();
+			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				auto index_name = fk.GetName(prev_table.name);
+				names.insert(index_name);
+			}
 		}
 	}
 
 	for (const auto &constraint : GetConstraints()) {
-		if (constraint->type != ConstraintType::UNIQUE) {
-			continue;
+		if (constraint->type == ConstraintType::UNIQUE) {
+			const auto &unique = constraint->Cast<UniqueConstraint>();
+			if (!unique.IsPrimaryKey()) {
+				continue;
+			}
+			auto index_name = unique.GetName(table.name);
+			if (names.find(index_name) == names.end()) {
+				prev_indexes.RemoveIndex(index_name);
+			}
 		}
-		const auto &unique = constraint->Cast<UniqueConstraint>();
-		if (!unique.IsPrimaryKey()) {
-			continue;
+		else if (constraint->type == ConstraintType::FOREIGN_KEY) {
+			const auto &fk = constraint->Cast<ForeignKeyConstraint>();
+			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				continue;
+			}
+			auto index_name = fk.GetName(table.name);
+			if (names.find(index_name) == names.end()) {
+				prev_indexes.RemoveIndex(index_name);
+			}
 		}
-		auto index_name = unique.GetName(table.name);
-		if (names.find(index_name) == names.end()) {
-			prev_indexes.RemoveIndex(index_name);
-		}
+
 	}
 }
 
@@ -1402,21 +1418,24 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 	auto create_info = GetInfo();
 	auto &table_info = create_info->Cast<CreateTableInfo>();
 
-	if (info.constraint->type == ConstraintType::UNIQUE) {
-		const auto &unique = info.constraint->Cast<UniqueConstraint>();
-		const auto existing_pk = GetPrimaryKey();
-
-		if (unique.is_primary_key && existing_pk) {
-			auto existing_name = existing_pk->ToString();
-			throw CatalogException("table %s can have only one primary key: %s", name, existing_name);
+	switch(info.constraint->type){
+		case ConstraintType::UNIQUE: {
+			const auto &unique = info.constraint->Cast<UniqueConstraint>();
+			const auto existing_pk = GetPrimaryKey();
+			if (unique.is_primary_key && existing_pk) {
+				auto existing_name = existing_pk->ToString();
+				throw CatalogException("table \"%s\" can have only one primary key: %s", name, existing_name);
+			}
+			break;
 		}
-		table_info.constraints.push_back(info.constraint->Copy());
-
-	} else {
-		throw NotImplementedException("No support for adding %s constraints with ALTER TABLE",
-		                              EnumUtil::ToString(info.constraint->type));
+		case ConstraintType::FOREIGN_KEY: {
+			break;
+		}
+		default: {
+			throw InternalException("unsupported constraint type in ALTER TABLE statement");
+		}
 	}
-
+	table_info.constraints.push_back(info.constraint->Copy());
 	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
 	const auto bound_constraint =
