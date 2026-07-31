@@ -203,6 +203,22 @@ WHERE struct_value.level_1.level_2.value = 101;
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
 
+# IS NOT DISTINCT FROM with a non-NULL constant follows the same leaf
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE struct_value.level_1.level_2.value IS NOT DISTINCT FROM 101;
+----
+0
+
+query II
+EXPLAIN ANALYZE
+SELECT struct_value, payload
+FROM read_parquet('{TEST_DIR}/bloom_list.parquet')
+WHERE struct_value.level_1.level_2.value IS NOT DISTINCT FROM 101;
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
 # A possible deep-list leaf match must retain its row groups
 query I
 SELECT count(deep_list)
