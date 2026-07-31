@@ -1,5 +1,5 @@
 # name: test/sql/export/parquet/export_parquet_hugeint.test
-# description: Test EXPORT DATABASE with BIT columns
+# description: Test EXPORT DATABASE with HUGEINT columns (VARCHAR path for exact restore)
 # group: [parquet]
 
 require parquet
@@ -7,6 +7,7 @@ require parquet
 statement ok
 begin transaction;
 
+# EXPORT DATABASE always writes HUGEINT as VARCHAR so full hugeint range round-trips
 statement ok
 create table tbl as select "hugeint" from test_all_types(), range(3);
 
@@ -27,3 +28,9 @@ IMPORT DATABASE '{TEST_DIR}/export_test'
 query I nosort result
 select * from tbl;
 ----
+
+# schema.sql restores HUGEINT; data was written as VARCHAR and cast back on import
+query I
+SELECT typeof(hugeint) FROM tbl LIMIT 1
+----
+HUGEINT

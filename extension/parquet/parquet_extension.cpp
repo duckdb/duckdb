@@ -130,6 +130,13 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 	//! Whether TIMESTAMP (without timezone) should be marked as adjusted to UTC in the Parquet schema
 	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::AUTO;
+
+	//! How HUGEINT/UHUGEINT columns are encoded when writing Parquet (default: DOUBLE, lossy)
+	//! Applied in ParquetWriteSelect before the writer sees the column types.
+	//! 'double'  — current default (DOUBLE physical type)
+	//! 'decimal' — DECIMAL(38,0) FLBA; values outside the decimal range error
+	//! 'varchar' — exact string form; always safe, less numeric interop
+	string hugeint_encoding = "double";
 };
 
 ParquetWriteLocalState::ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
@@ -159,6 +166,7 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["shredding"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["write_timestamp_as_int96"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 	copy_options["timestamp_is_adjusted_to_utc"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["hugeint_encoding"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 
 	// Deprecated
 	copy_options["row_group_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
@@ -350,6 +358,12 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 		} else if (loption == "timestamp_is_adjusted_to_utc") {
 			bind_data->timestamp_is_adjusted_to_utc =
 			    EnumUtil::FromString<TimeStampIsAdjustedToUTC>(StringUtil::Upper(option.second[0].ToString()));
+		} else if (loption == "hugeint_encoding") {
+			const auto roption = StringUtil::Lower(option.second[0].ToString());
+			if (roption != "double" && roption != "decimal" && roption != "varchar") {
+				throw BinderException("Expected hugeint_encoding 'double', 'decimal' or 'varchar'");
+			}
+			bind_data->hugeint_encoding = roption;
 		} else {
 			throw InternalException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -733,6 +747,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.write_timestamp_as_int96);
 	serializer.WritePropertyWithDefault<vector<bool>>(120, "not_null_columns", bind_data.not_null_columns,
 	                                                  default_value.not_null_columns);
+	serializer.WritePropertyWithDefault(121, "hugeint_encoding", bind_data.hugeint_encoding,
+	                                    default_value.hugeint_encoding);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -773,6 +789,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    119, "write_timestamp_as_int96", default_value.write_timestamp_as_int96);
 	data->not_null_columns =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<bool>>(120, "not_null_columns", vector<bool>());
+	data->hugeint_encoding = deserializer.ReadPropertyWithExplicitDefault(121, "hugeint_encoding",
+	                                                                     default_value.hugeint_encoding);
 
 	return std::move(data);
 }
@@ -877,6 +895,22 @@ static bool IsTypeLossy(const LogicalType &type) {
 	return type.id() == LogicalTypeId::HUGEINT || type.id() == LogicalTypeId::UHUGEINT;
 }
 
+//! How HUGEINT/UHUGEINT should be encoded for this COPY. Default is lossy DOUBLE (historical behavior).
+static string GetHugeintEncodingOption(const case_insensitive_map_t<vector<Value>> &options) {
+	auto entry = options.find("hugeint_encoding");
+	if (entry == options.end() || entry->second.empty()) {
+		return "double";
+	}
+	if (entry->second.size() != 1) {
+		throw BinderException("hugeint_encoding requires exactly one argument");
+	}
+	const auto roption = StringUtil::Lower(entry->second[0].ToString());
+	if (roption != "double" && roption != "decimal" && roption != "varchar") {
+		throw BinderException("Expected hugeint_encoding 'double', 'decimal' or 'varchar'");
+	}
+	return roption;
+}
+
 static bool IsExtensionGeometryType(const LogicalType &type, ClientContext &context) {
 	if (type.id() != LogicalTypeId::BLOB) {
 		return false;
@@ -896,6 +930,8 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	vector<unique_ptr<Expression>> result;
 
 	bool any_change = false;
+	// Opt-in encoding for HUGEINT/UHUGEINT on COPY TO. EXPORT DATABASE always uses VARCHAR (below).
+	const auto hugeint_encoding = GetHugeintEncodingOption(input.options);
 
 	for (auto &expr : input.select_list) {
 		const auto &type = expr->GetReturnType();
@@ -911,13 +947,36 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
-		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR
+		// EXPORT DATABASE always writes HUGEINT/UHUGEINT as VARCHAR so IMPORT restores them exactly.
+		// This path is independent of HUGEINT_ENCODING (which only applies to COPY TO).
 		else if (input.copy_to_type == CopyToType::EXPORT_DATABASE && TypeVisitor::Contains(type, IsTypeLossy)) {
 			// Replace all lossy types with VARCHAR
 			auto new_type = TypeVisitor::VisitReplace(
 			    type, [](const LogicalType &ty) -> LogicalType { return IsTypeLossy(ty) ? LogicalType::VARCHAR : ty; });
 
 			// Cast the column to the new type
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
+			cast_expr->SetAlias(name);
+			result.push_back(std::move(cast_expr));
+			any_change = true;
+		}
+		// Opt-in: write HUGEINT/UHUGEINT as DECIMAL(38,0) FLBA. Out-of-range values fail the cast.
+		else if (input.copy_to_type == CopyToType::COPY_TO_FILE && hugeint_encoding == "decimal" &&
+		         TypeVisitor::Contains(type, IsTypeLossy)) {
+			auto new_type = TypeVisitor::VisitReplace(type, [](const LogicalType &ty) -> LogicalType {
+				return IsTypeLossy(ty) ? LogicalType::DECIMAL(38, 0) : ty;
+			});
+			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
+			cast_expr->SetAlias(name);
+			result.push_back(std::move(cast_expr));
+			any_change = true;
+		}
+		// Opt-in: write HUGEINT/UHUGEINT as VARCHAR (exact, always in range).
+		else if (input.copy_to_type == CopyToType::COPY_TO_FILE && hugeint_encoding == "varchar" &&
+		         TypeVisitor::Contains(type, IsTypeLossy)) {
+			auto new_type = TypeVisitor::VisitReplace(type, [](const LogicalType &ty) -> LogicalType {
+				return IsTypeLossy(ty) ? LogicalType::VARCHAR : ty;
+			});
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
 			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
@@ -936,7 +995,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
-		// Otherwise, just reference the input column
+		// Otherwise, just reference the input column (HUGEINT default: DOUBLE via the writer)
 		else {
 			result.push_back(std::move(expr));
 		}
