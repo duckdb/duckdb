@@ -9,6 +9,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
