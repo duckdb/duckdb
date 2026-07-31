@@ -85,13 +85,13 @@ void RecursiveCTEMetrics::RecordTasks(idx_t count) {
 }
 
 void RecursiveCTEMetrics::RecordEpoch(idx_t workers, idx_t elapsed_us_p, idx_t frontier_rows_p, idx_t frontier_chunks_p,
-                                      idx_t frontier_storage_bytes_p) {
+                                      idx_t scheduler_input_rows_p) {
 	epochs++;
 	scheduled_workers += workers;
 	elapsed_us += elapsed_us_p;
 	frontier_rows += frontier_rows_p;
 	frontier_chunks += frontier_chunks_p;
-	frontier_storage_bytes += frontier_storage_bytes_p;
+	scheduler_input_rows += scheduler_input_rows_p;
 }
 
 void RecursiveCTEMetrics::RecordSink(idx_t wait_ns, idx_t work_ns, idx_t rows) {
@@ -168,7 +168,7 @@ void RecursiveCTEMetrics::Log(const vector<unique_ptr<RecursiveCTEPartialKeyInde
 	            {"elapsed_us", to_string(elapsed_us)},
 	            {"frontier_rows", to_string(frontier_rows)},
 	            {"frontier_chunks", to_string(frontier_chunks)},
-	            {"frontier_storage_bytes", to_string(frontier_storage_bytes)},
+	            {"scheduler_input_rows", to_string(scheduler_input_rows)},
 	            {"sink_lock_wait_ns", to_string(sink_wait_ns.load())},
 	            {"sink_lock_work_ns", to_string(sink_work_ns.load())},
 	            {"sink_lock_rows", to_string(sink_rows.load())},

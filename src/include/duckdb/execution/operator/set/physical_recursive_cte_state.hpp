@@ -87,7 +87,7 @@ public:
 	}
 	void RecordTasks(idx_t count);
 	void RecordEpoch(idx_t workers, idx_t elapsed_us, idx_t frontier_rows, idx_t frontier_chunks,
-	                 idx_t frontier_storage_bytes);
+	                 idx_t scheduler_input_rows);
 	void RecordSink(idx_t wait_ns, idx_t work_ns, idx_t rows);
 	void RecordHashRows(idx_t rows);
 	void RecordRecurringScanRows(idx_t rows);
@@ -112,7 +112,7 @@ private:
 	idx_t elapsed_us = 0;
 	idx_t frontier_rows = 0;
 	idx_t frontier_chunks = 0;
-	idx_t frontier_storage_bytes = 0;
+	idx_t scheduler_input_rows = 0;
 	atomic<idx_t> sink_wait_ns {0};
 	atomic<idx_t> sink_work_ns {0};
 	atomic<idx_t> sink_rows {0};

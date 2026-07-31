@@ -84,7 +84,7 @@ static idx_t GetRecursiveWorkUnits(const RecursiveCTEState &state, idx_t direct_
 	return MaxValue<idx_t>(work_units, 1);
 }
 
-static idx_t GetRecursiveFrontierRows(const RecursiveCTEState &state) {
+static idx_t GetRecursiveInputRows(const RecursiveCTEState &state) {
 	auto &op = state.GetOperator();
 	auto &references = op.recursive_references;
 	idx_t recursive_rows = 0;
@@ -98,21 +98,8 @@ static idx_t GetRecursiveFrontierRows(const RecursiveCTEState &state) {
 	return recursive_rows;
 }
 
-static idx_t GetRecursiveFrontierStorageBytes(const RecursiveCTEState &state) {
-	auto &op = state.GetOperator();
-	auto &references = op.recursive_references;
-	idx_t recursive_bytes = 0;
-	if (op.working_table && references.frontier_scans > 0) {
-		recursive_bytes += state.CurrentInputTable().SizeInBytes() * references.frontier_scans;
-	}
-	if (op.recurring_table && references.recurring_scans > 0 && !op.using_key) {
-		recursive_bytes += op.recurring_table->SizeInBytes() * references.recurring_scans;
-	}
-	return recursive_bytes;
-}
-
-static idx_t GetRecursiveRowLimit(idx_t frontier_rows) {
-	return MaxValue<idx_t>((frontier_rows + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
+static idx_t GetRecursiveRowLimit(idx_t input_rows) {
+	return MaxValue<idx_t>((input_rows + RECURSIVE_ROWS_PER_THREAD - 1) / RECURSIVE_ROWS_PER_THREAD, 1);
 }
 
 static RecursiveCTEParallelism GetRecursiveParallelism(const RecursiveCTEState &state, idx_t work_units,
@@ -897,9 +884,9 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		}
 	}
 
-	const auto frontier_rows = GetRecursiveFrontierRows(gstate);
+	const auto scheduler_input_rows = GetRecursiveInputRows(gstate);
 	const auto direct_probe_work_units = recursive_references.direct_probe_work_units;
-	const auto row_limit = MaxValue(GetRecursiveRowLimit(frontier_rows), direct_probe_work_units);
+	const auto row_limit = MaxValue(GetRecursiveRowLimit(scheduler_input_rows), direct_probe_work_units);
 	idx_t work_units = 1;
 	RecursiveCTEParallelism parallelism(1);
 	if (row_limit > 1) {
@@ -907,11 +894,14 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		if (work_units > 1) {
 			parallelism = GetRecursiveParallelism(gstate, work_units, row_limit, *schedule_plan);
 		}
-	} else if (collect_metrics) {
-		// Runtime metrics report exact frontier work even when the row bound makes the epoch serial.
-		work_units = GetRecursiveWorkUnits(gstate, direct_probe_work_units);
 	}
-	const auto frontier_storage_bytes = collect_metrics ? GetRecursiveFrontierStorageBytes(gstate) : 0;
+	idx_t frontier_rows = 0;
+	idx_t frontier_chunks = 0;
+	if (collect_metrics) {
+		const auto &frontier = static_cast<const RecursiveCTEState &>(gstate).CurrentInputTable();
+		frontier_rows = frontier.Count();
+		frontier_chunks = frontier.ChunkCount();
+	}
 	if (!using_key && union_all) {
 		const auto source_tasks_write_recursive_output = parallelism.frontier_worker_count == 1 &&
 		                                                 parallelism.source_task_worker_count > 1 &&
@@ -946,8 +936,8 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		const auto epoch_end = std::chrono::steady_clock::now();
 		const auto elapsed_us =
 		    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(epoch_end - epoch_start).count());
-		gstate.GetMetrics().RecordEpoch(max_worker_count, elapsed_us, frontier_rows, work_units,
-		                                frontier_storage_bytes);
+		gstate.GetMetrics().RecordEpoch(max_worker_count, elapsed_us, frontier_rows, frontier_chunks,
+		                                scheduler_input_rows);
 	}
 	if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
 		if (collect_metrics && !gstate.HasMaterializedInvariantPipelines()) {

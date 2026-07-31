@@ -33,6 +33,38 @@ CALL enable_logging('PhysicalOperator');
 statement ok
 CALL truncate_duckdb_logs();
 
+# Frontier metrics describe each iteration input once, while scheduler metrics account for both scan references.
+query II
+WITH RECURSIVE t(i, level) AS (
+	VALUES (1, 0), (2, 0)
+	UNION ALL
+	SELECT a.i, a.level + 1
+	FROM t a
+	JOIN t b USING (i)
+	WHERE a.level < 1 AND b.level < 1
+)
+SELECT count(*), max(level) FROM t;
+----
+4	1
+
+statement ok
+CALL disable_logging();
+
+query III
+SELECT info.frontier_rows::UBIGINT = 4,
+       info.frontier_chunks::UBIGINT = 2,
+       info.scheduler_input_rows::UBIGINT = 8
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
 # This broad CPU-heavy recursion uses multiple workers and promotes the distinct sink.
 query II
 WITH RECURSIVE t(i, digest, level) AS (
