@@ -1,0 +1,61 @@
+# name: test/sql/storage/partial_delete_pending_compress.test
+# description: An old snapshot blocks masking; the next checkpoint masks once the delete is visible
+# group: [storage]
+
+# the BASE_TABLE byte thresholds below are calibrated for the default 256KB block size
+require block_size 262144
+
+statement ok
+SET immediate_transaction_mode=true
+
+# force every CHECKPOINT to run even with an empty WAL: the retry that masks the previously-pending
+# deletes happens inside a checkpoint pass, and the final checkpoint below has no WAL changes of its own
+statement ok
+PRAGMA force_checkpoint
+
+# 10 full row groups so the array-vs-mask memory gap is observable
+statement ok
+CREATE TABLE p AS SELECT i FROM range(1228800) t(i)
+
+statement ok
+CHECKPOINT
+
+statement ok con1
+BEGIN
+
+query I con2
+DELETE FROM p WHERE i % 2 = 0
+----
+614400
+
+statement ok con2
+CHECKPOINT
+
+# con1 started before the delete committed - the delete ids are >= lowest_active_start, so the
+# partial deletes are NOT masked yet: arrays are retained (memory stays high) and con1 sees all rows
+query I con1
+SELECT COUNT(*) FROM p
+----
+1228800
+
+query I
+SELECT COALESCE(SUM(memory_usage_bytes), 0) > 2000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+statement ok con1
+COMMIT
+
+# the delete is now visible to all transactions - the next checkpoint masks the partial deletes
+statement ok
+CHECKPOINT
+
+query II
+SELECT COUNT(*), MIN(i) FROM p
+----
+614400	1
+
+query I
+SELECT COALESCE(SUM(memory_usage_bytes), 0) < 2000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true

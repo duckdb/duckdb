@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/index/index_pointer.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
 class RowGroup;
@@ -41,6 +42,12 @@ enum class VersionCompressionResult : uint8_t {
 	//! (some rows are not deleted)
 	SETTLED
 };
+
+//! The storage state of the delete side of a ChunkVectorInfo. Exhaustive and mutually exclusive:
+//! CONSTANT - all rows share constant_delete_id (NOT_DELETED_ID for none-deleted, or a single delete id)
+//! MASKED   - partially deleted, every delete visible to all transactions: stored in deleted_mask, deleted_data freed
+//! ARRAY    - per-row delete ids materialized in deleted_data
+enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
 
 class ChunkVectorInfo {
 public:
@@ -106,6 +113,10 @@ private:
 	IndexPointer GetInitializedDeletedPointer();
 	//! Frees the per-row delete ids (if any)
 	void FreeDeleteData();
+	//! ARRAY -> MASKED: record alive rows as invalid bits, free the per-row delete array
+	void CompressDeleteToMask();
+	//! MASKED -> ARRAY: re-materialize the per-row delete array from the bitmask
+	void DecompressDeleteMask();
 
 private:
 	FixedSizeAllocator &allocator;
@@ -118,6 +129,12 @@ private:
 	IndexPointer deleted_data;
 	//! The constant delete id (if there is only one, e.g. because the entire vector was deleted in one transaction)
 	transaction_t constant_delete_id;
+	//! Bitmask used in the MASKED state: valid bit == the row is deleted (committed, visible to all
+	//! transactions), invalid bit == the row is alive. Matches the on-disk VECTOR_INFO orientation.
+	//! Only meaningful when delete_state == DeleteIdState::MASKED.
+	ValidityMask deleted_mask;
+	//! The current delete-side storage state - the single source of truth for the delete side
+	DeleteIdState delete_state = DeleteIdState::CONSTANT;
 	//! Whether a compression pass could achieve anything for this vector: armed by any id modification,
 	//! disarmed when a pass compresses the vector fully or finds it settled (live rows block the collapse
 	//! until a further delete re-arms it). CompressVersionIds returns the cached SETTLED without
