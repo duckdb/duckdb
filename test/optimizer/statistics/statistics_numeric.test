@@ -246,3 +246,88 @@ query II
 EXPLAIN SELECT count(*) FROM positives WHERE radians(x) > 2;
 ----
 logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# statistics propagation for decimals backed by hugeints
+statement ok
+CREATE TABLE decimal_stats(a DECIMAL(18,2), b DECIMAL(18,2), c DECIMAL(19,2), d DECIMAL(2,0));
+
+statement ok
+INSERT INTO decimal_stats VALUES
+	(1000000000000000.00, 0.02, 10000000000000000.00, -2),
+	(2000000000000000.00, 0.03, 20000000000000000.00, 3);
+
+query III
+SELECT type, s.min, s.max
+FROM (SELECT typeof(a + b) type, stats(a + b) s FROM decimal_stats LIMIT 1)
+----
+DECIMAL(19,2)	1000000000000000.02	2000000000000000.03
+
+query III
+SELECT type, s.min, s.max
+FROM (SELECT typeof(a - b) type, stats(a - b) s FROM decimal_stats LIMIT 1)
+----
+DECIMAL(19,2)	999999999999999.97	1999999999999999.98
+
+query III
+SELECT type, s.min, s.max
+FROM (SELECT typeof(c * d) type, stats(c * d) s FROM decimal_stats LIMIT 1)
+----
+DECIMAL(21,2)	-40000000000000000.00	60000000000000000.00
+
+# statistics propagation for hugeints
+statement ok
+CREATE TABLE hugeint_stats(a HUGEINT, b HUGEINT);
+
+statement ok
+INSERT INTO hugeint_stats VALUES (10000000000000000000, -2), (20000000000000000000, 3);
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(a + b) s FROM hugeint_stats LIMIT 1)
+----
+9999999999999999998	20000000000000000003
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(a - b) s FROM hugeint_stats LIMIT 1)
+----
+9999999999999999997	20000000000000000002
+
+query II
+SELECT s.min, s.max FROM (SELECT stats(a * b) s FROM hugeint_stats LIMIT 1)
+----
+-40000000000000000000	60000000000000000000
+
+# potentially overflowing hugeint statistics keep the checked operator
+statement ok
+CREATE TABLE hugeint_stats_overflow(
+	add_left HUGEINT,
+	add_right HUGEINT,
+	subtract_left HUGEINT,
+	subtract_right HUGEINT,
+	multiply_left HUGEINT,
+	multiply_right HUGEINT
+);
+
+statement ok
+INSERT INTO hugeint_stats_overflow VALUES (
+	170141183460469231731687303715884105727,
+	1,
+	-170141183460469231731687303715884105728,
+	1,
+	170141183460469231731687303715884105727,
+	2
+);
+
+statement error
+SELECT add_left + add_right FROM hugeint_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in addition of INT128.*
+
+statement error
+SELECT subtract_left - subtract_right FROM hugeint_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in subtraction of INT128.*
+
+statement error
+SELECT multiply_left * multiply_right FROM hugeint_stats_overflow
+----
+<REGEX>:Out of Range Error.*Overflow in multiplication of INT128.*

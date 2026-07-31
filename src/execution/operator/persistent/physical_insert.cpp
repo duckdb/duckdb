@@ -5,6 +5,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/row_id_deduplicator.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -81,11 +82,15 @@ InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<Logica
 }
 
 InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
-                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints)
+                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+                                   OnConflictAction action_type)
     : collection_index(DConstants::INVALID_INDEX), bound_constraints(bound_constraints) {
 	auto &allocator = Allocator::Get(context);
 	update_chunk.Initialize(allocator, types);
 	append_chunk.Initialize(allocator, types);
+	if (action_type == OnConflictAction::UPDATE) {
+		updated_rows = make_uniq<RowIdDeduplicator>(context, vector<LogicalType> {LogicalType::ROW_TYPE});
+	}
 }
 
 ConstraintState &InsertLocalState::GetConstraintState(DataTable &table, TableCatalogEntry &table_ref) {
@@ -121,7 +126,7 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<InsertLocalState>(context.client, insert_types, bound_constraints);
+	return make_uniq<InsertLocalState>(context.client, insert_types, bound_constraints, action_type);
 }
 
 bool AllConflictsMeetCondition(DataChunk &result) {
@@ -288,20 +293,15 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 	return update_chunk.size();
 }
 
-// TODO: should we use a hash table to keep track of this instead?
 static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) {
-	// Insert all rows, if any of the rows has already been updated before, we throw an error
-	auto data = FlatVector::GetData<row_t>(row_ids);
-
-	auto &updated_rows = lstate.updated_rows;
-	for (idx_t i = 0; i < count; i++) {
-		auto result = updated_rows.insert(data[i]);
-		if (result.second == false) {
-			// This is following postgres behavior:
-			throw InvalidInputException(
-			    "ON CONFLICT DO UPDATE can not update the same row twice in the same command. Ensure that no rows "
-			    "proposed for insertion within the same command have duplicate constrained values");
-		}
+	// Register all row-ids; a distinct count below `count` means a row-id repeated, which we reject.
+	D_ASSERT(lstate.updated_rows);
+	auto distinct = lstate.updated_rows->Register(row_ids, count);
+	if (distinct != count) {
+		// This is following postgres behavior:
+		throw InvalidInputException(
+		    "ON CONFLICT DO UPDATE can not update the same row twice in the same command. Ensure that no rows "
+		    "proposed for insertion within the same command have duplicate constrained values");
 	}
 }
 
@@ -491,8 +491,9 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 	VerifyOnConflictCondition<GLOBAL>(context, combined_chunk, on_conflict_condition, constraint_state, tuples,
 	                                  data_table, local_storage);
 
-	if (&tuples == &lstate.update_chunk) {
-		// Allow updating duplicate rows for the 'update_chunk'
+	if (RefersToSameObject(tuples, lstate.update_chunk)) {
+		D_ASSERT(op.action_type == OnConflictAction::UPDATE);
+		// Reject updating the same target row more than once.
 		RegisterUpdatedRows(lstate, row_ids, conflict_count);
 	}
 	auto affected_tuples = PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);

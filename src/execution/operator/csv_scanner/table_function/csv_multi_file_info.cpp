@@ -5,6 +5,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/callback_async_task.hpp"
 
@@ -143,6 +144,10 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	if (names.empty()) {
 		names = StringsToIdentifiers(best_schema.GetNames());
 		return_types = best_schema.GetTypes();
+	}
+	if (names.empty() && return_types.empty()) {
+		throw InvalidInputException("No columns found in CSV files. Provide the columns option or ensure at least one "
+		                            "file contains a header or data row.");
 	}
 	if (only_header_or_empty_files == current_file && !options.columns_set) {
 		for (idx_t i = 0; i < return_types.size(); i++) {

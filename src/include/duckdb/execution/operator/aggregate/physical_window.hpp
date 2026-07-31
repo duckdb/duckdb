@@ -52,6 +52,9 @@ public:
 	bool ParallelSource() const override {
 		return true;
 	}
+	bool HasSourceTasks() const override {
+		return true;
+	}
 
 	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 	OrderPreservationType SourceOrder() const override;

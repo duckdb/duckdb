@@ -1,0 +1,18 @@
+# name: test/sql/json/scalar/test_json_icu.test
+# description: Test JSON uses ICU for casts
+# group: [scalar]
+
+require icu
+
+require json
+
+statement ok
+set calendar = 'gregorian';
+
+statement ok
+set timezone = 'Europe/Berlin';
+
+query I
+select '1992-09-20 11:30:00.987654321'::TIMESTAMPTZ::JSON j;
+----
+"1992-09-20 11:30:00.987654+02"

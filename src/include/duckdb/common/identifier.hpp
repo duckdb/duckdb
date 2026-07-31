@@ -77,6 +77,9 @@ public:
 		return value.c_str();
 	}
 
+	//! Whether the identifier starts with the given prefix (case-insensitive)
+	DUCKDB_API bool StartsWith(const string &prefix) const;
+
 	//! Case-insensitive hash of the identifier
 	DUCKDB_API hash_t Hash() const;
 

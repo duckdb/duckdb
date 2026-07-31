@@ -51,6 +51,7 @@ jobs:
 
       - name: Install tools
         run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - uses: ./.github/actions/ccache-action
 
@@ -125,15 +126,23 @@ jobs:
         include:
           - name: Ingestion Perf
             benchmarks: .github/regression/ingestion.csv
-          - name: Micro + TPCH-PARQUET
-            benchmarks: .github/regression/micro.csv .github/regression/tpch_parquet.csv
-          - name: H2OAI + IMDB + CSV
-            benchmarks: .github/regression/h2oai.csv .github/regression/imdb.csv .github/regression/csv.csv
+          - name: Micro
+            benchmarks: .github/regression/micro.csv
+          - name: H2OAI
+            benchmarks: .github/regression/h2oai.csv
+          - name: IMDB
+            benchmarks: .github/regression/imdb.csv
+          - name: CSV
+            benchmarks: .github/regression/csv.csv
           - name: RealNest
             benchmarks: .github/regression/realnest.csv
             data_setup: |
               mkdir -p duckdb_benchmark_data
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
+          - name: Recursive CTE + AoC24
+            benchmarks: benchmark/recursive_cte/recursive_cte.csv benchmark/aoc24/aoc24.csv
+            timed_runs: 7
+            regression_threshold_seconds: 0.01
 
     steps:
       - uses: actions/checkout@v6
@@ -141,8 +150,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -179,6 +188,12 @@ jobs:
             if [[ "$benchmark" == ".github/regression/realnest.csv" ]]; then
               extra_args=()
             fi
+            if [[ -n "${{ matrix.timed_runs }}" ]]; then
+              extra_args+=(--timed-runs "${{ matrix.timed_runs }}")
+            fi
+            if [[ -n "${{ matrix.regression_threshold_seconds }}" ]]; then
+              extra_args+=(--regression-threshold-seconds "${{ matrix.regression_threshold_seconds }}")
+            fi
 
             echo "::group::$(basename "$benchmark" .csv)"
             if ! python scripts/regression/test_runner.py \
@@ -202,15 +217,20 @@ jobs:
     if: ${{ github.repository_owner == 'duckdb' }}
     needs:
       - linux-base
-    runs-on: namespace-profile-linux-x64
+    runs-on: namespace-profile-linux-small
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: TPCH SF10
             benchmarks: .github/regression/tpch_sf10.csv
+            threads: 4
           - name: TPCDS SF3
             benchmarks: .github/regression/tpcds_sf3.csv
+            threads: 4
+          - name: TPCH-PARQUET SF1
+            benchmarks: .github/regression/tpch_parquet.csv
+            threads: 2
 
     steps:
       - name: "Checkout"
@@ -220,8 +240,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -255,6 +275,7 @@ jobs:
             --clear-benchmark-cache \
             --disable-timeout \
             --max-timeout 3600 \
+            --threads ${{ matrix.threads }} \
             --timed-runs 30
 
   regression-bench-fivetran:
@@ -270,8 +291,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Checkout Private Regression
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
@@ -320,8 +341,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -365,8 +386,8 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install
-        run: |
-          python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -407,8 +428,9 @@ jobs:
 
       - name: Install
         run: |
-          python3 scripts/ci/retry.py -- make toolsci
-          python3 scripts/ci/retry.py -- pip install tqdm
+          python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+          python3 scripts/ci/retry.py --timeout 2m -- pip install tqdm
+        timeout-minutes: 10
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
