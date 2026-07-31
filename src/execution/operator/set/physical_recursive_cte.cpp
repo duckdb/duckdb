@@ -292,26 +292,32 @@ unique_ptr<LocalSinkState> PhysicalRecursiveCTE::GetLocalSinkState(ExecutionCont
 
 void RecursiveCTEState::SinkSerialDistinct(DataChunk &chunk, RecursiveCTELocalState &lstate) {
 	D_ASSERT(ht);
+	const auto collect_metrics = metrics.Enabled();
+	const auto candidate_count = chunk.size();
 	const auto before_lock =
-	    metrics.Enabled() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+	    collect_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 	idx_t new_group_count;
 	{
 		lock_guard<mutex> guard(intermediate_table_lock);
 		const auto after_lock =
-		    metrics.Enabled() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-		if (metrics.Enabled()) {
-			metrics.RecordHashRows(chunk.size());
+		    collect_metrics ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		if (collect_metrics) {
+			metrics.RecordHashRows(candidate_count);
 		}
 		new_group_count = ht->FindOrCreateGroups(chunk, lstate.dummy_addresses, lstate.new_groups);
 		chunk.Slice(lstate.new_groups, new_group_count);
-		if (metrics.Enabled()) {
+		if (collect_metrics) {
 			const auto after_work = std::chrono::steady_clock::now();
+			GetEpochMetrics().RecordDistinctGrouping(
+			    candidate_count, new_group_count,
+			    NumericCast<idx_t>(
+			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()));
 			RecordSinkMetrics(
 			    NumericCast<idx_t>(
 			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),
 			    NumericCast<idx_t>(
 			        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()),
-			    chunk.size());
+			    candidate_count);
 		}
 	}
 	if (new_group_count > 0) {
@@ -361,6 +367,10 @@ void RecursiveCTEState::SinkDistinct(DataChunk &chunk, RecursiveCTELocalState &l
 			lstate.partition_chunk.Slice(lstate.new_groups, new_group_count);
 			if (collect_sink_metrics) {
 				const auto after_work = std::chrono::steady_clock::now();
+				GetEpochMetrics().RecordDistinctGrouping(
+				    partition_count, new_group_count,
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_work - after_lock).count()));
 				RecordSinkMetrics(
 				    NumericCast<idx_t>(
 				        std::chrono::duration_cast<std::chrono::nanoseconds>(after_lock - before_lock).count()),

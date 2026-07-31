@@ -148,6 +148,13 @@ void RecursiveCTEEpochMetrics::RecordFinalStateDrain(idx_t elapsed_ns) {
 	final_state_drain_work_ns.fetch_add(elapsed_ns);
 }
 
+void RecursiveCTEEpochMetrics::RecordDistinctGrouping(idx_t candidate_rows, idx_t inserted_rows, idx_t elapsed_ns) {
+	D_ASSERT(inserted_rows <= candidate_rows);
+	distinct_candidate_rows.fetch_add(candidate_rows);
+	distinct_inserted_rows.fetch_add(inserted_rows);
+	distinct_grouping_work_ns.fetch_add(elapsed_ns);
+}
+
 RecursiveCTEMetrics::RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op_p)
     : logger(context.logger),
       enabled(logger && logger->ShouldLog(PhysicalOperatorLogType::NAME, PhysicalOperatorLogType::LEVEL)) {
@@ -281,6 +288,9 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 		return;
 	}
 	D_ASSERT(identity);
+	const auto distinct_candidate_rows = epoch_metrics.distinct_candidate_rows.load();
+	const auto distinct_inserted_rows = epoch_metrics.distinct_inserted_rows.load();
+	D_ASSERT(distinct_inserted_rows <= distinct_candidate_rows);
 	DUCKDB_LOG(
 	    logger, PhysicalOperatorLogType, identity->operator_type, identity->operator_parameters, "PhysicalRecursiveCTE",
 	    "EpochSummary",
@@ -305,7 +315,11 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 	     {"keyed_hash_commit_work_ns", to_string(epoch_metrics.keyed_hash_commit_work_ns.load())},
 	     {"partial_index_maintenance_work_ns", to_string(epoch_metrics.partial_index_maintenance_work_ns.load())},
 	     {"recurring_scan_work_ns", to_string(epoch_metrics.recurring_scan_work_ns.load())},
-	     {"final_state_drain_work_ns", to_string(epoch_metrics.final_state_drain_work_ns.load())}});
+	     {"final_state_drain_work_ns", to_string(epoch_metrics.final_state_drain_work_ns.load())},
+	     {"distinct_grouping_work_ns", to_string(epoch_metrics.distinct_grouping_work_ns.load())},
+	     {"distinct_candidate_rows", to_string(distinct_candidate_rows)},
+	     {"distinct_inserted_rows", to_string(distinct_inserted_rows)},
+	     {"distinct_duplicate_rows", to_string(distinct_candidate_rows - distinct_inserted_rows)}});
 }
 
 RecursiveCTESchedulerState::RecursiveCTESchedulerState(shared_ptr<RecursiveExecutorPool> executor_pool_p,

@@ -2,12 +2,13 @@
 
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
+
+#include <limits>
 
 namespace duckdb {
 
@@ -81,7 +82,7 @@ struct RecursiveCTEPipelineSchedulePlan {
 };
 
 struct RecursiveCTEMetricDistribution {
-	static constexpr idx_t BUCKET_COUNT = NumericLimits<idx_t>::Digits() + 1;
+	static constexpr idx_t BUCKET_COUNT = std::numeric_limits<idx_t>::digits + 1;
 
 	void Add(idx_t value);
 	idx_t MedianUpperBound() const;
@@ -101,6 +102,7 @@ struct RecursiveCTEEpochMetrics {
 	void RecordPartialIndexMaintenance(idx_t elapsed_ns);
 	void RecordRecurringScan(idx_t elapsed_ns);
 	void RecordFinalStateDrain(idx_t elapsed_ns);
+	void RecordDistinctGrouping(idx_t candidate_rows, idx_t inserted_rows, idx_t elapsed_ns);
 
 	RecursiveCTEMetricDistribution frontier_rows;
 	RecursiveCTEMetricDistribution workers;
@@ -117,6 +119,9 @@ struct RecursiveCTEEpochMetrics {
 	atomic<idx_t> partial_index_maintenance_work_ns {0};
 	atomic<idx_t> recurring_scan_work_ns {0};
 	atomic<idx_t> final_state_drain_work_ns {0};
+	atomic<idx_t> distinct_grouping_work_ns {0};
+	atomic<idx_t> distinct_candidate_rows {0};
+	atomic<idx_t> distinct_inserted_rows {0};
 };
 
 struct RecursiveCTELogIdentity {

@@ -182,6 +182,50 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'DistinctPromoted'
 ----
 1
 
+query IIII
+SELECT info.distinct_grouping_work_ns::UBIGINT > 0,
+       info.distinct_candidate_rows::UBIGINT = 400000,
+       info.distinct_inserted_rows::UBIGINT = 400000,
+       info.distinct_duplicate_rows::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Distinct metrics separate useful insertions from rejected recursive duplicates.
+query II
+WITH RECURSIVE t(i) AS (
+	VALUES (1)
+	UNION
+	(
+		SELECT i + 1 FROM t WHERE i < 4
+		UNION ALL
+		SELECT i + 1 FROM t WHERE i < 4
+	)
+)
+SELECT count(*), max(i) FROM t;
+----
+4	4
+
+statement ok
+CALL disable_logging();
+
+query IIII
+SELECT info.distinct_grouping_work_ns::UBIGINT > 0,
+       info.distinct_candidate_rows::UBIGINT = 7,
+       info.distinct_inserted_rows::UBIGINT = 4,
+       info.distinct_duplicate_rows::UBIGINT = 3
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1	1
+
 statement ok
 CALL enable_logging('PhysicalOperator');
 
