@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -17,6 +18,7 @@
 namespace duckdb {
 
 class RecursiveCTEState;
+class RecursiveCTEMetrics;
 struct RecursiveExecutorPool;
 struct RecursiveCTEPipelineSchedulePlan;
 class PhysicalColumnDataScan;
@@ -55,6 +57,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_CTE;
 	using executor_cache_t = reference_map_t<Pipeline, vector<unique_ptr<PipelineExecutor>>>;
 	friend class RecursiveCTEState;
+	friend class RecursiveCTEMetrics;
 
 public:
 	PhysicalRecursiveCTE(PhysicalPlan &physical_plan, Identifier ctename, TableIndex table_index,
@@ -128,12 +131,14 @@ public:
 
 private:
 	void ExecuteRecursivePipelines(ExecutionContext &context) const;
+	idx_t NextMetricsInvocation() const;
 
 private:
 	mutable shared_ptr<RecursiveExecutorPool> shared_executor_pool;
 	//! Immutable recursive projections of the generic pipeline schedule.
 	unique_ptr<RecursiveCTEPipelineSchedulePlan> recursive_schedule_plan;
 	unique_ptr<RecursiveCTEPipelineSchedulePlan> invariant_recursive_schedule_plan;
+	mutable atomic<idx_t> metrics_invocations {0};
 };
 
 //! Scans the frozen USING KEY state during a recursive epoch.

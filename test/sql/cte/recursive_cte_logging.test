@@ -83,6 +83,67 @@ CALL enable_logging('PhysicalOperator');
 statement ok
 CALL truncate_duckdb_logs();
 
+# Cached nested states can be destroyed after their derived physical operator. Their snapshotted identity remains valid.
+query II rowsort
+WITH RECURSIVE outer_cte(a, b) AS (
+	SELECT 1, 1
+	UNION
+	(
+		WITH RECURSIVE inner_cte(k, v) USING KEY (k) AS (
+			SELECT a, 0 FROM outer_cte WHERE b < 4
+			UNION ALL
+			SELECT n.k, r.v + 1
+			FROM inner_cte n
+			JOIN recurring.inner_cte r USING (k)
+			WHERE n.v < 1
+		)
+		SELECT k, b + 1
+		FROM inner_cte, outer_cte
+		WHERE v = 1 AND b < 4
+	)
+)
+SELECT * FROM outer_cte;
+----
+1	1
+1	2
+1	3
+1	4
+
+statement ok
+CALL disable_logging();
+
+query TIIII rowsort
+SELECT parameters['CTE Name'],
+       min(info.invocation_id::UBIGINT) = 1,
+       count(*) = count(DISTINCT info.invocation_id::UBIGINT),
+       max(info.invocation_id::UBIGINT) = count(*),
+       count(*) >= CASE parameters['CTE Name'] WHEN 'inner_cte' THEN 3 ELSE 1 END
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics'
+GROUP BY parameters['CTE Name'];
+----
+inner_cte	1	1	1	1
+outer_cte	1	1	1	1
+
+query I
+SELECT count(*) = (SELECT count(*)
+	FROM duckdb_logs_parsed('PhysicalOperator')
+	WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics')
+FROM duckdb_logs_parsed('PhysicalOperator') runtime
+JOIN duckdb_logs_parsed('PhysicalOperator') summary
+  ON runtime.parameters['Table Index'] = summary.parameters['Table Index']
+ AND runtime.info.invocation_id = summary.info.invocation_id
+WHERE runtime.class = 'PhysicalRecursiveCTE' AND runtime.event = 'RuntimeMetrics'
+  AND summary.class = 'PhysicalRecursiveCTE' AND summary.event = 'EpochSummary';
+----
+1
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
 # This broad CPU-heavy recursion uses multiple workers and promotes the distinct sink.
 query II
 WITH RECURSIVE t(i, digest, level) AS (
@@ -326,6 +387,15 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 1	1
 
+query III
+SELECT info.direct_probe_lookup_work_ns::UBIGINT > 0,
+       info.direct_probe_key_gather_work_ns::UBIGINT > 0,
+       info.direct_probe_payload_finalize_work_ns::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1
+
 query I
 SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
 FROM duckdb_logs_parsed('PhysicalOperator')
@@ -364,6 +434,15 @@ FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 1	1	1	1
+
+query III
+SELECT info.direct_probe_lookup_work_ns::UBIGINT > 0,
+       info.direct_probe_key_gather_work_ns::UBIGINT > 0,
+       info.direct_probe_payload_finalize_work_ns::UBIGINT > 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
+----
+1	1	1
 
 statement ok
 CALL enable_logging('PhysicalOperator');
@@ -463,5 +542,14 @@ SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT,
        info.recurring_scan_rows::UBIGINT > 0
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1	1
+
+query III
+SELECT info.direct_probe_lookup_work_ns::UBIGINT = 0,
+       info.direct_probe_key_gather_work_ns::UBIGINT = 0,
+       info.direct_probe_payload_finalize_work_ns::UBIGINT = 0
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
 1	1	1

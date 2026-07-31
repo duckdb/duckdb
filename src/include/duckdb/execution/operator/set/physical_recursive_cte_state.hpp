@@ -94,6 +94,9 @@ struct RecursiveCTEMetricDistribution {
 struct RecursiveCTEEpochMetrics {
 	void Record(idx_t frontier_rows, idx_t workers, idx_t tasks, idx_t elapsed_us, idx_t frontier_storage_bytes,
 	            idx_t frontier_allocation_bytes);
+	void RecordDirectProbeLookup(idx_t elapsed_ns);
+	void RecordDirectProbeKeyGather(idx_t elapsed_ns);
+	void RecordDirectProbePayloadFinalize(idx_t elapsed_ns);
 
 	RecursiveCTEMetricDistribution frontier_rows;
 	RecursiveCTEMetricDistribution workers;
@@ -103,6 +106,19 @@ struct RecursiveCTEEpochMetrics {
 	idx_t peak_frontier_storage_bytes = 0;
 	idx_t frontier_allocation_byte_epochs = 0;
 	idx_t peak_frontier_allocation_bytes = 0;
+	atomic<idx_t> direct_probe_lookup_work_ns {0};
+	atomic<idx_t> direct_probe_key_gather_work_ns {0};
+	atomic<idx_t> direct_probe_payload_finalize_work_ns {0};
+};
+
+struct RecursiveCTELogIdentity {
+	RecursiveCTELogIdentity(PhysicalOperatorType operator_type_p, idx_t invocation_id_p)
+	    : operator_type(operator_type_p), invocation_id(invocation_id_p) {
+	}
+
+	PhysicalOperatorType operator_type;
+	vector<pair<string, string>> operator_parameters;
+	idx_t invocation_id;
 };
 
 class RecursiveCTEMetrics {
@@ -121,7 +137,7 @@ public:
 	void RecordRecurringScanRows(idx_t rows);
 	void RecordDirectProbeRows(idx_t rows);
 	void RecordDirectProbeMatches(idx_t rows);
-	void RecordPartialProbeChainVisit();
+	void RecordPartialProbeChainVisits(idx_t count);
 	void RecordPartialIndexBuild(idx_t elapsed_us);
 	void RecordFinalStateRows(idx_t rows);
 	void RecordRetainedBuild();
@@ -132,7 +148,7 @@ public:
 	void LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_metrics) const;
 
 private:
-	const PhysicalRecursiveCTE &op;
+	unique_ptr<RecursiveCTELogIdentity> identity;
 	shared_ptr<Logger> logger;
 	bool enabled;
 	idx_t epochs = 0;

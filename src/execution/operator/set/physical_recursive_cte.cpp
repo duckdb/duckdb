@@ -39,6 +39,10 @@ PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, Identifi
 PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 }
 
+idx_t PhysicalRecursiveCTE::NextMetricsInvocation() const {
+	return metrics_invocations.fetch_add(1) + 1;
+}
+
 //===--------------------------------------------------------------------===//
 // Sink State
 //===--------------------------------------------------------------------===//
