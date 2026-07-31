@@ -140,9 +140,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
 	auto &plan = CreatePlan(*op.children[0]);
 	auto *limit_child = &plan;
 	auto total_limit = GetLimit(op.limit_val, op.offset_val);
-	if (!PreserveInsertionOrder(plan)) {
+	if (op.offset_val.Type() != LimitNodeType::UNSET && !PreserveInsertionOrder(plan)) {
 		DUCKDB_LOG_WARNING(context,
-		                   "LIMIT or OFFSET is applied to a query whose row order is not guaranteed - the result may "
+		                   "OFFSET is applied to a query whose row order is not guaranteed - the result may "
 		                   "differ between runs. This happens when the query contains order-breaking operators (e.g. "
 		                   "hash joins or aggregations), reads from a source that does not preserve order, or when "
 		                   "preserve_insertion_order=false. Add an ORDER BY to make the result deterministic.");
