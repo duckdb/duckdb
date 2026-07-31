@@ -306,19 +306,20 @@ public:
 		const auto groups = static_cast<std::size_t>(rounded_count / BITPACKING_ALGORITHM_GROUP_SIZE);
 		if (!duckdb_bitpacking::TryFastUnpack<T>(src, reinterpret_cast<T *>(dst), static_cast<uint32_t>(width), groups,
 		                                         frame_of_reference)) {
-			if (!std::is_same<T, hugeint_t>::value && !std::is_same<T, uhugeint_t>::value) {
-				throw InternalException("Unsupported type for bitpacking");
-			}
-			for (std::size_t group = 0; group < groups; group++) {
-				HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src) + group * width,
-				                      reinterpret_cast<uhugeint_t *>(dst) + group * BITPACKING_ALGORITHM_GROUP_SIZE,
-				                      width);
-			}
-			if (frame_of_reference != 0) {
-				auto values = reinterpret_cast<uhugeint_t *>(dst);
-				for (idx_t i = 0; i < rounded_count; i++) {
-					values[i] += static_cast<uhugeint_t>(frame_of_reference);
+			if constexpr (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
+				for (std::size_t group = 0; group < groups; group++) {
+					HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src) + group * width,
+					                      reinterpret_cast<uhugeint_t *>(dst) + group * BITPACKING_ALGORITHM_GROUP_SIZE,
+					                      width);
 				}
+				if (frame_of_reference != 0) {
+					auto values = reinterpret_cast<uhugeint_t *>(dst);
+					for (idx_t i = 0; i < rounded_count; i++) {
+						values[i] += static_cast<uhugeint_t>(frame_of_reference);
+					}
+				}
+			} else {
+				throw InternalException("Unsupported type for bitpacking");
 			}
 		}
 
