@@ -40,6 +40,14 @@ shared_ptr<ClientContext> PreparedStatement::TryGetContext() const {
 	return context.lock();
 }
 
+const string &PreparedStatement::GetName() const {
+	return name;
+}
+
+const string &PreparedStatement::GetQuery() const {
+	return query;
+}
+
 idx_t PreparedStatement::ColumnCount() const {
 	return info.types.size();
 }
