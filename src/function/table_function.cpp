@@ -104,22 +104,4 @@ bool TableFunction::Equal(const TableFunction &rhs) const {
 	return true; // they are equal
 }
 
-bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out) {
-	switch (in) {
-	case AsyncResultType::IMPLICIT:
-	case AsyncResultType::INVALID:
-		return false;
-	case AsyncResultType::HAVE_MORE_OUTPUT:
-		out = SourceResultType::HAVE_MORE_OUTPUT;
-		break;
-	case AsyncResultType::FINISHED:
-		out = SourceResultType::FINISHED;
-		break;
-	case AsyncResultType::BLOCKED:
-		out = SourceResultType::BLOCKED;
-		break;
-	}
-	return true;
-}
-
 } // namespace duckdb

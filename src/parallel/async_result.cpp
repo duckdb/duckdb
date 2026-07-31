@@ -1,3 +1,4 @@
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -149,6 +150,30 @@ void AsyncResult::ExecuteTasksSynchronously() {
 	async_tasks.clear();
 
 	result_type = AsyncResultType::HAVE_MORE_OUTPUT;
+}
+
+AsyncResult AsyncResult::FromTasks(vector<unique_ptr<AsyncTask>> &&tasks, TaskSchedulerType pool_type) {
+	if (tasks.empty()) {
+		return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
+	}
+	return AsyncResult(std::move(tasks), pool_type);
+}
+
+AsyncResult AsyncResult::FromChunk(const DataChunk &chunk) {
+	return AsyncResult(chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT);
+}
+
+SourceResultType AsyncResult::GetSourceResultType(AsyncResultType type, idx_t chunk_size) {
+	switch (type) {
+	case AsyncResultType::IMPLICIT:
+		return chunk_size > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+	case AsyncResultType::HAVE_MORE_OUTPUT:
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	case AsyncResultType::FINISHED:
+		return SourceResultType::FINISHED;
+	default:
+		throw InternalException("Unexpected AsyncResultType %s in GetSourceResultType", EnumUtil::ToChars(type));
+	}
 }
 
 AsyncResultType AsyncResult::GetAsyncResultType(SourceResultType s) {

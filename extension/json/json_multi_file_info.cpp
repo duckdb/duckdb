@@ -558,7 +558,7 @@ AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &g
 	default:
 		throw InternalException("Unsupported scan type for JSONMultiFileInfo::Scan");
 	}
-	return AsyncResult(output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED);
+	return AsyncResult::FromChunk(output);
 }
 
 void JSONReader::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {
