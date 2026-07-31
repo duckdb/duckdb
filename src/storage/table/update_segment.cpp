@@ -1561,14 +1561,25 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 
 bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
 	auto read_lock = lock.GetSharedLock();
-	if (!root) {
+	if (!root || start_row_index >= end_row_index) {
 		return false;
 	}
 	idx_t base_vector_index = start_row_index / STANDARD_VECTOR_SIZE;
-	idx_t end_vector_index = end_row_index / STANDARD_VECTOR_SIZE;
+	idx_t end_vector_index = (end_row_index - 1) / STANDARD_VECTOR_SIZE;
+	auto start_offset = start_row_index % STANDARD_VECTOR_SIZE;
+	auto end_offset = (end_row_index - 1) % STANDARD_VECTOR_SIZE + 1;
 	for (idx_t i = base_vector_index; i <= end_vector_index; i++) {
 		auto entry = GetUpdateNode(*read_lock, i);
-		if (entry.IsSet()) {
+		if (!entry.IsSet()) {
+			continue;
+		}
+		auto pin = entry.Pin();
+		auto &info = UpdateInfo::Get(pin);
+		auto start_in_vector = i == base_vector_index ? start_offset : 0;
+		auto end_in_vector = i == end_vector_index ? end_offset : STANDARD_VECTOR_SIZE;
+		auto tuples = info.GetTuples();
+		auto tuple = std::lower_bound(tuples, tuples + info.N, start_in_vector);
+		if (tuple != tuples + info.N && *tuple < end_in_vector) {
 			return true;
 		}
 	}
