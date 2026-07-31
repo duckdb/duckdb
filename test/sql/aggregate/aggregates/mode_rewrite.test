@@ -77,6 +77,54 @@ WHERE g = 1;
 ----
 a	0.970951	1.000000
 
+# frequency buckets use DuckDB equality, including NaN equality
+query TT
+WITH d(v) AS (
+	VALUES ('nan'::DOUBLE), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0), (1.0)
+)
+SELECT mode(v)::VARCHAR, round(entropy(v), 6)::VARCHAR FROM d;
+----
+nan	0.970951
+
+query TT
+WITH d(v) AS (
+	VALUES ('nan'::FLOAT), ('nan'::FLOAT), ('nan'::FLOAT), (1.0), (1.0)
+)
+SELECT mode(v)::VARCHAR, round(entropy(v), 6)::VARCHAR FROM d;
+----
+nan	0.970951
+
+# window and list paths use the same frequency-bucket equality
+query TT
+WITH d(v) AS (
+	VALUES ('nan'::DOUBLE), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0), (1.0)
+)
+SELECT mode(v) OVER ()::VARCHAR, round(entropy(v) OVER (), 6)::VARCHAR
+FROM d
+LIMIT 1;
+----
+nan	0.970951
+
+query IT
+WITH d(i, v) AS (
+	VALUES (1, 'nan'::DOUBLE), (2, 'nan'::DOUBLE), (3, 1.0), (4, 1.0), (5, 'nan'::DOUBLE)
+)
+SELECT i, mode(v) OVER (ORDER BY i ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)::VARCHAR
+FROM d
+ORDER BY i;
+----
+1	nan
+2	nan
+3	nan
+4	1.0
+5	1.0
+
+query TT
+SELECT list_mode(values)::VARCHAR, round(list_entropy(values), 6)::VARCHAR
+FROM (VALUES (['nan'::DOUBLE, 'nan'::DOUBLE, 'nan'::DOUBLE, 1.0, 1.0])) t(values);
+----
+nan	0.970951
+
 # groups with only NULL or filtered-out inputs are retained
 query III
 SELECT g,
@@ -202,6 +250,15 @@ logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"g"[^\]]*"v"[^\]]*\].*"Expressions":\s
 
 statement ok
 SET disabled_optimizers='frequency_aggregate_rewrite';
+
+# optimizer-disabled execution agrees on NaN frequency buckets
+query TT
+WITH d(v) AS (
+	VALUES ('nan'::DOUBLE), ('nan'::DOUBLE), ('nan'::DOUBLE), (1.0), (1.0)
+)
+SELECT mode(v)::VARCHAR, round(entropy(v), 6)::VARCHAR FROM d;
+----
+nan	0.970951
 
 # disabling frequency rewriting retains the legacy aggregate
 query II

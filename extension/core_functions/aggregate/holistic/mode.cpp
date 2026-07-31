@@ -3,9 +3,11 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -64,8 +66,22 @@ struct ModeAttr {
 };
 
 template <class T>
+struct ModeHash {
+	size_t operator()(const T &key) const {
+		return duckdb::Hash(key);
+	}
+};
+
+template <class T>
+struct ModeEquality {
+	bool operator()(const T &left, const T &right) const {
+		return Equals::Operation(left, right);
+	}
+};
+
+template <class T>
 struct ModeStandard {
-	using MAP_TYPE = unordered_map<T, ModeAttr>;
+	using MAP_TYPE = unordered_map<T, ModeAttr, ModeHash<T>, ModeEquality<T>>;
 
 	static MAP_TYPE *CreateEmpty(ArenaAllocator &) {
 		return new MAP_TYPE();
@@ -80,6 +96,9 @@ struct ModeStandard {
 	}
 
 	static void Destroy(T *mode) {
+	}
+	static bool IsEqual(const T &left, const T &right) {
+		return Equals::Operation(left, right);
 	}
 
 	static T *Update(T *mode, const T &key) {
@@ -112,6 +131,9 @@ struct ModeString {
 			delete[] mode->GetData();
 			mode->SetPointer(nullptr);
 		}
+	}
+	static bool IsEqual(const string_t &left, const string_t &right) {
+		return Equals::Operation(left, right);
 	}
 
 	static string_t *Update(string_t *mode, const string_t &key) {
@@ -257,7 +279,7 @@ struct ModeState {
 		nonzero -= size_t(old_count == 1);
 
 		attr.count -= 1;
-		if (count == old_count && key == *mode) {
+		if (count == old_count && TYPE_OP::IsEqual(key, *mode)) {
 			valid = false;
 		}
 	}
