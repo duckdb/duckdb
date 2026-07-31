@@ -209,7 +209,7 @@ vector<unique_ptr<AsyncTask>> &&AsyncResult::ExtractAsyncTasks() {
 }
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-vector<unique_ptr<AsyncTask>> AsyncResult::GenerateTestTasks() {
+bool AsyncResult::TryGenerateTestResult(AsyncResult &result) {
 	vector<unique_ptr<AsyncTask>> tasks;
 	auto random_number = rand() % 16;
 	switch (random_number) {
@@ -229,7 +229,11 @@ vector<unique_ptr<AsyncTask>> AsyncResult::GenerateTestTasks() {
 	default:
 		break;
 	}
-	return tasks;
+	if (tasks.empty()) {
+		return false;
+	}
+	result = AsyncResult(std::move(tasks));
+	return true;
 }
 #endif
 

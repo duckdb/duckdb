@@ -73,7 +73,8 @@ public:
 	vector<unique_ptr<AsyncTask>> &&ExtractAsyncTasks();
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	static vector<unique_ptr<AsyncTask>> GenerateTestTasks();
+	//! Randomly generate a BLOCKED test result, returns false if no test tasks were generated
+	static bool TryGenerateTestResult(AsyncResult &result);
 #endif
 
 	static AsyncResultsExecutionMode

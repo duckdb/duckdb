@@ -538,9 +538,9 @@ AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &g
                              LocalTableFunctionState &local_state, DataChunk &output) {
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
-		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
-		if (!tasks.empty()) {
-			return AsyncResult(std::move(tasks));
+		AsyncResult test_result;
+		if (AsyncResult::TryGenerateTestResult(test_result)) {
+			return test_result;
 		}
 	}
 #endif
