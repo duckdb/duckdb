@@ -383,7 +383,8 @@ public:
 						}
 						saw_value = true;
 					}
-					OP::template UpdateClusteredLocal<INPUT_TYPE>(local, static_cast<INPUT_TYPE>(vals[idx]));
+					OP::template UpdateClusteredLocal<INPUT_TYPE>(
+					    local, FORVector::WidenStored<INPUT_TYPE, READ_T>(vals[idx]));
 				}
 			} else {
 				for (idx_t i = 0; i < count; i++) {
@@ -394,7 +395,8 @@ public:
 						}
 						saw_value = true;
 					}
-					OP::template UpdateClusteredLocal<INPUT_TYPE>(local, static_cast<INPUT_TYPE>(vals[idx]));
+					OP::template UpdateClusteredLocal<INPUT_TYPE>(
+					    local, FORVector::WidenStored<INPUT_TYPE, READ_T>(vals[idx]));
 				}
 			}
 		} else if (sel) {
@@ -406,7 +408,8 @@ public:
 					}
 					saw_value = true;
 				}
-				OP::template UpdateClusteredLocal<INPUT_TYPE>(local, static_cast<INPUT_TYPE>(vals[idx]));
+				OP::template UpdateClusteredLocal<INPUT_TYPE>(local,
+				                                              FORVector::WidenStored<INPUT_TYPE, READ_T>(vals[idx]));
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
@@ -416,7 +419,8 @@ public:
 					}
 					saw_value = true;
 				}
-				OP::template UpdateClusteredLocal<INPUT_TYPE>(local, static_cast<INPUT_TYPE>(vals[i]));
+				OP::template UpdateClusteredLocal<INPUT_TYPE>(local,
+				                                              FORVector::WidenStored<INPUT_TYPE, READ_T>(vals[i]));
 			}
 		}
 		return saw_value;

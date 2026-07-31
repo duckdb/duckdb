@@ -34,7 +34,7 @@ bool TryFORScaleUp(Vector &source, Vector &result, idx_t count, uint8_t dst_widt
 		return false;
 	}
 	DST_T result_max;
-	if (!TryMultiplyOperator::Operation(scan.max_value, DST_T(mul), result_max)) {
+	if (!TryMultiplyOperator::Operation(scan.max_value, FORVector::WidenStored<DST_T, uint64_t>(mul), result_max)) {
 		return false;
 	}
 	if (FORValueOps<DST_T>::ToUnsignedStorage(result_max) >= Uhugeint::POWERS_OF_TEN[dst_width]) {

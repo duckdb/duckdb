@@ -883,17 +883,19 @@ void BitpackingScanPartialInternal(ColumnSegment &segment, ColumnScanState &stat
 			if (can_for) {
 				T_S base = static_cast<T_S>(scan_state.current_delta_offset);
 				T_S frame = static_cast<T_S>(scan_state.current_frame_of_reference);
-				T_S remaining_horizon =
-				    static_cast<T_S>(BITPACKING_METADATA_GROUP_SIZE - scan_state.current_group_offset);
+				T_S remaining_horizon = FORVector::WidenStored<T_S, uint64_t>(BITPACKING_METADATA_GROUP_SIZE -
+				                                                              scan_state.current_group_offset);
 				T_S max_delta;
 				T_S span;
 				T_S upper;
-				can_for = base >= 0 && frame >= 0 &&
-				          TryAddOperator::Operation(
-				              frame, static_cast<T_S>((uint64_t(1) << scan_state.current_width) - 1), max_delta) &&
-				          TryMultiplyOperator::Operation(remaining_horizon, max_delta, span) &&
-				          TryAddOperator::Operation(base, span, upper) &&
-				          upper <= static_cast<T_S>(NumericLimits<uint32_t>::Maximum());
+				can_for =
+				    base >= 0 && frame >= 0 &&
+				    TryAddOperator::Operation(
+				        frame, FORVector::WidenStored<T_S, uint64_t>((uint64_t(1) << scan_state.current_width) - 1),
+				        max_delta) &&
+				    TryMultiplyOperator::Operation(remaining_horizon, max_delta, span) &&
+				    TryAddOperator::Operation(base, span, upper) &&
+				    upper <= static_cast<T_S>(NumericLimits<uint32_t>::Maximum());
 			}
 			if (can_for) {
 				for_st = PhysicalType::UINT32;
