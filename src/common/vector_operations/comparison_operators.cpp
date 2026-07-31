@@ -17,6 +17,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 
 namespace duckdb {
 
@@ -128,7 +129,7 @@ int8_t Comparator::Operation(const double &left, const double &right) {
 //===--------------------------------------------------------------------===//
 template <class OP>
 static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &right, Vector &result) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(primitive_comparison_execute)
 	return false;
 #else
 	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
@@ -873,7 +874,7 @@ static void ComparatorExecute(const Vector &left, const Vector &right, Vector &r
 
 template <class OP>
 static bool TryPrimitiveComparatorExecute(const Vector &left, const Vector &right, Vector &result, idx_t count) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(primitive_comparator_execute)
 	return false;
 #else
 	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
@@ -987,7 +988,7 @@ static void DistinctExecute(const Vector &left, const Vector &right, Vector &res
 template <class OP>
 static bool TryPrimitiveDistinctComparatorExecute(const Vector &left, const Vector &right, Vector &result,
                                                   idx_t count) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(primitive_distinct_execute)
 	return false;
 #else
 	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
