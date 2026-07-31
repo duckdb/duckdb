@@ -24,7 +24,7 @@ public:
 	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
-	                                   vector<string> names, unique_ptr<ColumnDataCollection> collection,
+	                                   vector<Identifier> names, unique_ptr<ColumnDataCollection> collection,
 	                                   ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit MaterializedQueryResult(ErrorData error);

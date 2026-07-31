@@ -320,9 +320,9 @@ ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
 	column_names.reserve(nCol);
 	types.reserve(nCol);
 	for (idx_t c = 0; c < nCol; c++) {
-		column_names.push_back(result.names[c]);
-		types.push_back(result.types[c]);
-		type_names.push_back(GetTypeName(result.types[c]));
+		column_names.push_back(result.ColumnName(c).GetIdentifierName());
+		types.push_back(result.GetTypes()[c]);
+		type_names.push_back(GetTypeName(types.back()));
 	}
 }
 
