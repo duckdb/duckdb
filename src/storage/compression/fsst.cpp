@@ -868,7 +868,7 @@ bool FSSTStorage::ParseFSSTSegmentHeader(data_ptr_t base_ptr, duckdb_fsst_decode
 
 	*width_out = width;
 	// Currently, we allow an empty symbol table for a row group all strings are of length 0.
-	// This case is detected by reading a symbol table of size 0, which will fail on VERSION_MISSMATCH
+	// This case is detected by reading a symbol table of size 0, which will fail on VERSION_MISMATCH
 	// as the data we are reading is not really a fsst symbol table.
 	return consumed != DUCKDB_FSST_IMPORT_VERSION_MISMATCH;
 }
