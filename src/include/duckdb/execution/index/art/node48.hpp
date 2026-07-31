@@ -85,23 +85,23 @@ public:
 		}
 	}
 
-	//! Get the child node at byte (returns Node by value).
-	static Node GetChildNode(const Node48 &n, const uint8_t byte) {
+	//! Get the child node at byte, if it exists.
+	static OptionalNode GetChildNode(const Node48 &n, const uint8_t byte) {
 		if (n.child_index[byte] != EMPTY_MARKER) {
 			return n.children[n.child_index[byte]];
 		}
-		return Node();
+		return OptionalNode();
 	}
 
-	//! Get the first child node >= byte (returns Node by value, updates byte).
-	static Node GetNextChildNode(const Node48 &n, uint8_t &byte) {
+	//! Get the first child node >= byte, if it exists, and update byte.
+	static OptionalNode GetNextChildNode(const Node48 &n, uint8_t &byte) {
 		for (idx_t i = byte; i < Node256::CAPACITY; i++) {
 			if (n.child_index[i] != EMPTY_MARKER) {
 				byte = UnsafeNumericCast<uint8_t>(i);
 				return n.children[n.child_index[i]];
 			}
 		}
-		return Node();
+		return OptionalNode();
 	}
 
 	template <class NODE>

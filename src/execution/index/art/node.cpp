@@ -234,7 +234,7 @@ unsafe_optional_ptr<Node> Node::GetChildMutable(ART &art, const uint8_t byte, co
 	return GetChildInternal(art, *this, byte, unsafe);
 }
 
-Node Node::GetChildNode(const ART &art, const uint8_t byte) const {
+OptionalNode Node::GetChildNode(const ART &art, const uint8_t byte) const {
 	D_ASSERT(HasMetadata());
 	auto type = GetType();
 	ConstNodeHandle handle(art, *this);
@@ -252,7 +252,7 @@ Node Node::GetChildNode(const ART &art, const uint8_t byte) const {
 	}
 }
 
-Node Node::GetNextChildNode(const ART &art, uint8_t &byte) const {
+OptionalNode Node::GetNextChildNode(const ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 	auto type = GetType();
 	ConstNodeHandle handle(art, *this);

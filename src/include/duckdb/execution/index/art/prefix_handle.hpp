@@ -39,10 +39,10 @@ public:
 	}
 
 	//! Transform prefix chain to deprecated format.
-	//! Returns an empty Node if the prefix was not loaded from storage (early out) or if the endpoint
+	//! Returns an empty OptionalNode if the prefix was not loaded from storage (early out) or if the endpoint
 	//! was a gated node (handled internally). Otherwise, returns a copy of the child pointer at the tail of
 	//! the prefix chain for further traversal.
-	static Node TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
+	static OptionalNode TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
 
 private:
 	static NodeHandle TransformToDeprecatedAppend(NodeHandle handle, ART &art, FixedSizeAllocator &allocator,

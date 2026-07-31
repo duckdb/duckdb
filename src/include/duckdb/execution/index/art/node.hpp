@@ -41,6 +41,7 @@ class ART;
 class Prefix;
 class ARTKey;
 class FixedSizeAllocator;
+class OptionalNode;
 
 //! State for TransformToDeprecated operations
 class TransformToDeprecatedState {
@@ -146,10 +147,10 @@ public:
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status,
 	                        const ARTKey &row_id);
 
-	//! Get the child node at byte (returns Node by value via ConstNodeHandle).
-	Node GetChildNode(const ART &art, const uint8_t byte) const;
-	//! Get the first child node >= byte (returns Node by value, updates byte).
-	Node GetNextChildNode(const ART &art, uint8_t &byte) const;
+	//! Get the child node at byte, if it exists.
+	OptionalNode GetChildNode(const ART &art, const uint8_t byte) const;
+	//! Get the first child node >= byte, if it exists, and update byte.
+	OptionalNode GetNextChildNode(const ART &art, uint8_t &byte) const;
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.

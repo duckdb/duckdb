@@ -68,25 +68,25 @@ public:
 		}
 	}
 
-	//! Get the child node at byte (returns Node by value).
-	static Node GetChildNode(const BaseNode &n, const uint8_t byte) {
+	//! Get the child node at byte, if it exists.
+	static OptionalNode GetChildNode(const BaseNode &n, const uint8_t byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] == byte) {
 				return n.children[i];
 			}
 		}
-		return Node();
+		return OptionalNode();
 	}
 
-	//! Get the first child node >= byte (returns Node by value, updates byte).
-	static Node GetNextChildNode(const BaseNode &n, uint8_t &byte) {
+	//! Get the first child node >= byte, if it exists, and update byte.
+	static OptionalNode GetNextChildNode(const BaseNode &n, uint8_t &byte) {
 		for (uint8_t i = 0; i < n.count; i++) {
 			if (n.key[i] >= byte) {
 				byte = n.key[i];
 				return n.children[i];
 			}
 		}
-		return Node();
+		return OptionalNode();
 	}
 
 	//! Get the child at byte.

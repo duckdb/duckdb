@@ -174,7 +174,7 @@ void Iterator::FindMinimum(Node node) {
 		// Go to the leftmost entry in the current node.
 		uint8_t byte = 0;
 		auto child = node.GetNextChildNode(art, byte);
-		D_ASSERT(child.HasMetadata());
+		D_ASSERT(child);
 
 		// Move to the leftmost node.
 		current_key.Push(byte);
@@ -184,7 +184,7 @@ void Iterator::FindMinimum(Node node) {
 			D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 		}
 		nodes.emplace(node, byte);
-		node = child;
+		node = child.Get();
 	}
 	// Should always have a node with metadata.
 	throw InternalException("ART Iterator::FindMinimum: Reached node without metadata");
@@ -216,7 +216,7 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool equal) {
 			auto child = node.GetNextChildNode(art, next_byte);
 
 			// The key is greater than any key in this subtree.
-			if (!child.HasMetadata()) {
+			if (!child) {
 				return Next();
 			}
 
@@ -225,12 +225,12 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool equal) {
 
 			// We return the minimum because all keys are greater than the lower bound.
 			if (next_byte > key[depth]) {
-				FindMinimum(child);
+				FindMinimum(child.Get());
 				return true;
 			}
 
 			// Move to the child and increment depth.
-			node = child;
+			node = child.Get();
 			depth++;
 			continue;
 		}
@@ -297,7 +297,7 @@ bool Iterator::Next() {
 
 		top.byte++;
 		auto child = top.node.GetNextChildNode(art, top.byte);
-		if (!child.HasMetadata()) {
+		if (!child) {
 			// No more children of this node.
 			// Move up the tree by popping the key byte of the current node.
 			PopNode();
@@ -310,7 +310,7 @@ bool Iterator::Next() {
 			row_id[nested_depth - 1] = top.byte;
 		}
 
-		FindMinimum(child);
+		FindMinimum(child.Get());
 		return true;
 	}
 	return false;

@@ -45,11 +45,11 @@ public:
 
 			D_ASSERT(depth < key.len);
 			auto child = current.GetChildNode(art, key[depth]);
-			if (!child.HasMetadata()) {
+			if (!child) {
 				return OptionalNode();
 			}
 
-			current = child;
+			current = child.Get();
 			D_ASSERT(current.HasMetadata());
 			depth++;
 		}
