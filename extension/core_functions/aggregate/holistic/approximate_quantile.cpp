@@ -119,20 +119,20 @@ struct ApproxQuantileOperation {
 			return;
 		}
 		if (!state.h) {
-			state.h = new duckdb_tdigest::TDigest(100);
+			state.h = new duckdb_tdigest::TDigest(unary_input.input.allocator, 100);
 		}
 		state.h->add(val);
 		state.pos++;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		if (source.pos == 0) {
 			return;
 		}
 		D_ASSERT(source.h);
 		if (!target.h) {
-			target.h = new duckdb_tdigest::TDigest(100);
+			target.h = new duckdb_tdigest::TDigest(aggr_input_data.allocator, 100);
 		}
 		target.h->merge(source.h);
 		target.pos += source.pos;
@@ -269,7 +269,7 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 		if (!count_entry.IsValid() || !min_entry.IsValid() || !max_entry.IsValid() || !centroid_list.IsValid()) {
 			throw InvalidInputException("Invalid approx_quantile state - the state fields cannot be NULL");
 		}
-		std::vector<duckdb_tdigest::Centroid> centroids;
+		arena_vector<duckdb_tdigest::Centroid> centroids(input.allocator);
 		centroids.reserve(centroid_list.GetListLength());
 		for (const auto centroid_entry : centroid_list.GetChildValues()) {
 			const auto mean_entry = centroid_entry.template GetChildValue<0>();
@@ -279,8 +279,8 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 			}
 			centroids.emplace_back(mean_entry.GetValue(), weight_entry.GetValue());
 		}
-		auto digest = make_uniq<duckdb_tdigest::TDigest>(std::move(centroids), std::vector<duckdb_tdigest::Centroid>(),
-		                                                 100, 0, 0);
+		auto digest = make_uniq<duckdb_tdigest::TDigest>(
+		    std::move(centroids), duckdb::arena_vector<duckdb_tdigest::Centroid>(input.allocator), 100, 0, 0);
 		digest->setMinMax(min_entry.GetValue(), max_entry.GetValue());
 		state.pos = count_entry.GetValue();
 		state.h = digest.release();
@@ -350,19 +350,9 @@ float CheckApproxQuantile(const Value &quantile_val) {
 }
 
 unique_ptr<FunctionData> BindApproxQuantile(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw BinderException("APPROXIMATE QUANTILE can only take constant quantile parameters");
-	}
-	Value quantile_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	if (quantile_val.IsNull()) {
-		throw BinderException("APPROXIMATE QUANTILE parameter list cannot be NULL");
-	}
+	auto quantile_val = input.GetNonNullConstant(1);
 
 	vector<float> quantiles;
 	switch (quantile_val.type().id()) {
@@ -413,7 +403,8 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
-	fun.GetSignature().AddParameter(LogicalType::FLOAT);
+	fun.GetSignature().GetParameter(0).SetName("x");
+	fun.GetSignature().AddParameter("quantile", LogicalType::FLOAT);
 	return fun;
 }
 

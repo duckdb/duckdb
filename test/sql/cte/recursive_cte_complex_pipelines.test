@@ -155,3 +155,58 @@ LATERAL (
 LIMIT 1;
 ----
 1
+
+# A post-LEFT filter in an EXISTS controls convergence of the recursion.
+statement ok
+SET max_execution_time=5000
+
+query II
+WITH RECURSIVE t(step, r, v) AS (
+	VALUES (0, 'x', 1)
+	UNION ALL (
+		WITH tmp AS (SELECT * FROM t),
+		next(step, r, v) AS MATERIALIZED (
+			SELECT step, 'z', v FROM tmp WHERE r = 'x'
+			UNION ALL
+			SELECT * FROM tmp WHERE r <> 'z'
+		)
+		SELECT step + 1, r, v
+		FROM next
+		WHERE EXISTS (
+			SELECT *
+			FROM next n
+			LEFT JOIN tmp p ON n.r = p.r
+			WHERE p.v IS DISTINCT FROM n.v
+		)
+	)
+)
+SELECT max(step), count(*) FROM t;
+----
+1	3
+
+query II
+WITH RECURSIVE t(step, r, v) AS (
+	VALUES (0, 'x', 1)
+	UNION ALL (
+		WITH tmp AS (SELECT * FROM t),
+		next(step, r, v) AS NOT MATERIALIZED (
+			SELECT step, 'z', v FROM tmp WHERE r = 'x'
+			UNION ALL
+			SELECT * FROM tmp WHERE r <> 'z'
+		)
+		SELECT step + 1, r, v
+		FROM next
+		WHERE EXISTS (
+			SELECT *
+			FROM next n
+			LEFT JOIN tmp p ON n.r = p.r
+			WHERE p.v IS DISTINCT FROM n.v
+		)
+	)
+)
+SELECT max(step), count(*) FROM t;
+----
+1	3
+
+statement ok
+RESET max_execution_time

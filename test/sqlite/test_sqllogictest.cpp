@@ -12,6 +12,7 @@
 #include <string>
 #include <system_error>
 #include <vector>
+#include <duckdb/main/extension_helper.hpp>
 
 using namespace duckdb;
 
@@ -32,6 +33,10 @@ static void listFiles(FileSystem &fs, const string &path, std::function<void(con
 static bool endsWith(const string &mainStr, const string &toMatch) {
 	return (mainStr.size() >= toMatch.size() &&
 	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
+}
+
+static bool IsSQLLogicTestFile(const string &path) {
+	return endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage");
 }
 
 static void register_sqllogic_test_case(void (*test_fun)(), const string &path, const string &tags) {
@@ -232,8 +237,8 @@ static string ParseGroupFromPath(string file) {
 
 namespace duckdb {
 
-void RegisterSqllogictests() {
-	vector<string> excludes = {
+static const vector<string> &SQLiteLogicTestExcludes() {
+	static vector<string> excludes = {
 	    // tested separately
 	    "test/select1.test", "test/select2.test", "test/select3.test", "test/select4.test",
 	    // feature not supported
@@ -272,19 +277,70 @@ void RegisterSqllogictests() {
 	    "test/index/view/10/slt_good_2.test",
 	    // strange error in hash comparison, results appear correct...
 	    "test/index/random/10/slt_good_7.test", "test/index/random/10/slt_good_9.test"};
+	return excludes;
+}
+
+static bool IsExcludedSQLiteLogicTest(const string &path) {
+	for (auto &excl : SQLiteLogicTestExcludes()) {
+		if (path.find(excl) != string::npos) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool PathStartsWith(const string &path, const string &prefix) {
+	if (prefix.empty() || path.find(prefix) != 0) {
+		return false;
+	}
+	return path.size() == prefix.size() || path[prefix.size()] == '/';
+}
+
+static bool IsSQLiteLogicTestPath(FileSystem &fs, const string &path) {
+	auto sqlite_test_root = fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test");
+	auto normalized_path = StringUtil::Replace(path, "\\", "/");
+	auto normalized_root = StringUtil::Replace(sqlite_test_root, "\\", "/");
+	return PathStartsWith(normalized_path, normalized_root);
+}
+
+static bool IsExtensionTestPath(const string &path) {
+	auto normalized_path = StringUtil::Replace(path, "\\", "/");
+	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
+		auto normalized_root = StringUtil::Replace(extension_test_path, "\\", "/");
+		if (PathStartsWith(normalized_path, normalized_root)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void RegisterSqllogictests(const vector<string> &test_paths) {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	for (const auto &path : test_paths) {
+		if (IsSQLiteLogicTestPath(*fs, path)) {
+			if (!IsExcludedSQLiteLogicTest(path)) {
+				register_sqllogic_test_case(testRunner<>, path, "[sqlitelogic][.]");
+			}
+		} else if (IsExtensionTestPath(path)) {
+			register_sqllogic_test_case(testRunner<true>, path, ParseGroupFromPath(path));
+		} else {
+			register_sqllogic_test_case(testRunner<false>, path, ParseGroupFromPath(path));
+		}
+	}
+}
+
+void RegisterSqllogictests() {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"), [&](const string &path) {
 		if (endsWith(path, ".test")) {
-			for (auto &excl : excludes) {
-				if (path.find(excl) != string::npos) {
-					return;
-				}
+			if (IsExcludedSQLiteLogicTest(path)) {
+				return;
 			}
 			register_sqllogic_test_case(testRunner<>, path, "[sqlitelogic][.]");
 		}
 	});
 	listFiles(*fs, "test", [&](const string &path) {
-		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
+		if (IsSQLLogicTestFile(path)) {
 			// parse the name / group from the test
 			register_sqllogic_test_case(testRunner<false>, path, ParseGroupFromPath(path));
 		}
@@ -292,7 +348,7 @@ void RegisterSqllogictests() {
 
 	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
-			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
+			if (IsSQLLogicTestFile(path)) {
 				auto fun = testRunner<true>;
 				register_sqllogic_test_case(fun, path, ParseGroupFromPath(path));
 			}

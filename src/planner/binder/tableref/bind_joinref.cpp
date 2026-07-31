@@ -1,4 +1,8 @@
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
@@ -6,13 +10,12 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
@@ -102,33 +105,6 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const Bin
 	}
 }
 
-static bool HasLateralCorrelatedColumns(const Expression &root_expr, Binder &binder) {
-	if (binder.IsInsideSubquery()) {
-		return false;
-	}
-	unordered_set<TableIndex> lateral_bindings;
-	for (auto &active_binder_ref : binder.GetActiveBinders()) {
-		auto &active_binder = active_binder_ref.get();
-		if (!active_binder.IsLateralBinder()) {
-			continue;
-		}
-		for (auto &binding : active_binder.GetBinder().bind_context.GetBindingsList()) {
-			lateral_bindings.insert(binding->GetIndex());
-		}
-	}
-	if (lateral_bindings.empty()) {
-		return false;
-	}
-	bool has_lateral_correlated_columns = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &colref) {
-		    if (colref.Depth() > 0 && lateral_bindings.find(colref.Binding().table_index) != lateral_bindings.end()) {
-			    has_lateral_correlated_columns = true;
-		    }
-	    });
-	return has_lateral_correlated_columns;
-}
-
 BindingAlias Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
                                           const Identifier &using_column, const string &join_side) {
 	BindingAlias binding;
@@ -159,7 +135,55 @@ BoundStatement Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
 	return result;
 }
 
+//! The name under which the target of a NEAREST BY join remains visible to the outer query
+static Identifier GetNearestTargetAlias(const TableRef &target) {
+	if (!target.alias.empty()) {
+		return target.alias;
+	}
+	if (target.type == TableReferenceType::BASE_TABLE) {
+		return target.Cast<BaseTableRef>().Table();
+	}
+	return Identifier();
+}
+
+BoundStatement Binder::BindNearestJoin(JoinRef &ref) {
+	// NEAREST BY is sugar for a lateral join against the top-k rows of the target:
+	//   <left> JOIN (SELECT * FROM <target> WHERE <ranking> IS NOT NULL
+	//                ORDER BY <ranking> LIMIT <k>) <target_alias> ON TRUE
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	auto target_alias = GetNearestTargetAlias(*ref.right);
+	select_node->from_table = std::move(ref.right);
+
+	// Drop candidates whose ranking expression is NULL (they never rank)
+	select_node->where_clause =
+	    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, ref.ranking_expression->Copy());
+
+	auto order_modifier = make_uniq<OrderModifier>();
+	order_modifier->orders.emplace_back(ref.nearest_order_type, OrderByNullType::ORDER_DEFAULT,
+	                                    std::move(ref.ranking_expression));
+	select_node->modifiers.push_back(std::move(order_modifier));
+
+	auto limit_modifier = make_uniq<LimitModifier>();
+	limit_modifier->limit = make_uniq<ConstantExpression>(Value::BIGINT(NumericCast<int64_t>(ref.nearest_count)));
+	select_node->modifiers.push_back(std::move(limit_modifier));
+
+	auto select_statement = make_uniq<SelectStatement>();
+	select_statement->node = std::move(select_node);
+
+	auto lateral_join = make_uniq<JoinRef>(JoinRefType::REGULAR);
+	lateral_join->type = ref.type;
+	lateral_join->left = std::move(ref.left);
+	lateral_join->right = make_uniq<SubqueryRef>(std::move(select_statement), std::move(target_alias));
+	lateral_join->condition = make_uniq<ConstantExpression>(Value::BOOLEAN(true));
+	lateral_join->query_location = ref.query_location;
+	return Bind(*lateral_join);
+}
+
 BoundStatement Binder::Bind(JoinRef &ref) {
+	if (ref.ref_type == JoinRefType::NEAREST) {
+		return BindNearestJoin(ref);
+	}
 	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
@@ -206,7 +230,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		result->lateral = is_lateral;
 		if (result->lateral) {
 			// lateral join: can only be an INNER or LEFT join
-			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
+			if (result->type != JoinType::INNER && result->type != JoinType::LEFT) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
 			}
 		}
@@ -283,6 +307,8 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	case JoinRefType::POSITIONAL:
 	case JoinRefType::DEPENDENT:
 		break;
+	case JoinRefType::NEAREST:
+		throw InternalException("NEAREST BY should have been rewritten by BindNearestJoin");
 	}
 	extra_using_columns = RemoveDuplicateUsingColumns(extra_using_columns);
 
@@ -327,18 +353,29 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 
 			AddUsingBindings(*set, left_using_binding, left_binding);
 			AddUsingBindings(*set, right_using_binding, right_binding);
-			SetPrimaryBinding(*set, ref.type, left_binding, right_binding);
+			SetPrimaryBinding(*set, result->type, left_binding, right_binding);
 			bind_context.TransferUsingBinding(left_binder.bind_context, left_using_binding, *set, using_column);
 			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, *set, using_column);
 			AddUsingBindingSet(std::move(set));
 		}
 	}
 
+	for (auto &condition : extra_conditions) {
+		if (ref.condition) {
+			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
+			                                                 std::move(condition));
+		} else {
+			ref.condition = std::move(condition);
+		}
+	}
 	auto right_bindings = right_binder.bind_context.GetBindingAliases();
 	auto left_bindings = left_binder.bind_context.GetBindingAliases();
-
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
+	if (ref.condition) {
+		WhereBinder condition_binder(*this, context);
+		result->condition = condition_binder.Bind(ref.condition);
+	}
 
 	// Update the correlated columns for the parent binder
 	// For the left binder, depth >= 1 indicates correlations from the parent binder
@@ -354,23 +391,6 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 			// Decrement the depth to account for the effect of the lateral binder
 			col.depth--;
 			AddCorrelatedColumn(col);
-		}
-	}
-
-	for (auto &condition : extra_conditions) {
-		if (ref.condition) {
-			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
-			                                                 std::move(condition));
-		} else {
-			ref.condition = std::move(condition);
-		}
-	}
-	if (ref.condition) {
-		WhereBinder binder(*this, context);
-		result->condition = binder.Bind(ref.condition);
-		if (result->type != JoinType::INNER && result->type != JoinType::LEFT &&
-		    HasLateralCorrelatedColumns(*result->condition, *this)) {
-			throw NotImplementedException("Non-inner join on correlated columns not supported");
 		}
 	}
 

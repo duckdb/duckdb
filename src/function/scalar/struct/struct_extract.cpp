@@ -27,7 +27,6 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 }
 
 static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
@@ -46,19 +45,11 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	}
 	bound_function.GetArguments()[0] = child_type;
 
-	auto &key_child = arguments[1];
-	if (key_child->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-
-	if (key_child->GetReturnType().id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
-		throw BinderException("Key name for struct_extract needs to be a constant string");
-	}
-	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
+	auto key_val = input.GetNonNullConstant(1);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
-	if (key_val.IsNull() || key_str.empty()) {
-		throw BinderException("Key name for struct_extract needs to be neither NULL nor empty");
+	if (key_str.empty()) {
+		throw BinderException("Key name for struct_extract must not be empty");
 	}
 	auto key = Identifier(key_str);
 
@@ -91,9 +82,9 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	return StructExtractAtFun::GetBindData(key_index);
 }
 
-static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context, BoundScalarFunction &bound_function,
-                                                          vector<unique_ptr<Expression>> &arguments,
-                                                          bool struct_extract) {
+static unique_ptr<FunctionData> StructExtractBindInternal(BindScalarFunctionInput &input, bool struct_extract) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
 	auto &child_type = arguments[0]->GetReturnType();
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
@@ -110,15 +101,7 @@ static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context
 	}
 	bound_function.GetArguments()[0] = child_type;
 
-	auto &key_child = arguments[1];
-	if (key_child->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-
-	if (!key_child->IsFoldable()) {
-		throw BinderException("Key index for struct_extract needs to be a constant value");
-	}
-	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
+	Value key_val = input.GetConstant(1);
 	auto index = key_val.GetValue<int64_t>();
 	if (index <= 0 || idx_t(index) > struct_children.size()) {
 		throw BinderException("Key index %lld for struct_extract out of range - expected an index between 1 and %llu",
@@ -129,17 +112,11 @@ static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context
 }
 
 static unique_ptr<FunctionData> StructExtractBindIndex(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	return StructExtractBindInternal(context, bound_function, arguments, true);
+	return StructExtractBindInternal(input, true);
 }
 
 static unique_ptr<FunctionData> StructExtractAtBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	return StructExtractBindInternal(context, bound_function, arguments, false);
+	return StructExtractBindInternal(input, false);
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -156,18 +133,18 @@ unique_ptr<FunctionData> StructExtractAtFun::GetBindData(idx_t index) {
 }
 
 ScalarFunction GetKeyExtractFunction() {
-	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractBind, PropagateStructExtractStats);
+	return ScalarFunction("struct_extract", {{"struct", LogicalTypeId::STRUCT}, {"key", LogicalType::VARCHAR}},
+	                      LogicalType::ANY, StructExtractFunction, StructExtractBind, PropagateStructExtractStats);
 }
 
 ScalarFunction GetIndexExtractFunction() {
-	return ScalarFunction("struct_extract", {LogicalTypeId::TUPLE, LogicalType::BIGINT}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractBindIndex, PropagateStructExtractStats);
+	return ScalarFunction("struct_extract", {{"tuple", LogicalTypeId::TUPLE}, {"index", LogicalType::BIGINT}},
+	                      LogicalType::ANY, StructExtractFunction, StructExtractBindIndex, PropagateStructExtractStats);
 }
 
 ScalarFunction GetExtractAtFunction() {
-	return ScalarFunction("struct_extract_at", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractAtBind, PropagateStructExtractStats);
+	return ScalarFunction("struct_extract_at", {{"struct", LogicalTypeId::STRUCT}, {"index", LogicalType::BIGINT}},
+	                      LogicalType::ANY, StructExtractFunction, StructExtractAtBind, PropagateStructExtractStats);
 }
 
 ScalarFunctionSet StructExtractFun::GetFunctions() {

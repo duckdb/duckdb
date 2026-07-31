@@ -1,0 +1,484 @@
+module: common_handles
+handles:
+  instance_cache:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A database instance cache. Must be destroyed with duckdb_destroy_instance_cache."
+    cleanup_with: destroy_instance_cache
+  database:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A database object. Must be closed with duckdb_close."
+    cleanup_with: close
+  connection:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A connection to a duckdb database. Must be closed with duckdb_disconnect."
+    cleanup_with: disconnect
+  client_context:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A client context of a duckdb connection. Must be destroyed with duckdb_destroy_client_context."
+    cleanup_with: destroy_client_context
+  prepared_statement:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A prepared statement. Must be destroyed with duckdb_destroy_prepare."
+    cleanup_with: destroy_prepare
+  extracted_statements:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Extracted statements. Must be destroyed with duckdb_destroy_extracted."
+    cleanup_with: destroy_extracted
+  pending_result:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A pending query result. Must be destroyed with duckdb_destroy_pending."
+    cleanup_with: destroy_pending
+  appender:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "The appender enables fast data loading into DuckDB. Must be destroyed with duckdb_appender_destroy."
+    cleanup_with: appender_destroy
+  table_description:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "The table description allows querying information about the table. Must be destroyed with duckdb_table_description_destroy."
+    cleanup_with: table_description_destroy
+  config:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "The configuration for opening a database. Must be destroyed with duckdb_destroy_config."
+    cleanup_with: destroy_config
+  config_option:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A custom configuration option instance. Must be destroyed with duckdb_destroy_config_option."
+    cleanup_with: destroy_config_option
+  logical_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A logical type. Must be destroyed with duckdb_destroy_logical_type."
+    cleanup_with: destroy_logical_type
+  create_type_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Holds extra information to register a custom logical type. Reserved for future use."
+  data_chunk:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Contains a data chunk of a duckdb_result. Must be destroyed with duckdb_destroy_data_chunk."
+    cleanup_with: destroy_data_chunk
+  value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A value of a logical type. Must be destroyed with duckdb_destroy_value."
+    cleanup_with: destroy_value
+  profiling_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Holds a recursive tree containing profiling metrics."
+  error_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Holds error data. Must be destroyed with duckdb_destroy_error_data."
+    cleanup_with: destroy_error_data
+  expression:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Holds a bound expression. Must be destroyed with duckdb_destroy_expression."
+    cleanup_with: destroy_expression
+  vector:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A vector, either standalone or a column in a data chunk."
+  selection_vector:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A selection vector defining a selection on top of a vector. Must be destroyed with duckdb_destroy_selection_vector."
+    cleanup_with: destroy_selection_vector
+  arrow_options:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Arrow options for transforming DuckDB schema/chunks to Arrow. Must be destroyed with duckdb_destroy_arrow_options."
+    cleanup_with: destroy_arrow_options
+  arrow:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An arrow result set. Must be destroyed with duckdb_destroy_arrow."
+    cleanup_with: destroy_arrow
+  arrow_stream:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An arrow stream wrapper. Must be destroyed with duckdb_destroy_arrow_stream."
+    cleanup_with: destroy_arrow_stream
+  arrow_schema:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An arrow schema wrapper."
+  arrow_array:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An arrow array wrapper."
+  arrow_converted_schema:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Holds a converted Arrow schema. Must be destroyed with duckdb_destroy_arrow_converted_schema."
+    cleanup_with: destroy_arrow_converted_schema
+  file_open_options:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "File open options. Must be destroyed with duckdb_destroy_file_open_options."
+    cleanup_with: destroy_file_open_options
+  file_system:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A file system instance. Must be destroyed with duckdb_destroy_file_system."
+    cleanup_with: destroy_file_system
+  file_handle:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A file handle. Must be destroyed with duckdb_destroy_file_handle."
+    cleanup_with: destroy_file_handle
+  catalog:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A handle to a database catalog. Must be destroyed with duckdb_destroy_catalog."
+    cleanup_with: destroy_catalog
+  catalog_entry:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A handle to a catalog entry. Must be destroyed with duckdb_destroy_catalog_entry."
+    cleanup_with: destroy_catalog_entry
+  task_state:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Used for threading, contains a task state. Must be destroyed with duckdb_destroy_task_state."
+    cleanup_with: destroy_task_state
+  scalar_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A scalar function. Must be destroyed with duckdb_destroy_scalar_function."
+    cleanup_with: destroy_scalar_function
+  scalar_function_set:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A scalar function set. Must be destroyed with duckdb_destroy_scalar_function_set."
+    cleanup_with: destroy_scalar_function_set
+  aggregate_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An aggregate function. Must be destroyed with duckdb_destroy_aggregate_function."
+    cleanup_with: destroy_aggregate_function
+  aggregate_function_set:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "An aggregate function set. Must be destroyed with duckdb_destroy_aggregate_function_set."
+    cleanup_with: destroy_aggregate_function_set
+  aggregate_state:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "The state of an aggregate function."
+  table_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A table function. Must be destroyed with duckdb_destroy_table_function."
+    cleanup_with: destroy_table_function
+  cast_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A cast function. Must be destroyed with duckdb_destroy_cast_function."
+    cleanup_with: destroy_cast_function
+  copy_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A COPY function. Must be destroyed with duckdb_destroy_copy_function."
+    cleanup_with: destroy_copy_function
+  copy_function_bind_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Info for the bind function of a COPY function."
+  copy_function_global_init_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Info for the global initialization function of a COPY function."
+  copy_function_sink_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Info for the sink function of a COPY function."
+  copy_function_finalize_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Info for the finalize function of a COPY function."
+  replacement_scan_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Info passed to a replacement scan callback."
+  log_storage:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "A log storage instance. Must be destroyed with duckdb_destroy_log_storage."
+    cleanup_with: destroy_log_storage
+  function_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Additional function info."
+  bind_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "The bind info of a function."
+  init_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Additional function initialization info."
+  extension_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    description: "Holds the state of the C API extension initialization process."
+aliases:
+  sel_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    underlying: u32
+    qualified: true
+    description: "Type definition for the data pointers of selection vectors."
+callbacks:
+  delete_callback_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The callback to destroy data."
+    parameters:
+      data:
+        type: opaque
+        indirection: 1
+  copy_callback_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    return_pointer: 1
+    description: "The callback to copy data."
+    parameters:
+      data:
+        type: opaque
+        indirection: 1
+  table_function_bind_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The bind function of a table function."
+    parameters:
+      info:
+        type: bind_info
+  table_function_init_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The init function of a table function."
+    parameters:
+      info:
+        type: init_info
+  table_function_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The main function of a table function."
+    parameters:
+      info:
+        type: function_info
+      output:
+        type: data_chunk
+  replacement_callback_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The callback function for replacement scans."
+    parameters:
+      info:
+        type: replacement_scan_info
+      table_name:
+        type: char
+        indirection: 1
+        const: true
+      data:
+        type: opaque
+        indirection: 1
+  logger_write_log_entry_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The callback to write a log entry."
+    parameters:
+      extra_data:
+        type: opaque
+        indirection: 1
+      timestamp:
+        type: timestamp
+        indirection: 1
+      level:
+        type: char
+        indirection: 1
+        const: true
+      log_type:
+        type: char
+        indirection: 1
+        const: true
+      log_message:
+        type: char
+        indirection: 1
+        const: true
+  copy_function_sink_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The sink function of a copy function."
+    parameters:
+      info:
+        type: copy_function_sink_info
+      input:
+        type: data_chunk
+  copy_function_finalize_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The finalize function of a copy function."
+    parameters:
+      info:
+        type: copy_function_finalize_info
+  aggregate_state_size:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: idx
+    description: "A function to get the size of an aggregate state."
+    parameters:
+      info:
+        type: function_info
+  aggregate_init_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "A function to initialize an aggregate state."
+    parameters:
+      info:
+        type: function_info
+      state:
+        type: aggregate_state
+  aggregate_destroy_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "An optional function to destroy an aggregate state."
+    parameters:
+      states:
+        type: aggregate_state
+        indirection: 1
+      count:
+        type: idx
+  aggregate_update_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "A function to update a set of aggregate states with new values."
+    parameters:
+      info:
+        type: function_info
+      input:
+        type: data_chunk
+      states:
+        type: aggregate_state
+        indirection: 1
+  aggregate_combine_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "A function to combine aggregate states."
+    parameters:
+      info:
+        type: function_info
+      source:
+        type: aggregate_state
+        indirection: 1
+      target:
+        type: aggregate_state
+        indirection: 1
+      count:
+        type: idx
+  aggregate_finalize_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "A function to finalize aggregate states into a result vector."
+    parameters:
+      info:
+        type: function_info
+      source:
+        type: aggregate_state
+        indirection: 1
+      result:
+        type: vector
+      count:
+        type: idx
+      offset:
+        type: idx
+  scalar_function_bind_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The bind function of a scalar function."
+    parameters:
+      info:
+        type: bind_info
+  scalar_function_init_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The init function of a scalar function."
+    parameters:
+      info:
+        type: init_info
+  scalar_function_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The main function of a scalar function."
+    parameters:
+      info:
+        type: function_info
+      input:
+        type: data_chunk
+      output:
+        type: vector
+  cast_function_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: bool
+    description: "The function to cast from an input vector to an output vector."
+    parameters:
+      info:
+        type: function_info
+      count:
+        type: idx
+      input:
+        type: vector
+      output:
+        type: vector
+  copy_function_bind_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The bind function of a copy function."
+    parameters:
+      info:
+        type: copy_function_bind_info
+  copy_function_global_init_t:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    return_type: opaque
+    description: "The global initialization function of a copy function."
+    parameters:
+      info:
+        type: copy_function_global_init_info

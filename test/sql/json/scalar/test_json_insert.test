@@ -1,0 +1,232 @@
+# name: test/sql/json/scalar/test_json_insert.test
+# description: Test JSON insert (insert value at path only if it does not exist yet)
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# Basic: insert new key into object
+query T
+SELECT json_insert('{"a":1}', '$.b', '2')
+----
+{"a":1,"b":2}
+
+# Existing key is not overwritten
+query T
+SELECT json_insert('{"a":1}', '$.a', '99')
+----
+{"a":1}
+
+# JSON Pointer syntax works too
+query T
+SELECT json_insert('{"a":1}', '/b', '2')
+----
+{"a":1,"b":2}
+
+# Nested path: insert inside nested object
+query T
+SELECT json_insert('{"a":{"x":1}}', '$.a.y', '2')
+----
+{"a":{"x":1,"y":2}}
+
+# Nested path: existing nested key is not overwritten
+query T
+SELECT json_insert('{"a":{"x":1}}', '$.a.x', '99')
+----
+{"a":{"x":1}}
+
+# Create intermediate parents
+query T
+SELECT json_insert('{}', '$.a.b.c', '1')
+----
+{"a":{"b":{"c":1}}}
+
+# Array: existing index is not overwritten
+query T
+SELECT json_insert('[1,2,3]', '$[1]', '99')
+----
+[1,2,3]
+
+# Array append with JSON Pointer /- syntax
+query T
+SELECT json_insert('[1,2]', '/-', '3')
+----
+[1,2,3]
+
+# Array append with $[#] syntax
+query T
+SELECT json_insert('[1,2]', '$[#]', '3')
+----
+[1,2,3]
+
+# Array: index equal to length appends
+query T
+SELECT json_insert('[1,2]', '$[2]', '3')
+----
+[1,2,3]
+
+# Array: index beyond length is a no-op
+query T
+SELECT json_insert('[1,2]', '$[5]', '9')
+----
+[1,2]
+
+# Insert into object inside array
+query T
+SELECT json_insert('[{"a":1}]', '$[0].b', '2')
+----
+[{"a":1,"b":2}]
+
+# Insert different value types
+query T
+SELECT json_insert('{}', '$.s', '"hello"')
+----
+{"s":"hello"}
+
+query T
+SELECT json_insert('{}', '$.n', 'null')
+----
+{"n":null}
+
+query T
+SELECT json_insert('{}', '$.obj', '{"x":1}')
+----
+{"obj":{"x":1}}
+
+# Root always exists, so inserting at the root is a no-op
+query T
+SELECT json_insert('{"a":1}', '$', '2')
+----
+{"a":1}
+
+# NULL handling: NULL in any argument produces NULL
+query T
+SELECT json_insert(NULL, '$.a', '1')
+----
+NULL
+
+query T
+SELECT json_insert('{"a":1}', NULL, '1')
+----
+NULL
+
+query T
+SELECT json_insert('{"a":1}', '$.a', NULL)
+----
+NULL
+
+# Bare key name (treated as top-level key)
+query T
+SELECT json_insert('{"a":1}', 'b', '2')
+----
+{"a":1,"b":2}
+
+query T
+SELECT json_insert('{"a":1}', 'a', '9')
+----
+{"a":1}
+
+# Explicit ::JSON cast also works
+query T
+SELECT json_insert('{"a":1}', '$.b', '2'::JSON)
+----
+{"a":1,"b":2}
+
+# Constant vector test
+query T
+SELECT json_insert('{"a":1}', '$.b', '2') FROM range(3)
+----
+{"a":1,"b":2}
+{"a":1,"b":2}
+{"a":1,"b":2}
+
+# Table-based test: fill in a default without clobbering explicit settings
+statement ok
+CREATE TABLE configs (id INTEGER, cfg JSON);
+
+statement ok
+INSERT INTO configs VALUES
+    (1, '{"retries":5}'),
+    (2, '{"timeout":30}'),
+    (3, '{}');
+
+query IT
+SELECT id, json_insert(cfg, '$.retries', '3') FROM configs ORDER BY id
+----
+1	{"retries":5}
+2	{"timeout":30,"retries":3}
+3	{"retries":3}
+
+# Composability: insert then normalize
+query T
+SELECT json_normalize(json_insert('{"z":1}', '$.a', '2'))
+----
+{"a":2,"z":1}
+
+# Quoted key with an escaped quote: the key a"b exists, so this is a no-op
+query T
+SELECT json_insert('{"a\"b":1}', '$."a\"b"', '9')
+----
+{"a\"b":1}
+
+# Quoted key with an escaped quote: the key a"b is missing, so it is inserted
+query T
+SELECT json_insert('{"a\\":2}', '$."a\"b"', '9')
+----
+{"a\\":2,"a\"b":9}
+
+# [#-1] addresses the last element, which exists, so this is a no-op
+query T
+SELECT json_insert('[1,2]', '$[#-1]', '9')
+----
+[1,2]
+
+# [#-0] is the array length, so insert appends
+query T
+SELECT json_insert('[1,2]', '$[#-0]', '9')
+----
+[1,2,9]
+
+# Reverse index beyond the array length is a no-op
+query T
+SELECT json_insert('[1,2]', '$[#-5]', '9')
+----
+[1,2]
+
+# Append into a nested array
+query T
+SELECT json_insert('{"a":[1]}', '$.a[#]', '2')
+----
+{"a":[1,2]}
+
+# The empty path is the whole document, which always exists, so this is a no-op
+query T
+SELECT json_insert('{"a":1}', '', '2')
+----
+{"a":1}
+
+# Malformed paths raise an error rather than falling through to the root
+statement error
+SELECT json_insert('{"a":1}', '$not_a_path', '2')
+----
+JSON path error
+
+# Wildcards are not supported in modification functions
+statement error
+SELECT json_insert('{"a":1}', '$.*', '9')
+----
+not supported
+
+# A missing array leg is created
+query T
+SELECT json_insert('{}', '$.a[0]', '1')
+----
+{"a":[1]}
+
+# Creation below an appended element of an existing array
+query T
+SELECT json_insert('{"a":[0]}', '$.a[1].b', '5')
+----
+{"a":[0,{"b":5}]}

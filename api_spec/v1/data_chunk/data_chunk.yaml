@@ -1,0 +1,96 @@
+module: data_chunk
+functions:
+  create_data_chunk:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: data_chunk
+    parameters:
+      types:
+        type: logical_type
+        indirection: 1
+        description: An array of column types. Column types can not contain ANY and INVALID types.
+      column_count:
+        type: idx
+        description: The number of columns.
+    return_type: data_chunk
+    description: |
+      Creates an empty data chunk with the specified column types.
+      The result must be destroyed with `duckdb_destroy_data_chunk`.
+    return_description: The data chunk.
+  destroy_data_chunk:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: data_chunk
+    parameters:
+      chunk:
+        type: data_chunk
+        indirection: 1
+        description: The data chunk to destroy.
+    return_type: opaque
+    description: |
+      Destroys the data chunk and de-allocates all memory allocated for that chunk.
+  data_chunk_reset:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The data chunk to reset.
+    return_type: opaque
+    description: |
+      Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.
+      After calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current
+      data and validity pointers
+  data_chunk_get_column_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The data chunk to get the data from
+    return_type: idx
+    description: |
+      Retrieves the number of columns in a data chunk.
+    return_description: The number of columns in the data chunk
+  data_chunk_get_vector:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The data chunk to get the data from
+      col_idx:
+        type: idx
+    return_type: vector
+    description: |
+      Retrieves the vector at the specified column index in the data chunk.
+
+      The pointer to the vector is valid for as long as the chunk is alive.
+      It does NOT need to be destroyed.
+    return_description: The vector
+  data_chunk_get_size:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The data chunk to get the data from
+    return_type: idx
+    description: |
+      Retrieves the current number of tuples in a data chunk.
+    return_description: The number of tuples in the data chunk
+  data_chunk_set_size:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The data chunk to set the size in
+      size:
+        type: idx
+        description: The number of tuples in the data chunk
+    return_type: opaque
+    description: |
+      Sets the current number of tuples in a data chunk.

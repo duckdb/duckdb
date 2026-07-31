@@ -1,0 +1,56 @@
+module: expression
+functions:
+  destroy_expression:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: expression
+    parameters:
+      expr:
+        type: expression
+        indirection: 1
+        description: A pointer to the expression.
+    return_type: opaque
+    description: |
+      Destroys the expression and de-allocates its memory.
+  expression_return_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      expr:
+        type: expression
+        description: The expression.
+    return_type: logical_type
+    description: |
+      Returns the return type of an expression.
+    return_description: The return type. Must be destroyed with `duckdb_destroy_logical_type`.
+  expression_is_foldable:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      expr:
+        type: expression
+        description: The expression.
+    return_type: bool
+    description: |
+      Returns whether the expression is foldable into a value or not.
+    return_description: True, if the expression is foldable, else false.
+  expression_fold:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      context:
+        type: client_context
+        description: The client context.
+      expr:
+        type: expression
+        description: The expression. Must be foldable.
+      out_value:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: The folded value, if folding was successful. Must be destroyed with `duckdb_destroy_value`.
+    return_type: error_data
+    description: |
+      Folds an expression creating a folded value.
+    return_description: The error data. Must be destroyed with `duckdb_destroy_error_data`.

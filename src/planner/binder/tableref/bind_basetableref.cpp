@@ -100,7 +100,8 @@ unique_ptr<BoundAtClause> Binder::BindAtClause(optional_ptr<AtClause> at_clause)
 	return make_uniq<BoundAtClause>(at_clause->Unit(), std::move(val));
 }
 
-vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identifier &schema_name) {
+vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identifier &schema_name,
+                                                 bool default_schema_precedence) {
 	vector<CatalogSearchEntry> view_search_path;
 	auto &catalog_name = catalog.GetName();
 	if (!schema_name.empty()) {
@@ -111,7 +112,7 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const Identif
 		view_search_path.emplace_back(catalog_name, Identifier(default_schema));
 	}
 	//! Signal that this catalog should be checked, regardless of the schema in the reference
-	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA);
+	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA, default_schema_precedence);
 	return view_search_path;
 }
 
@@ -156,11 +157,11 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	auto at_clause = BindAtClause(ref.at_clause);
 	auto entry_at_clause = at_clause ? at_clause.get() : entry_retriever.GetAtClause();
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(ref.Table()), entry_at_clause, error_context);
-	BindSchemaOrCatalog(entry_retriever, ref.GetQualifiedNameMutable());
-	auto table_or_view = entry_retriever.GetEntry(
-	    EntryLookupInfo(table_lookup, QualifiedName(ref.GetQualifiedName().Catalog(), ref.GetQualifiedName().Schema(),
-	                                                table_lookup.GetEntryIdentifier())),
-	    OnEntryNotFound::RETURN_NULL);
+	// resolve the catalog/schema qualification for the lookup only - the reference itself keeps the name as written,
+	// which is what name extraction and replacement scans report
+	auto bound_name = BindTableName(entry_retriever, ref.GetQualifiedName());
+	auto table_or_view =
+	    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, bound_name), OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES || GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -228,10 +229,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
 		// in catalogs that do not have transactional DDL
 		table_or_view =
-		    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, QualifiedName(ref.GetQualifiedName().Catalog(),
-		                                                                         ref.GetQualifiedName().Schema(),
-		                                                                         table_lookup.GetEntryIdentifier())),
-		                             OnEntryNotFound::THROW_EXCEPTION);
+		    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
@@ -312,7 +310,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		// when binding a view, we always look into the catalog/schema where the view is stored first
 		auto view_search_path =
-		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name);
+		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name, true);
 		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 		// propagate the AT clause through the view
 		view_binder->entry_retriever.SetAtClause(entry_at_clause);

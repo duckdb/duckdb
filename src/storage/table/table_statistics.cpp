@@ -20,7 +20,8 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 		table_sample = make_uniq<ReservoirSample>(static_cast<idx_t>(FIXED_SAMPLE_SIZE));
 	}
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
-		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
+		throw DataCorruptionException(
+		    "Table statistics column count is not aligned with table column count. Corrupt file?");
 	} // LCOV_EXCL_STOP
 }
 

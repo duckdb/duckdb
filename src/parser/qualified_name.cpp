@@ -19,22 +19,31 @@ QualifiedName QualifiedName::Deserialize(Deserializer &deserializer) {
 }
 
 string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
-	const auto &catalog = Catalog();
-	const auto &schema = Schema();
+	if (path.empty()) {
+		return string();
+	}
 	string result;
-	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
-		if (!schema.empty()) {
-			result += SQLIdentifier(schema) + ".";
+	// render every qualification component (the path can hold a nested schema chain)
+	for (idx_t i = 0; i + 1 < path.size(); i++) {
+		auto &component = path[i];
+		if (component.empty()) {
+			continue;
 		}
-	} else if (!schema.empty() &&
-	           !(mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA && schema == DEFAULT_SCHEMA)) {
-		result += SQLIdentifier(schema) + ".";
+		if (mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA && result.empty() && i + 2 == path.size() &&
+		    component == DEFAULT_SCHEMA) {
+			// the only qualification is the default schema - hide it
+			continue;
+		}
+		result += SQLIdentifier(component) + ".";
 	}
 	result += SQLIdentifier(Name());
 	return result;
 }
 
+//! This parses a superset of the strings that the actual SQL parser accepts: it allows whitespace, most special
+//! characters like ()'- and keywords without requiring double quotes. It only requires double quotes around .
+//! characters and doubled double quotes (which collapse into a single double quote). It's only possible to fully
+//! double quote a component or not quote it at all.
 vector<Identifier> QualifiedName::ParseComponents(const string &input) {
 	vector<Identifier> result;
 	idx_t idx = 0;
@@ -44,6 +53,11 @@ normal:
 	//! quote
 	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
+			if (!entry.empty()) {
+				//! a quote may only open a component, e.g. abc"xyz" is not a valid identifier
+				throw ParserException("Unexpected quote in the middle of a qualified name component! (input: %s)",
+				                      input);
+			}
 			idx++;
 			goto quoted;
 		} else if (input[idx] == '.') {
@@ -61,8 +75,22 @@ quoted:
 	//! look for another quote
 	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
-			//! unquote
+			if (idx + 1 < input.size() && input[idx + 1] == '"') {
+				//! escaped quote ("" inside a quoted identifier is a literal ")
+				entry += '"';
+				idx++;
+				continue;
+			}
+			if (entry.empty()) {
+				//! the SQL parser also rejects "" as a zero-length delimited identifier
+				throw ParserException("Zero-length delimited identifier in qualified name! (input: %s)", input);
+			}
+			//! unquote; a closing quote must end the component, e.g. "abc"xyz is not a valid identifier
 			idx++;
+			if (idx < input.size() && input[idx] != '.') {
+				throw ParserException("Unexpected character after a quoted identifier in a qualified name! (input: %s)",
+				                      input);
+			}
 			goto normal;
 		}
 		entry += input[idx];

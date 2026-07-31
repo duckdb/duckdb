@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/bellman_ford.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=smoke
+QUERY=bellman_ford
+BENCHMARK_NAME=Recursive CTE Bellman-Ford
+DESCRIPTION=Run the USING KEY Bellman-Ford research workload

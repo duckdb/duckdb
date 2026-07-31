@@ -50,7 +50,7 @@ struct MultiFileReaderInterface {
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) = 0;
 	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) = 0;
 
-	virtual bool SupportsReadAhead() const {
+	virtual bool SupportsReadAhead(const MultiFileBindData &bind_data) const {
 		return false;
 	}
 	virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -256,13 +256,14 @@ public:
 	}
 
 	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData &data,
-	                                                         const vector<column_t> &column_ids,
+	                                                         const vector<ColumnIndex> &column_indexes,
 	                                                         optional_ptr<TableFilterSet> filters) {
 		if (!filters) {
 			return nullptr;
 		}
-		auto new_list = data.multi_file_reader->DynamicFilterPushdown(context, *data.file_list, data.file_options,
-		                                                              data.names, data.types, column_ids, *filters);
+		MultiFileDynamicPushdownInfo pushdown_info(context, data.file_options, data.names, data.types, column_indexes,
+		                                           *filters);
+		auto new_list = data.multi_file_reader->DynamicFilterPushdown(*data.file_list, pushdown_info);
 		return new_list;
 	}
 
@@ -426,9 +427,44 @@ public:
 	}
 
 	static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate,
-	                                  vector<idx_t> &projection_ids) {
+	                                  MultiFileGlobalState &gstate) {
 		auto &reader = *lstate.job.reader;
 		auto &reader_data = *lstate.job.reader_data;
+		auto &projection_ids = gstate.projection_ids;
+
+		if (!reader_data.extra_columns.empty()) {
+			if (!gstate.multi_file_reader_state || !gstate.multi_file_reader_state->supports_local_extra_columns) {
+				throw InternalException(
+				    "MultiFileReader added local extra columns without declaring support in its global state");
+			}
+		}
+		if (!projection_ids.empty()) {
+			vector<LogicalType> extra_columns;
+			if (gstate.multi_file_reader_state) {
+				extra_columns = reader_data.GetExtraColumns(*gstate.multi_file_reader_state);
+			}
+			const auto expected_expression_count = gstate.scanned_types.size() + extra_columns.size();
+			if (reader_data.expressions.size() != expected_expression_count) {
+				throw InternalException(
+				    "MultiFileReader input schema contains %llu columns, but the reader produced %llu expressions",
+				    expected_expression_count, reader_data.expressions.size());
+			}
+			for (idx_t i = 0; i < gstate.scanned_types.size(); i++) {
+				if (reader_data.expressions[i]->GetReturnType() != gstate.scanned_types[i]) {
+					throw InternalException(
+					    "MultiFileReader input column %llu has type %s, but the reader expression has type %s", i,
+					    gstate.scanned_types[i], reader_data.expressions[i]->GetReturnType());
+				}
+			}
+			for (idx_t i = 0; i < extra_columns.size(); i++) {
+				auto expression_idx = gstate.scanned_types.size() + i;
+				if (reader_data.expressions[expression_idx]->GetReturnType() != extra_columns[i]) {
+					throw InternalException(
+					    "MultiFileReader extra column %llu has type %s, but the reader expression has type %s", i,
+					    extra_columns[i], reader_data.expressions[expression_idx]->GetReturnType());
+				}
+			}
+		}
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
 		auto &local_column_ids = reader.column_indexes;
@@ -438,7 +474,7 @@ public:
 
 			auto primary_index = local_id.GetPrimaryIndex();
 			auto cast_entry = reader.cast_map.find(primary_index);
-			auto expr_entry = reader.expression_map.find(primary_index);
+			auto expr_entry = reader.expression_map.find(ProjectionIndex(i));
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
@@ -563,7 +599,7 @@ public:
 
 	static void InitializeReadAhead(ClientContext &context, const MultiFileBindData &bind_data,
 	                                MultiFileGlobalState &gstate) {
-		if (!bind_data.interface->SupportsReadAhead() ||
+		if (!bind_data.interface->SupportsReadAhead(bind_data) ||
 		    TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
 			return;
 		}
@@ -587,7 +623,7 @@ public:
 		}
 
 		// before instantiating a scan trigger a dynamic filter pushdown if possible
-		auto new_list = MultiFileFilterPushdown(context, bind_data, input.column_ids, input.filters);
+		auto new_list = MultiFileFilterPushdown(context, bind_data, input.column_indexes, input.filters);
 		if (new_list) {
 			result = make_uniq<MultiFileGlobalState>(std::move(new_list));
 		} else {
@@ -601,13 +637,13 @@ public:
 		    context, bind_data.file_options, bind_data.reader_bind, file_list, global_columns, input.column_indexes);
 
 		if (file_list.IsEmpty()) {
-			result->readers = {};
+			result->readers.clear();
 		} else if (!bind_data.union_readers.empty()) {
 			for (auto &reader : bind_data.union_readers) {
 				result->readers.push_back(make_uniq<MultiFileReaderData>(reader));
 			}
 			if (result->readers.size() != file_list.GetTotalFileCount()) {
-				result->readers = {};
+				result->readers.clear();
 			}
 		} else if (bind_data.initial_reader) {
 			// we can only use the initial reader if it was constructed from the first file
@@ -676,13 +712,8 @@ public:
 					}
 					result->scanned_types.emplace_back(entry->second.type);
 				} else {
-					result->scanned_types.push_back(table_types[column_id]);
+					result->scanned_types.push_back(col_idx.HasType() ? col_idx.GetScanType() : table_types[column_id]);
 				}
-			}
-		}
-		if (require_extra_columns) {
-			for (const auto &column_type : result->multi_file_reader_state->extra_columns) {
-				result->scanned_types.push_back(column_type);
 			}
 		}
 		InitializeReadAhead(context, bind_data, *result);
@@ -733,7 +764,7 @@ public:
 	                                              MultiFileBindData &bind_data, DataChunk &output) {
 		if (data.scan_chunk_file_index != data.job.file_index) {
 			// if the file changes we need to initialize the chunk again
-			InitializeDecodeChunk(context, data, gstate.projection_ids);
+			InitializeDecodeChunk(context, data, gstate);
 		}
 		auto &scan_chunk = data.scan_chunk;
 		if (!data.resuming_blocked_scan) {
@@ -825,6 +856,11 @@ public:
 			if (!job && read_ahead.IsDone() && !read_ahead.HasActiveProducers()) {
 				job = read_ahead.ClaimJob();
 				if (!job) {
+					// finish scan states left in the recycle pool so per-file accounting completes
+					unique_lock<mutex> parallel_lock(gstate.lock);
+					while (auto state = read_ahead.TryPopState()) {
+						bind_data.interface->FinishReading(context, *gstate.global_state, *state);
+					}
 					return MultiFileAcquireResult::EXHAUSTED;
 				}
 			}

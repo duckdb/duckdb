@@ -41,18 +41,22 @@ struct MultiFileReaderBindData {
 
 //! Global state for MultiFileReads
 struct MultiFileReaderGlobalState {
-	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p)
-	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p) {};
+	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p,
+	                           bool supports_local_extra_columns_p = false)
+	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p),
+	      supports_local_extra_columns(supports_local_extra_columns_p) {};
 	virtual ~MultiFileReaderGlobalState();
 
 	//! extra columns that will be produced during scanning
 	const vector<LogicalType> extra_columns;
 	// the file list driving the current scan
 	const optional_ptr<const MultiFileList> file_list;
+	//! Whether individual readers can add extra columns during InitializeReader
+	const bool supports_local_extra_columns;
 
 	//! Indicates that the MultiFileReader has added columns to be scanned that are not in the projection
-	bool RequiresExtraColumns() {
-		return !extra_columns.empty();
+	bool RequiresExtraColumns() const {
+		return !extra_columns.empty() || supports_local_extra_columns;
 	}
 
 	template <class TARGET>
@@ -135,6 +139,15 @@ struct MultiFileReaderData {
 	MultiFileConstantMap constant_map;
 	//! The set of expressions that should be evaluated to obtain the final result
 	vector<unique_ptr<Expression>> expressions;
+	//! Extra columns required by FinalizeChunk for this file, appended after any global extra columns
+	//! Is only allowed to be populated when MultiFileReaderGlobalState::supports_local_extra_columns is set
+	vector<LogicalType> extra_columns;
+
+	vector<LogicalType> GetExtraColumns(const MultiFileReaderGlobalState &global_state) const {
+		auto result = global_state.extra_columns;
+		result.insert(result.end(), extra_columns.begin(), extra_columns.end());
+		return result;
+	}
 
 	//! (only set when file_state is UNOPENED) the file to be opened
 	OpenFileInfo file_to_be_opened;

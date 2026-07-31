@@ -59,6 +59,7 @@ extern thread_local rng_t Streams[];
 thread_local struct W_STORE_SALES_TBL g_w_store_sales;
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 static thread_local int *pItemPermutation, nItemCount, nItemIndex;
+static thread_local int nItemPermutationSize;
 static thread_local ds_key_t jDate, kNewDateIndex;
 
 /*
@@ -77,7 +78,14 @@ static void mk_master(void *info_arr, ds_key_t index) {
 		strtodec(&dMax, "100000.00");
 		nMaxItemCount = 20;
 		jDate = skipDays(STORE_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(pItemPermutation, nItemCount = (int)getIDCount(ITEM), SS_PERMUTATION);
+		nItemCount = (int)getIDCount(ITEM);
+		// A cached permutation is only reusable if it is at least as large as the
+		// current scale requires; otherwise re-allocate to avoid overflowing it.
+		if (nItemCount > nItemPermutationSize) {
+			pItemPermutation = NULL;
+			nItemPermutationSize = nItemCount;
+		}
+		pItemPermutation = makePermutation(pItemPermutation, nItemCount, SS_PERMUTATION);
 
 		InitConstants::mk_master_store_sales_init = 1;
 	}

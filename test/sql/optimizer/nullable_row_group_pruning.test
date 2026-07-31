@@ -1,0 +1,80 @@
+# name: test/sql/optimizer/nullable_row_group_pruning.test
+# description: Row-group pruning on nullable columns
+# group: [optimizer]
+
+statement ok
+ATTACH '{TEST_DIR}/nullable_prune.duckdb' AS db (ROW_GROUP_SIZE 2048);
+
+statement ok
+USE db;
+
+statement ok
+CREATE TABLE integers AS
+    SELECT CASE WHEN range % 2048 = 0 THEN NULL ELSE range::INTEGER END AS i
+    FROM range(6144);
+
+query I
+SELECT sum(i) FROM integers WHERE i = 3000;
+----
+3000
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM integers WHERE i = 3000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT sum(i) FROM integers WHERE i < 1000;
+----
+499500
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM integers WHERE i < 1000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT sum(i) FROM integers WHERE i BETWEEN 2900 AND 3100;
+----
+603000
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM integers WHERE i BETWEEN 2900 AND 3100;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+# NULL matches IS DISTINCT FROM, so all row groups must be scanned.
+query I
+SELECT sum(i) FROM integers WHERE i IS DISTINCT FROM 3000;
+----
+18862152
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM integers WHERE i IS DISTINCT FROM 3000;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+
+statement ok
+CREATE TABLE strings AS
+    SELECT CASE WHEN range % 2048 = 0 THEN NULL ELSE lpad(range::VARCHAR, 5, '0') END AS s
+    FROM range(6144);
+
+query I
+SELECT sum(length(s)) FROM strings WHERE s = '03000';
+----
+5
+
+query II
+EXPLAIN ANALYZE SELECT sum(length(s)) FROM strings WHERE s = '03000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
+
+query I
+SELECT sum(length(s)) FROM strings WHERE s BETWEEN '02900' AND '03100';
+----
+1005
+
+query II
+EXPLAIN ANALYZE SELECT sum(length(s)) FROM strings WHERE s BETWEEN '02900' AND '03100';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*

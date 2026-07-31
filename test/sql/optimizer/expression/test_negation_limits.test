@@ -28,3 +28,55 @@ SELECT -v FROM vals WHERE id>1 ORDER BY id
 -2
 
 endloop
+
+# Negating a constant argument that equals the type's minimum value would overflow, so the result
+# is promoted to a wider type instead. This applies to any foldable constant expression (e.g. a cast
+# or a folded arithmetic expression), not just literals.
+
+# tinyint minimum -> smallint
+query IT
+SELECT -(CAST(-128 AS TINYINT)), typeof(-(CAST(-128 AS TINYINT)))
+----
+128	SMALLINT
+
+# smallint minimum -> integer
+query IT
+SELECT -(CAST(-32768 AS SMALLINT)), typeof(-(CAST(-32768 AS SMALLINT)))
+----
+32768	INTEGER
+
+# integer minimum -> bigint
+query IT
+SELECT -(CAST(-2147483648 AS INTEGER)), typeof(-(CAST(-2147483648 AS INTEGER)))
+----
+2147483648	BIGINT
+
+# bigint minimum -> hugeint
+query IT
+SELECT -(CAST(-9223372036854775808 AS BIGINT)), typeof(-(CAST(-9223372036854775808 AS BIGINT)))
+----
+9223372036854775808	HUGEINT
+
+# the promotion also kicks in when the minimum is produced by a folded arithmetic expression
+query IT
+SELECT -(CAST(-64 AS TINYINT) + CAST(-64 AS TINYINT)), typeof(-(CAST(-64 AS TINYINT) + CAST(-64 AS TINYINT)))
+----
+128	SMALLINT
+
+# a constant that is not the minimum value is not promoted
+query T
+SELECT typeof(-(CAST(-100 AS TINYINT)))
+----
+TINYINT
+
+# hugeint has no wider type to promote to, so negating its minimum still overflows
+statement error
+SELECT -(CAST(-170141183460469231731687303715884105728 AS HUGEINT))
+----
+Overflow in negation
+
+# a non-constant minimum value cannot be promoted and still overflows at runtime
+statement error
+SELECT -v FROM (VALUES (CAST(-128 AS TINYINT))) t(v)
+----
+Overflow in negation

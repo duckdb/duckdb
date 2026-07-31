@@ -7,10 +7,11 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
 
-static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, BoundCastExpression &cast_expression,
+static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, BoundFunctionExpression &cast_expression,
                                                 const Value &constant_value, Value &cast_constant, bool column_ref_left,
                                                 unique_ptr<Expression> &replacement) {
 	if (Timestamp::GetTime(constant_value.GetValue<timestamp_t>()) == dtime_t(0)) {
@@ -22,13 +23,13 @@ static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, B
 	switch (op) {
 	case ExpressionType::COMPARE_EQUAL:
 		// d =  T   -> false, preserving NULL
-		replacement =
-		    ExpressionRewriter::ConstantOrNull(std::move(cast_expression.ChildMutable()), Value::BOOLEAN(false));
+		replacement = ExpressionRewriter::ConstantOrNull(std::move(BoundCastExpression::ChildMutable(cast_expression)),
+		                                                 Value::BOOLEAN(false));
 		return true;
 	case ExpressionType::COMPARE_NOTEQUAL:
 		// d != T   -> true, preserving NULL
-		replacement =
-		    ExpressionRewriter::ConstantOrNull(std::move(cast_expression.ChildMutable()), Value::BOOLEAN(true));
+		replacement = ExpressionRewriter::ConstantOrNull(std::move(BoundCastExpression::ChildMutable(cast_expression)),
+		                                                 Value::BOOLEAN(true));
 		return true;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		// d IS DISTINCT FROM T     -> true
@@ -70,7 +71,7 @@ static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, B
 	return true;
 }
 
-static bool ConstantCastIsInvertible(BoundFunctionExpression &expr, BoundCastExpression &cast_expression,
+static bool ConstantCastIsInvertible(BoundFunctionExpression &expr, BoundFunctionExpression &cast_expression,
                                      const Value &constant_value, Value &cast_constant, const LogicalType &target_type,
                                      bool column_ref_left, unique_ptr<Expression> &replacement) {
 	if (cast_constant.IsNull() || BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
@@ -89,6 +90,49 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 	op->matchers.push_back(make_uniq<FoldableConstantMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	root = std::move(op);
+}
+
+RowComparisonSimplificationRule::RowComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto comparison = make_uniq<ComparisonExpressionMatcher>();
+	comparison->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
+	comparison->matchers.push_back(make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_FUNCTION));
+	comparison->matchers.push_back(make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_FUNCTION));
+	root = std::move(comparison);
+}
+
+unique_ptr<Expression> RowComparisonSimplificationRule::Apply(LogicalOperator &op,
+                                                              vector<reference<Expression>> &bindings,
+                                                              bool &changes_made, bool is_root) {
+	if (!is_root || op.type != LogicalOperatorType::LOGICAL_FILTER) {
+		return nullptr;
+	}
+	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto &left = bindings[1].get().Cast<BoundFunctionExpression>();
+	auto &right = bindings[2].get().Cast<BoundFunctionExpression>();
+	if (left.Function().GetName() != "row" || right.Function().GetName() != "row") {
+		return nullptr;
+	}
+	auto &left_children = left.GetChildrenMutable();
+	auto &right_children = right.GetChildrenMutable();
+	if (left_children.empty() || left_children.size() != right_children.size()) {
+		return nullptr;
+	}
+	for (idx_t child_idx = 0; child_idx < left_children.size(); child_idx++) {
+		auto &left_child = *left_children[child_idx];
+		auto &right_child = *right_children[child_idx];
+		if (left_child.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    right_child.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+		    left_child.GetReturnType().IsNested() || left_child.GetReturnType() != right_child.GetReturnType()) {
+			return nullptr;
+		}
+	}
+
+	auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+	for (idx_t child_idx = 0; child_idx < left_children.size(); child_idx++) {
+		result->GetChildrenMutable().push_back(BoundComparisonExpression::Create(
+		    comparison.GetExpressionType(), std::move(left_children[child_idx]), std::move(right_children[child_idx])));
+	}
+	return std::move(result);
 }
 
 unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
@@ -111,12 +155,20 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// comparison with constant NULL, return NULL
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
-	if (column_ref_expr.GetExpressionClass() == ExpressionClass::BOUND_CAST) {
+	if (BoundComparisonExpression::IsComparison(column_ref_expr) && !constant_value.IsNull() &&
+	    constant_value.type().id() == LogicalTypeId::BOOLEAN && BooleanValue::Get(constant_value)) {
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_EQUAL ||
+		    (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM && is_root &&
+		     op.type == LogicalOperatorType::LOGICAL_FILTER)) {
+			return column_ref_left ? std::move(left) : std::move(right);
+		}
+	}
+	if (BoundCastExpression::IsCast(column_ref_expr)) {
 		//! Here we check if we can apply the expression on the constant side
 		//! We can do this if the cast itself is invertible and casting the constant is
 		//! invertible in practice.
-		auto &cast_expression = column_ref_expr.Cast<BoundCastExpression>();
-		auto target_type = cast_expression.source_type();
+		auto &cast_expression = column_ref_expr.Cast<BoundFunctionExpression>();
+		auto target_type = BoundCastExpression::SourceType(cast_expression);
 		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType())) {
 			return nullptr;
 		}
@@ -141,7 +193,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		}
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
-		auto child_expression = std::move(cast_expression.ChildMutable());
+		auto child_expression = std::move(BoundCastExpression::ChildMutable(cast_expression));
 		auto new_constant_expr = make_uniq<BoundConstantExpression>(cast_constant);
 		if (column_ref_left) {
 			left = std::move(child_expression);
