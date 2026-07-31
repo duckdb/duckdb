@@ -309,6 +309,8 @@ public:
 
 	optional_ptr<CatalogEntry> GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
+	//! Look up an entry using the qualification carried in the lookup info (which can be a nested schema path)
+	optional_ptr<CatalogEntry> GetCatalogEntry(const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	//! Find all candidate common table expression by name; returns empty vector if none exists
 	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &name);

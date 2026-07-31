@@ -126,6 +126,16 @@ CatalogTransaction Catalog::GetCatalogTransaction(ClientContext &context) {
 	return CatalogTransaction(*this, context);
 }
 
+SchemaCatalogEntry &Catalog::GetEntrySchema(CatalogTransaction transaction, const QualifiedName &name) {
+	auto &path = name.Path();
+	if (path.size() <= 3) {
+		return GetSchema(transaction, name.Schema());
+	}
+	// nested entry ([catalog, schema_path..., name]): navigate the (nested) schema path
+	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
+	return *GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
+}
+
 //===--------------------------------------------------------------------===//
 // Table
 //===--------------------------------------------------------------------===//
@@ -149,24 +159,15 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
-	auto &qname = info.base->GetQualifiedName();
-	auto &path = qname.Path();
-	optional_ptr<SchemaCatalogEntry> schema;
-	if (path.size() > 3) {
-		// nested table ([catalog, schema_path..., name]): navigate the (nested) schema path
-		vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
-		schema = GetSchema(transaction, schema_path, OnEntryNotFound::THROW_EXCEPTION);
-	} else {
-		schema = GetSchema(transaction, qname.Schema());
-	}
-	return CreateTable(transaction, *schema, info);
+	auto &schema = GetEntrySchema(transaction, info.base->GetQualifiedName());
+	return CreateTable(transaction, schema, info);
 }
 
 //===--------------------------------------------------------------------===//
 // View
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, CreateViewInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreateView(transaction, schema, info);
 }
 
@@ -183,7 +184,7 @@ optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, S
 // Sequence
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreateSequence(transaction, schema, info);
 }
 
@@ -200,7 +201,7 @@ optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transactio
 // Type
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreateType(transaction, schema, info);
 }
 
@@ -217,7 +218,7 @@ optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, S
 // Table Function
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreateTableFunction(transaction, schema, info);
 }
 
@@ -239,7 +240,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTableFunction(ClientContext &context,
 // Copy Function
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreateCopyFunction(transaction, schema, info);
 }
 
@@ -257,7 +258,7 @@ optional_ptr<CatalogEntry> Catalog::CreateCopyFunction(CatalogTransaction transa
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction transaction,
                                                          CreatePragmaFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreatePragmaFunction(transaction, schema, info);
 }
 
@@ -274,7 +275,7 @@ optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction tran
 // Function
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreateFunction(transaction, schema, info);
 }
 
@@ -296,7 +297,7 @@ optional_ptr<CatalogEntry> Catalog::AddFunction(ClientContext &context, CreateFu
 // Collation
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreateCollation(transaction, schema, info);
 }
 
@@ -314,7 +315,7 @@ optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transacti
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(CatalogTransaction transaction,
                                                            CreateCoordinateSystemInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return CreateCoordinateSystem(transaction, schema, info);
 }
 
@@ -331,7 +332,7 @@ optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(CatalogTransaction tr
 // Index
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info) {
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<TableCatalogEntry>();
 	return schema.CreateIndex(transaction, info, table);
 }
@@ -1109,11 +1110,15 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	}
 
 	// If we have a specific schema name and no schemas were found, the schema doesn't exist.
-	// Throw an error about the schema instead of the table
-	if (schemas.empty() && !lookups.empty() && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
+	// Throw an error about the schema instead of the entry. A nested schema path is unambiguous, so we report it
+	// for every entry type; for a single schema level we only do so for tables (the message would otherwise hide
+	// the search-path suggestions that are useful for e.g. functions).
+	auto &lookup_path =
+	    lookups.empty() ? lookup_info.GetQualifiedName().Path() : lookups[0].lookup_info.GetQualifiedName().Path();
+	bool report_missing_schema = lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY || lookup_path.size() > 3;
+	if (schemas.empty() && !lookups.empty() && report_missing_schema) {
 		// the schema qualification is everything between the catalog and the entry name - for a nested schema this
 		// is more than one component
-		auto &lookup_path = lookups[0].lookup_info.GetQualifiedName().Path();
 		vector<string> schema_components;
 		for (idx_t i = lookup_path.size() > 2 ? 1 : 0; i + 1 < lookup_path.size(); i++) {
 			if (!lookup_path[i].empty()) {
@@ -1125,8 +1130,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 			string relation_name = schema_name + "." + lookup_info.GetEntryName();
 			auto except =
 			    CatalogException(lookup_info.GetErrorContext(),
-			                     "Table with name \"%s\" does not exist because schema \"%s\" does not exist.",
-			                     relation_name, schema_name);
+			                     "%s with name \"%s\" does not exist because schema \"%s\" does not exist.",
+			                     CatalogTypeToString(lookup_info.GetCatalogType()), relation_name, schema_name);
 			return {nullptr, nullptr, ErrorData(except)};
 		}
 	}
@@ -1430,7 +1435,7 @@ void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
 		return lookup.schema->Alter(transaction, info);
 	}
 	D_ASSERT(info.if_not_found == OnEntryNotFound::THROW_EXCEPTION);
-	auto &schema = GetSchema(transaction, info.GetQualifiedName().Schema());
+	auto &schema = GetEntrySchema(transaction, info.GetQualifiedName());
 	return schema.Alter(transaction, info);
 }
 

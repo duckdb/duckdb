@@ -59,7 +59,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	auto alias_select = make_uniq<SelectNode>();
 	alias_select->select_list.push_back(make_uniq<StarExpression>());
 	auto alias_table_ref = make_uniq<BaseTableRef>();
-	alias_table_ref->SetQualifiedName(QualifiedName(table.catalog.GetName(), table.schema.name, table.name));
+	alias_table_ref->SetQualifiedName(table.schema.GetQualifiedName(table.name));
 	alias_select->from_table = std::move(alias_table_ref);
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	alias_cte->query_node = std::move(alias_select);
@@ -634,9 +634,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	}
 	auto &table = *table_ptr;
 
-	// Trigger inherits catalog/schema from the base table
-	create_trigger_info.SetQualifiedName(
-	    QualifiedName(table.catalog.GetName(), table.schema.name, create_trigger_info.GetQualifiedName().Name()));
+	// Trigger inherits the catalog and the (possibly nested) schema from the base table
+	create_trigger_info.SetQualifiedName(table.schema.GetQualifiedName(create_trigger_info.GetQualifiedName().Name()));
 
 	auto &schema = BindCreateSchema(create_trigger_info);
 
@@ -836,10 +835,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::INDEX_ENTRY: {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
-		// Plan the table scan.
-		TableDescription table_description(QualifiedName(create_index_info.GetQualifiedName().Catalog(),
-		                                                 create_index_info.GetQualifiedName().Schema(),
-		                                                 create_index_info.table));
+		// Plan the table scan - the table lives in the same (possibly nested) schema as the index.
+		TableDescription table_description(create_index_info.GetQualifiedName().WithName(create_index_info.table));
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		auto plan = std::move(bound_table.plan);
