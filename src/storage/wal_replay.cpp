@@ -719,6 +719,24 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	}
 }
 
+//! Qualify a name stored in the WAL as [schema_path..., name] (i.e. without a catalog component) with the catalog we
+//! are replaying into, so nested schemas can be navigated. Do not use WithCatalog() here: that treats the leading
+//! component of a 3-element path as a catalog, which would drop the outermost schema of a nested path.
+static QualifiedName ReplayEntryName(Catalog &catalog, const QualifiedName &entry_name) {
+	vector<Identifier> path;
+	path.push_back(catalog.GetName());
+	for (idx_t i = 0; i + 1 < entry_name.Path().size(); i++) {
+		path.push_back(entry_name.Path()[i]);
+	}
+	return QualifiedName(std::move(path), entry_name.Name());
+}
+
+//! Re-qualify a serialized [catalog, schema_path..., name] entry name (as carried by a CreateInfo) for the catalog it
+//! is replayed into: the (possibly nested) schema path is kept, the serialized catalog component is replaced
+static QualifiedName ReplayQualifiedName(Catalog &catalog, const QualifiedName &entry_name, const Identifier &name) {
+	return entry_name.WithCatalog(catalog.GetName()).WithName(name);
+}
+
 //===--------------------------------------------------------------------===//
 // Replay Table
 //===--------------------------------------------------------------------===//
@@ -775,6 +793,9 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	if (only_deserialize) {
 		return;
 	}
+	// the WAL carries the catalog name the entry had when it was written - re-root it in the catalog we replay into
+	// (the database can be attached under a different name)
+	info.SetQualifiedName(info.GetQualifiedName().WithCatalog(catalog.GetName()));
 	catalog.Alter(context, info);
 }
 
@@ -837,9 +858,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	auto &table = catalog
-	                  .GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(),
-	                                                                      table_info.GetQualifiedName().Schema(),
-	                                                                      table_info.GetQualifiedName().Name()))
+	                  .GetEntry<TableCatalogEntry>(context, ReplayQualifiedName(catalog, table_info.GetQualifiedName(),
+	                                                                            table_info.GetQualifiedName().Name()))
 	                  .Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
 
@@ -904,7 +924,7 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 	auto entry = WALDropView::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::VIEW_ENTRY;
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
+	info.SetQualifiedName(ReplayEntryName(catalog, entry.qualified_name));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -982,7 +1002,7 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 	DropInfo info;
 
 	info.type = CatalogType::TYPE_ENTRY;
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
+	info.SetQualifiedName(ReplayEntryName(catalog, entry.qualified_name));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1001,9 +1021,9 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 		return;
 	}
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(trigger_info.GetQualifiedName().Catalog(),
-	                                                                          trigger_info.GetQualifiedName().Schema(),
-	                                                                          trigger_info.base_table->Table()));
+	// the trigger lives in the same (possibly nested) schema as its base table
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(
+	    context, ReplayQualifiedName(catalog, trigger_info.GetQualifiedName(), trigger_info.base_table->Table()));
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.CreateTrigger(transaction, trigger_info);
@@ -1014,7 +1034,7 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	DropInfo info;
 	info.type = CatalogType::TRIGGER_ENTRY;
 	auto table_name = std::move(entry.table);
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
+	info.SetQualifiedName(ReplayEntryName(catalog, entry.qualified_name));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1022,8 +1042,9 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"",
 		                        info.GetQualifiedName().Name());
 	}
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(
-	    context, QualifiedName(catalog.GetName(), info.GetQualifiedName().Schema(), table_name));
+	// the trigger lives in the same (possibly nested) schema as its base table
+	auto &table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, info.GetQualifiedName().WithName(std::move(table_name)));
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.DropTrigger(transaction, info.GetQualifiedName().Name(), info.cascade);
@@ -1046,7 +1067,7 @@ void WriteAheadLogDeserializer::ReplayDropSequence() {
 	auto entry = WALDropSequence::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::SEQUENCE_ENTRY;
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
+	info.SetQualifiedName(ReplayEntryName(catalog, entry.qualified_name));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1062,8 +1083,7 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	}
 
 	// fetch the sequence from the catalog
-	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(
-	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.name)));
+	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, ReplayEntryName(catalog, entry.qualified_name));
 	seq.ReplayValue(entry.usage_count, entry.counter, entry.last_value);
 }
 
@@ -1084,7 +1104,7 @@ void WriteAheadLogDeserializer::ReplayDropMacro() {
 	auto entry = WALDropMacro::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::MACRO_ENTRY;
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
+	info.SetQualifiedName(ReplayEntryName(catalog, entry.qualified_name));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1108,7 +1128,7 @@ void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 	auto entry = WALDropTableMacro::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
+	info.SetQualifiedName(ReplayEntryName(catalog, entry.qualified_name));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1137,8 +1157,9 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	const auto schema_name = create_info->GetQualifiedName().Schema();
 	const auto table_name = info.table;
 
-	auto &entry =
-	    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), schema_name, table_name));
+	// the table lives in the same (possibly nested) schema as the index
+	auto &entry = catalog.GetEntry<TableCatalogEntry>(
+	    context, ReplayQualifiedName(catalog, create_info->GetQualifiedName(), table_name));
 	auto &table = entry.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
 	auto &io_manager = TableIOManager::Get(storage);
@@ -1157,7 +1178,7 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 	auto entry = WALDropIndex::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::INDEX_ENTRY;
-	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
+	info.SetQualifiedName(ReplayEntryName(catalog, entry.qualified_name));
 	if (DeserializeOnly()) {
 		return;
 	}
