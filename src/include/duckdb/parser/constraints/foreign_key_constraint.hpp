@@ -28,7 +28,8 @@ public:
 
 public:
 	DUCKDB_API string ToString() const override;
-
+	//! Get the generated name of the foreign key constraint
+	DUCKDB_API string GetName(const string& table_name) const;
 	DUCKDB_API unique_ptr<Constraint> Copy() const override;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const override;

@@ -357,6 +357,13 @@ unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCata
 	throw NotImplementedException("BindAlterAddIndex not supported by this catalog");
 }
 
+unique_ptr<LogicalOperator> Catalog::BindAlterAddForeignKey(Binder &binder, TableCatalogEntry &table_entry,
+                                                       unique_ptr<LogicalOperator> plan,
+                                                       unique_ptr<CreateIndexInfo> create_info,
+                                                       unique_ptr<AlterTableInfo> alter_info) {
+	throw NotImplementedException("BindAlterAddForeignKey not supported by this catalog");
+}
+
 unique_ptr<TableRef> Catalog::RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) {
 	throw NotImplementedException("RemoteExecute(QueryNode) not supported by this catalog");
 }
