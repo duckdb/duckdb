@@ -65,24 +65,7 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	// sibling of the run root). Pointing HOME at {TEST_DIR} here would put ~/.duckdb inside a dir tests
 	// whitelist via allowed_directories, breaking permission tests (e.g. INSTALL-is-denied).
 	auto &test_config = TestConfiguration::Get();
-
-	string initial_dbpath = test_config.GetInitialDBPath();
-	test_config.ProcessPath(initial_dbpath, name);
-	if (!initial_dbpath.empty()) {
-		auto test_path = StringUtil::Replace(initial_dbpath, test_dir_path, string());
-		test_path = StringUtil::Replace(test_path, "\\", "/");
-		auto components = StringUtil::Split(test_path, "/");
-		components.pop_back();
-		string total_path = test_dir_path;
-		for (auto &component : components) {
-			if (component.empty()) {
-				continue;
-			}
-			total_path = TestJoinPath(total_path, component);
-			TestCreateDirectory(total_path);
-		}
-	}
-	SQLLogicTestRunner runner(std::move(initial_dbpath));
+	SQLLogicTestRunner runner(string {});
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 
 	string prev_directory;
@@ -105,27 +88,49 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 		auto test_working_dir = name.substr(0, found);
 		test_config.ChangeWorkingDirectory(test_working_dir);
 		// After the chdir, the temp dir (materialized above at the main cwd) is only reachable by its
-		// absolute path -- pin TEMP_DIR/{TEST_DIR} to it so `load {TEST_DIR}/x.db` & friends resolve.
+		// absolute path.
 		temp_dir_for_test = test_dir_absolute;
-		test_config.SetTestDirOverride(test_dir_absolute);
 	}
 
 	// setup this test runner with Config-based env, then override with ephemerals (only WORKING_DIR at this point)
 	for (auto &kv : test_config.GetTestEnvMap()) {
-		runner.environment_variables[kv.first] = kv.second;
+		runner.SetEnvironmentVariable(kv.first, kv.second);
 	}
 	// Per runner vars
-	runner.environment_variables["WORKING_DIR"] = TestGetCurrentDirectory();
-	runner.environment_variables["TEST_NAME"] = name;
-	runner.environment_variables["TEST_NAME__NO_SLASH"] = StringUtil::Replace(name, "/", "_");
-	runner.environment_variables["TEST_ID"] = TestNameToId(name); // full test name, sanitized to a path component
+	auto working_dir = TestGetCurrentDirectory();
+	auto base_test_name = StringUtil::Replace(name, "/", "_");
+	runner.SetEnvironmentVariable("WORKING_DIR", working_dir);
+	runner.SetEnvironmentVariable("WORKING_DIRECTORY", working_dir);
+	runner.SetEnvironmentVariable("TEST_NAME", name);
+	runner.SetEnvironmentVariable("TEST_NAME__NO_SLASH", base_test_name);
+	runner.SetEnvironmentVariable("BASE_TEST_NAME", base_test_name);
+	runner.SetEnvironmentVariable("TEST_ID", TestNameToId(name)); // full test name, sanitized to a path component
 	// TEMP_DIR -> assigned per-test to $BASE[/$RUN_ID][/$TEST_ID] -- RUN_ID and TEST_ID when enabled
 	// (absolute in the extension case; see temp_dir_for_test above).
-	runner.environment_variables["TEMP_DIR"] = temp_dir_for_test;
+	runner.SetEnvironmentVariable("TEMP_DIR", temp_dir_for_test);
+	runner.SetEnvironmentVariable("TEST_DIR", temp_dir_for_test);
 	// TEMP_DIR_ABSOLUTE is always the main-cwd-anchored absolute path captured before any extension
 	// chdir -- computing it from the post-chdir cwd here would point at the wrong (extension) tree.
-	runner.environment_variables["TEMP_DIR_ABSOLUTE"] = test_dir_absolute;
-	runner.environment_variables["CATALOG_DIR"] = temp_dir_for_test + "/" + runner.environment_variables["TEST_UUID"];
+	runner.SetEnvironmentVariable("TEMP_DIR_ABSOLUTE", test_dir_absolute);
+	runner.SetEnvironmentVariable("CATALOG_DIR", temp_dir_for_test + "/" + runner.GetEnvironmentVariable("TEST_UUID"));
+	runner.SetEnvironmentVariable("BUILD_DIRECTORY", DUCKDB_BUILD_DIRECTORY);
+
+	auto initial_dbpath = runner.ReplaceKeywords(test_config.GetInitialDBPath());
+	runner.dbpath = initial_dbpath;
+	if (!initial_dbpath.empty()) {
+		auto test_path = StringUtil::Replace(initial_dbpath, temp_dir_for_test, string());
+		test_path = StringUtil::Replace(test_path, "\\", "/");
+		auto components = StringUtil::Split(test_path, "/");
+		components.pop_back();
+		string total_path = temp_dir_for_test;
+		for (auto &component : components) {
+			if (component.empty()) {
+				continue;
+			}
+			total_path = TestJoinPath(total_path, component);
+			TestCreateDirectory(total_path);
+		}
+	}
 
 	runner.EmitBegin(name);
 
@@ -147,7 +152,6 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	}
 
 	if (!input && AUTO_SWITCH_TEST_DIR) {
-		test_config.ClearTestDirOverride();
 		test_config.ChangeWorkingDirectory(prev_directory);
 	}
 

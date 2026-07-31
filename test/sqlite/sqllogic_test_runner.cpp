@@ -192,6 +192,7 @@ void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
 }
 
 void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
+	definition.loop_iterator_names = StringUtil::Split(definition.loop_iterator_name, ",");
 	auto loop = make_uniq<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
@@ -307,7 +308,6 @@ unique_ptr<Connection> SQLLogicTestRunner::ConnectToDatabase(DuckDB &db_ref) {
 	auto &test_config = TestConfiguration::Get();
 	auto init_cmd = test_config.OnInitCommand() + ";" + test_config.OnConnectionCommand();
 	if (!init_cmd.empty()) {
-		test_config.ProcessPath(init_cmd, file_name);
 		auto res = result->Query(ReplaceKeywords(init_cmd));
 		if (res->HasError()) {
 			FAIL("Startup queries provided via on_init failed: " + res->GetError());
@@ -320,76 +320,186 @@ void SQLLogicTestRunner::Reconnect() {
 	con = ConnectToDatabase(*db);
 }
 
-void StringReplaceLoopIterator(string &text, const string &loop_iterator_name, const string &replacement,
-                               const string &test_name) {
-	auto loop_it = "{" + loop_iterator_name + "}";
-	auto deprecated_loop_it = "$" + loop_it;
-	if (StringUtil::Contains(text, deprecated_loop_it)) {
-		Printer::PrintF("Replacing deprecated loop iterator %s in test \"%s\" - please use the new loop iterator %s",
-		                deprecated_loop_it, test_name, loop_it);
-		text = StringUtil::Replace(text, deprecated_loop_it, replacement);
-	}
-	text = StringUtil::Replace(text, loop_it, replacement);
-}
+enum class VariableSyntax : uint8_t {
+	CANONICAL,
+	LEGACY_BRACED,
+	LEGACY_TEST_DIR,
+	LEGACY_WORKING_DIRECTORY,
+	LEGACY_BUILD_DIRECTORY
+};
 
-string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
-	replacement = ReplaceKeywords(replacement);
-	if (StringUtil::Contains(loop_iterator_name, ",")) {
-		auto name_splits = StringUtil::Split(loop_iterator_name, ",");
-		auto replacement_splits = StringUtil::Split(replacement, ",");
-		if (name_splits.size() != replacement_splits.size()) {
-			FAIL("foreach loop: number of commas in loop iterator (" + loop_iterator_name +
-			     ") does not match number of commas in replacement (" + replacement + ")");
+template <class LOOKUP, class WARN>
+static string ReplaceVariables(string input, LOOKUP lookup, WARN warn, bool replace_legacy_paths) {
+	string result;
+	idx_t copy_start = 0;
+	idx_t position = 0;
+	unordered_set<string> warned_tokens;
+
+	while (position < input.size()) {
+		idx_t token_start = position;
+		idx_t token_end;
+		string variable_name;
+		VariableSyntax syntax = VariableSyntax::CANONICAL;
+		bool found_token = false;
+
+		if (replace_legacy_paths && input[position] == '_') {
+			if (input.compare(position, 12, "__TEST_DIR__") == 0) {
+				variable_name = "TEST_DIR";
+				token_end = position + 12;
+				syntax = VariableSyntax::LEGACY_TEST_DIR;
+				found_token = true;
+			} else if (input.compare(position, 21, "__WORKING_DIRECTORY__") == 0) {
+				variable_name = "WORKING_DIRECTORY";
+				token_end = position + 21;
+				syntax = VariableSyntax::LEGACY_WORKING_DIRECTORY;
+				found_token = true;
+			} else if (input.compare(position, 19, "__BUILD_DIRECTORY__") == 0) {
+				variable_name = "BUILD_DIRECTORY";
+				token_end = position + 19;
+				syntax = VariableSyntax::LEGACY_BUILD_DIRECTORY;
+				found_token = true;
+			}
 		}
-		for (idx_t i = 0; i < name_splits.size(); i++) {
-			StringReplaceLoopIterator(text, name_splits[i], replacement_splits[i], file_name);
+		if (!found_token) {
+			idx_t name_start;
+			if (input[position] == '{') {
+				name_start = position + 1;
+			} else if (input[position] == '$' && position + 1 < input.size() && input[position + 1] == '{') {
+				name_start = position + 2;
+				syntax = VariableSyntax::LEGACY_BRACED;
+			} else {
+				position++;
+				continue;
+			}
+			auto close_brace = input.find('}', name_start);
+			if (close_brace == string::npos) {
+				break;
+			}
+			variable_name = input.substr(name_start, close_brace - name_start);
+			token_end = close_brace + 1;
 		}
-		return text;
-	} else {
-		StringReplaceLoopIterator(text, loop_iterator_name, replacement, file_name);
-		return text;
+
+		string replacement;
+		if (!lookup(variable_name, replacement)) {
+			position++;
+			continue;
+		}
+		if (result.empty()) {
+			result.reserve(input.size() + replacement.size());
+		}
+		result.append(input, copy_start, token_start - copy_start);
+		result += replacement;
+		copy_start = token_end;
+		position = token_end;
+
+		if (syntax != VariableSyntax::CANONICAL) {
+			auto original_token = input.substr(token_start, token_end - token_start);
+			if (warned_tokens.insert(original_token).second) {
+				warn(syntax, original_token, variable_name);
+			}
+		}
 	}
+	if (copy_start == 0) {
+		return input;
+	}
+	result.append(input, copy_start, input.size() - copy_start);
+	return result;
 }
 
 string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinition> &loops) {
-	for (auto &active_loop : loops) {
-		if (active_loop.tokens.empty()) {
-			// regular loop
-			text = ReplaceLoopIterator(text, active_loop.loop_iterator_name, to_string(active_loop.loop_idx));
-		} else {
-			// foreach loop
-			text = ReplaceLoopIterator(text, active_loop.loop_iterator_name, active_loop.tokens[active_loop.loop_idx]);
+	auto lookup = [&](const string &name, string &replacement) {
+		for (auto &active_loop : loops) {
+			for (idx_t name_idx = 0; name_idx < active_loop.loop_iterator_names.size(); name_idx++) {
+				if (active_loop.loop_iterator_names[name_idx] != name) {
+					continue;
+				}
+				if (active_loop.tokens.empty()) {
+					replacement = to_string(active_loop.loop_idx);
+				} else if (active_loop.loop_iterator_names.size() == 1) {
+					replacement = active_loop.tokens[active_loop.loop_idx];
+				} else {
+					replacement = active_loop.token_values[active_loop.loop_idx][name_idx];
+				}
+				return true;
+			}
 		}
-	}
-	return text;
+		return false;
+	};
+	auto warn = [&](VariableSyntax syntax, const string &original_token, const string &name) {
+		if (!ShouldWarnDeprecated(original_token)) {
+			return;
+		}
+		D_ASSERT(syntax == VariableSyntax::LEGACY_BRACED);
+		Printer::PrintF("Replacing deprecated loop iterator %s in test \"%s\" - please use the new loop iterator {%s}",
+		                original_token, file_name, name);
+	};
+	return ReplaceVariables(std::move(text), lookup, warn, false);
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
-	// ProcessPath replaced, can simplify this into simple `ReplaceVariables` loop.
-	//
-	// Replace environment variables in the SQL
-	for (auto &it : environment_variables) {
-		auto &name = it.first;
-		auto &value = it.second;
-		auto legacy_syntax = StringUtil::Format("${%s}", name);
-		auto env_syntax = StringUtil::Format("{%s}", name);
-		if (StringUtil::Contains(input, legacy_syntax)) {
-			Printer::PrintF("Replacing deprecated %s in test %s - please replace with %s", legacy_syntax, file_name,
-			                env_syntax);
-			input = StringUtil::Replace(input, legacy_syntax, value);
+	string uuid;
+	auto lookup = [&](const string &name, string &replacement) {
+		auto entry = environment_variables.find(name);
+		if (entry != environment_variables.end()) {
+			replacement = entry->second;
+			return true;
 		}
-		input = StringUtil::Replace(input, env_syntax, value);
-	}
-	auto &test_config = TestConfiguration::Get();
-	test_config.ProcessPath(input, file_name);
-	input = StringUtil::Replace(input, "{BUILD_DIRECTORY}", DUCKDB_BUILD_DIRECTORY);
-	if (StringUtil::Contains(input, "__BUILD_DIRECTORY__")) {
-		Printer::PrintF("Replacing deprecated __BUILD_DIRECTORY__ in test %s - please replace with {BUILD_DIRECTORY}",
-		                file_name);
-		input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
-	}
+		if (name == "UUID") {
+			if (uuid.empty()) {
+				uuid = UUID::ToString(UUID::GenerateRandomUUID());
+			}
+			replacement = uuid;
+			return true;
+		}
+		return false;
+	};
+	auto warn = [&](VariableSyntax syntax, const string &original_token, const string &name) {
+		if (!ShouldWarnDeprecated(original_token)) {
+			return;
+		}
+		switch (syntax) {
+		case VariableSyntax::LEGACY_BRACED:
+			Printer::PrintF("Replacing deprecated %s in test %s - please replace with {%s}", original_token, file_name,
+			                name);
+			break;
+		case VariableSyntax::LEGACY_TEST_DIR:
+			Printer::PrintF("Replacing deprecated string __TEST_DIR__ in path \"%s\" - please replace with {TEST_DIR}",
+			                original_token);
+			break;
+		case VariableSyntax::LEGACY_WORKING_DIRECTORY:
+			Printer::PrintF("Replacing deprecated string __WORKING_DIRECTORY__ in path \"%s\" - please replace with "
+			                "{WORKING_DIRECTORY}",
+			                original_token);
+			break;
+		case VariableSyntax::LEGACY_BUILD_DIRECTORY:
+			Printer::PrintF(
+			    "Replacing deprecated __BUILD_DIRECTORY__ in test %s - please replace with {BUILD_DIRECTORY}",
+			    file_name);
+			break;
+		default:
+			break;
+		}
+	};
+	return ReplaceVariables(std::move(input), lookup, warn, true);
+}
 
-	return input;
+void SQLLogicTestRunner::SetEnvironmentVariable(const string &name, string value) {
+	environment_variables[name] = std::move(value);
+}
+
+bool SQLLogicTestRunner::HasEnvironmentVariable(const string &name) const {
+	return environment_variables.count(name) != 0;
+}
+
+const string &SQLLogicTestRunner::GetEnvironmentVariable(const string &name) const {
+	auto entry = environment_variables.find(name);
+	D_ASSERT(entry != environment_variables.end());
+	return entry->second;
+}
+
+bool SQLLogicTestRunner::ShouldWarnDeprecated(const string &token) {
+	lock_guard<mutex> guard(variable_warning_lock);
+	return warned_deprecated_tokens.insert(token).second;
 }
 
 static string ParseExplanation(SQLLogicParser &parser, const vector<string> &params, size_t &index) {
@@ -1114,7 +1224,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 					auto val = GetVariableReplacement(var_value, variable_name);
 					var_value = val.ToString();
 				}
-				environment_variables[var_name] = var_value;
+				SetEnvironmentVariable(var_name, std::move(var_value));
 			} else {
 				parser.Fail("unrecognized set parameter: %s", token.parameters[0]);
 			}
@@ -1187,7 +1297,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 			}
 			auto env_var = token.parameters[0];
 			auto env_actual = test_config.GetTestEnv(env_var, token.parameters[1]);
-			environment_variables[env_var] = env_actual;
+			SetEnvironmentVariable(env_var, env_actual);
 			add_env_tag(file_tags, env_var, &env_actual);
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
@@ -1236,10 +1346,10 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
 			}
 
-			if (!test_env_defined && environment_variables.count(env_var)) {
+			if (!test_env_defined && HasEnvironmentVariable(env_var)) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
-			environment_variables[env_var] = env_actual;
+			SetEnvironmentVariable(env_var, env_actual);
 			add_env_tag(file_tags, token.parameters[0], token.parameters.size() == 2 ? &token.parameters[1] : nullptr);
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
