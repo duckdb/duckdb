@@ -244,16 +244,25 @@ bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &condit
 		bool condition_holds = false;
 		bool found_loop = false;
 		for (auto &loop : context.running_loops) {
-			if (loop.loop_iterator_name != condition.keyword) {
-				continue;
-			}
-			found_loop = true;
-
 			string loop_value;
-			if (loop.tokens.empty()) {
-				loop_value = to_string(loop.loop_idx);
-			} else {
-				loop_value = loop.tokens[loop.loop_idx];
+			bool found_this_loop = false;
+			for (idx_t name_idx = 0; name_idx < loop.loop_iterator_names.size(); name_idx++) {
+				if (loop.loop_iterator_names[name_idx] != condition.keyword) {
+					continue;
+				}
+				found_loop = true;
+				found_this_loop = true;
+				if (loop.tokens.empty()) {
+					loop_value = to_string(loop.loop_idx);
+				} else if (loop.loop_iterator_names.size() == 1) {
+					loop_value = loop.tokens[loop.loop_idx];
+				} else {
+					loop_value = loop.token_values[loop.loop_idx][name_idx];
+				}
+				break;
+			}
+			if (!found_this_loop) {
+				continue;
 			}
 			if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
 			    condition.comparison == ExpressionType::COMPARE_NOTEQUAL) {
@@ -284,6 +293,7 @@ bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &condit
 					throw BinderException("Unrecognized comparison for loop condition");
 				}
 			}
+			break;
 		}
 		if (!found_loop) {
 			throw BinderException("Condition in onlyif/skipif not found: %s must be a loop iterator name",
@@ -629,6 +639,19 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 			if (!ForEachTokenReplace(token, loop_def.tokens)) {
 				loop_def.tokens.push_back(token);
 			}
+		}
+		loop_def.token_values.clear();
+		for (auto &token : loop_def.tokens) {
+			token = runner.ReplaceKeywords(std::move(token));
+			if (loop_def.loop_iterator_names.size() == 1) {
+				continue;
+			}
+			auto values = StringUtil::Split(token, ",");
+			if (values.size() != loop_def.loop_iterator_names.size()) {
+				FAIL("foreach loop: number of commas in loop iterator (" + loop_def.loop_iterator_name +
+				     ") does not match number of commas in replacement (" + token + ")");
+			}
+			loop_def.token_values.push_back(std::move(values));
 		}
 		loop_def.loop_end = loop_def.tokens.size();
 	}

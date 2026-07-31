@@ -50,14 +50,6 @@ public:
 	string GetWorkingDirectory();
 	bool ChangeWorkingDirectory(const string &dir); // true -> changed
 
-	void ProcessPath(string &path, const string &test_name);
-	// Override the value {TEST_DIR}/__TEST_DIR__ expands to during ProcessPath. Used by the extension
-	// (AUTO_SWITCH_TEST_DIR) runner: after it chdir's into the extension source dir, the default
-	// (cwd-relative) TestDirectoryPath() would resolve to a non-existent sibling, so the runner pins
-	// {TEST_DIR} to the absolute, main-cwd-anchored temp dir. Empty (the default) uses TestDirectoryPath().
-	void SetTestDirOverride(const string &absolute_test_dir);
-	void ClearTestDirOverride();
-
 	string GetDescription();
 	string GetInitialDBPath();
 	optional_idx GetMaxThreads();
@@ -124,8 +116,6 @@ private:
 	// and get env updates to match
 	string working_dir;
 	string test_uuid;
-	// When non-empty, the value {TEST_DIR}/__TEST_DIR__ resolve to in ProcessPath (see SetTestDirOverride).
-	string test_dir_override;
 	unordered_map<string, string> test_env;
 
 	vector<unordered_set<string>> select_tag_sets;

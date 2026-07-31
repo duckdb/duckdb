@@ -1,0 +1,75 @@
+# name: test/sql/sqllogictest/variable_replacement.test
+# description: Test SQLLogicTest variable replacement
+# group: [sqllogictest]
+
+query IIII
+SELECT '{TEST_DIR}' = '{TEMP_DIR}',
+       '{WORKING_DIRECTORY}' = '{WORKING_DIR}',
+       '{BUILD_DIRECTORY}' = '{BUILD_DIR}',
+       '{BASE_TEST_NAME}' = '{TEST_NAME__NO_SLASH}'
+----
+true	true	true	true
+
+query I
+SELECT '{UUID}' = '{UUID}' AND TRY_CAST('{UUID}' AS UUID) IS NOT NULL
+----
+true
+
+query IIII
+SELECT '${TEST_DIR}' = '{TEST_DIR}',
+       '__TEST_DIR__' = '{TEST_DIR}',
+       '__WORKING_DIRECTORY__' = '{WORKING_DIRECTORY}',
+       '__BUILD_DIRECTORY__' = '{BUILD_DIRECTORY}'
+----
+true	true	true	true
+
+# Unknown braces are SQL syntax, not test variables.
+query I
+SELECT {'key': 42}.key
+----
+42
+
+set variable INNER replaced
+
+set variable OUTER {INNER}
+
+# Replacement values are not recursively expanded in the same phase.
+query T
+SELECT '{OUTER}'
+----
+{INNER}
+
+foreach left,right 1,one 2,two
+
+query I
+SELECT ({left} = 1 AND '{right}' = 'one') OR ({left} = 2 AND '{right}' = 'two')
+----
+true
+
+endloop
+
+set variable LOOP_VALUE {i}
+
+loop i 1 3
+
+# A global replacement can still be expanded by the later loop phase.
+query I
+SELECT {LOOP_VALUE} = {i}
+----
+true
+
+endloop
+
+foreach value outer
+
+foreach value inner
+
+# Preserve the existing outer-loop precedence for duplicate iterator names.
+query T
+SELECT '{value}'
+----
+outer
+
+endloop
+
+endloop

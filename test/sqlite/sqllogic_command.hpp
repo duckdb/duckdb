@@ -19,11 +19,13 @@ enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNO
 
 struct LoopDefinition {
 	string loop_iterator_name;
+	vector<string> loop_iterator_names;
 	idx_t loop_idx;
 	idx_t loop_start;
 	idx_t loop_end;
 	bool is_parallel;
 	vector<string> tokens;
+	vector<vector<string>> token_values;
 	bool is_skipped = false;
 };
 

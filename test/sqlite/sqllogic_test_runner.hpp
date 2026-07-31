@@ -74,7 +74,6 @@ public:
 	bool original_sqlite_test = false;
 	bool output_sql = false;
 	bool skip_reload = false;
-	unordered_map<string, string> environment_variables;
 	string local_extension_repo;
 	TestConfiguration::ExtensionAutoLoadingMode autoloading_mode;
 	bool autoinstall_is_checked;
@@ -113,6 +112,9 @@ public:
 	virtual void LoadDatabase(string dbpath, bool load_extensions);
 
 	string ReplaceKeywords(string input);
+	void SetEnvironmentVariable(const string &name, string value);
+	bool HasEnvironmentVariable(const string &name) const;
+	const string &GetEnvironmentVariable(const string &name) const;
 
 	bool InLoop() {
 		return !active_loops.empty();
@@ -121,7 +123,6 @@ public:
 	void Reconnect();
 	void StartLoop(LoopDefinition loop);
 	void EndLoop();
-	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 	void SkipTest(const string &reason);
@@ -141,8 +142,12 @@ private:
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
 	void ConfigureDefaultInMemoryTemporaryDirectory(const string &script);
 	static void AddSkipReason(const string &reason);
+	bool ShouldWarnDeprecated(const string &token);
 
 private:
+	unordered_map<string, string> environment_variables;
+	mutex variable_warning_lock;
+	unordered_set<string> warned_deprecated_tokens;
 	static mutex skip_reason_lock;
 	static map<string, idx_t> skip_reason_counts;
 };
