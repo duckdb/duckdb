@@ -33,18 +33,22 @@ public:
 	JSONStructureDescription &GetOrCreateDescription(LogicalTypeId type);
 
 	bool ContainsVarchar() const;
-	void InitializeCandidateTypes(idx_t max_depth, bool convert_strings_to_integers, idx_t depth = 0);
+	void InitializeCandidateTypes(idx_t max_depth, bool convert_strings_to_integers,
+	                              bool user_specified_timestamp_format = false, idx_t depth = 0);
 	void RefineCandidateTypes(yyjson_val *vals[], idx_t val_count, Vector &string_vector, ArenaAllocator &allocator,
-	                          MutableDateFormatMap &date_format_map);
+	                          MutableDateFormatMap &date_format_map, bool user_specified_timestamp_format = false);
 
 private:
 	void RefineCandidateTypesArray(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                               ArenaAllocator &allocator, MutableDateFormatMap &date_format_map);
+	                               ArenaAllocator &allocator, MutableDateFormatMap &date_format_map,
+	                               bool user_specified_timestamp_format);
 	void RefineCandidateTypesObject(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                                ArenaAllocator &allocator, MutableDateFormatMap &date_format_map);
+	                                ArenaAllocator &allocator, MutableDateFormatMap &date_format_map,
+	                                bool user_specified_timestamp_format);
 	void RefineCandidateTypesString(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                                MutableDateFormatMap &date_format_map);
-	void EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, MutableDateFormatMap &date_format_map);
+	                                MutableDateFormatMap &date_format_map, bool user_specified_timestamp_format);
+	void EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, MutableDateFormatMap &date_format_map,
+	                             bool user_specified_timestamp_format);
 	bool EliminateCandidateFormats(idx_t vec_count, Vector &string_vector, const Vector &result_vector,
 	                               MutableDateFormatMap &date_format_map);
 
@@ -83,6 +87,11 @@ public:
 
 	//! Whether any UBIGINT value exceeds the BIGINT range (i.e., >= 2^63)
 	bool has_large_ubigint = false;
+
+	//! Sticky ISO-8601 offset observation across refinement vectors (issue #14919).
+	//! If both are true the field is mixed → candidates cleared (VARCHAR).
+	bool has_timestamp_with_offset = false;
+	bool has_timestamp_without_offset = false;
 };
 
 struct JSONStructure {

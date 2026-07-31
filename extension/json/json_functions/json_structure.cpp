@@ -112,7 +112,7 @@ bool JSONStructureNode::ContainsVarchar() const {
 }
 
 void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bool convert_strings_to_integers,
-                                                 const idx_t depth) {
+                                                 const bool user_specified_timestamp_format, const idx_t depth) {
 	if (depth >= max_depth) {
 		return;
 	}
@@ -122,11 +122,21 @@ void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bo
 	}
 	auto &description = descriptions[0];
 	if (description.type == LogicalTypeId::VARCHAR && !initialized) {
-		// We loop through the candidate types and format templates from back to front
+		// We loop through the candidate types and format templates from back to front.
+		// TIMESTAMP_TZ is only a candidate when the user did not pass timestamp_format=; never infer that
+		// from the date-format map (auto-detect can also converge on a single format).
+		// Trial order puts TIMESTAMP_TZ before TIMESTAMP so back-to-front tries TZ first (issue #14919).
 		if (convert_strings_to_integers) {
-			// TIMESTAMP_TZ before TIMESTAMP so back-to-front trial tries TZ first (issue #14919)
-			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::BIGINT, LogicalTypeId::TIMESTAMP,
-			                               LogicalTypeId::TIMESTAMP_TZ, LogicalTypeId::DATE, LogicalTypeId::TIME};
+			if (user_specified_timestamp_format) {
+				description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::BIGINT, LogicalTypeId::TIMESTAMP,
+				                               LogicalTypeId::DATE, LogicalTypeId::TIME};
+			} else {
+				description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::BIGINT, LogicalTypeId::TIMESTAMP,
+				                               LogicalTypeId::TIMESTAMP_TZ, LogicalTypeId::DATE, LogicalTypeId::TIME};
+			}
+		} else if (user_specified_timestamp_format) {
+			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::TIMESTAMP, LogicalTypeId::DATE,
+			                               LogicalTypeId::TIME};
 		} else {
 			description.candidate_types = {LogicalTypeId::UUID, LogicalTypeId::TIMESTAMP, LogicalTypeId::TIMESTAMP_TZ,
 			                               LogicalTypeId::DATE, LogicalTypeId::TIME};
@@ -134,13 +144,15 @@ void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bo
 		initialized = true;
 	} else {
 		for (auto &child : description.children) {
-			child.InitializeCandidateTypes(max_depth, convert_strings_to_integers, depth + 1);
+			child.InitializeCandidateTypes(max_depth, convert_strings_to_integers, user_specified_timestamp_format,
+			                               depth + 1);
 		}
 	}
 }
 
 void JSONStructureNode::RefineCandidateTypes(yyjson_val *vals[], const idx_t val_count, Vector &string_vector,
-                                             ArenaAllocator &allocator, MutableDateFormatMap &date_format_map) {
+                                             ArenaAllocator &allocator, MutableDateFormatMap &date_format_map,
+                                             const bool user_specified_timestamp_format) {
 	if (descriptions.size() != 1) {
 		// We can't refine types if we have more than 1 description (yet), defaults to JSON type for now
 		return;
@@ -151,18 +163,22 @@ void JSONStructureNode::RefineCandidateTypes(yyjson_val *vals[], const idx_t val
 	auto &description = descriptions[0];
 	switch (description.type) {
 	case LogicalTypeId::LIST:
-		return RefineCandidateTypesArray(vals, val_count, string_vector, allocator, date_format_map);
+		return RefineCandidateTypesArray(vals, val_count, string_vector, allocator, date_format_map,
+		                                 user_specified_timestamp_format);
 	case LogicalTypeId::STRUCT:
-		return RefineCandidateTypesObject(vals, val_count, string_vector, allocator, date_format_map);
+		return RefineCandidateTypesObject(vals, val_count, string_vector, allocator, date_format_map,
+		                                  user_specified_timestamp_format);
 	case LogicalTypeId::VARCHAR:
-		return RefineCandidateTypesString(vals, val_count, string_vector, date_format_map);
+		return RefineCandidateTypesString(vals, val_count, string_vector, date_format_map,
+		                                  user_specified_timestamp_format);
 	default:
 		return;
 	}
 }
 
 void JSONStructureNode::RefineCandidateTypesArray(yyjson_val *vals[], const idx_t val_count, Vector &string_vector,
-                                                  ArenaAllocator &allocator, MutableDateFormatMap &date_format_map) {
+                                                  ArenaAllocator &allocator, MutableDateFormatMap &date_format_map,
+                                                  const bool user_specified_timestamp_format) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::LIST);
 	auto &desc = descriptions[0];
 	D_ASSERT(desc.children.size() == 1);
@@ -189,11 +205,13 @@ void JSONStructureNode::RefineCandidateTypesArray(yyjson_val *vals[], const idx_
 			}
 		}
 	}
-	child.RefineCandidateTypes(child_vals, total_list_size, string_vector, allocator, date_format_map);
+	child.RefineCandidateTypes(child_vals, total_list_size, string_vector, allocator, date_format_map,
+	                           user_specified_timestamp_format);
 }
 
 void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], const idx_t val_count, Vector &string_vector,
-                                                   ArenaAllocator &allocator, MutableDateFormatMap &date_format_map) {
+                                                   ArenaAllocator &allocator, MutableDateFormatMap &date_format_map,
+                                                   const bool user_specified_timestamp_format) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = descriptions[0];
 
@@ -245,51 +263,68 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], const idx
 
 	for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
 		desc.children[child_idx].RefineCandidateTypes(child_vals[child_idx], val_count, string_vector, allocator,
-		                                              date_format_map);
+		                                              date_format_map, user_specified_timestamp_format);
 	}
 }
 
 void JSONStructureNode::RefineCandidateTypesString(yyjson_val *vals[], const idx_t val_count, Vector &string_vector,
-                                                   MutableDateFormatMap &date_format_map) {
+                                                   MutableDateFormatMap &date_format_map,
+                                                   const bool user_specified_timestamp_format) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 	if (descriptions[0].candidate_types.empty()) {
 		return;
 	}
 	static JSONTransformOptions OPTIONS;
 	JSONTransform::GetStringVector(vals, val_count, LogicalType::SQLNULL, string_vector, OPTIONS);
-	EliminateCandidateTypes(val_count, string_vector, date_format_map);
+	EliminateCandidateTypes(val_count, string_vector, date_format_map, user_specified_timestamp_format);
 }
 
-static bool StringVectorHasTimezoneOffsets(const Vector &string_vector, const idx_t count) {
-	// TIMESTAMP_TZ auto-detect should only win when every non-null value carries an offset/Z.
-	// Otherwise plain timestamps would all become TIMESTAMPTZ.
+// Update sticky offset/plain-timestamp flags from this vector's non-null strings.
+// Mixed (both flags) → VARCHAR: neither TIMESTAMPTZ (would invent session TZ for naive values)
+// nor TIMESTAMP (would drop offsets) is safe.
+static void UpdateTimestampOffsetFlags(JSONStructureDescription &description, const Vector &string_vector,
+                                       const idx_t count) {
 	const auto strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &validity = FlatVector::Validity(string_vector);
-	bool saw_value = false;
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;
 		}
-		saw_value = true;
 		timestamp_t ts;
 		bool has_offset = false;
 		string_t tz(nullptr, 0);
-		auto res = Timestamp::TryConvertTimestampTZ(strings[i].GetData(), strings[i].GetSize(), ts, true, has_offset, tz);
+		auto res =
+		    Timestamp::TryConvertTimestampTZ(strings[i].GetData(), strings[i].GetSize(), ts, true, has_offset, tz);
 		if (res != TimestampCastResult::SUCCESS && res != TimestampCastResult::STRICT_UTC) {
-			return false;
+			continue; // not a timestamp string — other candidates handle it
 		}
-		if (!has_offset) {
-			return false;
+		if (has_offset) {
+			description.has_timestamp_with_offset = true;
+		} else {
+			description.has_timestamp_without_offset = true;
+		}
+		if (description.has_timestamp_with_offset && description.has_timestamp_without_offset) {
+			return;
 		}
 	}
-	return saw_value;
 }
 
 void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &string_vector,
-                                                MutableDateFormatMap &date_format_map) {
+                                                MutableDateFormatMap &date_format_map,
+                                                const bool user_specified_timestamp_format) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 	auto &description = descriptions[0];
 	auto &candidate_types = description.candidate_types;
+
+	// Monotonic across vectors: once we have seen both offset and plain timestamps, refuse to guess.
+	if (!user_specified_timestamp_format) {
+		UpdateTimestampOffsetFlags(description, string_vector, vec_count);
+		if (description.has_timestamp_with_offset && description.has_timestamp_without_offset) {
+			candidate_types.clear();
+			return;
+		}
+	}
+
 	while (true) {
 		if (candidate_types.empty()) {
 			return;
@@ -297,21 +332,25 @@ void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &s
 		const auto type = candidate_types.back();
 		Vector result_vector(type, vec_count);
 		if (type == LogicalTypeId::TIMESTAMP_TZ) {
-			// If the user supplied a single timestamp_format, do not override it with unrestricted
-			// TIMESTAMPTZ detection (non-matching TZ strings should stay VARCHAR).
-			if (date_format_map.HasFormats(LogicalTypeId::TIMESTAMP) &&
-			    date_format_map.NumberOfFormats(LogicalTypeId::TIMESTAMP) == 1) {
+			// Defense in depth: InitializeCandidateTypes already omits TZ when the user set timestamp_format=.
+			if (user_specified_timestamp_format) {
+				candidate_types.pop_back();
+				continue;
+			}
+			// Only accept TIMESTAMPTZ when every non-null value seen so far carries an offset/Z
+			// (has_timestamp_without_offset is false) and this vector does not refute that.
+			if (description.has_timestamp_without_offset || !description.has_timestamp_with_offset) {
+				// Plain timestamps present, or no offset evidence yet in this/prior vectors.
+				// If no offset evidence: drop TZ and try TIMESTAMP (etc.). Null-only vectors leave both
+				// flags false so TZ is skipped without locking it in.
+				candidate_types.pop_back();
+				continue;
+			}
+			string error_message;
+			if (!VectorOperations::DefaultTryCast(string_vector, result_vector, vec_count, &error_message, true)) {
 				candidate_types.pop_back();
 			} else {
-				// Only accept TIMESTAMPTZ when values actually include a timezone offset / Z
-				string error_message;
-				if (!StringVectorHasTimezoneOffsets(string_vector, vec_count) ||
-				    !VectorOperations::DefaultTryCast(string_vector, result_vector, vec_count, &error_message,
-				                                    true)) {
-					candidate_types.pop_back();
-				} else {
-					return;
-				}
+				return;
 			}
 		} else if (date_format_map.HasFormats(type)) {
 			if (EliminateCandidateFormats(vec_count, string_vector, result_vector, date_format_map)) {
@@ -396,6 +435,8 @@ static void SwapJSONStructureDescription(JSONStructureDescription &a, JSONStruct
 	std::swap(a.children, b.children);
 	std::swap(a.candidate_types, b.candidate_types);
 	std::swap(a.has_large_ubigint, b.has_large_ubigint);
+	std::swap(a.has_timestamp_with_offset, b.has_timestamp_with_offset);
+	std::swap(a.has_timestamp_without_offset, b.has_timestamp_without_offset);
 }
 
 JSONStructureDescription::JSONStructureDescription(JSONStructureDescription &&other) noexcept {
@@ -623,6 +664,16 @@ static void MergeNodeVal(JSONStructureNode &merged, const JSONStructureDescripti
 		merged_desc.has_large_ubigint = true;
 	}
 	if (merged_desc.type != LogicalTypeId::VARCHAR || !node_initialized || merged.descriptions.size() != 1) {
+		return;
+	}
+	// Sticky offset flags across parallel auto-detect tasks
+	merged_desc.has_timestamp_with_offset =
+	    merged_desc.has_timestamp_with_offset || child_desc.has_timestamp_with_offset;
+	merged_desc.has_timestamp_without_offset =
+	    merged_desc.has_timestamp_without_offset || child_desc.has_timestamp_without_offset;
+	if (merged_desc.has_timestamp_with_offset && merged_desc.has_timestamp_without_offset) {
+		merged_desc.candidate_types.clear(); // mixed offset/plain → VARCHAR
+		merged.initialized = true;
 		return;
 	}
 	if (!merged.initialized) {
