@@ -100,8 +100,8 @@ idx_t RecursiveCTEMetricDistribution::MedianUpperBound() const {
 		if (bucket == 0) {
 			return 0;
 		}
-		if (bucket == NumericLimits<idx_t>::Digits()) {
-			return NumericLimits<idx_t>::Maximum();
+		if (bucket == std::numeric_limits<idx_t>::digits) {
+			return std::numeric_limits<idx_t>::max();
 		}
 		return (idx_t(1) << bucket) - 1;
 	}
