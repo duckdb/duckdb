@@ -38,6 +38,18 @@ private:
 	vector<idx_t> indices;
 };
 
+struct RecursiveCTEReferenceInfo {
+	idx_t frontier_scans = 0;
+	idx_t recurring_scans = 0;
+	idx_t exact_key_probes = 0;
+	idx_t partial_key_probes = 0;
+	idx_t direct_probe_work_units = 0;
+
+	bool HasReferences() const {
+		return frontier_scans > 0 || recurring_scans > 0 || exact_key_probes > 0 || partial_key_probes > 0;
+	}
+};
+
 class PhysicalRecursiveCTE : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_CTE;
@@ -72,10 +84,8 @@ public:
 	vector<unique_ptr<Expression>> payload_aggregates;
 	//! Physical-only partial-key indexes required by direct recursive state probes.
 	vector<RecursiveCTEPartialKeySpec> partial_key_index_specs;
-	//! Number of recursive table scans inside the recursive member
-	idx_t recursive_reference_count = 0;
-	//! Number of recurring table scans inside the recursive member
-	idx_t recurring_reference_count = 0;
+	//! Physical recursive inputs inside the recursive member
+	RecursiveCTEReferenceInfo recursive_references;
 	//! Recursive table scans rebound to the current iteration input buffer
 	vector<reference<PhysicalColumnDataScan>> recursive_scans;
 	//! Recursive meta-pipelines that are independent of the active recursive scan graph and can be materialized once

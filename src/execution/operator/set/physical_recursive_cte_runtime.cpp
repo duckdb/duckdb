@@ -65,42 +65,48 @@ struct RecursiveCTEParallelism {
 	idx_t source_task_worker_count;
 };
 
-static idx_t GetRecursiveWorkUnits(const RecursiveCTEState &state) {
+static idx_t GetRecursiveWorkUnits(const RecursiveCTEState &state, idx_t direct_probe_work_units) {
 	auto &op = state.GetOperator();
+	auto &references = op.recursive_references;
 	idx_t work_units = 0;
-	if (op.working_table && op.recursive_reference_count > 0) {
-		work_units += state.CurrentInputTable().ChunkCount() * op.recursive_reference_count;
+	if (op.working_table && references.frontier_scans > 0) {
+		work_units += state.CurrentInputTable().ChunkCount() * references.frontier_scans;
 	}
-	if (op.recurring_table && op.recurring_reference_count > 0) {
+	if (op.recurring_table && references.recurring_scans > 0) {
 		const auto recurring_chunks =
 		    op.using_key ? (state.GetHashTable().Count() + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE
 		                 : op.recurring_table->ChunkCount();
-		work_units += recurring_chunks * op.recurring_reference_count;
+		work_units += recurring_chunks * references.recurring_scans;
 	}
+	// Direct probes consume their visible input without scanning the frozen recurring state. Recursive probe inputs
+	// are counted above, while independent probe inputs contribute their estimated chunks.
+	work_units = MaxValue(work_units, direct_probe_work_units);
 	return MaxValue<idx_t>(work_units, 1);
 }
 
 static idx_t GetRecursiveFrontierRows(const RecursiveCTEState &state) {
 	auto &op = state.GetOperator();
+	auto &references = op.recursive_references;
 	idx_t recursive_rows = 0;
-	if (op.working_table && op.recursive_reference_count > 0) {
-		recursive_rows += state.CurrentInputTable().Count() * op.recursive_reference_count;
+	if (op.working_table && references.frontier_scans > 0) {
+		recursive_rows += state.CurrentInputTable().Count() * references.frontier_scans;
 	}
-	if (op.recurring_table && op.recurring_reference_count > 0) {
+	if (op.recurring_table && references.recurring_scans > 0) {
 		const auto recurring_rows = op.using_key ? state.GetHashTable().Count() : op.recurring_table->Count();
-		recursive_rows += recurring_rows * op.recurring_reference_count;
+		recursive_rows += recurring_rows * references.recurring_scans;
 	}
 	return recursive_rows;
 }
 
 static idx_t GetRecursiveFrontierStorageBytes(const RecursiveCTEState &state) {
 	auto &op = state.GetOperator();
+	auto &references = op.recursive_references;
 	idx_t recursive_bytes = 0;
-	if (op.working_table && op.recursive_reference_count > 0) {
-		recursive_bytes += state.CurrentInputTable().SizeInBytes() * op.recursive_reference_count;
+	if (op.working_table && references.frontier_scans > 0) {
+		recursive_bytes += state.CurrentInputTable().SizeInBytes() * references.frontier_scans;
 	}
-	if (op.recurring_table && op.recurring_reference_count > 0 && !op.using_key) {
-		recursive_bytes += op.recurring_table->SizeInBytes() * op.recurring_reference_count;
+	if (op.recurring_table && references.recurring_scans > 0 && !op.using_key) {
+		recursive_bytes += op.recurring_table->SizeInBytes() * references.recurring_scans;
 	}
 	return recursive_bytes;
 }
@@ -323,6 +329,14 @@ public:
 	}
 };
 
+static bool IsDirectRecursiveKeyProbe(const PhysicalOperator &op, TableIndex cte_index) {
+	if (op.type != PhysicalOperatorType::RECURSIVE_KEY_JOIN) {
+		return false;
+	}
+	auto &key_join = op.Cast<PhysicalRecursiveCTEKeyJoin>();
+	return key_join.StateScan().cte_index == cte_index;
+}
+
 static unique_ptr<RecursiveCTEPipelineSchedulePlan>
 BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines,
                                    const PhysicalRecursiveCTE &recursive_cte) {
@@ -395,12 +409,45 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 	return plan;
 }
 
+static bool ContainsVisibleRecursiveScanInternal(const PhysicalOperator &op, TableIndex cte_index,
+                                                 reference_set_t<const PhysicalOperator> &visited) {
+	if (!visited.insert(op).second) {
+		return false;
+	}
+	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN ||
+	    op.type == PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN) {
+		auto &scan = op.Cast<PhysicalColumnDataScan>();
+		if (scan.cte_index == cte_index) {
+			return true;
+		}
+	}
+	for (auto &child : op.GetChildren()) {
+		if (ContainsVisibleRecursiveScanInternal(child.get(), cte_index, visited)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool ContainsVisibleRecursiveScan(const PhysicalOperator &op, TableIndex cte_index) {
+	reference_set_t<const PhysicalOperator> visited;
+	return ContainsVisibleRecursiveScanInternal(op, cte_index, visited);
+}
+
 static void CountDirectRecursiveReferences(const PhysicalOperator &op, TableIndex cte_index,
-                                           idx_t &recursive_reference_count, idx_t &recurring_reference_count) {
-	if (op.type == PhysicalOperatorType::RECURSIVE_KEY_JOIN) {
+                                           RecursiveCTEReferenceInfo &references) {
+	if (IsDirectRecursiveKeyProbe(op, cte_index)) {
 		auto &key_join = op.Cast<PhysicalRecursiveCTEKeyJoin>();
-		if (key_join.StateScan().cte_index == cte_index) {
-			recurring_reference_count++;
+		if (key_join.Layout().IsPartial()) {
+			references.partial_key_probes++;
+		} else {
+			references.exact_key_probes++;
+		}
+		auto &probe = key_join.children[0].get();
+		if (!ContainsVisibleRecursiveScan(probe, cte_index)) {
+			const auto probe_work_units = probe.estimated_cardinality / STANDARD_VECTOR_SIZE +
+			                              (probe.estimated_cardinality % STANDARD_VECTOR_SIZE != 0);
+			references.direct_probe_work_units = MaxValue(references.direct_probe_work_units, probe_work_units);
 		}
 		return;
 	}
@@ -413,9 +460,9 @@ static void CountDirectRecursiveReferences(const PhysicalOperator &op, TableInde
 		return;
 	}
 	if (op.type == PhysicalOperatorType::RECURSIVE_CTE_SCAN) {
-		recursive_reference_count++;
+		references.frontier_scans++;
 	} else {
-		recurring_reference_count++;
+		references.recurring_scans++;
 	}
 }
 
@@ -423,10 +470,9 @@ static bool OperatorDirectlyDependsOnRecursiveInput(const PhysicalOperator &op, 
 	if (op.type == PhysicalOperatorType::DELIM_SCAN) {
 		return true;
 	}
-	idx_t recursive_reference_count = 0;
-	idx_t recurring_reference_count = 0;
-	CountDirectRecursiveReferences(op, cte_index, recursive_reference_count, recurring_reference_count);
-	if (recursive_reference_count > 0 || recurring_reference_count > 0) {
+	RecursiveCTEReferenceInfo references;
+	CountDirectRecursiveReferences(op, cte_index, references);
+	if (references.HasReferences()) {
 		return true;
 	}
 	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
@@ -852,17 +898,18 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	}
 
 	const auto frontier_rows = GetRecursiveFrontierRows(gstate);
-	const auto row_limit = GetRecursiveRowLimit(frontier_rows);
+	const auto direct_probe_work_units = recursive_references.direct_probe_work_units;
+	const auto row_limit = MaxValue(GetRecursiveRowLimit(frontier_rows), direct_probe_work_units);
 	idx_t work_units = 1;
 	RecursiveCTEParallelism parallelism(1);
 	if (row_limit > 1) {
-		work_units = GetRecursiveWorkUnits(gstate);
+		work_units = GetRecursiveWorkUnits(gstate, direct_probe_work_units);
 		if (work_units > 1) {
 			parallelism = GetRecursiveParallelism(gstate, work_units, row_limit, *schedule_plan);
 		}
 	} else if (collect_metrics) {
 		// Runtime metrics report exact frontier work even when the row bound makes the epoch serial.
-		work_units = GetRecursiveWorkUnits(gstate);
+		work_units = GetRecursiveWorkUnits(gstate, direct_probe_work_units);
 	}
 	const auto frontier_storage_bytes = collect_metrics ? GetRecursiveFrontierStorageBytes(gstate) : 0;
 	if (!using_key && union_all) {
@@ -959,22 +1006,22 @@ static void GatherRecursiveScans(PhysicalOperator &op, TableIndex cte_index,
 }
 
 static void CountRecursiveReferencesInternal(const PhysicalOperator &op, TableIndex cte_index,
-                                             idx_t &recursive_reference_count, idx_t &recurring_reference_count,
+                                             RecursiveCTEReferenceInfo &references,
                                              reference_set_t<const PhysicalOperator> &visited) {
 	if (!visited.insert(op).second) {
 		return;
 	}
-	CountDirectRecursiveReferences(op, cte_index, recursive_reference_count, recurring_reference_count);
+	CountDirectRecursiveReferences(op, cte_index, references);
 	for (auto child : op.GetChildren()) {
-		CountRecursiveReferencesInternal(child.get(), cte_index, recursive_reference_count, recurring_reference_count,
-		                                 visited);
+		CountRecursiveReferencesInternal(child.get(), cte_index, references, visited);
 	}
 }
 
-static void CountRecursiveReferences(const PhysicalOperator &op, TableIndex cte_index, idx_t &recursive_reference_count,
-                                     idx_t &recurring_reference_count) {
+static RecursiveCTEReferenceInfo CountRecursiveReferences(const PhysicalOperator &op, TableIndex cte_index) {
 	reference_set_t<const PhysicalOperator> visited;
-	CountRecursiveReferencesInternal(op, cte_index, recursive_reference_count, recurring_reference_count, visited);
+	RecursiveCTEReferenceInfo result;
+	CountRecursiveReferencesInternal(op, cte_index, result, visited);
+	return result;
 }
 
 void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
@@ -988,8 +1035,7 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 		lock_guard<mutex> guard(shared_executor_pool->lock);
 		shared_executor_pool->executors.clear();
 	}
-	recursive_reference_count = 0;
-	recurring_reference_count = 0;
+	recursive_references = RecursiveCTEReferenceInfo();
 	recursive_scans.clear();
 	invariant_meta_pipelines.clear();
 
@@ -1007,7 +1053,7 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	recursive_meta_pipeline = make_shared_ptr<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
 	recursive_meta_pipeline->Build(children[1]);
-	CountRecursiveReferences(children[1], table_index, recursive_reference_count, recurring_reference_count);
+	recursive_references = CountRecursiveReferences(children[1], table_index);
 	GatherRecursiveScans(children[1], table_index, recursive_scans);
 
 	vector<const_reference<PhysicalOperator>> ops;
