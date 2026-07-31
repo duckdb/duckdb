@@ -41,6 +41,8 @@ public:
 	void FinishIOTask();
 	//! Try to park the calling scan task until the job's I/O completes, the last I/O task to finish wakes it.
 	bool TryPark(const InterruptState &interrupt_state);
+	//! Spin until every I/O task of the job has completed
+	void WaitUntilDone();
 
 private:
 	atomic<idx_t> pending_io_tasks;

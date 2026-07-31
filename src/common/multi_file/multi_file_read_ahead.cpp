@@ -52,6 +52,12 @@ bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 	return parked_scan.BlockTask(interrupt_state);
 }
 
+void ReadAheadJobCompletion::WaitUntilDone() {
+	while (PendingIOTasks() > 0) {
+		TaskScheduler::YieldThread();
+	}
+}
+
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
                                        unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
     : read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)) {
@@ -202,9 +208,7 @@ unique_ptr<LocalTableFunctionState> MultiFileReadAhead::TryPopState() {
 
 void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 	if (job.io_completion) {
-		while (job.io_completion->PendingIOTasks() > 0) {
-			TaskScheduler::YieldThread();
-		}
+		job.io_completion->WaitUntilDone();
 	}
 	// the job's I/O has completed, release its budget charge
 	pending_io_bytes -= job.io_bytes;
@@ -239,9 +243,7 @@ MultiFileGlobalState::~MultiFileGlobalState() = default;
 MultiFileLocalState::~MultiFileLocalState() {
 	// job reads might still be going, wait for them before destroying ze job
 	if (job_state == MultiFileJobState::WAIT_IO && job.io_completion) {
-		while (job.io_completion->PendingIOTasks() > 0) {
-			TaskScheduler::YieldThread();
-		}
+		job.io_completion->WaitUntilDone();
 	}
 }
 
