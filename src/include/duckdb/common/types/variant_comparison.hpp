@@ -18,7 +18,7 @@ class VariantNode;
 //! Ranks start at 1 so that every rank is strictly greater than the LIST/STRING delimiter (0); this
 //! guarantees a shorter list/object sorts before a longer one (the delimiter is smaller than any
 //! following element's rank byte) and that an element can never be confused with an end-of-list marker.
-enum class VariantComparisonType : data_t {
+enum class VariantComparisonType : uint8_t {
 	BOOLEAN = 1,
 	NUMBER,
 	REAL,

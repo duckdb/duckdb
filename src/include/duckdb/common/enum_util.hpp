@@ -572,7 +572,7 @@ enum class VacuumIndexStrategy : uint8_t;
 
 enum class VariantChildLookupMode : uint8_t;
 
-enum class VariantComparisonType : data_t;
+enum class VariantComparisonType : uint8_t;
 
 enum class VariantLogicalType : uint8_t;
 
