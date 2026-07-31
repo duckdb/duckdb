@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include <set>
@@ -129,6 +130,14 @@ TEST_CASE("Test user_agent", "[api]") {
 		Connection con(db);
 		auto res = con.Query("PRAGMA user_agent");
 		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
+	}
+	{
+		DuckDB db(nullptr);
+		HTTPHeaders headers(*db.instance);
+		auto user_agent = headers.GetHeaderValue("User-Agent");
+		REQUIRE(!user_agent.empty());
+		REQUIRE(user_agent.back() != ' ');
+		REQUIRE(user_agent.back() != '\t');
 	}
 }
 

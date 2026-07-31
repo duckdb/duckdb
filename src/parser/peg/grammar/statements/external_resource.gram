@@ -1,0 +1,7 @@
+ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt
+
+CreateExternalResourceStmt <- 'CREATE' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? AttachOptions?
+RegisterExternalResourceStmt <- 'REGISTER' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? 'FROM' Expression
+DestroyExternalResourceStmt <- 'DESTROY' 'EXTERNAL' 'RESOURCE' ColId
+ShowExternalResourcesStmt <- 'SHOW' ShowAllModifier? 'EXTERNAL' 'RESOURCES'
+ShowAllModifier <- 'ALL'

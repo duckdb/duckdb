@@ -13,6 +13,7 @@
 #include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
+#include "duckdb/optimizer/distinct_aggregate_rewriter.hpp"
 #include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
@@ -78,7 +79,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<MoveUnaryMinusRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<MonotonePreimageRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<LeftToPrefixRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<StringPrefixRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<InstrPrefixRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<OrderedAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctWindowedOptimizer>(rewriter));
@@ -92,6 +94,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ContainsToInClauseRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<NotComparisonSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<NotConjunctionSimplificationRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -141,19 +144,32 @@ void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(context, op);
 }
 
-// Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE/MERGE INTO)
-// inside a CTE body. When that is the case, several optimizations are unsafe because
-// they use table statistics captured at plan time, which do not reflect the table
-// state after the DML has executed.
-// Note: a top-level INSERT/UPDATE/DELETE (e.g. INSERT ... RETURNING) is NOT flagged —
-// only DML nested under a MATERIALIZED_CTE or RECURSIVE_CTE node.
+static bool ContainsDML(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		return true;
+	default:
+		break;
+	}
+	for (auto &child : op.children) {
+		if (ContainsDML(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Returns true if the plan contains a DML statement inside a CTE body. A top-level
+// DML statement is not flagged. COPY TO is side-effecting, but does not invalidate
+// table statistics and is deliberately excluded here.
 static bool CTEContainsDML(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
 	    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
-		for (auto &child : op.children) {
-			if (child->HasSideEffects()) {
-				return true;
-			}
+		if (!op.children.empty() && ContainsDML(*op.children[0])) {
+			return true;
 		}
 	}
 	for (auto &child : op.children) {
@@ -242,14 +258,20 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// removes any redundant DelimGets/DelimJoins
 	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
-		Deliminator deliminator;
+		Deliminator deliminator(context);
 		plan = deliminator.Optimize(std::move(plan));
 	});
 
-	// rewrite aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into a cascade of aggregations
+	// rewrite aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into explicit aggregate plans
 	RunOptimizer(OptimizerType::GROUPING_SETS, [&]() {
 		GroupingSetsOptimizer grouping_sets_optimizer(*this);
 		grouping_sets_optimizer.VisitOperator(plan);
+	});
+
+	// rewrite eligible DISTINCT aggregates into explicit aggregate plans
+	RunOptimizer(OptimizerType::DISTINCT_AGGREGATE_REWRITE, [&]() {
+		DistinctAggregateRewriter distinct_aggregate_rewriter(*this);
+		distinct_aggregate_rewriter.VisitOperator(plan);
 	});
 
 	// try to inline CTEs instead of materialization

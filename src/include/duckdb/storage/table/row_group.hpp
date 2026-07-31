@@ -129,7 +129,7 @@ public:
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
-	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk);
+	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk, TransactionData transaction);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
 	                               ExpressionExecutor &executor);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
@@ -238,6 +238,10 @@ public:
 	idx_t GetColumnCount() const;
 
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
+	//! Attempts to compress the version information of the row group
+	//! Per-row insert/delete ids that behave identically for all transactions with a start time of at least
+	//! lowest_active_start (i.e. all active and future transactions) are compressed into constants
+	void CompressVersionInfo(transaction_t lowest_active_start);
 
 	//! Direct accessors, fall outside of general use but can be useful to some extensions
 	ColumnData &GetRawColumnData(const StorageIndex &c) const;

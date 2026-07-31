@@ -29,6 +29,16 @@
         "name": "query_location",
         "type": "optional_idx",
         "default": "optional_idx()"
+      },
+      {
+        "id": 104,
+        "name": "query_location_length",
+        "type": "uint32_t",
+        "property": "query_location.length",
+        "default": "0",
+        "version": "v2.0.0",
+        "equals_skip": true,
+        "hash_skip": true
       }
     ]
   },
@@ -92,9 +102,12 @@
     "constructor": ["return_type"]
   },
   {
-    "class": "BoundCastExpression",
+    "class": "LegacyBoundCastExpression",
     "base": "Expression",
-    "enum": "BOUND_CAST",
+    "enum": "LEGACY_BOUND_CAST",
+    "includes": [
+      "duckdb/planner/expression/legacy_bound_cast_expression.hpp"
+    ],
     "members": [
       {
         "id": 200,
@@ -112,7 +125,8 @@
         "type": "bool"
       }
     ],
-    "constructor": ["$ClientContext", "child", "return_type"]
+    "constructor": ["$ClientContext", "child", "return_type&", "try_cast"],
+    "constructor_method": "LegacyBoundCastExpression::DeserializeLegacyExpression"
   },
   {
     "class": "BoundColumnRefExpression",

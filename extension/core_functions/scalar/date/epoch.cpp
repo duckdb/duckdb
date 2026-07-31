@@ -61,7 +61,9 @@ ScalarFunction ToTimestampFun::GetFunction() {
 }
 
 ScalarFunction NormalizedIntervalFun::GetFunction() {
-	return ScalarFunction({LogicalType::INTERVAL}, LogicalType::INTERVAL, NormalizedIntervalFunction);
+	ScalarFunction function({LogicalType::INTERVAL}, LogicalType::INTERVAL, NormalizedIntervalFunction);
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	return function;
 }
 
 ScalarFunction TimeTZSortKeyFun::GetFunction() {

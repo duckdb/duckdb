@@ -59,6 +59,23 @@ CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransacti
 	return result;
 }
 
+vector<Identifier> SchemaCatalogEntry::GetSchemaPath() const {
+	vector<Identifier> path;
+	optional_ptr<const SchemaCatalogEntry> schema = this;
+	while (schema) {
+		path.push_back(schema->name);
+		schema = schema->GetParentSchema().get();
+	}
+	std::reverse(path.begin(), path.end());
+	return path;
+}
+
+QualifiedName SchemaCatalogEntry::GetQualifiedName(const Identifier &entry_name) const {
+	auto path = GetSchemaPath();
+	path.insert(path.begin(), catalog.GetName());
+	return QualifiedName(std::move(path), entry_name);
+}
+
 unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSchemaInfo>();
 	result->SetQualifiedName(QualifiedName({name}, Identifier()));

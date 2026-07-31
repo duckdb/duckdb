@@ -1,0 +1,285 @@
+# name: test/sql/optimizer/substring_zonemap_pruning.test
+# description: Prune row groups for string slices with a shared removed prefix
+# group: [optimizer]
+
+# 500k rows -> 5 row groups. Every row has the same one-character prefix and the suffix increases with the row id.
+statement ok
+CREATE TABLE substring_pruning AS
+SELECT i::INTEGER AS i, 'p' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 2) = '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE substr(s, 2) = '495000';
+----
+1
+
+# Constant lengths can be applied after removing a shared prefix.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 2, 4) = '4950';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE substr(s, 2, 4) = '4950';
+----
+100
+
+# Bracket notation binds to array_slice and shares the same statistics propagation.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE s[2:] > '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE s[2:] > '495000';
+----
+4999
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE s[2:5] > '4950';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE s[2:5] > '4950';
+----
+4900
+
+# Omitted bounds preserve the full string statistics.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE s[:] > 'p495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE s[:] > 'p495000';
+----
+4999
+
+# Zero and one both refer to the first character for bracket slices.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE s[0:2] > 'p3';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE s[0:2] > 'p3';
+----
+100000
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE s[1:2] > 'p3';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE s[1:2] > 'p3';
+----
+100000
+
+# An omitted start creates a prefix slice.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE s[:2] > 'p3';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE s[:2] > 'p3';
+----
+100000
+
+# Ends beyond the string preserve the remaining suffix.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE s[2:20] > '491519';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE s[2:20] > '491519';
+----
+8480
+
+# An end before the start produces an empty string.
+query I
+SELECT count(*) FROM substring_pruning WHERE s[5:2] = '';
+----
+500000
+
+# Dynamic and negative starts are valid but do not propagate statistics.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE s[(i % 2) + 1:] > '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE s[(i % 2) + 1:] > '495000';
+----
+252500
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE s[-6:] > '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE s[-6:] > '495000';
+----
+4999
+
+# Prefix substrings preserve the ordering of the input min/max values.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 1, 2) > 'p3';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE substr(s, 1, 2) > 'p3';
+----
+100000
+
+# Offset zero starts before the first character, reducing the effective length by one.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 0, 3) > 'p3';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE substr(s, 0, 3) > 'p3';
+----
+100000
+
+# Bounds shorter than the requested prefix length are preserved unchanged.
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning WHERE substr(s, 1, 20) > 'p491519';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning WHERE substr(s, 1, 20) > 'p491519';
+----
+8480
+
+# Shared UTF-8 prefixes use character offsets rather than byte offsets.
+statement ok
+CREATE TABLE substring_pruning_utf8 AS
+SELECT i::INTEGER AS i, '🦆' || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning_utf8 WHERE substr(s, 2) = '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning_utf8 WHERE substr(s, 2) = '495000';
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning_utf8 WHERE s[2:] > '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning_utf8 WHERE s[2:] > '495000';
+----
+4999
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_pruning_utf8 WHERE s[2:5] > '4950';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_pruning_utf8 WHERE s[2:5] > '4950';
+----
+4900
+
+# A shared prefix is required. Alternating prefixes make every row group's min
+# and max disagree in the character removed by substr, so no bounds are derived.
+statement ok
+CREATE TABLE substring_no_shared_prefix AS
+SELECT i::INTEGER AS i, CASE WHEN i % 2 = 0 THEN 'a' ELSE 'b' END || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_no_shared_prefix WHERE substr(s, 2) = '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM substring_no_shared_prefix WHERE substr(s, 2) = '495000';
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_no_shared_prefix WHERE s[2:] > '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM substring_no_shared_prefix WHERE s[2:] > '495000';
+----
+4999
+
+# Truncated bounds can be transformed as long as the removed prefix is present
+# in the stored bounds. The derived bounds remain marked as truncated.
+statement ok
+CREATE TABLE substring_truncated_pruning AS
+SELECT i::INTEGER AS i, 'p' || lpad(i::VARCHAR, 6, '0') || repeat('x', 20) AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_truncated_pruning
+WHERE substr(s, 2) = '495000' || repeat('x', 20);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_truncated_pruning WHERE substr(s, 2) = '495000' || repeat('x', 20);
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_truncated_pruning
+WHERE s[2:] > '495000' || repeat('x', 20);
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 5.*
+
+query I
+SELECT count(*) FROM substring_truncated_pruning
+WHERE s[2:] > '495000' || repeat('x', 20);
+----
+4999
+
+# Truncated min/max values cannot prove a removed prefix that extends beyond
+# the bytes retained in the statistics.
+statement ok
+CREATE TABLE substring_truncated_stats AS
+SELECT i::INTEGER AS i, repeat('p', 13) || lpad(i::VARCHAR, 6, '0') AS s
+FROM range(500000) r(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_truncated_stats WHERE substr(s, 14) = '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM substring_truncated_stats WHERE substr(s, 14) = '495000';
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT sum(i) FROM substring_truncated_stats WHERE s[14:] > '495000';
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 5 / 5.*
+
+query I
+SELECT count(*) FROM substring_truncated_stats WHERE s[14:] > '495000';
+----
+4999

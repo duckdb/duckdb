@@ -12,6 +12,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -55,10 +56,24 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 		LogicalProjection &projection = op.Cast<LogicalProjection>();
 		D_ASSERT(projection.children.size() == 1);
 		auto &child = *projection.children[0];
-		if (!IsPassthrough(projection) || child.type != LogicalOperatorType::LOGICAL_GET) {
+		if (!IsPassthrough(projection)) {
 			break;
 		}
-		if (auto &get = child.Cast<LogicalGet>(); get.function.projection_expression_pushdown != nullptr) {
+
+		LogicalGet *get = nullptr;
+
+		// queries with LIMIT may include a STREAMING_LIMIT between PROJECTION and GET.
+		// See test/optimizer/pushdown/scalar_function_pushdown_limit.test
+		if (child.type == LogicalOperatorType::LOGICAL_LIMIT) {
+			if (auto &limit = child.Cast<LogicalLimit>();
+			    limit.children.size() == 1 && limit.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+				get = &limit.children[0]->Cast<LogicalGet>();
+			}
+		} else if (child.type == LogicalOperatorType::LOGICAL_GET) {
+			get = &child.Cast<LogicalGet>();
+		}
+
+		if (get != nullptr && get->function.projection_expression_pushdown != nullptr) {
 			projections.emplace(projection.table_index, projection);
 		}
 		break;
@@ -151,18 +166,14 @@ void CastCollect::VisitOperator(LogicalOperator &op) {
 	// nested cast to VARCHAR must not).
 	bool clean = ReachesPushdownGet(projection);
 	for (const auto &e : projection.expressions) {
-		switch (e->GetExpressionClass()) {
-		case ExpressionClass::BOUND_COLUMN_REF:
-		case ExpressionClass::BOUND_CAST:
+		if (e->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || BoundCastExpression::IsCast(*e)) {
 			continue;
-		default:
-			clean = false;
-			break;
 		}
+		clean = false;
 	}
 	if (clean) {
 		for (const auto &e : projection.expressions) {
-			if (e->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
+			if (BoundCastExpression::IsCast(*e)) {
 				top_level_casts.insert(e.get());
 			}
 		}
@@ -184,13 +195,18 @@ unique_ptr<Expression> CastCollect::VisitReplace(BoundColumnRefExpression &expr,
 	return std::move(*ptr);
 }
 
-unique_ptr<Expression> CastCollect::VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *ptr) {
-	if (expr.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+unique_ptr<Expression> CastCollect::VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *ptr) {
+	if (!BoundCastExpression::IsCast(expr)) {
+		// Descend into non-cast function children so e.g. fn(col, other) still sees "col"
+		return nullptr;
+	}
+	auto &cast_child = BoundCastExpression::Child(expr);
+	if (cast_child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		// Descend into children so e.g. fn(col, other) still sees "col" and
 		// registers a conflict
 		return nullptr;
 	}
-	const auto &bound_col = expr.Child().Cast<BoundColumnRefExpression>();
+	const auto &bound_col = cast_child.Cast<BoundColumnRefExpression>();
 	const auto binding = Resolve(bound_col.Binding(), analyses, projections);
 	if (!binding) {
 		return nullptr;
@@ -203,7 +219,8 @@ unique_ptr<Expression> CastCollect::VisitReplace(BoundCastExpression &expr, uniq
 			col_to_cast.emplace(binding->column_index, &expr);
 		}
 	} else if (it->second == nullptr || it->second->GetReturnType() != expr.GetReturnType() ||
-	           it->second->Cast<BoundCastExpression>().IsTryCast() != expr.IsTryCast()) {
+	           BoundCastExpression::IsTryCast(it->second->Cast<BoundFunctionExpression>()) !=
+	               BoundCastExpression::IsTryCast(expr)) {
 		// Different target type, or already a conflict.
 		// If reader can push CAST but not TRY_CAST or vice versa, we can't
 		// pretend thery are the same
@@ -234,11 +251,14 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundColumnRefExpression &expr,
 	return std::move(*ptr);
 }
 
-unique_ptr<Expression> CastReplace::VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *ptr) {
-	if (expr.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+unique_ptr<Expression> CastReplace::VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *ptr) {
+	if (!BoundCastExpression::IsCast(expr)) {
+		return nullptr;
+	}
+	if (BoundCastExpression::Child(expr).GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr; // Same as in ScalarFnCollect::VisitReplace
 	}
-	auto &bound_col_base = expr.ChildMutable();
+	auto &bound_col_base = BoundCastExpression::ChildMutable(expr);
 	const auto &bound_col = bound_col_base->Cast<BoundColumnRefExpression>();
 	const auto binding = Resolve(bound_col.Binding(), analyses, projections);
 	if (!binding) {

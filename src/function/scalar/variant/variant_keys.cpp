@@ -16,15 +16,9 @@ static void WriteKeysResult(const optional<VariantNode> &node, VectorWriter<Vect
 		return;
 	}
 
-	vector<string_t> keys;
+	auto keys_writer = list_writer.WriteDynamicList();
 	for (const auto &entry : node->GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC)) {
-		keys.push_back(entry.key);
-	}
-
-	auto keys_writer = list_writer.WriteList(keys.size());
-	idx_t key_idx = 0;
-	for (auto &key_writer : keys_writer) {
-		key_writer.WriteValue(keys[key_idx++]);
+		keys_writer.WriteElement().WriteValue(entry.key);
 	}
 }
 

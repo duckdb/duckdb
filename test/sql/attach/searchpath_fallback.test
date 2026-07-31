@@ -1,0 +1,179 @@
+# name: test/sql/attach/searchpath_fallback.test
+# description: Test the default schema fallback for queries.
+# group: [attach]
+
+# A view's owning catalog should take precedence over the caller's search path
+# for unqualified non-table entries in the catalog's default schema.
+# Validate the use of the correct macro.
+statement ok
+ATTACH ':memory:' AS view_path_c1;
+
+statement ok
+CREATE SCHEMA view_path_c1.s1;
+
+statement ok
+CREATE MACRO view_path_c1.main.fn() AS 1;
+
+statement ok
+ATTACH ':memory:' AS view_path_c2;
+
+statement ok
+CREATE MACRO view_path_c2.main.fn() AS 'caller';
+
+statement ok
+SET search_path = 'view_path_c2.main';
+
+statement ok
+CREATE VIEW view_path_c1.s1.v AS SELECT fn() AS result;
+
+# Verify CREATE VIEW used the owning catalog's INTEGER-returning macro.
+query T
+SELECT data_type
+FROM duckdb_columns()
+WHERE database_name = 'view_path_c1'
+  AND schema_name = 's1'
+  AND table_name = 'v'
+  AND column_name = 'result';
+----
+INTEGER
+
+# Verify rebinding the view also uses the owning catalog.
+query I
+FROM view_path_c1.s1.v;
+----
+1
+
+statement ok
+RESET search_path;
+
+statement ok
+DETACH view_path_c2;
+
+statement ok
+DETACH view_path_c1;
+
+# A view's owning catalog should take precedence over the caller's search path
+# for unqualified non-table entries in the catalog's default schema.
+statement ok
+ATTACH ':memory:' AS view_path_c1;
+
+statement ok
+CREATE SCHEMA view_path_c1.s1;
+
+statement ok
+CREATE MACRO view_path_c1.main.fn() AS 1;
+
+statement ok
+CREATE VIEW view_path_c1.s1.v AS SELECT fn() AS result;
+
+statement ok
+ATTACH ':memory:' AS view_path_c2;
+
+statement ok
+CREATE MACRO view_path_c2.main.fn() AS 2;
+
+statement ok
+SET search_path = 'view_path_c2.main';
+
+query I
+FROM view_path_c1.s1.v;
+----
+1
+
+statement ok
+RESET search_path;
+
+statement ok
+DETACH view_path_c2;
+
+statement ok
+DETACH view_path_c1;
+
+
+# Test with views over default tables
+statement ok
+ATTACH ':memory:' AS dt (DEFAULT_TABLE 'real_t');
+
+statement ok
+CREATE TABLE dt.main.real_t(i INT);
+
+statement ok
+INSERT INTO dt.main.real_t values (1);
+
+statement ok
+ATTACH ':memory:' AS c1;
+
+statement ok
+CREATE SCHEMA c1.s1;
+
+statement ok
+CREATE TABLE c1.main.dt(i INT);
+
+statement ok
+CREATE VIEW c1.s1.vv AS SELECT * FROM dt;
+
+query I
+FROM c1.s1.vv;
+----
+1
+
+statement ok
+DETACH dt;
+
+
+# Test with an alter column set type
+statement ok
+CREATE TYPE my_enum AS ENUM ('x');
+
+statement ok
+ATTACH ':memory:' AS c2;
+
+statement ok
+CREATE SCHEMA c2.s1;
+
+statement ok
+CREATE TYPE c2.my_enum AS ENUM ('y');
+
+statement ok
+CREATE TABLE c2.s1.t(a VARCHAR);
+
+statement ok
+INSERT INTO c2.s1.t VALUES ('x');
+
+statement ok
+ALTER TABLE c2.s1.t ALTER COLUMN a SET DATA TYPE my_enum;
+
+query I
+FROM c2.s1.t;
+----
+x
+
+statement ok
+DETACH c2;
+
+# Declare macro and use it in different catalog
+statement ok
+ATTACH ':memory:' as test;
+
+statement ok
+use test;
+
+statement ok
+ATTACH ':memory:' as test2;
+
+statement ok
+CREATE OR REPLACE MACRO fn(a) as a+1;
+
+statement ok
+CREATE SCHEMA other_schema;
+
+statement ok
+CREATE VIEW other_schema.some_view AS SELECT fn(1) AS t;
+
+statement ok
+use test2;
+
+query I
+from test.other_schema.some_view;
+----
+2

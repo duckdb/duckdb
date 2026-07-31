@@ -35,6 +35,8 @@ public:
 	optional_ptr<SchemaCatalogEntry> schema;
 	//! Create table info, in case of CREATE TABLE AS
 	unique_ptr<BoundCreateTableInfo> info;
+	//! Preferred input batch size
+	optional_idx preferred_batch_size;
 
 public:
 	// Source interface
@@ -55,9 +57,7 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 
-	OperatorPartitionInfo RequiredPartitionInfo() const override {
-		return OperatorPartitionInfo::BatchIndex();
-	}
+	OperatorPartitionInfo RequiredPartitionInfo() const override;
 
 	bool IsSink() const override {
 		return true;
@@ -65,6 +65,10 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
+	}
+
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
 	}
 
 private:

@@ -81,6 +81,28 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	return result;
 }
 
+int64_t SequenceCatalogEntry::SetValue(DuckTransaction &transaction, int64_t value, bool is_called) {
+	{
+		lock_guard<mutex> seqlock(lock);
+		if (value < data.min_value || value > data.max_value) {
+			throw SequenceException("setval: value %lld is out of bounds for sequence \"%s\" (%lld..%lld)", value, name,
+			                        data.min_value, data.max_value);
+		}
+
+		data.counter = value;
+		if (!is_called) {
+			data.usage_count++;
+			if (!temporary) {
+				transaction.PushSequenceUsage(*this, data);
+			}
+			return value;
+		}
+	}
+
+	// is_called: behave as if nextval() was just invoked and returned `value`.
+	return NextValue(transaction);
+}
+
 void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter, optional<int64_t> last_value) {
 	if (v_usage_count > data.usage_count) {
 		data.usage_count = v_usage_count;

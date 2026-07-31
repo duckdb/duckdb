@@ -27,6 +27,34 @@ unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	return result;
 }
 
+bool CopyInfo::Equals(const CopyInfo &other) const {
+	if (qualified_name != other.qualified_name || select_list != other.select_list || is_from != other.is_from ||
+	    format != other.format || is_format_auto_detected != other.is_format_auto_detected ||
+	    file_path != other.file_path || options.size() != other.options.size() ||
+	    parsed_options.size() != other.parsed_options.size()) {
+		return false;
+	}
+	if (!ParsedExpression::Equals(file_path_expression, other.file_path_expression)) {
+		return false;
+	}
+	for (auto &entry : options) {
+		auto other_entry = other.options.find(entry.first);
+		if (other_entry == other.options.end() || entry.second != other_entry->second) {
+			return false;
+		}
+	}
+	for (auto &entry : parsed_options) {
+		auto other_entry = other.parsed_options.find(entry.first);
+		if (other_entry == other.parsed_options.end() || !ParsedExpression::Equals(entry.second, other_entry->second)) {
+			return false;
+		}
+	}
+	if (select_statement && other.select_statement) {
+		return select_statement->Equals(other.select_statement.get());
+	}
+	return !select_statement && !other.select_statement;
+}
+
 string CopyInfo::CopyOptionsToString() const {
 	// We only output the format if there is a format, and it was manually set.
 	const bool output_format = !format.empty() && !is_format_auto_detected;

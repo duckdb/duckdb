@@ -9,6 +9,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -191,6 +192,8 @@ bool QueryProfiler::OperatorRequiresProfiling(const PhysicalOperatorType op_type
 	case PhysicalOperatorType::LEFT_DELIM_JOIN:
 	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
 	case PhysicalOperatorType::UNION:
+	case PhysicalOperatorType::CTE:
+	case PhysicalOperatorType::CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE:
 	case PhysicalOperatorType::RECURSIVE_KEY_CTE:
 	case PhysicalOperatorType::EMPTY_RESULT:
@@ -1004,6 +1007,13 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	info.SetExtraInfo(std::move(params));
 
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root_p), reference<ProfilingNode>(*node)));
+	if (root_p.type == PhysicalOperatorType::CTE_SCAN) {
+		auto &cte_scan = root_p.Cast<PhysicalColumnDataScan>();
+		if (cte_scan.cte_source) {
+			tree_map.insert(
+			    make_pair(reference<const PhysicalOperator>(*cte_scan.cte_source), reference<ProfilingNode>(*node)));
+		}
+	}
 	auto children = root_p.GetChildren();
 	for (auto &child : children) {
 		auto child_node = CreateTree(child.get(), depth + 1);

@@ -1,0 +1,696 @@
+module: prepared_statement
+functions:
+  prepare:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: prepared_statement
+    parameters:
+      connection:
+        type: connection
+        description: The connection object
+      query:
+        type: char
+        indirection: 1
+        const: true
+        description: The SQL query to prepare
+      out_prepared_statement:
+        type: prepared_statement
+        indirection: 1
+        kind: OUT
+        description: The resulting prepared statement object
+    return_type: state
+    description: |
+      Create a prepared statement object from a query.
+
+      Note that after calling `duckdb_prepare`, the prepared statement should always be destroyed using
+      `duckdb_destroy_prepare`, even if the prepare fails.
+
+      If the prepare fails, `duckdb_prepare_error` can be called to obtain the reason why the prepare failed.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  destroy_prepare:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: prepared_statement
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        indirection: 1
+        description: The prepared statement to destroy.
+    return_type: opaque
+    description: |
+      Closes the prepared statement and de-allocates all memory allocated for the statement.
+  prepare_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement to obtain the error from.
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      Returns the error message associated with the given prepared statement.
+      If the prepared statement has no error message, this returns `nullptr` instead.
+
+      The error message should not be freed. It will be de-allocated when `duckdb_destroy_prepare` is called.
+    return_description: The error message, or `nullptr` if there is none.
+  nparams:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement to obtain the number of parameters for.
+    return_type: idx
+    description: |
+      Returns the number of parameters that can be provided to the given prepared statement.
+
+      Returns 0 if the query was not successfully prepared.
+  parameter_name:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement for which to get the parameter name from.
+      index:
+        type: idx
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      Returns the name used to identify the parameter
+      The returned string should be freed using `duckdb_free`.
+
+      Returns NULL if the index is out of range for the provided prepared statement.
+  param_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement.
+      param_idx:
+        type: idx
+        description: The parameter index.
+    return_type: type
+    description: |
+      Returns the parameter type for the parameter at the given index.
+
+      Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the statement was not successfully prepared.
+    return_description: The parameter type
+  param_logical_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement.
+      param_idx:
+        type: idx
+        description: The parameter index.
+    return_type: logical_type
+    description: |
+      Returns the logical type for the parameter at the given index.
+
+      Returns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.
+
+      The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The logical type of the parameter
+  clear_bindings:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+    return_type: state
+    description: |
+      Clear the params bind to the prepared statement.
+  prepared_statement_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      statement:
+        type: prepared_statement
+        description: The prepared statement.
+    return_type: statement_type
+    description: |
+      Returns the statement type of the statement to be executed
+    return_description: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
+  prepared_statement_column_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement.
+    return_type: idx
+    description: |
+      Returns the number of columns present in a the result of the prepared statement. If any of the column types are invalid, the result will be 1.
+    return_description: The number of columns present in the result of the prepared statement.
+  prepared_statement_column_name:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement.
+      col_idx:
+        type: idx
+        description: The column index.
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      Returns the name of the specified column of the result of the prepared_statement.
+      The returned string should be freed using `duckdb_free`.
+
+      Returns `nullptr` if the column is out of range.
+    return_description: The column name of the specified column.
+  prepared_statement_column_logical_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement to fetch the column type from.
+      col_idx:
+        type: idx
+        description: The column index.
+    return_type: logical_type
+    description: |
+      Returns the column type of the specified column of the result of the prepared_statement.
+
+      Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
+      The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+    return_description: The logical type of the specified column.
+  prepared_statement_column_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement to fetch the column type from.
+      col_idx:
+        type: idx
+        description: The column index.
+    return_type: type
+    description: |
+      Returns the column type of the specified column of the result of the prepared_statement.
+
+      Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
+    return_description: The type of the specified column.
+  bind_value:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: value
+    return_type: state
+    description: |
+      Binds a value to the prepared statement at the specified index.
+
+      Supersedes all type-specific bind functions (e.g., `duckdb_bind_varchar`, `duckdb_bind_int64`, etc.).
+  bind_parameter_index:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx_out:
+        type: idx
+        indirection: 1
+        kind: OUT
+      name:
+        type: char
+        indirection: 1
+        const: true
+    return_type: state
+    description: |
+      Retrieve the index of the parameter for the prepared statement, identified by name
+  bind_boolean:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: bool
+    return_type: state
+    description: |
+      Binds a bool value to the prepared statement at the specified index.
+  bind_int8:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: i8
+    return_type: state
+    description: |
+      Binds an int8_t value to the prepared statement at the specified index.
+  bind_int16:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: i16
+    return_type: state
+    description: |
+      Binds an int16_t value to the prepared statement at the specified index.
+  bind_int32:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: i32
+    return_type: state
+    description: |
+      Binds an int32_t value to the prepared statement at the specified index.
+  bind_int64:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: i64
+    return_type: state
+    description: |
+      Binds an int64_t value to the prepared statement at the specified index.
+  bind_hugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: hugeint
+    return_type: state
+    description: |
+      Binds a duckdb_hugeint value to the prepared statement at the specified index.
+  bind_uhugeint:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: uhugeint
+    return_type: state
+    description: |
+      Binds a duckdb_uhugeint value to the prepared statement at the specified index.
+  bind_decimal:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: decimal
+    return_type: state
+    description: |
+      Binds a duckdb_decimal value to the prepared statement at the specified index.
+  bind_uint8:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: u8
+    return_type: state
+    description: |
+      Binds a uint8_t value to the prepared statement at the specified index.
+  bind_uint16:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: u16
+    return_type: state
+    description: |
+      Binds a uint16_t value to the prepared statement at the specified index.
+  bind_uint32:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: u32
+    return_type: state
+    description: |
+      Binds a uint32_t value to the prepared statement at the specified index.
+  bind_uint64:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: u64
+    return_type: state
+    description: |
+      Binds a uint64_t value to the prepared statement at the specified index.
+  bind_float:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: f32
+    return_type: state
+    description: |
+      Binds a float value to the prepared statement at the specified index.
+  bind_double:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: f64
+    return_type: state
+    description: |
+      Binds a double value to the prepared statement at the specified index.
+  bind_date:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: date
+    return_type: state
+    description: |
+      Binds a duckdb_date value to the prepared statement at the specified index.
+  bind_time:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: time
+    return_type: state
+    description: |
+      Binds a duckdb_time value to the prepared statement at the specified index.
+  bind_timestamp:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: timestamp
+    return_type: state
+    description: |
+      Binds a duckdb_timestamp value to the prepared statement at the specified index.
+  bind_timestamp_tz:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: timestamp
+    return_type: state
+    description: |
+      Binds a duckdb_timestamp value to the prepared statement at the specified index.
+  bind_interval:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: interval
+    return_type: state
+    description: |
+      Binds a duckdb_interval value to the prepared statement at the specified index.
+  bind_varchar:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: char
+        indirection: 1
+        const: true
+    return_type: state
+    description: |
+      Binds a null-terminated varchar value to the prepared statement at the specified index.
+
+      Superseded by `duckdb_bind_value`.
+  bind_varchar_length:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      val:
+        type: char
+        indirection: 1
+        const: true
+      length:
+        type: idx
+    return_type: state
+    description: |
+      Binds a varchar value to the prepared statement at the specified index.
+
+      Superseded by `duckdb_bind_value`.
+  bind_blob:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+      data:
+        type: opaque
+        indirection: 1
+        const: true
+      length:
+        type: idx
+    return_type: state
+    description: |
+      Binds a blob value to the prepared statement at the specified index.
+  bind_null:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+      param_idx:
+        type: idx
+    return_type: state
+    description: |
+      Binds a NULL value to the prepared statement at the specified index.
+  execute_prepared:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement to execute.
+      out_result:
+        type: result
+        indirection: 1
+        kind: OUT
+        description: The query result.
+    return_type: state
+    description: |
+      Executes the prepared statement with the given bound parameters, and returns a materialized query result.
+
+      This method can be called multiple times for each prepared statement, and the parameters can be modified
+      between calls to this function.
+
+      Note that the result must be freed with `duckdb_destroy_result`.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  extract_statements:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection object
+      query:
+        type: char
+        indirection: 1
+        const: true
+        description: The SQL query to extract
+      out_extracted_statements:
+        type: extracted_statements
+        indirection: 1
+        kind: OUT
+        description: The resulting extracted statements object
+    return_type: idx
+    description: |
+      Extract all statements from a query.
+      Note that after calling `duckdb_extract_statements`, the extracted statements should always be destroyed using
+      `duckdb_destroy_extracted`, even if no statements were extracted.
+
+      If the extract fails, `duckdb_extract_statements_error` can be called to obtain the reason why the extract failed.
+    return_description: The number of extracted statements or 0 on failure.
+  prepare_extracted_statement:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      connection:
+        type: connection
+        description: The connection object
+      extracted_statements:
+        type: extracted_statements
+        description: The extracted statements object
+      index:
+        type: idx
+        description: The index of the extracted statement to prepare
+      out_prepared_statement:
+        type: prepared_statement
+        indirection: 1
+        kind: OUT
+        description: The resulting prepared statement object
+    return_type: state
+    description: |
+      Prepare an extracted statement.
+      Note that after calling `duckdb_prepare_extracted_statement`, the prepared statement should always be destroyed using
+      `duckdb_destroy_prepare`, even if the prepare fails.
+
+      If the prepare fails, `duckdb_prepare_error` can be called to obtain the reason why the prepare failed.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  extract_statements_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      extracted_statements:
+        type: extracted_statements
+        description: The extracted statements to fetch the error from.
+    return_type: char
+    return_pointer: 1
+    return_const: true
+    description: |
+      Returns the error message contained within the extracted statements.
+      The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_extracted` is called.
+    return_description: The error of the extracted statements.
+  destroy_extracted:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: extracted_statements
+    parameters:
+      extracted_statements:
+        type: extracted_statements
+        indirection: 1
+        description: The extracted statements to destroy.
+    return_type: opaque
+    description: |
+      De-allocates all memory allocated for the extracted statements.
+  execute_prepared_streaming:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement to execute.
+      out_result:
+        type: result
+        indirection: 1
+        kind: OUT
+        description: The query result.
+    return_type: state
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Executes the prepared statement with the given bound parameters, and returns an optionally-streaming query result.
+      To determine if the resulting query was in fact streamed, use `duckdb_result_is_streaming`
+
+      This method can be called multiple times for each prepared statement, and the parameters can be modified
+      between calls to this function.
+
+      Note that the result must be freed with `duckdb_destroy_result`.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
+  pending_prepared_streaming:
+    lifecycle:
+      - ["deprecated", "v1.5.4", "2026-05-19"]
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      prepared_statement:
+        type: prepared_statement
+        description: The prepared statement to execute.
+      out_result:
+        type: pending_result
+        indirection: 1
+        kind: OUT
+        description: The pending query result.
+    return_type: state
+    description: |
+      **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+      Executes the prepared statement with the given bound parameters, and returns a pending result.
+      This pending result will create a streaming duckdb_result when executed.
+      The pending result represents an intermediate structure for a query that is not yet fully executed.
+
+      Note that after calling `duckdb_pending_prepared_streaming`, the pending result should always be destroyed using
+      `duckdb_destroy_pending`, even if this function returns DuckDBError.
+    return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'

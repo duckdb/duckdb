@@ -15,6 +15,9 @@ statement ok
 COPY (SELECT range::DOUBLE AS d FROM range(102400)) TO '{TEST_DIR}/expr_prune_double.parquet' (ROW_GROUP_SIZE 10240)
 
 statement ok
+COPY (SELECT range::FLOAT AS f FROM range(102400)) TO '{TEST_DIR}/expr_prune_float.parquet' (ROW_GROUP_SIZE 10240)
+
+statement ok
 COPY (SELECT CASE WHEN range = 95000 THEN 'nan'::DOUBLE ELSE range::DOUBLE END AS d FROM range(102400)) TO '{TEST_DIR}/expr_prune_nan.parquet' (ROW_GROUP_SIZE 10240)
 
 # constants are not divisible by the multiplier, so the optimizer keeps the expression filter
@@ -85,6 +88,47 @@ CALL disable_logging()
 query II
 SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
 ----
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# abs(d) is not globally monotone, but row-group stats can still prune ranges that are known to be nonnegative
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_double.parquet' WHERE abs(d) = 42.0
+----
+1
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging('PhysicalOperator')
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_float.parquet' WHERE abs(f) = 42.0::FLOAT
+----
+1
+
+statement ok
+CALL disable_logging()
+
+query II
+SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
+----
+ReadRowGroup	1
+SkipRowGroup	9
 
 statement ok
 CALL truncate_duckdb_logs()
@@ -247,3 +291,113 @@ FROM '{TEST_DIR}/expr_prune_prefix_utf8_boundary.parquet'
 WHERE prefix(s, chr(255)) OR prefix(s, 'zz')
 ----
 analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 2.*
+
+# ILIKE uses conservative ASCII bounds while retaining the original filter
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_or.parquet'
+WHERE s ILIKE 'P0000%'
+----
+100
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_or.parquet'
+WHERE s ILIKE 'P0000%'
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 4.*
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_or.parquet'
+WHERE s ILIKE 'P000000'
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_prefix_or.parquet'
+WHERE s ILIKE 'P000000'
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 1 / 4.*
+
+# ASCII bounds retain both case variants and the ILIKE filter removes false positives
+statement ok
+COPY (
+	SELECT CASE
+		WHEN range < 2048 THEN 'P0000' || lpad(range::VARCHAR, 4, '0')
+		WHEN range < 4096 THEN 'p0000' || lpad((range - 2048)::VARCHAR, 4, '0')
+		WHEN range < 6144 THEN 'Q0000' || lpad((range - 4096)::VARCHAR, 4, '0')
+		ELSE 'z0000' || lpad((range - 6144)::VARCHAR, 4, '0')
+	END AS s
+	FROM range(8192)
+) TO '{TEST_DIR}/expr_prune_ilike_case.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_case.parquet'
+WHERE s ILIKE 'p0000%'
+----
+4096
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_case.parquet'
+WHERE s ILIKE 'p0000%'
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 3 / 4.*
+
+# ILIKE bounds include Unicode characters that lowercase to ASCII
+statement ok
+COPY (
+	SELECT CASE
+		WHEN range < 2048 THEN 'A' || lpad(range::VARCHAR, 4, '0')
+		WHEN range < 4096 THEN 'İ' || lpad((range - 2048)::VARCHAR, 4, '0')
+		WHEN range < 6144 THEN 'K' || lpad((range - 4096)::VARCHAR, 4, '0')
+		WHEN range < 8192 THEN 'z' || lpad((range - 6144)::VARCHAR, 4, '0')
+		ELSE 'Å' || lpad((range - 8192)::VARCHAR, 4, '0')
+	END AS s
+	FROM range(10240)
+) TO '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048)
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
+WHERE s ILIKE 'i%'
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
+WHERE s ILIKE 'i%'
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 2 / 5.*
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
+WHERE s ILIKE 'k%'
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
+WHERE s ILIKE 'k%'
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 3 / 5.*
+
+query I
+SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
+WHERE s ILIKE 'İ%'
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*)
+FROM '{TEST_DIR}/expr_prune_ilike_unicode_bounds.parquet'
+WHERE s ILIKE 'İ%'
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 5 / 5.*

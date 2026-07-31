@@ -37,6 +37,11 @@ select json_object('x', 42::VARIANT)
 ----
 {"x":42}
 
+query T
+select [{'a': 1, 'b': [1]}::VARIANT]::JSON
+----
+[{"a":1,"b":[1]}]
+
 statement error
 select to_json({n: 42}, {extra: 'argument'})
 ----
@@ -122,6 +127,11 @@ query T
 select json_object('nested', [{nested2: 1}, {nested2: 2}, {nested2: 3}])
 ----
 {"nested":[{"nested2":1},{"nested2":2},{"nested2":3}]}
+
+query T
+select [{'a': 1, 'b': [1]}::VARIANT]::JSON
+----
+[{"a":1,"b":[1]}]
 
 statement ok
 create table test (a int, b double, c varchar, d int[], e uinteger)

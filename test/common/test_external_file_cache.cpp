@@ -428,6 +428,40 @@ TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[extern
 	REQUIRE(cache.GetCachedFileCount() == 1);
 }
 
+TEST_CASE("Entry evicted while referenced allows re-creation of the same path", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto &cache = db_instance.GetExternalFileCache();
+	auto &object_cache = db_instance.GetObjectCache();
+
+	const auto block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const auto content = MakeTestContent(block_size);
+	EFCTestFileGuard test_file("test_efc_evict_referenced_entry.bin", content);
+
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, content.size()) == content);
+	}
+	REQUIRE(cache.GetCachedFileCount() == 1);
+
+	auto held_entry = object_cache.GetObject(StringUtil::Format("external_file_cache-%s", test_file.GetPath()));
+	REQUIRE(held_entry);
+
+	EvictObjectCache(object_cache);
+	REQUIRE(cache.GetCachedFileCount() == 1);
+
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, content.size()) == content);
+	}
+	REQUIRE(cache.GetCachedFileCount() == 1);
+
+	held_entry.reset();
+	REQUIRE(cache.GetCachedFileCount() == 1);
+}
+
 TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file entries", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;

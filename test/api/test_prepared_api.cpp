@@ -48,7 +48,7 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	result = prepare->Execute(13);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	REQUIRE(prepare->named_param_map.size() == 1);
+	REQUIRE(prepare->GetParameterCount() == 1);
 }
 
 TEST_CASE("Test type resolution of function with parameter expressions", "[api]") {
@@ -155,6 +155,32 @@ TEST_CASE("Alter table and prepared statements", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {12}));
 }
 
+TEST_CASE("Test that prepared statements live in the client context", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto prepared_statement_count = [&con]() {
+		auto result = con.Query("SELECT count(*) FROM duckdb_prepared_statements()");
+		return result->GetValue(0, 0).GetValue<int64_t>();
+	};
+	REQUIRE(prepared_statement_count() == 0);
+
+	auto prepared = con.Prepare("SELECT $1::INTEGER");
+	REQUIRE(!prepared->HasError());
+	// the statement is prepared under a generated name in the client context
+	REQUIRE(prepared_statement_count() == 1);
+	REQUIRE(StringUtil::StartsWith(prepared->name, "duckdb_prepare_internal_"));
+	auto names = con.Query("SELECT name FROM duckdb_prepared_statements()");
+	REQUIRE(CHECK_COLUMN(names, 0, {Value(prepared->name)}));
+
+	auto result = prepared->Execute(42);
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// destroying the prepared statement deallocates it again
+	prepared.reset();
+	REQUIRE(prepared_statement_count() == 0);
+}
+
 TEST_CASE("Test destructors of prepared statements", "[api]") {
 	duckdb::unique_ptr<DuckDB> db;
 	duckdb::unique_ptr<Connection> con;
@@ -171,8 +197,8 @@ TEST_CASE("Test destructors of prepared statements", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {8}));
 	// now destroy the connection
 	con.reset();
-	// we can still use the prepared statement: the connection is alive until the prepared statement is dropped
-	REQUIRE_NO_FAIL(prepare->Execute(3, 5));
+	// the prepared statement lives in the connection - it can no longer be executed
+	REQUIRE_FAIL(prepare->Execute(3, 5));
 	// destroying the prepared statement is fine
 	prepare.reset();
 
@@ -272,27 +298,27 @@ TEST_CASE("Test prepared statement parameter counting", "[api]") {
 
 	auto p0 = con.Prepare("SELECT 42");
 	REQUIRE(!p0->HasError());
-	REQUIRE(p0->named_param_map.empty());
+	REQUIRE(p0->GetNamedParameterMap().empty());
 
 	auto p1 = con.Prepare("SELECT $1::int");
 	REQUIRE(!p1->HasError());
-	REQUIRE(p1->named_param_map.size() == 1);
+	REQUIRE(p1->GetParameterCount() == 1);
 
 	p1 = con.Prepare("SELECT ?::int");
 	REQUIRE(!p1->HasError());
-	REQUIRE(p1->named_param_map.size() == 1);
+	REQUIRE(p1->GetParameterCount() == 1);
 
 	auto p2 = con.Prepare("SELECT $1::int");
 	REQUIRE(!p2->HasError());
-	REQUIRE(p2->named_param_map.size() == 1);
+	REQUIRE(p2->GetParameterCount() == 1);
 
 	auto p3 = con.Prepare("SELECT ?::int, ?::string");
 	REQUIRE(!p3->HasError());
-	REQUIRE(p3->named_param_map.size() == 2);
+	REQUIRE(p3->GetParameterCount() == 2);
 
 	auto p4 = con.Prepare("SELECT $1::int, $2::string");
 	REQUIRE(!p4->HasError());
-	REQUIRE(p4->named_param_map.size() == 2);
+	REQUIRE(p4->GetParameterCount() == 2);
 }
 
 TEST_CASE("Test ANALYZE", "[api]") {
@@ -403,7 +429,7 @@ TEST_CASE("PREPARE multiple statements", "[prepared]") {
 	// we can use ExtractStatements to execute the individual statements though
 	auto statements = con.ExtractStatements(query);
 	for (auto &statement : statements) {
-		string stmt = query.substr(statement->stmt_location, statement->stmt_length);
+		string stmt = query.substr(statement->stmt_location.offset, statement->stmt_location.length);
 		prepared = con.Prepare(stmt);
 		REQUIRE(!prepared->HasError());
 

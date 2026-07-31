@@ -125,6 +125,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 
 static void mk_detail(void *info_arr, int bPrint) {
 	static thread_local int *pItemPermutation, nItemCount;
+	static thread_local int nItemPermutationSize;
 	struct W_WEB_SALES_TBL *r;
 	int nShipLag, nTemp;
 	struct W_WEB_RETURNS_TBL w_web_returns;
@@ -132,7 +133,14 @@ static void mk_detail(void *info_arr, int bPrint) {
 
 	if (!InitConstants::mk_detail_init) {
 		jDate = skipDays(WEB_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(pItemPermutation, nItemCount = (int)getIDCount(ITEM), WS_PERMUTATION);
+		nItemCount = (int)getIDCount(ITEM);
+		// A cached permutation is only reusable if it is at least as large as the
+		// current scale requires; otherwise re-allocate to avoid overflowing it.
+		if (nItemCount > nItemPermutationSize) {
+			pItemPermutation = NULL;
+			nItemPermutationSize = nItemCount;
+		}
+		pItemPermutation = makePermutation(pItemPermutation, nItemCount, WS_PERMUTATION);
 
 		InitConstants::mk_detail_init = 1;
 	}

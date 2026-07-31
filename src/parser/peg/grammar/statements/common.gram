@@ -3,6 +3,7 @@ Program <- TopLevelStatement*
 TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
+	ExternalResourceStatement /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /
@@ -37,6 +38,8 @@ Statement <-
 	ConnectStatement /
 	DisconnectStatement /
 	ExpressionStatement
+
+AnalyzeKeyword <- 'ANALYZE' / 'ANALYSE'
 
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
