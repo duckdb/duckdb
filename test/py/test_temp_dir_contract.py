@@ -170,6 +170,28 @@ def test_run_id_off_does_not_delete_the_caller_supplied_root(run, tmp_path):
     assert (root / "PRECIOUS.txt").is_file(), f"caller's root reaped: {tree(root)}"
 
 
+def _fail_after_prepare(run, tmp_path, *args):
+    """Fail startup once the tree exists: ValidateDataDirs runs after PrepareTempDir created it."""
+    result = run(TRIVIAL, *args, "--data-dir", str(tmp_path / "data-a"), "--local-data-dir", str(tmp_path / "data-b"))
+    assert result.returncode != 0, "invalid data-dir combination accepted"
+    assert "local-data-dir must equal data-dir" in result.stdout + result.stderr
+
+
+def test_startup_failure_after_prepare_still_reclaims(run, tmp_path):
+    """A return past PrepareTempDir owes the tree its disposition, same as a completed run."""
+    root = tmp_path / "root"
+    _fail_after_prepare(run, tmp_path, "--temp-dir-root", str(root), "--run-id", "R", "--temp-dir-destroy", "always")
+    assert not root.exists(), f"leaked after a startup failure: {tree(root)}"
+
+
+def test_startup_failure_after_prepare_honours_destroy_never(run, tmp_path):
+    """A failed startup is exactly when 'never' is asked to leave the tree for inspection."""
+    root = tmp_path / "root"
+    _fail_after_prepare(run, tmp_path, "--temp-dir-root", str(root), "--run-id", "R", "--temp-dir-destroy", "never")
+    assert (root / "R").is_dir(), f"run root reaped despite destroy=never: {tree(root)}"
+    assert homes(root), f"HOME reaped despite destroy=never: {tree(root)}"
+
+
 def test_empty_root_is_rejected(run):
     """Path::FromString("") is ".", so an empty root must be caught before it parses -- otherwise
     it silently roots the whole tree at the cwd."""

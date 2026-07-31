@@ -13,6 +13,18 @@
 
 using namespace duckdb;
 
+namespace {
+
+struct TempDirReclaimer {
+	~TempDirReclaimer() {
+		DestroyTempDir(success);
+	}
+
+	bool success = false;
+};
+
+} // namespace
+
 static bool IsSQLLogicTestFile(const string &path) {
 	return StringUtil::EndsWith(path, ".test") || StringUtil::EndsWith(path, ".test_slow") ||
 	       StringUtil::EndsWith(path, ".test_coverage");
@@ -143,6 +155,8 @@ int main(int argc_in, char *argv[]) {
 		fprintf(stderr, "Failed to prepare temp directory: %s\n", prep_error.c_str());
 		return 1;
 	}
+	TempDirReclaimer temp_dir_reclaimer;
+
 	// Capture env now that all --temp-dir-* context (base/run-id/create) is final; must run
 	// after PrepareTempDir so TEMP_DIR reflects the materialized run root.
 	test_config.UpdateEnvironment();
@@ -206,7 +220,7 @@ int main(int argc_in, char *argv[]) {
 	}
 
 	// Execute the run-id-level destroy disposition ($BASE/[RUN_ID]); pass/fail-aware, recursive.
-	DestroyTempDir(result == 0);
+	temp_dir_reclaimer.success = result == 0;
 
 	return result;
 }
