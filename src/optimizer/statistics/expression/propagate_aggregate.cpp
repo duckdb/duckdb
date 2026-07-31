@@ -4,7 +4,8 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggregateExpression &aggr,
-                                                                     unique_ptr<Expression> &expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr,
+                                                                     bool groups_are_non_empty) {
 	vector<BaseStatistics> stats;
 	stats.reserve(aggr.GetChildren().size());
 	for (auto &child : aggr.GetChildrenMutable()) {
@@ -18,7 +19,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 	if (!aggr.Function().GetCallbacks().HasStatisticsCallback()) {
 		return nullptr;
 	}
-	AggregateStatisticsInput input(aggr.BindInfo(), stats, node_stats.get());
+	AggregateStatisticsInput input(aggr.BindInfo(), stats, node_stats.get(), groups_are_non_empty);
 	return aggr.Function().GetCallbacks().GetStatisticsCallback()(context, aggr, input);
 }
 
