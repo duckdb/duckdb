@@ -1580,7 +1580,7 @@ static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter
 	}
 
 	auto leaf_comparison = BoundComparisonExpression::Create(
-	    comparison_type, make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL),
+	    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL),
 	    make_uniq<BoundConstantExpression>(constant->GetValue()));
 	leaf_filter = make_uniq<ExpressionFilter>(std::move(leaf_comparison));
 	return true;
