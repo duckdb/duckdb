@@ -7,6 +7,7 @@ project(ICUExtension)
 set_extension_version_sources(icu icu_extension.cpp)
 
 include_directories(include)
+include_directories(collation/include)
 option(WITH_INTERNAL_ICU "Use vendored copy of icu" TRUE)
 if(WITH_INTERNAL_ICU)
   include_directories(third_party/icu/common)
@@ -17,6 +18,11 @@ endif()
 
 set(ICU_EXTENSION_FILES
     ${ICU_LIBRARY_FILES}
+    collation/collation_collator.cpp
+    collation/collation_normalizer.cpp
+    collation/generated/collation_root_data.cpp
+    collation/generated/collation_normalization_data.cpp
+    collation/generated/collation_tailoring_data.cpp
     icu_extension.cpp
     icu-current.cpp
     icu-dateadd.cpp

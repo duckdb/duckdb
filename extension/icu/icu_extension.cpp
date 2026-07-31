@@ -26,42 +26,36 @@
 #include "unicode/timezone.h"
 #include "unicode/ucol.h"
 #include "icu-helpers.hpp"
+#include "collation_collator.hpp"
 
 #include <cassert>
 
 namespace duckdb {
 
+//! The collation settings of the tagged collations that are registered by the extension
+static collation::CollationSettings SettingsFromTag(const string &tag) {
+	collation::CollationSettings settings;
+	// "und-u-ks-level1-kc-true": compare at the primary level, but keep case differences
+	if (tag == "und-u-ks-level1-kc-true") {
+		settings.strength = collation::CollationStrength::PRIMARY;
+		settings.case_level = true;
+		return settings;
+	}
+	throw InvalidInputException("Unknown collation tag %s", tag);
+}
+
 struct IcuBindData : public FunctionData {
-	duckdb::unique_ptr<icu::Collator> collator;
+	collation::Collator collator;
 	string language;
 	string country;
 	string tag;
 
-	explicit IcuBindData(duckdb::unique_ptr<icu::Collator> collator_p) : collator(std::move(collator_p)) {
+	IcuBindData(string language_p, string country_p)
+	    : collator(country_p.empty() ? language_p : language_p + "_" + country_p), language(std::move(language_p)),
+	      country(std::move(country_p)) {
 	}
 
-	IcuBindData(string language_p, string country_p) : language(std::move(language_p)), country(std::move(country_p)) {
-		UErrorCode status = U_ZERO_ERROR;
-		auto locale = icu::Locale(language.c_str(), country.c_str());
-		if (locale.isBogus()) {
-			throw InvalidInputException("Locale is bogus!?");
-		}
-		this->collator = duckdb::unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
-		if (U_FAILURE(status)) {
-			auto error_name = u_errorName(status);
-			throw InvalidInputException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
-			                            language, country);
-		}
-	}
-
-	explicit IcuBindData(string tag_p) : tag(std::move(tag_p)) {
-		UErrorCode status = U_ZERO_ERROR;
-		UCollator *ucollator = ucol_open(tag.c_str(), &status);
-		if (U_FAILURE(status)) {
-			auto error_name = u_errorName(status);
-			throw InvalidInputException("Failed to create ICU collator with tag %s: %s", tag, error_name);
-		}
-		collator = unique_ptr<icu::Collator>(icu::Collator::fromUCollator(ucollator));
+	explicit IcuBindData(string tag_p) : collator(SettingsFromTag(tag_p)), tag(std::move(tag_p)) {
 	}
 
 	static duckdb::unique_ptr<FunctionData> CreateInstance(string language, string country, string tag) {
@@ -112,39 +106,66 @@ struct IcuBindData : public FunctionData {
 
 const string IcuBindData::FUNCTION_PREFIX = "icu_collate_";
 
-static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::unique_ptr<char[]> &buffer,
-                             int32_t &buffer_size) {
-	icu::UnicodeString unicode_string =
-	    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), int32_t(input.GetSize())));
-	int32_t string_size = collator.getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
-	if (string_size > buffer_size) {
-		// have to resize the buffer
-		buffer_size = string_size;
-		buffer = duckdb::unique_ptr<char[]>(new char[buffer_size]);
-
-		string_size = collator.getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
-	}
-	return string_size;
-}
-
 static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.BindInfo()->Cast<IcuBindData>();
-	auto &collator = *info.collator;
+	auto &collator = info.collator;
+
+	collation::CollationBuffer buffer;
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
+		// create a sort key from the string, the trailing null byte is not part of the result
+		collator.GetSortKey(input.GetData(), input.GetSize(), buffer);
+		auto &key = buffer.key;
+		auto string_size = key.size() - 1;
+		// convert the sort key to hexadecimal
+		auto str_result = StringVector::EmptyString(result, string_size * 2);
+		auto str_data = str_result.GetDataWriteable();
+		for (idx_t i = 0; i < string_size; i++) {
+			auto byte = key[i];
+			D_ASSERT(byte != 0);
+			str_data[i * 2] = HEX_TABLE[byte / 16];
+			str_data[i * 2 + 1] = HEX_TABLE[byte % 16];
+		}
+		str_result.Finalize();
+		return str_result;
+	});
+}
+
+// TODO: temporary, the reference implementation the built-in collator is verified against
+static void ICUReferenceCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.BindInfo()->Cast<IcuBindData>();
+	UErrorCode status = U_ZERO_ERROR;
+	duckdb::unique_ptr<icu::Collator> collator;
+	if (!info.tag.empty()) {
+		collator =
+		    duckdb::unique_ptr<icu::Collator>(icu::Collator::fromUCollator(ucol_open(info.tag.c_str(), &status)));
+	} else {
+		collator = duckdb::unique_ptr<icu::Collator>(
+		    icu::Collator::createInstance(icu::Locale(info.language.c_str(), info.country.c_str()), status));
+	}
+	if (U_FAILURE(status)) {
+		throw InvalidInputException("Failed to create ICU collator: %s", u_errorName(status));
+	}
 
 	duckdb::unique_ptr<char[]> buffer;
 	int32_t buffer_size = 0;
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
-		// create a sort key from the string
-		const auto string_size = idx_t(ICUGetSortKey(collator, input, buffer, buffer_size));
-		// convert the sort key to hexadecimal
-		auto str_result = StringVector::EmptyString(result, (string_size - 1) * 2);
+		auto unicode_string = icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), int32_t(input.GetSize())));
+		auto string_size = collator->getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
+		if (string_size > buffer_size) {
+			buffer_size = string_size;
+			buffer = duckdb::unique_ptr<char[]>(new char[buffer_size]);
+			string_size = collator->getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
+		}
+		auto str_result = StringVector::EmptyString(result, idx_t(string_size - 1) * 2);
 		auto str_data = str_result.GetDataWriteable();
-		for (idx_t i = 0; i < string_size - 1; i++) {
-			uint8_t byte = uint8_t(buffer[i]);
-			D_ASSERT(byte != 0);
+		for (idx_t i = 0; i < idx_t(string_size - 1); i++) {
+			auto byte = uint8_t(buffer[i]);
 			str_data[i * 2] = HEX_TABLE[byte / 16];
 			str_data[i * 2 + 1] = HEX_TABLE[byte % 16];
 		}
@@ -450,20 +471,7 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 
 static void LoadInternal(ExtensionLoader &loader) {
 	// iterate over all the collations
-	int32_t count;
-	auto locales = icu::Collator::getAvailableLocales(count);
-	for (int32_t i = 0; i < count; i++) {
-		string collation;
-		const auto &locale = locales[i]; // NOLINT
-		if (string(locale.getCountry()).empty()) {
-			// language only
-			collation = locale.getLanguage();
-		} else {
-			// language + country
-			collation = locale.getLanguage() + string("_") + locale.getCountry();
-		}
-		collation = StringUtil::Lower(collation);
-
+	for (auto &collation : collation::Collator::GetCollations()) {
 		CreateCollationInfo info(Identifier(collation), GetICUCollateFunction(collation, ""), false, false);
 		loader.RegisterCollation(info);
 	}
@@ -485,6 +493,12 @@ static void LoadInternal(ExtensionLoader &loader) {
 	ScalarFunction sort_key("icu_sort_key", {{"str", LogicalType::VARCHAR}, {"collator", LogicalType::VARCHAR}},
 	                        LogicalType::VARCHAR, ICUCollateFunction, ICUSortKeyBind);
 	loader.RegisterFunction(sort_key);
+
+	// TODO: temporary, used to verify the built-in collator against ICU
+	ScalarFunction reference_sort_key("icu_sort_key_reference",
+	                                  {{"str", LogicalType::VARCHAR}, {"collator", LogicalType::VARCHAR}},
+	                                  LogicalType::VARCHAR, ICUReferenceCollateFunction, ICUSortKeyBind);
+	loader.RegisterFunction(reference_sort_key);
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
