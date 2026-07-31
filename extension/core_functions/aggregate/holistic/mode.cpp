@@ -636,6 +636,7 @@ AggregateFunction GetEntropyCountsAggregate() {
 	auto function = AggregateFunction::UnaryAggregate<EntropyCountsState, int64_t, double, EntropyCountsFunction>(
 	    LogicalType::BIGINT, LogicalType::DOUBLE);
 	function.SetName(InternalEntropyFromCountsFun::Name);
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }
 
