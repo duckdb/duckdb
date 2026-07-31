@@ -209,6 +209,7 @@ structs:
       - name: size
         type: idx
   bignum:
+    renamed_from: { name: varint, version: "v1.4.0" }
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     description: "A DuckDB BIGNUM (uint8_t* + size + is_negative). The absolute value is stored in data in big endian format. Free data with duckdb_free."

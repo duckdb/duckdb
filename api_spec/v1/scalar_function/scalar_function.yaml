@@ -1,6 +1,7 @@
 module: scalar_function
 functions:
   create_scalar_function:
+    offset: 209
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
@@ -13,6 +14,7 @@ functions:
       The return value must be destroyed with `duckdb_destroy_scalar_function`.
     return_description: The scalar function object.
   destroy_scalar_function:
+    offset: 210
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
@@ -26,6 +28,7 @@ functions:
     description: |
       Destroys the given scalar function object.
   scalar_function_set_name:
+    offset: 211
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -41,6 +44,7 @@ functions:
     description: |
       Sets the name of the given scalar function.
   scalar_function_set_varargs:
+    offset: 212
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -56,6 +60,7 @@ functions:
       duckdb_scalar_function_add_parameter.
     return_description: The parameter type. Cannot contain INVALID.
   scalar_function_set_special_handling:
+    offset: 213
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -66,6 +71,7 @@ functions:
     description: |
       Sets the scalar function's null-handling behavior to special.
   scalar_function_set_volatile:
+    offset: 214
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -77,6 +83,7 @@ functions:
       Sets the Function Stability of the scalar function to VOLATILE, indicating the function should be re-run for every row.
       This limits optimization that can be performed for the function.
   scalar_function_add_parameter:
+    offset: 215
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -90,6 +97,7 @@ functions:
     description: |
       Adds a parameter to the scalar function.
   scalar_function_set_return_type:
+    offset: 216
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -103,6 +111,7 @@ functions:
     description: |
       Sets the return type of the scalar function.
   scalar_function_set_extra_info:
+    offset: 217
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -120,6 +129,7 @@ functions:
     description: |
       Assigns extra information to the scalar function that can be fetched during binding, etc.
   scalar_function_set_bind:
+    offset: 511
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.3.0", "2025-05-21"]
@@ -134,6 +144,7 @@ functions:
     description: |
       Sets the (optional) bind function of the scalar function.
   scalar_function_set_bind_data:
+    offset: 514
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.3.0", "2025-05-21"]
@@ -154,6 +165,7 @@ functions:
       The bind data object can be retrieved again during execution.
       In most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy.
   scalar_function_set_bind_data_copy:
+    offset: 519
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -168,6 +180,7 @@ functions:
     description: |
       Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.
   scalar_function_bind_set_error:
+    offset: 512
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.3.0", "2025-05-21"]
@@ -184,6 +197,7 @@ functions:
     description: |
       Report that an error has occurred while calling bind on a scalar function.
   scalar_function_set_function:
+    offset: 218
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -197,6 +211,7 @@ functions:
     description: |
       Sets the main function of the scalar function.
   register_scalar_function:
+    offset: 219
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -215,6 +230,7 @@ functions:
       If the function is incomplete or a function with this name already exists DuckDBError is returned.
     return_description: Whether or not the registration was successful.
   scalar_function_get_extra_info:
+    offset: 220
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -227,6 +243,7 @@ functions:
       Retrieves the extra info of the function as set in `duckdb_scalar_function_set_extra_info`.
     return_description: The extra info.
   scalar_function_bind_get_extra_info:
+    offset: 516
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -240,6 +257,7 @@ functions:
       Retrieves the extra info of the function as set in the bind info.
     return_description: The extra info.
   scalar_function_get_bind_data:
+    offset: 515
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.3.0", "2025-05-21"]
@@ -254,6 +272,7 @@ functions:
       Note that the bind data is read-only.
     return_description: The bind data object.
   scalar_function_get_client_context:
+    offset: 513
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.3.0", "2025-05-21"]
@@ -270,6 +289,7 @@ functions:
     description: |
       Retrieves the client context of the bind info of a scalar function.
   scalar_function_set_error:
+    offset: 221
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -285,6 +305,7 @@ functions:
     description: |
       Report that an error has occurred while executing the scalar function.
   create_scalar_function_set:
+    offset: 222
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
@@ -301,6 +322,7 @@ functions:
       The return value must be destroyed with `duckdb_destroy_scalar_function_set`.
     return_description: The scalar function set object.
   destroy_scalar_function_set:
+    offset: 223
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
@@ -313,6 +335,7 @@ functions:
     description: |
       Destroys the given scalar function set object.
   add_scalar_function_to_set:
+    offset: 224
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -328,6 +351,7 @@ functions:
 
       Returns DuckDBError if the function could not be added, for example if the overload already exists.
   register_scalar_function_set:
+    offset: 225
     lifecycle:
       - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
@@ -346,6 +370,7 @@ functions:
       If the set is incomplete or a function with this name already exists DuckDBError is returned.
     return_description: Whether or not the registration was successful.
   scalar_function_bind_get_argument_count:
+    offset: 517
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -358,6 +383,7 @@ functions:
       Returns the number of input arguments of the scalar function.
     return_description: The number of input arguments.
   scalar_function_bind_get_argument:
+    offset: 518
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -373,6 +399,7 @@ functions:
       Returns the input argument at index of the scalar function.
     return_description: The input argument at index. Must be destroyed with `duckdb_destroy_expression`.
   scalar_function_get_state:
+    offset: 520
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -386,6 +413,7 @@ functions:
       Retrieves the state pointer of the function info.
     return_description: The state pointer.
   scalar_function_set_init:
+    offset: 521
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -401,6 +429,7 @@ functions:
       Sets the (optional) state init function of the scalar function.
       This is called once for each worker thread that begins executing the function
   scalar_function_init_set_error:
+    offset: 522
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -417,6 +446,7 @@ functions:
     description: |
       Report that an error has occurred while calling init on a scalar function.
   scalar_function_init_set_state:
+    offset: 523
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -435,6 +465,7 @@ functions:
     description: |
       Sets the state pointer in the init info of the scalar function.
   scalar_function_init_get_client_context:
+    offset: 524
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -451,6 +482,7 @@ functions:
     description: |
       Retrieves the client context of the init info of a scalar function.
   scalar_function_init_get_bind_data:
+    offset: 525
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -465,6 +497,7 @@ functions:
       Note that the bind data is read-only.
     return_description: The bind data object.
   scalar_function_init_get_extra_info:
+    offset: 526
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]

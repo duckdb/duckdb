@@ -1,6 +1,7 @@
 module: datetime_helpers
 functions:
   from_date:
+    offset: 30
     lifecycle:
       - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
@@ -12,6 +13,7 @@ functions:
       Decompose a `duckdb_date` object into year, month and date (stored as `duckdb_date_struct`).
     return_description: The `duckdb_date_struct` with the decomposed elements.
   to_date:
+    offset: 31
     lifecycle:
       - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
@@ -23,6 +25,7 @@ functions:
       Re-compose a `duckdb_date` from year, month and date (`duckdb_date_struct`).
     return_description: The `duckdb_date` element.
   is_finite_date:
+    offset: 32
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -34,6 +37,7 @@ functions:
       Test a `duckdb_date` to see if it is a finite value.
     return_description: True if the date is finite, false if it is ±infinity.
   from_time:
+    offset: 33
     lifecycle:
       - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
@@ -45,6 +49,7 @@ functions:
       Decompose a `duckdb_time` object into hour, minute, second and microsecond (stored as `duckdb_time_struct`).
     return_description: The `duckdb_time_struct` with the decomposed elements.
   create_time_tz:
+    offset: 34
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -59,6 +64,7 @@ functions:
       Create a `duckdb_time_tz` object from micros and a timezone offset.
     return_description: The `duckdb_time_tz` element.
   from_time_tz:
+    offset: 35
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -71,6 +77,7 @@ functions:
 
       Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
   to_time:
+    offset: 36
     lifecycle:
       - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
@@ -82,6 +89,7 @@ functions:
       Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).
     return_description: The `duckdb_time` element.
   from_timestamp:
+    offset: 37
     lifecycle:
       - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
@@ -93,6 +101,7 @@ functions:
       Decompose a `duckdb_timestamp` object into a `duckdb_timestamp_struct`.
     return_description: The `duckdb_timestamp_struct` with the decomposed elements.
   to_timestamp:
+    offset: 38
     lifecycle:
       - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
@@ -104,6 +113,7 @@ functions:
       Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
     return_description: The `duckdb_timestamp` element.
   is_finite_timestamp:
+    offset: 39
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -115,6 +125,7 @@ functions:
       Test a `duckdb_timestamp` to see if it is a finite value.
     return_description: True if the timestamp is finite, false if it is ±infinity.
   is_finite_timestamp_s:
+    offset: 319
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -126,6 +137,7 @@ functions:
       Test a `duckdb_timestamp_s` to see if it is a finite value.
     return_description: True if the timestamp is finite, false if it is ±infinity.
   is_finite_timestamp_ms:
+    offset: 320
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -137,6 +149,7 @@ functions:
       Test a `duckdb_timestamp_ms` to see if it is a finite value.
     return_description: True if the timestamp is finite, false if it is ±infinity.
   is_finite_timestamp_ns:
+    offset: 321
     lifecycle:
       - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
@@ -148,6 +161,7 @@ functions:
       Test a `duckdb_timestamp_ns` to see if it is a finite value.
     return_description: True if the timestamp is finite, false if it is ±infinity.
   hugeint_to_double:
+    offset: 40
     lifecycle:
       - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
@@ -159,6 +173,7 @@ functions:
       Converts a duckdb_hugeint object (as obtained from a `DUCKDB_TYPE_HUGEINT` column) into a double.
     return_description: The converted `double` element.
   double_to_hugeint:
+    offset: 41
     lifecycle:
       - ["stable", "v0.2.9", "2021-09-06"]
     parameters:
@@ -172,6 +187,7 @@ functions:
       If the conversion fails because the double value is too big the result will be 0.
     return_description: The converted `duckdb_hugeint` element.
   uhugeint_to_double:
+    offset: 42
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -183,6 +199,7 @@ functions:
       Converts a duckdb_uhugeint object (as obtained from a `DUCKDB_TYPE_UHUGEINT` column) into a double.
     return_description: The converted `double` element.
   double_to_uhugeint:
+    offset: 43
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -196,6 +213,7 @@ functions:
       If the conversion fails because the double value is too big the result will be 0.
     return_description: The converted `duckdb_uhugeint` element.
   double_to_decimal:
+    offset: 44
     lifecycle:
       - ["stable", "v0.6.0", "2022-11-14"]
     parameters:
@@ -213,6 +231,7 @@ functions:
       If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
     return_description: The converted `duckdb_decimal` element.
   decimal_to_double:
+    offset: 45
     lifecycle:
       - ["stable", "v0.3.3", "2022-04-11"]
     parameters:

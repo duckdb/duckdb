@@ -1,6 +1,7 @@
 module: pending
 functions:
   pending_prepared:
+    offset: 85
     lifecycle:
       - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
@@ -22,6 +23,7 @@ functions:
       `duckdb_destroy_pending`, even if this function returns DuckDBError.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   destroy_pending:
+    offset: 86
     lifecycle:
       - ["stable", "v0.5.0", "2022-09-04"]
     role: destructor
@@ -35,6 +37,7 @@ functions:
     description: |
       Closes the pending result and de-allocates all memory allocated for the result.
   pending_error:
+    offset: 87
     lifecycle:
       - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
@@ -50,6 +53,7 @@ functions:
       The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_pending` is called.
     return_description: The error of the pending result.
   pending_execute_task:
+    offset: 88
     lifecycle:
       - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
@@ -67,6 +71,7 @@ functions:
       The error message can be obtained by calling duckdb_pending_error on the pending_result.
     return_description: The state of the pending result after the execution.
   pending_execute_check_state:
+    offset: 89
     lifecycle:
       - ["stable", "v0.10.0", "2024-02-13"]
     parameters:
@@ -82,6 +87,7 @@ functions:
       The error message can be obtained by calling duckdb_pending_error on the pending_result.
     return_description: The state of the pending result.
   execute_pending:
+    offset: 90
     lifecycle:
       - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
@@ -103,6 +109,7 @@ functions:
       Note that the result must be freed with `duckdb_destroy_result`.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   pending_execution_is_finished:
+    offset: 91
     lifecycle:
       - ["stable", "v0.9.0", "2023-09-26"]
     parameters:

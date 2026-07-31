@@ -7,6 +7,8 @@ aliases:
     description: "Alias for the DUCKDB_TYPE enum."
 enums:
   TYPE:
+    lifecycle:
+      - ["stable", "v0.1.0", "2019-06-27"]
     description: "An enum over DuckDB's internal types."
     values:
       TYPE_INVALID: {value: 0}

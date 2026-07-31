@@ -1,6 +1,7 @@
 module: copy_function
 functions:
   create_copy_function:
+    offset: 432
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -14,6 +15,7 @@ functions:
       The return value must be destroyed with `duckdb_destroy_copy_function`.
     return_description: The copy function object.
   copy_function_set_name:
+    offset: 433
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -30,6 +32,7 @@ functions:
     description: |
       Sets the name of the copy function.
   copy_function_set_extra_info:
+    offset: 434
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -48,6 +51,7 @@ functions:
     description: |
       Sets the extra info pointer of the copy function, which can be used to store arbitrary data.
   register_copy_function:
+    offset: 435
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -62,6 +66,7 @@ functions:
     description: |
       Registers the given copy function on the database connection under the specified name.
   destroy_copy_function:
+    offset: 436
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -76,6 +81,7 @@ functions:
     description: |
       Destroys the given copy function object.
   copy_function_set_bind:
+    offset: 437
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -89,6 +95,7 @@ functions:
     description: |
       Sets the bind function of the copy function, to use when binding `COPY ... TO`.
   copy_function_bind_set_error:
+    offset: 438
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -105,6 +112,7 @@ functions:
     description: |
       Report that an error occurred during the binding-phase of a `COPY ... TO` function.
   copy_function_bind_get_extra_info:
+    offset: 439
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -118,6 +126,7 @@ functions:
       Retrieves the extra info pointer of the copy function.
     return_description: The extra info pointer.
   copy_function_bind_get_client_context:
+    offset: 440
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -132,6 +141,7 @@ functions:
       Must be destroyed with `duckdb_destroy_client_context`
     return_description: The client context.
   copy_function_bind_get_column_count:
+    offset: 441
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -144,6 +154,7 @@ functions:
       Retrieves the number of columns that will be provided to the `COPY ... TO` function.
     return_description: The number of columns.
   copy_function_bind_get_column_type:
+    offset: 442
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -159,6 +170,7 @@ functions:
       Retrieves the type of a column that will be provided to the `COPY ... TO` function.
     return_description: The type of the column. Must be destroyed with `duckdb_destroy_logical_type`.
   copy_function_bind_get_options:
+    offset: 443
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -171,6 +183,7 @@ functions:
       Retrieves all values for the given options provided to the `COPY ... TO` function.
     return_description: A STRUCT value containing all options as fields. Must be destroyed with `duckdb_destroy_value`.
   copy_function_bind_set_bind_data:
+    offset: 444
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -189,6 +202,7 @@ functions:
     description: |
       Sets the bind data of the copy function, to be provided to the init, sink and finalize functions.
   copy_function_set_global_init:
+    offset: 445
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -202,6 +216,7 @@ functions:
     description: |
       Sets the initialization function of the copy function, called right before executing `COPY ... TO`.
   copy_function_global_init_set_error:
+    offset: 446
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -218,6 +233,7 @@ functions:
     description: |
       Report that an error occurred during the initialization-phase of a `COPY ... TO` function.
   copy_function_global_init_get_extra_info:
+    offset: 447
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -231,6 +247,7 @@ functions:
       Retrieves the extra info pointer of the copy function.
     return_description: The extra info pointer.
   copy_function_global_init_get_client_context:
+    offset: 448
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -245,6 +262,7 @@ functions:
       Must be destroyed with `duckdb_destroy_client_context`
     return_description: The client context.
   copy_function_global_init_get_bind_data:
+    offset: 449
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -258,6 +276,7 @@ functions:
       Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
     return_description: The bind data pointer.
   copy_function_global_init_get_file_path:
+    offset: 451
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -274,6 +293,7 @@ functions:
       Lives for the duration of the initialization callback, must not be destroyed.
     return_description: The file path.
   copy_function_global_init_set_global_state:
+    offset: 450
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -292,6 +312,7 @@ functions:
     description: |
       Sets the global state of the copy function, to be provided to all subsequent local init, sink and finalize functions.
   copy_function_set_sink:
+    offset: 452
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -305,6 +326,7 @@ functions:
     description: |
       Sets the sink function of the copy function, called during `COPY ... TO`.
   copy_function_sink_set_error:
+    offset: 453
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -321,6 +343,7 @@ functions:
     description: |
       Report that an error occurred during the sink-phase of a `COPY ... TO` function.
   copy_function_sink_get_extra_info:
+    offset: 454
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -334,6 +357,7 @@ functions:
       Retrieves the extra info pointer of the copy function.
     return_description: The extra info pointer.
   copy_function_sink_get_client_context:
+    offset: 455
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -348,6 +372,7 @@ functions:
       Must be destroyed with `duckdb_destroy_client_context`
     return_description: The client context.
   copy_function_sink_get_bind_data:
+    offset: 456
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -361,6 +386,7 @@ functions:
       Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
     return_description: The bind data pointer.
   copy_function_sink_get_global_state:
+    offset: 457
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -374,6 +400,7 @@ functions:
       Retrieves the global state provided during the init-phase of a `COPY ... TO` function.
     return_description: The global state pointer.
   copy_function_set_finalize:
+    offset: 458
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -387,6 +414,7 @@ functions:
     description: |
       Sets the finalize function of the copy function, called at the end of `COPY ... TO`.
   copy_function_finalize_set_error:
+    offset: 459
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -403,6 +431,7 @@ functions:
     description: |
       Report that an error occurred during the finalize-phase of a `COPY ... TO` function
   copy_function_finalize_get_extra_info:
+    offset: 460
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -416,6 +445,7 @@ functions:
       Retrieves the extra info pointer of the copy function.
     return_description: The extra info pointer.
   copy_function_finalize_get_client_context:
+    offset: 461
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -430,6 +460,7 @@ functions:
       Must be destroyed with `duckdb_destroy_client_context`
     return_description: The client context.
   copy_function_finalize_get_bind_data:
+    offset: 462
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -443,6 +474,7 @@ functions:
       Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
     return_description: The bind data pointer.
   copy_function_finalize_get_global_state:
+    offset: 463
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]
@@ -456,6 +488,7 @@ functions:
       Retrieves the global state provided during the init-phase of a `COPY ... TO` function.
     return_description: The global state pointer.
   copy_function_set_copy_from_function:
+    offset: 464
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.5.0", "2026-03-06"]

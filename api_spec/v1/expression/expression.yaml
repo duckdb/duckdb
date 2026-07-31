@@ -1,6 +1,7 @@
 module: expression
 functions:
   destroy_expression:
+    offset: 473
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -15,6 +16,7 @@ functions:
     description: |
       Destroys the expression and de-allocates its memory.
   expression_return_type:
+    offset: 474
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -27,6 +29,7 @@ functions:
       Returns the return type of an expression.
     return_description: The return type. Must be destroyed with `duckdb_destroy_logical_type`.
   expression_is_foldable:
+    offset: 475
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
@@ -39,6 +42,7 @@ functions:
       Returns whether the expression is foldable into a value or not.
     return_description: True, if the expression is foldable, else false.
   expression_fold:
+    offset: 476
     lifecycle:
       - ["stable", "v1.5.6", "2026-07-30"]
       - ["unstable", "v1.4.0", "2025-09-15"]
