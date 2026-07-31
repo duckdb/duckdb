@@ -627,6 +627,9 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	}
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 
+	if (!window_expr.ArgOrders().empty()) {
+		return false;
+	}
 	if (window_expr.OrderBy().size() != 1) {
 		return false;
 	}
