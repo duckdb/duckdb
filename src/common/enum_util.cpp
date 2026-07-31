@@ -4454,6 +4454,24 @@ PipelineBroadcastExchangeOrderMode EnumUtil::FromString<PipelineBroadcastExchang
 	return static_cast<PipelineBroadcastExchangeOrderMode>(StringUtil::StringToEnum(GetPipelineBroadcastExchangeOrderModeValues(), 3, "PipelineBroadcastExchangeOrderMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetPipelineBroadcastExchangeScanModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PipelineBroadcastExchangeScanMode::CHUNK), "CHUNK" },
+		{ static_cast<uint32_t>(PipelineBroadcastExchangeScanMode::BATCH), "BATCH" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeScanMode>(PipelineBroadcastExchangeScanMode value) {
+	return StringUtil::EnumToString(GetPipelineBroadcastExchangeScanModeValues(), 2, "PipelineBroadcastExchangeScanMode", static_cast<uint32_t>(value));
+}
+
+template<>
+PipelineBroadcastExchangeScanMode EnumUtil::FromString<PipelineBroadcastExchangeScanMode>(const char *value) {
+	return static_cast<PipelineBroadcastExchangeScanMode>(StringUtil::StringToEnum(GetPipelineBroadcastExchangeScanModeValues(), 2, "PipelineBroadcastExchangeScanMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetPipelineInputModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(PipelineInputMode::SCHEDULED_SOURCE), "SCHEDULED_SOURCE" },
@@ -5487,6 +5505,7 @@ SortKeyType EnumUtil::FromString<SortKeyType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetSourceResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SourceResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
+		{ static_cast<uint32_t>(SourceResultType::BATCH_ADVANCED), "BATCH_ADVANCED" },
 		{ static_cast<uint32_t>(SourceResultType::FINISHED), "FINISHED" },
 		{ static_cast<uint32_t>(SourceResultType::BLOCKED), "BLOCKED" }
 	};
@@ -5495,12 +5514,12 @@ const StringUtil::EnumStringLiteral *GetSourceResultTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value) {
-	return StringUtil::EnumToString(GetSourceResultTypeValues(), 3, "SourceResultType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSourceResultTypeValues(), 4, "SourceResultType", static_cast<uint32_t>(value));
 }
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value) {
-	return static_cast<SourceResultType>(StringUtil::StringToEnum(GetSourceResultTypeValues(), 3, "SourceResultType", value));
+	return static_cast<SourceResultType>(StringUtil::StringToEnum(GetSourceResultTypeValues(), 4, "SourceResultType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStarExpressionTypeValues() {

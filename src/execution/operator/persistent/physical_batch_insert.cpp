@@ -499,6 +499,13 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 	return SinkNextBatchType::READY;
 }
 
+SinkNextBatchType PhysicalBatchInsert::UpdateMinBatchIndex(ExecutionContext &,
+                                                           OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
+	gstate.memory_manager.UpdateMinBatchIndex(input.local_state.partition_info.min_batch_index.GetIndex());
+	return SinkNextBatchType::READY;
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//

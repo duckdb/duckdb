@@ -72,6 +72,8 @@ public:
 	                                        optional_idx source_min_batch_index);
 	//! Completes the current batch of an externally-fed pipeline
 	PipelineExecuteResult FinishBatchExternal(optional_idx source_min_batch_index);
+	//! Propagates a minimum batch index change through an externally-fed pipeline
+	PipelineExecuteResult UpdateMinBatchIndexExternal(optional_idx source_min_batch_index);
 	//! Finalizes an externally-fed pipeline executor after the producer is exhausted
 	PipelineExecuteResult FinishExternal(optional_idx source_min_batch_index);
 
@@ -158,6 +160,9 @@ private:
 	//! This flag is set when the pipeline gets interrupted by NextBatch -> NextBatch should be called again and the
 	//! source_chunk should be sent through the pipeline
 	bool next_batch_blocked = false;
+	//! A source advanced its batch index without producing another chunk
+	optional_idx pending_source_batch_index;
+	bool pending_min_batch_update = false;
 
 	//! Current operator being flushed
 	idx_t flushing_idx;
@@ -183,6 +188,7 @@ private:
 	//! Wrappers for sink/source calls to respective operators
 	SourceResultType GetData(DataChunk &chunk, OperatorSourceInput &input);
 	SinkResultType Sink(DataChunk &chunk, OperatorSinkInput &input);
+	SinkNextBatchType UpdateMinBatchIndex();
 
 	OperatorResultType ExecutePushInternal(DataChunk &input, ExecutionBudget &chunk_budget, idx_t initial_idx = 0);
 	PipelineExecuteResult PushInputChunk(DataChunk &input, ExecutionBudget &chunk_budget, PipelineInputChunkMode mode);
@@ -213,6 +219,7 @@ private:
 	int debug_blocked_source_count = 0;
 	int debug_blocked_combine_count = 0;
 	int debug_blocked_next_batch_count = 0;
+	int debug_blocked_min_batch_count = 0;
 	//! Number of times the Sink/Source will block before actually returning data
 	int debug_blocked_target_count = 1;
 #endif

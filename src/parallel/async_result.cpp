@@ -180,6 +180,8 @@ AsyncResultType AsyncResult::GetAsyncResultType(SourceResultType s) {
 	switch (s) {
 	case SourceResultType::HAVE_MORE_OUTPUT:
 		return AsyncResultType::HAVE_MORE_OUTPUT;
+	case SourceResultType::BATCH_ADVANCED:
+		throw InternalException("Async sources cannot finish a partition batch without output");
 	case SourceResultType::FINISHED:
 		return AsyncResultType::FINISHED;
 	case SourceResultType::BLOCKED:

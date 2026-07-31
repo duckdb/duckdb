@@ -400,6 +400,8 @@ enum class PipelineBroadcastExchangeConsumerMode : uint8_t;
 
 enum class PipelineBroadcastExchangeOrderMode : uint8_t;
 
+enum class PipelineBroadcastExchangeScanMode : uint8_t;
+
 enum class PipelineInputMode : uint8_t;
 
 enum class PipelineScheduleMode : uint8_t;
@@ -1158,6 +1160,9 @@ const char* EnumUtil::ToChars<PipelineBroadcastExchangeConsumerMode>(PipelineBro
 
 template<>
 const char* EnumUtil::ToChars<PipelineBroadcastExchangeOrderMode>(PipelineBroadcastExchangeOrderMode value);
+
+template<>
+const char* EnumUtil::ToChars<PipelineBroadcastExchangeScanMode>(PipelineBroadcastExchangeScanMode value);
 
 template<>
 const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value);
@@ -2020,6 +2025,9 @@ PipelineBroadcastExchangeConsumerMode EnumUtil::FromString<PipelineBroadcastExch
 
 template<>
 PipelineBroadcastExchangeOrderMode EnumUtil::FromString<PipelineBroadcastExchangeOrderMode>(const char *value);
+
+template<>
+PipelineBroadcastExchangeScanMode EnumUtil::FromString<PipelineBroadcastExchangeScanMode>(const char *value);
 
 template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value);
