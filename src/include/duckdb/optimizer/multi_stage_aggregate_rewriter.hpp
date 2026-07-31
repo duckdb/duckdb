@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/distinct_aggregate_rewriter.hpp
+// duckdb/optimizer/multi_stage_aggregate_rewriter.hpp
 //
 //===----------------------------------------------------------------------===//
 
@@ -14,11 +14,11 @@
 namespace duckdb {
 class Optimizer;
 
-//! The DistinctAggregateRewriter turns each DISTINCT argument/filter set into a deduplication aggregate followed by
-//! a non-distinct aggregate. Multiple sets share the original input through a CTE and join on the original group keys.
-class DistinctAggregateRewriter : public LogicalOperatorVisitor {
+//! Rewrites aggregates that require multiple aggregate stages. Compatible branches share their input through a CTE
+//! and are joined on the original group keys.
+class MultiStageAggregateRewriter : public LogicalOperatorVisitor {
 public:
-	explicit DistinctAggregateRewriter(Optimizer &optimizer);
+	MultiStageAggregateRewriter(Optimizer &optimizer, bool rewrite_distinct, bool rewrite_frequency);
 
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
@@ -28,6 +28,8 @@ private:
 
 private:
 	Optimizer &optimizer;
+	bool rewrite_distinct;
+	bool rewrite_frequency;
 	column_binding_map_t<ColumnBinding> replacement_map;
 };
 

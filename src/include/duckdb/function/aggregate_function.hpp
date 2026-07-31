@@ -20,6 +20,7 @@ namespace duckdb {
 class BufferManager;
 class InterruptState;
 class BoundAggregateFunction;
+class BoundAggregateExpression;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -128,6 +129,25 @@ typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deseri
 
 typedef AggregateStateLayout (*aggregate_get_state_type_t)(AggregateLayoutInput &input);
 
+enum class AggregateRewriteType : uint8_t { FREQUENCY };
+
+//! Describes an aggregate that the optimizer can execute using multiple aggregate stages.
+class DUCKDB_API AggregateRewriteInfo {
+public:
+	virtual ~AggregateRewriteInfo();
+
+	virtual AggregateRewriteType GetType() const = 0;
+	virtual bool IgnoreNulls() const = 0;
+	//! A frequency rewrite supplies the distinct value and its frequency as children.
+	virtual unique_ptr<BoundAggregateExpression>
+	CreateFinalAggregate(ClientContext &context, const BoundAggregateExpression &source,
+	                     vector<unique_ptr<Expression>> children, unique_ptr<Expression> filter,
+	                     unique_ptr<BoundOrderModifier> order_bys) const = 0;
+};
+
+//! The returned rewrite information must remain valid for the lifetime of the function.
+typedef const AggregateRewriteInfo &(*aggregate_rewrite_t)();
+
 //! Input to the import_aggregate_state callback: deserializes the input_vec.size() exported states from input_vec into
 //! dest_buffer (state i at offset i * layout.total_state_size).
 struct AggregateImportInputData {
@@ -230,6 +250,10 @@ public:
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
 
+	bool HasRewriteCallback() const { return rewrite != nullptr; }
+	aggregate_rewrite_t GetRewriteCallback() const { return rewrite; }
+	void SetRewriteCallback(aggregate_rewrite_t callback) { rewrite = callback; }
+
 public:
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size = nullptr;
@@ -264,6 +288,9 @@ public:
 	aggregate_serialize_t serialize = nullptr;
 
 	aggregate_deserialize_t deserialize = nullptr;
+
+	//! Optional logical-plan rewrite for aggregates represented by multiple aggregate stages.
+	aggregate_rewrite_t rewrite = nullptr;
 
 	aggregate_get_state_type_t get_state_type = nullptr;
 
@@ -389,6 +416,10 @@ public: // Callbacks
 	auto SetDeserializeCallback(aggregate_deserialize_t callback) -> void { callbacks.deserialize = callback; }
 	auto GetSerializeCallback() const -> aggregate_serialize_t { return callbacks.serialize; }
 	auto GetDeserializeCallback() const -> aggregate_deserialize_t { return callbacks.deserialize; }
+
+	auto HasRewriteCallback() const -> bool { return callbacks.rewrite != nullptr; }
+	auto GetRewriteCallback() const -> aggregate_rewrite_t { return callbacks.rewrite; }
+	auto SetRewriteCallback(aggregate_rewrite_t callback) -> void { callbacks.rewrite = callback; }
 
 	bool HasGetStateTypeCallback() const { return callbacks.get_state_type != nullptr; }
 	aggregate_get_state_type_t GetStateTypeCallback() const { return callbacks.get_state_type; }

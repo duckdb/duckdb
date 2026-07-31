@@ -64,8 +64,9 @@ bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rh
 	       init_local_state_finalize == rhs.init_local_state_finalize && cluster_update == rhs.cluster_update &&
 	       window == rhs.window && window_init == rhs.window_init && window_batch == rhs.window_batch &&
 	       bind == rhs.bind && destructor == rhs.destructor && statistics == rhs.statistics &&
-	       serialize == rhs.serialize && deserialize == rhs.deserialize && get_state_type == rhs.get_state_type &&
-	       export_aggregate_state == rhs.export_aggregate_state && import_aggregate_state == rhs.import_aggregate_state;
+	       serialize == rhs.serialize && deserialize == rhs.deserialize && rewrite == rhs.rewrite &&
+	       get_state_type == rhs.get_state_type && export_aggregate_state == rhs.export_aggregate_state &&
+	       import_aggregate_state == rhs.import_aggregate_state;
 }
 
 bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rhs) const {
@@ -73,6 +74,9 @@ bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rh
 }
 
 AggregateFunctionInfo::~AggregateFunctionInfo() {
+}
+
+AggregateRewriteInfo::~AggregateRewriteInfo() {
 }
 
 unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &context,
