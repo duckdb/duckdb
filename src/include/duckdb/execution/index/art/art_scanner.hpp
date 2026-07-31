@@ -81,7 +81,8 @@ void ARTScanPreorderInternal(ART_TYPE &art, NODE_REF &root, CHILD_HANDLER &&chil
 		stack.push_back(node);
 	};
 
-	// The root node pointer lives in the ART object, not inside a fixed-size buffer.
+	// The caller must keep the root slot valid while child_handler runs. This is implicit for the
+	// top-level ART root used by current callers; a subtree root requires its containing parent to remain pinned.
 	auto next = child_handler(root);
 	if (next) {
 		push(next.Get());
