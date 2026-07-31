@@ -19,7 +19,7 @@ public:
 	static constexpr NType PREFIX = NType::PREFIX;
 
 	//! Get a const reference to the child slot of the prefix.
-	static const Node &ChildRef(const ART &art, ConstNodeHandle &handle) {
+	static const Node &ChildRef(const ART &art, const ConstNodeHandle &handle) {
 		return *reinterpret_cast<const Node *>(handle.GetPtr() + art.PrefixCount() + 1);
 	}
 

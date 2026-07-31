@@ -58,12 +58,12 @@ public:
 
 public:
 	template <class T>
-	const T &Get() {
+	const T &Get() const {
 		D_ASSERT(T::TYPE == type);
 		return handle.GetRef<T>();
 	}
 
-	const_data_ptr_t GetPtr() {
+	const_data_ptr_t GetPtr() const {
 		return handle.GetPtr<const data_t>();
 	}
 
