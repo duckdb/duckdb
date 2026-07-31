@@ -19,17 +19,22 @@ QualifiedName QualifiedName::Deserialize(Deserializer &deserializer) {
 }
 
 string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
-	const auto &catalog = Catalog();
-	const auto &schema = Schema();
+	if (path.empty()) {
+		return string();
+	}
 	string result;
-	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
-		if (!schema.empty()) {
-			result += SQLIdentifier(schema) + ".";
+	// render every qualification component (the path can hold a nested schema chain)
+	for (idx_t i = 0; i + 1 < path.size(); i++) {
+		auto &component = path[i];
+		if (component.empty()) {
+			continue;
 		}
-	} else if (!schema.empty() &&
-	           !(mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA && schema == DEFAULT_SCHEMA)) {
-		result += SQLIdentifier(schema) + ".";
+		if (mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA && result.empty() && i + 2 == path.size() &&
+		    component == DEFAULT_SCHEMA) {
+			// the only qualification is the default schema - hide it
+			continue;
+		}
+		result += SQLIdentifier(component) + ".";
 	}
 	result += SQLIdentifier(Name());
 	return result;

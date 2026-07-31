@@ -26,7 +26,8 @@ CatalogException CatalogException::MissingEntry(const EntryLookupInfo &lookup_in
 	}
 	string version_info;
 	if (at_clause) {
-		version_info += " at " + StringUtil::Lower(at_clause->Unit()) + " " + at_clause->GetValue().ToString();
+		version_info +=
+		    " at " + StringUtil::Lower(at_clause->Unit().GetIdentifierName()) + " " + at_clause->GetValue().ToString();
 	}
 
 	auto extra_info = Exception::InitializeExtraInfo("MISSING_ENTRY", context.query_location);

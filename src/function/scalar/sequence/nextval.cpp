@@ -35,16 +35,15 @@ struct SetValValueOperator {
 	}
 };
 
-SequenceCatalogEntry &BindSequence(Binder &binder, QualifiedName name) {
-	// resolve the (optional) catalog/schema qualification and fetch the sequence from the catalog
-	Binder::BindSchemaOrCatalog(binder.context, name);
-	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, name);
+SequenceCatalogEntry &BindSequence(Binder &binder, const QualifiedName &name) {
+	// resolve the (possibly nested) catalog/schema qualification and fetch the sequence from the catalog
+	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, Binder::BindTableName(binder.EntryRetriever(), name));
 	return binder.EntryRetriever().GetEntry(sequence_lookup)->Cast<SequenceCatalogEntry>();
 }
 
-SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, QualifiedName name) {
-	Binder::BindSchemaOrCatalog(context, name);
-	return Catalog::GetEntry<SequenceCatalogEntry>(context, name);
+SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, const QualifiedName &name) {
+	CatalogEntryRetriever retriever(context);
+	return Catalog::GetEntry<SequenceCatalogEntry>(context, Binder::BindTableName(retriever, name));
 }
 
 SequenceCatalogEntry &BindSequence(Binder &binder, const Identifier &name) {

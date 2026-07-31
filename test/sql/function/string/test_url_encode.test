@@ -34,3 +34,16 @@ statement error
 select url_decode('%FF%FF%FF');
 ----
 decoded value is invalid UTF8
+
+# invalid UTF8 through TRY() on a dictionary-encoded column must not crash
+statement ok
+CREATE TABLE t24268 AS SELECT '%c0' AS c FROM range(4096);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT COUNT(*) FROM t24268 WHERE TRY(url_decode(c)) IS NULL
+----
+4096
+

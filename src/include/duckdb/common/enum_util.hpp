@@ -308,6 +308,8 @@ enum class LogMode : uint8_t;
 
 enum class LoggingTargetTable : uint8_t;
 
+enum class LogicalOperatorRepeatability : uint8_t;
+
 enum class LogicalOperatorType : uint8_t;
 
 enum class LogicalTypeId : uint8_t;
@@ -400,6 +402,10 @@ enum class PipelineBroadcastExchangeOrderMode : uint8_t;
 
 enum class PipelineInputMode : uint8_t;
 
+enum class PipelineScheduleMode : uint8_t;
+
+enum class PipelineScheduleStageType : uint8_t;
+
 enum class PragmaType : uint8_t;
 
 enum class PreparedParamType : uint8_t;
@@ -428,7 +434,7 @@ enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
 
-enum class RecursiveCTEInlineStageType : uint8_t;
+enum class RecursiveCTESourcePhase : uint8_t;
 
 enum class RecursiveProbeSidePreference : uint8_t;
 
@@ -437,6 +443,8 @@ enum class RegexMatchOperatorSemantics : uint8_t;
 enum class RelationType : uint8_t;
 
 enum class RemoteCapability : uint8_t;
+
+enum class RemoveUnusedColumnsMode : uint8_t;
 
 enum class RenderMode : uint8_t;
 
@@ -1014,6 +1022,9 @@ template<>
 const char* EnumUtil::ToChars<LoggingTargetTable>(LoggingTargetTable value);
 
 template<>
+const char* EnumUtil::ToChars<LogicalOperatorRepeatability>(LogicalOperatorRepeatability value);
+
+template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
 
 template<>
@@ -1152,6 +1163,12 @@ template<>
 const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value);
 
 template<>
+const char* EnumUtil::ToChars<PipelineScheduleMode>(PipelineScheduleMode value);
+
+template<>
+const char* EnumUtil::ToChars<PipelineScheduleStageType>(PipelineScheduleStageType value);
+
+template<>
 const char* EnumUtil::ToChars<PragmaType>(PragmaType value);
 
 template<>
@@ -1194,7 +1211,7 @@ template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
-const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineStageType value);
+const char* EnumUtil::ToChars<RecursiveCTESourcePhase>(RecursiveCTESourcePhase value);
 
 template<>
 const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
@@ -1207,6 +1224,9 @@ const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
 const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value);
+
+template<>
+const char* EnumUtil::ToChars<RemoveUnusedColumnsMode>(RemoveUnusedColumnsMode value);
 
 template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
@@ -1864,6 +1884,9 @@ template<>
 LoggingTargetTable EnumUtil::FromString<LoggingTargetTable>(const char *value);
 
 template<>
+LogicalOperatorRepeatability EnumUtil::FromString<LogicalOperatorRepeatability>(const char *value);
+
+template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
 
 template<>
@@ -2002,6 +2025,12 @@ template<>
 PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value);
 
 template<>
+PipelineScheduleMode EnumUtil::FromString<PipelineScheduleMode>(const char *value);
+
+template<>
+PipelineScheduleStageType EnumUtil::FromString<PipelineScheduleStageType>(const char *value);
+
+template<>
 PragmaType EnumUtil::FromString<PragmaType>(const char *value);
 
 template<>
@@ -2044,7 +2073,7 @@ template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
-RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(const char *value);
+RecursiveCTESourcePhase EnumUtil::FromString<RecursiveCTESourcePhase>(const char *value);
 
 template<>
 RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);
@@ -2057,6 +2086,9 @@ RelationType EnumUtil::FromString<RelationType>(const char *value);
 
 template<>
 RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value);
+
+template<>
+RemoveUnusedColumnsMode EnumUtil::FromString<RemoveUnusedColumnsMode>(const char *value);
 
 template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);

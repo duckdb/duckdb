@@ -228,7 +228,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->SetQualifiedName(QualifiedName(Identifier(catalog), table.schema.name, table.name));
+		// carry the full (possibly nested) schema path of the exported table
+		info->SetQualifiedName(table.schema.GetQualifiedName(table.name));
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
@@ -245,8 +246,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		}
 
 		ExportedTableData exported_data;
-		exported_data.qualified_name =
-		    QualifiedName(Identifier(catalog), info->GetQualifiedName().Schema(), info->Table());
+		exported_data.qualified_name = info->GetQualifiedName();
 
 		exported_data.file_path = info->file_path;
 

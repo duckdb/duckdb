@@ -103,6 +103,9 @@ public:
 	const vector<weak_ptr<Pipeline>> &GetDataflowDependencies() const {
 		return dataflow_dependencies;
 	}
+	const vector<weak_ptr<Pipeline>> &GetExternalFinishDependencies() const {
+		return external_finish_dependencies;
+	}
 	bool HasDataflowDependencies() const {
 		return !dataflow_dependencies.empty();
 	}
