@@ -97,6 +97,8 @@ struct RecursiveCTEEpochMetrics {
 	void RecordDirectProbeLookup(idx_t elapsed_ns);
 	void RecordDirectProbeKeyGather(idx_t elapsed_ns);
 	void RecordDirectProbePayloadFinalize(idx_t elapsed_ns);
+	void RecordKeyedHashCommit(idx_t elapsed_ns);
+	void RecordPartialIndexMaintenance(idx_t elapsed_ns);
 
 	RecursiveCTEMetricDistribution frontier_rows;
 	RecursiveCTEMetricDistribution workers;
@@ -109,6 +111,8 @@ struct RecursiveCTEEpochMetrics {
 	atomic<idx_t> direct_probe_lookup_work_ns {0};
 	atomic<idx_t> direct_probe_key_gather_work_ns {0};
 	atomic<idx_t> direct_probe_payload_finalize_work_ns {0};
+	atomic<idx_t> keyed_hash_commit_work_ns {0};
+	atomic<idx_t> partial_index_maintenance_work_ns {0};
 };
 
 struct RecursiveCTELogIdentity {
@@ -263,6 +267,8 @@ public:
 	}
 
 private:
+	template <bool COLLECT_METRICS>
+	void CommitUsingKeyUpdatesInternal();
 	unique_ptr<GroupedAggregateHashTable> ht;
 	vector<unique_ptr<RecursiveCTEPartialKeyIndex>> partial_key_indexes;
 	vector<unique_ptr<RecursiveCTEDistinctPartition>> distinct_partitions;

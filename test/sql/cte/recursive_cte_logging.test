@@ -387,14 +387,16 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 1	1
 
-query III
+query IIIII
 SELECT info.direct_probe_lookup_work_ns::UBIGINT > 0,
        info.direct_probe_key_gather_work_ns::UBIGINT > 0,
-       info.direct_probe_payload_finalize_work_ns::UBIGINT > 0
+       info.direct_probe_payload_finalize_work_ns::UBIGINT > 0,
+       info.keyed_hash_commit_work_ns::UBIGINT > 0,
+       info.partial_index_maintenance_work_ns::UBIGINT = 0
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
-1	1	1
+1	1	1	1	1
 
 query I
 SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
@@ -435,14 +437,16 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
 ----
 1	1	1	1
 
-query III
+query IIIII
 SELECT info.direct_probe_lookup_work_ns::UBIGINT > 0,
        info.direct_probe_key_gather_work_ns::UBIGINT > 0,
-       info.direct_probe_payload_finalize_work_ns::UBIGINT > 0
+       info.direct_probe_payload_finalize_work_ns::UBIGINT > 0,
+       info.keyed_hash_commit_work_ns::UBIGINT > 0,
+       info.partial_index_maintenance_work_ns::UBIGINT > 0
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
-1	1	1
+1	1	1	1	1
 
 statement ok
 CALL enable_logging('PhysicalOperator');

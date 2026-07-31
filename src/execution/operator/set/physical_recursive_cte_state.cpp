@@ -132,6 +132,14 @@ void RecursiveCTEEpochMetrics::RecordDirectProbePayloadFinalize(idx_t elapsed_ns
 	direct_probe_payload_finalize_work_ns.fetch_add(elapsed_ns);
 }
 
+void RecursiveCTEEpochMetrics::RecordKeyedHashCommit(idx_t elapsed_ns) {
+	keyed_hash_commit_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordPartialIndexMaintenance(idx_t elapsed_ns) {
+	partial_index_maintenance_work_ns.fetch_add(elapsed_ns);
+}
+
 RecursiveCTEMetrics::RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op_p)
     : logger(context.logger),
       enabled(logger && logger->ShouldLog(PhysicalOperatorLogType::NAME, PhysicalOperatorLogType::LEVEL)) {
@@ -265,26 +273,29 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 		return;
 	}
 	D_ASSERT(identity);
-	DUCKDB_LOG(logger, PhysicalOperatorLogType, identity->operator_type, identity->operator_parameters,
-	           "PhysicalRecursiveCTE", "EpochSummary",
-	           {{"invocation_id", to_string(identity->invocation_id)},
-	            {"epochs", to_string(epoch_metrics.frontier_rows.count)},
-	            {"frontier_rows_p50_upper_bound", to_string(epoch_metrics.frontier_rows.MedianUpperBound())},
-	            {"frontier_rows_max", to_string(epoch_metrics.frontier_rows.maximum)},
-	            {"workers_p50_upper_bound", to_string(epoch_metrics.workers.MedianUpperBound())},
-	            {"workers_max", to_string(epoch_metrics.workers.maximum)},
-	            {"tasks_p50_upper_bound", to_string(epoch_metrics.tasks.MedianUpperBound())},
-	            {"tasks_max", to_string(epoch_metrics.tasks.maximum)},
-	            {"elapsed_us_p50_upper_bound", to_string(epoch_metrics.elapsed_us.MedianUpperBound())},
-	            {"elapsed_us_max", to_string(epoch_metrics.elapsed_us.maximum)},
-	            {"frontier_storage_byte_epochs", to_string(epoch_metrics.frontier_storage_byte_epochs)},
-	            {"peak_frontier_storage_bytes", to_string(epoch_metrics.peak_frontier_storage_bytes)},
-	            {"frontier_allocation_byte_epochs", to_string(epoch_metrics.frontier_allocation_byte_epochs)},
-	            {"peak_frontier_allocation_bytes", to_string(epoch_metrics.peak_frontier_allocation_bytes)},
-	            {"direct_probe_lookup_work_ns", to_string(epoch_metrics.direct_probe_lookup_work_ns.load())},
-	            {"direct_probe_key_gather_work_ns", to_string(epoch_metrics.direct_probe_key_gather_work_ns.load())},
-	            {"direct_probe_payload_finalize_work_ns",
-	             to_string(epoch_metrics.direct_probe_payload_finalize_work_ns.load())}});
+	DUCKDB_LOG(
+	    logger, PhysicalOperatorLogType, identity->operator_type, identity->operator_parameters, "PhysicalRecursiveCTE",
+	    "EpochSummary",
+	    {{"invocation_id", to_string(identity->invocation_id)},
+	     {"epochs", to_string(epoch_metrics.frontier_rows.count)},
+	     {"frontier_rows_p50_upper_bound", to_string(epoch_metrics.frontier_rows.MedianUpperBound())},
+	     {"frontier_rows_max", to_string(epoch_metrics.frontier_rows.maximum)},
+	     {"workers_p50_upper_bound", to_string(epoch_metrics.workers.MedianUpperBound())},
+	     {"workers_max", to_string(epoch_metrics.workers.maximum)},
+	     {"tasks_p50_upper_bound", to_string(epoch_metrics.tasks.MedianUpperBound())},
+	     {"tasks_max", to_string(epoch_metrics.tasks.maximum)},
+	     {"elapsed_us_p50_upper_bound", to_string(epoch_metrics.elapsed_us.MedianUpperBound())},
+	     {"elapsed_us_max", to_string(epoch_metrics.elapsed_us.maximum)},
+	     {"frontier_storage_byte_epochs", to_string(epoch_metrics.frontier_storage_byte_epochs)},
+	     {"peak_frontier_storage_bytes", to_string(epoch_metrics.peak_frontier_storage_bytes)},
+	     {"frontier_allocation_byte_epochs", to_string(epoch_metrics.frontier_allocation_byte_epochs)},
+	     {"peak_frontier_allocation_bytes", to_string(epoch_metrics.peak_frontier_allocation_bytes)},
+	     {"direct_probe_lookup_work_ns", to_string(epoch_metrics.direct_probe_lookup_work_ns.load())},
+	     {"direct_probe_key_gather_work_ns", to_string(epoch_metrics.direct_probe_key_gather_work_ns.load())},
+	     {"direct_probe_payload_finalize_work_ns",
+	      to_string(epoch_metrics.direct_probe_payload_finalize_work_ns.load())},
+	     {"keyed_hash_commit_work_ns", to_string(epoch_metrics.keyed_hash_commit_work_ns.load())},
+	     {"partial_index_maintenance_work_ns", to_string(epoch_metrics.partial_index_maintenance_work_ns.load())}});
 }
 
 RecursiveCTESchedulerState::RecursiveCTESchedulerState(shared_ptr<RecursiveExecutorPool> executor_pool_p,

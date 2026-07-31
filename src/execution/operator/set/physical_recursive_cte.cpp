@@ -424,14 +424,17 @@ static void ScatterChunk(DataChunk &output_chunk, DataChunk &input_chunk, const 
 	}
 }
 
-void RecursiveCTEState::CommitUsingKeyUpdates() {
+template <bool COLLECT_METRICS>
+void RecursiveCTEState::CommitUsingKeyUpdatesInternal() {
 	D_ASSERT(op.using_key);
 	ColumnDataScanState update_scan_state;
 	intermediate_table.InitializeScan(update_scan_state);
 	while (intermediate_table.Scan(update_scan_state, update_rows)) {
-		if (metrics.Enabled()) {
+		if constexpr (COLLECT_METRICS) {
 			metrics.RecordHashRows(update_rows.size());
 		}
+		const auto hash_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		distinct_rows.Reset();
 		GatherChunk(distinct_rows, update_rows, op.distinct_idx);
 		if (!executor.expressions.empty()) {
@@ -440,20 +443,41 @@ void RecursiveCTEState::CommitUsingKeyUpdates() {
 		}
 		if (partial_key_indexes.empty()) {
 			ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
+			if constexpr (COLLECT_METRICS) {
+				const auto hash_end = std::chrono::steady_clock::now();
+				GetEpochMetrics().RecordKeyedHashCommit(NumericCast<idx_t>(
+				    std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
+			}
 			continue;
 		}
-		const auto build_start =
-		    metrics.Enabled() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		const auto new_group_count = ht->AddChunkAndGetNewGroups(
 		    distinct_rows, payload_rows, AggregateType::NON_DISTINCT, new_group_addresses, new_groups);
+		if constexpr (COLLECT_METRICS) {
+			const auto hash_end = std::chrono::steady_clock::now();
+			GetEpochMetrics().RecordKeyedHashCommit(NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(hash_end - hash_start).count()));
+		}
+		const auto index_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 		for (auto &index : partial_key_indexes) {
 			index->AddGroups(distinct_rows, new_groups, new_group_addresses, new_group_count);
 		}
-		if (metrics.Enabled()) {
-			const auto build_end = std::chrono::steady_clock::now();
+		if constexpr (COLLECT_METRICS) {
+			const auto index_end = std::chrono::steady_clock::now();
+			const auto elapsed_ns = NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::nanoseconds>(index_end - index_start).count());
+			GetEpochMetrics().RecordPartialIndexMaintenance(elapsed_ns);
 			metrics.RecordPartialIndexBuild(NumericCast<idx_t>(
-			    std::chrono::duration_cast<std::chrono::microseconds>(build_end - build_start).count()));
+			    std::chrono::duration_cast<std::chrono::microseconds>(index_end - index_start).count()));
 		}
+	}
+}
+
+void RecursiveCTEState::CommitUsingKeyUpdates() {
+	if (metrics.Enabled()) {
+		CommitUsingKeyUpdatesInternal<true>();
+	} else {
+		CommitUsingKeyUpdatesInternal<false>();
 	}
 }
 
