@@ -107,6 +107,14 @@ extern "C" {
 #endif
 #endif
 
+//! The unstable surface is not a promise, so it is not part of any released
+//! version: its constructs may change shape or vanish. Targeting an older version
+//! while opting into it would hand back today's shapes under names that version
+//! never promised, so the two are mutually exclusive.
+#if DUCKDB_API_ALLOW_UNSTABLE && !DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
+#error "the unstable surface requires targeting the newest API version"
+#endif
+
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -2164,7 +2172,7 @@ DUCKDB_C_API duckdb_state duckdb_appender_create_ext(duckdb_connection connectio
                                                      duckdb_appender *out_appender);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates an appender object that executes the given query with any data appended to it.
  *
@@ -2220,7 +2228,7 @@ DUCKDB_C_API idx_t duckdb_appender_column_count(duckdb_appender appender);
 DUCKDB_C_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the error data associated with the appender. Must be destroyed with duckdb_destroy_error_data.
  *
@@ -2250,7 +2258,7 @@ DUCKDB_C_API duckdb_error_data duckdb_appender_error_data(duckdb_appender append
 DUCKDB_C_API duckdb_state duckdb_appender_flush(duckdb_appender appender);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Clears all buffered data from the appender without flushing it to the table. This discards any data that has been
  * appended but not yet written. The appender can continue to be used after clearing.
@@ -2369,7 +2377,7 @@ DUCKDB_C_API duckdb_state duckdb_appender_end_row(duckdb_appender appender);
 DUCKDB_C_API duckdb_state duckdb_append_default(duckdb_appender appender);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 2, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Append a DEFAULT value, at the specified row and column, (NULL if DEFAULT not available for column) to the chunk
  * created from the specified appender. The default value of the column must be a constant value. Non-deterministic
@@ -2751,7 +2759,7 @@ DUCKDB_C_API const char *duckdb_appender_error(duckdb_appender appender);
 
 /* --- Functions for arrow --- */
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Transforms a DuckDB Schema into an Arrow Schema
  *
@@ -2771,7 +2779,7 @@ DUCKDB_C_API duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow
                                                       struct ArrowSchema *out_schema);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Transforms a DuckDB data chunk into an Arrow array.
  *
@@ -2789,7 +2797,7 @@ DUCKDB_C_API duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_arrow_options a
                                                           struct ArrowArray *out_arrow_array);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Transforms an Arrow Schema into a DuckDB Schema.
  *
@@ -2807,7 +2815,7 @@ DUCKDB_C_API duckdb_error_data duckdb_schema_from_arrow(duckdb_connection connec
                                                         duckdb_arrow_converted_schema *out_types);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Transforms an Arrow array into a DuckDB data chunk. The data chunk will retain ownership of the underlying Arrow
  * data.
@@ -2829,7 +2837,7 @@ DUCKDB_C_API duckdb_error_data duckdb_data_chunk_from_arrow(duckdb_connection co
                                                             duckdb_data_chunk *out_chunk);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the arrow converted schema and de-allocates all memory allocated for that arrow converted schema.
  *
@@ -3310,7 +3318,7 @@ DUCKDB_C_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_functi
 
 /* --- Functions for catalog --- */
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieve a database catalog instance by name. This function can only be called from within the context of an active
  * transaction, e.g. during execution of a registered function callback. Otherwise returns `nullptr`.
@@ -3326,7 +3334,7 @@ DUCKDB_C_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_functi
 DUCKDB_C_API duckdb_catalog duckdb_client_context_get_catalog(duckdb_client_context context, const char *catalog_name);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieve the "type name" of the given catalog. E.g. for a DuckDB database, this returns 'duckdb'. The returned string
  * is owned by the catalog and remains valid until the catalog is destroyed.
@@ -3341,7 +3349,7 @@ DUCKDB_C_API duckdb_catalog duckdb_client_context_get_catalog(duckdb_client_cont
 DUCKDB_C_API const char *duckdb_catalog_get_type_name(duckdb_catalog catalog);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieve a catalog entry from the given catalog by type, schema name and entry name. The returned catalog entry
  * remains valid for the duration of the current transaction.
@@ -3362,7 +3370,7 @@ DUCKDB_C_API duckdb_catalog_entry duckdb_catalog_get_entry(duckdb_catalog catalo
                                                            const char *schema_name, const char *entry_name);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the given catalog instance.
  *
@@ -3378,7 +3386,7 @@ DUCKDB_C_API duckdb_catalog_entry duckdb_catalog_get_entry(duckdb_catalog catalo
 DUCKDB_C_API void duckdb_destroy_catalog(duckdb_catalog *catalog);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Get the type of the given catalog entry.
  *
@@ -3392,7 +3400,7 @@ DUCKDB_C_API void duckdb_destroy_catalog(duckdb_catalog *catalog);
 DUCKDB_C_API duckdb_catalog_entry_type duckdb_catalog_entry_get_type(duckdb_catalog_entry entry);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Get the name of the given catalog entry.
  *
@@ -3406,7 +3414,7 @@ DUCKDB_C_API duckdb_catalog_entry_type duckdb_catalog_entry_get_type(duckdb_cata
 DUCKDB_C_API const char *duckdb_catalog_entry_get_name(duckdb_catalog_entry entry);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the given catalog entry instance.
  *
@@ -3441,7 +3449,7 @@ DUCKDB_C_API void duckdb_destroy_catalog_entry(duckdb_catalog_entry *entry);
 
 /* --- Functions for config_option --- */
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a configuration option instance.
  *
@@ -3454,7 +3462,7 @@ DUCKDB_C_API void duckdb_destroy_catalog_entry(duckdb_catalog_entry *entry);
 DUCKDB_C_API duckdb_config_option duckdb_create_config_option(void);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the given configuration option instance.
  *
@@ -3468,7 +3476,7 @@ DUCKDB_C_API duckdb_config_option duckdb_create_config_option(void);
 DUCKDB_C_API void duckdb_destroy_config_option(duckdb_config_option *option);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the name of the configuration option.
  *
@@ -3483,7 +3491,7 @@ DUCKDB_C_API void duckdb_destroy_config_option(duckdb_config_option *option);
 DUCKDB_C_API void duckdb_config_option_set_name(duckdb_config_option option, const char *name);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the type of the configuration option.
  *
@@ -3498,7 +3506,7 @@ DUCKDB_C_API void duckdb_config_option_set_name(duckdb_config_option option, con
 DUCKDB_C_API void duckdb_config_option_set_type(duckdb_config_option option, duckdb_logical_type type);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the default value of the configuration option. If the type of this option has already been set with
  * `duckdb_config_option_set_type`, the value is cast to the type. Otherwise, the type is inferred from the value.
@@ -3514,7 +3522,7 @@ DUCKDB_C_API void duckdb_config_option_set_type(duckdb_config_option option, duc
 DUCKDB_C_API void duckdb_config_option_set_default_value(duckdb_config_option option, duckdb_value default_value);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the default scope of the configuration option. If not set, this defaults to
  * `DUCKDB_CONFIG_OPTION_SCOPE_SESSION`.
@@ -3531,7 +3539,7 @@ DUCKDB_C_API void duckdb_config_option_set_default_scope(duckdb_config_option op
                                                          duckdb_config_option_scope default_scope);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the description of the configuration option.
  *
@@ -3546,7 +3554,7 @@ DUCKDB_C_API void duckdb_config_option_set_default_scope(duckdb_config_option op
 DUCKDB_C_API void duckdb_config_option_set_description(duckdb_config_option option, const char *description);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Registers the given configuration option on the specified connection.
  *
@@ -3561,7 +3569,7 @@ DUCKDB_C_API void duckdb_config_option_set_description(duckdb_config_option opti
 DUCKDB_C_API duckdb_state duckdb_register_config_option(duckdb_connection connection, duckdb_config_option option);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the value of a configuration option by name from the given client context.
  *
@@ -3718,7 +3726,7 @@ DUCKDB_C_API duckdb_query_progress_type duckdb_query_progress(duckdb_connection 
  */
 DUCKDB_C_API void duckdb_disconnect(duckdb_connection *connection);
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the client context of the connection.
  *
@@ -3734,7 +3742,7 @@ DUCKDB_C_API void duckdb_connection_get_client_context(duckdb_connection connect
                                                        duckdb_client_context *out_context);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the arrow options of the connection.
  *
@@ -3750,7 +3758,7 @@ DUCKDB_C_API void duckdb_connection_get_arrow_options(duckdb_connection connecti
                                                       duckdb_arrow_options *out_arrow_options);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the connection id of the client context.
  *
@@ -3764,7 +3772,7 @@ DUCKDB_C_API void duckdb_connection_get_arrow_options(duckdb_connection connecti
 DUCKDB_C_API idx_t duckdb_client_context_get_connection_id(duckdb_client_context context);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the client context and deallocates its memory.
  *
@@ -3778,7 +3786,7 @@ DUCKDB_C_API idx_t duckdb_client_context_get_connection_id(duckdb_client_context
 DUCKDB_C_API void duckdb_destroy_client_context(duckdb_client_context *context);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the arrow options and deallocates its memory.
  *
@@ -3792,7 +3800,7 @@ DUCKDB_C_API void duckdb_destroy_client_context(duckdb_client_context *context);
 DUCKDB_C_API void duckdb_destroy_arrow_options(duckdb_arrow_options *arrow_options);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Get the list of (fully qualified) table names of the query.
  *
@@ -3827,7 +3835,7 @@ DUCKDB_C_API duckdb_value duckdb_get_table_names(duckdb_connection connection, c
 
 /* --- Functions for copy_function --- */
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a new empty copy function.
  *
@@ -3842,7 +3850,7 @@ DUCKDB_C_API duckdb_value duckdb_get_table_names(duckdb_connection connection, c
 DUCKDB_C_API duckdb_copy_function duckdb_create_copy_function(void);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the name of the copy function.
  *
@@ -3857,7 +3865,7 @@ DUCKDB_C_API duckdb_copy_function duckdb_create_copy_function(void);
 DUCKDB_C_API void duckdb_copy_function_set_name(duckdb_copy_function copy_function, const char *name);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the extra info pointer of the copy function, which can be used to store arbitrary data.
  *
@@ -3874,7 +3882,7 @@ DUCKDB_C_API void duckdb_copy_function_set_extra_info(duckdb_copy_function copy_
                                                       duckdb_delete_callback_t destructor);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Registers the given copy function on the database connection under the specified name.
  *
@@ -3890,7 +3898,7 @@ DUCKDB_C_API duckdb_state duckdb_register_copy_function(duckdb_connection connec
                                                         duckdb_copy_function copy_function);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the given copy function object.
  *
@@ -3904,7 +3912,7 @@ DUCKDB_C_API duckdb_state duckdb_register_copy_function(duckdb_connection connec
 DUCKDB_C_API void duckdb_destroy_copy_function(duckdb_copy_function *copy_function);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the bind function of the copy function, to use when binding `COPY ... TO`.
  *
@@ -3919,7 +3927,7 @@ DUCKDB_C_API void duckdb_destroy_copy_function(duckdb_copy_function *copy_functi
 DUCKDB_C_API void duckdb_copy_function_set_bind(duckdb_copy_function copy_function, duckdb_copy_function_bind_t bind);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Report that an error occurred during the binding-phase of a `COPY ... TO` function.
  *
@@ -3934,7 +3942,7 @@ DUCKDB_C_API void duckdb_copy_function_set_bind(duckdb_copy_function copy_functi
 DUCKDB_C_API void duckdb_copy_function_bind_set_error(duckdb_copy_function_bind_info info, const char *error);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the extra info pointer of the copy function.
  *
@@ -3948,7 +3956,7 @@ DUCKDB_C_API void duckdb_copy_function_bind_set_error(duckdb_copy_function_bind_
 DUCKDB_C_API void *duckdb_copy_function_bind_get_extra_info(duckdb_copy_function_bind_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the client context of the current connection binding the `COPY ... TO` function.
  *
@@ -3964,7 +3972,7 @@ DUCKDB_C_API void *duckdb_copy_function_bind_get_extra_info(duckdb_copy_function
 DUCKDB_C_API duckdb_client_context duckdb_copy_function_bind_get_client_context(duckdb_copy_function_bind_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the number of columns that will be provided to the `COPY ... TO` function.
  *
@@ -3978,7 +3986,7 @@ DUCKDB_C_API duckdb_client_context duckdb_copy_function_bind_get_client_context(
 DUCKDB_C_API idx_t duckdb_copy_function_bind_get_column_count(duckdb_copy_function_bind_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the type of a column that will be provided to the `COPY ... TO` function.
  *
@@ -3994,7 +4002,7 @@ DUCKDB_C_API duckdb_logical_type duckdb_copy_function_bind_get_column_type(duckd
                                                                            idx_t col_idx);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves all values for the given options provided to the `COPY ... TO` function.
  *
@@ -4008,7 +4016,7 @@ DUCKDB_C_API duckdb_logical_type duckdb_copy_function_bind_get_column_type(duckd
 DUCKDB_C_API duckdb_value duckdb_copy_function_bind_get_options(duckdb_copy_function_bind_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the bind data of the copy function, to be provided to the init, sink and finalize functions.
  *
@@ -4025,7 +4033,7 @@ DUCKDB_C_API void duckdb_copy_function_bind_set_bind_data(duckdb_copy_function_b
                                                           duckdb_delete_callback_t destructor);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the initialization function of the copy function, called right before executing `COPY ... TO`.
  *
@@ -4041,7 +4049,7 @@ DUCKDB_C_API void duckdb_copy_function_set_global_init(duckdb_copy_function copy
                                                        duckdb_copy_function_global_init_t init);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Report that an error occurred during the initialization-phase of a `COPY ... TO` function.
  *
@@ -4057,7 +4065,7 @@ DUCKDB_C_API void duckdb_copy_function_global_init_set_error(duckdb_copy_functio
                                                              const char *error);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the extra info pointer of the copy function.
  *
@@ -4071,7 +4079,7 @@ DUCKDB_C_API void duckdb_copy_function_global_init_set_error(duckdb_copy_functio
 DUCKDB_C_API void *duckdb_copy_function_global_init_get_extra_info(duckdb_copy_function_global_init_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the client context of the current connection initializing the `COPY ... TO` function.
  *
@@ -4088,7 +4096,7 @@ DUCKDB_C_API duckdb_client_context
 duckdb_copy_function_global_init_get_client_context(duckdb_copy_function_global_init_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
  *
@@ -4102,7 +4110,7 @@ duckdb_copy_function_global_init_get_client_context(duckdb_copy_function_global_
 DUCKDB_C_API void *duckdb_copy_function_global_init_get_bind_data(duckdb_copy_function_global_init_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the file path provided to the `COPY ... TO` function.
  *
@@ -4118,7 +4126,7 @@ DUCKDB_C_API void *duckdb_copy_function_global_init_get_bind_data(duckdb_copy_fu
 DUCKDB_C_API const char *duckdb_copy_function_global_init_get_file_path(duckdb_copy_function_global_init_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the global state of the copy function, to be provided to all subsequent local init, sink and finalize functions.
  *
@@ -4136,7 +4144,7 @@ DUCKDB_C_API void duckdb_copy_function_global_init_set_global_state(duckdb_copy_
                                                                     duckdb_delete_callback_t destructor);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the sink function of the copy function, called during `COPY ... TO`.
  *
@@ -4152,7 +4160,7 @@ DUCKDB_C_API void duckdb_copy_function_set_sink(duckdb_copy_function copy_functi
                                                 duckdb_copy_function_sink_t function);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Report that an error occurred during the sink-phase of a `COPY ... TO` function.
  *
@@ -4167,7 +4175,7 @@ DUCKDB_C_API void duckdb_copy_function_set_sink(duckdb_copy_function copy_functi
 DUCKDB_C_API void duckdb_copy_function_sink_set_error(duckdb_copy_function_sink_info info, const char *error);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the extra info pointer of the copy function.
  *
@@ -4181,7 +4189,7 @@ DUCKDB_C_API void duckdb_copy_function_sink_set_error(duckdb_copy_function_sink_
 DUCKDB_C_API void *duckdb_copy_function_sink_get_extra_info(duckdb_copy_function_sink_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the client context of the current connection during the sink-phase of the `COPY ... TO` function.
  *
@@ -4197,7 +4205,7 @@ DUCKDB_C_API void *duckdb_copy_function_sink_get_extra_info(duckdb_copy_function
 DUCKDB_C_API duckdb_client_context duckdb_copy_function_sink_get_client_context(duckdb_copy_function_sink_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
  *
@@ -4211,7 +4219,7 @@ DUCKDB_C_API duckdb_client_context duckdb_copy_function_sink_get_client_context(
 DUCKDB_C_API void *duckdb_copy_function_sink_get_bind_data(duckdb_copy_function_sink_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the global state provided during the init-phase of a `COPY ... TO` function.
  *
@@ -4225,7 +4233,7 @@ DUCKDB_C_API void *duckdb_copy_function_sink_get_bind_data(duckdb_copy_function_
 DUCKDB_C_API void *duckdb_copy_function_sink_get_global_state(duckdb_copy_function_sink_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the finalize function of the copy function, called at the end of `COPY ... TO`.
  *
@@ -4241,7 +4249,7 @@ DUCKDB_C_API void duckdb_copy_function_set_finalize(duckdb_copy_function copy_fu
                                                     duckdb_copy_function_finalize_t finalize);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Report that an error occurred during the finalize-phase of a `COPY ... TO` function
  *
@@ -4256,7 +4264,7 @@ DUCKDB_C_API void duckdb_copy_function_set_finalize(duckdb_copy_function copy_fu
 DUCKDB_C_API void duckdb_copy_function_finalize_set_error(duckdb_copy_function_finalize_info info, const char *error);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the extra info pointer of the copy function.
  *
@@ -4270,7 +4278,7 @@ DUCKDB_C_API void duckdb_copy_function_finalize_set_error(duckdb_copy_function_f
 DUCKDB_C_API void *duckdb_copy_function_finalize_get_extra_info(duckdb_copy_function_finalize_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the client context of the current connection during the finalize-phase of the `COPY ... TO` function.
  *
@@ -4287,7 +4295,7 @@ DUCKDB_C_API duckdb_client_context
 duckdb_copy_function_finalize_get_client_context(duckdb_copy_function_finalize_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
  *
@@ -4301,7 +4309,7 @@ duckdb_copy_function_finalize_get_client_context(duckdb_copy_function_finalize_i
 DUCKDB_C_API void *duckdb_copy_function_finalize_get_bind_data(duckdb_copy_function_finalize_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the global state provided during the init-phase of a `COPY ... TO` function.
  *
@@ -4315,7 +4323,7 @@ DUCKDB_C_API void *duckdb_copy_function_finalize_get_bind_data(duckdb_copy_funct
 DUCKDB_C_API void *duckdb_copy_function_finalize_get_global_state(duckdb_copy_function_finalize_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the table function to use when executing a `COPY ... FROM (...)` statement with this copy function.
  *
@@ -4478,7 +4486,7 @@ DUCKDB_C_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size
 
 /* --- Functions for database --- */
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 2, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a new database instance cache. The instance cache is necessary if a client/program (re)opens multiple
  * databases to the same file within the same process. Must be destroyed with 'duckdb_destroy_instance_cache'.
@@ -4492,7 +4500,7 @@ DUCKDB_C_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size
 DUCKDB_C_API duckdb_instance_cache duckdb_create_instance_cache(void);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 2, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a new database instance in the instance cache, or retrieves an existing database instance. Must be closed
  * with 'duckdb_close'.
@@ -4514,7 +4522,7 @@ DUCKDB_C_API duckdb_state duckdb_get_or_create_from_cache(duckdb_instance_cache 
                                                           char **out_error);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 2, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys an existing database instance cache and de-allocates its memory.
  *
@@ -4690,7 +4698,7 @@ DUCKDB_C_API void duckdb_destroy_config(duckdb_config *config);
 
 /* --- Functions for expression --- */
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the expression and de-allocates its memory.
  *
@@ -4704,7 +4712,7 @@ DUCKDB_C_API void duckdb_destroy_config(duckdb_config *config);
 DUCKDB_C_API void duckdb_destroy_expression(duckdb_expression *expr);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the return type of an expression.
  *
@@ -4718,7 +4726,7 @@ DUCKDB_C_API void duckdb_destroy_expression(duckdb_expression *expr);
 DUCKDB_C_API duckdb_logical_type duckdb_expression_return_type(duckdb_expression expr);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns whether the expression is foldable into a value or not.
  *
@@ -4732,7 +4740,7 @@ DUCKDB_C_API duckdb_logical_type duckdb_expression_return_type(duckdb_expression
 DUCKDB_C_API bool duckdb_expression_is_foldable(duckdb_expression expr);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Folds an expression creating a folded value.
  *
@@ -4767,7 +4775,7 @@ DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context cont
 
 /* --- Functions for file_system --- */
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Get a file system instance associated with the given client context.
  *
@@ -4781,7 +4789,7 @@ DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context cont
 DUCKDB_C_API duckdb_file_system duckdb_client_context_get_file_system(duckdb_client_context context);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the given file system instance.
  *
@@ -4795,7 +4803,7 @@ DUCKDB_C_API duckdb_file_system duckdb_client_context_get_file_system(duckdb_cli
 DUCKDB_C_API void duckdb_destroy_file_system(duckdb_file_system *file_system);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the last error that occurred on the given file system instance.
  *
@@ -4809,7 +4817,7 @@ DUCKDB_C_API void duckdb_destroy_file_system(duckdb_file_system *file_system);
 DUCKDB_C_API duckdb_error_data duckdb_file_system_error_data(duckdb_file_system file_system);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Opens a file at the given path with the specified options.
  *
@@ -4828,7 +4836,7 @@ DUCKDB_C_API duckdb_state duckdb_file_system_open(duckdb_file_system file_system
                                                   duckdb_file_open_options options, duckdb_file_handle *out_file);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a new file open options instance with blank settings.
  *
@@ -4841,7 +4849,7 @@ DUCKDB_C_API duckdb_state duckdb_file_system_open(duckdb_file_system file_system
 DUCKDB_C_API duckdb_file_open_options duckdb_create_file_open_options(void);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets a specific flag in the file open options.
  *
@@ -4858,7 +4866,7 @@ DUCKDB_C_API duckdb_state duckdb_file_open_options_set_flag(duckdb_file_open_opt
                                                             bool value);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the given file open options instance.
  *
@@ -4872,7 +4880,7 @@ DUCKDB_C_API duckdb_state duckdb_file_open_options_set_flag(duckdb_file_open_opt
 DUCKDB_C_API void duckdb_destroy_file_open_options(duckdb_file_open_options *options);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the given file handle and deallocates all associated resources. This will also close the file if it is still
  * open.
@@ -4887,7 +4895,7 @@ DUCKDB_C_API void duckdb_destroy_file_open_options(duckdb_file_open_options *opt
 DUCKDB_C_API void duckdb_destroy_file_handle(duckdb_file_handle *file_handle);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the last error that occurred on the given file handle.
  *
@@ -4901,7 +4909,7 @@ DUCKDB_C_API void duckdb_destroy_file_handle(duckdb_file_handle *file_handle);
 DUCKDB_C_API duckdb_error_data duckdb_file_handle_error_data(duckdb_file_handle file_handle);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Reads data from the file into the buffer.
  *
@@ -4917,7 +4925,7 @@ DUCKDB_C_API duckdb_error_data duckdb_file_handle_error_data(duckdb_file_handle 
 DUCKDB_C_API int64_t duckdb_file_handle_read(duckdb_file_handle file_handle, void *buffer, int64_t size);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Writes data from the buffer to the file.
  *
@@ -4933,7 +4941,7 @@ DUCKDB_C_API int64_t duckdb_file_handle_read(duckdb_file_handle file_handle, voi
 DUCKDB_C_API int64_t duckdb_file_handle_write(duckdb_file_handle file_handle, const void *buffer, int64_t size);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Tells the current position in the file.
  *
@@ -4947,7 +4955,7 @@ DUCKDB_C_API int64_t duckdb_file_handle_write(duckdb_file_handle file_handle, co
 DUCKDB_C_API int64_t duckdb_file_handle_tell(duckdb_file_handle file_handle);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Gets the size of the file.
  *
@@ -4961,7 +4969,7 @@ DUCKDB_C_API int64_t duckdb_file_handle_tell(duckdb_file_handle file_handle);
 DUCKDB_C_API int64_t duckdb_file_handle_size(duckdb_file_handle file_handle);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Seeks to a specific position in the file.
  *
@@ -4976,7 +4984,7 @@ DUCKDB_C_API int64_t duckdb_file_handle_size(duckdb_file_handle file_handle);
 DUCKDB_C_API duckdb_state duckdb_file_handle_seek(duckdb_file_handle file_handle, int64_t position);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Synchronizes the file's state with the underlying storage.
  *
@@ -4990,7 +4998,7 @@ DUCKDB_C_API duckdb_state duckdb_file_handle_seek(duckdb_file_handle file_handle
 DUCKDB_C_API duckdb_state duckdb_file_handle_sync(duckdb_file_handle file_handle);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Closes the given file handle.
  *
@@ -5022,7 +5030,7 @@ DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handl
 
 /* --- Functions for log_storage --- */
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a new log storage object.
  *
@@ -5035,7 +5043,7 @@ DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handl
 DUCKDB_C_API duckdb_log_storage duckdb_create_log_storage(void);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys a log storage object.
  *
@@ -5049,7 +5057,7 @@ DUCKDB_C_API duckdb_log_storage duckdb_create_log_storage(void);
 DUCKDB_C_API void duckdb_destroy_log_storage(duckdb_log_storage *log_storage);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the callback function for writing log entries.
  *
@@ -5065,7 +5073,7 @@ DUCKDB_C_API void duckdb_log_storage_set_write_log_entry(duckdb_log_storage log_
                                                          duckdb_logger_write_log_entry_t function);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the extra data of the custom log storage.
  *
@@ -5082,7 +5090,7 @@ DUCKDB_C_API void duckdb_log_storage_set_extra_data(duckdb_log_storage log_stora
                                                     duckdb_delete_callback_t delete_callback);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the name of the log storage.
  *
@@ -5097,7 +5105,7 @@ DUCKDB_C_API void duckdb_log_storage_set_extra_data(duckdb_log_storage log_stora
 DUCKDB_C_API void duckdb_log_storage_set_name(duckdb_log_storage log_storage, const char *name);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Registers a custom log storage for the logger.
  *
@@ -5564,7 +5572,7 @@ DUCKDB_C_API duckdb_state duckdb_register_logical_type(duckdb_connection con, du
                                                        duckdb_create_type_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 2) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Gets the CRS (Coordinate Reference System) of a GEOMETRY type. Result must be freed with `duckdb_free`.
  *
@@ -5869,7 +5877,7 @@ DUCKDB_C_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepar
 DUCKDB_C_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the number of columns present in a the result of the prepared statement. If any of the column types are
  * invalid, the result will be 1.
@@ -5884,7 +5892,7 @@ DUCKDB_C_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepare
 DUCKDB_C_API idx_t duckdb_prepared_statement_column_count(duckdb_prepared_statement prepared_statement);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the name of the specified column of the result of the prepared_statement. The returned string should be freed
  * using `duckdb_free`.
@@ -5903,7 +5911,7 @@ DUCKDB_C_API const char *duckdb_prepared_statement_column_name(duckdb_prepared_s
                                                                idx_t col_idx);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the column type of the specified column of the result of the prepared_statement.
  *
@@ -5922,7 +5930,7 @@ DUCKDB_C_API duckdb_logical_type
 duckdb_prepared_statement_column_logical_type(duckdb_prepared_statement prepared_statement, idx_t col_idx);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the column type of the specified column of the result of the prepared_statement.
  *
@@ -6566,7 +6574,7 @@ DUCKDB_C_API duckdb_statement_type duckdb_result_statement_type(duckdb_result re
 DUCKDB_C_API duckdb_logical_type duckdb_column_logical_type(duckdb_result *result, idx_t col);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the arrow options associated with the given result. These options are definitions of how the arrow
  * arrays/schema should be produced.
@@ -6667,7 +6675,7 @@ DUCKDB_C_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 DUCKDB_C_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates duckdb_error_data. Must be destroyed with `duckdb_destroy_error_data`.
  *
@@ -6682,7 +6690,7 @@ DUCKDB_C_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
 DUCKDB_C_API duckdb_error_data duckdb_create_error_data(duckdb_error_type type, const char *message);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the error data and deallocates its memory.
  *
@@ -6696,7 +6704,7 @@ DUCKDB_C_API duckdb_error_data duckdb_create_error_data(duckdb_error_type type, 
 DUCKDB_C_API void duckdb_destroy_error_data(duckdb_error_data *error_data);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the duckdb_error_type of the error data.
  *
@@ -6710,7 +6718,7 @@ DUCKDB_C_API void duckdb_destroy_error_data(duckdb_error_data *error_data);
 DUCKDB_C_API duckdb_error_type duckdb_error_data_error_type(duckdb_error_data error_data);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the error message of the error data. Must not be freed.
  *
@@ -6724,7 +6732,7 @@ DUCKDB_C_API duckdb_error_type duckdb_error_data_error_type(duckdb_error_data er
 DUCKDB_C_API const char *duckdb_error_data_message(duckdb_error_data error_data);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns whether the error data contains an error or not.
  *
@@ -6818,7 +6826,7 @@ DUCKDB_C_API uint32_t duckdb_string_t_length(duckdb_string_t string);
 DUCKDB_C_API const char *duckdb_string_t_data(duckdb_string_t *string);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Checks if a string is valid UTF-8.
  *
@@ -7207,7 +7215,7 @@ DUCKDB_C_API void duckdb_scalar_function_set_extra_info(duckdb_scalar_function s
                                                         duckdb_delete_callback_t destroy);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the (optional) bind function of the scalar function.
  *
@@ -7223,7 +7231,7 @@ DUCKDB_C_API void duckdb_scalar_function_set_bind(duckdb_scalar_function scalar_
                                                   duckdb_scalar_function_bind_t bind);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the user-provided bind data in the bind object of the scalar function. The bind data object can be retrieved
  * again during execution. In most case, you also need to set the copy-callback of your bind data via
@@ -7242,7 +7250,7 @@ DUCKDB_C_API void duckdb_scalar_function_set_bind_data(duckdb_bind_info info, vo
                                                        duckdb_delete_callback_t destroy);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.
  *
@@ -7257,7 +7265,7 @@ DUCKDB_C_API void duckdb_scalar_function_set_bind_data(duckdb_bind_info info, vo
 DUCKDB_C_API void duckdb_scalar_function_set_bind_data_copy(duckdb_bind_info info, duckdb_copy_callback_t copy);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Report that an error has occurred while calling bind on a scalar function.
  *
@@ -7319,7 +7327,7 @@ DUCKDB_C_API duckdb_state duckdb_register_scalar_function(duckdb_connection con,
 DUCKDB_C_API void *duckdb_scalar_function_get_extra_info(duckdb_function_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the extra info of the function as set in the bind info.
  *
@@ -7333,7 +7341,7 @@ DUCKDB_C_API void *duckdb_scalar_function_get_extra_info(duckdb_function_info in
 DUCKDB_C_API void *duckdb_scalar_function_bind_get_extra_info(duckdb_bind_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`. Note that the bind data is
  * read-only.
@@ -7348,7 +7356,7 @@ DUCKDB_C_API void *duckdb_scalar_function_bind_get_extra_info(duckdb_bind_info i
 DUCKDB_C_API void *duckdb_scalar_function_get_bind_data(duckdb_function_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the client context of the bind info of a scalar function.
  *
@@ -7440,7 +7448,7 @@ DUCKDB_C_API duckdb_state duckdb_add_scalar_function_to_set(duckdb_scalar_functi
 DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set(duckdb_connection con, duckdb_scalar_function_set set);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the number of input arguments of the scalar function.
  *
@@ -7454,7 +7462,7 @@ DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set(duckdb_connection 
 DUCKDB_C_API idx_t duckdb_scalar_function_bind_get_argument_count(duckdb_bind_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the input argument at index of the scalar function.
  *
@@ -7469,7 +7477,7 @@ DUCKDB_C_API idx_t duckdb_scalar_function_bind_get_argument_count(duckdb_bind_in
 DUCKDB_C_API duckdb_expression duckdb_scalar_function_bind_get_argument(duckdb_bind_info info, idx_t index);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the state pointer of the function info.
  *
@@ -7483,7 +7491,7 @@ DUCKDB_C_API duckdb_expression duckdb_scalar_function_bind_get_argument(duckdb_b
 DUCKDB_C_API void *duckdb_scalar_function_get_state(duckdb_function_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the (optional) state init function of the scalar function. This is called once for each worker thread that
  * begins executing the function
@@ -7500,7 +7508,7 @@ DUCKDB_C_API void duckdb_scalar_function_set_init(duckdb_scalar_function scalar_
                                                   duckdb_scalar_function_init_t init);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Report that an error has occurred while calling init on a scalar function.
  *
@@ -7515,7 +7523,7 @@ DUCKDB_C_API void duckdb_scalar_function_set_init(duckdb_scalar_function scalar_
 DUCKDB_C_API void duckdb_scalar_function_init_set_error(duckdb_init_info info, const char *error);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Sets the state pointer in the init info of the scalar function.
  *
@@ -7532,7 +7540,7 @@ DUCKDB_C_API void duckdb_scalar_function_init_set_state(duckdb_init_info info, v
                                                         duckdb_delete_callback_t destroy);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the client context of the init info of a scalar function.
  *
@@ -7548,7 +7556,7 @@ DUCKDB_C_API void duckdb_scalar_function_init_get_client_context(duckdb_init_inf
                                                                  duckdb_client_context *out_context);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`. Note that the bind data is
  * read-only.
@@ -7563,7 +7571,7 @@ DUCKDB_C_API void duckdb_scalar_function_init_get_client_context(duckdb_init_inf
 DUCKDB_C_API void *duckdb_scalar_function_init_get_bind_data(duckdb_init_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the extra info of the function as set in the init info.
  *
@@ -7676,7 +7684,7 @@ DUCKDB_C_API const char *duckdb_table_description_error(duckdb_table_description
 DUCKDB_C_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Return the number of columns of the described table.
  *
@@ -7704,7 +7712,7 @@ DUCKDB_C_API idx_t duckdb_table_description_get_column_count(duckdb_table_descri
 DUCKDB_C_API char *duckdb_table_description_get_column_name(duckdb_table_description table_description, idx_t index);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Obtain the column type at 'index'. The return value must be destroyed with `duckdb_destroy_logical_type`.
  *
@@ -7935,7 +7943,7 @@ DUCKDB_C_API duckdb_state duckdb_register_table_function(duckdb_connection con, 
 DUCKDB_C_API void *duckdb_bind_get_extra_info(duckdb_bind_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the client context of the bind info of a table function.
  *
@@ -8225,7 +8233,7 @@ DUCKDB_C_API void *duckdb_function_get_local_init_data(duckdb_function_info info
 DUCKDB_C_API void duckdb_function_set_error(duckdb_function_info info, const char *error);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the number of result columns of a table function.
  *
@@ -8242,7 +8250,7 @@ DUCKDB_C_API void duckdb_function_set_error(duckdb_function_info info, const cha
 DUCKDB_C_API idx_t duckdb_table_function_bind_get_result_column_count(duckdb_bind_info info);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the name of a result column of a table function.
  *
@@ -8263,7 +8271,7 @@ DUCKDB_C_API idx_t duckdb_table_function_bind_get_result_column_count(duckdb_bin
 DUCKDB_C_API const char *duckdb_table_function_bind_get_result_column_name(duckdb_bind_info info, idx_t col_idx);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Retrieves the type of a result column of a table function.
  *
@@ -8705,7 +8713,7 @@ DUCKDB_C_API duckdb_value duckdb_create_date(duckdb_date input);
 DUCKDB_C_API duckdb_value duckdb_create_time(duckdb_time input);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a value from a time_ns
  *
@@ -9079,7 +9087,7 @@ DUCKDB_C_API duckdb_date duckdb_get_date(duckdb_value val);
 DUCKDB_C_API duckdb_time duckdb_get_time(duckdb_value val);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the time_ns value of the given value.
  *
@@ -9304,7 +9312,7 @@ DUCKDB_C_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duc
 DUCKDB_C_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a map value from a map type and two arrays, one for the keys and one for the values, each of length
  * `entry_count`. Must be destroyed with `duckdb_destroy_value`.
@@ -9323,7 +9331,7 @@ DUCKDB_C_API duckdb_value duckdb_create_map_value(duckdb_logical_type map_type, 
                                                   duckdb_value *values, idx_t entry_count);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a union value from a union type, a tag index, and a value. Must be destroyed with `duckdb_destroy_value`.
  *
@@ -9474,7 +9482,7 @@ DUCKDB_C_API uint64_t duckdb_get_enum_value(duckdb_value value);
 DUCKDB_C_API duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Returns the SQL string representation of the given value.
  *
@@ -9890,7 +9898,7 @@ DUCKDB_C_API bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t r
 
 /* --- Functions for vector --- */
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a flat vector. Must be destroyed with `duckdb_destroy_vector`.
  *
@@ -9905,7 +9913,7 @@ DUCKDB_C_API bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t r
 DUCKDB_C_API duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the vector and de-allocates its memory.
  *
@@ -10030,7 +10038,7 @@ DUCKDB_C_API void duckdb_vector_assign_string_element_len(duckdb_vector vector, 
                                                           idx_t str_len);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Assigns a string element in the vector at the specified location without UTF-8 validation. The caller is responsible
  * for ensuring the input is valid UTF-8. Use `duckdb_valid_utf8_check` to validate strings before calling this function
@@ -10139,7 +10147,7 @@ DUCKDB_C_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, 
 DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Slice a vector with a selection vector. The length of the selection vector must be less than or equal to the length
  * of the vector. Turns the vector into a dictionary vector.
@@ -10156,7 +10164,7 @@ DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector sel, idx_t len);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 4, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Copy the src vector to the dst with a selection vector that identifies which indices to copy.
  *
@@ -10179,7 +10187,7 @@ DUCKDB_C_API void duckdb_vector_copy_sel(duckdb_vector src, duckdb_vector dst, d
                                          idx_t src_count, idx_t src_offset, idx_t dst_offset);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Copies the value from `value` to `vector`.
  *
@@ -10194,7 +10202,7 @@ DUCKDB_C_API void duckdb_vector_copy_sel(duckdb_vector src, duckdb_vector dst, d
 DUCKDB_C_API void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Changes `to_vector` to reference `from_vector. After, the vectors share ownership of the data.
  *
@@ -10273,7 +10281,7 @@ DUCKDB_C_API void duckdb_validity_set_row_invalid(uint64_t *validity, idx_t row)
 DUCKDB_C_API void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Creates a new selection vector of size `size`. Must be destroyed with `duckdb_destroy_selection_vector`.
  *
@@ -10287,7 +10295,7 @@ DUCKDB_C_API void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row);
 DUCKDB_C_API duckdb_selection_vector duckdb_create_selection_vector(idx_t size);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Destroys the selection vector and de-allocates its memory.
  *
@@ -10301,7 +10309,7 @@ DUCKDB_C_API duckdb_selection_vector duckdb_create_selection_vector(idx_t size);
 DUCKDB_C_API void duckdb_destroy_selection_vector(duckdb_selection_vector sel);
 #endif
 
-#if DUCKDB_API_VERSION_AT_LEAST(1, 3, 0) && (DUCKDB_API_VERSION_AT_LEAST(1, 5, 6) || DUCKDB_API_ALLOW_UNSTABLE)
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 /*!
  * Access the data pointer of a selection vector.
  *
