@@ -155,6 +155,20 @@ void RecursiveCTEEpochMetrics::RecordDistinctGrouping(idx_t candidate_rows, idx_
 	distinct_grouping_work_ns.fetch_add(elapsed_ns);
 }
 
+void RecursiveCTEEpochMetrics::RecordPipelineExecution(RecursiveCTEPipelineMetricType metric_type, idx_t elapsed_ns) {
+	switch (metric_type) {
+	case RecursiveCTEPipelineMetricType::RECURSIVE:
+		recursive_pipeline_execute_work_ns.fetch_add(elapsed_ns);
+		break;
+	case RecursiveCTEPipelineMetricType::INVARIANT_BUILD:
+		invariant_build_execute_work_ns.fetch_add(elapsed_ns);
+		break;
+	case RecursiveCTEPipelineMetricType::INVARIANT_CTE_MATERIALIZATION:
+		invariant_cte_materialization_execute_work_ns.fetch_add(elapsed_ns);
+		break;
+	}
+}
+
 RecursiveCTEMetrics::RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op_p)
     : logger(context.logger),
       enabled(logger && logger->ShouldLog(PhysicalOperatorLogType::NAME, PhysicalOperatorLogType::LEVEL)) {
@@ -319,7 +333,11 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 	     {"distinct_grouping_work_ns", to_string(epoch_metrics.distinct_grouping_work_ns.load())},
 	     {"distinct_candidate_rows", to_string(distinct_candidate_rows)},
 	     {"distinct_inserted_rows", to_string(distinct_inserted_rows)},
-	     {"distinct_duplicate_rows", to_string(distinct_candidate_rows - distinct_inserted_rows)}});
+	     {"distinct_duplicate_rows", to_string(distinct_candidate_rows - distinct_inserted_rows)},
+	     {"recursive_pipeline_execute_work_ns", to_string(epoch_metrics.recursive_pipeline_execute_work_ns.load())},
+	     {"invariant_build_execute_work_ns", to_string(epoch_metrics.invariant_build_execute_work_ns.load())},
+	     {"invariant_cte_materialization_execute_work_ns",
+	      to_string(epoch_metrics.invariant_cte_materialization_execute_work_ns.load())}});
 }
 
 RecursiveCTESchedulerState::RecursiveCTESchedulerState(shared_ptr<RecursiveExecutorPool> executor_pool_p,

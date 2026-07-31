@@ -161,11 +161,31 @@ static void ExecuteRecursivePipelineInline(PipelineExecutor &pipeline_executor) 
 	}
 }
 
+template <bool COLLECT_METRICS>
+struct RecursiveCTETaskMetrics {
+	RecursiveCTETaskMetrics(RecursiveCTEState &, RecursiveCTEPipelineMetricType) {
+	}
+};
+
+template <>
+struct RecursiveCTETaskMetrics<true> {
+	RecursiveCTETaskMetrics(RecursiveCTEState &state_p, RecursiveCTEPipelineMetricType metric_type_p)
+	    : state(state_p), metric_type(metric_type_p) {
+	}
+
+	RecursiveCTEState &state;
+	RecursiveCTEPipelineMetricType metric_type;
+};
+
 //! A task that executes a cached PipelineExecutor
-class RecursiveCTETask : public ExecutorTask {
+template <bool COLLECT_METRICS>
+class RecursiveCTETask : public ExecutorTask, private RecursiveCTETaskMetrics<COLLECT_METRICS> {
 public:
-	RecursiveCTETask(Pipeline &pipeline_p, shared_ptr<Event> event_p, PipelineExecutor &executor_p)
-	    : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p), pipeline_executor(executor_p) {
+	RecursiveCTETask(Pipeline &pipeline_p, shared_ptr<Event> event_p, PipelineExecutor &executor_p,
+	                 RecursiveCTEState &state_p, RecursiveCTEPipelineMetricType metric_type_p)
+	    : ExecutorTask(pipeline_p.executor, std::move(event_p)), RecursiveCTETaskMetrics<COLLECT_METRICS>(
+	                                                                 state_p, metric_type_p),
+	      pipeline(pipeline_p), pipeline_executor(executor_p) {
 	}
 
 	Pipeline &pipeline;
@@ -173,27 +193,27 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		pipeline_executor.SetTaskForInterrupts(shared_from_this());
-
-		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
-			auto res = pipeline_executor.Execute(PARTIAL_CHUNK_COUNT);
-			switch (res) {
-			case PipelineExecuteResult::NOT_FINISHED:
-				return TaskExecutionResult::TASK_NOT_FINISHED;
-			case PipelineExecuteResult::INTERRUPTED:
-				return TaskExecutionResult::TASK_BLOCKED;
-			case PipelineExecuteResult::FINISHED:
-				break;
-			}
-		} else {
-			auto res = pipeline_executor.Execute();
-			switch (res) {
-			case PipelineExecuteResult::NOT_FINISHED:
+		const auto execute_start =
+		    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+		const auto result = mode == TaskExecutionMode::PROCESS_PARTIAL ? pipeline_executor.Execute(PARTIAL_CHUNK_COUNT)
+		                                                               : pipeline_executor.Execute();
+		if constexpr (COLLECT_METRICS) {
+			const auto execute_end = std::chrono::steady_clock::now();
+			this->state.GetEpochMetrics().RecordPipelineExecution(
+			    this->metric_type,
+			    NumericCast<idx_t>(
+			        std::chrono::duration_cast<std::chrono::nanoseconds>(execute_end - execute_start).count()));
+		}
+		switch (result) {
+		case PipelineExecuteResult::NOT_FINISHED:
+			if (mode != TaskExecutionMode::PROCESS_PARTIAL) {
 				throw InternalException("Execute without limit should not return NOT_FINISHED");
-			case PipelineExecuteResult::INTERRUPTED:
-				return TaskExecutionResult::TASK_BLOCKED;
-			case PipelineExecuteResult::FINISHED:
-				break;
 			}
+			return TaskExecutionResult::TASK_NOT_FINISHED;
+		case PipelineExecuteResult::INTERRUPTED:
+			return TaskExecutionResult::TASK_BLOCKED;
+		case PipelineExecuteResult::FINISHED:
+			break;
 		}
 
 		event->FinishTask();
@@ -217,12 +237,15 @@ private:
 //! root events must sometimes be reset up-front on the main thread to avoid reset-vs-execute races.
 class RecursiveCTEPipelineEvent : public BasePipelineEvent {
 public:
-	RecursiveCTEPipelineEvent(shared_ptr<Pipeline> pipeline_p, RecursiveCTEState &state_p, idx_t worker_limit_p)
-	    : BasePipelineEvent(std::move(pipeline_p)), state(state_p), worker_limit(worker_limit_p) {
+	RecursiveCTEPipelineEvent(shared_ptr<Pipeline> pipeline_p, RecursiveCTEState &state_p, idx_t worker_limit_p,
+	                          RecursiveCTEPipelineMetricType metric_type_p)
+	    : BasePipelineEvent(std::move(pipeline_p)), state(state_p), worker_limit(worker_limit_p),
+	      metric_type(metric_type_p) {
 	}
 
 	RecursiveCTEState &state;
 	idx_t worker_limit;
+	RecursiveCTEPipelineMetricType metric_type;
 	bool prepared_for_schedule = false;
 
 	void PrepareForSchedule() {
@@ -254,7 +277,13 @@ public:
 		vector<shared_ptr<Task>> tasks;
 		for (idx_t i = 0; i < max_threads; i++) {
 			executors[i]->PrepareForExecution();
-			tasks.push_back(make_uniq<RecursiveCTETask>(*pipeline, shared_from_this(), *executors[i]));
+			if (state.GetMetrics().Enabled()) {
+				tasks.push_back(make_uniq<RecursiveCTETask<true>>(*pipeline, shared_from_this(), *executors[i], state,
+				                                                  metric_type));
+			} else {
+				tasks.push_back(make_uniq<RecursiveCTETask<false>>(*pipeline, shared_from_this(), *executors[i], state,
+				                                                   metric_type));
+			}
 		}
 		SetTasks(std::move(tasks));
 	}
@@ -334,6 +363,22 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 	// 1. a scheduler-free stage plan for the single-thread inline fast path
 	// 2. a per-iteration Event graph for the multi-threaded path
 	auto plan = make_uniq<RecursiveCTEPipelineSchedulePlan>();
+	reference_map_t<const Pipeline, RecursiveCTEPipelineMetricType> pipeline_metric_types;
+	for (auto &meta_pipeline : meta_pipelines) {
+		auto metric_type = RecursiveCTEPipelineMetricType::RECURSIVE;
+		if (recursive_cte.invariant_meta_pipelines.find(*meta_pipeline) !=
+		    recursive_cte.invariant_meta_pipelines.end()) {
+			auto sink = meta_pipeline->GetSink();
+			metric_type = sink && sink->type == PhysicalOperatorType::CTE
+			                  ? RecursiveCTEPipelineMetricType::INVARIANT_CTE_MATERIALIZATION
+			                  : RecursiveCTEPipelineMetricType::INVARIANT_BUILD;
+		}
+		vector<shared_ptr<Pipeline>> pipelines;
+		meta_pipeline->GetPipelines(pipelines, false);
+		for (auto &pipeline : pipelines) {
+			pipeline_metric_types.emplace(*pipeline, metric_type);
+		}
+	}
 	// Retained invariant meta-pipelines are absent after the first epoch, so build the induced schedule for
 	// the active subset and ignore dependencies whose other endpoint is already materialized.
 	auto schedule = BuildPipelineSchedule(meta_pipelines, PipelineScheduleMode::ACTIVE_SUBSET);
@@ -360,7 +405,9 @@ BuildRecursivePipelineSchedulePlan(const vector<shared_ptr<MetaPipeline>> &meta_
 			}
 		}
 		recursive_stage_indices[stage_idx] = plan->stages.size();
-		plan->stages.emplace_back(stage.type, pipeline, has_source_tasks);
+		auto metric_type = pipeline_metric_types.find(pipeline);
+		D_ASSERT(metric_type != pipeline_metric_types.end());
+		plan->stages.emplace_back(stage.type, pipeline, has_source_tasks, metric_type->second);
 	}
 	for (idx_t stage_idx = 0; stage_idx < schedule->stages.size(); stage_idx++) {
 		const auto recursive_stage_idx = recursive_stage_indices[stage_idx];
@@ -725,7 +772,7 @@ static void ScheduleRecursivePlan(const RecursiveCTEPipelineSchedulePlan &plan, 
 		switch (stage.type) {
 		case PipelineScheduleStageType::EXECUTE:
 			events.push_back(make_shared_ptr<RecursiveCTEPipelineEvent>(
-			    std::move(pipeline), state, parallelism.WorkerCount(stage.has_source_tasks)));
+			    std::move(pipeline), state, parallelism.WorkerCount(stage.has_source_tasks), stage.metric_type));
 			break;
 		case PipelineScheduleStageType::PREPARE_FINISH:
 			events.push_back(make_shared_ptr<PipelinePrepareFinishEvent>(std::move(pipeline)));
@@ -769,6 +816,7 @@ static void ExecuteRecursivePipelineFinishInline(Pipeline &pipeline, Executor &e
 	}
 }
 
+template <bool COLLECT_METRICS>
 static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &executor,
                                        const RecursiveCTEPipelineSchedulePlan &plan) {
 	for (auto &pipeline : plan.initialize_on_schedule_pipelines) {
@@ -790,10 +838,19 @@ static void ExecuteRecursiveInlinePlan(RecursiveCTEState &state, Executor &execu
 			auto &executors = state.GetScheduler().GetExecutors(pipeline);
 			D_ASSERT(executors.size() >= max_threads);
 			executors[0]->PrepareForExecution();
-			if (state.GetMetrics().Enabled()) {
+			if constexpr (COLLECT_METRICS) {
 				state.GetMetrics().RecordTasks(1);
 			}
+			const auto execute_start =
+			    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 			ExecuteRecursivePipelineInline(*executors[0]);
+			if constexpr (COLLECT_METRICS) {
+				const auto execute_end = std::chrono::steady_clock::now();
+				state.GetEpochMetrics().RecordPipelineExecution(
+				    stage.metric_type,
+				    NumericCast<idx_t>(
+				        std::chrono::duration_cast<std::chrono::nanoseconds>(execute_end - execute_start).count()));
+			}
 			break;
 		}
 		case PipelineScheduleStageType::PREPARE_FINISH:
@@ -931,7 +988,11 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	auto inline_execution = allow_reuse && parallelism.IsInline();
 
 	if (inline_execution) {
-		ExecuteRecursiveInlinePlan(gstate, executor, *schedule_plan);
+		if (collect_metrics) {
+			ExecuteRecursiveInlinePlan<true>(gstate, executor, *schedule_plan);
+		} else {
+			ExecuteRecursiveInlinePlan<false>(gstate, executor, *schedule_plan);
+		}
 	} else {
 		vector<shared_ptr<Event>> events;
 		ScheduleRecursivePlan(*schedule_plan, gstate, events, parallelism);

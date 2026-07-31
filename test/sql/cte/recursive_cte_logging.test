@@ -182,15 +182,16 @@ WHERE class = 'PhysicalRecursiveCTE' AND event = 'DistinctPromoted'
 ----
 1
 
-query IIII
+query IIIII
 SELECT info.distinct_grouping_work_ns::UBIGINT > 0,
        info.distinct_candidate_rows::UBIGINT = 400000,
        info.distinct_inserted_rows::UBIGINT = 400000,
-       info.distinct_duplicate_rows::UBIGINT = 0
+       info.distinct_duplicate_rows::UBIGINT = 0,
+       info.recursive_pipeline_execute_work_ns::UBIGINT > 0
 FROM duckdb_logs_parsed('PhysicalOperator')
 WHERE class = 'PhysicalRecursiveCTE' AND event = 'EpochSummary';
 ----
-1	1	1	1
+1	1	1	1	1
 
 statement ok
 CALL enable_logging('PhysicalOperator');

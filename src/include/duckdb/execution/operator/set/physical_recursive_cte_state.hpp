@@ -29,6 +29,8 @@ enum class RecursiveCTESourcePhase : uint8_t {
 	FINISHED
 };
 
+enum class RecursiveCTEPipelineMetricType : uint8_t { RECURSIVE, INVARIANT_BUILD, INVARIANT_CTE_MATERIALIZATION };
+
 //! Epoch-stable secondary index over a proper subset of USING KEY columns.
 class RecursiveCTEPartialKeyIndex {
 public:
@@ -61,13 +63,16 @@ private:
 };
 
 struct RecursiveCTEScheduleStage {
-	RecursiveCTEScheduleStage(PipelineScheduleStageType type_p, Pipeline &pipeline_p, bool has_source_tasks_p)
-	    : type(type_p), pipeline(pipeline_p), has_source_tasks(has_source_tasks_p), dependency_count(0) {
+	RecursiveCTEScheduleStage(PipelineScheduleStageType type_p, Pipeline &pipeline_p, bool has_source_tasks_p,
+	                          RecursiveCTEPipelineMetricType metric_type_p)
+	    : type(type_p), pipeline(pipeline_p), has_source_tasks(has_source_tasks_p), metric_type(metric_type_p),
+	      dependency_count(0) {
 	}
 
 	PipelineScheduleStageType type;
 	reference<Pipeline> pipeline;
 	bool has_source_tasks;
+	RecursiveCTEPipelineMetricType metric_type;
 	vector<idx_t> dependents;
 	idx_t dependency_count;
 };
@@ -103,6 +108,7 @@ struct RecursiveCTEEpochMetrics {
 	void RecordRecurringScan(idx_t elapsed_ns);
 	void RecordFinalStateDrain(idx_t elapsed_ns);
 	void RecordDistinctGrouping(idx_t candidate_rows, idx_t inserted_rows, idx_t elapsed_ns);
+	void RecordPipelineExecution(RecursiveCTEPipelineMetricType metric_type, idx_t elapsed_ns);
 
 	RecursiveCTEMetricDistribution frontier_rows;
 	RecursiveCTEMetricDistribution workers;
@@ -122,6 +128,9 @@ struct RecursiveCTEEpochMetrics {
 	atomic<idx_t> distinct_grouping_work_ns {0};
 	atomic<idx_t> distinct_candidate_rows {0};
 	atomic<idx_t> distinct_inserted_rows {0};
+	atomic<idx_t> recursive_pipeline_execute_work_ns {0};
+	atomic<idx_t> invariant_build_execute_work_ns {0};
+	atomic<idx_t> invariant_cte_materialization_execute_work_ns {0};
 };
 
 struct RecursiveCTELogIdentity {
