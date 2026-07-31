@@ -140,11 +140,10 @@ DUCKDB_AUTOVEC_TARGET static inline duckdb_av_u16x16 Decode16(const uint8_t *DUC
 		duckdb_av_u8x16 lo, hi;
 		std::memcpy(&lo, base, 16);
 		std::memcpy(&hi, base + WIDTH, 16);
-		const duckdb_av_u16x16 mask = duckdb_av_u16x16 {} + static_cast<uint16_t>((1u << WIDTH) - 1);
-		return ((ShuffleGatherPair<WIDTH>(lo, hi, std::make_index_sequence<32> {}) *
-		         MulShift16<WIDTH>(std::make_index_sequence<16> {})) >>
-		        (16 - WIDTH)) &
-		       mask;
+		// no mask needed: the multiply truncates the bits above the value, the shift drops those below
+		return (ShuffleGatherPair<WIDTH>(lo, hi, std::make_index_sequence<32> {}) *
+		        MulShift16<WIDTH>(std::make_index_sequence<16> {})) >>
+		       (16 - WIDTH);
 	}
 }
 // Unpack 32 values in 16-bit lanes, pairing the decodes into 32-byte stores (u8 outputs narrow both
