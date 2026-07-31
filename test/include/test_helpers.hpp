@@ -32,6 +32,7 @@
 namespace duckdb {
 
 void RegisterSqllogictests();
+void RegisterSqllogictests(const vector<string> &test_paths);
 void RegisterSqllogictestStdin();
 bool SummarizeFailures();
 

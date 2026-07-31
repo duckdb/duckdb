@@ -56,6 +56,9 @@ public:
 	bool ParallelSource() const override {
 		return true;
 	}
+	bool HasSourceTasks() const override {
+		return true;
+	}
 
 public:
 	// Sink Interface

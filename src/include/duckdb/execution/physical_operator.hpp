@@ -160,6 +160,11 @@ public:
 		return false;
 	}
 
+	//! Whether this source creates partitioned work that is not bounded by its input chunks
+	virtual bool HasSourceTasks() const {
+		return false;
+	}
+
 	//! How this source manages parallelism
 	virtual TableFunctionParallelism SourceParallelism() const;
 

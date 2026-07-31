@@ -131,6 +131,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_MACRO";
 	case PhysicalOperatorType::CREATE_SECRET:
 		return "CREATE_SECRET";
+	case PhysicalOperatorType::RECURSIVE_KEY_JOIN:
+		return "RECURSIVE_KEY_JOIN";
 	case PhysicalOperatorType::DROP:
 		return "DROP";
 	case PhysicalOperatorType::PRAGMA:
