@@ -65,9 +65,8 @@ static void ExtractPivotExpressions(ParsedExpression &root_expr, identifier_set_
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
 		    if (child_colref.IsQualified()) {
-			    if (StringUtil::StartsWith(child_colref.ColumnNames()[0].GetIdentifierName(),
-			                               DummyBinding::DUMMY_NAME) &&
-			        macro_binding && macro_binding->HasMatchingBinding(Identifier(child_colref.GetName()))) {
+			    if (child_colref.ColumnNames()[0].StartsWith(DummyBinding::DUMMY_NAME) && macro_binding &&
+			        macro_binding->HasMatchingBinding(Identifier(child_colref.GetName()))) {
 				    throw ParameterNotResolvedException();
 			    }
 			    throw BinderException(child_colref, "PIVOT expression cannot contain qualified columns");

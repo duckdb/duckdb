@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -13,8 +14,9 @@
 
 namespace duckdb {
 
-CatalogSearchEntry::CatalogSearchEntry(Identifier catalog_p, Identifier schema_p)
-    : catalog(std::move(catalog_p)), schema(std::move(schema_p)) {
+CatalogSearchEntry::CatalogSearchEntry(Identifier catalog_p, Identifier schema_p, bool default_schema_precedence_p)
+    : catalog(std::move(catalog_p)), schema(std::move(schema_p)),
+      default_schema_precedence(default_schema_precedence_p) {
 }
 
 string CatalogSearchEntry::ToString() const {
@@ -29,7 +31,7 @@ string CatalogSearchEntry::WriteOptionallyQuoted(const Identifier &input) {
 	auto &name = input.GetIdentifierName();
 	for (idx_t i = 0; i < name.size(); i++) {
 		if (name[i] == '.' || name[i] == ',' || name[i] == '"') {
-			return "\"" + StringUtil::Replace(name, "\"", "\"\"") + "\"";
+			return SQLQuotedIdentifier::ToString(name);
 		}
 	}
 	return name;
@@ -189,6 +191,15 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 				}
 			}
 		}
+		if (!path.GetCatalog().empty()) {
+			// "a.b" can also name a nested schema - give a clearer error in that case
+			vector<Identifier> nested_path {path.GetCatalog(), path.GetSchema()};
+			if (Catalog::GetSchema(context, Identifier(), nested_path, OnEntryNotFound::RETURN_NULL)) {
+				throw NotImplementedException("%s: \"%s\" is a nested schema - nested schemas cannot be used in the "
+				                              "search path",
+				                              GetSetName(set_type), path.ToString());
+			}
+		}
 		throw CatalogException("%s: No catalog + schema named \"%s\" found.", GetSetName(set_type), path.ToString());
 	}
 	if (set_type == CatalogSetPathType::SET_SCHEMA) {
@@ -281,6 +292,37 @@ vector<Identifier> CatalogSearchPath::GetSchemasForCatalog(const Identifier &cat
 		}
 	}
 	return schemas;
+}
+
+vector<CatalogSearchEntry> CatalogSearchPath::GetImplicitSearchCatalogs() const {
+	// Get the implicit entries that were not already resolved by the precedence flag.
+	vector<CatalogSearchEntry> catalogs;
+	for (auto &path : paths) {
+		if (path.GetSchema().empty() && !path.GetCatalog().empty() && !path.DefaultSchemaPrecedence()) {
+			catalogs.push_back(path);
+		}
+	}
+	return catalogs;
+}
+
+vector<CatalogSearchEntry> CatalogSearchPath::GetWithPrecedenceSchemas(ClientContext &context) const {
+	vector<CatalogSearchEntry> res;
+	for (auto &path : paths) {
+		// Resolve implicit entries with default_schema_precedence to the catalog's default schema.
+		if (path.GetSchema().empty()) {
+			if (path.GetCatalog().empty() || !path.DefaultSchemaPrecedence()) {
+				continue;
+			}
+			auto catalog_entry = Catalog::GetCatalogEntry(context, path.GetCatalog());
+			if (!catalog_entry) {
+				continue;
+			}
+			res.emplace_back(path.GetCatalog(), Identifier(catalog_entry->GetDefaultSchema()));
+		} else {
+			res.emplace_back(path);
+		}
+	}
+	return res;
 }
 
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {

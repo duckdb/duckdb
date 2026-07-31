@@ -1,0 +1,98 @@
+# name: test/sql/catalog/nested_schema/nested_constraints.test
+# description: Test constraints (PRIMARY KEY / UNIQUE / FOREIGN KEY) on tables in nested schemas
+# group: [nested_schema]
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE TABLE s1.s2.pk(i INTEGER PRIMARY KEY, s VARCHAR UNIQUE);
+
+statement ok
+INSERT INTO s1.s2.pk VALUES (1, 'a'), (2, 'b');
+
+statement error
+INSERT INTO s1.s2.pk VALUES (1, 'c');
+----
+<REGEX>:.*primary key.*
+
+statement error
+INSERT INTO s1.s2.pk VALUES (3, 'a');
+----
+<REGEX>:.*unique constraint.*
+
+# an unqualified foreign key resolves within the same nested schema
+
+statement ok
+CREATE TABLE s1.s2.fk(j INTEGER REFERENCES pk(i));
+
+statement ok
+INSERT INTO s1.s2.fk VALUES (1);
+
+statement error
+INSERT INTO s1.s2.fk VALUES (99);
+----
+<REGEX>:.*foreign key constraint.*
+
+# the referenced table cannot be dropped while the foreign key exists
+statement error
+DROP TABLE s1.s2.pk;
+----
+<REGEX>:.*main key table.*
+
+statement ok
+DROP TABLE s1.s2.fk;
+
+# a fully qualified foreign key to a table in the same nested schema
+
+statement ok
+CREATE TABLE s1.s2.fk2(j INTEGER, FOREIGN KEY (j) REFERENCES s1.s2.pk(i));
+
+statement ok
+INSERT INTO s1.s2.fk2 VALUES (2);
+
+statement error
+INSERT INTO s1.s2.fk2 VALUES (99);
+----
+<REGEX>:.*foreign key constraint.*
+
+statement error
+DELETE FROM s1.s2.pk WHERE i = 2;
+----
+<REGEX>:.*foreign key constraint.*
+
+# a foreign key to a table in a different schema is not supported
+
+statement ok
+CREATE SCHEMA s1.s3;
+
+statement error
+CREATE TABLE s1.s3.fk3(j INTEGER REFERENCES s2.pk(i));
+----
+<REGEX>:.*(not supported|does not exist).*
+
+# CHECK constraints work on nested tables
+
+statement ok
+CREATE TABLE s1.s2.chk(i INTEGER CHECK (i > 0));
+
+statement ok
+INSERT INTO s1.s2.chk VALUES (1);
+
+statement error
+INSERT INTO s1.s2.chk VALUES (-1);
+----
+<REGEX>:.*CHECK constraint.*
+
+# cascading drop removes the tables and their constraints
+
+statement ok
+DROP SCHEMA s1 CASCADE;
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE database_name = 'memory';
+----
+0

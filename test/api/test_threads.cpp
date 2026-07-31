@@ -1,8 +1,12 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 #include <thread>
 
@@ -132,6 +136,43 @@ TEST_CASE("Test async threads", "[api]") {
 	con.Query("SET async_threads=2");
 	REQUIRE(scheduler.NumberOfAsyncThreads() == 2);
 }
+
+static idx_t ColumnDataScanMaxThreads(Connection &con, MaterializedQueryResult &result,
+                                      const OperatorPartitionInfo &partition_info) {
+	PhysicalPlan physical_plan(Allocator::Get(*con.context));
+	auto &scan = physical_plan.Make<PhysicalColumnDataScan>(result.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
+	                                                        result.Collection().Count(), result.Collection());
+	auto source_state = scan.GetGlobalSourceState(*con.context, partition_info);
+	return source_state->MaxThreads();
+}
+
+#if STANDARD_VECTOR_SIZE <= 4096
+TEST_CASE("Column data scan batch sizes preserve source parallelism", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=8"));
+
+	const idx_t small_count = STANDARD_VECTOR_SIZE * 16;
+	auto small_result = con.Query(StringUtil::Format("SELECT i FROM range(%llu) t(i)", small_count));
+	REQUIRE(!small_result->HasError());
+	auto &small_materialized = *small_result;
+
+	REQUIRE(ColumnDataScanMaxThreads(con, small_materialized, OperatorPartitionInfo::NoPartitionInfo()) == 16);
+	REQUIRE(ColumnDataScanMaxThreads(con, small_materialized, OperatorPartitionInfo::BatchIndex()) == 8);
+	REQUIRE(ColumnDataScanMaxThreads(con, small_materialized,
+	                                 OperatorPartitionInfo::BatchIndex(DEFAULT_ROW_GROUP_SIZE)) == 8);
+
+#if STANDARD_VECTOR_SIZE >= 512
+	const idx_t large_count = DEFAULT_ROW_GROUP_SIZE * 8 + STANDARD_VECTOR_SIZE;
+	auto large_result = con.Query(StringUtil::Format("SELECT i FROM range(%llu) t(i)", large_count));
+	REQUIRE(!large_result->HasError());
+	auto &large_materialized = *large_result;
+	REQUIRE(ColumnDataScanMaxThreads(con, large_materialized, OperatorPartitionInfo::BatchIndex()) == 9);
+	REQUIRE(ColumnDataScanMaxThreads(con, large_materialized,
+	                                 OperatorPartitionInfo::BatchIndex(DEFAULT_ROW_GROUP_SIZE)) == 9);
+#endif
+}
+#endif
 #endif
 
 #ifdef DUCKDB_NO_THREADS

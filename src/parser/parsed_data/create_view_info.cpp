@@ -15,8 +15,8 @@ CreateViewInfo::CreateViewInfo(const QualifiedName &view_name)
 	SetViewName(view_name.Name());
 }
 
-CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name)
-    : CreateViewInfo(QualifiedName(schema.catalog.GetName(), schema.name, std::move(view_name))) {
+CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, const Identifier &view_name)
+    : CreateViewInfo(schema.GetQualifiedName(view_name)) {
 }
 
 string CreateViewInfo::ToString() const {

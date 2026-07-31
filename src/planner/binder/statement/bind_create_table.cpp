@@ -569,13 +569,15 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 
 		// Resolve the table reference in the same catalog/schema as the table being
 		// created, so FK references work for external catalogs (not just the default).
-		Identifier fk_catalog =
-		    fk.info.schema.empty() ? schema.ParentCatalog().GetName() : Identifier::InvalidCatalog();
-		string fk_schema =
-		    fk.info.schema.empty() ? schema.name.GetIdentifierName() : fk.info.schema.GetIdentifierName();
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(fk.info.table));
-		auto table_entry = entry_retriever.GetEntry(EntryLookupInfo(
-		    table_lookup, QualifiedName(fk_catalog, Identifier(fk_schema), table_lookup.GetEntryIdentifier())));
+		QualifiedName fk_name;
+		if (fk.info.schema.empty() || fk.info.schema == schema.name) {
+			// a foreign key can only reference a table in the same (possibly nested) schema
+			fk_name = schema.GetQualifiedName(fk.info.table);
+		} else {
+			fk_name = QualifiedName(Identifier::InvalidCatalog(), fk.info.schema, fk.info.table);
+		}
+		auto table_entry = entry_retriever.GetEntry(EntryLookupInfo(table_lookup, fk_name));
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}
@@ -608,9 +610,10 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
                                                              vector<unique_ptr<Expression>> &bound_defaults,
                                                              AlterBindMode bind_mode) {
-	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
-	auto &dependencies = result->dependencies;
+	auto &base = result->Base();
+	base.dependencies = LogicalDependencyList();
+	auto &dependencies = base.dependencies;
 	auto &catalog = schema.ParentCatalog();
 	optional_ptr<StorageManager> storage_manager;
 	if (catalog.IsDuckCatalog() && !catalog.InMemory()) {
@@ -710,7 +713,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
 	}
 
-	result->dependencies.VerifyDependencies(schema.catalog, result->Base().GetTableName());
+	base.dependencies.VerifyDependencies(schema.catalog, base.GetTableName());
 
 #ifdef DEBUG
 	// Ensure all types are bound
