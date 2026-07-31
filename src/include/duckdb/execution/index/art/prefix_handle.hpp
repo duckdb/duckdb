@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-//! PrefixHandle provides static methods for mutable prefix operations.
+//! PrefixHandle provides static methods for mutable prefix operations on a NodeHandle.
 class PrefixHandle {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;
