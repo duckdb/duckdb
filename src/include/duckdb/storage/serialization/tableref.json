@@ -362,7 +362,7 @@
       {
         "id": 1,
         "name": "unit",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 2,
