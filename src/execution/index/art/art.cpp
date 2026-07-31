@@ -1224,6 +1224,7 @@ void ART::Vacuum(IndexLock &state) {
 	}
 
 	auto &art = *this;
+	const auto vacuum_deprecated_leaves = indexes.find(Node::GetAllocatorIdx(NType::LEAF)) != indexes.end();
 
 	auto child_handler = [&](Node &child) -> OptionalNode {
 		// Vacuums the pointer if needed and updates in place within the parent.
@@ -1237,7 +1238,7 @@ void ART::Vacuum(IndexLock &state) {
 	auto on_pop = [&](Node current) -> ARTScanNodeResult {
 		D_ASSERT(current.HasMetadata());
 		if (current.GetType() == NType::LEAF) {
-			if (indexes.find(Node::GetAllocatorIdx(NType::LEAF)) != indexes.end()) {
+			if (vacuum_deprecated_leaves) {
 				// Vacuum the internal pointers in the deprecated leaf chain.
 				Leaf::DeprecatedVacuum(art, current);
 			}
