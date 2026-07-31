@@ -99,6 +99,8 @@ struct RecursiveCTEEpochMetrics {
 	void RecordDirectProbePayloadFinalize(idx_t elapsed_ns);
 	void RecordKeyedHashCommit(idx_t elapsed_ns);
 	void RecordPartialIndexMaintenance(idx_t elapsed_ns);
+	void RecordRecurringScan(idx_t elapsed_ns);
+	void RecordFinalStateDrain(idx_t elapsed_ns);
 
 	RecursiveCTEMetricDistribution frontier_rows;
 	RecursiveCTEMetricDistribution workers;
@@ -113,6 +115,8 @@ struct RecursiveCTEEpochMetrics {
 	atomic<idx_t> direct_probe_payload_finalize_work_ns {0};
 	atomic<idx_t> keyed_hash_commit_work_ns {0};
 	atomic<idx_t> partial_index_maintenance_work_ns {0};
+	atomic<idx_t> recurring_scan_work_ns {0};
+	atomic<idx_t> final_state_drain_work_ns {0};
 };
 
 struct RecursiveCTELogIdentity {
@@ -306,6 +310,8 @@ private:
 	unique_ptr<RecursiveCTEEpochMetrics> epoch_metrics;
 
 	SourceResultType GetUsingKeyData(ExecutionContext &context, DataChunk &chunk);
+	template <bool COLLECT_METRICS>
+	SourceResultType GetUsingKeyDataInternal(ExecutionContext &context, DataChunk &chunk);
 	SourceResultType GetUnionData(ExecutionContext &context, DataChunk &chunk);
 	void InitializeIntermediateAppend();
 	ColumnDataCollection &CurrentOutputTable();

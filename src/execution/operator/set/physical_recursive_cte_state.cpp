@@ -140,6 +140,14 @@ void RecursiveCTEEpochMetrics::RecordPartialIndexMaintenance(idx_t elapsed_ns) {
 	partial_index_maintenance_work_ns.fetch_add(elapsed_ns);
 }
 
+void RecursiveCTEEpochMetrics::RecordRecurringScan(idx_t elapsed_ns) {
+	recurring_scan_work_ns.fetch_add(elapsed_ns);
+}
+
+void RecursiveCTEEpochMetrics::RecordFinalStateDrain(idx_t elapsed_ns) {
+	final_state_drain_work_ns.fetch_add(elapsed_ns);
+}
+
 RecursiveCTEMetrics::RecursiveCTEMetrics(ClientContext &context, const PhysicalRecursiveCTE &op_p)
     : logger(context.logger),
       enabled(logger && logger->ShouldLog(PhysicalOperatorLogType::NAME, PhysicalOperatorLogType::LEVEL)) {
@@ -295,7 +303,9 @@ void RecursiveCTEMetrics::LogEpochSummary(const RecursiveCTEEpochMetrics &epoch_
 	     {"direct_probe_payload_finalize_work_ns",
 	      to_string(epoch_metrics.direct_probe_payload_finalize_work_ns.load())},
 	     {"keyed_hash_commit_work_ns", to_string(epoch_metrics.keyed_hash_commit_work_ns.load())},
-	     {"partial_index_maintenance_work_ns", to_string(epoch_metrics.partial_index_maintenance_work_ns.load())}});
+	     {"partial_index_maintenance_work_ns", to_string(epoch_metrics.partial_index_maintenance_work_ns.load())},
+	     {"recurring_scan_work_ns", to_string(epoch_metrics.recurring_scan_work_ns.load())},
+	     {"final_state_drain_work_ns", to_string(epoch_metrics.final_state_drain_work_ns.load())}});
 }
 
 RecursiveCTESchedulerState::RecursiveCTESchedulerState(shared_ptr<RecursiveExecutorPool> executor_pool_p,

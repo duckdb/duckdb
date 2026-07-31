@@ -167,6 +167,10 @@ public:
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
+private:
+	SourceResultType GetDataFromState(DataChunk &chunk, OperatorSourceInput &input,
+	                                  RecursiveCTEState &recursive_state) const;
 };
 
 } // namespace duckdb

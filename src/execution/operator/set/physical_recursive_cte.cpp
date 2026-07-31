@@ -535,6 +535,19 @@ SourceResultType PhysicalRecursiveCTEStateScan::GetDataInternal(ExecutionContext
 		throw InternalException("USING KEY state scan has no recursive state");
 	}
 	auto &recursive_state = recursive_cte->sink_state->Cast<RecursiveCTEState>();
+	if (!recursive_state.GetMetrics().Enabled()) {
+		return GetDataFromState(chunk, input, recursive_state);
+	}
+	const auto scan_start = std::chrono::steady_clock::now();
+	const auto result = GetDataFromState(chunk, input, recursive_state);
+	const auto scan_end = std::chrono::steady_clock::now();
+	recursive_state.GetEpochMetrics().RecordRecurringScan(
+	    NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(scan_end - scan_start).count()));
+	return result;
+}
+
+SourceResultType PhysicalRecursiveCTEStateScan::GetDataFromState(DataChunk &chunk, OperatorSourceInput &input,
+                                                                 RecursiveCTEState &recursive_state) const {
 	auto &gstate = input.global_state.Cast<RecursiveCTEStateScanGlobalState>();
 	auto &lstate = input.local_state.Cast<RecursiveCTEStateScanLocalState>();
 	while (true) {
@@ -649,6 +662,14 @@ SourceResultType RecursiveCTEState::GetData(ExecutionContext &context, DataChunk
 }
 
 SourceResultType RecursiveCTEState::GetUsingKeyData(ExecutionContext &context, DataChunk &chunk) {
+	if (metrics.Enabled()) {
+		return GetUsingKeyDataInternal<true>(context, chunk);
+	}
+	return GetUsingKeyDataInternal<false>(context, chunk);
+}
+
+template <bool COLLECT_METRICS>
+SourceResultType RecursiveCTEState::GetUsingKeyDataInternal(ExecutionContext &context, DataChunk &chunk) {
 	D_ASSERT(op.using_key);
 	while (true) {
 		switch (source_phase) {
@@ -674,6 +695,8 @@ SourceResultType RecursiveCTEState::GetUsingKeyData(ExecutionContext &context, D
 			break;
 		}
 		case RecursiveCTESourcePhase::DRAINING_FINAL_KEY_STATE: {
+			const auto drain_start =
+			    COLLECT_METRICS ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 			while (ht->Scan(ht_scan_state, source_distinct_rows, source_payload_rows)) {
 				if (source_distinct_rows.size() == 0) {
 					continue;
@@ -681,10 +704,18 @@ SourceResultType RecursiveCTEState::GetUsingKeyData(ExecutionContext &context, D
 				ScatterChunk(chunk, source_distinct_rows, op.distinct_idx);
 				ScatterChunk(chunk, source_payload_rows, op.payload_idx);
 				chunk.CheckCardinality(source_distinct_rows.size());
-				if (metrics.Enabled()) {
+				if constexpr (COLLECT_METRICS) {
 					metrics.RecordFinalStateRows(chunk.size());
+					const auto drain_end = std::chrono::steady_clock::now();
+					GetEpochMetrics().RecordFinalStateDrain(NumericCast<idx_t>(
+					    std::chrono::duration_cast<std::chrono::nanoseconds>(drain_end - drain_start).count()));
 				}
 				return SourceResultType::HAVE_MORE_OUTPUT;
+			}
+			if constexpr (COLLECT_METRICS) {
+				const auto drain_end = std::chrono::steady_clock::now();
+				GetEpochMetrics().RecordFinalStateDrain(NumericCast<idx_t>(
+				    std::chrono::duration_cast<std::chrono::nanoseconds>(drain_end - drain_start).count()));
 			}
 			source_phase = RecursiveCTESourcePhase::FINISHED;
 			break;
