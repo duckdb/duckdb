@@ -27,10 +27,10 @@ struct VariantArrayLengthFun {
 
 struct VariantContainsFun {
 	static constexpr const char *Name = "variant_contains";
-	static constexpr const char *Parameters = "variant_haystack::VARIANT,variant_needle::VARIANT\001variant_haystack::VARIANT,variant_needle::VARIANT,path::VARCHAR";
-	static constexpr const char *Description = "\001";
-	static constexpr const char *Example = "variant_contains({'a': { 'a': 1, 'b': 2}}::VARIANT, '{ 'a': 1, 'b': 2}'::VARIANT)\001variant_contains({'a': { 'a': 1, 'b': 2}}::VARIANT, '{ 'a': 1, 'b': 2}'::VARIANT, 'a')";
-	static constexpr const char *Categories = "variant\001variant";
+	static constexpr const char *Parameters = "variant_haystack::VARIANT,variant_needle::VARIANT";
+	static constexpr const char *Description = "Returns whether the needle is contained in the haystack, recursively checking nested arrays and objects.";
+	static constexpr const char *Example = "variant_contains({'a': {'b': 42}}::VARIANT, {'b': 42}::VARIANT)";
+	static constexpr const char *Categories = "variant";
 
 	static ScalarFunctionSet GetFunctions();
 };
