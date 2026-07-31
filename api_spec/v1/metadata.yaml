@@ -1,4 +1,4 @@
-schema_version: "0.6"
+schema_version: "0.7"
 versions:
   - "v0.1.0"
   - "v0.1.1"

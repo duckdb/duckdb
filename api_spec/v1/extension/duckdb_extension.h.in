@@ -92,13 +92,9 @@
 #error "the DuckDB C extension API struct was introduced in v1.2.0; cannot target an older version"
 #endif
 
-//! The unstable tail sits after every stable band, so its slot offsets depend on
-//! all of them being compiled in. Reaching it therefore requires targeting the
-//! newest surface -- which is also the only build the engine will load it into,
-//! since an unstable extension is locked to one exact DuckDB version.
-#if DUCKDB_API_ALLOW_UNSTABLE && !DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
-#error "the unstable API surface requires targeting the newest API version"
-#endif
+//! Note: duckdb.h rejects opting into the unstable surface while targeting an
+//! older version. That matters doubly here -- the unstable tail sits after every
+//! stable band, so its slot offsets are only valid when all bands are compiled in.
 
 //===--------------------------------------------------------------------===//
 // Function pointer struct

@@ -24,7 +24,7 @@ There are currently four states with the following semantics:
 | `deprecated` | still promised, but scheduled to go; callers should migrate   |
 | `removed`    | gone from the library                                         |
 
-Every function __must__ declare a lifecycle. A functions slot in the extension v-table is defined by the version it was
+Every function __must__ declare a lifecycle. A function's slot in the extension v-table is defined by the version it was
 stabilized in (or at the end if unstable), and an undated function would therefore not have a defined position.
 
 ## Consumers of `duckdb.h`
@@ -38,7 +38,8 @@ To control what symbols are visible to you, you can define the following macros:
 
 This is the version of the API that you want to target.
 Defaults to the newest version the header describes. Define all three or none.
-Declarations appear only if they existed at that version. This allows you to "get me the API as of version X".
+A declaration appears only if it had been stabilized by that version. This allows you to "get me the API as of
+version X".
 
 - `DUCKDB_API_ALLOW_DEPRECATED`
 
@@ -48,10 +49,31 @@ Deprecation is relative to the target, a symbol deprecated in v1.5.6 is still vi
 
 - `DUCKDB_API_ALLOW_UNSTABLE`
 
-Defaults to `0`. Set to `1` to show symbols that are not yet stable at your target, accepting that they may change.
+Defaults to `0`. Set to `1` to show symbols that have not been stabilized yet, accepting that they may change.
+This requires targeting the newest version, see below.
 
 For backwards compatability, the older `DUCKDB_API_NO_DEPRECATED` and `DUCKDB_EXTENSION_API_VERSION_UNSTABLE` macros
 still work, and just set the new `DUCKDB_API_ALLOW_DEPRECATED`/`DUCKDB_API_ALLOW_UNSTABLE` macros accordingly.
+
+### Unstable is a version of its own
+
+A symbol is emitted from the version it was **stabilized** in, not the version it was introduced in.
+Until then, it is not part of any released version: its signature may still change.
+So asking for an older target *and* the unstable surface would hand you today's signatures under names that version never promised, which is the one case where "the API as of version X" would not be true.
+The two are therefore mutually exclusive:
+
+```c
+#if DUCKDB_API_ALLOW_UNSTABLE && !DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
+#error "the unstable surface requires targeting the newest API version"
+#endif
+```
+
+Which leaves one rule for *both kinds of consumer*:
+- **pick a version** and get the surface stabilized as of it, with signatures frozen and deprecation relative to it, or,
+- **pick unstable** and get everything at the newest version, including unstable symbols, with no promises.
+
+A gate therefore only ever reads `DUCKDB_API_VERSION_AT_LEAST(<stabilized>)`, or the bare switch for something not yet
+stabilized.
 
 ## Extensions
 
@@ -90,11 +112,13 @@ The `scripts/check_extension_abi.py` can be used to verify this against every re
 Since the Extension-C-API struct was first introduced in version **v1.2.0**, nothing can predate it, and targeting
 anything older is a compile error rather than an empty struct.
 
-### Two modes, not three knobs
+### The same two choices, picked by the build system
 
-Unlike a client, an extension can not set the `DUCKDB_API_VERSION_MAJOR`/`_MINOR`/`_PATCH` and
-`DUCKDB_API_ALLOW_UNSTABLE`/`_DEPRECATED` macros freely.
-Instead, it gets to pick from two "modes" at build-time:
+The rule explained in the "[Unstable is a version of its own](#unstable-is-a-version-of-its-own)" section above applies unchanged here: **pick a version**, or **pick unstable**.
+What differs is that an extension does not set the macros itself and the choice is not only about which symbols it can
+see: it also decides which DuckDB versions can load the result.
+
+So the cmake build helper you call makes it for you:
 
 **Versioned**: forward-loadable
 
@@ -106,9 +130,11 @@ ABI type `C_STRUCT`. You state the minimum API version you need (which implicitl
 `DUCKDB_EXTENSION_API_VERSION` macros).
 Any DuckDB at or above it can load your extension. You get the prefix of the v-table up to that target version, and
 nothing more.
-You can __not__ set the `DUCKDB_API_ALLOW_UNSTABLE` macro.
-You can still set `DUCKDB_API_ALLOW_DEPRECATED` though, if disabled it drops the *names* (indirection macros), but not
-the slots in the vtable, so it will hide some "symbols" but will not disturb the v-table layout.
+Pin the *lowest* version that has what you need: nothing was stabilized between v1.2.0 and v1.5.6, so every pin in
+between yields the same 404 slots while needlessly excluding the DuckDBs before it.
+`DUCKDB_API_ALLOW_UNSTABLE` is unavailable, by the rule above.
+`DUCKDB_API_ALLOW_DEPRECATED` still works: disabling it drops the *names* (the indirection macros) but not the slots, so
+it hides symbols without disturbing the v-table layout.
 
 **Pinned**: locked to a specific DuckDB version
 
@@ -125,22 +151,15 @@ hash for a dev build, taken from `DUCKDB_EXTENSION_API_VERSION_UNSTABLE`, which 
 
 ### Why can't I get the unstable symbols _and_ pin a version?
 
-The unstable tail of the v-table sits last after every version band, so its slot offsets depend on all of them being
-compiled in.
-An extension that pinned v1.2.0 *and* compiled the tail would place its first tail slot at index 404 while the engine
-puts it at 546, and every unstable call would go through the wrong pointer, silently.
-Therefore:
-
-```c
-#if DUCKDB_API_ALLOW_UNSTABLE && !DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
-#error "the unstable API surface requires targeting the newest API version"
-#endif
-```
+The general reason is above: an unstable signature is not frozen, so no version can promise it. 
+But for extensions this is extra important because the unstable tail of the v-table sits last after every version band, so its slot offsets depend on all the stable versions being compiled in first.
+An extension that pinned v1.2.0 *and* compiled the tail would place its first tail slot at index 404 while the DuckDB puts it at 546, and every unstable call would go through the wrong pointer, silently.
+The guard `duckdb.h` already emits prevents that too.
 
 This costs nothing in practice, because the only build that can reach the tail is locked to a specific DuckDB version
 anyway.
 
-It also means a slot is frozen when **stabilized**, not when introduction.
+It also means a slot is frozen when it is **stabilized**, not when it is introduced (as unstable).
 While a function is unstable it is only ever observed by a build locked to a single version, so it can still be
 reordered, have its signature changed, or dropped entirely.
 The moment it is set to `stable`, its slot is permanent.
@@ -171,9 +190,15 @@ though every later slot had shifted, and a future rename needs no change to the 
 
 ### Removal
 
-A `removed` function has to keeps its slot to not cause the offsets after it to move, but loses its mapping macro, so
-the name no longer compiles.
+A `removed` function has to keep its slot so the offsets after it do not move, but it loses its mapping macro, so the
+name no longer compiles.
 DuckDB is free to leave the actual function pointer `NULL`.
+
+Note that removal is the one thing that can break an extension that was *already built*: its slot index is baked in, and
+a newer DuckDB leaves that slot `NULL`, so the call crashes rather than failing to compile.
+Nothing in the versioning scheme can prevent that, since the extension was compiled before the removal existed.
+Prefer deprecation, which costs nothing at runtime: the slot stays filled, old binaries keep working, and new builds get
+a compile error instead.
 
 ## Version macro forwarding
 
