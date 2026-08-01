@@ -6,6 +6,7 @@
 #include "gregorian.hpp"
 #include "hebrew.hpp"
 #include "islamic.hpp"
+#include "japanese.hpp"
 #include "persian.hpp"
 
 #include <chrono>
@@ -1193,6 +1194,9 @@ unique_ptr<Calendar> Calendar::TryCreate(const string &type, unique_ptr<TimeZone
 	}
 	if (StringUtil::CIEquals(type, "hebrew")) {
 		return make_uniq<HebrewCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "japanese")) {
+		return make_uniq<JapaneseCalendar>(std::move(zone));
 	}
 	// TODO: temporary, the calendars that have not been reimplemented yet come from ICU
 	return TryCreateICUCalendar(type, std::move(zone));
