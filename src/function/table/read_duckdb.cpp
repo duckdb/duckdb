@@ -321,25 +321,14 @@ AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState 
 		input.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
 		scan_function.function(context, input, chunk);
 
-		switch (input.async_result.GetResultType()) {
-		case AsyncResultType::BLOCKED:
+		if (input.async_result.GetResultType() == AsyncResultType::BLOCKED) {
 			return std::move(input.async_result);
-		case AsyncResultType::HAVE_MORE_OUTPUT:
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		case AsyncResultType::IMPLICIT:
-			if (chunk.size() > 0) {
-				return SourceResultType::HAVE_MORE_OUTPUT;
-			}
-			finished = true;
-			return SourceResultType::FINISHED;
-		case AsyncResultType::FINISHED:
-			finished = true;
-			return SourceResultType::FINISHED;
-		default:
-			throw InternalException("DuckDBReader call of scan_function.function returned unexpected return '%'",
-			                        EnumUtil::ToChars(input.async_result.GetResultType()));
 		}
-		throw InternalException("DuckDBReader hasn't handled a scan_function.function return");
+		auto source_result = AsyncResult::GetSourceResultType(input.async_result.GetResultType(), chunk.size());
+		if (source_result == SourceResultType::FINISHED) {
+			finished = true;
+		}
+		return source_result;
 	}
 }
 

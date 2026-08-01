@@ -2095,10 +2095,7 @@ AsyncResult ParquetReader::ScheduleRowGroupReads(ParquetReaderScanState &state, 
 	default:
 		throw InternalException("Unexpected parquet prefetch strategy when scheduling I/O");
 	}
-	if (!io_tasks.empty()) {
-		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
-	}
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return AsyncResult::FromTasks(std::move(io_tasks), TaskSchedulerType::ASYNC);
 }
 
 void ParquetReader::FinishRowGroup(ClientContext &context, ParquetReaderScanState &state, bool log_prefetch) {

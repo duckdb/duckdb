@@ -205,6 +205,9 @@ private:
 	void CacheChunk(DataChunk &input, idx_t operator_idx);
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	//! Blocks until the target count is reached, spawning a thread that fires the interrupt callback shortly after
+	bool TryDebugBlock(int &debug_counter, const InterruptState &interrupt_state_p);
+
 	//! Debugging state: number of times blocked
 	int debug_blocked_sink_count = 0;
 	int debug_blocked_source_count = 0;

@@ -924,9 +924,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
                                 LocalTableFunctionState &local_state_p, DataChunk &chunk) {
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
-		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
-		if (!tasks.empty()) {
-			return AsyncResult(std::move(tasks));
+		AsyncResult test_result;
+		if (AsyncResult::TryGenerateTestResult(test_result)) {
+			return test_result;
 		}
 	}
 #endif

@@ -410,20 +410,16 @@ AsyncResult CSVFileScan::ScheduleIO(ClientContext &context, GlobalTableFunctionS
                                     LocalTableFunctionState &lstate_p) {
 	auto &lstate = lstate_p.Cast<CSVLocalState>();
 	D_ASSERT(lstate.claim_state == CSVLocalState::ClaimState::PENDING);
-	auto io_tasks = CollectClaimIOTasks(lstate);
-	if (!io_tasks.empty()) {
-		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
-	}
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return AsyncResult::FromTasks(CollectClaimIOTasks(lstate), TaskSchedulerType::ASYNC);
 }
 
 AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                               LocalTableFunctionState &local_state, DataChunk &chunk) {
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
-		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
-		if (!tasks.empty()) {
-			return AsyncResult(std::move(tasks));
+		AsyncResult test_result;
+		if (AsyncResult::TryGenerateTestResult(test_result)) {
+			return test_result;
 		}
 	}
 #endif
@@ -442,8 +438,7 @@ AsyncResult CSVFileScan::Scan(ClientContext &context, GlobalTableFunctionState &
 		io_tasks.push_back(BufferLoadTask(csv_reader.buffer_manager, csv_reader.PendingBufferIdx()));
 		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
 	}
-	return chunk.size() == 0 ? AsyncResult(SourceResultType::FINISHED)
-	                         : AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
+	return AsyncResult::FromChunk(chunk);
 }
 
 void CSVFileScan::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {
