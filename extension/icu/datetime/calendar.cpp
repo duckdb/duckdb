@@ -4,6 +4,7 @@
 #include "grego.hpp"
 #include "coptic.hpp"
 #include "gregorian.hpp"
+#include "persian.hpp"
 
 #include <chrono>
 
@@ -1174,6 +1175,12 @@ unique_ptr<Calendar> Calendar::TryCreate(const string &type, unique_ptr<TimeZone
 	}
 	if (StringUtil::CIEquals(type, "ethiopic-amete-alem")) {
 		return make_uniq<EthiopicAmeteAlemCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "persian")) {
+		return make_uniq<PersianCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "indian")) {
+		return make_uniq<IndianCalendar>(std::move(zone));
 	}
 	// TODO: temporary, the calendars that have not been reimplemented yet come from ICU
 	return TryCreateICUCalendar(type, std::move(zone));
