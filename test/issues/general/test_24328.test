@@ -1,0 +1,56 @@
+# name: test/issues/general/test_24328.test
+# description: map_contains respects collations on map keys
+# group: [general]
+
+statement ok
+SET debug_verify_serializer = true;
+
+query IIII
+SELECT map_contains(MAP {'Apple': 1}, 'apple' COLLATE NOCASE),
+       contains(MAP {'Apple': 1}, 'apple' COLLATE NOCASE),
+       map_contains(map(['Apple' COLLATE NOCASE], [1]), 'apple'),
+       map_contains(MAP {'Apple': 1}, 'banana' COLLATE NOCASE);
+----
+true	true	true	false
+
+statement ok
+SET debug_verify_serializer = false;
+
+query I
+WITH data(m, key) AS (
+    VALUES (MAP {'Apple': 1}, 'APPLE'),
+           (MAP {'Banana': 2}, 'banana'),
+           (MAP {'Cherry': 3}, 'pear')
+)
+SELECT map_contains(m, key COLLATE NOCASE)
+FROM data;
+----
+true
+true
+false
+
+query II
+SELECT map_contains(MAP {'hello': 1}, 'héllo' COLLATE NOACCENT),
+       map_contains(MAP {'Hello': 1}, 'HÉLLO' COLLATE NOCASE.NOACCENT);
+----
+true	true
+
+statement ok
+CREATE TABLE collated_maps AS SELECT map(['Apple' COLLATE NOCASE], [1]) AS m;
+
+query I
+SELECT map_contains(m, 'apple')
+FROM collated_maps;
+----
+true
+
+query II
+SELECT map_contains(NULL::MAP(VARCHAR, INTEGER), 'apple' COLLATE NOCASE),
+       map_contains(MAP {'Apple': 1}, NULL::VARCHAR COLLATE NOCASE);
+----
+NULL	NULL
+
+statement error
+SELECT map_contains(map(['Résumé' COLLATE NOACCENT], [1]), 'résumé' COLLATE NOCASE);
+----
+Cannot combine types with different collation!
