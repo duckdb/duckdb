@@ -512,17 +512,35 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 		auto max_stats_type = parquet_stats.__isset.is_max_value_exact && parquet_stats.is_max_value_exact
 		                          ? StringStatsType::EXACT_STATS
 		                          : StringStatsType::TRUNCATED_STATS;
+		string min_stats;
+		string max_stats;
+		bool has_min_stats = false;
+		bool has_max_stats = false;
 		if (parquet_stats.__isset.min_value &&
 		    StringStatsAreValid(parquet_stats.min_value, is_varchar, min_stats_type)) {
 			StringStats::SetMin(string_stats, parquet_stats.min_value, min_stats_type);
+			min_stats = parquet_stats.min_value;
+			has_min_stats = true;
 		} else if (parquet_stats.__isset.min && StringStatsAreValid(parquet_stats.min, is_varchar, min_stats_type)) {
 			StringStats::SetMin(string_stats, parquet_stats.min, min_stats_type);
+			min_stats = parquet_stats.min;
+			has_min_stats = true;
 		}
 		if (parquet_stats.__isset.max_value &&
 		    StringStatsAreValid(parquet_stats.max_value, is_varchar, max_stats_type)) {
 			StringStats::SetMax(string_stats, parquet_stats.max_value, max_stats_type);
+			max_stats = parquet_stats.max_value;
+			has_max_stats = true;
 		} else if (parquet_stats.__isset.max && StringStatsAreValid(parquet_stats.max, is_varchar, max_stats_type)) {
 			StringStats::SetMax(string_stats, parquet_stats.max, max_stats_type);
+			max_stats = parquet_stats.max;
+			has_max_stats = true;
+		}
+		if (has_min_stats && has_max_stats && min_stats_type == StringStatsType::EXACT_STATS &&
+		    max_stats_type == StringStatsType::EXACT_STATS && min_stats == max_stats) {
+			StringStats::FromConstant(string_stats, string_t(min_stats));
+			StringStats::SetMin(string_stats, string_t(min_stats), StringStatsType::EXACT_STATS);
+			StringStats::SetMax(string_stats, string_t(max_stats), StringStatsType::EXACT_STATS);
 		}
 		return string_stats.ToUnique();
 	}
