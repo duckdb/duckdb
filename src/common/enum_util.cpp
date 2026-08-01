@@ -113,6 +113,7 @@
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/types/variant_comparison.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
@@ -6435,6 +6436,38 @@ const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode val
 template<>
 VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value) {
 	return static_cast<VariantChildLookupMode>(StringUtil::StringToEnum(GetVariantChildLookupModeValues(), 3, "VariantChildLookupMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetVariantComparisonTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VariantComparisonType::BOOLEAN), "BOOLEAN" },
+		{ static_cast<uint32_t>(VariantComparisonType::NUMBER), "NUMBER" },
+		{ static_cast<uint32_t>(VariantComparisonType::REAL), "REAL" },
+		{ static_cast<uint32_t>(VariantComparisonType::VARCHAR), "VARCHAR" },
+		{ static_cast<uint32_t>(VariantComparisonType::BLOB), "BLOB" },
+		{ static_cast<uint32_t>(VariantComparisonType::UUID), "UUID" },
+		{ static_cast<uint32_t>(VariantComparisonType::TIMESTAMP), "TIMESTAMP" },
+		{ static_cast<uint32_t>(VariantComparisonType::TIMESTAMP_TZ), "TIMESTAMP_TZ" },
+		{ static_cast<uint32_t>(VariantComparisonType::TIME), "TIME" },
+		{ static_cast<uint32_t>(VariantComparisonType::TIME_TZ), "TIME_TZ" },
+		{ static_cast<uint32_t>(VariantComparisonType::INTERVAL), "INTERVAL" },
+		{ static_cast<uint32_t>(VariantComparisonType::GEOMETRY), "GEOMETRY" },
+		{ static_cast<uint32_t>(VariantComparisonType::BITSTRING), "BITSTRING" },
+		{ static_cast<uint32_t>(VariantComparisonType::ARRAY), "ARRAY" },
+		{ static_cast<uint32_t>(VariantComparisonType::OBJECT), "OBJECT" },
+		{ static_cast<uint32_t>(VariantComparisonType::NULL_VALUE), "NULL_VALUE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VariantComparisonType>(VariantComparisonType value) {
+	return StringUtil::EnumToString(GetVariantComparisonTypeValues(), 16, "VariantComparisonType", static_cast<uint32_t>(value));
+}
+
+template<>
+VariantComparisonType EnumUtil::FromString<VariantComparisonType>(const char *value) {
+	return static_cast<VariantComparisonType>(StringUtil::StringToEnum(GetVariantComparisonTypeValues(), 16, "VariantComparisonType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVariantLogicalTypeValues() {
