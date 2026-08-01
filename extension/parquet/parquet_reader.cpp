@@ -1286,6 +1286,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	if (parquet_options.encryption_config && !encryption_util) {
 		encryption_util = context_p.db->GetEncryptionUtil(true);
 	}
+	interval_bloom_filter_version = ParquetStatisticsUtils::GetIntervalBloomFilterVersion(*GetFileMetadata());
 	InitializeSchema(context_p);
 	// Length-pushdown rewrites these columns to BIGINT, update the local schema
 	for (const auto &[idx, expr] : projection_expressions) {
@@ -1333,6 +1334,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_op
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
+	interval_bloom_filter_version = ParquetStatisticsUtils::GetIntervalBloomFilterVersion(*GetFileMetadata());
 	InitializeSchema(context_p);
 }
 
@@ -1503,6 +1505,11 @@ static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expre
 		return false;
 	}
 
+	if (leaf_reader->Type().id() == LogicalTypeId::INTERVAL && function.GetChildren().size() == 1 &&
+	    function.Function().GetName() == "normalized_interval") {
+		return true;
+	}
+
 	// Handle LIST type.
 	if (leaf_reader->Type().id() == LogicalTypeId::LIST &&
 	    (function.Function().GetName() == "list_extract" || function.Function().GetName() == "array_extract")) {
@@ -1658,13 +1665,15 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 						check_bloom_filter = prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
 					}
 				}
+				auto hash_strategy = bloom_reader ? ParquetStatisticsUtils::GetBloomFilterHashStrategy(
+				                                        bloom_reader->Schema(), interval_bloom_filter_version)
+				                                  : nullopt;
 				if (check_bloom_filter && bloom_reader && bloom_filter &&
 				    bloom_reader->Schema().schema_type == ParquetColumnSchemaType::COLUMN &&
-				    bloom_reader->ColumnIndex() < group.columns.size() &&
-				    ParquetStatisticsUtils::BloomFilterSupported(bloom_reader->Schema()) &&
+				    bloom_reader->ColumnIndex() < group.columns.size() && hash_strategy &&
 				    ParquetStatisticsUtils::BloomFilterExcludes(
 				        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data, *state.thrift_file_proto,
-				        allocator, bloom_reader->Schema())) {
+				        allocator, bloom_reader->Schema(), *hash_strategy)) {
 					prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 				}
 			}
