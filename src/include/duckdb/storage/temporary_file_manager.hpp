@@ -41,6 +41,14 @@ enum class TemporaryBufferSize : uint64_t {
 	DEFAULT = DEFAULT_BLOCK_ALLOC_SIZE,
 };
 
+//! Prefix shared by every temporary file this instance creates: "duckdb_temp_<instance id>_".
+//! The instance id is what keeps two DatabaseInstances that resolve to the same temp_directory -
+//! two in-memory instances in one working directory, two readers of one database file, or two
+//! instances inside a single process - from ever choosing the same path and writing over each
+//! other. The "duckdb_temp_" part is kept so that the cleanup in ~TemporaryDirectoryHandle, and
+//! that of other duckdb versions sharing the directory, still recognises these files.
+DUCKDB_API string TemporaryFilePrefix(DatabaseInstance &db);
+
 //===--------------------------------------------------------------------===//
 // TemporaryFileIdentifier/TemporaryFileIndex
 //===--------------------------------------------------------------------===//

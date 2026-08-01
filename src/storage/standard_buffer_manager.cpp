@@ -463,7 +463,7 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 
 string StandardBufferManager::GetTemporaryPath(block_id_t id) {
 	auto &fs = FileSystem::GetFileSystem(db);
-	return fs.JoinPath(temporary_directory.path, "duckdb_temp_block-" + to_string(id) + ".block");
+	return fs.JoinPath(temporary_directory.path, TemporaryFilePrefix(db) + "block-" + to_string(id) + ".block");
 }
 
 void StandardBufferManager::RequireTemporaryDirectory() {
