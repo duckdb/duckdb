@@ -60,22 +60,21 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 	return count;
 }
 
-static void RowIdFilter(idx_t row_start, idx_t max_count, ColumnScanState &state, Vector &result, SelectionResult &sel,
-                        idx_t &count, const TableFilter &filter, TableFilterState &filter_state) {
+void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             SelectionResult &sel, idx_t &count, const TableFilter &filter,
+                             TableFilterState &filter_state) {
+	auto row_start = GetRowStart(state);
+	auto max_count = GetVectorCount(vector_index); // bitmap filters read the full vector domain
 	auto current_row = row_start + state.offset_in_column;
 	state.offset_in_column += max_count;
-	// We do another quick statistics scan for row ids here
 	const auto rowid_start = current_row;
 	const auto rowid_end = current_row + max_count;
 	const auto prune_result = RowGroup::CheckRowIdFilter(filter, rowid_start, rowid_end);
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-		// We can just break out of the loop here.
 		count = 0;
 		return;
 	}
 
-	// Generate row ids: fill the full vector densely, so the bitmap fast path (which evaluates the whole
-	// vector before intersecting with `sel`) never reads uninitialized positions
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::ScatterWriter<row_t>(result);
 	for (idx_t i = 0; i < max_count; i++) {
@@ -83,19 +82,10 @@ static void RowIdFilter(idx_t row_start, idx_t max_count, ColumnScanState &state
 	}
 	FlatVector::SetSize(result, count_t(max_count));
 
-	// Was this filter always true? If so, we dont need to apply it
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		return;
 	}
-
-	// Now apply the filter over the full vector domain; `sel` (count entries) narrows it
 	ColumnSegment::FilterSelection(sel, result, filter_state, max_count, count);
-}
-
-void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             SelectionResult &sel, idx_t &count, const TableFilter &filter,
-                             TableFilterState &filter_state) {
-	RowIdFilter(GetRowStart(state), GetVectorCount(vector_index), state, result, sel, count, filter, filter_state);
 }
 
 void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

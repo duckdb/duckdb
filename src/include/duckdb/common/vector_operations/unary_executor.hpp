@@ -11,6 +11,7 @@
 #include "duckdb/common/autovec.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -96,7 +97,7 @@ private:
 		}
 	}
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(unary_executor_flat)
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	DUCKDB_AUTOVEC_TARGET static inline void
 	ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
@@ -151,7 +152,6 @@ private:
 	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		auto dispatch_type = input.GetVectorType();
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
-		// ExecuteFlat carries the widened-ISA target: pre-AVX2 CPUs take the generic gather path (default case)
 		if (!CpuBenefitsFromAutoVec() && dispatch_type != VectorType::CONSTANT_VECTOR) {
 			dispatch_type = VectorType::SEQUENCE_VECTOR;
 		}
@@ -174,7 +174,7 @@ private:
 			}
 			break;
 		}
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(unary_executor_flat)
 		case VectorType::FLAT_VECTOR: {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			if (result.size() != count) {

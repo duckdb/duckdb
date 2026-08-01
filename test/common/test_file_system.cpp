@@ -43,7 +43,7 @@ static void create_dummy_file(string fname) {
 
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	auto dname = fs->JoinPath(fs->GetWorkingDirectory(), TestCreatePath("TEST_DIR"));
+	auto dname = TestMakeAbsolute(TestCreatePath("TEST_DIR"), fs->GetWorkingDirectory());
 	auto dname_converted_slashes = StringUtil::Replace(dname, "\\", "/");
 
 	// handle differences between windows and linux

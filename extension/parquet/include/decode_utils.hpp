@@ -99,7 +99,6 @@ public:
 			                  width, sizeof(T) * BITPACK_DLEN);
 		}
 
-		// the bitpacking kernels read via unaligned loads, so the packed bytes are consumed in place in one pass
 		BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(dst), src.ptr, count, width);
 		src.unsafe_inc(count * width / BITPACK_DLEN);
 	}

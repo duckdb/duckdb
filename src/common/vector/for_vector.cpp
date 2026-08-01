@@ -334,6 +334,8 @@ bool FORVector::TryCastType(Vector &source, Vector &result, idx_t count) {
 	// the view aliases the payload: revoke the source's in-place widen permission, so a later flatten
 	// of the source copies out instead of mutating the data seen through this view
 	source.BufferMutable().cache_owned = false;
+	// the retype/reinterpret exploited the narrow payload: keep the scan decoding this column into FOR
+	FORVector::KeepAlive(source);
 	if (GetTypeIdSize(st) == GetTypeIdSize(result.GetType().InternalType())) {
 		// stored payload is already the target width bit-for-bit (all values in [0, max] fit the target),
 		// so the FOR label adds nothing: hand back a FLAT reinterpret. This is what compressed

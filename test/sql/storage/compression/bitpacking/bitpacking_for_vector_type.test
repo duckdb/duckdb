@@ -22,8 +22,16 @@ FROM range(10000)
 statement ok
 CHECKPOINT
 
+# pure projection is not a FOR exploit: only the first chunk decodes FOR, so probe a single-chunk table
+statement ok
+CREATE TABLE one_chunk AS
+SELECT (1000 + (range % 50))::INTEGER AS val FROM range(2048)
+
+statement ok
+CHECKPOINT
+
 query I
-SELECT DISTINCT vector_type(val) FROM t
+SELECT DISTINCT vector_type(val) FROM one_chunk
 ----
 FOR_VECTOR
 
@@ -74,10 +82,11 @@ FOR_VECTOR	FLAT_VECTOR
 statement ok
 PRAGMA force_bitpacking_mode='for'
 
+# single-chunk table: pure vector_type() projection is not a FOR exploit, so only the first chunk stays FOR
 statement ok
 CREATE TABLE wide64 AS
 SELECT (5000000000::HUGEINT + (range % 50)::HUGEINT) AS h
-FROM range(10000)
+FROM range(2048)
 
 statement ok
 CHECKPOINT

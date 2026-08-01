@@ -84,7 +84,7 @@ static bool FORBounds(T lmin, T lmax, T rmin, T rmax, T &result_min, T &result_m
 	}
 }
 
-#ifndef DUCKDB_SMALLER_BINARY
+#ifndef DUCKDB_SMALLER_BINARY_ALL
 using binary_buffer_kernel_t = void (*)(const BinaryBufferArgs &);
 
 // Resolves the buffer-level kernels the registered arithmetic already instantiated: same-width,
@@ -107,24 +107,28 @@ struct FORStandardExecutor {
 			return LogicalType::UBIGINT;
 		}
 	}
+	template <class TL, class TR, class TRES>
+	static void RunKernel(const BinaryBufferArgs &args) {
+		BinaryExecutor::ExecuteBuffers<TL, TR, TRES, BinaryStandardOperatorWrapper, OP, bool>(args, false);
+	}
 	static binary_buffer_kernel_t Kernel(PhysicalType lw, PhysicalType rw, PhysicalType res) {
 		if (lw == rw) {
 			D_ASSERT(lw == res);
 			switch (res) {
 			case PhysicalType::UINT8:
-				return &BinaryExecutor::ExecuteBuffersStandard<uint8_t, uint8_t, uint8_t, OP>;
+				return &RunKernel<uint8_t, uint8_t, uint8_t>;
 			case PhysicalType::UINT16:
-				return &BinaryExecutor::ExecuteBuffersStandard<uint16_t, uint16_t, uint16_t, OP>;
+				return &RunKernel<uint16_t, uint16_t, uint16_t>;
 			case PhysicalType::UINT32:
-				return &BinaryExecutor::ExecuteBuffersStandard<uint32_t, uint32_t, uint32_t, OP>;
+				return &RunKernel<uint32_t, uint32_t, uint32_t>;
 			default:
-				return &BinaryExecutor::ExecuteBuffersStandard<uint64_t, uint64_t, uint64_t, OP>;
+				return &RunKernel<uint64_t, uint64_t, uint64_t>;
 			}
 		}
 		D_ASSERT(res == MaxStored(lw, rw));
 #define DUCKDB_FOR_MIXED_PAIR(LP, RP, TL, TR_, TRES)                                                                   \
 	if (lw == PhysicalType::LP && rw == PhysicalType::RP) {                                                            \
-		return &BinaryExecutor::ExecuteBuffersStandard<TL, TR_, TRES, OP>;                                             \
+		return &RunKernel<TL, TR_, TRES>;                                                                              \
 	}
 		DUCKDB_FOR_MIXED_PAIR(UINT16, UINT8, uint16_t, uint8_t, uint16_t)
 		DUCKDB_FOR_MIXED_PAIR(UINT8, UINT16, uint8_t, uint16_t, uint16_t)
@@ -163,7 +167,7 @@ template <class DOMAIN_T, class OP>
 static bool TryFORConstant(Vector &left, Vector &right, Vector &result, idx_t count,
                            buffer_ptr<DictionaryEntry> &dict_cache) {
 	using TRAITS = FOROpTraits<OP>;
-#ifdef DUCKDB_SMALLER_BINARY
+#ifdef DUCKDB_SMALLER_BINARY_ALL
 	(void)left;
 	(void)right;
 	(void)result;
@@ -233,6 +237,7 @@ static bool TryFORConstant(Vector &left, Vector &right, Vector &result, idx_t co
 				EXECUTOR::Kernel(scan.stored_type, compute, compute)(args);
 			}
 		};
+		FORVector::KeepAlive(*scan.for_vec);
 		if (scan.sel) {
 			const idx_t child_count = scan.for_vec->size();
 			if (child_count > STANDARD_VECTOR_SIZE) {
@@ -259,7 +264,7 @@ template <class DOMAIN_T, class OP>
 static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t count,
                          buffer_ptr<DictionaryEntry> &dict_cache, unique_ptr<Vector> &scratch) {
 	using TRAITS = FOROpTraits<OP>;
-#ifdef DUCKDB_SMALLER_BINARY
+#ifdef DUCKDB_SMALLER_BINARY_ALL
 	(void)left;
 	(void)right;
 	(void)result;
@@ -339,6 +344,8 @@ static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t coun
 			args.result_validity = &FORVector::Validity(target);
 			EXECUTOR::Kernel(lw, rw, compute)(args);
 		};
+		FORVector::KeepAlive(*lscan.for_vec);
+		FORVector::KeepAlive(*rscan.for_vec);
 		if (sel && !DenseAutoVecPaysOff(count, child_count, GetTypeIdSize(compute))) {
 			// selective: gather both payloads through sel, result stays dense
 			fill_result(result, count, sel);

@@ -475,6 +475,7 @@ bool Vector::TryFlattenWithHashes(hash_t *hashes, idx_t hash_count, hash_t null_
 			}
 		});
 	});
+	buffer->for_active = true; // fused widen+hash exploits FOR; keep producing it
 	buffer->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 	return true;
 }

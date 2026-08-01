@@ -31,7 +31,6 @@ struct SelectionData {
 	AllocatedData owned_data;
 	AllocatedData bitmap_data;
 	idx_t row_span = 0;
-	//! Whether owned_data already holds the bitmap's materialized indices at [0] (set by Flatten).
 	bool indices_cached = false;
 	bool is_bitmap = false;
 };
@@ -126,11 +125,6 @@ public:
 			sel_vector = nullptr;
 			capacity = 0ULL;
 		}
-	}
-	void Initialize(buffer_ptr<SelectionData> data, sel_t *sel, idx_t capacity_p) {
-		selection_data = std::move(data);
-		sel_vector = sel;
-		capacity = capacity_p;
 	}
 	void Initialize(const SelectionVector &other) {
 		selection_data = other.selection_data;

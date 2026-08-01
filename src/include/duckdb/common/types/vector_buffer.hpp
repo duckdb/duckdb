@@ -138,6 +138,8 @@ public:
 	uhugeint_t for_max_value = 0;
 	//! True when this buffer is managed by a VectorCache and allows in-place widening on Flatten.
 	bool cache_owned = false;
+	//! One-shot FOR-decode token: bitpacking produces FOR only when set, spends it on produce; exploits refill it.
+	bool for_active = true;
 	//! Cached flatten buffer reused across iterations to avoid per-chunk malloc/free.
 	buffer_ptr<VectorBuffer> flatten_cache;
 

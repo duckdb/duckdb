@@ -29,7 +29,8 @@ struct LocalTableFunctionState;
 
 class ReadAheadJobCompletion {
 public:
-	explicit ReadAheadJobCompletion(idx_t io_task_count) : pending_io_tasks(io_task_count) {
+	ReadAheadJobCompletion(shared_ptr<TaskExecutor> executor_p, idx_t io_task_count)
+	    : executor(std::move(executor_p)), pending_io_tasks(io_task_count) {
 	}
 
 public:
@@ -41,8 +42,12 @@ public:
 	void FinishIOTask();
 	//! Try to park the calling scan task until the job's I/O completes, the last I/O task to finish wakes it.
 	bool TryPark(const InterruptState &interrupt_state);
+	//! Block until the job's I/O completed, running scheduled I/O inline so progress does not depend on pool threads
+	void WaitForIO();
 
 private:
+	//! Executor holding the scheduled I/O, waiters drain it inline
+	shared_ptr<TaskExecutor> executor;
 	atomic<idx_t> pending_io_tasks;
 	//! Holds the scan task parked on this job's I/O
 	StateWithBlockableTasks parked_scan;
@@ -123,8 +128,8 @@ private:
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
-	//! Async I/O executor (async pool).
-	unique_ptr<TaskExecutor> executor;
+	//! Async I/O executor (async pool)
+	shared_ptr<TaskExecutor> executor;
 };
 
 } // namespace duckdb

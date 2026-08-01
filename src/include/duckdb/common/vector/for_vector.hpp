@@ -65,6 +65,11 @@ struct FORVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::FOR_VECTOR);
 		return vector.buffer->GetData();
 	}
+
+	//! Refill the FOR-decode token: signals the scan that this FOR vector's narrow payload was exploited.
+	static inline void KeepAlive(const Vector &for_vec) {
+		for_vec.buffer->for_active = true;
+	}
 	static PhysicalType GetStoredType(const Vector &vector);
 	static inline ValidityMask &Validity(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FOR_VECTOR);

@@ -24,10 +24,8 @@ class ExpressionExecutor;
 struct ExpressionExecutorState;
 struct FunctionLocalState;
 
-//! Decomposed `ref <op> const` or `ref <op> ref` comparison for the bitmap select fast path.
 struct BitmapComparisonInfo {
 	optional_ptr<const BoundReferenceExpression> ref;
-	//! exactly one of `constant` (ref <op> const) or `ref2` (ref <op> ref) is set
 	optional_ptr<const BoundConstantExpression> constant;
 	optional_ptr<const BoundReferenceExpression> ref2;
 	ExpressionType op;
@@ -87,11 +85,8 @@ public:
 
 public:
 	unique_ptr<FunctionLocalState> local_state;
-	//! Set once: this expression is a `ref <op> const` comparison the bitmap select fast path can handle
 	bool select_bitmap_capable = false;
-	//! Cached comparison decomposition (valid when select_bitmap_capable), so Select does not walk the expression
 	BitmapComparisonInfo cmp_info;
-	//! Scratch bitmaps, their buffers are allocated lazily by PrepareBitmap only when actually used.
 	SelectionResult tmp_sel1, tmp_sel2, tmp_sel3;
 	//! Reused dictionary child for FOR arithmetic over sliced inputs
 	buffer_ptr<DictionaryEntry> for_dictionary;
@@ -99,10 +94,7 @@ public:
 	unique_ptr<Vector> for_scratch;
 
 private:
-	//! Non-constant input columns that may be compatible dictionary vectors
 	vector<idx_t> dictionary_input_indices;
-	//! Reusable input chunk for dictionary execution (points at the dictionary children); allocated once, then only
-	//! re-referenced per call so the hot path does no per-chunk allocation
 	DataChunk dictionary_input_chunk;
 	//! Vector holding the expression executed on the entire dictionary
 	buffer_ptr<DictionaryEntry> output_dictionary;

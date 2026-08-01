@@ -789,7 +789,7 @@ void BitpackingScanPartialInternal(ColumnSegment &segment, ColumnScanState &stat
 	T *result_data = reinterpret_cast<T *>(result_buf);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
-	bool try_for = allow_for && sizeof(T) > 1 && result_offset == 0;
+	bool try_for = allow_for && sizeof(T) > 1 && result_offset == 0 && result.BufferMutable().for_active;
 	PhysicalType for_st = PhysicalType::INVALID;
 	T for_max = 0;
 	idx_t scanned = 0;
@@ -1006,6 +1006,7 @@ void BitpackingScanPartialInternal(ColumnSegment &segment, ColumnScanState &stat
 
 	if (sizeof(T) > 1 && for_st != PhysicalType::INVALID) {
 		FORVector::Create<T>(result, for_st, for_max);
+		result.BufferMutable().for_active = false; // spent; exploit sites refill it
 	}
 }
 

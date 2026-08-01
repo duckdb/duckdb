@@ -16,13 +16,12 @@
 
 namespace duckdb {
 
-SelectivityOptionalFilterState::SelectivityStats::SelectivityStats(const idx_t n_vectors_to_check,
-                                                                   const float selectivity_threshold)
+SelectivityGate::SelectivityGate(const idx_t n_vectors_to_check, const float selectivity_threshold)
     : n_vectors_to_check(n_vectors_to_check), selectivity_threshold(selectivity_threshold), tuples_accepted(0),
-      tuples_processed(0), vectors_processed(0), status(FilterStatus::ACTIVE), pause_multiplier(0) {
+      tuples_processed(0), vectors_processed(0), status(Status::ACTIVE), pause_multiplier(0) {
 }
 
-void SelectivityOptionalFilterState::SelectivityStats::Update(idx_t accepted, idx_t processed) {
+void SelectivityGate::Update(idx_t accepted, idx_t processed) {
 	vectors_processed++;
 	tuples_accepted += accepted;
 	tuples_processed += processed;
@@ -33,11 +32,11 @@ void SelectivityOptionalFilterState::SelectivityStats::Update(idx_t accepted, id
 		vectors_processed = 0;
 		tuples_accepted = 0;
 		tuples_processed = 0;
-		status = FilterStatus::ACTIVE;
+		status = Status::ACTIVE;
 	} else if (vectors_processed >= n_vectors_to_check) {
 		// pause the filter if we processed enough vectors and the selectivity is too high
 		if (GetSelectivity() >= selectivity_threshold) {
-			status = FilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY;
+			status = Status::PAUSED_DUE_TO_HIGH_SELECTIVITY;
 			pause_multiplier++; // increase the pause duration
 		} else {
 			pause_multiplier = 0; // selective enough, reset the pause duration
@@ -45,10 +44,10 @@ void SelectivityOptionalFilterState::SelectivityStats::Update(idx_t accepted, id
 	}
 }
 
-bool SelectivityOptionalFilterState::SelectivityStats::IsActive() const {
-	return status == FilterStatus::ACTIVE;
+bool SelectivityGate::IsActive() const {
+	return status == Status::ACTIVE;
 }
-double SelectivityOptionalFilterState::SelectivityStats::GetSelectivity() const {
+double SelectivityGate::GetSelectivity() const {
 	if (tuples_processed == 0) {
 		return 0.0;
 	}
@@ -115,7 +114,7 @@ struct SelectivityOptionalFilterLocalState : public FunctionLocalState {
 		stats.Update(accepted, processed);
 	}
 
-	SelectivityOptionalFilterState::SelectivityStats stats;
+	SelectivityGate stats;
 	ExpressionExecutor executor;
 	//! Scratch selection reused across chunks (never allocated per vector)
 	SelectionVector temp_true = SelectionVector(STANDARD_VECTOR_SIZE);

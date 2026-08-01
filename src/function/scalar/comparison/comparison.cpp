@@ -1,8 +1,9 @@
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/function/scalar/comparison_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 
@@ -33,7 +34,7 @@ void ComparisonFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	}
 }
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(comparison_select)
 template <ExpressionType TYPE>
 idx_t ComparisonSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
                        optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
@@ -78,7 +79,7 @@ static ScalarFunction GetComparisonFunctionInternal(const string &name) {
 	if constexpr (TYPE == ExpressionType::COMPARE_DISTINCT_FROM || TYPE == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		comparison_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	}
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(comparison_select)
 	comparison_fun.SetSelectCallback(ComparisonSelect<TYPE>);
 #endif
 	return comparison_fun;

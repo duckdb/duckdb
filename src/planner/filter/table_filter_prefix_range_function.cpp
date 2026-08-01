@@ -138,6 +138,7 @@ public:
 	// FOR payloads probe the bitmap straight from the narrow values: widening is a register zero-extend
 	template <typename T, typename CONVERTER>
 	idx_t LookupKeysNarrow(Vector &keys, const SelectionVector *sel, SelectionVector &result_sel, idx_t count) const {
+		FORVector::KeepAlive(keys);
 		idx_t found_count = 0;
 		FOR_SWITCH_STORED(FORVector::GetStoredType(keys), S, {
 			auto data = reinterpret_cast<const S *>(FORVector::GetData(keys));
@@ -148,7 +149,7 @@ public:
 				const uint8_t in_range = y <= span;
 				const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
 				const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
-				result_sel.set_index(found_count, idx);
+				result_sel.set_index(found_count, i);
 				found_count += bit & in_range;
 			}
 		});

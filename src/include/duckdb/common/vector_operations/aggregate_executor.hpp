@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -38,7 +39,7 @@ using SubFrames = vector<FrameBounds>;
 
 class AggregateExecutor {
 private:
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 	template <class STATE_TYPE, class OP>
 	static inline void NullaryFlatLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
 	                                   idx_t count) {
@@ -64,7 +65,7 @@ private:
 		}
 	}
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                 STATE_TYPE **__restrict states, const ValidityMask &mask, idx_t count) {
@@ -106,7 +107,7 @@ private:
 	}
 #endif
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_sel_flags)
 	template <class STATE_TYPE, class INPUT_TYPE, class OP, bool HAS_ISEL, bool HAS_SSEL>
 #else
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
@@ -114,7 +115,7 @@ private:
 	static inline void UnaryScatterLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                    STATE_TYPE **__restrict states, const SelectionVector &isel,
 	                                    const SelectionVector &ssel, const ValidityMask &mask, idx_t count) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(aggregate_executor_sel_flags)
 		const auto HAS_ISEL = isel.IsSet();
 		const auto HAS_SSEL = ssel.IsSet();
 #endif
@@ -139,7 +140,7 @@ private:
 		}
 	}
 
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                       STATE_TYPE *__restrict state, idx_t count, const ValidityMask &mask) {
@@ -321,7 +322,7 @@ public:
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			OP::template ConstantOperation<STATE_TYPE, OP>(**sdata, aggr_input_data, count);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 		} else if (states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetDataMutable<STATE_TYPE *>(states);
 			NullaryFlatLoop<STATE_TYPE, OP>(sdata, aggr_input_data, count);
@@ -554,6 +555,7 @@ public:
 			ExecuteUnaryClusteredUnifiedOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
 			return;
 		}
+		FORVector::KeepAlive(*scan_data.for_vec);
 		auto &validity = *scan_data.validity;
 		if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
 			// FOR payloads are non-negative and fit i64; when the vector max bounds the whole run contribution the
@@ -737,7 +739,7 @@ public:
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			AggregateUnaryInput input_data(aggr_input_data, ConstantVector::Validity(input));
 			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(**sdata, *idata, input_data, count);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
@@ -749,7 +751,7 @@ public:
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(idata);
 			states.ToUnifiedFormat(sdata);
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(aggregate_executor_sel_flags)
 			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
 			                                             aggr_input_data, (STATE_TYPE **)sdata.data, *idata.sel,
 			                                             *sdata.sel, idata.validity, count);
@@ -793,7 +795,7 @@ public:
 			                                                           input_data, count);
 			break;
 		}
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(aggregate_executor_flat)
 		case VectorType::FLAT_VECTOR: {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			UnaryFlatUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, (STATE_TYPE *)state, count,

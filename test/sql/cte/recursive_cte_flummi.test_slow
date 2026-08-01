@@ -1,0 +1,415 @@
+# name: test/sql/cte/recursive_cte_flummi.test_slow
+# description: Generated recursive CTE programs from Flummi
+# group: [cte]
+
+statement ok
+SET threads=4;
+
+statement ok
+SET max_execution_time=30000;
+
+# Counter
+statement ok
+SET VARIABLE flummi_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/flummi_counter.sql'));
+
+query IIII
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+10	0	9	45
+
+# Breadth-first search, including unreachable nodes and a cycle
+statement ok
+CREATE TABLE nodes(node INTEGER);
+
+statement ok
+INSERT INTO nodes SELECT * FROM range(1, 9);
+
+statement ok
+CREATE TABLE edges(here INTEGER, there INTEGER);
+
+statement ok
+INSERT INTO edges VALUES (1, 2), (1, 3), (2, 4), (3, 4), (4, 5), (6, 7);
+
+statement ok
+INSERT INTO edges SELECT there, here FROM edges;
+
+statement ok
+SET VARIABLE flummi_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/flummi_bfs.sql'));
+
+query IIII
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+8	5	3	7
+
+statement ok
+DROP TABLE edges;
+
+statement ok
+DROP TABLE nodes;
+
+# Generated k-core: retain a K4 and eliminate a separate two-node component
+statement ok
+CREATE TABLE nodes(node INTEGER);
+
+statement ok
+INSERT INTO nodes SELECT * FROM range(1, 7);
+
+statement ok
+CREATE TABLE edges(here INTEGER, there INTEGER);
+
+statement ok
+INSERT INTO edges VALUES (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4), (5, 6);
+
+statement ok
+INSERT INTO edges SELECT there, here FROM edges;
+
+statement ok
+SET VARIABLE flummi_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/flummi_k_core.sql'));
+
+query IIII
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+4	1	4	10
+
+statement ok
+DROP TABLE edges;
+
+statement ok
+DROP TABLE nodes;
+
+# All-pairs shortest paths over an acyclic graph
+statement ok
+CREATE TABLE nodes(id INTEGER);
+
+statement ok
+INSERT INTO nodes SELECT * FROM range(6);
+
+statement ok
+CREATE TABLE edges(here INTEGER, there INTEGER, length INTEGER);
+
+statement ok
+INSERT INTO edges VALUES
+	(0, 1, 1),
+	(0, 2, 5),
+	(1, 2, 1),
+	(1, 3, 4),
+	(2, 3, 1),
+	(3, 4, 1),
+	(2, 4, 5),
+	(4, 5, 1);
+
+statement ok
+SET VARIABLE flummi_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/smoke/flummi_paths.sql'));
+
+query IIT
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+15	50	baae867701af8a4d31a49c9a7e7d98da
+
+statement ok
+DROP TABLE edges;
+
+statement ok
+DROP TABLE nodes;
+
+# Community detection
+statement ok
+CREATE TABLE nodes(id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE edges(here INTEGER, there INTEGER, PRIMARY KEY (here, there));
+
+statement ok
+INSERT INTO nodes SELECT i::INTEGER FROM range(10000) nodes(i);
+
+statement ok
+INSERT INTO edges
+SELECT node.id,
+       ((node.id // 50) * 50 + (node.id % 50 + edge_offset) % 50)::INTEGER
+FROM nodes AS node, range(1, 3) offsets(edge_offset);
+
+statement ok
+SET VARIABLE flummi_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/flummi_community_detection.sql')
+);
+
+query III
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+9200	10000	49995000
+
+statement ok
+DROP TABLE edges;
+
+statement ok
+DROP TABLE nodes;
+
+# Connected components
+statement ok
+CREATE TABLE nodes(id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE edges(here INTEGER, there INTEGER, PRIMARY KEY (here, there));
+
+statement ok
+INSERT INTO nodes SELECT i::INTEGER FROM range(10000) nodes(i);
+
+statement ok
+INSERT INTO edges
+SELECT (component + here_level * 100)::INTEGER,
+       (component + there_level * 100)::INTEGER
+FROM range(100) components(component),
+     range(100) here_levels(here_level),
+     range(100) there_levels(there_level)
+WHERE here_level < there_level
+  AND ((here_level * 17 + there_level * 31) % 7 = 0
+       OR there_level = here_level + 1);
+
+statement ok
+INSERT INTO edges SELECT there, here FROM edges;
+
+statement ok
+INSERT INTO edges SELECT id, id FROM nodes;
+
+statement ok
+SET VARIABLE flummi_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/flummi_connected_components.sql')
+);
+
+query III
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+700	9900	244650
+
+statement ok
+DROP TABLE edges;
+
+statement ok
+DROP TABLE nodes;
+
+# Recursive k-means
+statement ok
+CREATE TYPE point AS STRUCT(x REAL, y REAL);
+
+statement ok
+CREATE TABLE points(x REAL, y REAL, PRIMARY KEY (x, y));
+
+statement ok
+INSERT INTO points
+SELECT ((i * 37) % 1000 + (i % 7) * 0.1)::REAL,
+       ((i * 91 + (i * i) % 997) % 1000 + (i % 11) * 0.01)::REAL
+FROM range(2000) points(i);
+
+statement ok
+SET VARIABLE flummi_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/flummi_kmeans.sql'));
+
+query IIRRII
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+2	2000	1007.055603	999.141113	985	1015
+
+# Handwritten USING KEY k-core
+statement ok
+CREATE TABLE key_nodes(node INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE key_edges("from" INTEGER, "to" INTEGER, PRIMARY KEY ("from", "to"));
+
+statement ok
+INSERT INTO key_nodes
+SELECT (copy * 16 + node)::INTEGER
+FROM range(50) copies(copy), range(1, 17) base_nodes(node);
+
+statement ok
+INSERT INTO key_edges
+SELECT (copy * 16 + base_edge."from")::INTEGER,
+       (copy * 16 + base_edge."to")::INTEGER
+FROM range(50) copies(copy),
+     (VALUES
+         (1, 2), (1, 3),
+         (2, 3), (2, 9),
+         (4, 5), (4, 6), (4, 10), (4, 13),
+         (5, 6), (5, 7), (5, 10), (5, 14),
+         (6, 7), (6, 8), (6, 9), (6, 11),
+         (7, 8),
+         (11, 12), (11, 15),
+         (15, 16)
+     ) AS base_edge("from", "to");
+
+statement ok
+INSERT INTO key_edges SELECT "to", "from" FROM key_edges;
+
+statement ok
+CREATE VIEW nodes AS SELECT * FROM key_nodes;
+
+statement ok
+CREATE VIEW edges AS SELECT * FROM key_edges;
+
+statement ok
+SET VARIABLE flummi_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/flummi_k_core_using_key.sql')
+);
+
+statement ok
+SET threads=1;
+
+query IIII
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+500	1	794	198750
+
+statement ok
+SET threads=4;
+
+query IIII
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+500	1	794	198750
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output='physical_only';
+
+query II
+EXPLAIN SELECT * FROM query(getvariable('flummi_sql'));
+----
+physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
+
+statement ok
+DROP VIEW edges;
+
+statement ok
+DROP VIEW nodes;
+
+# Cellular automata
+statement ok
+SET threads=2;
+
+statement ok
+CALL enable_logging('PhysicalOperator', storage='memory');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+SET VARIABLE flummi_sql = (
+	SELECT replace(
+	           replace(
+	               replace(content,
+	                       'CAST((50) AS INTEGER) AS "height"',
+	                       'CAST((10) AS INTEGER) AS "height"'),
+	               'CAST((50) AS INTEGER) AS "width"',
+	               'CAST((10) AS INTEGER) AS "width"'),
+	           'CAST((50) AS INTEGER) AS "iterations"',
+	           'CAST((10) AS INTEGER) AS "iterations"')
+	FROM read_text('benchmark/recursive_cte/queries/performance/flummi_generations.sql')
+);
+
+query IIT
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+22	1308	5998b31dc0f1b502e94fb79edb15ecb5
+
+statement ok
+CALL disable_logging();
+
+# Tiny-vector configurations create enough work units to parallelize the same input.
+query I
+SELECT info.scheduled_workers::UBIGINT = info.epochs::UBIGINT
+       OR current_setting('standard_vector_size')::UBIGINT < 1024
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+CALL enable_logging('PhysicalOperator', storage='memory');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Materialized fan-out work justifies two workers, but not four.
+statement ok
+SET VARIABLE flummi_sql = (
+	SELECT replace(
+	           replace(
+	               replace(content,
+	                       'CAST((50) AS INTEGER) AS "height"',
+	                       'CAST((CASE WHEN current_setting(''standard_vector_size'')::UBIGINT < 1024 THEN 10 ELSE 50 END) AS INTEGER) AS "height"'),
+	               'CAST((50) AS INTEGER) AS "width"',
+	               'CAST((CASE WHEN current_setting(''standard_vector_size'')::UBIGINT < 1024 THEN 10 ELSE 50 END) AS INTEGER) AS "width"'),
+	           'CAST((50) AS INTEGER) AS "iterations"',
+	           'CAST((3) AS INTEGER) AS "iterations"')
+	FROM read_text('benchmark/recursive_cte/queries/performance/flummi_generations.sql')
+);
+
+query III
+WITH result AS (SELECT * FROM query(getvariable('flummi_sql')))
+SELECT outputs,
+       output_bytes = CASE WHEN current_setting('standard_vector_size')::UBIGINT < 1024 THEN 476 ELSE 10396 END,
+       output_md5 = CASE WHEN current_setting('standard_vector_size')::UBIGINT < 1024
+                         THEN 'bd8910442ccf5092381413e278421dd0'
+                         ELSE 'b219e422e83fc2ca892f7edeb1a22c00'
+                    END
+FROM result;
+----
+8	1	1
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT > info.epochs::UBIGINT
+       OR current_setting('standard_vector_size')::UBIGINT < 1024
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+SET threads=4;
+
+statement ok
+CALL enable_logging('PhysicalOperator', storage='memory');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query III
+WITH result AS (SELECT * FROM query(getvariable('flummi_sql')))
+SELECT outputs,
+       output_bytes = CASE WHEN current_setting('standard_vector_size')::UBIGINT < 1024 THEN 476 ELSE 10396 END,
+       output_md5 = CASE WHEN current_setting('standard_vector_size')::UBIGINT < 1024
+                         THEN 'bd8910442ccf5092381413e278421dd0'
+                         ELSE 'b219e422e83fc2ca892f7edeb1a22c00'
+                    END
+FROM result;
+----
+8	1	1
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.scheduled_workers::UBIGINT = info.epochs::UBIGINT
+       OR current_setting('standard_vector_size')::UBIGINT < 1024
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+SET threads=2;
+
+statement ok
+SET VARIABLE flummi_sql = (SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/flummi_life.sql'));
+
+query IIT
+SELECT * FROM query(getvariable('flummi_sql'));
+----
+202	12019	5d5cfdb73d7bc1caf12a5af0ce64a033
+
+statement ok
+RESET max_execution_time;

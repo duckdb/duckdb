@@ -432,6 +432,10 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	if (approved_tuple_count == 0) {
 		return 0;
 	}
+	if (state.ShouldSkip()) { // optional filter paused/always true
+		return approved_tuple_count;
+	}
+	const idx_t before_count = approved_tuple_count;
 	D_ASSERT(state.executor);
 	if (scan_count > STANDARD_VECTOR_SIZE) {
 		SelectionVector result_sel(approved_tuple_count);
@@ -466,7 +470,6 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 				offset += chunk_count;
 				continue;
 			}
-			// filter the chunk into its own selection, then append the (offset-corrected) matches to result_sel
 			idx_t new_matches = state.executor->SelectExpression(chunk, chunk_sel, current_sel, current_count);
 			for (idx_t i = 0; i < new_matches; i++) {
 				result_sel.set_index(result_offset + i, chunk_sel.get_index(i) + offset);
@@ -476,23 +479,21 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 		}
 		approved_tuple_count = result_offset;
 		sel.Initialize(result_sel);
+		state.RecordSelectivity(approved_tuple_count, before_count);
 		return approved_tuple_count;
 	}
 
-	// standard case: run the expression once over the whole vector (the input chunk lives in the filter state)
-	auto &chunk = state.filter_chunk;
+	auto &chunk = state.filter_chunk; // reused per call
 	if (chunk.data.empty()) {
 		chunk.data.emplace_back(Vector::Ref(vector));
 	} else {
 		chunk.data[0].Reference(vector);
 	}
 	chunk.SetChildCardinality(scan_count);
-	// nested evaluation slices per child and needs an explicit selection, so nested columns always narrow below
-	const bool nested = vector.GetType().IsNested();
+	const bool nested = vector.GetType().IsNested(); // nested evaluation needs explicit indices
 	const bool identity_all = !sel.IsSet() && approved_tuple_count == scan_count;
 
-	// Bitmap fast path (bitmap_capable is false without the autovec path, so it falls through below)
-	if (!nested && state.bitmap_capable && (identity_all || sel.IsSet())) {
+	if (!nested && state.bitmap_capable && (identity_all || sel.IsSet())) { // bitmap scan-filter path
 		auto &new_sel = state.scratch;
 		idx_t matched = state.executor->SelectExpression(chunk, new_sel, nullptr, scan_count);
 		if (!new_sel.IsBitmap()) {
@@ -504,12 +505,16 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 			approved_tuple_count = new_sel.Intersect(sel, matched, approved_tuple_count, scan_count);
 		}
 		sel.Initialize(new_sel);
+		state.RecordSelectivity(approved_tuple_count, before_count);
 		return approved_tuple_count;
 	}
+	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE) { // index-based fast filters
+		auto result = state.fast_executor->FilterSelection(sel.Flattened(), vector, scan_count, approved_tuple_count);
+		state.RecordSelectivity(approved_tuple_count, before_count);
+		return result;
+	}
 	SelectionVector result_sel(approved_tuple_count);
-	// the narrowing path indexes the running selection per row: use the materialized view
-	// (nullptr == identity, only valid when the candidate rows span the whole scanned vector)
-	optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel.Flattened() : nullptr;
+	optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel.Flattened() : nullptr; // narrowing path indexes rows
 	SelectionVector identity_sel;
 	if (!sel.IsSet() && (nested || approved_tuple_count != scan_count)) {
 		identity_sel = SelectionVector::Incremental(approved_tuple_count);
@@ -517,6 +522,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	}
 	approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
 	sel.Initialize(result_sel);
+	state.RecordSelectivity(approved_tuple_count, before_count);
 	return approved_tuple_count;
 }
 
@@ -537,8 +543,14 @@ idx_t ColumnSegment::FilterSelection(SelectionResult &sel, Vector &vector, Table
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state,
                                      idx_t scan_count, idx_t &approved_tuple_count) {
 	auto &state = filter_state.Cast<ExpressionFilterState>();
-	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE) {
-		return state.fast_executor->FilterSelection(sel, vector, scan_count, approved_tuple_count);
+	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE) { // index-based fast filters
+		if (state.ShouldSkip()) {                                    // optional filter paused/always true
+			return approved_tuple_count;
+		}
+		const idx_t before_count = approved_tuple_count;
+		auto result = state.fast_executor->FilterSelection(sel, vector, scan_count, approved_tuple_count);
+		state.RecordSelectivity(approved_tuple_count, before_count);
+		return result;
 	}
 	SelectionResult result_sel;
 	result_sel.Initialize(sel);

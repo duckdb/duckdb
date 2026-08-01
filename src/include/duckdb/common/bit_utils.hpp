@@ -32,7 +32,6 @@ struct CountZeros<uint64_t> {
 			return 64;
 		}
 #if defined(__GNUC__) || defined(__clang__)
-		// gcc runs the de Bruijn fallback literally (no bit-scan); the builtin is a single instruction
 		return static_cast<idx_t>(__builtin_clzll(value_in));
 #else
 		uint64_t value = value_in;
@@ -58,7 +57,6 @@ struct CountZeros<uint64_t> {
 			return 64;
 		}
 #if defined(__GNUC__) || defined(__clang__)
-		// gcc runs the de Bruijn fallback literally (no bit-scan); the builtin is a single instruction
 		return static_cast<idx_t>(__builtin_ctzll(value_in));
 #else
 		uint64_t value = value_in;

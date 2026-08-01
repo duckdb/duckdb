@@ -20,7 +20,7 @@ namespace {
 template <class DST_T>
 bool TryFORScaleUp(Vector &source, Vector &result, idx_t count, uint8_t dst_width, uint64_t mul,
                    buffer_ptr<DictionaryEntry> &dict_cache) {
-#ifdef DUCKDB_SMALLER_BINARY
+#ifdef DUCKDB_SMALLER_BINARY_ALL
 	(void)source;
 	(void)result;
 	(void)count;
@@ -59,6 +59,7 @@ bool TryFORScaleUp(Vector &source, Vector &result, idx_t count, uint8_t dst_widt
 		args.count = n;
 		EXECUTOR::Kernel(scan.stored_type, compute, compute)(args);
 	};
+	FORVector::KeepAlive(*scan.for_vec);
 	if (scan.sel) {
 		const idx_t child_count = scan.for_vec->size();
 		if (child_count > STANDARD_VECTOR_SIZE) {

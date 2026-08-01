@@ -17,9 +17,7 @@
 
 namespace duckdb {
 
-//! Private inheritance: a SelectionResult cannot be passed where a plain SelectionVector is expected, so
-//! per-value index access on a possibly-bitmap selection is a compile error; Flattened() is the explicit,
-//! once-per-vector conversion. The safe (non-indexing) part of the base API is re-exposed below.
+//! Bitmap-capable selection result; Flattened() materializes an index selection.
 struct SelectionResult : private SelectionVector {
 	using SelectionVector::Capacity;
 	using SelectionVector::Initialize;
@@ -28,17 +26,14 @@ struct SelectionResult : private SelectionVector {
 	using SelectionVector::RowSpan;
 	using SelectionVector::SelectionVector;
 
-	//! Materialize a bitmap (no-op if already flat) and view as a plain, index-only SelectionVector.
-	SelectionVector &Flattened() {
+	SelectionVector &Flattened() { // explicit bitmap-to-index boundary
 		Flatten();
 		return *this;
 	}
-	//! Share another result's representation (the base overload cannot accept a SelectionResult from outside).
-	void Initialize(const SelectionResult &other) {
+	void Initialize(const SelectionResult &other) { // expose sharing between results
 		SelectionVector::Initialize(static_cast<const SelectionVector &>(other));
 	}
-	//! Swap representations with a plain selection (used to hand a result over to a caller-owned output).
-	void SwapInto(SelectionVector &out) {
+	void SwapInto(SelectionVector &out) { // hand bitmap-capable result to plain selection output
 		std::swap(out, static_cast<SelectionVector &>(*this));
 	}
 
@@ -61,13 +56,13 @@ struct SelectionResult : private SelectionVector {
 		Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
 	}
 
-	void ToBitmap(idx_t count, idx_t row_span) {
+	void ToBitmap(idx_t count, idx_t row_span) { // promote index selection to bitmap
 		if (!IsBitmap()) {
 			IndexToBitmap(count, row_span);
 		}
 	}
 
-	idx_t Intersect(SelectionResult &other, idx_t count, idx_t other_count, idx_t row_span) {
+	idx_t Intersect(SelectionResult &other, idx_t count, idx_t other_count, idx_t row_span) { // AND + popcount
 		ToBitmap(count, row_span);
 		if (!other.IsSet()) {
 			D_ASSERT(other_count == row_span);
@@ -83,9 +78,14 @@ struct SelectionResult : private SelectionVector {
 		other_result.ToBitmap(other_count, row_span);
 		return IntersectBitmap(other_result);
 	}
+	idx_t Union(SelectionResult &other) { // OR + popcount
+		D_ASSERT(IsBitmap() && other.IsBitmap());
+		D_ASSERT(RowSpan() == other.RowSpan());
+		auto other_bitmap = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
+		return UnionBitmap(other_bitmap);
+	}
 
-	//! Fill this as the bitwise complement of `other` (a bitmap) over row_span rows; returns the bitmap words.
-	validity_t *Complement(const SelectionResult &other, idx_t row_span) {
+	validity_t *Complement(const SelectionResult &other, idx_t row_span) { // false-side bitmap
 		D_ASSERT(other.IsBitmap() && other.RowSpan() == row_span);
 		auto dst = reinterpret_cast<validity_t *>(PrepareBitmap(row_span));
 		auto src = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
@@ -97,8 +97,7 @@ struct SelectionResult : private SelectionVector {
 
 	uint64_t *PrepareBitmap(idx_t row_span) {
 		static constexpr idx_t NWORDS = (STANDARD_VECTOR_SIZE + 63) / 64;
-		// the bitmap is a fixed NWORDS buffer: row_span beyond STANDARD_VECTOR_SIZE would overflow every writer
-		D_ASSERT(row_span <= STANDARD_VECTOR_SIZE);
+		D_ASSERT(row_span <= STANDARD_VECTOR_SIZE); // fixed vector-sized bitmap buffer
 		if (!selection_data || selection_data.use_count() > 1) {
 			selection_data = make_shared_ptr<SelectionData>();
 		}
@@ -139,7 +138,6 @@ private:
 		auto b = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
 		return IntersectBitmap(b);
 	}
-
 	DUCKDB_AUTOVEC_TARGET idx_t IntersectBitmap(const validity_t *other_bitmap) {
 		D_ASSERT(IsBitmap());
 		selection_data->indices_cached = false;
@@ -148,6 +146,18 @@ private:
 		idx_t total = 0;
 		for (idx_t w = 0; w < nwords; w++) {
 			a[w] &= other_bitmap[w];
+			total += CountOnes<validity_t>::Count(a[w]);
+		}
+		return total;
+	}
+	DUCKDB_AUTOVEC_TARGET idx_t UnionBitmap(const validity_t *other_bitmap) {
+		D_ASSERT(IsBitmap());
+		selection_data->indices_cached = false;
+		auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
+		const idx_t nwords = (selection_data->row_span + 63) / 64;
+		idx_t total = 0;
+		for (idx_t w = 0; w < nwords; w++) {
+			a[w] |= other_bitmap[w];
 			total += CountOnes<validity_t>::Count(a[w]);
 		}
 		return total;

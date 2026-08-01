@@ -29,12 +29,9 @@ inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonI
 		return false;
 	}
 	const auto raw_op = expr.GetExpressionType();
-	if (raw_op == ExpressionType::COMPARE_DISTINCT_FROM) {
+	if (raw_op == ExpressionType::COMPARE_DISTINCT_FROM) { // NULL-aware distinct cannot use validity-AND semantics
 		return false;
 	}
-	// NOT DISTINCT FROM equals `=` only when a NULL can't meet a NULL. That holds against a (non-null) constant, but
-	// NOT for column-vs-column: two NULLs are "not distinct" (true) yet `=` AND-s out validity (false). So the col-col
-	// path must reject it - decorrelation matches correlated keys this way, and mapping it to `=` drops NULL matches.
 	const auto op = raw_op == ExpressionType::COMPARE_NOT_DISTINCT_FROM ? ExpressionType::COMPARE_EQUAL : raw_op;
 	auto &comparison = expr.Cast<BoundFunctionExpression>();
 	auto &left = BoundComparisonExpression::Left(comparison);
@@ -52,7 +49,7 @@ inline bool TryGetBitmapComparisonInfo(const Expression &expr, BitmapComparisonI
 		info.op = FlipComparisonExpression(op);
 	} else if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
 	           right.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-		if (raw_op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		if (raw_op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) { // col-col NULL=NULL must not map to '='
 			return false;
 		}
 		info.ref = &left.Cast<BoundReferenceExpression>();
@@ -77,25 +74,15 @@ inline bool IsBitmapComparisonCandidate(const Expression &expr) {
 		return false;
 	}
 	if (info.ref2) {
-		// both sides of a bound comparison share the same type
 		return true;
 	}
 	const auto &value = info.constant->GetValue();
 	return !value.IsNull() && value.type().InternalType() == pt;
 }
 
-inline bool HasBitmapComparisonChild(const BoundConjunctionExpression &expr) {
-	for (auto &child : expr.GetChildren()) {
-		if (IsBitmapComparisonCandidate(*child)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-//! A comparison candidate, or an AND of them (e.g. BETWEEN): the whole Select can produce a bitmap.
-inline bool IsBitmapSelectCandidate(const Expression &expr) {
-	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or conjunction of comparisons
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND ||
+	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
 			if (!IsBitmapSelectCandidate(*child)) {
 				return false;
@@ -138,30 +125,33 @@ inline const Vector *TryGetDictChild(const Vector &v, const SelectionVector *&se
 	return FORVector::TryGetFOR(v, sel);
 }
 
+//! Uniform fill (folding validity) when FOR range analysis proves the comparison always true/false.
+inline void WriteConstantBitmap(bool value, idx_t count, const validity_t *validity, validity_t *__restrict bitmap) {
+	const idx_t nwords = (count + 63) / 64;
+	const validity_t fill = value ? ~validity_t(0) : 0;
+	for (idx_t w = 0; w < nwords; w++) {
+		bitmap[w] = fill;
+	}
+	if (value) {
+		if (count % 64) {
+			bitmap[nwords - 1] &= (validity_t(1) << (count % 64)) - 1;
+		}
+		AndValidityIntoBitmap(validity, count, bitmap);
+	}
+}
+
 inline void FillConstView(const ForView &view, ExpressionType op, idx_t span, validity_t *t_bm) {
 	const validity_t *validity = view.original_validity ? view.original_validity->GetData() : nullptr;
 	if (view.always_false || view.always_true) {
 		WriteConstantBitmap(view.always_true, span, validity, t_bm);
 		return;
 	}
-	DispatchBitmapType(view.narrow_type, span, [&](auto tag) {
-		using T = decltype(tag);
-		const auto data = reinterpret_cast<const T *>(view.data);
-		const auto constant = static_cast<T>(view.rewritten_constant);
-		DispatchBitmapCmpOp<T>(
-		    op, [&](auto cmp) { NarrowCmpToBitmap<T, decltype(cmp)>(data, constant, span, validity, t_bm); });
-	});
+	DispatchFlatCmpToBitmap(view.narrow_type, op, view.data, span, validity, t_bm,
+	                        [&](auto tag) { return static_cast<decltype(tag)>(view.rewritten_constant); });
 }
 
 inline void FillNarrowCol(const NarrowCol &l, const NarrowCol &r, ExpressionType op, idx_t span, validity_t *t_bm) {
-	DispatchBitmapType(l.type, span, [&](auto tag) {
-		using T = decltype(tag);
-		DispatchBitmapCmpOp<T>(op, [&](auto cmp) {
-			NarrowColCmpToBitmap<T, decltype(cmp)>(reinterpret_cast<const T *>(l.data),
-			                                       reinterpret_cast<const T *>(r.data), span, l.validity, r.validity,
-			                                       t_bm);
-		});
-	});
+	DispatchFlatColCmpToBitmap(l.type, op, l.data, r.data, span, l.validity, r.validity, t_bm);
 }
 
 inline idx_t EmitBitmapSelection(SelectionResult &t, validity_t *t_bm, idx_t len, const SelectionVector *sel,
@@ -199,9 +189,7 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
                                       idx_t count, SelectionResult *bitmap_sel, SelectionVector *true_sel,
                                       SelectionVector *false_sel, SelectionResult &tmp_sel1, SelectionResult &tmp_sel2,
                                       SelectionResult &tmp_sel3, idx_t &result) {
-	// when a bitmap output is requested, true_sel aliases its flat view (see ExpressionExecutor::Select): the
-	// comparison result lands in bitmap_sel and true_sel/false_sel are not materialized separately
-	auto &col = chunk.data[info.ref->Index()];
+	auto &col = chunk.data[info.ref->Index()]; // dense compare reads the flat input directly
 	const auto pt = col.GetType().InternalType();
 	if (!BitmapCmpTypeSupported(pt)) {
 		return false;
@@ -292,6 +280,12 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 	if (have_sel && !l_for && !DenseAutoVecPaysOff(count, span, GetTypeIdSize(pt))) {
 		return false;
 	}
+	if (l_for) {
+		FORVector::KeepAlive(col); // col-col guarantees the right side shares col's FOR type
+		if (info.ref2) {
+			FORVector::KeepAlive(chunk.data[info.ref2->Index()]);
+		}
+	}
 
 	SelectionResult &t = bitmap_sel ? *bitmap_sel : tmp_sel1;
 	auto t_bm = reinterpret_cast<validity_t *>(t.PrepareBitmap(span));
@@ -299,7 +293,7 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 		FillNarrowCol(l, r, info.op, span, t_bm);
 	} else if (!l_for) {
 		const auto &constant = info.constant->GetValue();
-		DispatchFlatCmpToBitmap(pt, info.op, col, span, l.validity, t_bm,
+		DispatchFlatCmpToBitmap(pt, info.op, l.data, span, l.validity, t_bm,
 		                        [&](auto tag) { return constant.GetValueUnsafe<decltype(tag)>(); });
 	} else {
 		FillConstView(view, info.op, span, t_bm);

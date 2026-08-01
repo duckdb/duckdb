@@ -30,7 +30,7 @@ struct SelectivityTrackingLocalState : public FunctionLocalState {
 		return stats.IsActive();
 	}
 
-	SelectivityOptionalFilterState::SelectivityStats stats;
+	SelectivityGate stats;
 };
 
 inline unique_ptr<FunctionLocalState> InitSelectivityTrackingLocalState(idx_t n_vectors_to_check,
@@ -44,7 +44,7 @@ inline unique_ptr<FunctionLocalState> InitSelectivityTrackingLocalState(idx_t n_
 inline idx_t SetAllTrueSelection(idx_t count, optional_ptr<SelectionVector> true_sel,
                                  optional_ptr<SelectionVector> false_sel) {
 	if (true_sel) {
-		// hoist the optional_ptr dereference so the fill loop stays tight
+		// pull the optional_ptr dereference out so the fill loop stays tight
 		auto &result = *true_sel;
 		for (idx_t i = 0; i < count; i++) {
 			result.set_index(i, i);
