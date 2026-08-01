@@ -221,6 +221,7 @@ private:
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 	void ResetSinkAndOperators();
+	void ResetBatchIndexes();
 	shared_ptr<GlobalSourceState> GetSourceState();
 	void SetSourceState(shared_ptr<GlobalSourceState> state);
 	void FinishSourceAndPreventBlocking(ClientContext &context);
