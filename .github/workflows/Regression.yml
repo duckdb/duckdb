@@ -113,6 +113,7 @@ jobs:
           BUILD_JEMALLOC: 1
           CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
           DISABLE_SANITIZER: 1
+          DUCKDB_OPTIMIZATION_PROFILE: NONE
         with:
           build: python3 scripts/ci/retry.py -- make release
           bundle: make release-artifact
