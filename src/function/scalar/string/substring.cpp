@@ -123,6 +123,21 @@ string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_
 			start = -offset;
 			end = -offset - length;
 		}
+		// count the number of characters so we can clamp the scan positions to the string
+		int64_t num_characters = 0;
+		for (idx_t i = 0; i < input_size; i++) {
+			if (IsCharacter(input_data[i])) {
+				num_characters++;
+			}
+		}
+		// clamp the start position to one past the last character, and recompute the end position
+		// relative to the clamped start for positive lengths
+		start = MinValue<int64_t>(start, num_characters + 1);
+		if (length < 0) {
+			end = MinValue<int64_t>(end, num_characters + 1);
+		} else {
+			end = start - length;
+		}
 		if (end <= 0) {
 			end_pos = input_size;
 		}
