@@ -8,6 +8,7 @@ set_extension_version_sources(icu icu_extension.cpp)
 
 include_directories(include)
 include_directories(collation/include)
+include_directories(${CMAKE_SOURCE_DIR}/third_party/zstd/include)
 option(WITH_INTERNAL_ICU "Use vendored copy of icu" TRUE)
 if(WITH_INTERNAL_ICU)
   include_directories(third_party/icu/common)
@@ -19,10 +20,9 @@ endif()
 set(ICU_EXTENSION_FILES
     ${ICU_LIBRARY_FILES}
     collation/collation_collator.cpp
+    collation/collation_loader.cpp
     collation/collation_normalizer.cpp
-    collation/generated/collation_root_data.cpp
-    collation/generated/collation_normalization_data.cpp
-    collation/generated/collation_tailoring_data.cpp
+    collation/generated/collation_data.cpp
     icu_extension.cpp
     icu-current.cpp
     icu-dateadd.cpp
@@ -39,6 +39,7 @@ set(ICU_EXTENSION_FILES
 
 build_static_extension(icu ${ICU_EXTENSION_FILES})
 link_threads(icu_extension "")
+target_link_libraries(icu_extension duckdb_zstd)
 if(NOT WITH_INTERNAL_ICU)
   find_package(
     ICU
@@ -49,6 +50,7 @@ endif()
 disable_target_warnings(icu_extension)
 set(PARAMETERS "-no-warnings")
 build_loadable_extension(icu ${PARAMETERS} ${ICU_EXTENSION_FILES})
+target_link_libraries(icu_loadable_extension duckdb_zstd)
 if(NOT WITH_INTERNAL_ICU)
   target_link_libraries(icu_loadable_extension ICU::i18n ICU::uc ICU::data)
 endif()

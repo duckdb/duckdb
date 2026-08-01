@@ -107,8 +107,9 @@ uint8_t Normalizer::CombiningClass(uint32_t codepoint) {
 	if (codepoint < FIRST_COMBINING_MARK) {
 		return 0;
 	}
-	auto value =
-	    FindRange(codepoint, combining_class_start, combining_class_end, combining_class_value, combining_class_count);
+	auto &data = GetCollationNormalization();
+	auto value = FindRange(codepoint, data.combining_class_start, data.combining_class_end, data.combining_class_value,
+	                       data.combining_class_count);
 	return value ? *value : 0;
 }
 
@@ -120,23 +121,25 @@ static uint16_t GetFCD(uint32_t codepoint) {
 	if (codepoint >= HANGUL_S_BASE && codepoint < HANGUL_S_BASE + HANGUL_S_COUNT) {
 		return 0;
 	}
-	auto value = FindRange(codepoint, fcd_start, fcd_end, fcd_value, fcd_count);
+	auto &data = GetCollationNormalization();
+	auto value = FindRange(codepoint, data.fcd_start, data.fcd_end, data.fcd_value, data.fcd_count);
 	return value ? *value : 0;
 }
 
 //! The canonical decomposition of a code point, or nullptr if it has none
 static const uint32_t *GetDecomposition(uint32_t codepoint, uint32_t &length) {
+	auto &data = GetCollationNormalization();
 	uint32_t lower = 0;
-	uint32_t upper = decomposition_count;
+	uint32_t upper = data.decomposition_count;
 	while (lower < upper) {
 		auto middle = (lower + upper) / 2;
-		if (codepoint < decomposition_codepoint[middle]) {
+		if (codepoint < data.decomposition_codepoint[middle]) {
 			upper = middle;
-		} else if (codepoint > decomposition_codepoint[middle]) {
+		} else if (codepoint > data.decomposition_codepoint[middle]) {
 			lower = middle + 1;
 		} else {
-			length = decomposition_length[middle];
-			return decomposition_chars + decomposition_offset[middle];
+			length = data.decomposition_length[middle];
+			return data.decomposition_chars + data.decomposition_offset[middle];
 		}
 	}
 	return nullptr;

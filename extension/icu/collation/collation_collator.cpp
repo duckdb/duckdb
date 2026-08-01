@@ -83,19 +83,19 @@ static collation_element_t MakeElement(uint32_t primary, uint32_t secondary, uin
 }
 
 //! Returns the position of a Han character in radical/stroke order, or false if it is not a Han character
-static bool GetHanIndex(uint32_t codepoint, uint32_t &result) {
+static bool GetHanIndex(const CollationRoot &root, uint32_t codepoint, uint32_t &result) {
 	// only the ranges of the block the code point is in have to be searched
-	uint32_t lower = han_block_lower[codepoint >> HAN_BLOCK_SHIFT];
-	uint32_t upper = han_block_upper[codepoint >> HAN_BLOCK_SHIFT];
+	uint32_t lower = root.han_block_lower[codepoint >> HAN_BLOCK_SHIFT];
+	uint32_t upper = root.han_block_upper[codepoint >> HAN_BLOCK_SHIFT];
 	while (lower < upper) {
 		auto middle = (lower + upper) / 2;
-		auto start = han_range_start[middle];
+		auto start = root.han_range_start[middle];
 		if (codepoint < start) {
 			upper = middle;
-		} else if (codepoint >= start + han_range_length[middle]) {
+		} else if (codepoint >= start + root.han_range_length[middle]) {
 			lower = middle + 1;
 		} else {
-			result = han_range_index[middle] + (codepoint - start);
+			result = root.han_range_index[middle] + (codepoint - start);
 			return true;
 		}
 	}
@@ -103,10 +103,10 @@ static bool GetHanIndex(uint32_t codepoint, uint32_t &result) {
 }
 
 //! The collation element of a code point that has no mapping in the table
-static collation_element_t ImplicitElement(uint32_t codepoint) {
+static collation_element_t ImplicitElement(const CollationRoot &root, uint32_t codepoint) {
 	uint32_t index;
 	uint32_t primary;
-	if (GetHanIndex(codepoint, index)) {
+	if (GetHanIndex(root, codepoint, index)) {
 		auto lead = HAN_FIRST_LEAD_BYTE + index / HAN_PER_LEAD_BYTE;
 		auto rest = index % HAN_PER_LEAD_BYTE;
 		primary = (lead << 24) | ((0x02 + rest / HAN_THIRD_BYTE_COUNT) << 16) |
@@ -170,7 +170,7 @@ class ElementGenerator {
 public:
 	ElementGenerator(const CollationTailoring *tailoring_p, const TailoredBlocks &tailored_p, vector<uint32_t> &text_p,
 	                 const uint64_t *fast_elements_p, const uint64_t *fast_expansions_p, uint32_t fast_limit_p)
-	    : table(&root_table), tailoring(tailoring_p), tailored(tailored_p), text(text_p),
+	    : root(GetCollationRoot()), table(&root.table), tailoring(tailoring_p), tailored(tailored_p), text(text_p),
 	      fast_elements(fast_elements_p), fast_expansions(fast_expansions_p), fast_limit(fast_limit_p) {
 	}
 
@@ -186,6 +186,7 @@ private:
 	bool MatchPrefix(const CollationContext &context, idx_t position);
 
 private:
+	const CollationRoot &root;
 	//! the table the code point that is being processed comes from
 	const CollationTable *table;
 	const CollationTailoring *tailoring;
@@ -318,8 +319,8 @@ void ElementGenerator::Generate(vector<collation_element_t> &result) {
 		    LookupTailoringValue(*tailoring, codepoint, lower, upper, value)) {
 			table = &tailoring->table;
 		} else {
-			table = &root_table;
-			value = LookupValue(root_table, codepoint);
+			table = &root.table;
+			value = LookupValue(root.table, codepoint);
 		}
 		auto tag = value >> COLLATION_TAG_SHIFT;
 		auto index = value & COLLATION_INDEX_MASK;
@@ -338,7 +339,7 @@ void ElementGenerator::Generate(vector<collation_element_t> &result) {
 			} else if (entry.ce_count > 0) {
 				AppendElements(entry.ce_offset, entry.ce_count, result);
 			} else {
-				result.push_back(ImplicitElement(codepoint));
+				result.push_back(ImplicitElement(root, codepoint));
 			}
 		} else if (tag == COLLATION_TAG_SINGLE) {
 			auto element = table->ces[index];
@@ -349,7 +350,7 @@ void ElementGenerator::Generate(vector<collation_element_t> &result) {
 			auto &expansion = table->expansions[index];
 			AppendElements(expansion.ce_offset, expansion.ce_count, result);
 		} else {
-			result.push_back(ImplicitElement(codepoint));
+			result.push_back(ImplicitElement(root, codepoint));
 		}
 		position += consumed;
 	}
@@ -403,7 +404,11 @@ public:
 		return bytes[index];
 	}
 	//! Appends everything but the trailing level terminator to the sort key
+	//! Appends everything but the last byte, which is the terminator of the level
 	void AppendTo(vector<uint8_t> &result) const {
+		if (bytes.empty()) {
+			return;
+		}
 		result.insert(result.end(), bytes.begin(), bytes.end() - 1);
 	}
 
@@ -442,6 +447,7 @@ static constexpr uint32_t QUATERNARY_LEVEL_FLAG = 0x20;
 
 static void WriteSortKey(const vector<collation_element_t> &elements, const CollationSettings &settings,
                          const uint8_t *reorder_table, CollationBuffer &buffer) {
+	auto compressible_lead_byte = GetCollationRoot().compressible_lead_byte;
 	auto &result = buffer.key;
 	auto levels = GetLevelMask(settings);
 	auto upper_first = settings.case_first == CaseFirst::UPPER_FIRST;
@@ -502,7 +508,7 @@ static void WriteSortKey(const vector<collation_element_t> &elements, const Coll
 		}
 		if (primary > NO_CE_PRIMARY && (levels & PRIMARY_LEVEL_FLAG) != 0) {
 			// the un-reordered primary determines whether the weight can be compressed
-			auto compressible = compressible_lead_byte[primary >> 24];
+			auto compressible = compressible_lead_byte[primary >> 24] != 0;
 			if (reorder_table) {
 				primary = (static_cast<uint32_t>(reorder_table[primary >> 24]) << 24) | (primary & 0x00FFFFFF);
 			}
@@ -577,9 +583,9 @@ static void WriteSortKey(const vector<collation_element_t> &elements, const Coll
 				if (primary > 0 && primary <= MERGE_SEPARATOR_PRIMARY) {
 					// backwards secondary weights are compared within segments
 					// that are separated by the merge separator
-					auto last = secondaries.Size() - 1;
-					if (secondary_segment_start < last) {
-						for (idx_t left = secondary_segment_start, right = last; left < right; left++, right--) {
+					if (secondary_segment_start + 1 < secondaries.Size()) {
+						for (idx_t left = secondary_segment_start, right = secondaries.Size() - 1; left < right;
+						     left++, right--) {
 							std::swap(secondaries[left], secondaries[right]);
 						}
 					}
@@ -778,51 +784,58 @@ static void WriteSortKey(const vector<collation_element_t> &elements, const Coll
 // Collator
 //===--------------------------------------------------------------------===//
 
-static const CollationTailoring *FindTailoring(const string &collation) {
+//! Looks up a collation by name, the names are sorted so that the lookup is a search
+static const CollationInfo *FindCollation(const string &collation) {
 	uint32_t lower = 0;
-	uint32_t upper = tailoring_count;
+	uint32_t upper = collation_count;
 	while (lower < upper) {
 		auto middle = (lower + upper) / 2;
-		auto comparison = collation.compare(tailorings[middle].name);
+		auto comparison = collation.compare(collation_infos[middle].name);
 		if (comparison < 0) {
 			upper = middle;
 		} else if (comparison > 0) {
 			lower = middle + 1;
 		} else {
-			return tailorings + middle;
+			return collation_infos + middle;
 		}
 	}
 	return nullptr;
 }
 
-Collator::Collator(const string &collation) : tailoring(FindTailoring(StringUtil::Lower(collation))) {
-	if (tailoring) {
-		settings.strength = static_cast<CollationStrength>(tailoring->strength);
-		settings.case_level = tailoring->case_level;
-		settings.case_first = static_cast<CaseFirst>(tailoring->case_first);
-		settings.alternate_shifted = tailoring->alternate_shifted;
-		settings.backward_secondary = tailoring->backward_secondary;
-		settings.normalization = tailoring->normalization;
+Collator::Collator(const string &collation) {
+	auto info = FindCollation(StringUtil::Lower(collation));
+	if (info) {
+		// the tables of the collation are decompressed here, the sort keys only read them
+		tailoring = &GetCollationTailoring(info->unit);
+		settings.strength = static_cast<CollationStrength>(info->strength);
+		settings.case_level = info->case_level;
+		settings.case_first = static_cast<CaseFirst>(info->case_first);
+		settings.alternate_shifted = info->alternate_shifted;
+		settings.backward_secondary = info->backward_secondary;
+		settings.normalization = info->normalization;
 	}
 	BuildFastPath();
 }
 
 void Collator::BuildFastPath() {
+	auto &root = GetCollationRoot();
 	if (tailoring) {
 		tailored.Build(tailoring->codepoints, tailoring->count);
 	}
 	// characters that map to one or two elements without depending on their neighbours are
 	// collated without decomposing the string or searching the tables
 	for (uint32_t codepoint = 0; codepoint < FAST_LIMIT; codepoint++) {
-		auto value = LookupValue(root_table, codepoint);
-		auto table = &root_table;
-		uint32_t tailored_value;
-		uint32_t lower;
-		uint32_t upper;
-		if (tailoring && tailored.Contains(codepoint) && (tailored.GetRange(codepoint, lower, upper), true) &&
-		    LookupTailoringValue(*tailoring, codepoint, lower, upper, tailored_value)) {
-			value = tailored_value;
-			table = &tailoring->table;
+		auto value = LookupValue(root.table, codepoint);
+		auto table = &root.table;
+		if (tailoring && tailored.Contains(codepoint)) {
+			uint32_t lower;
+			uint32_t upper;
+			uint32_t tailored_value;
+			tailored.GetRange(codepoint, lower, upper);
+			if (LookupTailoringValue(*tailoring, codepoint, lower, upper, tailored_value)) {
+				value = tailored_value;
+				table = &tailoring->table;
+			}
 		}
 		auto tag = value >> COLLATION_TAG_SHIFT;
 		auto index = value & COLLATION_INDEX_MASK;
@@ -843,13 +856,13 @@ void Collator::BuildFastPath() {
 }
 
 bool Collator::HasCollation(const string &collation) {
-	return FindTailoring(StringUtil::Lower(collation)) != nullptr;
+	return FindCollation(StringUtil::Lower(collation)) != nullptr;
 }
 
 vector<string> Collator::GetCollations() {
 	vector<string> result;
-	for (uint32_t i = 0; i < tailoring_count; i++) {
-		result.emplace_back(tailorings[i].name);
+	for (uint32_t i = 0; i < collation_count; i++) {
+		result.emplace_back(collation_infos[i].name);
 	}
 	return result;
 }
@@ -860,6 +873,7 @@ vector<string> Collator::GetCollations() {
 template <bool UPPER_FIRST>
 static void WriteSimpleSortKey(const vector<collation_element_t> &elements, const uint8_t *reorder_table,
                                CollationBuffer &buffer) {
+	auto compressible_lead_byte = GetCollationRoot().compressible_lead_byte;
 	auto &result = buffer.key;
 	SortKeyLevel secondaries(buffer.levels[0]);
 	SortKeyLevel tertiaries(buffer.levels[2]);
@@ -871,7 +885,7 @@ static void WriteSimpleSortKey(const vector<collation_element_t> &elements, cons
 		auto primary = static_cast<uint32_t>(element >> 32);
 		if (primary > NO_CE_PRIMARY) {
 			// the un-reordered primary determines whether the weight can be compressed
-			auto compressible = compressible_lead_byte[primary >> 24];
+			auto compressible = compressible_lead_byte[primary >> 24] != 0;
 			if (reorder_table) {
 				primary = (static_cast<uint32_t>(reorder_table[primary >> 24]) << 24) | (primary & 0x00FFFFFF);
 			}
@@ -1021,6 +1035,7 @@ bool Collator::GetFastElements(const char *data, idx_t size, CollationBuffer &bu
 
 template <bool UPPER_FIRST>
 bool Collator::GetFastSortKey(const char *data, idx_t size, CollationBuffer &buffer) const {
+	auto compressible_lead_byte = GetCollationRoot().compressible_lead_byte;
 	auto &result = buffer.key;
 	result.clear();
 	SortKeyLevel secondaries(buffer.levels[0]);
@@ -1065,7 +1080,7 @@ bool Collator::GetFastSortKey(const char *data, idx_t size, CollationBuffer &buf
 			auto primary = static_cast<uint32_t>(element >> 32);
 			if (primary > NO_CE_PRIMARY) {
 				// the un-reordered primary determines whether the weight can be compressed
-				auto compressible = compressible_lead_byte[primary >> 24];
+				auto compressible = compressible_lead_byte[primary >> 24] != 0;
 				if (reorder_table) {
 					primary = (static_cast<uint32_t>(reorder_table[primary >> 24]) << 24) | (primary & 0x00FFFFFF);
 				}
