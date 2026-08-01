@@ -727,7 +727,7 @@ void WindowBoundariesState::FrameBegin(idx_t row_idx, const idx_t count, WindowI
 			int64_t computed_start;
 			if (!TryAddOperator::Operation(static_cast<int64_t>(row_idx), boundary_begin.GetCell<int64_t>(chunk_idx),
 			                               computed_start)) {
-				window_start = partition_begin_data[chunk_idx];
+				window_start = partition_end_data[chunk_idx];
 			} else {
 				window_start = UnsafeNumericCast<idx_t>(MaxValue<int64_t>(computed_start, 0));
 			}
