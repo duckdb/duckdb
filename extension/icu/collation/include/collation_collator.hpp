@@ -74,6 +74,8 @@ struct CollationBuffer {
 	vector<uint8_t> levels[4];
 };
 
+//! A collator is immutable once it is created, so that it can be shared between threads.
+//! The buffers it works in are passed in by the caller.
 class Collator {
 public:
 	explicit Collator(CollationSettings settings_p) : settings(settings_p) {
@@ -93,11 +95,6 @@ public:
 	//! The settings of this collator
 	const CollationSettings &GetSettings() const {
 		return settings;
-	}
-	//! Overrides the settings of the collation, used for tagged collations
-	void SetSettings(CollationSettings settings_p) {
-		settings = settings_p;
-		BuildFastPath();
 	}
 
 private:

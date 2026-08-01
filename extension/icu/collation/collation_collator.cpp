@@ -194,6 +194,7 @@ private:
 	vector<uint32_t> &text;
 	//! the positions a discontiguous contraction matched, reused across the characters
 	vector<idx_t> skipped_buffer;
+
 	//! the elements of the characters that do not depend on their neighbours
 	const uint64_t *fast_elements;
 	const uint64_t *fast_expansions;
@@ -272,7 +273,6 @@ bool ElementGenerator::MatchContraction(const CollationContext &context, idx_t p
 
 bool ElementGenerator::MatchContext(const CollationEntry &entry, idx_t position, uint32_t &ce_offset,
                                     uint32_t &ce_count, idx_t &consumed, vector<idx_t> &skipped) {
-	vector<idx_t> candidate_skipped;
 	for (uint32_t i = 0; i < entry.context_count; i++) {
 		auto &context = table->contexts[entry.context_offset + i];
 		if (context.type == COLLATION_CONTEXT_PREFIX) {
@@ -282,10 +282,10 @@ bool ElementGenerator::MatchContext(const CollationEntry &entry, idx_t position,
 			consumed = 1;
 			skipped.clear();
 		} else {
-			if (!MatchContraction(context, position, consumed, candidate_skipped)) {
+			if (!MatchContraction(context, position, consumed, skipped_buffer)) {
 				continue;
 			}
-			skipped = candidate_skipped;
+			skipped = skipped_buffer;
 		}
 		ce_offset = context.ce_offset;
 		ce_count = context.ce_count;

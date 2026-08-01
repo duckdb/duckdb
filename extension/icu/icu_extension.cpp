@@ -92,17 +92,26 @@ struct IcuBindData : public FunctionData {
 		return CreateInstance(language, country, tag);
 	}
 
+	//! The prefix of the collation functions, and of the ones that are kept for backwards
+	//! compatibility, which return the sort key in hexadecimal instead of as a blob
 	static const string FUNCTION_PREFIX;
+	static const string HEX_FUNCTION_PREFIX;
 
 	static string EncodeFunctionName(const string &collation) {
 		return FUNCTION_PREFIX + collation;
 	}
+	static string EncodeHexFunctionName(const string &collation) {
+		return HEX_FUNCTION_PREFIX + collation;
+	}
 	static string DecodeFunctionName(const Identifier &fname) {
-		return fname.GetIdentifierName().substr(FUNCTION_PREFIX.size());
+		auto &name = fname.GetIdentifierName();
+		auto prefix = StringUtil::StartsWith(name, HEX_FUNCTION_PREFIX) ? HEX_FUNCTION_PREFIX : FUNCTION_PREFIX;
+		return name.substr(prefix.size());
 	}
 };
 
-const string IcuBindData::FUNCTION_PREFIX = "icu_collate_";
+const string IcuBindData::FUNCTION_PREFIX = "collate_";
+const string IcuBindData::HEX_FUNCTION_PREFIX = "icu_collate_";
 
 //! The two hexadecimal characters of every byte value
 static const uint16_t &HexDigits(uint8_t byte) {
@@ -120,21 +129,37 @@ static const uint16_t &HexDigits(uint8_t byte) {
 	return HEX_PAIRS[byte];
 }
 
+//! Keeps the buffers the collator works in alive across the chunks of a scan, so that
+//! generating sort keys does not allocate
+struct CollatorLocalState : public FunctionLocalState {
+	collation::CollationBuffer buffer;
+
+	static unique_ptr<FunctionLocalState> Init(ExpressionState &, const BoundFunctionExpression &, FunctionData *) {
+		return make_uniq<CollatorLocalState>();
+	}
+};
+
+//! Writes the sort key of every string, either as a blob or in hexadecimal. The hexadecimal
+//! form is only used by the functions that are kept for backwards compatibility.
+template <bool HEX>
 static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.BindInfo()->Cast<IcuBindData>();
+	// the collator is immutable, it is shared between the threads that run the function
 	auto &collator = info.collator;
 
-	collation::CollationBuffer buffer;
+	auto &buffer = ExecuteFunctionState::GetFunctionState(state)->Cast<CollatorLocalState>().buffer;
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
 		// create a sort key from the string, the trailing null byte is not part of the result
 		collator.GetSortKey(input.GetData(), input.GetSize(), buffer);
 		auto &key = buffer.key;
-		auto string_size = key.size() - 1;
-		// convert the sort key to hexadecimal
-		auto str_result = StringVector::EmptyString(result, string_size * 2);
+		auto key_size = key.size() - 1;
+		if (!HEX) {
+			return StringVector::AddStringOrBlob(result, const_char_ptr_cast(key.data()), key_size);
+		}
+		auto str_result = StringVector::EmptyString(result, key_size * 2);
 		auto str_data = str_result.GetDataWriteable();
-		for (idx_t i = 0; i < string_size; i++) {
+		for (idx_t i = 0; i < key_size; i++) {
 			D_ASSERT(key[i] != 0);
 			auto digits = HexDigits(key[i]);
 			memcpy(str_data + i * 2, &digits, sizeof(digits));
@@ -182,12 +207,27 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &
 	}
 }
 
-static ScalarFunction GetICUCollateFunction(const string &collation, const string &tag) {
+//! The function a collation pushes into a query, it writes the sort key as a blob
+static ScalarFunction GetCollateFunction(const string &collation, const string &tag) {
 	string fname = IcuBindData::EncodeFunctionName(collation);
-	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction,
+	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::BLOB, ICUCollateFunction<false>,
 	                      ICUCollateBind);
 	//! collation tag is added into the Function extra info
 	result.extra_info = tag;
+	result.SetInitStateCallback(CollatorLocalState::Init);
+	result.SetSerializeCallback(IcuBindData::Serialize);
+	result.SetDeserializeCallback(IcuBindData::Deserialize);
+	return result;
+}
+
+//! The function collations used before they wrote blobs, it is kept registered so that
+//! queries and plans that call it directly keep working
+static ScalarFunction GetICUCollateFunction(const string &collation, const string &tag) {
+	string fname = IcuBindData::EncodeHexFunctionName(collation);
+	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction<true>,
+	                      ICUCollateBind);
+	result.extra_info = tag;
+	result.SetInitStateCallback(CollatorLocalState::Init);
 	result.SetSerializeCallback(IcuBindData::Serialize);
 	result.SetDeserializeCallback(IcuBindData::Deserialize);
 	return result;
@@ -442,8 +482,9 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 static void LoadInternal(ExtensionLoader &loader) {
 	// iterate over all the collations
 	for (auto &collation : collation::Collator::GetCollations()) {
-		CreateCollationInfo info(Identifier(collation), GetICUCollateFunction(collation, ""), false, false);
+		CreateCollationInfo info(Identifier(collation), GetCollateFunction(collation, ""), false, false);
 		loader.RegisterCollation(info);
+		loader.RegisterFunction(GetICUCollateFunction(collation, ""));
 	}
 
 	/**
@@ -456,12 +497,13 @@ static void LoadInternal(ExtensionLoader &loader) {
 	 * e.g. "und@colcaselevel=yes;colstrength=primary"
 	 *
 	 */
-	CreateCollationInfo info("icu_noaccent", GetICUCollateFunction("noaccent", "und-u-ks-level1-kc-true"), false,
-	                         false);
+	CreateCollationInfo info("icu_noaccent", GetCollateFunction("noaccent", "und-u-ks-level1-kc-true"), false, false);
 	loader.RegisterCollation(info);
+	loader.RegisterFunction(GetICUCollateFunction("noaccent", "und-u-ks-level1-kc-true"));
 
 	ScalarFunction sort_key("icu_sort_key", {{"str", LogicalType::VARCHAR}, {"collator", LogicalType::VARCHAR}},
-	                        LogicalType::VARCHAR, ICUCollateFunction, ICUSortKeyBind);
+	                        LogicalType::VARCHAR, ICUCollateFunction<true>, ICUSortKeyBind);
+	sort_key.SetInitStateCallback(CollatorLocalState::Init);
 	loader.RegisterFunction(sort_key);
 
 	// Time Zones
