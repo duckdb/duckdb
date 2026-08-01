@@ -963,17 +963,26 @@ struct RoundIntegerOperator {
 				return 0;
 			}
 			const auto power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-precision];
-			auto addition = power_of_ten / 2;
-			if (input < 0) {
-				addition = -addition;
+			//	Divide and compute the remainder instead of adding, to avoid overflowing the
+			//	intermediate addition for values near the boundaries of the type
+			TA quotient = UnsafeNumericCast<TA>(input / power_of_ten);
+			TA remainder = UnsafeNumericCast<TA>(input % power_of_ten);
+			if (remainder < 0) {
+				remainder = -remainder;
 			}
-			addition += input;
-			addition /= power_of_ten;
-			if (addition) {
-				return UnsafeNumericCast<TR>(addition * power_of_ten);
-			} else {
+			//	Round half away from zero: round up when the remainder reaches half the power of ten
+			if (remainder >= power_of_ten - remainder) {
+				quotient += (input < 0) ? -1 : 1;
+			}
+			if (quotient == 0) {
 				return 0;
 			}
+			//	Multiply the rounded quotient back, checking for overflow
+			TA result;
+			if (!TryMultiplyOperator::Operation(quotient, UnsafeNumericCast<TA>(power_of_ten), result)) {
+				throw OutOfRangeException("Overflow in ROUND");
+			}
+			return UnsafeNumericCast<TR>(result);
 		} else {
 			//	Rounding integers to higher precision is a NOP
 			return input;
