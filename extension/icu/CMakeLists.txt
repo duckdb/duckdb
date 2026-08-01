@@ -26,6 +26,7 @@ set(ICU_EXTENSION_FILES
     collation/generated/collation_tailoring_data.cpp
     datetime/astronomy.cpp
     datetime/calendar.cpp
+    datetime/chinese.cpp
     datetime/calendar_reference.cpp
     datetime/coptic.cpp
     datetime/hebrew.cpp

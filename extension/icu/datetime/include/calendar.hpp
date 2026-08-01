@@ -116,6 +116,10 @@ public:
 	//! one is tagged with RESOLVE_REMAP, in which case the tag holds the field it resolves to.
 	static constexpr int32_t RESOLVE_STOP = -1;
 	static constexpr int32_t RESOLVE_REMAP = 32;
+	//! A group of rows, terminated by a null row. Groups are tried in order.
+	using ResolutionGroup = const int32_t *const *;
+	//! A table of groups, terminated by a null group
+	using ResolutionTable = const ResolutionGroup *;
 
 	//! Whether the years of the first era count backwards, as in the Gregorian BC era
 	virtual bool IsEra0CountingBackward() const {
@@ -182,6 +186,9 @@ protected:
 	}
 	//! The extended year that a year and week of the week-based year describe
 	int32_t HandleGetExtendedYearFromWeekFields(int32_t year_woy, int32_t woy);
+	//! The order in which the fields that describe a date are tried, which a calendar system
+	//! whose months are not identified by a number alone overrides
+	virtual ResolutionTable GetDatePrecedence() const;
 
 	//! The value of a field without triggering a recomputation
 	int32_t InternalGet(CalendarField field) const {
@@ -201,6 +208,10 @@ protected:
 	}
 	bool HasFailedInternal() const {
 		return failed;
+	}
+	//! Starts a new operation, which is not affected by whatever went wrong before it
+	void ClearFailure() {
+		failed = false;
 	}
 	//! The instant the calendar is set to, without recomputing it
 	double GetTimeInternal() const {
@@ -225,6 +236,13 @@ protected:
 	//! The Julian day at which the current fields resolve, ignoring the time of day
 	virtual int32_t HandleComputeJulianDay(CalendarField best_field);
 
+	//! Sets up a clone for a GetActualMaximum or GetActualMinimum computation of a field
+	void PrepareGetActual(CalendarField field, bool is_minimum);
+	//! Makes sure that both the time and the fields are up to date
+	void Complete();
+	//! A copy of this calendar that the field machinery can be used on
+	unique_ptr<FieldCalendar> CopyFields() const;
+
 	//! The operations that make up a public one. Like ICU, which threads a single error code
 	//! through an operation, they do nothing once something has gone wrong, so that a failure
 	//! is reported instead of a value computed from a broken intermediate state.
@@ -246,11 +264,6 @@ private:
 	//! The first value that is handed out to a field that the caller sets
 	static constexpr int32_t STAMP_MINIMUM_USER = 2;
 
-	//! A group of rows, terminated by a null row. Groups are tried in order.
-	using ResolutionGroup = const int32_t *const *;
-	//! A table of groups, terminated by a null group
-	using ResolutionTable = const ResolutionGroup *;
-
 	//! Recomputes the time from the fields
 	void ComputeTime();
 	//! Recomputes the fields from the time
@@ -260,8 +273,6 @@ private:
 	//! The total offset that applies to a local time that is split into a day and a time of day
 	int32_t ComputeZoneOffset(double millis, double millis_in_day) const;
 	int32_t ComputeJulianDay();
-	//! Makes sure that both the time and the fields are up to date
-	void Complete();
 	void UpdateTime();
 	//! The highest stamp of a range of fields
 	int32_t NewestStamp(CalendarField first, CalendarField last, int32_t best_so_far) const;
@@ -269,11 +280,6 @@ private:
 	CalendarField ResolveFields(ResolutionTable table) const;
 	//! The 0-based day of week of the current fields, relative to the first day of the week
 	int32_t GetLocalDOW() const;
-
-	//! A copy of this calendar that the field machinery can be used on
-	unique_ptr<FieldCalendar> CopyFields() const;
-	//! Sets up a clone for a GetActualMaximum or GetActualMinimum computation of a field
-	void PrepareGetActual(CalendarField field, bool is_minimum);
 	//! Walks a field from one limit towards the other until it stops normalizing to itself
 	int32_t GetActualHelper(CalendarField field, int32_t start_value, int32_t end_value);
 	//! Compacts the stamps once they run out, preserving the order in which fields were set

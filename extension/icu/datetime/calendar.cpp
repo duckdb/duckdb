@@ -4,6 +4,7 @@
 #include "grego.hpp"
 #include "coptic.hpp"
 #include "gregorian.hpp"
+#include "chinese.hpp"
 #include "hebrew.hpp"
 #include "islamic.hpp"
 #include "japanese.hpp"
@@ -434,7 +435,7 @@ int32_t FieldCalendar::ComputeJulianDay() {
 		}
 	}
 
-	auto best_field = ResolveFields(DATE_PRECEDENCE);
+	auto best_field = ResolveFields(GetDatePrecedence());
 	if (best_field == CAL_FIELD_COUNT) {
 		best_field = CAL_DATE;
 	}
@@ -638,8 +639,12 @@ int32_t FieldCalendar::GetLocalDOW() const {
 	return dow_local;
 }
 
+FieldCalendar::ResolutionTable FieldCalendar::GetDatePrecedence() const {
+	return DATE_PRECEDENCE;
+}
+
 int32_t FieldCalendar::HandleGetExtendedYearFromWeekFields(int32_t year_woy, int32_t woy) {
-	const auto best_field = ResolveFields(DATE_PRECEDENCE);
+	const auto best_field = ResolveFields(GetDatePrecedence());
 	const auto dow_local = GetLocalDOW();
 	const auto first_dow = GetFirstDayOfWeek();
 	const auto jan1_start = int32_t(HandleComputeMonthStart(year_woy, 0, false));
@@ -1203,6 +1208,12 @@ unique_ptr<Calendar> Calendar::TryCreate(const string &type, unique_ptr<TimeZone
 	}
 	if (StringUtil::CIEquals(type, "japanese")) {
 		return make_uniq<JapaneseCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "chinese")) {
+		return make_uniq<ChineseCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "dangi")) {
+		return make_uniq<DangiCalendar>(std::move(zone));
 	}
 	// TODO: temporary, the calendars that have not been reimplemented yet come from ICU
 	return TryCreateICUCalendar(type, std::move(zone));
