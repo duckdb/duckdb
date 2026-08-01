@@ -419,7 +419,7 @@ WHERE strlen(s) > 30
 2048
 
 query II
-EXPLAIN ANALYZE SELECT count(*)
+EXPLAIN ANALYZE SELECT sum(strlen(s))
 FROM '{TEST_DIR}/expr_prune_string_length.parquet'
 WHERE strlen(s) > 30
 ----
@@ -433,7 +433,7 @@ WHERE octet_length(b) > 30
 2048
 
 query II
-EXPLAIN ANALYZE SELECT count(*)
+EXPLAIN ANALYZE SELECT sum(octet_length(b))
 FROM '{TEST_DIR}/expr_prune_string_length.parquet'
 WHERE octet_length(b) > 30
 ----

@@ -538,9 +538,11 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 		}
 		if (has_min_stats && has_max_stats && min_stats_type == StringStatsType::EXACT_STATS &&
 		    max_stats_type == StringStatsType::EXACT_STATS && min_stats == max_stats) {
-			StringStats::FromConstant(string_stats, string_t(min_stats));
-			StringStats::SetMin(string_stats, string_t(min_stats), StringStatsType::EXACT_STATS);
-			StringStats::SetMax(string_stats, string_t(max_stats), StringStatsType::EXACT_STATS);
+			auto constant_stats = StringStats::CreateEmpty(type);
+			StringStats::FromConstant(constant_stats, string_t(min_stats));
+			StringStats::SetMin(constant_stats, string_t(min_stats), StringStatsType::EXACT_STATS);
+			StringStats::SetMax(constant_stats, string_t(max_stats), StringStatsType::EXACT_STATS);
+			return constant_stats.ToUnique();
 		}
 		return string_stats.ToUnique();
 	}
