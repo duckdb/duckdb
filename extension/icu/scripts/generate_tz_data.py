@@ -20,6 +20,7 @@ import sys
 import urllib.request
 
 DATA_URL = "https://raw.githubusercontent.com/unicode-org/icu-data/main/tzdata/icunew/{version}/44/zoneinfo64.txt"
+WINDOWS_URL = "https://raw.githubusercontent.com/unicode-org/icu-data/main/tzdata/icunew/{version}/44/windowsZones.txt"
 
 # The zone that ICU uses to signal "this identifier is not a time zone".
 UNKNOWN_ZONE = "Etc/Unknown"
@@ -126,6 +127,29 @@ def post32_lo(value):
     return value & 0xFFFFFFFF
 
 
+def parse_windows_zones(text):
+    """Parse the mapping from Windows time zone names to the zones of this dataset."""
+    body = find_section(text, "mapTimezones")
+    mapping = []
+    pos = 0
+    while True:
+        entry = re.compile(r'"([^"]+)"\s*\{').search(body, pos)
+        if not entry:
+            break
+        regions, pos = read_block(body, entry.start())
+        inner = 0
+        while True:
+            key = re.compile(r'(\w+)\s*\{').search(regions, inner)
+            if not key:
+                break
+            value, inner = read_block(regions, key.start())
+            # a region can map to several zones, of which the first one is the default
+            zones = "".join(parse_strings(value)).split()
+            if zones:
+                mapping.append((entry.group(1), key.group(1), zones[0]))
+    return sorted(mapping)
+
+
 def parse_rules(text):
     rules = {}
     pos = 0
@@ -152,7 +176,7 @@ def emit_array(out, declaration, values, per_line):
     out.append("};")
 
 
-def generate(version, zones, rules):
+def generate(version, zones, rules, windows_zones):
     rule_names = sorted(rules)
     rule_index = {name: i for i, name in enumerate(rule_names)}
 
@@ -218,6 +242,12 @@ def generate(version, zones, rules):
     out.append("};")
     out.append("")
 
+    out.append("const TZWindowsZone TZ_WINDOWS_ZONES[] = {")
+    for name, region, zone in windows_zones:
+        out.append('    {"%s", "%s", "%s"},' % (escape(name), escape(region), escape(zone)))
+    out.append("};")
+    out.append("")
+    out.append("const idx_t TZ_WINDOWS_ZONE_COUNT = %d;" % len(windows_zones))
     out.append("const idx_t TZ_ZONE_COUNT = %d;" % len(zones))
     out.append('const char *const TZ_VERSION = "%s";' % version)
     out.append("")
@@ -243,7 +273,15 @@ def main():
     names = parse_strings(find_section(text, "Names"))
     zones = parse_zones(find_section(text, "Zones"), names)
     rules = parse_rules(find_section(text, "Rules"))
-    sys.stdout.write(generate(version, zones, rules))
+
+    if os.path.exists(source):
+        windows_text = open(os.path.join(os.path.dirname(source), "windowsZones.txt"),
+                            encoding="utf-8-sig").read()
+    else:
+        windows_text = urllib.request.urlopen(WINDOWS_URL.format(version=source)).read().decode("utf-8-sig")
+    windows_zones = parse_windows_zones(strip_comments(windows_text))
+
+    sys.stdout.write(generate(version, zones, rules, windows_zones))
     return 0
 
 

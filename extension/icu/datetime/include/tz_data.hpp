@@ -56,6 +56,15 @@ struct TZZoneData {
 	int32_t final_year;
 };
 
+//! The zone that a Windows time zone name maps to in a region, which is how the time zone of
+//! the host is determined on Windows
+struct TZWindowsZone {
+	const char *windows_name;
+	//! A two letter region code, or "001" for the default
+	const char *region;
+	const char *zone;
+};
+
 //! A single time zone identifier. Multiple identifiers can refer to the same data.
 struct TZZone {
 	const char *name;
@@ -69,6 +78,9 @@ extern const idx_t TZ_ZONE_COUNT;
 extern const TZZoneData TZ_ZONE_DATA[];
 //! The recurring rules, indexed by TZZoneData::final_rule
 extern const TZRule TZ_RULES[];
+//! The Windows time zone names, sorted by name and region
+extern const TZWindowsZone TZ_WINDOWS_ZONES[];
+extern const idx_t TZ_WINDOWS_ZONE_COUNT;
 //! The IANA release that the data was generated from
 extern const char *const TZ_VERSION;
 

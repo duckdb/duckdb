@@ -4,9 +4,12 @@
 #include "grego.hpp"
 
 #include <climits>
+#include <cstdio>
 #include <cstdlib>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
 #endif
 
@@ -446,6 +449,79 @@ vector<int64_t> TimeZone::GetTransitions(const string &id) {
 	return result;
 }
 
+#ifdef _WIN32
+//! The zone that a Windows time zone name maps to, preferring the region of the host
+static unique_ptr<TimeZone> TryCreateFromWindowsName(const string &name, const string &region) {
+	const TZWindowsZone *fallback = nullptr;
+	for (idx_t i = 0; i < TZ_WINDOWS_ZONE_COUNT; i++) {
+		const auto &entry = TZ_WINDOWS_ZONES[i];
+		if (name != entry.windows_name) {
+			continue;
+		}
+		if (region == entry.region) {
+			return TimeZone::TryCreate(entry.zone);
+		}
+		if (StringUtil::Equals(entry.region, "001")) {
+			fallback = &entry;
+		}
+	}
+	return fallback ? TimeZone::TryCreate(fallback->zone) : nullptr;
+}
+
+//! The time zone of the host on Windows, which names its zones differently
+static unique_ptr<TimeZone> TryCreateWindowsDefault() {
+	DYNAMIC_TIME_ZONE_INFORMATION info;
+	memset(&info, 0, sizeof(info));
+	SYSTEMTIME zeroed;
+	memset(&zeroed, 0, sizeof(zeroed));
+	if (GetDynamicTimeZoneInformation(&info) == TIME_ZONE_ID_INVALID) {
+		return nullptr;
+	}
+
+	// daylight savings time has been switched off, which leaves a fixed offset. This is how the
+	// control panel itself decides that the setting is off.
+	if (info.DynamicDaylightTimeDisabled != 0 &&
+	    memcmp(&info.StandardDate, &info.DaylightDate, sizeof(info.StandardDate)) == 0 &&
+	    ((info.TimeZoneKeyName[0] != L'\0' && memcmp(&info.StandardDate, &zeroed, sizeof(zeroed)) == 0) ||
+	     (info.TimeZoneKeyName[0] == L'\0' && memcmp(&info.StandardDate, &zeroed, sizeof(zeroed)) != 0))) {
+		const auto offset_minutes = info.Bias;
+		if (offset_minutes == 0) {
+			return TimeZone::TryCreate("Etc/UTC");
+		}
+		// the bias already follows the sign convention of the Etc zones, so it is not negated
+		if (offset_minutes % 60 == 0) {
+			char zone[16];
+			snprintf(zone, sizeof(zone), "Etc/GMT%+ld", long(offset_minutes / 60));
+			auto result = TimeZone::TryCreate(zone);
+			if (result) {
+				return result;
+			}
+		}
+	}
+
+	if (info.TimeZoneKeyName[0] == L'\0') {
+		return nullptr;
+	}
+	// the key name holds invariant characters only, so it converts directly
+	string name;
+	for (idx_t i = 0; i < sizeof(info.TimeZoneKeyName) / sizeof(WCHAR) && info.TimeZoneKeyName[i]; i++) {
+		name += char(info.TimeZoneKeyName[i]);
+	}
+
+	// a Windows zone can cover several regions, which each have their own zone
+	string region;
+	wchar_t region_code[3] = {};
+	const auto length =
+	    GetGeoInfoW(GetUserGeoID(GEOCLASS_NATION), GEO_ISO2, region_code, sizeof(region_code) / sizeof(wchar_t), 0);
+	if (length != 0) {
+		for (idx_t i = 0; i < 2 && region_code[i]; i++) {
+			region += char(region_code[i]);
+		}
+	}
+	return TryCreateFromWindowsName(name, region);
+}
+#endif
+
 unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
 	// an explicitly configured zone takes priority over the host configuration
 	const auto tz_env = std::getenv("TZ");
@@ -460,7 +536,12 @@ unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
 			return result;
 		}
 	}
-#ifndef _WIN32
+#ifdef _WIN32
+	auto windows_zone = TryCreateWindowsDefault();
+	if (windows_zone) {
+		return windows_zone;
+	}
+#else
 	// the host zone is the zone info file that /etc/localtime points at
 	char buffer[PATH_MAX];
 	const auto length = readlink("/etc/localtime", buffer, sizeof(buffer) - 1);
