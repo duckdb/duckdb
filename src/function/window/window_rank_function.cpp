@@ -408,8 +408,11 @@ unique_ptr<LocalSinkState> WindowPercentRankExecutor::GetLocal(ExecutionContext 
 }
 
 static inline double PercentRank(const idx_t begin, const idx_t end, const uint64_t rank) {
-	auto denom = static_cast<double>(NumericCast<int64_t>(end - begin - 1));
-	return denom > 0 ? ((double)rank - 1) / denom : 0;
+	if (end <= begin + 1) {
+		return 0;
+	}
+	const auto denom = static_cast<double>(NumericCast<int64_t>(end - begin - 1));
+	return ((double)rank - 1) / denom;
 }
 
 void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
@@ -424,16 +427,20 @@ void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &ev
 		auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				const auto rank = gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
-				rdata.WriteValue(PercentRank(frame_begin[i], frame_end[i], rank));
+				const auto begin = frame_begin[i];
+				const auto end = MaxValue(frame_end[i], begin);
+				const auto rank = gpeer.token_tree->Rank(begin, end, row_idx);
+				rdata.WriteValue(PercentRank(begin, end, rank));
 			}
 		} else {
 			//	Clamp peer to the frame
 			auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				const auto frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
-				lpeer.rank = (frame_peer_begin - frame_begin[i]) + 1;
-				rdata.WriteValue(PercentRank(frame_begin[i], frame_end[i], lpeer.rank));
+				const auto begin = frame_begin[i];
+				const auto end = MaxValue(frame_end[i], begin);
+				const auto frame_peer_begin = MaxValue(begin, peer_begin[i]);
+				lpeer.rank = (frame_peer_begin - begin) + 1;
+				rdata.WriteValue(PercentRank(begin, end, lpeer.rank));
 			}
 		}
 		return;
@@ -497,10 +504,13 @@ unique_ptr<LocalSinkState> WindowCumeDistExecutor::GetLocal(ExecutionContext &co
 }
 
 static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t peer_end) {
+	if (end <= begin) {
+		return 0;
+	}
 	const auto denom = static_cast<double>(NumericCast<int64_t>(end - begin));
 	const auto num_begin = MaxValue(peer_end, begin);
 	const auto num = static_cast<double>(num_begin - begin);
-	return denom > 0 ? (num / denom) : 0;
+	return num / denom;
 }
 
 void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
@@ -514,15 +524,19 @@ void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 		auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				const auto peer_end = gpeer.token_tree->PeerEnd(frame_begin[i], frame_end[i], row_idx);
-				rdata.WriteValue(CumeDist(frame_begin[i], frame_end[i], peer_end));
+				const auto begin = frame_begin[i];
+				const auto end = MaxValue(frame_end[i], begin);
+				const auto peer_end = gpeer.token_tree->PeerEnd(begin, end, row_idx);
+				rdata.WriteValue(CumeDist(begin, end, peer_end));
 			}
 		} else {
 			auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
+				const auto begin = frame_begin[i];
+				const auto end = MaxValue(frame_end[i], begin);
 				//	Clamp the peer end to the frame
-				const auto frame_peer_end = MinValue(peer_end[i], frame_end[i]);
-				rdata.WriteValue(CumeDist(frame_begin[i], frame_end[i], frame_peer_end));
+				const auto frame_peer_end = MinValue(peer_end[i], end);
+				rdata.WriteValue(CumeDist(begin, end, frame_peer_end));
 			}
 		}
 		return;
