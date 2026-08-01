@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/smaller_binary.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -15,7 +17,7 @@
 #include <utility>
 
 #if (defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 12)) && (defined(__x86_64__) || defined(__aarch64__)) &&  \
-    !defined(DUCKDB_SMALLER_BINARY) // clang/gcc on x86/aarch64
+    !DUCKDB_SMALLER_BINARY(autovec) // clang/gcc on x86/aarch64
 #define DUCKDB_AUTOVEC 1
 #else
 #define DUCKDB_AUTOVEC 0
