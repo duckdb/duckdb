@@ -165,8 +165,9 @@ uint64_t ICUDateFunc::SetTimeNS(Calendar *calendar, timestamp_tz_ns_t date) {
 
 int32_t ICUDateFunc::ExtractField(Calendar *calendar, CalendarField field) {
 	const auto result = calendar->Get(field);
+	// a date the calendar cannot represent is something the query asked for, not a defect
 	if (calendar->HasFailed()) {
-		throw InternalException("Unable to extract calendar part.");
+		throw ConversionException("Unable to extract calendar part");
 	}
 	return result;
 }
@@ -175,7 +176,7 @@ int32_t ICUDateFunc::SubtractField(Calendar *calendar, CalendarField field, time
 	const int64_t millis = end_date.value / Interval::MICROS_PER_MSEC;
 	const auto sub = calendar->FieldDifference(double(millis), field);
 	if (calendar->HasFailed()) {
-		throw InternalException("Unable to subtract calendar part.");
+		throw ConversionException("Unable to subtract calendar part");
 	}
 	return sub;
 }

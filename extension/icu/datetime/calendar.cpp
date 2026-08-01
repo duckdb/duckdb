@@ -185,7 +185,8 @@ void FieldCalendar::SetTimeChecked(double millis) {
 }
 
 double FieldCalendar::GetTime() {
-	failed = false;
+	// the time is what an operation is read back out of, so a failure along the way is still
+	// the answer to this call rather than something that happened before it
 	return GetTimeChecked();
 }
 
@@ -810,7 +811,6 @@ void FieldCalendar::ComputeWeekFields() {
 // Arithmetic
 //===--------------------------------------------------------------------===//
 void FieldCalendar::Add(CalendarField field, int32_t amount) {
-	failed = false;
 	AddChecked(field, amount);
 }
 
@@ -835,7 +835,12 @@ void FieldCalendar::AddChecked(CalendarField field, int32_t amount) {
 		if (failed) {
 			return;
 		}
-		Set(CAL_ERA, era + amount);
+		int32_t sum;
+		if (!TryAdd(era, amount, sum)) {
+			Fail();
+			return;
+		}
+		Set(CAL_ERA, sum);
 		PinField(CAL_ERA);
 		return;
 	}
@@ -843,7 +848,10 @@ void FieldCalendar::AddChecked(CalendarField field, int32_t amount) {
 	case CAL_YEAR_WOY:
 		// in an era that counts backwards, later years have smaller numbers
 		if (GetChecked(CAL_ERA) == 0 && IsEra0CountingBackward()) {
-			amount = -amount;
+			if (!TryMultiply(amount, -1, amount)) {
+				Fail();
+				return;
+			}
 		}
 		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case CAL_EXTENDED_YEAR:
@@ -853,7 +861,12 @@ void FieldCalendar::AddChecked(CalendarField field, int32_t amount) {
 		if (failed) {
 			return;
 		}
-		Set(field, value + amount);
+		int32_t sum;
+		if (!TryAdd(value, amount, sum)) {
+			Fail();
+			return;
+		}
+		Set(field, sum);
 		// adding a month to the 31st of a month keeps it within the resulting month
 		PinField(CAL_DATE);
 		return;

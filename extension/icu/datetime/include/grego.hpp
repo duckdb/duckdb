@@ -48,7 +48,9 @@ struct FloorDiv {
 	}
 	static int32_t Divide(int32_t numerator, int32_t denominator, int32_t &remainder) {
 		const auto quotient = Divide(numerator, denominator);
-		remainder = numerator - (quotient * denominator);
+		// the remainder is always smaller than the denominator, but the product it is taken
+		// from is not, so it is formed wide enough to hold the extremes of the numerator
+		remainder = int32_t(int64_t(numerator) - int64_t(quotient) * denominator);
 		return quotient;
 	}
 	//! Divides a millisecond count by a whole number of milliseconds, keeping the remainder exact

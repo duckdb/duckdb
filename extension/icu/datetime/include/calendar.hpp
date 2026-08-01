@@ -92,7 +92,9 @@ public:
 	virtual bool HasFailed() const = 0;
 	//! Sets a field. The time is recomputed the next time it is needed.
 	virtual void Set(CalendarField field, int32_t value) = 0;
-	//! Adds an amount to a field, keeping the wall clock time invariant for date fields
+	//! Adds an amount to a field, keeping the wall clock time invariant for date fields.
+	//! Several adds make up one operation, so a failure in any of them is kept until the
+	//! next call to SetTime rather than being cleared by the add that follows it.
 	virtual void Add(CalendarField field, int32_t amount) = 0;
 	//! The number of times the field has to be incremented to reach the target instant
 	virtual int32_t FieldDifference(double target, CalendarField field) = 0;
