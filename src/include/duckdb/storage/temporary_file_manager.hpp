@@ -357,6 +357,11 @@ public:
 	TemporaryFileManager &GetTempFile() const;
 
 private:
+	//! Removes this instance's temporary files and, if it created it, the directory. May throw; the
+	//! destructor is what guarantees nothing escapes.
+	void CleanupTemporaryDirectory();
+
+private:
 	DatabaseInstance &db;
 	string temp_directory;
 	bool created_directory = false;

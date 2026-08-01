@@ -1,6 +1,8 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/main/database.hpp"
@@ -745,7 +747,25 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 	// first release any temporary files
 	temp_file.reset();
-	// then delete the temporary file directory
+	// Cleaning up runs from a destructor, so nothing here may throw. It reaches RemoveFile, which
+	// does throw: TryRemoveFile is "try" only in the sense of skipping a file that is absent, and it
+	// checks existence and removes in two steps, so a file another instance sharing this directory
+	// removes in between raises ENOENT. On Windows removing a file another instance still holds open
+	// fails outright. Neither is actionable at this point - whatever is left behind is reaped by a
+	// later instance - and letting it escape would be std::terminate.
+	try {
+		CleanupTemporaryDirectory();
+	} catch (std::exception &ex) {
+		ErrorData data(ex);
+		try {
+			DUCKDB_LOG_ERROR(db, "TemporaryDirectoryHandle::~TemporaryDirectoryHandle()\t\t" + data.Message());
+		} catch (...) { // NOLINT
+		}
+	} catch (...) { // NOLINT
+	}
+}
+
+void TemporaryDirectoryHandle::CleanupTemporaryDirectory() {
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		bool delete_directory = created_directory;
