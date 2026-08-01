@@ -189,7 +189,8 @@ void TransformStackFrame::ThrowMissingResult(idx_t slot, const char *rule_name) 
 }
 
 void TransformStackFrame::ThrowUnexpectedResultType(idx_t slot, const char *rule_name) {
-	throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot, rule_name);
+	throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
+	                        rule_name);
 }
 
 void TransformStack::ThrowUnexpectedRootResultType(const char *rule_name) {
