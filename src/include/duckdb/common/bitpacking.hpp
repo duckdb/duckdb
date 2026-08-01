@@ -27,12 +27,10 @@ namespace internal {
 
 static constexpr const uint32_t BITPACKING_GROUP_SIZE = 32;
 
-// The packed buffer is 32-bit words at an arbitrary byte offset, so access it via memcpy - a raw load/store
-// would be UB on a misaligned address. A fixed-size memcpy compiles to one (un)aligned move.
 template <class T>
 static inline T LoadWord(const T *DUCKDB_BITPACKING_RESTRICT p) {
 	T v;
-	std::memcpy(&v, static_cast<const void *>(p), sizeof(T));
+	std::memcpy(&v, static_cast<const void *>(p), sizeof(T)); // unaligned-safe word load
 	return v;
 }
 template <class T>
@@ -51,15 +49,11 @@ static constexpr uint64_t Mask() {
 	}
 }
 
-// Invoke f(integral_constant<size_t, I>) for I in 0..N-1, in order.
 template <class F, std::size_t... I>
 static inline void ForEachIndex(F &&f, std::index_sequence<I...>) {
 	(f(std::integral_constant<std::size_t, I> {}), ...);
 }
 
-// Extract value INDEX of a 32-value group. For outputs up to 32 bits we read at the OUTPUT element width so
-// load and store share a lane width (auto-vectorizes); a value then spans at most two read units. The 64-bit
-// output is the one special case: the packing is 32-bit words, so a value spans 2-3 of them.
 template <uint32_t WIDTH, class OUT_T, std::size_t INDEX>
 static inline void UnpackValue(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out,
                                OUT_T frame) {
@@ -80,7 +74,6 @@ static inline void UnpackValue(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OU
 			                   frame);
 		}
 	} else {
-		// u64 output: a value spans 2 or 3 of the 32-bit source words.
 		constexpr std::size_t bit_position = INDEX * WIDTH;
 		constexpr std::size_t word_index = bit_position / 32;
 		constexpr uint32_t shift = bit_position % 32;
@@ -117,7 +110,7 @@ static inline void UnpackBlock(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OU
 template <uint32_t WIDTH, class OUT_T>
 static inline void UnpackBuffer(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out,
                                 std::size_t groups, OUT_T frame = 0) {
-	std::size_t start = 0; // groups the autovec shuffle path already unpacked (0 when it is unavailable/ineligible)
+	std::size_t start = 0; // groups already handled by the shuffle path
 #if DUCKDB_AUTOVEC
 	if constexpr (::duckdb::UseShuffleUnpack<WIDTH, OUT_T>()) {
 		if (::duckdb::CpuBenefitsFromAutoVec()) {
@@ -169,10 +162,8 @@ static inline void PackBuffer(const IN_T *DUCKDB_BITPACKING_RESTRICT in, uint32_
 	}
 }
 
-// Turn the runtime width into a compile-time constant and call func(integral_constant<uint32_t, width>).
-// Only widths 0..MAX_WIDTH are instantiated (so e.g. uint8 never instantiates width 9+).
 template <class FUNC, std::size_t... W>
-static inline bool DispatchWidthImpl(uint32_t width, FUNC &&func, std::index_sequence<W...>) {
+static inline bool DispatchWidthImpl(uint32_t width, FUNC &&func, std::index_sequence<W...>) { // width -> template
 	return ((width == W && (func(std::integral_constant<uint32_t, uint32_t(W)> {}), true)) || ...);
 }
 template <uint32_t MAX_WIDTH, class FUNC>
@@ -184,7 +175,6 @@ static inline void DispatchWidth(uint32_t width, FUNC &&func) {
 
 } // namespace internal
 
-// fastunpack: IN is the packed buffer (32-bit words), OUT the destination values. fastpack is the inverse.
 #define DUCKDB_BITPACKING_FASTUNPACK(IN_T, OUT_T, MAX_WIDTH)                                                           \
 	inline void fastunpack(const IN_T *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out,           \
 	                       const uint32_t bit, const std::size_t groups = 1, const OUT_T frame = 0) {                  \
@@ -296,13 +286,10 @@ public:
 		}
 	}
 
-	// Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
-	// Assumes both src and dst to be of the correct size
 	template <class T>
-	//! `frame_of_reference` is added to every value during the unpack (saving a second pass over the output).
 	inline static void UnPackBuffer(data_ptr_t dst, data_ptr_t src, idx_t count, bitpacking_width_t width,
-	                                bool skip_sign_extension = false, T frame_of_reference = 0) {
-		const auto rounded_count = RoundUpToAlgorithmGroupSize(count);
+	                                bool skip_sign_extension = false, T frame_of_reference = 0) { // adds frame inline
+		const auto rounded_count = RoundUpToAlgorithmGroupSize(count); // partial tail uses a full scratch group
 		const auto groups = static_cast<std::size_t>(rounded_count / BITPACKING_ALGORITHM_GROUP_SIZE);
 		if (!duckdb_bitpacking::TryFastUnpack<T>(src, reinterpret_cast<T *>(dst), static_cast<uint32_t>(width), groups,
 		                                         frame_of_reference)) {

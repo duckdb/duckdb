@@ -88,7 +88,6 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 	return function;
 }
 
-// mixed-width integer pairs compute at the wider operand's width via in-register argument promotion
 template <class OP>
 static scalar_function_t GetMixedIntegerFunction(PhysicalType left, PhysicalType right) {
 #define DUCKDB_MIXED_ARITH_PAIR(LP, RP, TL, TR_, TRES)                                                                 \

@@ -151,7 +151,6 @@ private:
 	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		auto dispatch_type = input.GetVectorType();
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
-		// ExecuteFlat carries the widened-ISA target: pre-AVX2 CPUs take the generic gather path (default case)
 		if (!CpuBenefitsFromAutoVec() && dispatch_type != VectorType::CONSTANT_VECTOR) {
 			dispatch_type = VectorType::SEQUENCE_VECTOR;
 		}

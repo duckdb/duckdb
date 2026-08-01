@@ -939,7 +939,6 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
 					                approved_tuple_count, filter.filter, table_filter_state);
 				}
-				// materialize a bitmap selection once here so all column slices share one index array
 				auto &flat_sel = sel.Flattened();
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {

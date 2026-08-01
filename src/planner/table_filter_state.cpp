@@ -22,8 +22,6 @@ static void InitializeExecutor(ClientContext &context, const Expression &express
 }
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
-	// Pull up a top-level single optional wrapper: a paused vector then costs nothing on every path, and
-	// bitmap-capability plus the active executors are derived from the unwrapped child.
 	optional_ptr<const Expression> inner = &expression;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expression.Cast<BoundFunctionExpression>();

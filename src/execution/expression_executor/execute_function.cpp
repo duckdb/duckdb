@@ -10,8 +10,7 @@ namespace duckdb {
 namespace {
 
 bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
-	// Only on autovec-capable toolchains/CPUs; otherwise fall back to the normal execution path
-	if (!DUCKDB_AUTOVEC || !CpuBenefitsFromAutoVec()) {
+	if (!DUCKDB_AUTOVEC || !CpuBenefitsFromAutoVec()) { // fallback when widened kernels are unavailable
 		return false;
 	}
 	auto name = expr.Function().GetName();
@@ -33,7 +32,7 @@ bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
-	// a `ref <op> const` comparison can be selected straight into a bitmap (autovec) in the fast path below
+	// cached bitmap select shape
 	select_bitmap_capable =
 	    CpuBenefitsFromAutoVec() && IsBitmapComparisonCandidate(expr) && TryGetBitmapComparisonInfo(expr, cmp_info);
 	// Check if the expression is eligible for dictionary optimization
@@ -97,11 +96,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	const auto input_dictionary_size = input_dictionary_size_opt.GetIndex();
 	auto &input_sel = DictionaryVector::SelVector(first_input);
 
-	// Autovec-friendly ops ignore the selection vector: run the kernel over the flat dictionary child in place and
-	// keep the input's selection on the result. The child is pointed at (no gather, no copy), the output buffer is
-	// reused, and the lane-aware guard skips this when the selection is too sparse to pay for computing the whole
-	// child.
-	if (IsSafeAutoVecArithmetic(expr) && input_dictionary_size <= STANDARD_VECTOR_SIZE &&
+	if (IsSafeAutoVecArithmetic(expr) && input_dictionary_size <= STANDARD_VECTOR_SIZE && // dense dictionary arithmetic
 	    DenseAutoVecPaysOff(args.size(), input_dictionary_size, GetTypeIdSize(result.GetType().InternalType()))) {
 		for (idx_t idx = 1; idx < dictionary_input_indices.size(); idx++) {
 			const auto &input = args.data[dictionary_input_indices[idx]];
@@ -116,16 +111,13 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		}
 		if (!output_dictionary || output_dictionary->data.size() != input_dictionary_size) {
 			output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
-			// the reused buffer holds different data every chunk, so it must not advertise the stable id that
-			// CreateReusableDictionary mints - downstream id-keyed caches would otherwise serve stale data
-			output_dictionary->id.clear();
+			output_dictionary->id.clear(); // reused result has no stable dictionary id
 		}
 		if (dictionary_input_chunk.data.empty()) {
-			dictionary_input_chunk.InitializeEmpty(args.GetTypes()); // one-time allocation, reused across chunks
+			dictionary_input_chunk.InitializeEmpty(args.GetTypes()); // reused across chunks
 		}
 		for (idx_t i = 0; i < args.ColumnCount(); i++) {
-			// point dict inputs at their flat child, reference constants/flats as-is: only buffer refs, no allocation
-			dictionary_input_chunk.data[i].Reference(args.data[i]);
+			dictionary_input_chunk.data[i].Reference(args.data[i]); // constants/flats stay as-is
 		}
 		for (auto idx : dictionary_input_indices) {
 			dictionary_input_chunk.data[idx].Reference(DictionaryVector::Child(args.data[idx]));
@@ -136,9 +128,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		return true;
 	}
 
-	// Otherwise (non-autovec functions over a single storage dictionary): execute the function over the whole
-	// dictionary once and cache the result by id, reusing it across chunks that reference the same dictionary.
-	const auto &input_dictionary_id = DictionaryVector::DictionaryId(first_input);
+	const auto &input_dictionary_id = DictionaryVector::DictionaryId(first_input); // storage dictionary cache path
 	if (dictionary_input_indices.size() != 1 || input_dictionary_id.empty() ||
 	    input_dictionary_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
 		return false;
@@ -326,11 +316,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
 #if DUCKDB_AUTOVEC
-	// Fast path: a `flat_ref <cmp> const` comparison is evaluated densely into a bitmap straight from the input
-	// chunk, skipping the per-node intermediate-vector machinery below. Any input selection is AND-ed in, and the
-	// result is emitted to whatever the caller wants (bitmap, true and/or false selection). All select callers
-	// (scan filters, PhysicalFilter, joins) benefit; non-matching shapes fall through.
-	if (chunk) {
+	if (chunk) { // bitmap select fast path can read directly from the input chunk
 		auto &fstate = state->Cast<ExecuteFunctionState>();
 		if (fstate.select_bitmap_capable) {
 			idx_t result;

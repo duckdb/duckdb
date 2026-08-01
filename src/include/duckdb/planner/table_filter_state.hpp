@@ -58,20 +58,13 @@ public:
 
 	unique_ptr<ExpressionExecutor> executor;
 	unique_ptr<ExpressionFilterExecutor> fast_executor;
-	//! Statically true for bitmap-eligible expressions; cleared on the first non-bitmap result at runtime
-	bool bitmap_capable;
-	//! Reused per-call input chunk and result selection, so per-vector filter calls allocate nothing
-	DataChunk filter_chunk;
+	bool bitmap_capable;    // cleared if runtime vectors leave the bitmap path
+	DataChunk filter_chunk; // reused filter input chunk
 	SelectionResult scratch;
-	//! Pulled-up skip for a top-level selectivity_optional() wrapper: paused vectors pass through for free.
-	//! null => no adaptive skip.
-	unique_ptr<SelectivityGate> skip_gate;
-	//! Top-level optional_filter(): always-true at runtime, so every vector is skipped.
-	bool always_skip = false;
+	unique_ptr<SelectivityGate> skip_gate; // pulled-up selectivity_optional state
+	bool always_skip = false;              // top-level optional_filter
 
-	//! true if this vector can pass through untouched; records the skip in `skip_gate` when applicable.
 	bool ShouldSkip();
-	//! Feed (accepted, processed) back into the pulled-up stats after an active vector. No-op if not pulled up.
 	void RecordSelectivity(idx_t accepted, idx_t processed);
 };
 

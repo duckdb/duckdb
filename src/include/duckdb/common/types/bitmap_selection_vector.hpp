@@ -130,7 +130,7 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 		}
 	}
 	const auto result_count = UnsafeNumericCast<idx_t>(dst - result_sel);
-	sel.Initialize(sel_data, result_sel, result_capacity);
+	sel.Initialize(sel_data);
 	return result_count;
 }
 

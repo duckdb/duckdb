@@ -92,23 +92,17 @@ struct BinaryLambdaWrapper {
 	}
 };
 
-//! Buffer-level operands for the binary executor: everything the loops need, no Vector objects.
-//! Constant sides point at a single value; both-constant shapes are the caller's job (ExecuteConstant).
 struct BinaryBufferArgs {
 	const_data_ptr_t ldata = nullptr;
 	const_data_ptr_t rdata = nullptr;
 	data_ptr_t result_data = nullptr;
-	//! rows to produce
 	idx_t count = 0;
-	//! per-side selection over the payload (nullptr = dense); ignored for constant sides
 	const SelectionVector *lsel = nullptr;
 	const SelectionVector *rsel = nullptr;
 	bool lconstant = false;
 	bool rconstant = false;
-	//! per-side validity (nullptr = all valid); a constant side must not be NULL
 	const ValidityMask *lvalidity = nullptr;
 	const ValidityMask *rvalidity = nullptr;
-	//! caller-owned result mask, never sharing an input mask's buffer
 	ValidityMask *result_validity = nullptr;
 };
 
@@ -222,8 +216,6 @@ struct BinaryExecutor {
 	}
 #endif
 
-	//! Buffer-level entry the Vector-level paths below traverse on their way to the loops; callers
-	//! with raw payloads (FOR vectors) invoke it directly, so both share one set of instantiations.
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static void ExecuteBuffers(const BinaryBufferArgs &args, FUNC fun) {
 		auto ldata = reinterpret_cast<const LEFT_TYPE *>(args.ldata);
@@ -276,7 +268,6 @@ struct BinaryExecutor {
 			return;
 		}
 #endif
-		// selective shapes (and pre-AVX2 x86): the generic gather loop, with identity/zero selections
 		SelectionVector owned_lzero;
 		SelectionVector owned_rzero;
 		auto lsel = args.lconstant ? ConstantVector::ZeroSelectionVector(args.count, owned_lzero)
@@ -288,12 +279,6 @@ struct BinaryExecutor {
 		result_validity.Reset(args.count);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
 		    ldata, rdata, result_data, lsel, rsel, args.count, lmask, rmask, result_validity, fun);
-	}
-
-	//! Address-taking convenience mirroring ExecuteStandard
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-	static void ExecuteBuffersStandard(const BinaryBufferArgs &args) {
-		ExecuteBuffers<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(args, false);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>

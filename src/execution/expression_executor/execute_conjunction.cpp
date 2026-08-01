@@ -24,13 +24,10 @@ struct ConjunctionState : public ExpressionState {
 		}
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
-	//! Scratches for the AND bitmap-intersect fast path: acc accumulates, tmp holds each subsequent child
-	SelectionResult intersect_acc;
-	SelectionResult intersect_tmp;
-	//! Only enabled when the conjunction has at least one child that can be evaluated densely into a bitmap
-	bool bitmap_capable = false;
-	//! Per-child IsBitmapComparisonCandidate, cached so the per-vector loop does not walk the expression
-	vector<bool> dense_child;
+	SelectionResult intersect_acc; // AND bitmap accumulator
+	SelectionResult intersect_tmp; // per-child scratch
+	bool bitmap_capable = false;   // at least one child can produce a bitmap
+	vector<bool> dense_child;      // cached per-child bitmap eligibility
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConjunctionExpression &expr,
@@ -78,10 +75,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 	auto &state = state_p->Cast<ConjunctionState>();
 
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		// Bitmap intersect fast path: keep one bitmap accumulator. Non-bitmap children execute once on the
-		// current accumulator (materialized), then their index result is promoted back to a bitmap; bitmap-safe
-		// comparison children can execute over the dense input and be AND-ed into the accumulator.
-		if (state.bitmap_capable && true_sel && !false_sel && (!sel || !sel->IsSet())) {
+		if (state.bitmap_capable && true_sel && !false_sel && (!sel || !sel->IsSet())) { // bitmap AND fast path
 			auto &children = expr.GetChildren();
 			idx_t intersect_count = count;
 			bool have_accumulator = false;
@@ -90,9 +84,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 				auto &child = *children[child_idx];
 				auto child_state = state.child_states[child_idx].get();
-				// dense candidates evaluate over the full input and are AND-ed into the accumulator; other
-				// children narrow on the (materialized) accumulator and their result replaces it
-				const bool dense = state.dense_child[child_idx];
+				const bool dense = state.dense_child[child_idx]; // dense children AND into the accumulator
 				const SelectionVector *current_sel = nullptr;
 				idx_t current_count = count;
 				if (!dense && have_accumulator) {
@@ -119,13 +111,11 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			}
 
 			if (have_accumulator && (used_dense_bitmap_child || intersect_count == 0)) {
-				// swap, not move: the scratch keeps the caller's old buffers for reuse on the next vector
 				if (bitmap_sel) {
-					std::swap(*bitmap_sel, state.intersect_acc);
+					std::swap(*bitmap_sel, state.intersect_acc); // keep old caller buffers for scratch reuse
 				} else {
-					// the caller's output is a plain SelectionVector: materialize the bitmap once
 					state.intersect_acc.SwapInto(*true_sel);
-					true_sel->Flatten();
+					true_sel->Flatten(); // plain callers need an index selection
 				}
 				return intersect_count;
 			}

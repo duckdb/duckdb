@@ -14,13 +14,10 @@ void SelectionVector::Flatten() const {
 	auto keep = selection_data;
 	auto bm = reinterpret_cast<const validity_t *>(keep->bitmap_data.get());
 	if (!keep->indices_cached) {
-		// materialize into the spare index buffer next to the bitmap: sharers of this bitmap then flatten
-		// for free, and reused scratches ping-pong between the representations with no allocation
 		auto shared = keep;
 		SelectionVector target(std::move(shared));
 		BitmapToSelectionVector(bm, keep->row_span, target);
 		if (target.selection_data.get() != keep.get()) {
-			// the spare buffer was missing/too small: adopt the freshly allocated index array instead
 			selection_data = std::move(target.selection_data);
 			sel_vector = target.sel_vector;
 			capacity = target.capacity;
