@@ -73,7 +73,7 @@ string CopyInfo::CopyOptionsToString() const {
 	for (auto &opt : parsed_options) {
 		auto &name = opt.first;
 		auto &expr = opt.second;
-		string option_string = SQLIdentifier::ToString(name);
+		string option_string = StringUtil::Format("%s", name);
 		if (expr) {
 			option_string += " " + expr->ToString();
 		}
@@ -83,7 +83,7 @@ string CopyInfo::CopyOptionsToString() const {
 		auto &name = opt.first;
 		auto &values = opt.second;
 
-		auto option = SQLIdentifier::ToString(name) + " ";
+		auto option = StringUtil::Format("%s ", name);
 		if (values.empty()) {
 			// Options like HEADER don't need an explicit value
 			// just providing the name already sets it to true
