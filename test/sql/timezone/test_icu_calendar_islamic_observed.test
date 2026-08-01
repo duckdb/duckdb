@@ -1,0 +1,138 @@
+# name: test/sql/timezone/test_icu_calendar_islamic_observed.test
+# description: The Islamic calendars that follow the sighting of the new moon
+# group: [timezone]
+
+require icu
+
+statement ok
+SET TimeZone='UTC'
+
+# islamic observed
+statement ok
+SET Calendar='islamic'
+
+query IIIIII
+SELECT ts, year(ts), month(ts), day(ts), era(ts), dayofyear(ts) FROM (VALUES
+  ('2024-06-15 12:00:00+00'::TIMESTAMPTZ), ('0622-07-19 12:00:00+00'), ('0622-07-15 12:00:00+00'),
+  ('1970-01-01 00:00:00+00'), ('2024-07-07 12:00:00+00'), ('2024-07-08 12:00:00+00'),
+  ('2024-03-10 12:00:00+00'), ('2024-03-11 12:00:00+00'), ('2024-04-09 12:00:00+00'),
+  ('1900-01-01 12:00:00+00'), ('2100-01-01 12:00:00+00'), ('1500-01-01 12:00:00+00')) t(ts)
+----
+1445-12-09 12:00:00+00	1445	12	9	0	334
+0001-01-02 12:00:00+00	1	1	2	0	2
+0001-12-28 (BC) 12:00:00+00	0	12	28	0	353
+1389-10-23 00:00:00+00	1389	10	23	0	289
+1446-01-02 12:00:00+00	1446	1	2	0	2
+1446-01-03 12:00:00+00	1446	1	3	0	3
+1445-08-30 12:00:00+00	1445	8	30	0	237
+1445-09-01 12:00:00+00	1445	9	1	0	238
+1445-10-01 12:00:00+00	1445	10	1	0	267
+1317-08-29 12:00:00+00	1317	8	29	0	237
+1523-10-21 12:00:00+00	1523	10	21	0	286
+0905-05-21 12:00:00+00	905	5	21	0	138
+
+query I
+SELECT make_timestamptz(1445, 1, 1, 0, 0, 0.0, 'UTC')
+----
+1445-01-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(1445, 9, 1, 0, 0, 0.0, 'UTC')
+----
+1445-09-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(1445, 12, 29, 0, 0, 0.0, 'UTC')
+----
+1445-12-29 00:00:00+00
+
+query I
+SELECT make_timestamptz(1, 1, 1, 0, 0, 0.0, 'UTC')
+----
+0001-01-01 00:00:00+00
+
+query I
+SELECT date_trunc('year', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+1445-01-01 00:00:00+00
+
+query I
+SELECT date_trunc('month', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+1445-12-01 00:00:00+00
+
+query I
+SELECT last_day('2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-07-05
+
+query I
+SELECT last_day('2024-03-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-04-08
+
+query I
+SELECT date_diff('year', '1900-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+127
+
+query I
+SELECT date_diff('month', '2023-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+13
+
+query I
+SELECT age('2024-06-15 12:00:00+00'::TIMESTAMPTZ, '1900-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+127 years 9 months 20 days
+
+query I
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+{'year': 1445, 'month': 12, 'day': 9, 'era': 0, 'dayofyear': 334, 'week': 48, 'isoyear': 1445}
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1950-01-01 12:00:00+00'::TIMESTAMPTZ, '2050-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 5 DAY) t(ts)
+----
+7306	67594305393640859729195
+
+# islamic rgsa
+statement ok
+SET Calendar='islamic-rgsa'
+
+query IIIIII
+SELECT ts, year(ts), month(ts), day(ts), era(ts), dayofyear(ts) FROM (VALUES
+  ('2024-06-15 12:00:00+00'::TIMESTAMPTZ), ('0622-07-19 12:00:00+00'), ('1970-01-01 00:00:00+00'),
+  ('2024-07-07 12:00:00+00'), ('1500-01-01 12:00:00+00')) t(ts)
+----
+1445-12-09 12:00:00+00	1445	12	9	0	334
+0001-01-02 12:00:00+00	1	1	2	0	2
+1389-10-23 00:00:00+00	1389	10	23	0	289
+1446-01-02 12:00:00+00	1446	1	2	0	2
+0905-05-21 12:00:00+00	905	5	21	0	138
+
+query I
+SELECT make_timestamptz(1445, 1, 1, 0, 0, 0.0, 'UTC')
+----
+1445-01-01 00:00:00+00
+
+query I
+SELECT last_day('2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-07-05
+
+query I
+SELECT date_diff('year', '1900-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+127
+
+query I
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+{'year': 1445, 'month': 12, 'day': 9, 'era': 0, 'dayofyear': 334, 'week': 48, 'isoyear': 1445}
+
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1950-01-01 12:00:00+00'::TIMESTAMPTZ, '2050-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 5 DAY) t(ts)
+----
+7306	67594305393640859729195
+

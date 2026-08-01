@@ -1,5 +1,6 @@
 #include "islamic.hpp"
 
+#include "astronomy.hpp"
 #include "grego.hpp"
 
 #include <cmath>
@@ -116,6 +117,124 @@ void IslamicCivilCalendar::HandleComputeFields(int32_t julian_day) {
 	InternalSet(CAL_ERA, 0);
 	InternalSet(CAL_YEAR, int32_t(year));
 	InternalSet(CAL_EXTENDED_YEAR, int32_t(year));
+	InternalSet(CAL_MONTH, month);
+	InternalSet(CAL_ORDINAL_MONTH, month);
+	InternalSet(CAL_DATE, int32_t(dom));
+	InternalSet(CAL_DAY_OF_YEAR, int32_t(doy));
+}
+
+//===--------------------------------------------------------------------===//
+// Observed
+//===--------------------------------------------------------------------===//
+//! The instant of the Hijra, which the months are counted from
+static constexpr double HIJRA_MILLIS = -42521587200000.0;
+
+static int64_t ComputeTrueMonthStart(int32_t month);
+
+//! The angle between the moon and the sun in degrees, in the range -180..180, which is negative
+//! before the new moon and positive after it
+static double MoonAge(double millis) {
+	Astronomer astronomer(millis);
+	auto age = astronomer.GetMoonAge() * 180 / 3.14159265358979323846;
+	if (age > 180) {
+		age -= 360;
+	}
+	return age;
+}
+
+//! The day the given month starts on, counted from the Hijra. This is the day after the new
+//! moon was first visible at sunset.
+//!
+//! Finding it takes a good number of moon positions, and the same months are asked for over and
+//! over while scanning a column of dates, so the results are cached. ICU caches them as well,
+//! without which this is much slower than the calendars that are pure arithmetic.
+static int64_t TrueMonthStart(int32_t month) {
+	struct Entry {
+		int32_t month;
+		int64_t start;
+	};
+	// a direct mapped cache, which keeps the memory bounded and needs no locking
+	static constexpr idx_t CACHE_SIZE = 512;
+	static thread_local Entry cache[CACHE_SIZE] = {};
+	auto &entry = cache[idx_t(uint32_t(month)) % CACHE_SIZE];
+	if (entry.start != 0 && entry.month == month) {
+		return entry.start;
+	}
+	const auto start = ComputeTrueMonthStart(month);
+	entry = {month, start};
+	return start;
+}
+
+static int64_t ComputeTrueMonthStart(int32_t month) {
+	// guess when the month started from the average length of a lunar month, then walk to the
+	// day the moon was actually new
+	auto origin = HIJRA_MILLIS + std::floor(month * Astronomer::SYNODIC_MONTH) * double(MILLIS_PER_DAY);
+	auto age = MoonAge(origin);
+	if (age >= 0) {
+		// the month had already started
+		do {
+			origin -= double(MILLIS_PER_DAY);
+			age = MoonAge(origin);
+		} while (age >= 0);
+	} else {
+		// the previous month had not ended yet
+		do {
+			origin += double(MILLIS_PER_DAY);
+			age = MoonAge(origin);
+		} while (age < 0);
+	}
+	return FloorDiv::Divide(int64_t(origin) - int64_t(HIJRA_MILLIS), int64_t(MILLIS_PER_DAY)) + 1;
+}
+
+int64_t IslamicCalendar::YearStart(int32_t year) const {
+	return TrueMonthStart(12 * (year - 1));
+}
+
+int64_t IslamicCalendar::MonthStart(int32_t year, int32_t month) const {
+	int32_t months;
+	if (!TryAdd(year, -1, months) || !TryMultiply(months, 12, months) || !TryAdd(months, month, months)) {
+		Fail();
+		return 0;
+	}
+	return TrueMonthStart(months);
+}
+
+int32_t IslamicCalendar::HandleGetMonthLength(int32_t eyear, int32_t month) const {
+	month = 12 * (eyear - 1) + month;
+	return int32_t(TrueMonthStart(month + 1) - TrueMonthStart(month));
+}
+
+int32_t IslamicCalendar::HandleGetYearLength(int32_t eyear) const {
+	const auto month = 12 * (eyear - 1);
+	return int32_t(TrueMonthStart(month + 12) - TrueMonthStart(month));
+}
+
+void IslamicCalendar::HandleComputeFields(int32_t julian_day) {
+	const auto days = int32_t(int64_t(julian_day) - GetEpoch());
+	// guess how many whole months have passed, then correct the guess
+	auto month = int32_t(std::floor(double(days) / Astronomer::SYNODIC_MONTH));
+	const auto start_date = int32_t(std::floor(month * Astronomer::SYNODIC_MONTH));
+	if (days - start_date >= 25 && MoonAge(GetTimeInternal()) > 0) {
+		// the day is near the end of the month, so assume the next one and search backwards
+		month++;
+	}
+	while (TrueMonthStart(month) > days) {
+		month--;
+	}
+
+	const auto year = month >= 0 ? ((month / 12) + 1) : ((month + 1) / 12);
+	month = ((month % 12) + 12) % 12;
+	const auto dom = (days - MonthStart(year, month)) + 1;
+	const auto doy = (days - MonthStart(year, 0)) + 1;
+	if (dom > NumericLimits<int32_t>::Maximum() || dom < NumericLimits<int32_t>::Minimum() ||
+	    doy > NumericLimits<int32_t>::Maximum() || doy < NumericLimits<int32_t>::Minimum()) {
+		Fail();
+		return;
+	}
+
+	InternalSet(CAL_ERA, 0);
+	InternalSet(CAL_YEAR, year);
+	InternalSet(CAL_EXTENDED_YEAR, year);
 	InternalSet(CAL_MONTH, month);
 	InternalSet(CAL_ORDINAL_MONTH, month);
 	InternalSet(CAL_DATE, int32_t(dom));

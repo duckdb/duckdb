@@ -202,6 +202,10 @@ protected:
 	bool HasFailedInternal() const {
 		return failed;
 	}
+	//! The instant the calendar is set to, without recomputing it
+	double GetTimeInternal() const {
+		return time;
+	}
 	//! Arithmetic that reports whether the result no longer fits, which the field resolution
 	//! has to detect because a date that cannot be represented must not silently wrap around
 	static bool TryAdd(int32_t left, int32_t right, int32_t &result);

@@ -68,6 +68,48 @@ protected:
 	}
 };
 
+//! The Islamic calendar in which a month starts on the day the new moon is first visible, which
+//! is what the religious calendar follows
+class IslamicCalendar : public IslamicCivilCalendar {
+public:
+	explicit IslamicCalendar(unique_ptr<TimeZone> zone) : IslamicCivilCalendar(std::move(zone)) {
+	}
+
+	const char *GetType() const override {
+		return "islamic";
+	}
+	unique_ptr<Calendar> Copy() const override {
+		return unique_ptr<Calendar>(new IslamicCalendar(*this));
+	}
+
+protected:
+	IslamicCalendar(const IslamicCalendar &other) = default;
+
+	int64_t YearStart(int32_t year) const override;
+	int64_t MonthStart(int32_t year, int32_t month) const override;
+	int32_t HandleGetMonthLength(int32_t eyear, int32_t month) const override;
+	int32_t HandleGetYearLength(int32_t eyear) const override;
+	void HandleComputeFields(int32_t julian_day) override;
+};
+
+//! The Islamic calendar as observed by the Umm al-Qura observatory in Saudi Arabia, which uses
+//! the same sighting rule
+class IslamicRGSACalendar : public IslamicCalendar {
+public:
+	explicit IslamicRGSACalendar(unique_ptr<TimeZone> zone) : IslamicCalendar(std::move(zone)) {
+	}
+
+	const char *GetType() const override {
+		return "islamic-rgsa";
+	}
+	unique_ptr<Calendar> Copy() const override {
+		return unique_ptr<Calendar>(new IslamicRGSACalendar(*this));
+	}
+
+protected:
+	IslamicRGSACalendar(const IslamicRGSACalendar &other) = default;
+};
+
 //! The Umm al-Qura calendar of Saudi Arabia, which follows a table of observed month lengths for
 //! the years 1300 to 1600 and the tabular calendar outside of that range
 class IslamicUmalquraCalendar : public IslamicCivilCalendar {

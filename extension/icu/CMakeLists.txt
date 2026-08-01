@@ -24,6 +24,7 @@ set(ICU_EXTENSION_FILES
     collation/generated/collation_root_data.cpp
     collation/generated/collation_normalization_data.cpp
     collation/generated/collation_tailoring_data.cpp
+    datetime/astronomy.cpp
     datetime/calendar.cpp
     datetime/calendar_reference.cpp
     datetime/coptic.cpp

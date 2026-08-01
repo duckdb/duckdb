@@ -1183,6 +1183,12 @@ unique_ptr<Calendar> Calendar::TryCreate(const string &type, unique_ptr<TimeZone
 	if (StringUtil::CIEquals(type, "indian")) {
 		return make_uniq<IndianCalendar>(std::move(zone));
 	}
+	if (StringUtil::CIEquals(type, "islamic")) {
+		return make_uniq<IslamicCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "islamic-rgsa")) {
+		return make_uniq<IslamicRGSACalendar>(std::move(zone));
+	}
 	if (StringUtil::CIEquals(type, "islamic-civil")) {
 		return make_uniq<IslamicCivilCalendar>(std::move(zone));
 	}
