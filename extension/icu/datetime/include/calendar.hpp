@@ -202,6 +202,21 @@ protected:
 		fields[field] = value;
 		stamp[field] = STAMP_INTERNALLY_SET;
 	}
+	bool IsSet(CalendarField field) const {
+		return stamp[field] != STAMP_UNSET;
+	}
+	//! The month of the current fields, which can be given as a month or as an ordinal month
+	int32_t InternalGetMonth() const;
+	int32_t InternalGetMonth(int32_t default_value) const;
+	//! The more recently set of the two fields
+	CalendarField NewerField(CalendarField field, CalendarField alternate) const {
+		return stamp[alternate] > stamp[field] ? alternate : field;
+	}
+	//! The instant the calendar is set to, without recomputing it
+	double GetTimeInternal() const {
+		return time;
+	}
+
 	//! Records that the current operation cannot be represented
 	void Fail() const {
 		failed = true;
@@ -213,24 +228,11 @@ protected:
 	void ClearFailure() {
 		failed = false;
 	}
-	//! The instant the calendar is set to, without recomputing it
-	double GetTimeInternal() const {
-		return time;
-	}
+
 	//! Arithmetic that reports whether the result no longer fits, which the field resolution
 	//! has to detect because a date that cannot be represented must not silently wrap around
 	static bool TryAdd(int32_t left, int32_t right, int32_t &result);
 	static bool TryMultiply(int32_t left, int32_t right, int32_t &result);
-	bool IsSet(CalendarField field) const {
-		return stamp[field] != STAMP_UNSET;
-	}
-	//! The month of the current fields, which can be given as a month or as an ordinal month
-	int32_t InternalGetMonth() const;
-	int32_t InternalGetMonth(int32_t default_value) const;
-	//! The more recently set of the two fields
-	CalendarField NewerField(CalendarField field, CalendarField alternate) const {
-		return stamp[alternate] > stamp[field] ? alternate : field;
-	}
 
 	int32_t GetLimit(CalendarField field, LimitType type) const;
 	//! The Julian day at which the current fields resolve, ignoring the time of day
@@ -242,6 +244,10 @@ protected:
 	void Complete();
 	//! A copy of this calendar that the field machinery can be used on
 	unique_ptr<FieldCalendar> CopyFields() const;
+
+	//! Tries to work out the difference from the average length of the field, which avoids the
+	//! search when the guess turns out to bracket the answer. Returns false if it does not.
+	int32_t TryGuessDifference(double start, double target, CalendarField field, int32_t &result);
 
 	//! The operations that make up a public one. Like ICU, which threads a single error code
 	//! through an operation, they do nothing once something has gone wrong, so that a failure

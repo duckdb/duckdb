@@ -11,6 +11,7 @@
 #include "persian.hpp"
 
 #include <chrono>
+#include <cmath>
 
 namespace duckdb {
 namespace datetime {
@@ -931,10 +932,119 @@ void FieldCalendar::AddChecked(CalendarField field, int32_t amount) {
 	}
 }
 
+//! Roughly how long a field is, in milliseconds, which is only used to guess how many of them
+//! fit between two instants. A guess that is wrong costs nothing but the search it saves.
+static double ApproximateFieldLength(CalendarField field) {
+	switch (field) {
+	case CAL_ERA:
+		return 0;
+	case CAL_YEAR:
+	case CAL_YEAR_WOY:
+	case CAL_EXTENDED_YEAR:
+		return 365.2425 * double(MILLIS_PER_DAY);
+	case CAL_MONTH:
+	case CAL_ORDINAL_MONTH:
+		return 30.436875 * double(MILLIS_PER_DAY);
+	case CAL_WEEK_OF_YEAR:
+	case CAL_WEEK_OF_MONTH:
+	case CAL_DAY_OF_WEEK_IN_MONTH:
+		return double(MILLIS_PER_WEEK);
+	case CAL_DATE:
+	case CAL_DAY_OF_YEAR:
+	case CAL_DAY_OF_WEEK:
+	case CAL_DOW_LOCAL:
+	case CAL_JULIAN_DAY:
+		return double(MILLIS_PER_DAY);
+	case CAL_AM_PM:
+		return 12 * double(MILLIS_PER_HOUR);
+	case CAL_HOUR:
+	case CAL_HOUR_OF_DAY:
+		return double(MILLIS_PER_HOUR);
+	case CAL_MINUTE:
+		return double(MILLIS_PER_MINUTE);
+	case CAL_SECOND:
+		return double(MILLIS_PER_SECOND);
+	default:
+		return 1;
+	}
+}
+
+int32_t FieldCalendar::TryGuessDifference(double start, double target, CalendarField field, int32_t &result) {
+	const auto length = ApproximateFieldLength(field);
+	if (length <= 0) {
+		return false;
+	}
+	const auto estimate = (target - start) / length;
+	// a small difference is found by the search below in about as many steps as the guess would
+	// take to check, so it is only worth guessing once the two instants are further apart
+	static constexpr double WORTH_GUESSING = 8;
+	if (!(std::fabs(estimate) >= WORTH_GUESSING) || estimate < NumericLimits<int32_t>::Minimum() / 2 ||
+	    estimate > NumericLimits<int32_t>::Maximum() / 2) {
+		return false;
+	}
+
+	// The answer is the number of whole fields that fit between the two instants: the largest
+	// count that lands on or before the target. The guess is only a starting point, and it is
+	// walked to the answer rather than trusted, so a guess that is wrong only costs a step.
+	const auto step = (target < start) ? -1 : 1;
+	const auto reaches = [&](int32_t count, double &reached) {
+		SetTimeChecked(start);
+		AddChecked(field, count);
+		reached = GetTimeChecked();
+		if (failed) {
+			return false;
+		}
+		return step > 0 ? (reached <= target) : (reached >= target);
+	};
+
+	static constexpr int32_t MAX_STEPS = 4;
+	auto count = int32_t(estimate);
+	double reached;
+	if (!reaches(count, reached)) {
+		if (failed) {
+			return false;
+		}
+		// the guess passed the target, so walk back to the last count that does not
+		for (int32_t i = 0; i < MAX_STEPS; i++) {
+			count -= step;
+			if (reaches(count, reached)) {
+				result = count;
+				return true;
+			}
+			if (failed) {
+				return false;
+			}
+		}
+		return false;
+	}
+	// the guess lands on or before the target, so walk forward while the next one still does
+	for (int32_t i = 0; i < MAX_STEPS; i++) {
+		double next;
+		if (!reaches(count + step, next)) {
+			if (failed) {
+				return false;
+			}
+			result = count;
+			return true;
+		}
+		count += step;
+	}
+	return false;
+}
+
 int32_t FieldCalendar::FieldDifference(double target, CalendarField field) {
 	failed = false;
 	int32_t min = 0;
 	const auto start = GetTimeChecked();
+
+	// most differences are close to what the average length of the field predicts, which saves
+	// the search below from having to bracket the answer from scratch
+	if (start != target && TryGuessDifference(start, target, field, min)) {
+		SetTimeChecked(start);
+		AddChecked(field, min);
+		return min;
+	}
+	failed = false;
 	// the amount is always added to the start, so that adding a year to February 29 four times
 	// in a row does not get stuck on February 28
 	if (start < target) {
@@ -1220,9 +1330,9 @@ unique_ptr<Calendar> Calendar::TryCreate(const string &type, unique_ptr<TimeZone
 
 const vector<string> &Calendar::GetAvailableTypes() {
 	static const vector<string> TYPES = {
-	    "buddhist", "chinese",       "coptic",        "dangi",        "ethiopic",         "ethiopic-amete-alem",
-	    "gregorian", "hebrew",       "indian",        "islamic",      "islamic-civil",    "islamic-rgsa",
-	    "islamic-tbla", "islamic-umalqura", "iso8601", "japanese",    "persian",          "roc"};
+	    "buddhist",     "chinese",          "coptic",  "dangi",    "ethiopic",      "ethiopic-amete-alem",
+	    "gregorian",    "hebrew",           "indian",  "islamic",  "islamic-civil", "islamic-rgsa",
+	    "islamic-tbla", "islamic-umalqura", "iso8601", "japanese", "persian",       "roc"};
 	return TYPES;
 }
 

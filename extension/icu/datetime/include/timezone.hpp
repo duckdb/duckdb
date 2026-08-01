@@ -33,8 +33,6 @@ public:
 	//! The identifiers that refer to the same data as the given zone, including the zone itself.
 	//! Returns an empty list if the zone has no aliases.
 	static vector<string> GetEquivalentIds(const string &id);
-	//! The instants (in seconds) at which the offsets of a zone change, for testing purposes
-	static vector<int64_t> GetTransitions(const string &id);
 	//! The time zone of the host, or nullptr if it cannot be determined
 	static unique_ptr<TimeZone> TryCreateDefault();
 
