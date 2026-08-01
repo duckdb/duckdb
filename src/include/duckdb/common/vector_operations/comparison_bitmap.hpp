@@ -251,11 +251,11 @@ inline void DispatchBitmapType(PhysicalType pt, idx_t count, FN &&fn) {
 }
 
 template <class ConstGetter>
-inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const Vector &flat, idx_t count,
+inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const_data_ptr_t data_p, idx_t count,
                                     const validity_t *validity, validity_t *__restrict bitmap, ConstGetter get_const) {
 	DispatchBitmapType(pt, count, [&](auto tag) { // typed flat col/constant dispatch
 		using T = decltype(tag);
-		const auto *data = FlatVector::GetData<T>(flat);
+		const auto *data = reinterpret_cast<const T *>(data_p);
 		const auto constant = get_const(tag); // caller supplies typed constant without runtime cast
 		DispatchBitmapCmpOp<T>(op, [&](auto cmp) {
 			CmpMaskToBitmap<T, decltype(cmp), false>(data, data, constant, count, bitmap);
@@ -264,13 +264,13 @@ inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const Ve
 	});
 }
 
-inline void DispatchFlatColCmpToBitmap(PhysicalType pt, ExpressionType op, const Vector &left, const Vector &right,
-                                       idx_t count, const validity_t *lvalidity, const validity_t *rvalidity,
-                                       validity_t *__restrict bitmap) {
+inline void DispatchFlatColCmpToBitmap(PhysicalType pt, ExpressionType op, const_data_ptr_t ldata_p,
+                                       const_data_ptr_t rdata_p, idx_t count, const validity_t *lvalidity,
+                                       const validity_t *rvalidity, validity_t *__restrict bitmap) {
 	DispatchBitmapType(pt, count, [&](auto tag) { // typed flat col/constant dispatch
 		using T = decltype(tag);
-		const auto *ldata = FlatVector::GetData<T>(left);
-		const auto *rdata = FlatVector::GetData<T>(right);
+		const auto *ldata = reinterpret_cast<const T *>(ldata_p);
+		const auto *rdata = reinterpret_cast<const T *>(rdata_p);
 		DispatchBitmapCmpOp<T>(op, [&](auto cmp) {
 			CmpMaskToBitmap<T, decltype(cmp), true>(ldata, rdata, T(0), count, bitmap);
 			AndValidityIntoBitmap(lvalidity, count, bitmap);

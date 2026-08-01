@@ -130,10 +130,11 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 	if (col2) {
 		auto &rvalidity = FlatVector::Validity(*col2);
 		const validity_t *rvalidity_data = rvalidity.CanHaveNull() ? rvalidity.GetData() : nullptr;
-		DispatchFlatColCmpToBitmap(pt, info.op, col, *col2, span, lvalidity_data, rvalidity_data, t_bm);
+		DispatchFlatColCmpToBitmap(pt, info.op, FlatVector::GetData(col), FlatVector::GetData(*col2), span,
+		                           lvalidity_data, rvalidity_data, t_bm);
 	} else {
 		const auto &constant = info.constant->GetValue();
-		DispatchFlatCmpToBitmap(pt, info.op, col, span, lvalidity_data, t_bm,
+		DispatchFlatCmpToBitmap(pt, info.op, FlatVector::GetData(col), span, lvalidity_data, t_bm,
 		                        [&](auto tag) { return constant.GetValueUnsafe<decltype(tag)>(); });
 	}
 
