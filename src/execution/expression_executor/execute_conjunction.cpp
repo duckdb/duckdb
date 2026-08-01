@@ -14,7 +14,7 @@ struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root)
 	    : ExpressionState(expr, root), intersect_tmp(STANDARD_VECTOR_SIZE) {
 		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
-			dense_child.push_back(IsBitmapComparisonCandidate(*child));
+			dense_child.push_back(IsBitmapSelectCandidate(*child));
 			bitmap_capable = bitmap_capable || dense_child.back();
 		}
 		bitmap_capable = bitmap_capable && CpuBenefitsFromAutoVec();
@@ -24,7 +24,7 @@ struct ConjunctionState : public ExpressionState {
 		}
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
-	SelectionResult intersect_acc; // AND bitmap accumulator
+	SelectionResult intersect_acc; // bitmap accumulator
 	SelectionResult intersect_tmp; // per-child scratch
 	bool bitmap_capable = false;   // at least one child can produce a bitmap
 	vector<bool> dense_child;      // cached per-child bitmap eligibility
@@ -73,55 +73,63 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel, SelectionResult *bitmap_sel = nullptr) {
 	auto &state = state_p->Cast<ConjunctionState>();
-
-	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		if (state.bitmap_capable && true_sel && !false_sel && (!sel || !sel->IsSet())) { // bitmap AND fast path
-			auto &children = expr.GetChildren();
-			idx_t intersect_count = count;
-			bool have_accumulator = false;
-			bool used_dense_bitmap_child = false;
-
-			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-				auto &child = *children[child_idx];
-				auto child_state = state.child_states[child_idx].get();
-				const bool dense = state.dense_child[child_idx]; // dense children AND into the accumulator
-				const SelectionVector *current_sel = nullptr;
-				idx_t current_count = count;
-				if (!dense && have_accumulator) {
-					current_sel = &state.intersect_acc.Flattened();
-					current_count = intersect_count;
-				}
-				state.intersect_tmp.EnsureIndexWritable(count);
-				idx_t child_count =
-				    Select(child, child_state, current_sel, current_count, nullptr, nullptr, &state.intersect_tmp);
-				state.intersect_tmp.ToBitmap(child_count, count);
-				if (dense && have_accumulator) {
-					child_count =
-					    state.intersect_acc.Intersect(state.intersect_tmp, intersect_count, child_count, count);
+	const bool is_and = expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
+	if (state.bitmap_capable && true_sel && !false_sel && (!sel || !sel->IsSet())) { // bitmap AND/OR fast path
+		auto &children = expr.GetChildren();
+		idx_t result_count = is_and ? count : 0;
+		bool have_accumulator = false;
+		bool used_dense_bitmap_child = false;
+		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+			auto &child = *children[child_idx];
+			auto child_state = state.child_states[child_idx].get();
+			const bool dense = state.dense_child[child_idx]; // dense children combine over the full vector
+			const SelectionVector *current_sel = nullptr;
+			idx_t current_count = count;
+			if (!is_and && !dense) {
+				state.bitmap_capable = false;
+				have_accumulator = false;
+				break;
+			}
+			if (!dense && have_accumulator) {
+				current_sel = &state.intersect_acc.Flattened();
+				current_count = result_count;
+			}
+			state.intersect_tmp.EnsureIndexWritable(count);
+			idx_t child_count =
+			    Select(child, child_state, current_sel, current_count, nullptr, nullptr, &state.intersect_tmp);
+			state.intersect_tmp.ToBitmap(child_count, count);
+			if (have_accumulator) {
+				if (dense) {
+					result_count =
+					    is_and ? state.intersect_acc.Intersect(state.intersect_tmp, result_count, child_count, count)
+					           : state.intersect_acc.Union(state.intersect_tmp);
 				} else {
 					std::swap(state.intersect_acc, state.intersect_tmp);
-					have_accumulator = true;
+					result_count = child_count;
 				}
-				used_dense_bitmap_child |= dense;
-
-				intersect_count = child_count;
-				if (intersect_count == 0) {
-					break;
-				}
+			} else {
+				std::swap(state.intersect_acc, state.intersect_tmp);
+				have_accumulator = true;
+				result_count = child_count;
 			}
-
-			if (have_accumulator && (used_dense_bitmap_child || intersect_count == 0)) {
-				if (bitmap_sel) {
-					std::swap(*bitmap_sel, state.intersect_acc); // keep old caller buffers for scratch reuse
-				} else {
-					state.intersect_acc.SwapInto(*true_sel);
-					true_sel->Flatten(); // plain callers need an index selection
-				}
-				return intersect_count;
+			used_dense_bitmap_child |= dense;
+			if ((is_and && result_count == 0) || (!is_and && result_count == count)) {
+				break;
 			}
-			state.bitmap_capable = false;
 		}
+		if (have_accumulator && (used_dense_bitmap_child || result_count == (is_and ? 0 : count))) {
+			if (bitmap_sel) {
+				std::swap(*bitmap_sel, state.intersect_acc); // keep old caller buffers for scratch reuse
+			} else {
+				state.intersect_acc.SwapInto(*true_sel);
+				true_sel->Flatten(); // plain callers need an index selection
+			}
+			return result_count;
+		}
+		state.bitmap_capable = false;
+	}
 
+	if (is_and) {
 		// get runtime statistics
 		auto filter_state = state.adaptive_filter->BeginFilter();
 		const auto &permutation = state.adaptive_filter->GetPermutation();

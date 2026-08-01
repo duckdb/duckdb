@@ -78,8 +78,9 @@ inline bool IsBitmapComparisonCandidate(const Expression &expr) {
 	return !value.IsNull() && value.type().InternalType() == pt;
 }
 
-inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or AND of comparisons
-	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or conjunction of comparisons
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND ||
+	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
 			if (!IsBitmapSelectCandidate(*child)) {
 				return false;

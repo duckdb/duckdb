@@ -78,6 +78,12 @@ struct SelectionResult : private SelectionVector {
 		other_result.ToBitmap(other_count, row_span);
 		return IntersectBitmap(other_result);
 	}
+	idx_t Union(SelectionResult &other) { // OR + popcount
+		D_ASSERT(IsBitmap() && other.IsBitmap());
+		D_ASSERT(RowSpan() == other.RowSpan());
+		auto other_bitmap = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
+		return UnionBitmap(other_bitmap);
+	}
 
 	validity_t *Complement(const SelectionResult &other, idx_t row_span) { // false-side bitmap
 		D_ASSERT(other.IsBitmap() && other.RowSpan() == row_span);
@@ -132,7 +138,6 @@ private:
 		auto b = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
 		return IntersectBitmap(b);
 	}
-
 	DUCKDB_AUTOVEC_TARGET idx_t IntersectBitmap(const validity_t *other_bitmap) {
 		D_ASSERT(IsBitmap());
 		selection_data->indices_cached = false;
@@ -141,6 +146,18 @@ private:
 		idx_t total = 0;
 		for (idx_t w = 0; w < nwords; w++) {
 			a[w] &= other_bitmap[w];
+			total += CountOnes<validity_t>::Count(a[w]);
+		}
+		return total;
+	}
+	DUCKDB_AUTOVEC_TARGET idx_t UnionBitmap(const validity_t *other_bitmap) {
+		D_ASSERT(IsBitmap());
+		selection_data->indices_cached = false;
+		auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
+		const idx_t nwords = (selection_data->row_span + 63) / 64;
+		idx_t total = 0;
+		for (idx_t w = 0; w < nwords; w++) {
+			a[w] |= other_bitmap[w];
 			total += CountOnes<validity_t>::Count(a[w]);
 		}
 		return total;

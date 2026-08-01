@@ -100,6 +100,38 @@ SELECT i32 FROM autovec_filter_t WHERE i32 > -200 AND i64 < 3000 ORDER BY i32
 100
 200
 
+query I
+SELECT i32 FROM autovec_filter_t WHERE i32 < -100 OR i64 >= 4000 ORDER BY i32
+----
+-300
+-200
+400
+500
+
+query I
+SELECT i32 FROM autovec_filter_t WHERE 0 > i32 OR i32 > 300 ORDER BY i32
+----
+-300
+-200
+-100
+400
+500
+
+# nested conjunctions in the bitmap path: AND-of-OR and OR-of-AND
+query I
+SELECT i32 FROM autovec_filter_t WHERE (i32 < -100 OR i32 > 300) AND i64 >= 0 ORDER BY i32
+----
+400
+500
+
+query I
+SELECT i32 FROM autovec_filter_t WHERE (i32 > 0 AND i32 < 300) OR i64 <= -2000 ORDER BY i32
+----
+-300
+-200
+100
+200
+
 statement ok
 CREATE TABLE autovec_arith_t(a INTEGER, b INTEGER, k INTEGER);
 
@@ -246,6 +278,12 @@ SELECT count(*) FROM (
 ) t WHERE a < 5000 AND b LIKE '%b%'
 ----
 4000
+
+# nested OR (bitmap-capable) AND-ed with a non-bitmap LIKE: exercises the scalar-fallback of a nested conjunction
+query I
+SELECT count(*) FROM autovec_mixed_t WHERE (a < 100 OR a >= 9990) AND b LIKE '%b%'
+----
+88
 
 # Mixed scan filters should also slice nullable payload columns with the same selected rows.
 load {TEST_DIR}/autovec_payload_null.db
