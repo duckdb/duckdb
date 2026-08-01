@@ -58,8 +58,7 @@ struct CleanupBufferPool {
 	}
 };
 
-//! Object cache is shared among multiple database instances. When any of them is destroyed, its evictable entries
-//! aren't evicted aggressively. Instead, we rely on internal LRU cache to evict them.
+//! Object cache is shared among multiple database instances. Entries are scoped to their owning memory context.
 class ObjectCache {
 public:
 	//! Default max memory 8GiB for non-evictable cache entries.
@@ -74,6 +73,21 @@ public:
 private:
 	friend class BoundObjectCache;
 	friend class DatabaseInstance;
+
+	struct ObjectCacheKey {
+		MemoryContextId context_id;
+		string key;
+
+		bool operator==(const ObjectCacheKey &other) const {
+			return context_id == other.context_id && key == other.key;
+		}
+	};
+
+	struct ObjectCacheKeyHash {
+		size_t operator()(const ObjectCacheKey &key) const {
+			return std::hash<hugeint_t> {}(key.context_id.GetUUID()) ^ std::hash<string> {}(key.key);
+		}
+	};
 
 	shared_ptr<ObjectCacheEntry> GetObject(MemoryContextId context_id, const string &key) {
 		const lock_guard<mutex> lock(lock_mutex);
@@ -95,7 +109,7 @@ private:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(MemoryContextId context_id, const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreate(MemoryContextId context_id, const string &key, ARGS &&...args) {
 		const lock_guard<mutex> lock(lock_mutex);
 		auto cache_key = MakeCacheKey(context_id, key);
 
@@ -165,15 +179,12 @@ private:
 
 	void DropNonEvictableEntries(MemoryContextId context_id) {
 		const lock_guard<mutex> lock(lock_mutex);
-		const auto cache_key_prefix = MakeCacheKey(context_id, "");
-		vector<string> entries_to_delete;
-		for (auto entry = non_evictable_entries.begin(); entry != non_evictable_entries.end(); entry++) {
-			if (StringUtil::StartsWith(entry->first, cache_key_prefix)) {
-				entries_to_delete.emplace_back(entry->first);
+		for (auto entry = non_evictable_entries.begin(); entry != non_evictable_entries.end();) {
+			if (entry->first.context_id == context_id) {
+				entry = non_evictable_entries.erase(entry);
+			} else {
+				++entry;
 			}
-		}
-		for (auto &entry : entries_to_delete) {
-			non_evictable_entries.erase(entry);
 		}
 	}
 
@@ -186,7 +197,7 @@ private:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(MemoryContextId context_id, const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreateWithTypePrefix(MemoryContextId context_id, const string &key, ARGS &&...args) {
 		return GetOrCreate<T>(context_id, MakeTypedCacheKey<T>(key), std::forward<ARGS>(args)...);
 	}
 
@@ -235,16 +246,16 @@ private:
 	static string MakeTypedCacheKey(const string &key) {
 		return StringUtil::Format("%s-%s", T::ObjectType(), key);
 	}
-	static string MakeCacheKey(MemoryContextId context_id, const string &key) {
-		return StringUtil::Format("%s-%s", context_id.ToString(), key);
+	static ObjectCacheKey MakeCacheKey(MemoryContextId context_id, const string &key) {
+		return ObjectCacheKey {context_id, key};
 	}
 
 private:
 	mutable mutex lock_mutex;
 	//! LRU cache for evictable entries
-	SharedLruCache<string, ObjectCacheEntry, duckdb::BufferPoolPayload> lru_cache;
+	SharedLruCache<ObjectCacheKey, ObjectCacheEntry, duckdb::BufferPoolPayload, ObjectCacheKeyHash> lru_cache;
 	//! Separate storage for non-evictable entries (i.e., encryption keys)
-	unordered_map<string, shared_ptr<ObjectCacheEntry>> non_evictable_entries;
+	unordered_map<ObjectCacheKey, shared_ptr<ObjectCacheEntry>, ObjectCacheKeyHash> non_evictable_entries;
 	//! Used to create buffer pool reservation on entries creation.
 	BufferPool &buffer_pool;
 };
@@ -261,7 +272,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
 		return cache.GetOrCreate<T>(context_id, key, std::forward<ARGS>(args)...);
 	}
 
@@ -279,7 +290,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&...args) {
 		return cache.GetOrCreateWithTypePrefix<T>(context_id, key, std::forward<ARGS>(args)...);
 	}
 
