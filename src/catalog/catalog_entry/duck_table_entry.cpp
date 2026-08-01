@@ -823,12 +823,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	if (!removed_columns.empty() && !info.cascade) {
 		throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
 	}
-	bool dropped_column_is_generated = false;
+	bool dropped_column_is_generated = columns.GetColumn(LogicalIndex(removed_index)).Generated();
 	for (auto &col : columns.Logical()) {
 		if (col.Logical() == removed_index || removed_columns.count(col.Logical())) {
-			if (col.Generated()) {
-				dropped_column_is_generated = true;
-			}
 			continue;
 		}
 		create_info->columns.AddColumn(col.Copy());
