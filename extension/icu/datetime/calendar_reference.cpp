@@ -465,7 +465,8 @@ unique_ptr<GlobalTableFunctionState> VerifyInit(ClientContext &context, TableFun
 	                                    "Europe/Dublin",
 	                                    "GMT+5:30"};
 	// the calendar systems that are no longer provided by ICU
-	static const char *NATIVE_TYPES[] = {"gregorian", "buddhist", "roc", "iso8601"};
+	static const char *NATIVE_TYPES[] = {"gregorian", "buddhist",           "roc", "iso8601", "coptic",
+	                                     "ethiopic",  "ethiopic-amete-alem"};
 	for (const auto &type : NATIVE_TYPES) {
 		for (const auto &zone_name : DENSE_ZONES) {
 			Verify(type, zone_name, result->mismatches, GetInstants(zone_name, 1));

@@ -26,6 +26,7 @@ set(ICU_EXTENSION_FILES
     collation/generated/collation_tailoring_data.cpp
     datetime/calendar.cpp
     datetime/calendar_reference.cpp
+    datetime/coptic.cpp
     datetime/gregorian.cpp
     datetime/icu_calendar.cpp
     datetime/grego.cpp

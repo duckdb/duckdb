@@ -2,6 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "grego.hpp"
+#include "coptic.hpp"
 #include "gregorian.hpp"
 
 #include <chrono>
@@ -457,6 +458,19 @@ void FieldCalendar::ComputeTime() {
 	} else {
 		time = millis + millis_in_day - ComputeZoneOffset(millis, millis_in_day);
 	}
+}
+
+int32_t FieldCalendar::HandleGetMonthLength(int32_t eyear, int32_t month) const {
+	int32_t next_month;
+	if (!TryAdd(month, 1, next_month)) {
+		Fail();
+		return 0;
+	}
+	return int32_t(HandleComputeMonthStart(eyear, next_month, true) - HandleComputeMonthStart(eyear, month, true));
+}
+
+int32_t FieldCalendar::HandleGetYearLength(int32_t eyear) const {
+	return int32_t(HandleComputeMonthStart(eyear + 1, 0, false) - HandleComputeMonthStart(eyear, 0, false));
 }
 
 int32_t FieldCalendar::HandleComputeJulianDay(CalendarField best_field) {
@@ -1151,6 +1165,15 @@ unique_ptr<Calendar> Calendar::TryCreate(const string &type, unique_ptr<TimeZone
 	}
 	if (StringUtil::CIEquals(type, "iso8601")) {
 		return make_uniq<ISO8601Calendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "coptic")) {
+		return make_uniq<CopticCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "ethiopic")) {
+		return make_uniq<EthiopicCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "ethiopic-amete-alem")) {
+		return make_uniq<EthiopicAmeteAlemCalendar>(std::move(zone));
 	}
 	// TODO: temporary, the calendars that have not been reimplemented yet come from ICU
 	return TryCreateICUCalendar(type, std::move(zone));

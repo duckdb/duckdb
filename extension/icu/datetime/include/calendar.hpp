@@ -161,10 +161,11 @@ protected:
 	//! The Julian day of the day before the first day of a month, in this calendar system.
 	//! If use_month is false the month is ignored and the day before the year start is returned.
 	virtual int64_t HandleComputeMonthStart(int32_t eyear, int32_t month, bool use_month) const = 0;
-	//! The number of days in a month of this calendar system
-	virtual int32_t HandleGetMonthLength(int32_t eyear, int32_t month) const = 0;
+	//! The number of days in a month of this calendar system, which follows from where the
+	//! months start unless the system can describe it more directly
+	virtual int32_t HandleGetMonthLength(int32_t eyear, int32_t month) const;
 	//! The number of days in a year of this calendar system
-	virtual int32_t HandleGetYearLength(int32_t eyear) const = 0;
+	virtual int32_t HandleGetYearLength(int32_t eyear) const;
 	//! Computes the era, year, month, day of month, day of year and extended year of a Julian day
 	virtual void HandleComputeFields(int32_t julian_day) = 0;
 	//! The extended year that the currently set fields describe
