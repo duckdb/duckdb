@@ -602,6 +602,11 @@ optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const Identifier &catalog, co
 	    on_entry_not_found);
 }
 
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const EntryLookupInfo &lookup_info,
+                                                   OnEntryNotFound on_entry_not_found) {
+	return entry_retriever.GetEntry(lookup_info, on_entry_not_found);
+}
+
 //! Create a binder whose catalog search path is anchored to the table's catalog+schema
 shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const Identifier &catalog_name, const Identifier &schema_name) {
 	shared_ptr<Binder> new_binder = Binder::CreateBinder(context, this);
