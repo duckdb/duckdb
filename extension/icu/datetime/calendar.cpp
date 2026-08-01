@@ -1215,13 +1215,14 @@ unique_ptr<Calendar> Calendar::TryCreate(const string &type, unique_ptr<TimeZone
 	if (StringUtil::CIEquals(type, "dangi")) {
 		return make_uniq<DangiCalendar>(std::move(zone));
 	}
-	// TODO: temporary, the calendars that have not been reimplemented yet come from ICU
-	return TryCreateICUCalendar(type, std::move(zone));
+	return nullptr;
 }
 
 const vector<string> &Calendar::GetAvailableTypes() {
-	// TODO: temporary, the list comes from ICU until every calendar has been reimplemented
-	static const auto TYPES = GetICUCalendarTypes();
+	static const vector<string> TYPES = {
+	    "buddhist", "chinese",       "coptic",        "dangi",        "ethiopic",         "ethiopic-amete-alem",
+	    "gregorian", "hebrew",       "indian",        "islamic",      "islamic-civil",    "islamic-rgsa",
+	    "islamic-tbla", "islamic-umalqura", "iso8601", "japanese",    "persian",          "roc"};
 	return TYPES;
 }
 

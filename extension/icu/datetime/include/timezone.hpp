@@ -13,9 +13,6 @@
 #include "tz_data.hpp"
 
 namespace duckdb {
-
-class ExtensionLoader;
-
 namespace datetime {
 
 //! How a local time that either does not exist or occurs twice is resolved.
@@ -129,9 +126,6 @@ private:
 	//! The first instant that final_zone applies to
 	double final_start_millis;
 };
-
-// TODO: temporary, registers the function that verifies the time zones against ICU
-void RegisterTimeZoneVerifyFunction(ExtensionLoader &loader);
 
 } // namespace datetime
 } // namespace duckdb

@@ -1,12 +1,9 @@
 # The ICU Extension
 
-This project contains an easy-to-use version of the collation/timezone part of the ICU library.
-
-The compiled size of the project is around 6MB. 
-The majority of this is the inlined ICU data that is required to properly support collation 
-and time zones for all included locales.
-The header `Reducing Data Size` down below can help you 
-if you want to strip out certain locales to make the included data smaller.
+This extension provides the collations, time zones and calendar systems that DuckDB needs for
+its date and time functions. It is named after the ICU library, which it used to be built on;
+it no longer depends on it, and instead carries its own implementations together with the
+Unicode data they are generated from.
 
 ## Updating the Time Zone Data
 
@@ -52,91 +49,32 @@ Occasionally, a new zone is introduced, in which case you can only check post-ch
 
 ## Updating the Collation Data
 
-ICU makes periodic updates to the collation data tables.
-You can track updates to the ICU data by following the `unicode-org/icu-data` project on GitHub.
+The collation data lives in `collation/generated/` and is generated from the Unicode collation
+data. You can track updates by following the `unicode-org/icu-data` project on GitHub.
 
-### Generating the Data
-
-The shell script `extensions/icu/scripts/makedata.sh` can be used to automatically update to a particular data version.
-To use it, first update the `data_version` variable to the latest code version tag corresponding to the data drop,
-and update the `tz_version` variable to the time zone version. 
-(Time zone versions are in the year followed by a sequential lowercase letter e.g., `2026b`).
-
-Once the script has been updated, run it from the `extension/icu`directory:
+To update to a new release, run the generator from the `extension/icu` directory:
 
 ```sh
-$ pushd extension/icu
-$ /bin/sh scripts/makedata.sh
+$ python3 scripts/generate_collation_data.py
 ```
 
-The script will download all the code and data, then generate the new `stubdata.cpp` file.
-You can then build ICU with the new data.
+## Testing
 
-## Updating the Code.
-
-ICU also updates the code roughly annually,
-and we import that code directly into the ICU project.
-We import it because we occasionally have to fix bugs without waiting for them.
-At some point it may make more sense to use a submodule,
-but we have not done that yet.
-
-### Copying the Code
-
-The simplest way to obtain the code is to update the data to the latest version (see above).
-Once the script runs, you will have the full set of code in `extension/icu/build/icu-release-<tag>`.
-We use two source directories, that need to be copied to `extension/icu/third_party`:
-
-```sh
-$ cp -r -f build/icu-release-78.3/icu4c/source/common/ third_party/icu/common
-$ cp -r -f build/icu-release-78.3/icu4c/source/i18n/ third_party/icu/i18n
-```
-
-### Patching the Code
-
-The code cannot quite be used as is; most notably, we need a particular set of configuration options.
-These are in `third_party/icu/common/uconfig.h`.
-Diff the file against the previous version and pull in the settings we require.
-Note that ICU is a live code base and what they think we should be using may not be correct,
-so you may have to go down the rabbit hole and add/change some of them!
-
-Occasionally, there are other patches that need to be applied, and the current list is here:
-
-* `extension/icu/third_party/icu/common/utrie2.cpp:143` - The use of `U_POINTER_MASK_LSB` should be commented out because it fails on Apple ARM chips with stubbed data.
-
-Please keep it up to date.
-
-### New Files
-
-New releases may contain new files that our code subset depends on.
-You should add these files to the appropriate `CMakeLists.txt` file library.
-Note that there are _two_ libraries: A unity library for most files and a traditional library.
-The traditional library is needed because a fair number of ICU source files assume that
-they are in separate compilation units and define local symbols with conflicting names.
-If a file does not have this issue, it should go into the unity library to save compilation time.
-
-### Test the Build
-
-Since ICU is an extension, you can unit test it by simply making a list of all the tests that require ICU,
-and then using `unittest`'s `-f` flag:
+The extension has no external dependencies, so it can be unit tested by making a list of all the
+tests that mention it and using `unittest`'s `-f` flag:
 
 ```sh
 $ git grep -E -l -w -i icu -- '*.test*' > smoke.test
 $ ./build/release/test/unittest -f smoke.test
 ```
 
-Check any tests that now fail, but it is most likely that the test output has been modified by the ICU team.
-Two recent examples of this:
+Two of those tests are worth knowing about:
 
-* The Norwegian collation names were changed around 2020;
-* The dates of the Meiji Restoration were updated in the Japanese calendar.
-
-One other source of changes with code updates is `duckdb/main/extension_entries.hpp`.
-You may need to regenerate it if new collations are added.
-
-### Clean up and Commit
-
-The simplest way to remove the unused files is to use `git clean -d -f`. 
-You should then rebuild to make sure you didn't accidentally remove a new header file.
+* `test/sql/timezone/test_icu_datetime_sweep.test` hashes the offsets of every time zone at a
+  spread of instants and the rendering of two centuries of dates in every calendar system, which
+  is the broad net that catches an unintended change to either dataset.
+* `test/sql/timezone/test_icu_calendar_*.test` cover the calendar systems one by one, including
+  the boundaries of their eras and their leap months and days.
 
 ## Usage
 
@@ -221,16 +159,3 @@ from icu_calendar_names() order by 1;
 | japanese            |
 | persian             |
 | roc                 |
-
-## Reducing Data Size
-
-The inlined data is present in `data/icudtXXl.dat`. 
-It is compiled from the ICU library as described [here](https://github.com/unicode-org/icu/blob/master/docs/userguide/icu_data/buildtool.md), 
-with the filters set in `extension/icu/filters.json`.
-
-In the default configuration, only `misc`, `"coll_tree"` and `"coll_ucadata"` are included, 
-which are the parts required for collation and basic time zone support. 
-However, all locales are included. The size of the data can be significantly reduced by stripping certain locales. 
-The linked page describes how to do that. 
-After re-packaging the data, you can run `scripts/inline-data.py` to inline a smaller segment of the data.
-

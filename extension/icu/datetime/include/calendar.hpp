@@ -319,12 +319,5 @@ private:
 	int32_t minimal_days_in_first_week;
 };
 
-// TODO: temporary, the calendar systems that are still provided by ICU
-unique_ptr<Calendar> TryCreateICUCalendar(const string &type, unique_ptr<TimeZone> zone);
-vector<string> GetICUCalendarTypes();
-
-// TODO: temporary, registers the function that verifies the calendars against ICU
-void RegisterCalendarVerifyFunction(ExtensionLoader &loader);
-
 } // namespace datetime
 } // namespace duckdb

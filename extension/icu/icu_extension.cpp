@@ -20,9 +20,6 @@
 #include "include/icu-timebucket.hpp"
 #include "include/icu-timezone.hpp"
 #include "include/icu_extension.hpp"
-#include "unicode/coll.h"
-#include "unicode/stringpiece.h"
-#include "unicode/ucol.h"
 #include "icu-helpers.hpp"
 #include "collation_collator.hpp"
 #include "calendar.hpp"
@@ -140,47 +137,6 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 			D_ASSERT(key[i] != 0);
 			auto digits = HexDigits(key[i]);
 			memcpy(str_data + i * 2, &digits, sizeof(digits));
-		}
-		str_result.Finalize();
-		return str_result;
-	});
-}
-
-// TODO: temporary, the reference implementation the built-in collator is verified against
-static void ICUReferenceCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.BindInfo()->Cast<IcuBindData>();
-	UErrorCode status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::Collator> collator;
-	if (!info.tag.empty()) {
-		collator =
-		    duckdb::unique_ptr<icu::Collator>(icu::Collator::fromUCollator(ucol_open(info.tag.c_str(), &status)));
-	} else {
-		collator = duckdb::unique_ptr<icu::Collator>(
-		    icu::Collator::createInstance(icu::Locale(info.language.c_str(), info.country.c_str()), status));
-	}
-	if (U_FAILURE(status)) {
-		throw InvalidInputException("Failed to create ICU collator: %s", u_errorName(status));
-	}
-
-	duckdb::unique_ptr<char[]> buffer;
-	int32_t buffer_size = 0;
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
-		auto unicode_string = icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), int32_t(input.GetSize())));
-		auto string_size = collator->getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
-		if (string_size > buffer_size) {
-			buffer_size = string_size;
-			buffer = duckdb::unique_ptr<char[]>(new char[buffer_size]);
-			string_size = collator->getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
-		}
-		auto str_result = StringVector::EmptyString(result, idx_t(string_size - 1) * 2);
-		auto str_data = str_result.GetDataWriteable();
-		for (idx_t i = 0; i < idx_t(string_size - 1); i++) {
-			auto byte = uint8_t(buffer[i]);
-			str_data[i * 2] = HEX_TABLE[byte / 16];
-			str_data[i * 2 + 1] = HEX_TABLE[byte % 16];
 		}
 		str_result.Finalize();
 		return str_result;
@@ -442,12 +398,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                        LogicalType::VARCHAR, ICUCollateFunction, ICUSortKeyBind);
 	loader.RegisterFunction(sort_key);
 
-	// TODO: temporary, used to verify the built-in collator against ICU
-	ScalarFunction reference_sort_key("icu_sort_key_reference",
-	                                  {{"str", LogicalType::VARCHAR}, {"collator", LogicalType::VARCHAR}},
-	                                  LogicalType::VARCHAR, ICUReferenceCollateFunction, ICUSortKeyBind);
-	loader.RegisterFunction(reference_sort_key);
-
 	// Time Zones
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	auto tz = TimeZone::TryCreateDefault();
@@ -469,15 +419,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	RegisterICUTimeZoneFunctions(loader);
 
 	// Calendars
-	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR,
-	                          Value(Calendar::GetAvailableTypes().front()), SetICUCalendar);
+	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, Value("gregorian"),
+	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
 	loader.RegisterFunction(cal_names);
-
-	// TODO: temporary, used to verify the built-in time zones and calendars against ICU
-	datetime::RegisterTimeZoneVerifyFunction(loader);
-	datetime::RegisterCalendarVerifyFunction(loader);
 }
 
 void IcuExtension::Load(ExtensionLoader &loader) {

@@ -1,0 +1,91 @@
+.mode list
+.separator "\t"
+.nullvalue NULL
+SELECT '@@MARK@@';
+SET TimeZone='UTC';
+SELECT '@@MARK@@';
+SELECT '--- persian ---';
+SELECT '@@MARK@@';
+SET Calendar='persian';
+SELECT '@@MARK@@';
+SELECT ts, year(ts), month(ts), day(ts), era(ts), dayofyear(ts) FROM (VALUES
+  ('2024-06-15 12:00:00+00'::TIMESTAMPTZ), ('0622-03-21 12:00:00+00'), ('0622-03-22 12:00:00+00'),
+  ('1970-01-01 00:00:00+00'), ('2024-03-19 12:00:00+00'), ('2024-03-20 12:00:00+00'),
+  ('2025-03-20 12:00:00+00'), ('2025-03-21 12:00:00+00'), ('2123-03-20 12:00:00+00'),
+  ('2124-03-20 12:00:00+00'), ('1500-01-01 12:00:00+00'), ('0001-01-01 12:00:00+00')) t(ts);
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1403, 1, 1, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1403, 12, 29, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1403, 12, 30, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1402, 12, 30, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1, 1, 1, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT '2024-06-15 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 MONTH;
+SELECT '@@MARK@@';
+SELECT '2024-06-15 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 YEAR;
+SELECT '@@MARK@@';
+SELECT '2024-03-20 12:00:00+00'::TIMESTAMPTZ - INTERVAL 1 DAY;
+SELECT '@@MARK@@';
+SELECT date_trunc('year', '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT date_trunc('month', '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT date_trunc('quarter', '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT last_day('2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT last_day('2025-03-01 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT date_diff('year', '1900-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT date_diff('month', '2023-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT age('2024-06-15 12:00:00+00'::TIMESTAMPTZ, '1900-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT * FROM generate_series('2024-03-15 12:00:00+00'::TIMESTAMPTZ, '2024-03-25 12:00:00+00'::TIMESTAMPTZ, INTERVAL 2 DAY);
+SELECT '@@MARK@@';
+SELECT '--- indian ---';
+SELECT '@@MARK@@';
+SET Calendar='indian';
+SELECT '@@MARK@@';
+SELECT ts, year(ts), month(ts), day(ts), era(ts), dayofyear(ts) FROM (VALUES
+  ('2024-06-15 12:00:00+00'::TIMESTAMPTZ), ('0079-03-22 12:00:00+00'), ('0078-03-22 12:00:00+00'),
+  ('1970-01-01 00:00:00+00'), ('2024-03-20 12:00:00+00'), ('2024-03-21 12:00:00+00'),
+  ('2023-03-21 12:00:00+00'), ('2023-03-22 12:00:00+00'), ('2024-12-31 12:00:00+00'),
+  ('2025-01-01 12:00:00+00'), ('0001-01-01 12:00:00+00')) t(ts);
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1946, 1, 1, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1946, 1, 31, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1945, 1, 31, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1946, 12, 30, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT make_timestamptz(1, 1, 1, 0, 0, 0.0, 'UTC');
+SELECT '@@MARK@@';
+SELECT '2024-06-15 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 MONTH;
+SELECT '@@MARK@@';
+SELECT '2024-06-15 12:00:00+00'::TIMESTAMPTZ + INTERVAL 1 YEAR;
+SELECT '@@MARK@@';
+SELECT date_trunc('year', '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT date_trunc('month', '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT last_day('2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT last_day('2024-04-01 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT date_diff('year', '1900-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT age('2024-06-15 12:00:00+00'::TIMESTAMPTZ, '1900-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00+00'::TIMESTAMPTZ);
+SELECT '@@MARK@@';
+SELECT * FROM generate_series('2024-03-18 12:00:00+00'::TIMESTAMPTZ, '2024-03-26 12:00:00+00'::TIMESTAMPTZ, INTERVAL 2 DAY);
