@@ -432,6 +432,11 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	if (approved_tuple_count == 0) {
 		return 0;
 	}
+	// Pulled-up optional-filter skip: a paused (or always-true) filter passes the vector through untouched.
+	if (state.ShouldSkip()) {
+		return approved_tuple_count;
+	}
+	const idx_t before_count = approved_tuple_count;
 	D_ASSERT(state.executor);
 	if (scan_count > STANDARD_VECTOR_SIZE) {
 		SelectionVector result_sel(approved_tuple_count);
@@ -476,6 +481,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 		}
 		approved_tuple_count = result_offset;
 		sel.Initialize(result_sel);
+		state.RecordSelectivity(approved_tuple_count, before_count);
 		return approved_tuple_count;
 	}
 
@@ -504,7 +510,17 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 			approved_tuple_count = new_sel.Intersect(sel, matched, approved_tuple_count, scan_count);
 		}
 		sel.Initialize(new_sel);
+		state.RecordSelectivity(approved_tuple_count, before_count);
 		return approved_tuple_count;
+	}
+	// non-bitmap inner (bloom/PRF/comparison): run the fast executor so a pulled-up wrapper never falls back
+	// to the generic executor, which would re-create the inner scalar function's own selectivity stats.
+	// Flatten first (any incoming bitmap -> indices) since the fast executor is index-based; it updates
+	// `sel` in place (Flattened() aliases sel's base) and reports the surviving count.
+	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE) {
+		auto result = state.fast_executor->FilterSelection(sel.Flattened(), vector, scan_count, approved_tuple_count);
+		state.RecordSelectivity(approved_tuple_count, before_count);
+		return result;
 	}
 	SelectionVector result_sel(approved_tuple_count);
 	// the narrowing path indexes the running selection per row: use the materialized view
@@ -517,6 +533,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	}
 	approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
 	sel.Initialize(result_sel);
+	state.RecordSelectivity(approved_tuple_count, before_count);
 	return approved_tuple_count;
 }
 
@@ -538,7 +555,14 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Table
                                      idx_t scan_count, idx_t &approved_tuple_count) {
 	auto &state = filter_state.Cast<ExpressionFilterState>();
 	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE) {
-		return state.fast_executor->FilterSelection(sel, vector, scan_count, approved_tuple_count);
+		// mutually exclusive with the delegating else-branch below, so the skip is gated exactly once
+		if (state.ShouldSkip()) {
+			return approved_tuple_count;
+		}
+		const idx_t before_count = approved_tuple_count;
+		auto result = state.fast_executor->FilterSelection(sel, vector, scan_count, approved_tuple_count);
+		state.RecordSelectivity(approved_tuple_count, before_count);
+		return result;
 	}
 	SelectionResult result_sel;
 	result_sel.Initialize(sel);

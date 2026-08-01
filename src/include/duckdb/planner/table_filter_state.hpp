@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/selection_result.hpp"
+#include "duckdb/planner/filter/selectivity_gate.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -62,6 +63,16 @@ public:
 	//! Reused per-call input chunk and result selection, so per-vector filter calls allocate nothing
 	DataChunk filter_chunk;
 	SelectionResult scratch;
+	//! Pulled-up skip for a top-level selectivity_optional() wrapper: paused vectors pass through for free.
+	//! null => no adaptive skip.
+	unique_ptr<SelectivityGate> skip_gate;
+	//! Top-level optional_filter(): always-true at runtime, so every vector is skipped.
+	bool always_skip = false;
+
+	//! true if this vector can pass through untouched; records the skip in `skip_gate` when applicable.
+	bool ShouldSkip();
+	//! Feed (accepted, processed) back into the pulled-up stats after an active vector. No-op if not pulled up.
+	void RecordSelectivity(idx_t accepted, idx_t processed);
 };
 
 } // namespace duckdb
