@@ -89,8 +89,7 @@ static inline void UnpackValue(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OU
 
 template <uint32_t WIDTH, class OUT_T, std::size_t... I>
 static inline void UnpackBlockUnrolled(const uint32_t *DUCKDB_BITPACKING_RESTRICT in,
-                                       OUT_T *DUCKDB_BITPACKING_RESTRICT out, OUT_T frame,
-                                       std::index_sequence<I...>) {
+                                       OUT_T *DUCKDB_BITPACKING_RESTRICT out, OUT_T frame, std::index_sequence<I...>) {
 	// expand with in/out as restrict parameters: a [&] closure would lose the restrict
 	// qualification and force per-value reloads of the input words and frame
 	(UnpackValue<WIDTH, OUT_T, I>(in, out, frame), ...);

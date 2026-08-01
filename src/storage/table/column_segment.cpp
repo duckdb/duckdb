@@ -508,7 +508,8 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 		state.RecordSelectivity(approved_tuple_count, before_count);
 		return approved_tuple_count;
 	}
-	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE) { // index-based fast filters
+	if (state.fast_executor && scan_count <= STANDARD_VECTOR_SIZE &&
+	    vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) { // don't go here for index-based fast filters
 		auto result = state.fast_executor->FilterSelection(sel.Flattened(), vector, scan_count, approved_tuple_count);
 		state.RecordSelectivity(approved_tuple_count, before_count);
 		return result;
