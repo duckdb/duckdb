@@ -45,7 +45,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return; // FIXME: get this working for STRUCT
 	}
 
-	// Mark non-constant inputs that may be eligible for dictionary optimization.
+	// Set input_col_idx accordingly, marking the expression as eligible for dictionary optimization
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &bound_function = expr.Cast<BoundFunctionExpression>();
@@ -83,6 +83,8 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	if (dictionary_input_indices.empty()) {
 		return false; // This expression is not eligible for dictionary optimization
 	}
+
+	// Figure out if we can do the optimization
 	const auto first_input_idx = dictionary_input_indices[0];
 	const auto &first_input = args.data[first_input_idx];
 	if (first_input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
@@ -142,14 +144,20 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		return false;
 	}
 	if (!output_dictionary || current_input_dictionary_id != input_dictionary_id) {
-		// We haven't seen this dictionary before. If it is bigger than a vector, only do the optimization when the
-		// chunk is more than 50% full - this protects it against selective filters.
+		// We haven't seen this dictionary before
 		const auto chunk_fill_ratio = static_cast<double>(args.size()) / STANDARD_VECTOR_SIZE;
 		if (input_dictionary_size > STANDARD_VECTOR_SIZE && chunk_fill_ratio <= CHUNK_FILL_RATIO_THRESHOLD) {
+			// If the dictionary size is <= STANDARD_VECTOR_SIZE, we always do the optimization
+			// If it's greater, we only do the optimization if the chunk is more than 50% full
+			// This protects the optimization against selective filters
 			return false;
 		}
+
+		// We can do dictionary optimization! Re-initialize
 		output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
 		current_input_dictionary_id = input_dictionary_id;
+
+		// Set up the input chunk
 		DataChunk input_chunk;
 		input_chunk.InitializeEmpty(args.GetTypes());
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
@@ -168,7 +176,10 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 			VectorOperations::Copy(output_intermediate, output_dictionary->data, count, 0, offset);
 		}
 	}
+
+	// Result references the dictionary
 	result.Dictionary(output_dictionary, input_sel, args.size());
+
 	return true;
 }
 
