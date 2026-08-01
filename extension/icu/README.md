@@ -8,36 +8,30 @@ and time zones for all included locales.
 The header `Reducing Data Size` down below can help you 
 if you want to strip out certain locales to make the included data smaller.
 
-## Updating the Data
+## Updating the Time Zone Data
 
-ICU makes periodic updates to the data tables (both collation and time zone) when the IANA data changes.
-You can follow these updates by subscribing to `tz-announce@iana.org`.
-You can then track updates to the ICU data by following the `unicode-org/icu-data` project on GitHub.
+The time zone data lives in `datetime/generated/tz_data.cpp` and is generated from the Unicode
+Consortium time zone dataset, which is the Unicode redistribution of the IANA time zone database.
+The IANA data changes a few times a year; you can follow the updates by subscribing to
+`tz-announce@iana.org`, and the corresponding Unicode drops by following the `unicode-org/icu-data`
+project on GitHub.
 
-### Generating the Data
-
-The shell script `extensions/icu/scripts/makedata.sh` can be used to automatically update to a particular data version.
-To use it, first update the `data_version` variable to the latest code version tag corresponding to the data drop,
-and update the `tz_version` variable to the time zone version. 
-(Time zone versions are in the year followed by a sequential lowercase letter e.g., `2026b`).
-
-Once the script has been updated, run it from the `extension/icu`directory:
+To update to a new release, run the generator with the IANA version
+(the year followed by a sequential lowercase letter, e.g. `2026c`):
 
 ```sh
 $ pushd extension/icu
-$ /bin/sh scripts/makedata.sh
+$ python3 scripts/generate_tz_data.py 2026c > datetime/generated/tz_data.cpp
+$ popd
 ```
-
-The script will download all the code and data, then generate the new `stubdata.cpp` file.
-You can then build ICU with the new data.
 
 ### Testing the Data
 
-For time zone updates, add a new test to the end of `test/sql/timezone/test_icu_timezone.test` 
+For time zone updates, add a new test to the end of `test/sql/timezone/test_icu_timezone.test`
 that validates one of the changes.
 Typically, this will consist of setting the `timezone` to the zone whose rules changed
 and then running a simple query to see if the offset is correct.
-For example, in early 2026, the Canadian province of British Columbia switched 
+For example, in early 2026, the Canadian province of British Columbia switched
 to permanent daylight savings time (-07).
 To test this, we pick a date well after the usual transition and check the offset.
 
@@ -55,6 +49,28 @@ select '2026-11-10'::timestamptz
 
 To be extra careful, run the test before updating to make sure it actually changes.
 Occasionally, a new zone is introduced, in which case you can only check post-change.
+
+## Updating the Collation Data
+
+ICU makes periodic updates to the collation data tables.
+You can track updates to the ICU data by following the `unicode-org/icu-data` project on GitHub.
+
+### Generating the Data
+
+The shell script `extensions/icu/scripts/makedata.sh` can be used to automatically update to a particular data version.
+To use it, first update the `data_version` variable to the latest code version tag corresponding to the data drop,
+and update the `tz_version` variable to the time zone version. 
+(Time zone versions are in the year followed by a sequential lowercase letter e.g., `2026b`).
+
+Once the script has been updated, run it from the `extension/icu`directory:
+
+```sh
+$ pushd extension/icu
+$ /bin/sh scripts/makedata.sh
+```
+
+The script will download all the code and data, then generate the new `stubdata.cpp` file.
+You can then build ICU with the new data.
 
 ## Updating the Code.
 

@@ -27,6 +27,7 @@
 #include "unicode/ucol.h"
 #include "icu-helpers.hpp"
 #include "collation_collator.hpp"
+#include "timezone.hpp"
 
 #include <cassert>
 
@@ -547,6 +548,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
 	loader.RegisterFunction(cal_names);
+
+	// TODO: temporary, used to verify the built-in time zones against ICU
+	datetime::RegisterTimeZoneVerifyFunction(loader);
 }
 
 void IcuExtension::Load(ExtensionLoader &loader) {

@@ -8,6 +8,7 @@ set_extension_version_sources(icu icu_extension.cpp)
 
 include_directories(include)
 include_directories(collation/include)
+include_directories(datetime/include)
 option(WITH_INTERNAL_ICU "Use vendored copy of icu" TRUE)
 if(WITH_INTERNAL_ICU)
   include_directories(third_party/icu/common)
@@ -23,6 +24,10 @@ set(ICU_EXTENSION_FILES
     collation/generated/collation_root_data.cpp
     collation/generated/collation_normalization_data.cpp
     collation/generated/collation_tailoring_data.cpp
+    datetime/grego.cpp
+    datetime/timezone.cpp
+    datetime/tz_reference.cpp
+    datetime/generated/tz_data.cpp
     icu_extension.cpp
     icu-current.cpp
     icu-dateadd.cpp
