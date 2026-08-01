@@ -534,8 +534,8 @@ public:
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
-		} else if (!state.preserve_identifier_case) {
-			result_text = StringUtil::Lower(result_text);
+		} else {
+			result_text = state.FoldIdentifier(result_text);
 		}
 		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
 			result_text = result_text.substr(1, result_text.size() - 2);
@@ -707,8 +707,8 @@ public:
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
 			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
-		} else if (!state.preserve_identifier_case) {
-			result_text = StringUtil::Lower(result_text);
+		} else {
+			result_text = state.FoldIdentifier(result_text);
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text, start_offset));
 	}

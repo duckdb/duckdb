@@ -77,6 +77,12 @@ overrides = {
         "FALLBACK_OVERRIDE": "FALLBACK",
         "STRICT_OVERRIDE": "STRICT",
     },
+    # "true"/"false" are accepted for backwards compatibility with the boolean preserve_identifier_case setting
+    "IdentifierCaseMode": {
+        "ON": ["ON", "TRUE", "PRESERVE"],
+        "LOWERCASE": ["LOWERCASE", "FALSE", "LOWER"],
+        "UPPERCASE": ["UPPERCASE", "UPPER"],
+    },
     "OrderByNullType": {
         "ORDER_DEFAULT": ["ORDER_DEFAULT", "DEFAULT"],
         "NULLS_FIRST": ["NULLS FIRST", "NULLS_FIRST"],
