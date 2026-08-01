@@ -4,6 +4,7 @@
 #include "grego.hpp"
 #include "coptic.hpp"
 #include "gregorian.hpp"
+#include "hebrew.hpp"
 #include "islamic.hpp"
 #include "persian.hpp"
 
@@ -325,15 +326,13 @@ int32_t FieldCalendar::GetLimit(CalendarField field, LimitType type) const {
 //===--------------------------------------------------------------------===//
 // Computing the time from the fields
 //===--------------------------------------------------------------------===//
-//! Arithmetic that reports whether the result no longer fits, which the field resolution has to
-//! detect because a date that cannot be represented must not silently wrap around
-static bool TryAdd(int32_t left, int32_t right, int32_t &result) {
+bool FieldCalendar::TryAdd(int32_t left, int32_t right, int32_t &result) {
 	const auto sum = int64_t(left) + int64_t(right);
 	result = int32_t(sum);
 	return sum >= NumericLimits<int32_t>::Minimum() && sum <= NumericLimits<int32_t>::Maximum();
 }
 
-static bool TryMultiply(int32_t left, int32_t right, int32_t &result) {
+bool FieldCalendar::TryMultiply(int32_t left, int32_t right, int32_t &result) {
 	const auto product = int64_t(left) * int64_t(right);
 	result = int32_t(product);
 	return product >= NumericLimits<int32_t>::Minimum() && product <= NumericLimits<int32_t>::Maximum();
@@ -1191,6 +1190,9 @@ unique_ptr<Calendar> Calendar::TryCreate(const string &type, unique_ptr<TimeZone
 	}
 	if (StringUtil::CIEquals(type, "islamic-umalqura")) {
 		return make_uniq<IslamicUmalquraCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "hebrew")) {
+		return make_uniq<HebrewCalendar>(std::move(zone));
 	}
 	// TODO: temporary, the calendars that have not been reimplemented yet come from ICU
 	return TryCreateICUCalendar(type, std::move(zone));

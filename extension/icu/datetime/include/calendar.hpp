@@ -199,6 +199,13 @@ protected:
 	void Fail() const {
 		failed = true;
 	}
+	bool HasFailedInternal() const {
+		return failed;
+	}
+	//! Arithmetic that reports whether the result no longer fits, which the field resolution
+	//! has to detect because a date that cannot be represented must not silently wrap around
+	static bool TryAdd(int32_t left, int32_t right, int32_t &result);
+	static bool TryMultiply(int32_t left, int32_t right, int32_t &result);
 	bool IsSet(CalendarField field) const {
 		return stamp[field] != STAMP_UNSET;
 	}
@@ -213,6 +220,19 @@ protected:
 	int32_t GetLimit(CalendarField field, LimitType type) const;
 	//! The Julian day at which the current fields resolve, ignoring the time of day
 	virtual int32_t HandleComputeJulianDay(CalendarField best_field);
+
+	//! The operations that make up a public one. Like ICU, which threads a single error code
+	//! through an operation, they do nothing once something has gone wrong, so that a failure
+	//! is reported instead of a value computed from a broken intermediate state.
+	void SetTimeChecked(double millis);
+	double GetTimeChecked();
+	int32_t GetChecked(CalendarField field);
+	//! Calendar systems whose months do not simply follow one another override this
+	virtual void AddChecked(CalendarField field, int32_t amount);
+	int32_t GetActualMaximumChecked(CalendarField field);
+	int32_t GetActualMinimumChecked(CalendarField field);
+	//! Clamps a field to the range that it can actually have
+	void PinField(CalendarField field);
 
 private:
 	//! A field that was never set
@@ -245,17 +265,6 @@ private:
 	CalendarField ResolveFields(ResolutionTable table) const;
 	//! The 0-based day of week of the current fields, relative to the first day of the week
 	int32_t GetLocalDOW() const;
-	//! Clamps a field to the range that it can actually have
-	void PinField(CalendarField field);
-	//! The operations that make up a public one. Like ICU, which threads a single error code
-	//! through an operation, they do nothing once something has gone wrong, so that a failure
-	//! is reported instead of a value computed from a broken intermediate state.
-	void SetTimeChecked(double millis);
-	double GetTimeChecked();
-	int32_t GetChecked(CalendarField field);
-	void AddChecked(CalendarField field, int32_t amount);
-	int32_t GetActualMaximumChecked(CalendarField field);
-	int32_t GetActualMinimumChecked(CalendarField field);
 
 	//! A copy of this calendar that the field machinery can be used on
 	unique_ptr<FieldCalendar> CopyFields() const;
