@@ -47,6 +47,7 @@ class CollectionScanState;
 class TableFilter;
 class TableFilterSet;
 struct ColumnFetchState;
+struct PrefetchState;
 struct RowGroupAppendState;
 class MetadataManager;
 class RowVersionManager;
@@ -155,6 +156,12 @@ public:
 	bool CheckZonemapSegments(CollectionScanState &state);
 	void Scan(ScanOptions options, CollectionScanState &state, DataChunk &result);
 	void Scan(CollectionScanState &state, DataChunk &result, TableScanType type);
+	//! Synchronously prefetches the blocks required to scan the next row_count rows
+	void PrefetchScanIO(CollectionScanState &state, idx_t row_count);
+	//! Prepares the next eligible vector in the assigned range, idempotent, returns false when none remain
+	bool PrepareScan(ScanOptions options, CollectionScanState &state);
+	//! Processes the vector prepared by PrepareScan, clearing the prepared state when the vector is finished
+	void ProcessPreparedScan(ScanOptions options, CollectionScanState &state, DataChunk &result);
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
@@ -248,6 +255,12 @@ public:
 	ColumnData &GetRawColumnData(storage_t c) const;
 
 private:
+	//! Registers prefetch candidates for the next row_count rows, returns false when prefetching is not supported
+	bool RegisterScanIO(CollectionScanState &state, idx_t row_count, PrefetchState &prefetch_state);
+	//! Shared scan-state setup for InitializeScan and InitializeScanWithOffset
+	bool InitializeScanInternal(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
+	//! Advances the scan past the current vector, clearing the prepared state
+	void FinishVector(CollectionScanState &state);
 	void InitializeAppendInternal(RowGroupAppendState &append_state);
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	optional_ptr<RowVersionManager> GetVersionInfoIfLoaded() const;

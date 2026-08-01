@@ -258,7 +258,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"iceberg_table_properties", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_to_ducklake", "iceberg", CatalogType::TABLE_FUNCTION_ENTRY},
     {"iceberg_truncate", "iceberg", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"iceberg_verify_equality_deletes", "iceberg", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_calendar_names", "icu", CatalogType::TABLE_FUNCTION_ENTRY},
     {"icu_collate_af", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_collate_am", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1099,6 +1098,7 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
 }; // END_OF_EXTENSION_FUNCTION_OVERLOADS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
+    {"__iceberg_unsafe_struct_null_default_interp", "iceberg"},
     {"allow_asterisks_in_http_paths", "httpfs"},
     {"auto_fallback_to_full_download", "httpfs"},
     {"azure_account_name", "azure"},
@@ -1148,9 +1148,12 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"httpfs_client_implementation", "httpfs"},
     {"httpfs_connection_caching", "httpfs"},
     {"httpfs_enable_credential_refresh", "httpfs"},
+    {"iceberg_default_format_version", "iceberg"},
     {"iceberg_logging_post_body_truncate_limit", "iceberg"},
     {"iceberg_test_force_token_expiry", "iceberg"},
+    {"iceberg_unsafe_skip_puffin_verification", "iceberg"},
     {"iceberg_use_metadata_log", "iceberg"},
+    {"iceberg_use_server_side_scan_planning", "iceberg"},
     {"iceberg_via_aws_sdk_for_catalog_interactions", "iceberg"},
     {"merge_http_secret_into_s3_request", "httpfs"},
     {"mysql_adaptive_replan_enabled", "mysql_scanner"},

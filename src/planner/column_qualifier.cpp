@@ -265,8 +265,11 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
 	                                error_context);
-	auto func = binder.GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
-	                                   function_lookup, OnEntryNotFound::RETURN_NULL);
+	// resolve the qualification: this decides whether a leading component (e.g. "s1" in "s1.s2.my_macro()") is a
+	// catalog or the outermost schema of a nested schema path. The name as written is left alone - the dot-call
+	// rewrite below turns the qualification into a column reference and needs it unresolved.
+	auto bound_name = binder.BindTableName(function.GetQualifiedName());
+	auto func = binder.GetCatalogEntry(EntryLookupInfo(function_lookup, bound_name), OnEntryNotFound::RETURN_NULL);
 	if (func) {
 		// found the function - we are done
 		return func;

@@ -1,9 +1,10 @@
 #include "core_functions/aggregate/holistic_functions.hpp"
-#include "duckdb/planner/expression.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/abs.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
+#include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -276,7 +277,7 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	fun.SetBindCallback(BindMAD);
 	fun.SetStructStateExport(QuantileStateLayout<STATE>);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(mad_window)
 	fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
 	fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif

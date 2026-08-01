@@ -123,7 +123,7 @@ NULL
 statement error
 FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['dont_exist']);
 ----
-"force_not_null" expected to find dont_exist, but it was not found in the table
+force_not_null expected to find dont_exist, but it was not found in the table
 
 # Lests add a few tests with copy from
 statement ok
