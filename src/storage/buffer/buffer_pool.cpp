@@ -5,7 +5,6 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/block_allocator.hpp"
@@ -13,17 +12,6 @@
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
-
-static QueryContext GetBlockOwnerContext(QueryContext context, const BlockMemory &memory) {
-	if (!context.Valid()) {
-		return context;
-	}
-	auto client_context = context.GetClientContext();
-	if (DatabaseInstance::GetDatabase(*client_context).GetMemoryContextId() != memory.GetMemoryContextId()) {
-		return QueryContext();
-	}
-	return context;
-}
 
 static idx_t FileBufferTypeToEvictionQueueTypeIdx(const FileBufferType &type) {
 	switch (type) {
@@ -435,17 +423,16 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context,
 	}
 
 	queue.IterateUnloadableBlocks([&](BufferEvictionNode &, const shared_ptr<BlockMemory> &handle, BlockLock &lock) {
-		auto owner_context = GetBlockOwnerContext(context, *handle);
 		// hooray, we can unload the block
 		if (buffer && handle->GetBuffer(lock)->AllocSize() == extra_memory) {
 			// we can re-use the memory directly
-			*buffer = handle->UnloadAndTakeBlock(lock, owner_context);
+			*buffer = handle->UnloadAndTakeBlock(lock, context);
 			found = true;
 			return false;
 		}
 
 		// release the memory and mark the block as unloaded
-		handle->Unload(lock, owner_context);
+		handle->Unload(lock, context);
 
 		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 			found = true;
