@@ -380,7 +380,10 @@
         "description": "Use the experimental trampoline-style parser transformer",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "debug_verification_mode",
