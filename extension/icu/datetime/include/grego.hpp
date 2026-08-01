@@ -66,16 +66,22 @@ struct Grego {
 		return ((year & 0x3) == 0) && ((year % 100 != 0) || (year % 400 == 0));
 	}
 	//! The number of days in a 0-based month
+	static int8_t MonthLength(int32_t month, bool is_leap) {
+		return MONTH_LENGTH[month + (is_leap ? 12 : 0)];
+	}
 	static int8_t MonthLength(int32_t year, int32_t month) {
-		return MONTH_LENGTH[month + (IsLeapYear(year) ? 12 : 0)];
+		return MonthLength(month, IsLeapYear(year));
 	}
 	//! The number of days in the month before a 0-based month
 	static int8_t PreviousMonthLength(int32_t year, int32_t month) {
 		return (month > 0) ? MonthLength(year, month - 1) : 31;
 	}
 	//! The number of days before a 0-based month in its year
+	static int16_t DaysBeforeMonth(int32_t month, bool is_leap) {
+		return DAYS_BEFORE[month + (is_leap ? 12 : 0)];
+	}
 	static int16_t DaysBeforeMonth(int32_t year, int32_t month) {
-		return DAYS_BEFORE[month + (IsLeapYear(year) ? 12 : 0)];
+		return DaysBeforeMonth(month, IsLeapYear(year));
 	}
 
 	//! Converts a year, 0-based month and 1-based day of month to days since 1970-01-01
@@ -91,6 +97,11 @@ struct Grego {
 	                         int32_t &mid);
 	//! The 1-based day of week (1 == Sunday) of a day since 1970-01-01
 	static int32_t DayOfWeek(int32_t day);
+	//! The 1-based day of week (1 == Sunday) of a Julian day, which is Monday on day zero
+	static int32_t JulianDayToDayOfWeek(int32_t julian) {
+		const auto dow = int32_t((int64_t(julian) + 1) % 7);
+		return dow + (dow < 0 ? 8 : 1);
+	}
 	//! The ordinal of the day of week within its month: 1, 2, 3, 4 or -1 for the last one
 	static int32_t DayOfWeekInMonth(int32_t year, int32_t month, int32_t dom);
 

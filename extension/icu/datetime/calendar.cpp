@@ -158,6 +158,14 @@ void FieldCalendar::SetMinimalDaysInFirstWeek(int32_t days) {
 // Getting and setting
 //===--------------------------------------------------------------------===//
 void FieldCalendar::SetTime(double millis) {
+	failed = false;
+	SetTimeChecked(millis);
+}
+
+void FieldCalendar::SetTimeChecked(double millis) {
+	if (failed) {
+		return;
+	}
 	time = MinValue<double>(MaxValue<double>(millis, MIN_MILLIS), MAX_MILLIS);
 	fields_set = false;
 	all_fields_set = false;
@@ -171,21 +179,39 @@ void FieldCalendar::SetTime(double millis) {
 
 double FieldCalendar::GetTime() {
 	failed = false;
+	return GetTimeChecked();
+}
+
+double FieldCalendar::GetTimeChecked() {
+	if (failed) {
+		return 0;
+	}
 	if (!time_set) {
 		UpdateTime();
 	}
-	return time;
+	return failed ? 0 : time;
 }
 
 int32_t FieldCalendar::Get(CalendarField field) {
 	failed = false;
+	return GetChecked(field);
+}
+
+int32_t FieldCalendar::GetChecked(CalendarField field) {
+	if (failed) {
+		return 0;
+	}
 	Complete();
-	return fields[field];
+	return failed ? 0 : fields[field];
 }
 
 void FieldCalendar::Set(CalendarField field, int32_t value) {
 	if (fields_virtually_set) {
+		// a failure to materialize the fields is not reported, matching ICU
+		const auto was_failed = failed;
+		failed = false;
 		ComputeFields();
+		failed = was_failed;
 	}
 	fields[field] = value;
 	if (next_stamp == NumericLimits<int32_t>::Maximum()) {
@@ -220,6 +246,9 @@ void FieldCalendar::RecalculateStamps() {
 
 void FieldCalendar::UpdateTime() {
 	ComputeTime();
+	if (failed) {
+		return;
+	}
 	// the calendar is always lenient, so the fields are recomputed to normalize them
 	fields_set = false;
 	time_set = true;
@@ -229,9 +258,15 @@ void FieldCalendar::UpdateTime() {
 void FieldCalendar::Complete() {
 	if (!time_set) {
 		UpdateTime();
+		if (failed) {
+			return;
+		}
 	}
 	if (!fields_set) {
 		ComputeFields();
+		if (failed) {
+			return;
+		}
 		fields_set = true;
 		all_fields_set = true;
 	}
@@ -287,6 +322,20 @@ int32_t FieldCalendar::GetLimit(CalendarField field, LimitType type) const {
 //===--------------------------------------------------------------------===//
 // Computing the time from the fields
 //===--------------------------------------------------------------------===//
+//! Arithmetic that reports whether the result no longer fits, which the field resolution has to
+//! detect because a date that cannot be represented must not silently wrap around
+static bool TryAdd(int32_t left, int32_t right, int32_t &result) {
+	const auto sum = int64_t(left) + int64_t(right);
+	result = int32_t(sum);
+	return sum >= NumericLimits<int32_t>::Minimum() && sum <= NumericLimits<int32_t>::Maximum();
+}
+
+static bool TryMultiply(int32_t left, int32_t right, int32_t &result) {
+	const auto product = int64_t(left) * int64_t(right);
+	result = int32_t(product);
+	return product >= NumericLimits<int32_t>::Minimum() && product <= NumericLimits<int32_t>::Maximum();
+}
+
 CalendarField FieldCalendar::ResolveFields(ResolutionTable table) const {
 	auto best_field = int32_t(CAL_FIELD_COUNT);
 	for (idx_t g = 0; table[g] && best_field == int32_t(CAL_FIELD_COUNT); g++) {
@@ -421,7 +470,7 @@ int32_t FieldCalendar::HandleComputeJulianDay(CalendarField best_field) {
 		year = HandleGetExtendedYear();
 	}
 	InternalSet(CAL_EXTENDED_YEAR, year);
-	if (year > NumericLimits<int32_t>::Maximum() / 400) {
+	if (failed || year > NumericLimits<int32_t>::Maximum() / 400) {
 		failed = true;
 		return 0;
 	}
@@ -429,20 +478,33 @@ int32_t FieldCalendar::HandleComputeJulianDay(CalendarField best_field) {
 	const auto month =
 	    (IsSet(CAL_MONTH) || IsSet(CAL_ORDINAL_MONTH)) ? InternalGetMonth() : GetDefaultMonthInYear(year);
 	auto julian_day = int32_t(HandleComputeMonthStart(year, use_month ? month : 0, use_month));
+	if (failed) {
+		return 0;
+	}
 
 	if (best_field == CAL_DATE) {
 		const auto dom = IsSet(CAL_DATE) ? InternalGet(CAL_DATE, 1) : GetDefaultDayInMonth(year, month);
-		return julian_day + dom;
+		int32_t result;
+		if (!TryAdd(dom, julian_day, result)) {
+			failed = true;
+			return 0;
+		}
+		return result;
 	}
 	if (best_field == CAL_DAY_OF_YEAR) {
-		return julian_day + InternalGet(CAL_DAY_OF_YEAR);
+		int32_t result;
+		if (!TryAdd(InternalGet(CAL_DAY_OF_YEAR), julian_day, result)) {
+			failed = true;
+			return 0;
+		}
+		return result;
 	}
 
 	// at this point julian_day is the day before the first day of the year or the month, so the
 	// week fields are resolved relative to it
 	const auto first_dow = GetFirstDayOfWeek();
 	// the 0-based localized day of week of the first day of the period, 0..6
-	auto first = int32_t(Grego::DayOfWeek(julian_day + 1 - JULIAN_1970_CE)) - first_dow;
+	auto first = Grego::JulianDayToDayOfWeek(julian_day + 1) - first_dow;
 	if (first < 0) {
 		first += 7;
 	}
@@ -455,12 +517,20 @@ int32_t FieldCalendar::HandleComputeJulianDay(CalendarField best_field) {
 			date += 7;
 		}
 		const auto dim = InternalGet(CAL_DAY_OF_WEEK_IN_MONTH, 1);
+		int32_t shift;
 		if (dim >= 0) {
-			date += 7 * (dim - 1);
+			if (!TryMultiply(7, dim - 1, shift) || !TryAdd(date, shift, date)) {
+				failed = true;
+				return 0;
+			}
 		} else {
 			// count backwards from the last day with that day of week in the month
 			const auto month_length = HandleGetMonthLength(year, InternalGetMonth(0));
-			date += ((month_length - date) / 7 + dim + 1) * 7;
+			if (!TryAdd((month_length - date) / 7, dim + 1, shift) || !TryMultiply(shift, 7, shift) ||
+			    !TryAdd(date, shift, date)) {
+				failed = true;
+				return 0;
+			}
 		}
 	} else {
 		if (best_field == CAL_WEEK_OF_YEAR &&
@@ -469,7 +539,7 @@ int32_t FieldCalendar::HandleComputeJulianDay(CalendarField best_field) {
 			// the week of the year has to stay within the year it was given for
 			const auto woy = InternalGet(best_field);
 			const auto next_julian_day = int32_t(HandleComputeMonthStart(year + 1, 0, false));
-			auto next_first = int32_t(Grego::DayOfWeek(next_julian_day + 1 - JULIAN_1970_CE)) - first_dow;
+			auto next_first = Grego::JulianDayToDayOfWeek(next_julian_day + 1) - first_dow;
 			if (next_first < 0) {
 				next_first += 7;
 			}
@@ -478,7 +548,7 @@ int32_t FieldCalendar::HandleComputeJulianDay(CalendarField best_field) {
 				// the first week may belong to the next year
 				if (next_first > 0 && (7 - next_first) >= GetMinimalDaysInFirstWeek()) {
 					julian_day = next_julian_day;
-					first = int32_t(Grego::DayOfWeek(julian_day + 1 - JULIAN_1970_CE)) - first_dow;
+					first = Grego::JulianDayToDayOfWeek(julian_day + 1) - first_dow;
 					if (first < 0) {
 						first += 7;
 					}
@@ -490,10 +560,23 @@ int32_t FieldCalendar::HandleComputeJulianDay(CalendarField best_field) {
 				if ((7 - first) < GetMinimalDaysInFirstWeek()) {
 					test_date += 7;
 				}
-				test_date += (woy - 1) * 7 + julian_day;
+				int32_t weeks;
+				if (!TryMultiply(woy - 1, 7, weeks) || !TryAdd(weeks, test_date, test_date) ||
+				    !TryAdd(julian_day, test_date, test_date)) {
+					failed = true;
+					return 0;
+				}
 				if (test_date > next_julian_day) {
-					julian_day = int32_t(HandleComputeMonthStart(year - 1, 0, false));
-					first = int32_t(Grego::DayOfWeek(julian_day + 1 - JULIAN_1970_CE)) - first_dow;
+					int32_t previous_year;
+					if (!TryAdd(year, -1, previous_year)) {
+						failed = true;
+						return 0;
+					}
+					julian_day = int32_t(HandleComputeMonthStart(previous_year, 0, false));
+					if (failed) {
+						return 0;
+					}
+					first = Grego::JulianDayToDayOfWeek(julian_day + 1) - first_dow;
 					if (first < 0) {
 						first += 7;
 					}
@@ -505,10 +588,19 @@ int32_t FieldCalendar::HandleComputeJulianDay(CalendarField best_field) {
 		if ((7 - first) < GetMinimalDaysInFirstWeek()) {
 			date += 7;
 		}
-		date += 7 * (InternalGet(best_field) - 1);
+		int32_t weeks;
+		if (!TryAdd(InternalGet(best_field), -1, weeks) || !TryMultiply(7, weeks, weeks) ||
+		    !TryAdd(date, weeks, date)) {
+			failed = true;
+			return 0;
+		}
 	}
 
-	return julian_day + date;
+	if (!TryAdd(julian_day, date, julian_day)) {
+		failed = true;
+		return 0;
+	}
+	return julian_day;
 }
 
 int32_t FieldCalendar::GetLocalDOW() const {
@@ -537,7 +629,7 @@ int32_t FieldCalendar::HandleGetExtendedYearFromWeekFields(int32_t year_woy, int
 	const auto jan1_start = int32_t(HandleComputeMonthStart(year_woy, 0, false));
 	const auto next_jan1_start = int32_t(HandleComputeMonthStart(year_woy + 1, 0, false));
 
-	auto first = int32_t(Grego::DayOfWeek(jan1_start + 1 - JULIAN_1970_CE)) - first_dow;
+	auto first = int32_t(Grego::JulianDayToDayOfWeek(jan1_start + 1)) - first_dow;
 	if (first < 0) {
 		first += 7;
 	}
@@ -604,8 +696,13 @@ void FieldCalendar::ComputeFields() {
 	InternalSet(CAL_JULIAN_DAY, julian_day);
 
 	// every calendar system is computed from the proleptic Gregorian fields of the Julian day
+	const auto epoch_day = int64_t(julian_day) - JULIAN_1970_CE;
+	if (epoch_day > NumericLimits<int32_t>::Maximum() || epoch_day < NumericLimits<int32_t>::Minimum()) {
+		failed = true;
+		return;
+	}
 	int8_t dow;
-	Grego::DayToFields(julian_day - JULIAN_1970_CE, gregorian_year, gregorian_month, gregorian_dom, dow, gregorian_doy);
+	Grego::DayToFields(int32_t(epoch_day), gregorian_year, gregorian_month, gregorian_dom, dow, gregorian_doy);
 	InternalSet(CAL_DAY_OF_WEEK, dow);
 
 	HandleComputeFields(julian_day);
@@ -692,6 +789,13 @@ void FieldCalendar::ComputeWeekFields() {
 //===--------------------------------------------------------------------===//
 void FieldCalendar::Add(CalendarField field, int32_t amount) {
 	failed = false;
+	AddChecked(field, amount);
+}
+
+void FieldCalendar::AddChecked(CalendarField field, int32_t amount) {
+	if (failed) {
+		return;
+	}
 	if (amount == 0) {
 		return;
 	}
@@ -705,21 +809,29 @@ void FieldCalendar::Add(CalendarField field, int32_t amount) {
 
 	switch (field) {
 	case CAL_ERA: {
-		Set(CAL_ERA, Get(CAL_ERA) + amount);
+		const auto era = GetChecked(CAL_ERA);
+		if (failed) {
+			return;
+		}
+		Set(CAL_ERA, era + amount);
 		PinField(CAL_ERA);
 		return;
 	}
 	case CAL_YEAR:
 	case CAL_YEAR_WOY:
 		// in an era that counts backwards, later years have smaller numbers
-		if (Get(CAL_ERA) == 0 && IsEra0CountingBackward()) {
+		if (GetChecked(CAL_ERA) == 0 && IsEra0CountingBackward()) {
 			amount = -amount;
 		}
 		DUCKDB_EXPLICIT_FALLTHROUGH;
 	case CAL_EXTENDED_YEAR:
 	case CAL_MONTH:
 	case CAL_ORDINAL_MONTH: {
-		Set(field, Get(field) + amount);
+		const auto value = GetChecked(field);
+		if (failed) {
+			return;
+		}
+		Set(field, value + amount);
 		// adding a month to the 31st of a month keeps it within the resulting month
 		PinField(CAL_DATE);
 		return;
@@ -764,22 +876,22 @@ void FieldCalendar::Add(CalendarField field, int32_t amount) {
 	int32_t prev_offset = 0;
 	int32_t prev_wall_time = 0;
 	if (keep_wall_time) {
-		prev_offset = Get(CAL_DST_OFFSET) + Get(CAL_ZONE_OFFSET);
-		prev_wall_time = Get(CAL_MILLISECONDS_IN_DAY);
+		prev_offset = GetChecked(CAL_DST_OFFSET) + GetChecked(CAL_ZONE_OFFSET);
+		prev_wall_time = GetChecked(CAL_MILLISECONDS_IN_DAY);
 	}
 
-	SetTime(GetTime() + delta);
+	SetTimeChecked(GetTimeChecked() + delta);
 
 	if (!keep_wall_time) {
 		return;
 	}
-	auto new_wall_time = Get(CAL_MILLISECONDS_IN_DAY);
+	auto new_wall_time = GetChecked(CAL_MILLISECONDS_IN_DAY);
 	if (new_wall_time == prev_wall_time) {
 		return;
 	}
 	// a zone transition between the two instants shifted the wall clock time
 	const auto t = time;
-	const auto new_offset = Get(CAL_DST_OFFSET) + Get(CAL_ZONE_OFFSET);
+	const auto new_offset = GetChecked(CAL_DST_OFFSET) + GetChecked(CAL_ZONE_OFFSET);
 	if (new_offset == prev_offset) {
 		return;
 	}
@@ -788,29 +900,29 @@ void FieldCalendar::Add(CalendarField field, int32_t amount) {
 	auto adjustment = prev_offset - new_offset;
 	adjustment = adjustment >= 0 ? adjustment % int32_t(MILLIS_PER_DAY) : -(-adjustment % int32_t(MILLIS_PER_DAY));
 	if (adjustment != 0) {
-		SetTime(t + adjustment);
-		new_wall_time = Get(CAL_MILLISECONDS_IN_DAY);
+		SetTimeChecked(t + adjustment);
+		new_wall_time = GetChecked(CAL_MILLISECONDS_IN_DAY);
 	}
 	// the wall clock time does not exist on the resulting date, so it is interpreted with the
 	// offsets from after the transition
 	if (new_wall_time != prev_wall_time && adjustment < 0) {
-		SetTime(t);
+		SetTimeChecked(t);
 	}
 }
 
 int32_t FieldCalendar::FieldDifference(double target, CalendarField field) {
 	failed = false;
 	int32_t min = 0;
-	const auto start = GetTime();
+	const auto start = GetTimeChecked();
 	// the amount is always added to the start, so that adding a year to February 29 four times
 	// in a row does not get stuck on February 28
 	if (start < target) {
 		int32_t max = 1;
 		// double the amount until it overshoots
 		while (!failed) {
-			SetTime(start);
-			Add(field, max);
-			const auto ms = GetTime();
+			SetTimeChecked(start);
+			AddChecked(field, max);
+			const auto ms = GetTimeChecked();
 			if (ms == target) {
 				return max;
 			}
@@ -829,9 +941,9 @@ int32_t FieldCalendar::FieldDifference(double target, CalendarField field) {
 		}
 		while ((max - min) > 1 && !failed) {
 			const auto t = min + (max - min) / 2;
-			SetTime(start);
-			Add(field, t);
-			const auto ms = GetTime();
+			SetTimeChecked(start);
+			AddChecked(field, t);
+			const auto ms = GetTimeChecked();
 			if (ms == target) {
 				return t;
 			} else if (ms > target) {
@@ -843,9 +955,9 @@ int32_t FieldCalendar::FieldDifference(double target, CalendarField field) {
 	} else if (start > target) {
 		int32_t max = -1;
 		while (!failed) {
-			SetTime(start);
-			Add(field, max);
-			const auto ms = GetTime();
+			SetTimeChecked(start);
+			AddChecked(field, max);
+			const auto ms = GetTimeChecked();
 			if (ms == target) {
 				return max;
 			}
@@ -861,9 +973,9 @@ int32_t FieldCalendar::FieldDifference(double target, CalendarField field) {
 		}
 		while ((min - max) > 1 && !failed) {
 			const auto t = min + (max - min) / 2;
-			SetTime(start);
-			Add(field, t);
-			const auto ms = GetTime();
+			SetTimeChecked(start);
+			AddChecked(field, t);
+			const auto ms = GetTimeChecked();
 			if (ms == target) {
 				return t;
 			} else if (ms < target) {
@@ -874,8 +986,8 @@ int32_t FieldCalendar::FieldDifference(double target, CalendarField field) {
 		}
 	}
 	// leave the calendar at the end point
-	SetTime(start);
-	Add(field, min);
+	SetTimeChecked(start);
+	AddChecked(field, min);
 	return min;
 }
 
@@ -955,6 +1067,13 @@ int32_t FieldCalendar::GetActualHelper(CalendarField field, int32_t start_value,
 
 int32_t FieldCalendar::GetActualMaximum(CalendarField field) {
 	failed = false;
+	return GetActualMaximumChecked(field);
+}
+
+int32_t FieldCalendar::GetActualMaximumChecked(CalendarField field) {
+	if (failed) {
+		return 0;
+	}
 	switch (field) {
 	case CAL_DATE: {
 		auto work = CopyFields();
@@ -990,12 +1109,22 @@ int32_t FieldCalendar::GetActualMaximum(CalendarField field) {
 
 int32_t FieldCalendar::GetActualMinimum(CalendarField field) {
 	failed = false;
+	return GetActualMinimumChecked(field);
+}
+
+int32_t FieldCalendar::GetActualMinimumChecked(CalendarField field) {
+	if (failed) {
+		return 0;
+	}
 	return GetActualHelper(field, GetLimit(field, LimitType::GREATEST_MINIMUM), GetLimit(field, LimitType::MINIMUM));
 }
 
 void FieldCalendar::PinField(CalendarField field) {
-	const auto max = GetActualMaximum(field);
-	const auto min = GetActualMinimum(field);
+	const auto max = GetActualMaximumChecked(field);
+	const auto min = GetActualMinimumChecked(field);
+	if (failed) {
+		return;
+	}
 	if (fields[field] > max) {
 		Set(field, max);
 	} else if (fields[field] < min) {
@@ -1011,7 +1140,17 @@ unique_ptr<Calendar> Calendar::TryCreate(const string &type, unique_ptr<TimeZone
 		return nullptr;
 	}
 	if (type.empty() || StringUtil::CIEquals(type, "gregorian")) {
-		return make_uniq<GregorianCalendar>(std::move(zone));
+		// Postgres always assumes times are given in the proleptic Gregorian calendar
+		return make_uniq<GregorianCalendar>(std::move(zone), true);
+	}
+	if (StringUtil::CIEquals(type, "buddhist")) {
+		return make_uniq<BuddhistCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "roc")) {
+		return make_uniq<ROCCalendar>(std::move(zone));
+	}
+	if (StringUtil::CIEquals(type, "iso8601")) {
+		return make_uniq<ISO8601Calendar>(std::move(zone));
 	}
 	// TODO: temporary, the calendars that have not been reimplemented yet come from ICU
 	return TryCreateICUCalendar(type, std::move(zone));

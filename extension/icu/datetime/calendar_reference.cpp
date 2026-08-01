@@ -104,6 +104,9 @@ public:
 	}
 
 	void SetTime(double time) {
+		// an operation that failed leaves the state of the calendar undefined, which the
+		// extension never observes because it reports the failure straight away
+		desynchronized = false;
 		millis = time;
 		UErrorCode status = U_ZERO_ERROR;
 		expected.setTime(time, status);
@@ -112,11 +115,15 @@ public:
 
 	//! Reads a field from both, reporting a difference, and returns the reference value
 	int32_t Get(const string &tag, CalendarField field) {
+		if (desynchronized) {
+			return 0;
+		}
 		UErrorCode status = U_ZERO_ERROR;
 		const auto expected_value = expected.get(UCalendarDateFields(field), status);
 		const auto actual_value = actual.Get(field);
 		if (U_FAILURE(status) || actual.HasFailed()) {
 			Report(tag + " get " + FieldName(field) + " failure", U_FAILURE(status), actual.HasFailed());
+			desynchronized = true;
 			return expected_value;
 		}
 		Report(tag + " get " + FieldName(field), expected_value, actual_value);
@@ -135,20 +142,28 @@ public:
 	}
 
 	void Add(const string &tag, CalendarField field, int32_t amount) {
+		if (desynchronized) {
+			return;
+		}
 		UErrorCode status = U_ZERO_ERROR;
 		expected.add(UCalendarDateFields(field), amount, status);
 		actual.Add(field, amount);
 		if (U_FAILURE(status) || actual.HasFailed()) {
 			Report(tag + " add " + FieldName(field) + " failure", U_FAILURE(status), actual.HasFailed());
+			desynchronized = true;
 		}
 	}
 
 	void GetTime(const string &tag) {
+		if (desynchronized) {
+			return;
+		}
 		UErrorCode status = U_ZERO_ERROR;
 		const auto expected_value = double(expected.getTime(status));
 		const auto actual_value = actual.GetTime();
 		if (U_FAILURE(status) || actual.HasFailed()) {
 			Report(tag + " time failure", U_FAILURE(status), actual.HasFailed());
+			desynchronized = true;
 			return;
 		}
 		Report(tag + " time", int64_t(expected_value), int64_t(actual_value));
@@ -162,11 +177,15 @@ public:
 	}
 
 	void FieldDifference(const string &tag, double target, CalendarField field) {
+		if (desynchronized) {
+			return;
+		}
 		UErrorCode status = U_ZERO_ERROR;
 		const auto expected_value = expected.fieldDifference(target, UCalendarDateFields(field), status);
 		const auto actual_value = actual.FieldDifference(target, field);
 		if (U_FAILURE(status) || actual.HasFailed()) {
 			Report(tag + " difference " + FieldName(field) + " failure", U_FAILURE(status), actual.HasFailed());
+			desynchronized = true;
 			return;
 		}
 		Report(tag + " difference " + FieldName(field), expected_value, actual_value);
@@ -192,6 +211,8 @@ private:
 	Calendar &actual;
 	vector<Mismatch> &mismatches;
 	double millis;
+	//! Whether an operation failed, after which the state of the calendars is undefined
+	bool desynchronized = false;
 };
 
 //! Reproduces how the extension truncates a time to a part boundary
@@ -318,8 +339,9 @@ void VerifyArithmetic(Comparator &comparator, double instant) {
 	for (const auto field : {CAL_YEAR, CAL_MONTH, CAL_DATE, CAL_WEEK_OF_YEAR}) {
 		for (const auto delta : {1.0, -1.0, 1e3, -1e3, 1e7, -1e7, 1e10, -1e10, 1e12, -1e12}) {
 			comparator.SetTime(instant);
-			comparator.FieldDifference("difference", instant + delta, field);
-			comparator.GetTime("difference");
+			const string tag = "difference " + string(FieldName(field)) + " by " + to_string(int64_t(delta));
+			comparator.FieldDifference(tag, instant + delta, field);
+			comparator.GetTime(tag);
 		}
 	}
 }
@@ -360,22 +382,29 @@ void VerifyZoneSwitching(Comparator &comparator, double instant) {
 	}
 }
 
-void Verify(const string &zone_name, vector<Mismatch> &mismatches, const vector<double> &instants) {
+void Verify(const string &type, const string &zone_name, vector<Mismatch> &mismatches, const vector<double> &instants) {
 	auto tz = TimeZone::TryCreate(zone_name);
-	auto actual = Calendar::TryCreate("gregorian", std::move(tz));
-
-	UErrorCode status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::Calendar> expected(icu::Calendar::createInstance(
-	    icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(zone_name))),
-	    icu::Locale("@calendar=gregorian"), status));
-	// the extension makes the calendar proleptic Gregorian, which is what Postgres assumes
-	ucal_setGregorianChange(reinterpret_cast<UCalendar *>(expected.get()), U_DATE_MIN, &status);
-	if (U_FAILURE(status)) {
-		mismatches.push_back({zone_name, 0, "create calendar", 0, 1});
+	auto actual = Calendar::TryCreate(type, std::move(tz));
+	if (!actual) {
+		mismatches.push_back({zone_name, 0, "create " + type + " calendar", 0, 1});
 		return;
 	}
 
-	Comparator comparator(zone_name, *expected, *actual, mismatches);
+	string locale_id("@calendar=");
+	locale_id += type;
+	UErrorCode status = U_ZERO_ERROR;
+	duckdb::unique_ptr<icu::Calendar> expected(icu::Calendar::createInstance(
+	    icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(zone_name))),
+	    icu::Locale(locale_id.c_str()), status));
+	if (!expected) {
+		mismatches.push_back({zone_name, 0, "create " + type + " calendar", 1, 0});
+		return;
+	}
+	// the extension makes the calendar proleptic Gregorian, which is what Postgres assumes.
+	// This fails for the calendars that are not Gregorian, which the extension ignores.
+	ucal_setGregorianChange(reinterpret_cast<UCalendar *>(expected.get()), U_DATE_MIN, &status);
+
+	Comparator comparator(type + " " + zone_name, *expected, *actual, mismatches);
 	for (const auto instant : instants) {
 		comparator.SetTime(instant);
 		comparator.GetAllFields("fields");
@@ -435,14 +464,18 @@ unique_ptr<GlobalTableFunctionState> VerifyInit(ClientContext &context, TableFun
 	                                    "Asia/Kathmandu",
 	                                    "Europe/Dublin",
 	                                    "GMT+5:30"};
-	for (const auto &zone_name : DENSE_ZONES) {
-		Verify(zone_name, result->mismatches, GetInstants(zone_name, 1));
-		if (result->mismatches.size() > 100) {
-			return std::move(result);
+	// the calendar systems that are no longer provided by ICU
+	static const char *NATIVE_TYPES[] = {"gregorian", "buddhist", "roc", "iso8601"};
+	for (const auto &type : NATIVE_TYPES) {
+		for (const auto &zone_name : DENSE_ZONES) {
+			Verify(type, zone_name, result->mismatches, GetInstants(zone_name, 1));
+			if (result->mismatches.size() > 100) {
+				return std::move(result);
+			}
 		}
 	}
 	for (const auto &zone_name : TimeZone::GetAvailableIds()) {
-		Verify(zone_name, result->mismatches, GetInstants(zone_name, 32));
+		Verify("gregorian", zone_name, result->mismatches, GetInstants(zone_name, 32));
 		if (result->mismatches.size() > 100) {
 			break;
 		}
