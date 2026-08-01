@@ -51,14 +51,16 @@ static void LeftFunction(DataChunk &args, ExpressionState &state, Vector &result
 }
 
 ScalarFunction LeftFun::GetFunction() {
-	ScalarFunction function({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, LeftFunction<LeftRightUnicode>);
+	ScalarFunction function({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                        LeftFunction<LeftRightUnicode>);
 	// throws if the resulting substring is out of the supported range
 	function.SetFallible();
 	return function;
 }
 
 ScalarFunction LeftGraphemeFun::GetFunction() {
-	ScalarFunction function({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, LeftFunction<LeftRightGrapheme>);
+	ScalarFunction function({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                        LeftFunction<LeftRightGrapheme>);
 	// throws if the resulting substring is out of the supported range
 	function.SetFallible();
 	return function;
@@ -90,14 +92,16 @@ static void RightFunction(DataChunk &args, ExpressionState &state, Vector &resul
 }
 
 ScalarFunction RightFun::GetFunction() {
-	ScalarFunction function({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, RightFunction<LeftRightUnicode>);
+	ScalarFunction function({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                        RightFunction<LeftRightUnicode>);
 	// throws if the resulting substring is out of the supported range
 	function.SetFallible();
 	return function;
 }
 
 ScalarFunction RightGraphemeFun::GetFunction() {
-	ScalarFunction function({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, RightFunction<LeftRightGrapheme>);
+	ScalarFunction function({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                        RightFunction<LeftRightGrapheme>);
 	// throws if the resulting substring is out of the supported range
 	function.SetFallible();
 	return function;

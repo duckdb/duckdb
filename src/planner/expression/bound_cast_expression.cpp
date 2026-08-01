@@ -212,14 +212,15 @@ static bool NestedCastCanThrow(const LogicalType &source_type, const LogicalType
 		if (target_type.id() == LogicalTypeId::ARRAY) {
 			// Casting into a fixed-size ARRAY throws whenever the source length differs
 			if (source_type.id() != LogicalTypeId::ARRAY || ArrayType::IsAnySize(source_type) ||
-			    ArrayType::IsAnySize(target_type) || ArrayType::GetSize(source_type) != ArrayType::GetSize(target_type)) {
+			    ArrayType::IsAnySize(target_type) ||
+			    ArrayType::GetSize(source_type) != ArrayType::GetSize(target_type)) {
 				return true;
 			}
 		} else if (target_type.id() != LogicalTypeId::LIST) {
 			return true;
 		}
-		return BoundCastExpression::CastCanThrow(ListOrArrayChildType(source_type),
-		                                         ListOrArrayChildType(target_type), false);
+		return BoundCastExpression::CastCanThrow(ListOrArrayChildType(source_type), ListOrArrayChildType(target_type),
+		                                         false);
 	case LogicalTypeId::STRUCT: {
 		if (target_type.id() != LogicalTypeId::STRUCT) {
 			return true;
@@ -274,7 +275,8 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	// Casting from a string requires parsing it, which throws whenever the string is not a valid representation of
 	// the target type. Types that sit above VARCHAR in the coercion lattice (e.g. UUID, BLOB, BIT, nested types)
 	// would otherwise be considered safe by the max-type check below.
-	if (source_type.id() == LogicalTypeId::VARCHAR) {
+	// ENUM values are cast through their string value, so casting from an ENUM parses a string as well
+	if (source_type.id() == LogicalTypeId::VARCHAR || source_type.id() == LogicalTypeId::ENUM) {
 		return true;
 	}
 	// Casts of nested types are executed on the child types - recurse into them
@@ -292,7 +294,7 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	}
 	// A cast only succeeds for every input if the target type can represent every value of the source type,
 	// i.e. if the target is the maximum of the two types. Narrowing casts can overflow, and casts between types
-	// that have no ordering (e.g. ENUM -> BIGINT, whose maximum is VARCHAR) can fail to convert.
+	// that have no ordering in the lattice can fail to convert.
 	return LogicalType::DefaultForceMaxLogicalType(source_type, target_type) != target_type;
 }
 

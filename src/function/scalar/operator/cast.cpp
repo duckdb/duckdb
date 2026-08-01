@@ -31,7 +31,7 @@ static void SetCastNullHandling(FUNC &function, const LogicalType &target_type) 
 //! Whether the cast can throw a runtime error - either because the types allow for it, or because no cast exists
 //! between the types at all, in which case the cast throws for every non-NULL value
 static bool BoundCastCanThrow(const BoundCastInfo &bound_cast, const LogicalType &source_type,
-                         const LogicalType &target_type, bool try_cast) {
+                              const LogicalType &target_type, bool try_cast) {
 	if (try_cast) {
 		return false;
 	}

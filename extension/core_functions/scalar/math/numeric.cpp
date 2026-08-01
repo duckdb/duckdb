@@ -1085,12 +1085,17 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			}
 			throw InternalException("Unimplemented numeric type for function \"round\"");
 		}
-		round.AddFunction(ScalarFunction({{"x", type}}, type, round_func, bind_func));
-		round.AddFunction(
-		    ScalarFunction({{"x", type}, {"precision", LogicalType::INTEGER}}, type, round_prec_func, bind_prec_func));
+		ScalarFunction round_function({{"x", type}}, type, round_func, bind_func);
+		ScalarFunction round_prec_function({{"x", type}, {"precision", LogicalType::INTEGER}}, type, round_prec_func,
+		                                   bind_prec_func);
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			// rounding a DECIMAL can overflow
+			round_function.SetFallible();
+			round_prec_function.SetFallible();
+		}
+		round.AddFunction(std::move(round_function));
+		round.AddFunction(std::move(round_prec_function));
 	}
-	// rounding a DECIMAL can overflow
-	round.SetFallible();
 	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;
 }

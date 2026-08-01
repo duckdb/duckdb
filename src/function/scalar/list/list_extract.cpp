@@ -169,13 +169,14 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 	lfun.GetSignature().GetParameter(1).SetName("index");
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
+	// extracting from a string throws if the index is outside of the supported range
+	// extracting from a list returns NULL for indexes that are out of range instead
+	sfun.SetFallible();
 
 	array_extract_set.AddFunction(lfun);
 	array_extract_set.AddFunction(sfun);
 	array_extract_set.AddFunction(GetKeyExtractFunction());
 	array_extract_set.AddFunction(GetIndexExtractFunction());
-	// throws if the index is outside of the supported range
-	array_extract_set.SetFallible();
 	return array_extract_set;
 }
 

@@ -1,7 +1,4 @@
 #include "duckdb/function/scalar_function.hpp"
-#include <mutex>
-#include <set>
-#include <cstdio>
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -13,16 +10,9 @@ void ThrowNonFallibleFunctionError(const Identifier &name, std::exception &ex) {
 	if (!Exception::IsExecutionError(error.Type())) {
 		throw;
 	}
-	{
-		static std::mutex violation_lock;
-		static std::set<std::string> violations;
-		std::lock_guard<std::mutex> guard(violation_lock);
-		auto entry = name.GetIdentifierName() + " | " + error.RawMessage().substr(0, 100);
-		if (violations.insert(entry).second) {
-			fprintf(stderr, "\nFALLIBLE_VIOLATION: %s\n", entry.c_str());
-		}
-	}
-	throw;
+	throw InternalException("Scalar function \"%s\" threw an execution error, but the function is not marked as "
+	                        "fallible - the function must call SetFallible(). Error: %s",
+	                        name, error.RawMessage());
 }
 
 bool ScalarFunctionCallbacks::operator==(const ScalarFunctionCallbacks &rhs) const {
