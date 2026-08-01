@@ -167,3 +167,12 @@
 #ifndef DUCKDB_SB_FEATURE_mad_window
 #define DUCKDB_SB_FEATURE_mad_window DUCKDB_SB_DEFAULT // group: window_specialization
 #endif
+
+// --- sort_specialization: per-layout instances of the sorting stack -----------------------------
+// The whole sorting stack (run sort, merge, sort key scatter/gather, range joins) is templated on
+// SortKeyType, so each of the nine layouts is a full instance of it, ~70 KB. Trimming binds a
+// wider layout instead, which costs memory and time on every sort, not just code size.
+
+#ifndef DUCKDB_SB_FEATURE_sort_key_layouts
+#define DUCKDB_SB_FEATURE_sort_key_layouts DUCKDB_SB_DEFAULT // group: sort_specialization
+#endif
