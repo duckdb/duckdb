@@ -24,6 +24,56 @@ INSERT INTO tbl2 VALUES (0, 'a'), (1, 'b'), (null, 'c')
 statement ok
 CREATE TABLE empty_topn(s INTEGER, p INTEGER)
 
+# Ordering expressions can introduce NULLs even when their input columns cannot
+statement ok
+CREATE TABLE expression_nulls(id INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO expression_nulls VALUES (1), (2), (3)
+
+query II
+SELECT id, row_number() OVER (ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST) AS rn
+FROM expression_nulls
+QUALIFY rn <= 3
+ORDER BY rn
+----
+2	1
+1	2
+3	3
+
+# Exercise the min_n/max_n rewrite without a payload column
+query I
+SELECT row_number() OVER (ORDER BY NULLIF(id % 3, 0) DESC NULLS LAST) AS rn
+FROM expression_nulls
+QUALIFY rn <= 3
+ORDER BY rn
+----
+1
+2
+3
+
+# An expression whose ordering key is always NULL must not fabricate a NULL payload
+query II
+SELECT count(*), count(id)
+FROM (
+	SELECT id
+	FROM expression_nulls
+	QUALIFY row_number() OVER (ORDER BY NULLIF(id, id) NULLS LAST) = 1
+)
+----
+1	1
+
+# This is not specific to NULLIF: TRY_CAST can also introduce NULLs
+query IIII
+SELECT count(*), count(id), min(rn), max(rn)
+FROM (
+	SELECT id, row_number() OVER (ORDER BY TRY_CAST(id::VARCHAR || 'x' AS INTEGER) NULLS LAST) AS rn
+	FROM expression_nulls
+	QUALIFY rn <= 3
+)
+----
+3	3	1	3
+
 query I
 SELECT p
 FROM empty_topn
