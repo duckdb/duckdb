@@ -28,6 +28,9 @@ static constexpr int32_t JULIAN_1_CE = 1721426;
 //! January 1, 1970 CE in the proleptic Gregorian calendar, as a Julian day
 static constexpr int32_t JULIAN_1970_CE = 2440588;
 
+//! The year that the epoch starts in, which fields default to
+static constexpr int32_t EPOCH_YEAR = 1970;
+
 //! The supported Julian day range. Values outside of it cannot be represented as milliseconds.
 static constexpr int32_t MIN_JULIAN = -0x7F000000;
 static constexpr int32_t MAX_JULIAN = +0x7F000000;

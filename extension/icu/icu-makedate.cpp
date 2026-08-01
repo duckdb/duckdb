@@ -15,17 +15,17 @@
 
 namespace duckdb {
 
-date_t ICUMakeDate::Operation(icu::Calendar *calendar, timestamp_tz_t instant) {
+date_t ICUMakeDate::Operation(Calendar *calendar, timestamp_tz_t instant) {
 	if (!instant.IsFinite()) {
 		return Timestamp::GetDate(timestamp_t(instant));
 	}
 
 	// Extract the time zone parts
 	SetTime(calendar, instant);
-	const auto era = ExtractField(calendar, UCAL_ERA);
-	const auto year = ExtractField(calendar, UCAL_YEAR);
-	const auto mm = ExtractField(calendar, UCAL_MONTH) + 1;
-	const auto dd = ExtractField(calendar, UCAL_DATE);
+	const auto era = ExtractField(calendar, CAL_ERA);
+	const auto year = ExtractField(calendar, CAL_YEAR);
+	const auto mm = ExtractField(calendar, CAL_MONTH) + 1;
+	const auto dd = ExtractField(calendar, CAL_DATE);
 
 	const auto yyyy = era ? year : (-year + 1);
 	date_t result;
@@ -44,7 +44,7 @@ date_t ICUMakeDate::ToDate(ClientContext &context, timestamp_tz_t instant) {
 bool ICUMakeDate::CastToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<CastData>();
 	auto &info = cast_data.info->Cast<BindData>();
-	CalendarPtr calendar(info.calendar->clone());
+	CalendarPtr calendar(info.calendar->Copy());
 
 	UnaryExecutor::Execute<timestamp_tz_t, date_t>(
 	    source, result, count, [&](timestamp_tz_t input) { return Operation(calendar.get(), input); });
@@ -71,7 +71,7 @@ void ICUMakeDate::AddCasts(ExtensionLoader &loader) {
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	template <typename T>
-	static inline timestamp_tz_t Operation(icu::Calendar *calendar, T yyyy, T mm, T dd, T hr, T mn, double ss) {
+	static inline timestamp_tz_t Operation(Calendar *calendar, T yyyy, T mm, T dd, T hr, T mn, double ss) {
 		const auto year = Cast::Operation<T, int32_t>(AddOperator::Operation<T, T, T>(yyyy, (yyyy < 0)));
 		const auto month = Cast::Operation<T, int32_t>(SubtractOperatorOverflowCheck::Operation<T, T, T>(mm, 1));
 		const auto day = Cast::Operation<T, int32_t>(dd);
@@ -84,13 +84,13 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		const auto millis = int32_t(ss);
 		int64_t micros = LossyNumericCast<int64_t, double>(std::round((ss - millis) * Interval::MICROS_PER_MSEC));
 
-		calendar->set(UCAL_YEAR, year);
-		calendar->set(UCAL_MONTH, month);
-		calendar->set(UCAL_DATE, day);
-		calendar->set(UCAL_HOUR_OF_DAY, hour);
-		calendar->set(UCAL_MINUTE, min);
-		calendar->set(UCAL_SECOND, secs);
-		calendar->set(UCAL_MILLISECOND, millis);
+		calendar->Set(CAL_YEAR, year);
+		calendar->Set(CAL_MONTH, month);
+		calendar->Set(CAL_DATE, day);
+		calendar->Set(CAL_HOUR_OF_DAY, hour);
+		calendar->Set(CAL_MINUTE, min);
+		calendar->Set(CAL_SECOND, secs);
+		calendar->Set(CAL_MILLISECOND, millis);
 
 		return GetTime(calendar, micros);
 	}
@@ -110,7 +110,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<BindData>();
-		CalendarPtr calendar_ptr(info.calendar->clone());
+		CalendarPtr calendar_ptr(info.calendar->Copy());
 		auto calendar = calendar_ptr.get();
 
 		// Three cases: no TZ, constant TZ, variable TZ

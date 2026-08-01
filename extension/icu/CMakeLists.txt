@@ -24,6 +24,10 @@ set(ICU_EXTENSION_FILES
     collation/generated/collation_root_data.cpp
     collation/generated/collation_normalization_data.cpp
     collation/generated/collation_tailoring_data.cpp
+    datetime/calendar.cpp
+    datetime/calendar_reference.cpp
+    datetime/gregorian.cpp
+    datetime/icu_calendar.cpp
     datetime/grego.cpp
     datetime/timezone.cpp
     datetime/tz_reference.cpp

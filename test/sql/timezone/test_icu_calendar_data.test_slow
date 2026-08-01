@@ -1,0 +1,13 @@
+# name: test/sql/timezone/test_icu_calendar_data.test_slow
+# description: Verify the built-in Gregorian calendar against ICU
+# group: [timezone]
+
+require icu
+
+# For a spread of instants in every known time zone, this compares the built-in calendar against
+# ICU: every field it computes, the truncation and construction patterns that the date functions
+# use, adding to every field, the difference between two instants, the actual maximum of the day
+# of the month, and reusing a calendar across rows with different time zones.
+query IIIII
+FROM icu_calendar_verify()
+----
