@@ -106,7 +106,7 @@ struct CopyFromFunctionBindInput {
 
 struct CopyToSelectInput {
 	ClientContext &context;
-	case_insensitive_map_t<vector<Value>> &options;
+	identifier_map_t<vector<Value>> &options;
 	vector<unique_ptr<Expression>> select_list;
 	CopyToType copy_to_type;
 };
@@ -120,10 +120,10 @@ struct CopyOption {
 };
 
 struct CopyOptionsInput {
-	explicit CopyOptionsInput(case_insensitive_map_t<CopyOption> &options) : options(options) {
+	explicit CopyOptionsInput(identifier_map_t<CopyOption> &options) : options(options) {
 	}
 
-	case_insensitive_map_t<CopyOption> &options;
+	identifier_map_t<CopyOption> &options;
 };
 
 struct CopyToPropagateStatsInput {

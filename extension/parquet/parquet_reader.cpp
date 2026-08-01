@@ -1549,7 +1549,10 @@ static bool TryGetBloomFilterLeaf(ColumnReader &column_reader, const TableFilter
                                   optional_ptr<ColumnReader> &leaf_reader, unique_ptr<TableFilter> &leaf_filter) {
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::TryGetBloomFilterLeaf");
 	auto &expr = *expr_filter.expr;
-	if (!BoundComparisonExpression::IsComparison(expr) || expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+	auto comparison_type = expr.GetExpressionType();
+	if (!BoundComparisonExpression::IsComparison(expr) ||
+	    (comparison_type != ExpressionType::COMPARE_EQUAL &&
+	     comparison_type != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
 		return false;
 	}
 

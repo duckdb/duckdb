@@ -43,10 +43,10 @@ static void URLDecodeFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 ScalarFunction UrlDecodeFun::GetFunction() {
-	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::VARCHAR, URLDecodeFunction);
+	ScalarFunction fun({LogicalType::VARCHAR}, LogicalType::VARCHAR, URLDecodeFunction);
 	// throws if the decoded value is not valid UTF8
-	function.SetFallible();
-	return function;
+	fun.SetFallible();
+	return fun;
 }
 
 } // namespace duckdb

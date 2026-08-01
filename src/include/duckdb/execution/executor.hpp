@@ -131,11 +131,9 @@ private:
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
 	void ScheduleEventsInternal(ScheduleEventData &event_data);
 
-	static void VerifyScheduledEvents(const ScheduleEventData &event_data);
+	static void VerifyScheduledEvents(const vector<shared_ptr<Event>> &events);
 	static void VerifyScheduledEventsInternal(const idx_t i, const vector<reference<Event>> &vertices,
 	                                          vector<bool> &visited, vector<bool> &recursion_stack);
-
-	void SchedulePipeline(const shared_ptr<MetaPipeline> &pipeline, ScheduleEventData &event_data);
 
 	bool NextExecutor();
 

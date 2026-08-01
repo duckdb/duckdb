@@ -12,7 +12,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
@@ -22,6 +21,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
@@ -30,6 +30,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include <utility>
 
 namespace duckdb {
@@ -55,7 +56,7 @@ RemoveUnusedColumns::RemoveUnusedColumns(Optimizer &optimizer)
 
 RemoveUnusedColumns::RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root)
     : optimizer(parent.optimizer), binder(parent.binder), context(parent.context), everything_referenced(is_root),
-      root(parent.root) {
+      allow_missing_cte_references(parent.allow_missing_cte_references), mode(parent.mode), root(parent.root) {
 }
 
 unordered_map<TableIndex, MaterializedCTEInfo> &RemoveUnusedColumns::GetCTEMap() {
@@ -67,6 +68,123 @@ unordered_map<TableIndex, MaterializedCTEInfo> &RemoveUnusedColumns::GetCTEMap()
 
 optional_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> RemoveUnusedColumns::TryGetCTEMap() {
 	return root.root_cte_map.get();
+}
+
+void RemoveUnusedColumns::GatherRecursiveDependencies(unique_ptr<LogicalOperator> &bottom, TableIndex cte_index,
+                                                      const unordered_set<ProjectionIndex> &required_columns,
+                                                      unordered_set<ProjectionIndex> &recursive_dependencies) {
+	auto bindings = bottom->GetColumnBindings();
+
+	RemoveUnusedColumns analysis(optimizer);
+	analysis.everything_referenced = false;
+	analysis.allow_missing_cte_references = true;
+	analysis.mode = RemoveUnusedColumnsMode::ANALYZE;
+	analysis.GetCTEMap().insert({cte_index, MaterializedCTEInfo()});
+	for (auto column_idx : required_columns) {
+		if (column_idx.GetIndex() >= bindings.size()) {
+			throw InternalException("Recursive CTE liveness column is out of range");
+		}
+		analysis.column_references.emplace(bindings[column_idx.GetIndex()], ReferencedColumn());
+	}
+	analysis.VisitOperator(bottom);
+
+	auto cte_map = analysis.TryGetCTEMap();
+	D_ASSERT(cte_map);
+	auto cte_entry = cte_map->find(cte_index);
+	D_ASSERT(cte_entry != cte_map->end());
+	for (auto &entry : cte_entry->second.column_references) {
+		recursive_dependencies.insert(entry.first.column_index);
+	}
+}
+
+bool RemoveUnusedColumns::ComputeRecursiveRequiredColumns(LogicalRecursiveCTE &rec,
+                                                          unordered_set<ProjectionIndex> &required_columns) {
+	for (auto &entry : column_references) {
+		if (entry.first.table_index == rec.table_index) {
+			required_columns.insert(entry.first.column_index);
+		}
+	}
+	if (required_columns.empty()) {
+		required_columns.insert(ProjectionIndex(0));
+	}
+	while (true) {
+		unordered_set<ProjectionIndex> recursive_dependencies;
+		GatherRecursiveDependencies(rec.children[1], rec.table_index, required_columns, recursive_dependencies);
+		const auto old_count = required_columns.size();
+		required_columns.insert(recursive_dependencies.begin(), recursive_dependencies.end());
+		if (required_columns.size() >= rec.column_count) {
+			return false;
+		}
+		if (required_columns.size() == old_count) {
+			return true;
+		}
+	}
+}
+
+void RemoveUnusedColumns::ApplyRecursiveProjections(LogicalRecursiveCTE &rec,
+                                                    const unordered_set<ProjectionIndex> &required_columns) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
+	for (auto column_idx : required_columns) {
+		column_references.emplace(ColumnBinding(rec.table_index, column_idx), ReferencedColumn());
+	}
+	vector<idx_t> entries;
+	for (idx_t i = 0; i < rec.column_count; i++) {
+		entries.push_back(i);
+	}
+	ClearUnusedExpressions(entries, rec.table_index);
+
+	for (auto &child : rec.children) {
+		child->ResolveOperatorTypes();
+		auto bindings = child->GetColumnBindings();
+		vector<unique_ptr<Expression>> expressions;
+		expressions.reserve(entries.size());
+		for (auto column_idx : entries) {
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
+		}
+		auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+		if (child->has_estimated_cardinality) {
+			projection->SetEstimatedCardinality(child->estimated_cardinality);
+		}
+		projection->children.push_back(std::move(child));
+		child = std::move(projection);
+	}
+	vector<LogicalType> internal_types;
+	internal_types.reserve(entries.size());
+	for (auto column_idx : entries) {
+		internal_types.push_back(rec.internal_types[column_idx]);
+	}
+	rec.internal_types = std::move(internal_types);
+	rec.column_count = entries.size();
+}
+
+void RemoveUnusedColumns::RewriteRecursiveCTEReferences(LogicalRecursiveCTE &rec,
+                                                        const unordered_set<ProjectionIndex> &required_columns) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
+	CTERefPruner cte_ref_pruner(rec.table_index, required_columns);
+	cte_ref_pruner.VisitOperator(*rec.children[1]);
+	ColumnBindingReplacer column_binding_replacer;
+	column_binding_replacer.replacement_bindings = std::move(cte_ref_pruner.binding_replacements);
+	column_binding_replacer.VisitOperator(*rec.children[1]);
+}
+
+bool RemoveUnusedColumns::TryPruneRecursiveCTE(LogicalRecursiveCTE &rec) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
+	GetCTEMap().insert({rec.table_index, MaterializedCTEInfo()});
+	if (!rec.union_all || !rec.key_targets.empty() || everything_referenced ||
+	    !LogicalSubtreeIsRepeatable(*rec.children[0]) || !LogicalSubtreeIsRepeatable(*rec.children[1])) {
+		return false;
+	}
+	unordered_set<ProjectionIndex> required_columns;
+	if (!ComputeRecursiveRequiredColumns(rec, required_columns)) {
+		return false;
+	}
+	ApplyRecursiveProjections(rec, required_columns);
+	RewriteRecursiveCTEReferences(rec, required_columns);
+	for (auto &child : rec.children) {
+		RemoveUnusedColumns remove(*this, true);
+		remove.VisitOperator(child);
+	}
+	return true;
 }
 
 idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
@@ -96,6 +214,7 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 
 template <class T>
 void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	idx_t offset = 0;
 	idx_t new_col_idx = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
@@ -132,11 +251,26 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 }
 
 void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
+	const bool analyze = mode == RemoveUnusedColumnsMode::ANALYZE;
 	auto &op = *op_ref;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// aggregate
 		auto &aggr = op.Cast<LogicalAggregate>();
+		if (analyze) {
+			RemoveUnusedColumns remove(*this, everything_referenced);
+			for (auto &group : aggr.groups) {
+				remove.VisitExpression(&group);
+			}
+			for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+				auto binding = ColumnBinding(aggr.aggregate_index, ProjectionIndex(i));
+				if (everything_referenced || column_references.find(binding) != column_references.end()) {
+					remove.VisitExpression(&aggr.expressions[i]);
+				}
+			}
+			remove.VisitOperator(op.children[0]);
+			return;
+		}
 		if (!everything_referenced) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
@@ -161,7 +295,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		if (everything_referenced) {
+		if (analyze || everything_referenced) {
 			break;
 		}
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
@@ -211,6 +345,38 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		break;
 	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = op.Cast<LogicalSetOperation>();
+		if (analyze) {
+			if (!setop.setop_all || everything_referenced) {
+				for (auto &child : op.children) {
+					RemoveUnusedColumns remove(*this, true);
+					remove.VisitOperator(child);
+				}
+				return;
+			}
+
+			vector<ProjectionIndex> entries;
+			for (idx_t i = 0; i < setop.column_count; i++) {
+				auto column_idx = ProjectionIndex(i);
+				if (column_references.find(ColumnBinding(setop.table_index, column_idx)) != column_references.end()) {
+					entries.push_back(column_idx);
+				}
+			}
+			if (entries.empty()) {
+				entries.emplace_back(0);
+			}
+			for (auto &child : op.children) {
+				auto bindings = child->GetColumnBindings();
+				RemoveUnusedColumns remove(*this, false);
+				for (auto column_idx : entries) {
+					if (column_idx.GetIndex() >= bindings.size()) {
+						throw InternalException("UNION liveness column is out of range");
+					}
+					remove.column_references.emplace(bindings[column_idx.GetIndex()], ReferencedColumn());
+				}
+				remove.VisitOperator(child);
+			}
+			return;
+		}
 		if (setop.setop_all && !everything_referenced) {
 			// for UNION we can remove unreferenced columns if union all is used
 			// it's possible not all columns are referenced, but unreferenced columns in the union can
@@ -280,8 +446,19 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &proj = op.Cast<LogicalProjection>();
+		if (analyze) {
+			RemoveUnusedColumns remove(*this, false);
+			for (idx_t i = 0; i < proj.expressions.size(); i++) {
+				auto binding = ColumnBinding(proj.table_index, ProjectionIndex(i));
+				if (everything_referenced || column_references.find(binding) != column_references.end()) {
+					remove.VisitExpression(&proj.expressions[i]);
+				}
+			}
+			remove.VisitOperator(op.children[0]);
+			return;
+		}
 		if (!everything_referenced) {
-			auto &proj = op.Cast<LogicalProjection>();
 			CheckPushdownExtract(op);
 			auto old_expression_count = proj.expressions.size();
 			ClearUnusedExpressions(proj.expressions, proj.table_index);
@@ -316,8 +493,10 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		auto &get = op.Cast<LogicalGet>();
-		RemoveColumnsFromLogicalGet(get, op_ref);
+		if (!analyze) {
+			auto &get = op.Cast<LogicalGet>();
+			RemoveColumnsFromLogicalGet(get, op_ref);
+		}
 		if (!op.children.empty()) {
 			// Some LOGICAL_GET operators (e.g., table in out functions) may have a
 			// child operator. So we recurse into it if it exists.
@@ -328,8 +507,10 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	}
 	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		auto &get = op.Cast<LogicalColumnDataGet>();
-		RemoveColumnsFromLogicalColumnDataGet(get);
+		if (!analyze) {
+			auto &get = op.Cast<LogicalColumnDataGet>();
+			RemoveColumnsFromLogicalColumnDataGet(get);
+		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
@@ -346,14 +527,20 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		// We do not (yet) support pruning columns in recursive CTEs, so we mark everything as referenced and continue
-		// to the children. However, we still need to create the cte_info_map for the recursive CTE so that column
-		// references in the CTE body can find the correct CTE entry and mark columns as referenced.
-		auto &rec = op.Cast<LogicalCTE>();
-		auto &cte_info_map = GetCTEMap();
-		cte_info_map.insert({rec.table_index, MaterializedCTEInfo()});
-		everything_referenced = true;
-		break;
+		if (analyze) {
+			LogicalOperatorVisitor::VisitOperatorExpressions(op);
+			for (auto &child : op.children) {
+				RemoveUnusedColumns remove(*this, true);
+				remove.VisitOperator(child);
+			}
+			return;
+		}
+		auto &rec = op.Cast<LogicalRecursiveCTE>();
+		if (!TryPruneRecursiveCTE(rec)) {
+			everything_referenced = true;
+			break;
+		}
+		return;
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 		auto &cte_map_ref = GetCTEMap();
@@ -399,17 +586,39 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			throw InternalException("CTE pruning did not traverse the entire plan. This is a bug in the optimizer.");
 		}
 
-		if (!cte_map_entry.everything_referenced) {
+		if (cte_map_entry.everything_referenced) {
+			if (!analyze) {
+				everything_referenced = true;
+			}
+			// We may opt out here, but we still need to traverse the left-hand side of the CTE.
+			RemoveUnusedColumns remove(*this, true);
+			remove.VisitOperator(cte.children[0]);
+			return;
+		}
+		if (referenced_columns_in_rhs.empty()) {
+			// If we have no columns selected just select the first column.
+			referenced_columns_in_rhs.emplace(0);
+		}
+		if (analyze) {
+			auto bindings = cte.children[0]->GetColumnBindings();
+			RemoveUnusedColumns lhs_child_analyzer(*this, false);
+			for (auto column_idx : referenced_columns_in_rhs) {
+				if (column_idx.GetIndex() >= bindings.size()) {
+					throw InternalException("CTE liveness column is out of range");
+				}
+				lhs_child_analyzer.column_references.emplace(bindings[column_idx.GetIndex()], ReferencedColumn());
+			}
+			lhs_child_analyzer.VisitOperator(cte.children[0]);
+			return;
+		}
+
+		{
 			RemoveUnusedColumns lhs_child_optimizer(*this, true);
 			// Construct a projection on top of the left-hand side of the CTE
 			// that only projects the columns that are referenced in the right-hand side of the CTE
 			cte.children[0]->ResolveOperatorTypes();
 			auto bindings = cte.children[0]->GetColumnBindings();
 			vector<unique_ptr<Expression>> expressions;
-			if (referenced_columns_in_rhs.empty()) {
-				// if we have no columns selected just select the first column
-				referenced_columns_in_rhs.emplace(0);
-			}
 			for (idx_t i = 0; i < bindings.size(); i++) {
 				if (referenced_columns_in_rhs.find(ProjectionIndex(i)) != referenced_columns_in_rhs.end()) {
 					expressions.push_back(make_uniq<BoundColumnRefExpression>(cte.children[0]->types[i], bindings[i]));
@@ -435,11 +644,6 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			column_binding_replacer.VisitOperator(*cte.children[1]);
 			return;
 		}
-		everything_referenced = true;
-		// We may opt out here, but we still need to traverse the left-hand side of the CTE
-		RemoveUnusedColumns remove(*this, true);
-		remove.VisitOperator(cte.children[0]);
-		return;
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		auto &cte_ref = op.Cast<LogicalCTERef>();
@@ -452,6 +656,9 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		auto &cte_map_ref = *cte_info_map;
 		auto it = cte_map_ref.find(cte_ref.cte_index);
 		if (it == cte_map_ref.end()) {
+			if (allow_missing_cte_references) {
+				break;
+			}
 			throw InternalException("Could not find CTE definition for CTE reference");
 		}
 		auto &cte_entry = it->second;
@@ -479,8 +686,9 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
-	if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
-	    op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	if (!analyze &&
+	    (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
+	     op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN)) {
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		// after removing duplicate columns we may have duplicate join conditions (if the join graph is cyclical)
 		vector<JoinCondition> unique_conditions;
@@ -555,6 +763,7 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
     ReferencedColumn &col,
     const std::function<ProjectionIndex(const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type)>
         &callback) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	//! For each struct extract, replace the expression with a BoundColumnRefExpression
 	//! The expression references a binding created for the extracted path, 1 per unique path
 	for (auto &struct_extract : col.struct_extracts) {
@@ -616,6 +825,7 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 }
 
 void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expression_count) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	vector<unique_ptr<Expression>> expressions;
 	auto &context = this->context;
 
@@ -670,6 +880,7 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 }
 
 void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
@@ -745,6 +956,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 }
 
 void RemoveUnusedColumns::RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	if (everything_referenced) {
 		return;
 	}
@@ -755,6 +967,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDat
 }
 
 void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref) {
+	D_ASSERT(mode == RemoveUnusedColumnsMode::APPLY);
 	if (everything_referenced) {
 		return;
 	}
