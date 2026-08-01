@@ -55,3 +55,11 @@ EXPLAIN SELECT CASE WHEN X>5 THEN X ELSE X+1 END FROM test
 query I nosort casenorm6
 EXPLAIN SELECT CASE WHEN X>5 THEN X ELSE X+1 END FROM test
 ----
+
+query I nosort casenorm7
+EXPLAIN SELECT CASE WHEN random() > 0.5 THEN X ELSE X END FROM test
+----
+
+query I nosort casenorm7
+EXPLAIN SELECT CASE WHEN random() > 0.5 THEN X ELSE X END FROM test
+----
