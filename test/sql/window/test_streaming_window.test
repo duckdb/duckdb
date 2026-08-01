@@ -326,6 +326,30 @@ explain select last_value(i IGNORE NULLS) over () from integers
 ----
 physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
+# A bounded frame cannot be streamed: the first value changes as the frame moves
+query TT
+explain select i, first_value(i) over (ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) from integers
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+statement ok
+create table first_value_bounded (i integer);
+
+statement ok
+INSERT INTO first_value_bounded VALUES (1), (2), (3), (4), (5);
+
+query II
+SELECT i, first_value(i) OVER (ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM first_value_bounded
+----
+1	1
+2	1
+3	2
+4	3
+5	4
+
+statement ok
+DROP TABLE first_value_bounded;
+
 query TT
 explain select last_value(i IGNORE NULLS) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
 from integers

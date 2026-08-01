@@ -779,10 +779,13 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		// We can only stream first values if the frame start never moves past the first row
+		if (wexpr.WindowStart() != WindowBoundary::UNBOUNDED_PRECEDING) {
+			return false;
+		}
 		if (wexpr.IgnoreNulls()) {
 			// We can stream first values ignoring NULLs if they are "running totals"
-			return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
-			       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
+			return wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 		}
 		return true;
 	}
