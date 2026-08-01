@@ -1341,6 +1341,31 @@ hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, co
 
 template <>
 uhugeint_t InterpolateOperator::Operation(const uhugeint_t &lo, const double d, const uhugeint_t &hi) {
+	if (d == 0 || lo == hi) {
+		return lo;
+	}
+	if (d == 1) {
+		return hi;
+	}
+	if (d > 0 && d < 1) {
+		const bool ascending = lo < hi;
+		const auto lower = ascending ? lo : hi;
+		const auto upper = ascending ? hi : lo;
+		auto delta = upper;
+		if (Uhugeint::TrySubtractInPlace(delta, lower)) {
+			const auto double_delta = Uhugeint::Cast<double>(delta);
+			uhugeint_t roundtrip_delta;
+			uhugeint_t offset;
+			if (Uhugeint::TryConvert(double_delta, roundtrip_delta) && roundtrip_delta == delta &&
+			    Uhugeint::TryConvert(double_delta * (ascending ? d : 1 - d), offset)) {
+				auto result = lower;
+				if (Uhugeint::TryAddInPlace(result, offset)) {
+					return result;
+				}
+			}
+		}
+	}
+	// Retain the endpoint-based fallback if converting or adding the interpolated delta is unsafe.
 	return Uhugeint::Convert(Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
 }
 

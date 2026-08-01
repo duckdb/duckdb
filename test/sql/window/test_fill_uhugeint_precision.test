@@ -1,0 +1,66 @@
+# name: test/sql/window/test_fill_uhugeint_precision.test
+# description: Preserve precision when filling between nearby large UHUGEINT values
+# group: [window]
+
+query II
+SELECT i, fill(v ORDER BY i) OVER () AS filled
+FROM (VALUES (0, 9999999999999999999999999997::UHUGEINT),
+             (1, NULL::UHUGEINT),
+             (2, 9999999999999999999999999999::UHUGEINT)) t(i, v)
+ORDER BY i;
+----
+0	9999999999999999999999999997
+1	9999999999999999999999999998
+2	9999999999999999999999999999
+
+# Converting a rounded endpoint to UINT128 previously threw near UHUGEINT_MAX.
+query II
+SELECT i, fill(v ORDER BY i) OVER () AS filled
+FROM (VALUES (0, 340282366920938463463374607431768211453::UHUGEINT),
+             (1, NULL::UHUGEINT),
+             (2, 340282366920938463463374607431768211455::UHUGEINT)) t(i, v)
+ORDER BY i;
+----
+0	340282366920938463463374607431768211453
+1	340282366920938463463374607431768211454
+2	340282366920938463463374607431768211455
+
+# Use the correct weight from the lower endpoint for ascending and descending values.
+query III
+SELECT i,
+       fill(ascending_v ORDER BY i) OVER () AS ascending_filled,
+       fill(descending_v ORDER BY i) OVER () AS descending_filled
+FROM (VALUES (0, 340282366920938463463374607431768211451::UHUGEINT,
+                 340282366920938463463374607431768211455::UHUGEINT),
+             (1, NULL::UHUGEINT, NULL::UHUGEINT),
+             (4, 340282366920938463463374607431768211455::UHUGEINT,
+                 340282366920938463463374607431768211451::UHUGEINT)) t(i, ascending_v, descending_v)
+QUALIFY i = 1;
+----
+1	340282366920938463463374607431768211452	340282366920938463463374607431768211454
+
+# Fall back when the full endpoint delta cannot make an exact round trip through DOUBLE.
+query III
+SELECT i,
+       fill(ascending_v ORDER BY i) OVER () AS ascending_filled,
+       fill(descending_v ORDER BY i) OVER () AS descending_filled
+FROM (VALUES (0, 1::UHUGEINT, 340282366920938463463374607431768211455::UHUGEINT),
+             (1, NULL::UHUGEINT, NULL::UHUGEINT),
+             (2, 340282366920938463463374607431768211455::UHUGEINT, 1::UHUGEINT))
+     t(i, ascending_v, descending_v)
+QUALIFY i = 1;
+----
+1	170141183460469231731687303715884105728	170141183460469231731687303715884105728
+
+# Duplicate order keys can place a missing value exactly at either endpoint.
+query II
+SELECT id, fill(v ORDER BY ordering) OVER () AS filled
+FROM (VALUES (0, 0, 340282366920938463463374607431768211453::UHUGEINT),
+             (1, 0, NULL::UHUGEINT),
+             (2, 1, 340282366920938463463374607431768211455::UHUGEINT),
+             (3, 1, NULL::UHUGEINT)) t(id, ordering, v)
+QUALIFY id IN (1, 3)
+ORDER BY id;
+----
+1	340282366920938463463374607431768211453
+3	340282366920938463463374607431768211455
