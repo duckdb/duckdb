@@ -25,6 +25,7 @@ class QueryErrorContext;
 class TableRef;
 struct hugeint_t;
 class optional_idx; // NOLINT: matching std style
+struct QueryLocation;
 
 inline void AssertRestrictFunction(const void *left_start, const void *left_end, const void *right_start,
                                    const void *right_end, const char *fname, int linenr) {
@@ -117,9 +118,9 @@ public:
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const ParsedExpression &expr);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const QueryErrorContext &error_context);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const TableRef &ref);
-	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(optional_idx error_location);
+	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(QueryLocation error_location);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const string &subtype,
-	                                                                    optional_idx error_location);
+	                                                                    QueryLocation error_location);
 
 	//! Whether this exception type can occur during execution of a query
 	DUCKDB_API static bool IsExecutionError(ExceptionType type);
@@ -147,7 +148,7 @@ public:
 		return (message + "\n" + GetStackTrace());
 	}
 
-	DUCKDB_API static void SetQueryLocation(optional_idx error_location, unordered_map<string, string> &extra_info);
+	DUCKDB_API static void SetQueryLocation(QueryLocation error_location, unordered_map<string, string> &extra_info);
 };
 
 //===--------------------------------------------------------------------===//
@@ -406,7 +407,7 @@ class TypeMismatchException : public Exception {
 public:
 	DUCKDB_API TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
 	DUCKDB_API TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
-	DUCKDB_API TypeMismatchException(optional_idx error_location, const LogicalType &type_1, const LogicalType &type_2,
+	DUCKDB_API TypeMismatchException(QueryLocation error_location, const LogicalType &type_1, const LogicalType &type_2,
 	                                 const string &msg);
 	DUCKDB_API explicit TypeMismatchException(const string &msg);
 };

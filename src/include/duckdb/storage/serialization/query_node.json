@@ -378,5 +378,25 @@
         "type": "vector<ParsedExpression*>"
       }
     ]
+  },
+  {
+    "class": "CopyQueryNode",
+    "base": "QueryNode",
+    "enum": "COPY_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/copy_query_node.hpp",
+      "duckdb/parser/parsed_data/copy_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "CopyInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": [
+      "info"
+    ]
   }
 ]

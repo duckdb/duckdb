@@ -22,7 +22,7 @@ struct ExternalResourceType {
 	//! The type name, e.g. 'quack@aws:ec2'.
 	string name;
 	//! What kind of resource this is — a free-form classification set by the registrant. Consumers
-	//! filter on it; e.g. `WITH EXTERNAL RESOURCE ... ATTACH|CONNECT` handles kind 'catalog', other
+	//! filter on it; e.g. `ATTACH/CONNECT TO EXTERNAL RESOURCE ... ATTACH|CONNECT` handles kind 'catalog', other
 	//! kinds (compute, storage, ...) are provisioned but not attached. The registry itself is agnostic.
 	string kind;
 	//! Function that provisions the resource and returns a handle.
@@ -33,6 +33,9 @@ struct ExternalResourceType {
 	string destroy_function;
 	//! Function that reconnects to an existing resource. May be empty.
 	string resolve_function;
+	//! Function that enumerates the resources of this type that exist externally (for discovery /
+	//! `SHOW ALL EXTERNAL RESOURCES`). Returns a table of handles. May be empty.
+	string list_function;
 	//! Where it came from: "user" (register_external_resource_type) or "extension".
 	string origin;
 	//! The caller's catalog search path captured at registration (serialized). The callbacks are resolved

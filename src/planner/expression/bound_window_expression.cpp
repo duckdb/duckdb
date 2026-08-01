@@ -18,6 +18,11 @@ BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr
       distinct(false) {
 }
 
+bool BoundWindowExpression::IsVolatile() const {
+	auto stability = aggregate ? aggregate->GetStability() : window->GetStability();
+	return stability == FunctionStability::VOLATILE || Expression::IsVolatile();
+}
+
 string BoundWindowExpression::ToString() const {
 	string function_name =
 	    aggregate.get() ? aggregate->GetName().GetIdentifierName() : window->GetName().GetIdentifierName();

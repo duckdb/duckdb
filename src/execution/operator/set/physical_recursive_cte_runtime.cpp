@@ -170,7 +170,7 @@ public:
 	}
 
 	bool TaskBlockedOnResult() const override {
-		return pipeline_executor.RemainingSinkChunk();
+		return pipeline.IsStreamingResultPipeline() && pipeline_executor.RemainingSinkChunk();
 	}
 
 private:

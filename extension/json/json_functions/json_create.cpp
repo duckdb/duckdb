@@ -85,6 +85,12 @@ struct JSONCopyFormatOptions {
 	optional_ptr<const Expression> timestamptz_ns_format_expression;
 };
 
+static JSONCopyFormatOptions ClientFormatOptions(ClientContext &context) {
+	JSONCopyFormatOptions result;
+	result.context = context;
+	return result;
+}
+
 struct JSONCopyToJSONFunctionData : public FunctionData {
 public:
 	JSONCopyToJSONFunctionData(StructNames const_struct_names_p, bool has_date_format_p, string date_format_string_p,
@@ -792,7 +798,18 @@ static void CreateValuesTimestampNS(yyjson_mut_doc *doc, yyjson_mut_val *vals[],
 
 static void CreateValuesTimestampTZ(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
                                     const JSONCopyFormatOptions &options) {
-	CreateValuesFormatted(doc, vals, value_v, count, bool(options.timestamp_format), [&](Vector &string_vector) {
+	if (!options.timestamp_format) {
+		// no COPY format was given - use the full cast set so that the session time zone is applied
+		Vector string_vector(LogicalType::VARCHAR, count);
+		if (options.context) {
+			VectorOperations::Cast(*options.context.get_mutable(), value_v, string_vector, count, true);
+		} else {
+			VectorOperations::DefaultCast(value_v, string_vector, count);
+		}
+		TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
+		return;
+	}
+	CreateValuesFormatted(doc, vals, value_v, count, true, [&](Vector &string_vector) {
 		auto format_expression = value_v.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS
 		                             ? options.timestamptz_ns_format_expression
 		                             : options.timestamptz_format_expression;
@@ -973,6 +990,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	const auto &info = func_expr.BindInfo()->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
+	auto options = ClientFormatOptions(state.GetContext());
 
 	// Initialize values
 	const idx_t count = args.size();
@@ -987,7 +1005,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t pair_idx = 0; pair_idx < args.data.size() / 2; pair_idx++) {
 		Vector &key_v = args.data[pair_idx * 2];
 		Vector &value_v = args.data[pair_idx * 2 + 1];
-		CreateKeyValuePairs(info.const_struct_names, doc, objs, vals, key_v, value_v, count);
+		CreateKeyValuePairs(info.const_struct_names, doc, objs, vals, key_v, value_v, count, options);
 	}
 	// Write JSON values to string
 	auto objects = FlatVector::GetDataMutable<string_t>(result);
@@ -1002,6 +1020,7 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	const auto &info = func_expr.BindInfo()->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
+	auto options = ClientFormatOptions(state.GetContext());
 
 	// Initialize arrays
 	const idx_t count = args.size();
@@ -1014,7 +1033,7 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	auto vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
 	// Loop through args
 	for (auto &v : args.data) {
-		CreateValues(info.const_struct_names, doc, vals, v, count);
+		CreateValues(info.const_struct_names, doc, vals, v, count, options);
 		for (idx_t i = 0; i < count; i++) {
 			yyjson_mut_arr_append(arrs[i], vals[i]);
 		}
@@ -1060,8 +1079,9 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	const auto &info = func_expr.BindInfo()->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
+	auto options = ClientFormatOptions(state.GetContext());
 
-	ToJSONFunctionInternal(info.const_struct_names, args.data[0], args.size(), result, alc);
+	ToJSONFunctionInternal(info.const_struct_names, args.data[0], args.size(), result, alc, options);
 }
 
 static void JSONCopyToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -1184,16 +1204,17 @@ ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
 
 struct NestedToJSONCastData : public BoundCastData {
 public:
-	NestedToJSONCastData() {
+	explicit NestedToJSONCastData(optional_ptr<ClientContext> client) : client(client) {
 	}
 
 	unique_ptr<BoundCastData> Copy() const override {
-		auto result = make_uniq<NestedToJSONCastData>();
+		auto result = make_uniq<NestedToJSONCastData>(client);
 		result->const_struct_names = const_struct_names.Copy();
 		return std::move(result);
 	}
 
 public:
+	optional_ptr<ClientContext> client;
 	StructNames const_struct_names;
 };
 
@@ -1201,14 +1222,17 @@ static bool AnyToJSONCast(Vector &source, Vector &result, idx_t count, CastParam
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator->Reset();
 	auto alc = lstate.json_allocator->GetYYAlc();
-	const auto &names = parameters.cast_data->Cast<NestedToJSONCastData>().const_struct_names;
+	auto &cast_data = parameters.cast_data->Cast<NestedToJSONCastData>();
+	const auto &names = cast_data.const_struct_names;
 
-	ToJSONFunctionInternal(names, source, count, result, alc);
+	JSONCopyFormatOptions options;
+	options.context = cast_data.client;
+	ToJSONFunctionInternal(names, source, count, result, alc, options);
 	return true;
 }
 
 static BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-	auto cast_data = make_uniq<NestedToJSONCastData>();
+	auto cast_data = make_uniq<NestedToJSONCastData>(input.context);
 	GetJSONType(cast_data->const_struct_names, source);
 	return BoundCastInfo(AnyToJSONCast, std::move(cast_data), JSONFunctionLocalState::InitCastLocalState);
 }

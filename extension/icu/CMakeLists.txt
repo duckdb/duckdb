@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(ICUExtension)
 
+# Before any subdirectory or target, which would otherwise inherit the
+# directory-wide definition
+set_extension_version_sources(icu icu_extension.cpp)
+
 include_directories(include)
 option(WITH_INTERNAL_ICU "Use vendored copy of icu" TRUE)
 if(WITH_INTERNAL_ICU)

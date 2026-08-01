@@ -29,6 +29,16 @@
         "name": "query_location",
         "type": "optional_idx",
         "default": "optional_idx()"
+      },
+      {
+        "id": 104,
+        "name": "query_location_length",
+        "type": "uint32_t",
+        "property": "query_location.length",
+        "default": "0",
+        "version": "v2.0.0",
+        "equals_skip": true,
+        "hash_skip": true
       }
     ]
   },

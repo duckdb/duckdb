@@ -1,0 +1,38 @@
+diff --git a/src/include/planning/iceberg_multi_file_list.hpp b/src/include/planning/iceberg_multi_file_list.hpp
+index b2bc0cd0..a6da48f0 100644
+--- a/src/include/planning/iceberg_multi_file_list.hpp
++++ b/src/include/planning/iceberg_multi_file_list.hpp
+@@ -177,10 +177,7 @@ public:
+ 
+ public:
+ 	//! MultiFileList API
+-	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-	                                                const vector<Identifier> &names, const vector<LogicalType> &types,
+-	                                                const vector<column_t> &column_ids,
+-	                                                TableFilterSet &filters) const override;
++	unique_ptr<MultiFileList> DynamicFilterPushdown(MultiFileDynamicPushdownInfo &pushdown_info) const override;
+ 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+ 	                                                MultiFilePushdownInfo &info,
+ 	                                                vector<unique_ptr<Expression>> &filters) const override;
+diff --git a/src/planning/iceberg_multi_file_list.cpp b/src/planning/iceberg_multi_file_list.cpp
+index f1c78937..d4cbed8f 100644
+--- a/src/planning/iceberg_multi_file_list.cpp
++++ b/src/planning/iceberg_multi_file_list.cpp
+@@ -411,9 +411,14 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
+ }
+ 
+ unique_ptr<MultiFileList>
+-IcebergMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-                                            const vector<Identifier> &names, const vector<LogicalType> &types,
+-                                            const vector<column_t> &column_ids, TableFilterSet &filters) const {
++IcebergMultiFileList::DynamicFilterPushdown(MultiFileDynamicPushdownInfo &pushdown_info) const {
++	auto &options = pushdown_info.options;
++	auto &names = pushdown_info.column_names;
++	auto &types = pushdown_info.column_types;
++	auto &column_ids = pushdown_info.column_ids;
++	auto &context = pushdown_info.context;
++	auto &filters = pushdown_info.filters;
++
+ 	if (!filters.HasFilters()) {
+ 		return nullptr;
+ 	}
