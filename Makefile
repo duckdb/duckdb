@@ -357,6 +357,9 @@ endif
 ifeq (${NATIVE_ARCH}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DNATIVE_ARCH=1
 endif
+ifneq (${DUCKDB_OPTIMIZATION_PROFILE}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_OPTIMIZATION_PROFILE=${DUCKDB_OPTIMIZATION_PROFILE}
+endif
 ifeq (${OVERRIDE_NEW_DELETE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_NEW_DELETE=1
 endif
@@ -673,6 +676,7 @@ toolsci:
 	clang++ --version
 
 test_ci:
+	cmake -P scripts/ci/test_architecture_flags.cmake
 	python3 -m unittest discover --buffer --start-directory scripts/ci $(T)
 
 .PHONY: format_tools parser_tools spell_tools
