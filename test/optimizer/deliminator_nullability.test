@@ -23,6 +23,18 @@ CREATE TABLE ev(id INTEGER NOT NULL, wh INTEGER NOT NULL);
 statement ok
 INSERT INTO ev VALUES (1, 6), (2, 7), (3, 9);
 
+statement ok
+CREATE TABLE nested_outer(s STRUCT(x INTEGER, y INTEGER));
+
+statement ok
+INSERT INTO nested_outer VALUES ({'x': NULL, 'y': 1}), ({'x': 1, 'y': 2}), ({'x': 9, 'y': 9});
+
+statement ok
+CREATE TABLE nested_inner(s STRUCT(x INTEGER, y INTEGER));
+
+statement ok
+INSERT INTO nested_inner VALUES ({'x': NULL, 'y': 1}), ({'x': 1, 'y': 2});
+
 foreach cte_mode true false
 
 statement ok
@@ -175,5 +187,57 @@ FROM ids
 JOIN nn ON ids.id = nn.k;
 ----
 logical_opt	<REGEX>:.*Join Type: MARK.*wh IS DISTINCT FROM wh.*
+
+# A nested value can be non-NULL while equality returns NULL because a child is NULL.
+# Do not replace regular nested equality with a null-safe delimiter join.
+query I
+SELECT count(*) FROM nested_outer
+WHERE EXISTS (SELECT 1 FROM nested_inner WHERE nested_inner.s = nested_outer.s);
+----
+1
+
+query I
+SELECT count(*) FROM nested_outer
+WHERE NOT EXISTS (SELECT 1 FROM nested_inner WHERE nested_inner.s = nested_outer.s);
+----
+2
+
+# Null-safe nested equality must retain its child-NULL semantics too.
+query I
+SELECT count(*) FROM nested_outer
+WHERE EXISTS (
+    SELECT 1 FROM nested_inner
+    WHERE nested_inner.s IS NOT DISTINCT FROM nested_outer.s
+);
+----
+2
+
+query I
+SELECT count(*) FROM nested_outer
+WHERE NOT EXISTS (
+    SELECT 1 FROM nested_inner
+    WHERE nested_inner.s IS NOT DISTINCT FROM nested_outer.s
+);
+----
+1
+
+# The same child-NULL semantics apply to other nested types.
+query I
+SELECT count(*) FROM (VALUES ([NULL]::INTEGER[]), ([1]), ([2])) nested_list_outer(v)
+WHERE EXISTS (
+    SELECT 1 FROM (VALUES ([NULL]::INTEGER[]), ([1])) nested_list_inner(v)
+    WHERE nested_list_inner.v = nested_list_outer.v
+);
+----
+1
+
+query I
+SELECT count(*) FROM (VALUES ([NULL]::INTEGER[]), ([1]), ([2])) nested_list_outer(v)
+WHERE NOT EXISTS (
+    SELECT 1 FROM (VALUES ([NULL]::INTEGER[]), ([1])) nested_list_inner(v)
+    WHERE nested_list_inner.v = nested_list_outer.v
+);
+----
+2
 
 endloop

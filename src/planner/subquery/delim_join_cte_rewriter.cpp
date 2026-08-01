@@ -301,6 +301,11 @@ static bool IsColumnEqualityPredicate(Expression &expr) {
 	return lhs.Cast<BoundColumnRefExpression>().Depth() == 0 && rhs.Cast<BoundColumnRefExpression>().Depth() == 0;
 }
 
+static bool IsNestedComparison(const LogicalType &type) {
+	// Eliminating this join changes nested child-NULL semantics; top-level nullability is not sufficient.
+	return type.IsNested();
+}
+
 static bool IsNonSelectiveJoinPredicate(Expression &expr) {
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		bool all_children_non_selective = true;
@@ -1212,6 +1217,9 @@ bool GeneratedDedupRefEliminator::RemoveJoin(unique_ptr<LogicalOperator> &join, 
 		if (!cond.IsComparison()) {
 			return false;
 		}
+		if (IsNestedComparison(cond.GetLHS().GetReturnType())) {
+			return false;
+		}
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
 
 		auto lhs_generated_idx = FindGeneratedOutputBinding(cond.GetLHS(), *dedup_ref);
@@ -1360,6 +1368,9 @@ bool GeneratedDedupRefEliminator::RemoveFilterCrossProduct(unique_ptr<LogicalOpe
 		}
 
 		auto comparison_type = expr.GetExpressionType();
+		if (IsNestedComparison(lhs.GetReturnType())) {
+			return false;
+		}
 		if (lhs_dedup) {
 			if (!replacement_bindings.TryAdd(ReplacementBinding(lhs_colref.Binding(), rhs_colref.Binding()))) {
 				return false;
