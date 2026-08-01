@@ -284,6 +284,9 @@ public:
 	//! Whether the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
 
+	//! Whether the aggregate returns numeric zero instead of NULL for an empty input
+	bool returns_zero_on_empty = false;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -325,6 +328,9 @@ public: // Properties
 	//! Whether the aggregate is affect by distinct modifiers
 	auto GetDistinctDependent() const -> AggregateDistinctDependent { return properties.distinct_dependent; }
 	auto SetDistinctDependent(AggregateDistinctDependent value) -> void { properties.distinct_dependent = value; }
+
+	auto ReturnsZeroOnEmpty() const -> bool { return properties.returns_zero_on_empty; }
+	auto SetReturnsZeroOnEmpty() -> void { properties.returns_zero_on_empty = true; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }

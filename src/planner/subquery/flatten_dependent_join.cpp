@@ -7,6 +7,7 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
@@ -733,8 +734,8 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownCorrelatedN
                                                                                     bool propagate_null_values) {
 	auto state = PushDownCorrelatedNode(plan, propagate_null_values, {});
 	if (!replacement_map.empty()) {
-		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
-		RewriteCountAggregates::Rewrite(*plan, replacement_map);
+		// replace missing groups for aggregates that return zero on empty
+		RewriteZeroOnEmptyAggregates::Rewrite(*plan, replacement_map);
 	}
 	if (!parent) {
 		ColumnBindingResolver::Verify(binder.context, *plan);
@@ -841,7 +842,7 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 	}
 	for (auto &aggr_exp : aggr.expressions) {
 		auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
-		if (!b_aggr_exp.PropagatesNullValues()) {
+		if (!b_aggr_exp.PropagatesNullValues() || b_aggr_exp.Function().ReturnsZeroOnEmpty()) {
 			join_type = JoinType::LEFT;
 			break;
 		}
@@ -861,21 +862,22 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownAggregate(u
 		    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		join->conditions.push_back(std::move(cond));
 	}
-	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+	vector<ColumnBinding> zero_on_empty_bindings;
+	for (idx_t i = 0, aggregate_count = aggr.expressions.size(); i < aggregate_count; i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().Function();
-
-		auto count_fun = CountFunctionBase::GetFunction();
-		auto count_star_fun = CountStarFun::GetFunction();
-
-		const auto is_count_func =
-		    bound_func.GetName() == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
-
-		const auto is_count_star_func =
-		    bound_func.GetName() == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
-
-		if (is_count_func || is_count_star_func) {
-			replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
+		if (bound_func.ReturnsZeroOnEmpty()) {
+			zero_on_empty_bindings.emplace_back(aggr.aggregate_index, ProjectionIndex(i));
+		}
+	}
+	if (!zero_on_empty_bindings.empty()) {
+		auto marker_index = ProjectionIndex(aggr.expressions.size());
+		FunctionBinder function_binder(binder.context);
+		aggr.expressions.push_back(function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
+		                                                                 AggregateType::NON_DISTINCT));
+		auto marker_binding = ColumnBinding(aggr.aggregate_index, marker_index);
+		for (auto &binding : zero_on_empty_bindings) {
+			replacement_map[binding] = marker_binding;
 		}
 	}
 	plan = std::move(join);

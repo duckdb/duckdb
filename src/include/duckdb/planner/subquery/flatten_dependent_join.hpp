@@ -84,7 +84,7 @@ private:
 	void AddReplacementAliases(const BindingReplacementGraph &replacements);
 	Binder &binder;
 	column_binding_map_t<ColumnBinding> correlated_aliases;
-	column_binding_map_t<idx_t> replacement_map;
+	column_binding_map_t<ColumnBinding> replacement_map;
 	const CorrelatedColumns &correlated_columns;
 	vector<LogicalType> delim_types;
 

@@ -11,6 +11,7 @@ AggregateFunction RegrCountFun::GetFunction() {
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::UINTEGER);
 	regr_count.SetName("regr_count");
 	regr_count.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	regr_count.SetReturnsZeroOnEmpty();
 	return regr_count;
 }
 

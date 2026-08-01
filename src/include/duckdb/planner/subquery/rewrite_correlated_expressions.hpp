@@ -31,15 +31,15 @@ private:
 	column_binding_map_t<ColumnBinding> &correlated_aliases;
 };
 
-//! Helper class that rewrites COUNT aggregates into a CASE expression turning NULL into 0 after a LEFT OUTER JOIN
-class RewriteCountAggregates : public LogicalOperatorVisitor {
+//! Helper class that rewrites aggregates returning zero on empty into a CASE expression after a LEFT OUTER JOIN
+class RewriteZeroOnEmptyAggregates : public LogicalOperatorVisitor {
 public:
-	static void Rewrite(LogicalOperator &op, column_binding_map_t<idx_t> &replacement_map);
+	static void Rewrite(LogicalOperator &op, column_binding_map_t<ColumnBinding> &replacement_map);
 
 private:
-	explicit RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map);
+	explicit RewriteZeroOnEmptyAggregates(column_binding_map_t<ColumnBinding> &replacement_map);
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-	column_binding_map_t<idx_t> &replacement_map;
+	column_binding_map_t<ColumnBinding> &replacement_map;
 };
 
 } // namespace duckdb
