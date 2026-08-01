@@ -106,9 +106,23 @@ struct IcuBindData : public FunctionData {
 
 const string IcuBindData::FUNCTION_PREFIX = "icu_collate_";
 
-static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+//! The two hexadecimal characters of every byte value
+static const uint16_t &HexDigits(uint8_t byte) {
+	static const auto HEX_PAIRS = []() {
+		const char digits[] = "0123456789ABCDEF";
+		array<uint16_t, 256> pairs {};
+		for (idx_t value = 0; value < 256; value++) {
+			auto low = static_cast<uint16_t>(digits[value % 16]);
+			auto high = static_cast<uint16_t>(digits[value / 16]);
+			// the pair is stored in the order it is written to memory
+			pairs[value] = static_cast<uint16_t>(high | (low << 8));
+		}
+		return pairs;
+	}();
+	return HEX_PAIRS[byte];
+}
 
+static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.BindInfo()->Cast<IcuBindData>();
 	auto &collator = info.collator;
@@ -123,10 +137,9 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 		auto str_result = StringVector::EmptyString(result, string_size * 2);
 		auto str_data = str_result.GetDataWriteable();
 		for (idx_t i = 0; i < string_size; i++) {
-			auto byte = key[i];
-			D_ASSERT(byte != 0);
-			str_data[i * 2] = HEX_TABLE[byte / 16];
-			str_data[i * 2 + 1] = HEX_TABLE[byte % 16];
+			D_ASSERT(key[i] != 0);
+			auto digits = HexDigits(key[i]);
+			memcpy(str_data + i * 2, &digits, sizeof(digits));
 		}
 		str_result.Finalize();
 		return str_result;

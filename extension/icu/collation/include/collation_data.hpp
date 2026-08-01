@@ -97,6 +97,11 @@ extern const bool compressible_lead_byte[];
 extern const uint32_t variable_top_primary;
 
 // Han characters are ordered by radical/stroke, the order is stored as runs of code points
+//! The Han ranges are indexed by blocks of code points, han_block_index[cp >> shift] is
+//! the first range that can contain a code point of that block
+static constexpr uint32_t HAN_BLOCK_SHIFT = 8;
+extern const uint32_t han_block_lower[];
+extern const uint32_t han_block_upper[];
 extern const uint32_t han_range_start[];
 extern const uint16_t han_range_length[];
 extern const uint32_t han_range_index[];

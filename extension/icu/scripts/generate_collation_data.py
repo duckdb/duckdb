@@ -111,6 +111,9 @@ HAN_PER_LEAD_BYTE = HAN_THIRD_BYTE_COUNT * HAN_SECOND_BYTE_COUNT
 
 UNASSIGNED_IMPLICIT_LEAD_BYTE = 0xFE
 
+# the Han ranges are indexed by blocks of this many code points
+HAN_BLOCK_SHIFT = 8
+
 # FractionalUCA.txt places the trailing weights (U+FFFD, U+FFFF) in their own region,
 # they use the single trailing lead byte at runtime
 FILE_FIRST_TRAILING_LEAD_BYTE = 0xE5
@@ -1629,6 +1632,23 @@ def write_root_data(path, table, builder, stage1, stage2, han_range_list):
 
     compressible = ["true" if value else "false" for value in table.compressible]
     out.append(format_array("compressible_lead_byte", compressible, "bool", 12, lambda v: v))
+
+    # an index of the ranges by code point block, so that the lookup only searches the
+    # ranges that can hold a code point of that block
+    lower_bounds = []
+    upper_bounds = []
+    lower = 0
+    upper = 0
+    for block in range(0, (MAX_CODEPOINT >> HAN_BLOCK_SHIFT) + 1):
+        start = block << HAN_BLOCK_SHIFT
+        while lower < len(han_range_list) and han_range_list[lower][0] + han_range_list[lower][1] <= start:
+            lower += 1
+        while upper < len(han_range_list) and han_range_list[upper][0] < start + (1 << HAN_BLOCK_SHIFT):
+            upper += 1
+        lower_bounds.append(lower)
+        upper_bounds.append(upper)
+    out.append(format_array("han_block_lower", lower_bounds, "uint32_t", 12, lambda v: "%d" % v))
+    out.append(format_array("han_block_upper", upper_bounds, "uint32_t", 12, lambda v: "%d" % v))
 
     han_starts = [start for start, _, _ in han_range_list]
     han_lengths = [length for _, length, _ in han_range_list]

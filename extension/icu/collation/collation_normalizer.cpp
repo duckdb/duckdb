@@ -7,6 +7,11 @@ namespace collation {
 
 static constexpr uint32_t REPLACEMENT_CHARACTER = 0xFFFD;
 
+//! No character below these limits has a combining class or a canonical decomposition,
+//! which the tables are checked against
+static constexpr uint32_t FIRST_COMBINING_MARK = 0x300;
+static constexpr uint32_t FIRST_DECOMPOSING_CHARACTER = 0xC0;
+
 // Hangul syllables are decomposed algorithmically
 static constexpr uint32_t HANGUL_S_BASE = 0xAC00;
 static constexpr uint32_t HANGUL_L_BASE = 0x1100;
@@ -17,8 +22,13 @@ static constexpr uint32_t HANGUL_T_COUNT = 28;
 static constexpr uint32_t HANGUL_N_COUNT = HANGUL_V_COUNT * HANGUL_T_COUNT;
 static constexpr uint32_t HANGUL_S_COUNT = 19 * HANGUL_N_COUNT;
 
-void Normalizer::Decode(const char *data, idx_t size, vector<uint32_t> &result) {
+static bool IsHangulSyllable(uint32_t codepoint) {
+	return codepoint >= HANGUL_S_BASE && codepoint < HANGUL_S_BASE + HANGUL_S_COUNT;
+}
+
+uint32_t Normalizer::Decode(const char *data, idx_t size, vector<uint32_t> &result) {
 	result.clear();
+	uint32_t flags = 0;
 	auto bytes = reinterpret_cast<const uint8_t *>(data);
 	idx_t pos = 0;
 	while (pos < size) {
@@ -61,9 +71,17 @@ void Normalizer::Decode(const char *data, idx_t size, vector<uint32_t> &result) 
 			pos++;
 			continue;
 		}
+		if (codepoint >= 0x80) {
+			// ASCII characters never carry a combining class and never decompose
+			flags |= TEXT_HAS_MARKS;
+			if (IsHangulSyllable(codepoint)) {
+				flags |= TEXT_HAS_HANGUL;
+			}
+		}
 		result.push_back(codepoint);
 		pos += length;
 	}
+	return flags;
 }
 
 //! Binary search in a range table
@@ -86,6 +104,9 @@ static const T *FindRange(uint32_t codepoint, const uint32_t *starts, const uint
 }
 
 uint8_t Normalizer::CombiningClass(uint32_t codepoint) {
+	if (codepoint < FIRST_COMBINING_MARK) {
+		return 0;
+	}
 	auto value =
 	    FindRange(codepoint, combining_class_start, combining_class_end, combining_class_value, combining_class_count);
 	return value ? *value : 0;
@@ -93,6 +114,9 @@ uint8_t Normalizer::CombiningClass(uint32_t codepoint) {
 
 //! The combining classes of the first and last character of the canonical decomposition
 static uint16_t GetFCD(uint32_t codepoint) {
+	if (codepoint < FIRST_DECOMPOSING_CHARACTER) {
+		return 0;
+	}
 	if (codepoint >= HANGUL_S_BASE && codepoint < HANGUL_S_BASE + HANGUL_S_COUNT) {
 		return 0;
 	}
@@ -116,10 +140,6 @@ static const uint32_t *GetDecomposition(uint32_t codepoint, uint32_t &length) {
 		}
 	}
 	return nullptr;
-}
-
-static bool IsHangulSyllable(uint32_t codepoint) {
-	return codepoint >= HANGUL_S_BASE && codepoint < HANGUL_S_BASE + HANGUL_S_COUNT;
 }
 
 bool Normalizer::IsFCD(const vector<uint32_t> &text) {
