@@ -73,6 +73,13 @@ public:
 
 	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
 
+	//! Identifies this instance for the lifetime of the process. Distinct for every DatabaseInstance,
+	//! including two instances in the same process, so it can name resources that instances must not
+	//! share. Attached databases belong to one instance and therefore share its id.
+	const string &GetInstanceId() const {
+		return instance_id;
+	}
+
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
@@ -96,6 +103,7 @@ private:
 	void Configure(DBConfig &config, const char *path);
 
 private:
+	string instance_id;
 	shared_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<ExternalResourceTypeRegistry> external_resource_type_registry;

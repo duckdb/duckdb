@@ -1,3 +1,4 @@
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/main/profiler/metrics_manager.hpp"
@@ -77,7 +78,7 @@ DBConfig::DBConfig(const identifier_map_t<Value> &config_dict, bool read_only) :
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() : db_validity(*this) {
+DatabaseInstance::DatabaseInstance() : instance_id(UUID::ToString(UUIDv4::GenerateRandomUUID())), db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
