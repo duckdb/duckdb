@@ -27,6 +27,7 @@ set(ICU_EXTENSION_FILES
     datetime/calendar.cpp
     datetime/calendar_reference.cpp
     datetime/coptic.cpp
+    datetime/islamic.cpp
     datetime/persian.cpp
     datetime/gregorian.cpp
     datetime/icu_calendar.cpp
