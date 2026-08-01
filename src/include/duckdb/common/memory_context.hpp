@@ -8,36 +8,33 @@
 
 #pragma once
 
-#include "duckdb/common/constants.hpp"
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/string.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
 //! Identifies an owner within a shared memory-management domain.
 class MemoryContextId {
 public:
-	constexpr explicit MemoryContextId(idx_t database_id_p) : database_id(database_id_p) {
+	constexpr explicit MemoryContextId(hugeint_t uuid_p) : uuid(uuid_p) {
 	}
 
-	idx_t GetDatabaseId() const {
-		return database_id;
+	hugeint_t GetUUID() const {
+		return uuid;
 	}
 
-	string ToString() const {
-		return StringUtil::Format("%llu", database_id);
-	}
+	string ToString() const;
 
 	bool operator==(const MemoryContextId &other) const {
-		return database_id == other.database_id;
+		return uuid == other.uuid;
 	}
 
 	bool operator!=(const MemoryContextId &other) const {
-		return database_id != other.database_id;
+		return uuid != other.uuid;
 	}
 
 private:
-	idx_t database_id;
+	hugeint_t uuid;
 };
 
 } // namespace duckdb

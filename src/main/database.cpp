@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/types/type_manager.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -51,11 +52,6 @@
 
 namespace duckdb {
 
-static MemoryContextId NextMemoryContextId() {
-	static atomic<idx_t> next_database_id {0};
-	return MemoryContextId(next_database_id.fetch_add(1));
-}
-
 DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	encoding_functions = make_uniq<EncodingFunctionSet>();
@@ -84,7 +80,7 @@ DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_o
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() : memory_context_id(NextMemoryContextId()), db_validity(*this) {
+DatabaseInstance::DatabaseInstance() : memory_context_id(UUID::GenerateRandomUUID()), db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
