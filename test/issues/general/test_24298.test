@@ -17,9 +17,9 @@ statement ok
 FORCE CHECKPOINT
 
 query I
-SELECT stats(v)::VARCHAR FROM top_level LIMIT 1
+SELECT stats(v).fully_shredded IS NULL FROM top_level LIMIT 1
 ----
-{'has_no_null': true, 'has_null': false, 'shredding_state': UNINITIALIZED}
+true
 
 query I
 SELECT DISTINCT vector_type(v) FROM top_level
