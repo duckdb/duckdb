@@ -214,6 +214,11 @@ public:
 	DUCKDB_API virtual void CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
 	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+	//! Remove a directory only if it is empty, and report whether it was removed. Unlike RemoveDirectory
+	//! this never recurses, so it is the safe way to drop a directory that another process may be using:
+	//! "list it, and remove it if it looked empty" is a race that deletes whatever the other process
+	//! created in between.
+	DUCKDB_API virtual bool RemoveDirectoryIfEmpty(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,

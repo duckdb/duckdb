@@ -531,6 +531,10 @@ void FileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpene
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
+bool FileSystem::RemoveDirectoryIfEmpty(const string &directory, optional_ptr<FileOpener> opener) {
+	throw NotImplementedException("%s: RemoveDirectoryIfEmpty is not implemented!", GetName());
+}
+
 bool FileSystem::IsDirectory(const OpenFileInfo &info) {
 	if (!info.extended_info) {
 		return false;

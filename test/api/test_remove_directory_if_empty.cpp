@@ -1,0 +1,67 @@
+#include "catch.hpp"
+#include "test_helpers.hpp"
+#include "duckdb/common/local_file_system.hpp"
+
+using namespace duckdb;
+
+namespace {
+
+string ProbeDir(const string &name) {
+	LocalFileSystem fs;
+	return fs.JoinPath(TestDirectoryPath(), name);
+}
+
+void MakeFile(FileSystem &fs, const string &path) {
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	handle->Close();
+}
+
+} // namespace
+
+TEST_CASE("Test RemoveDirectoryIfEmpty", "[api]") {
+	LocalFileSystem fs;
+
+	SECTION("an empty directory is removed") {
+		auto dir = ProbeDir("rdie_empty");
+		fs.RemoveDirectory(dir);
+		fs.CreateDirectory(dir);
+		REQUIRE(fs.RemoveDirectoryIfEmpty(dir));
+		REQUIRE(!fs.DirectoryExists(dir));
+	}
+
+	SECTION("a directory holding a file is left alone, and the file survives") {
+		// this is the property the caller depends on: refusing must not destroy what is inside,
+		// which is exactly what the recursive RemoveDirectory would have done
+		auto dir = ProbeDir("rdie_file");
+		fs.RemoveDirectory(dir);
+		fs.CreateDirectory(dir);
+		auto file = fs.JoinPath(dir, "occupied.txt");
+		MakeFile(fs, file);
+
+		REQUIRE(!fs.RemoveDirectoryIfEmpty(dir));
+		REQUIRE(fs.DirectoryExists(dir));
+		REQUIRE(fs.FileExists(file));
+
+		fs.RemoveDirectory(dir);
+	}
+
+	SECTION("a directory holding a subdirectory is left alone") {
+		auto dir = ProbeDir("rdie_subdir");
+		fs.RemoveDirectory(dir);
+		fs.CreateDirectory(dir);
+		auto sub = fs.JoinPath(dir, "child");
+		fs.CreateDirectory(sub);
+
+		REQUIRE(!fs.RemoveDirectoryIfEmpty(dir));
+		REQUIRE(fs.DirectoryExists(sub));
+
+		fs.RemoveDirectory(dir);
+	}
+
+	SECTION("removing a directory that is already gone succeeds") {
+		// teardown may race another instance that removed it first; that is not an error
+		auto dir = ProbeDir("rdie_absent");
+		fs.RemoveDirectory(dir);
+		REQUIRE(fs.RemoveDirectoryIfEmpty(dir));
+	}
+}

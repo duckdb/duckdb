@@ -47,6 +47,7 @@ public:
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
+	bool RemoveDirectoryIfEmpty(const string &directory, optional_ptr<FileOpener> opener) override;
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
 
