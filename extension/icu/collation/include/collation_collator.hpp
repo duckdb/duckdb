@@ -74,9 +74,11 @@ struct CollationBuffer {
 	vector<uint8_t> levels[4];
 };
 
+//! A collator is immutable once it is created, so that it can be shared between threads.
+//! The buffers it works in are passed in by the caller.
 class Collator {
 public:
-	explicit Collator(CollationSettings settings_p) : settings(settings_p), tailoring(nullptr) {
+	explicit Collator(CollationSettings settings_p) : settings(settings_p) {
 	}
 	//! Creates a collator for a collation name such as "de" or "fr_ca", falling back to the
 	//! root collation when the locale is unknown
@@ -94,11 +96,6 @@ public:
 	const CollationSettings &GetSettings() const {
 		return settings;
 	}
-	//! Overrides the settings of the collation, used for tagged collations
-	void SetSettings(CollationSettings settings_p) {
-		settings = settings_p;
-		BuildFastPath();
-	}
 
 private:
 	//! Fills the table of ASCII characters that map to a single collation element
@@ -113,7 +110,8 @@ private:
 
 private:
 	CollationSettings settings;
-	const CollationTailoring *tailoring;
+	//! The tailoring of the collation, or nullptr when it uses the root collation
+	const CollationTailoring *tailoring = nullptr;
 	//! The characters below this limit are collated without decomposing anything, they
 	//! cannot carry a combining class
 	static constexpr uint32_t FAST_LIMIT = 0x300;

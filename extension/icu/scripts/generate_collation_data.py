@@ -11,17 +11,26 @@ The generated tables are derived exclusively from Unicode Consortium data:
 Run as:
     python3 extension/icu/scripts/generate_collation_data.py
 
-The downloaded source files are cached in a temporary directory, the generated
-C++ files are written to extension/icu/collation/generated.
+The versions above can be overridden with the CLDR_VERSION and UNICODE_VERSION
+environment variables, see scripts/README.md for the steps to take when a new
+release of the data comes out.
+
+The downloaded source files are cached in ~/.cache/duckdb-collation-data, the
+generated C++ file is written to extension/icu/collation/generated. The zstd
+command line tool is used to compress the tables, it has to be installed to run
+this script.
 """
 
 import os
 import re
+import struct
+import subprocess
 import sys
 import urllib.request
 
-CLDR_VERSION = "release-48"
-UNICODE_VERSION = "17.0.0"
+#! the versions of the data the tables are generated from, see scripts/README.md to update them
+CLDR_VERSION = os.environ.get("CLDR_VERSION", "release-48")
+UNICODE_VERSION = os.environ.get("UNICODE_VERSION", "17.0.0")
 
 CLDR_BASE = "https://raw.githubusercontent.com/unicode-org/cldr/%s/common" % CLDR_VERSION
 UCD_BASE = "https://www.unicode.org/Public/%s/ucd" % UNICODE_VERSION
@@ -1592,48 +1601,85 @@ HEADER = """//===---------------------------------------------------------------
 """
 
 
-def format_array(name, values, element_type, per_line, formatter):
-    lines = ["const %s %s[] = {" % (element_type, name)]
-    for start in range(0, len(values), per_line):
-        chunk = values[start : start + per_line]
-        lines.append("    " + " ".join(formatter(value) + "," for value in chunk))
+def pack(values, width):
+    """Packs values into little endian bytes of the given width."""
+    formats = {8: "<Q", 4: "<I", 2: "<H", 1: "<B"}
+    mask = (1 << (width * 8)) - 1
+    return b"".join(struct.pack(formats[width], value & mask) for value in values)
+
+
+class Unit:
+    """A group of arrays that is compressed and decompressed as a whole.
+
+    The arrays are stored largest element first, so that every one of them is aligned once
+    the counts at the start of the unit are. The counts let the loader find the arrays back.
+    """
+
+    def __init__(self):
+        self.arrays = []
+
+    def add(self, values, width, per_element=1):
+        self.arrays.append((list(values), width, per_element))
+
+    def serialize(self):
+        counts = [len(values) // per_element for values, _, per_element in self.arrays]
+        header = pack(counts, 4)
+        header += b"\0" * (-len(header) % 8)
+        return header + b"".join(pack(values, width) for values, width, _ in self.arrays)
+
+
+def compress_units(units, dictionary_size=8192):
+    """Compresses the units against a dictionary trained on the ones that are optional.
+
+    Every unit is compressed on its own, so that a collation can be decompressed without
+    decompressing the others, while the shared dictionary keeps the small ones small.
+    """
+    import shutil
+    import tempfile
+
+    directory = tempfile.mkdtemp(prefix="collation-data-")
+    try:
+        paths = []
+        for index, (name, blob, trainable) in enumerate(units):
+            path = os.path.join(directory, "%04d.bin" % index)
+            with open(path, "wb") as f:
+                f.write(blob)
+            paths.append((path, trainable))
+        dictionary_path = os.path.join(directory, "dictionary")
+        subprocess.run(
+            ["zstd", "--train", "-q", "-f", "--maxdict=%d" % dictionary_size, "-o", dictionary_path]
+            + [path for path, trainable in paths if trainable],
+            check=True,
+            capture_output=True,
+        )
+        with open(dictionary_path, "rb") as f:
+            dictionary = f.read()
+        compressed = []
+        for path, _ in paths:
+            subprocess.run(
+                ["zstd", "-q", "-f", "-19", "-D", dictionary_path, path, "-o", path + ".zst"],
+                check=True,
+                capture_output=True,
+            )
+            with open(path + ".zst", "rb") as f:
+                compressed.append(f.read())
+        return dictionary, compressed
+    finally:
+        shutil.rmtree(directory)
+
+
+def format_bytes(name, data, per_line=24):
+    lines = ["const uint8_t %s[] = {" % name]
+    for start in range(0, len(data), per_line):
+        lines.append("    " + " ".join("0x%02X," % byte for byte in data[start : start + per_line]))
     lines.append("};")
     lines.append("")
     return "\n".join(lines)
 
 
-def write_root_data(path, table, builder, stage1, stage2, han_range_list):
-    out = [HEADER % ("collation_root_data.cpp", CLDR_VERSION, UNICODE_VERSION)]
-    out.append('#include "collation_data.hpp"\n')
-    out.append("namespace duckdb {")
-    out.append("namespace collation {")
-    out.append("")
-
-    out.append(format_array("root_ces", [ce.encode() for ce in builder.ces], "uint64_t", 6, lambda v: "0x%016XULL" % v))
-    out.append(format_array("root_trie_stage1", stage1, "uint32_t", 12, lambda v: "%d" % v))
-    out.append(format_array("root_trie_stage2", stage2, "uint32_t", 8, lambda v: "0x%08X" % v))
-
-    expansions = []
-    for offset, count in builder.expansions:
-        expansions.append("{%d, %d}" % (offset, count))
-    out.append(format_array("root_expansions", expansions, "CollationExpansion", 4, lambda v: v))
-
-    entries = []
-    for ce_offset, ce_count, context_offset, context_count in builder.entries:
-        entries.append("{%d, %d, %d, %d}" % (ce_offset, ce_count, context_offset, context_count))
-    out.append(format_array("root_entries", entries, "CollationEntry", 3, lambda v: v))
-
-    contexts = []
-    for chars_offset, chars_length, kind, ce_offset, ce_count in builder.contexts:
-        contexts.append("{%d, %d, %d, %d, %d}" % (chars_offset, chars_length, kind, ce_offset, ce_count))
-    out.append(format_array("root_contexts", contexts, "CollationContext", 3, lambda v: v))
-
-    out.append(format_array("root_context_chars", builder.context_chars, "uint32_t", 10, lambda v: "0x%X" % v))
-
-    compressible = ["true" if value else "false" for value in table.compressible]
-    out.append(format_array("compressible_lead_byte", compressible, "bool", 12, lambda v: v))
-
-    # an index of the ranges by code point block, so that the lookup only searches the
+def root_unit(table, builder, stage1, stage2, han_range_list):
+    """The tables of the root collation, which every collation uses."""
+    # an index of the Han ranges by code point block, so that a lookup only searches the
     # ranges that can hold a code point of that block
     lower_bounds = []
     upper_bounds = []
@@ -1647,90 +1693,74 @@ def write_root_data(path, table, builder, stage1, stage2, han_range_list):
             upper += 1
         lower_bounds.append(lower)
         upper_bounds.append(upper)
-    out.append(format_array("han_block_lower", lower_bounds, "uint32_t", 12, lambda v: "%d" % v))
-    out.append(format_array("han_block_upper", upper_bounds, "uint32_t", 12, lambda v: "%d" % v))
 
-    han_starts = [start for start, _, _ in han_range_list]
-    han_lengths = [length for _, length, _ in han_range_list]
-    han_indexes = [index for _, _, index in han_range_list]
-    out.append(format_array("han_range_start", han_starts, "uint32_t", 10, lambda v: "0x%X" % v))
-    out.append(format_array("han_range_length", han_lengths, "uint16_t", 14, lambda v: "%d" % v))
-    out.append(format_array("han_range_index", han_indexes, "uint32_t", 10, lambda v: "%d" % v))
-
-    out.append("const CollationTable root_table = {")
-    out.append("    root_trie_stage1, root_trie_stage2, root_ces, root_expansions,")
-    out.append("    root_entries, root_contexts, root_context_chars};")
-    out.append("")
-    out.append("const uint32_t variable_top_primary = 0x%08X;" % table.variable_top)
-    out.append("const uint32_t han_range_count = %d;" % len(han_range_list))
-    out.append("")
-    out.append("} // namespace collation")
-    out.append("} // namespace duckdb")
-    out.append("")
-    with open(path, "w") as f:
-        f.write("\n".join(out))
+    unit = Unit()
+    unit.add([ce.encode() for ce in builder.ces], 8)
+    unit.add(stage1, 4)
+    unit.add(stage2, 4)
+    unit.add([value for expansion in builder.expansions for value in expansion], 4, 2)
+    unit.add([value for entry in builder.entries for value in entry], 4, 4)
+    unit.add([value for context in builder.contexts for value in context], 4, 5)
+    unit.add(builder.context_chars, 4)
+    unit.add(lower_bounds, 4)
+    unit.add(upper_bounds, 4)
+    unit.add([start for start, _, _ in han_range_list], 4)
+    unit.add([index for _, _, index in han_range_list], 4)
+    unit.add([length for _, length, _ in han_range_list], 2)
+    unit.add([1 if value else 0 for value in table.compressible], 1)
+    return unit
 
 
-def write_normalization_data(path, data):
-    out = [HEADER % ("collation_normalization_data.cpp", CLDR_VERSION, UNICODE_VERSION)]
-    out.append('#include "collation_data.hpp"\n')
-    out.append("namespace duckdb {")
-    out.append("namespace collation {")
-    out.append("")
-
-    # canonical decompositions, sorted by code point for binary search
+def normalization_unit(data):
+    """The canonical decompositions and combining classes."""
     chars = []
-    entries = []
-    for cp in sorted(data.decomposition):
-        decomposition = data.decomposition[cp]
-        entries.append((cp, len(chars), len(decomposition)))
+    decompositions = []
+    for codepoint in sorted(data.decomposition):
+        decomposition = data.decomposition[codepoint]
+        decompositions.append((codepoint, len(chars), len(decomposition)))
         chars.extend(decomposition)
-    out.append(format_array("decomposition_chars", chars, "uint32_t", 10, lambda v: "0x%X" % v))
-    out.append(
-        format_array("decomposition_codepoint", [entry[0] for entry in entries], "uint32_t", 10, lambda v: "0x%X" % v)
-    )
-    out.append(
-        format_array("decomposition_offset", [entry[1] for entry in entries], "uint32_t", 12, lambda v: "%d" % v)
-    )
-    out.append(format_array("decomposition_length", [entry[2] for entry in entries], "uint8_t", 20, lambda v: "%d" % v))
-    out.append("const uint32_t decomposition_count = %d;" % len(entries))
-    out.append("")
 
-    # combining classes, stored as ranges
-    ranges = []
-    for cp in sorted(data.combining_class):
-        ccc = data.combining_class[cp]
-        if ranges and ranges[-1][1] + 1 == cp and ranges[-1][2] == ccc:
-            ranges[-1] = (ranges[-1][0], cp, ccc)
-        else:
-            ranges.append((cp, cp, ccc))
-    out.append(
-        format_array("combining_class_start", [start for start, _, _ in ranges], "uint32_t", 10, lambda v: "0x%X" % v)
-    )
-    out.append(format_array("combining_class_end", [end for _, end, _ in ranges], "uint32_t", 10, lambda v: "0x%X" % v))
-    out.append(format_array("combining_class_value", [ccc for _, _, ccc in ranges], "uint8_t", 20, lambda v: "%d" % v))
-    out.append("const uint32_t combining_class_count = %d;" % len(ranges))
-    out.append("")
+    def ranges_of(values):
+        result = []
+        for codepoint in sorted(values):
+            value = values[codepoint]
+            if result and result[-1][1] + 1 == codepoint and result[-1][2] == value:
+                result[-1] = (result[-1][0], codepoint, value)
+            else:
+                result.append((codepoint, codepoint, value))
+        return result
 
-    # leading/trailing combining classes, stored as ranges
-    fcd = build_fcd(data)
-    fcd_ranges = []
-    for cp in sorted(fcd):
-        value = fcd[cp]
-        if fcd_ranges and fcd_ranges[-1][1] + 1 == cp and fcd_ranges[-1][2] == value:
-            fcd_ranges[-1] = (fcd_ranges[-1][0], cp, value)
-        else:
-            fcd_ranges.append((cp, cp, value))
-    out.append(format_array("fcd_start", [start for start, _, _ in fcd_ranges], "uint32_t", 10, lambda v: "0x%X" % v))
-    out.append(format_array("fcd_end", [end for _, end, _ in fcd_ranges], "uint32_t", 10, lambda v: "0x%X" % v))
-    out.append(format_array("fcd_value", [value for _, _, value in fcd_ranges], "uint16_t", 12, lambda v: "0x%04X" % v))
-    out.append("const uint32_t fcd_count = %d;" % len(fcd_ranges))
-    out.append("")
-    out.append("} // namespace collation")
-    out.append("} // namespace duckdb")
-    out.append("")
-    with open(path, "w") as f:
-        f.write("\n".join(out))
+    combining = ranges_of(data.combining_class)
+    fcd = ranges_of(build_fcd(data))
+
+    unit = Unit()
+    unit.add(chars, 4)
+    unit.add([codepoint for codepoint, _, _ in decompositions], 4)
+    unit.add([offset for _, offset, _ in decompositions], 4)
+    unit.add([start for start, _, _ in combining], 4)
+    unit.add([end for _, end, _ in combining], 4)
+    unit.add([start for start, _, _ in fcd], 4)
+    unit.add([end for _, end, _ in fcd], 4)
+    unit.add([value for _, _, value in fcd], 2)
+    unit.add([length for _, _, length in decompositions], 1)
+    unit.add([value for _, _, value in combining], 1)
+    return unit
+
+
+def tailoring_unit(tailoring):
+    """The tables of one tailoring."""
+    builder = tailoring.builder
+    codepoints = sorted(builder.values)
+    unit = Unit()
+    unit.add([ce.encode() for ce in builder.ces], 8)
+    unit.add([value for expansion in builder.expansions for value in expansion], 4, 2)
+    unit.add([value for entry in builder.entries for value in entry], 4, 4)
+    unit.add([value for context in builder.contexts for value in context], 4, 5)
+    unit.add(builder.context_chars, 4)
+    unit.add(codepoints, 4)
+    unit.add([builder.values[codepoint] for codepoint in codepoints], 4)
+    unit.add(tailoring.reorder_table or [], 1)
+    return unit
 
 
 # region variants that are exposed as separate collations, mapped to the CLDR locale that
@@ -1769,11 +1799,13 @@ STRENGTH_VALUES = {
 
 
 class Tailoring:
-    def __init__(self, name, builder, settings, reorder_table):
+    def __init__(self, name, builder, settings, reorder_table, mappings=None):
         self.name = name
         self.builder = builder
         self.settings = settings
         self.reorder_table = reorder_table
+        # the strings the rules map, which generate_collation_tests.py orders
+        self.mappings = mappings or {}
 
 
 def collation_settings(rules_settings):
@@ -1886,7 +1918,9 @@ def build_tailorings(root, normalization, implicit_primary):
         builder.close_over_composites()
         reorder_table = build_reorder_table(root, builder.reorder) if builder.reorder else None
         tables = build_tailoring_tables(builder.mappings, root, builder.suppressed, builder.prefix_mappings)
-        tailorings[name] = Tailoring(name, tables, collation_settings(builder.settings), reorder_table)
+        tailorings[name] = Tailoring(
+            name, tables, collation_settings(builder.settings), reorder_table, builder.mappings
+        )
 
     # the locales that use the root collation share an empty tailoring
     tailorings["root"] = Tailoring("root", build_tailoring_tables({}, root, set()), collation_settings({}), None)
@@ -1914,45 +1948,19 @@ def fetch_collation_listing():
     return result
 
 
-def write_tailoring_data(path, tailorings, sources):
-    out = [HEADER % ("collation_tailoring_data.cpp", CLDR_VERSION, UNICODE_VERSION)]
-    out.append('#include "collation_data.hpp"\n')
-    out.append("namespace duckdb {")
-    out.append("namespace collation {")
-    out.append("")
-
+def write_collation_data(path, table, builder, stage1, stage2, han_range_list, normalization, tailorings, sources):
+    """Writes the compressed tables and the metadata the loader needs to find them."""
     names = sorted(tailorings)
-    for index, name in enumerate(names):
-        tailoring = tailorings[name]
-        builder = tailoring.builder
-        prefix = "tailoring_%d" % index
-        out.append("// %s" % name)
-        out.append(
-            format_array(
-                prefix + "_ces", [ce.encode() for ce in builder.ces], "uint64_t", 6, lambda v: "0x%016XULL" % v
-            )
-        )
-        expansions = ["{%d, %d}" % (offset, count) for offset, count in builder.expansions]
-        out.append(format_array(prefix + "_expansions", expansions, "CollationExpansion", 4, lambda v: v))
-        entries = ["{%d, %d, %d, %d}" % values for values in builder.entries]
-        out.append(format_array(prefix + "_entries", entries, "CollationEntry", 3, lambda v: v))
-        contexts = ["{%d, %d, %d, %d, %d}" % values for values in builder.contexts]
-        out.append(format_array(prefix + "_contexts", contexts, "CollationContext", 3, lambda v: v))
-        out.append(format_array(prefix + "_context_chars", builder.context_chars, "uint32_t", 10, lambda v: "0x%X" % v))
-        codepoints = sorted(builder.values)
-        out.append(format_array(prefix + "_codepoints", codepoints, "uint32_t", 10, lambda v: "0x%X" % v))
-        out.append(
-            format_array(
-                prefix + "_values", [builder.values[cp] for cp in codepoints], "uint32_t", 8, lambda v: "0x%08X" % v
-            )
-        )
-        if tailoring.reorder_table:
-            out.append(
-                format_array(prefix + "_reorder", tailoring.reorder_table, "uint8_t", 12, lambda v: "0x%02X" % v)
-            )
+    units = [
+        ("root", root_unit(table, builder, stage1, stage2, han_range_list).serialize(), False),
+        ("normalization", normalization_unit(normalization).serialize(), False),
+    ]
+    for name in names:
+        units.append((name, tailoring_unit(tailorings[name]).serialize(), True))
+    dictionary, compressed = compress_units(units)
 
-    # the collations that are registered, every one of them points at the locale it
-    # takes its rules from
+    # the collations that are registered, every one of them points at the locale it takes
+    # its rules from
     registered = {}
     for name, source in sources.items():
         parts = name.split("_")
@@ -1961,23 +1969,40 @@ def write_tailoring_data(path, tailorings, sources):
             continue
         registered[name] = source
 
-    out.append("const CollationTailoring tailorings[] = {")
+    out = [HEADER % ("collation_data.cpp", CLDR_VERSION, UNICODE_VERSION)]
+    out.append('#include "collation_data.hpp"\n')
+    out.append("namespace duckdb {")
+    out.append("namespace collation {")
+    out.append("")
+    out.append("// The tables are compressed with zstd. Every unit is compressed on its own so that")
+    out.append("// a collation can be loaded without loading the others, against a dictionary that is")
+    out.append("// trained on all of them so that the small ones stay small.")
+    out.append("")
+    out.append(format_bytes("collation_dictionary", dictionary))
+    out.append("const uint32_t collation_dictionary_size = %d;" % len(dictionary))
+    out.append("")
+    for index, ((name, blob, _), data) in enumerate(zip(units, compressed)):
+        out.append("// %s: %d bytes" % (name, len(blob)))
+        out.append(format_bytes("collation_unit_%d" % index, data))
+    out.append("const CollationUnit collation_units[] = {")
+    for index, ((_, blob, _), data) in enumerate(zip(units, compressed)):
+        out.append("    {collation_unit_%d, %d, %d}," % (index, len(data), len(blob)))
+    out.append("};")
+    out.append("")
+    out.append("const uint32_t collation_unit_count = %d;" % len(units))
+    out.append("")
+
+    out.append("const CollationInfo collation_infos[] = {")
     for name in sorted(registered):
-        target = registered[name]
-        index = names.index(target)
-        tailoring = tailorings[target]
-        prefix = "tailoring_%d" % index
+        tailoring = tailorings[registered[name]]
         settings = tailoring.settings
-        out.append('    {"%s",' % name)
+        # the first two units are the root collation and the normalization tables
+        unit = 2 + names.index(registered[name])
         out.append(
-            "     {nullptr, nullptr, %s_ces, %s_expansions, %s_entries, %s_contexts, %s_context_chars},"
-            % (prefix, prefix, prefix, prefix, prefix)
-        )
-        out.append("     %s_codepoints, %s_values, %d," % (prefix, prefix, len(tailoring.builder.values)))
-        out.append(
-            "     %s, %d, %s, %d, %s, %s, %s},"
+            '    {"%s", %d, %d, %s, %d, %s, %s, %s},'
             % (
-                prefix + "_reorder" if tailoring.reorder_table else "nullptr",
+                name,
+                unit,
                 settings["strength"],
                 "true" if settings["case_level"] else "false",
                 settings["case_first"],
@@ -1988,13 +2013,23 @@ def write_tailoring_data(path, tailorings, sources):
         )
     out.append("};")
     out.append("")
-    out.append("const uint32_t tailoring_count = %d;" % len(registered))
+    out.append("const uint32_t collation_count = %d;" % len(registered))
+    out.append("const uint32_t variable_top_primary = 0x%08X;" % table.variable_top)
     out.append("")
     out.append("} // namespace collation")
     out.append("} // namespace duckdb")
     out.append("")
     with open(path, "w") as f:
         f.write("\n".join(out))
+    sys.stderr.write(
+        "data: %.1f KB in %d units, compressed to %.1f KB with a %.1f KB dictionary\n"
+        % (
+            sum(len(blob) for _, blob, _ in units) / 1024,
+            len(units),
+            sum(len(data) for data in compressed) / 1024,
+            len(dictionary) / 1024,
+        )
+    )
 
 
 def main():
@@ -2016,17 +2051,11 @@ def main():
     stage1, stage2 = build_trie(builder.values)
     sys.stderr.write("root: %d collation elements, %d trie entries\n" % (len(builder.ces), len(stage2)))
 
-    write_root_data(
-        os.path.join(OUTPUT_DIR, "collation_root_data.cpp"), table, builder, stage1, stage2, han_ranges(table.han_order)
-    )
-
     normalization = parse_unicode_data(unicode_data)
     sys.stderr.write(
         "normalization: %d decompositions, %d combining classes\n"
         % (len(normalization.decomposition), len(normalization.combining_class))
     )
-    write_normalization_data(os.path.join(OUTPUT_DIR, "collation_normalization_data.cpp"), normalization)
-
     han_index = {cp: i for i, cp in enumerate(table.han_order)}
 
     def implicit_primary(cp):
@@ -2039,7 +2068,17 @@ def main():
         "tailorings: %d rule sets for %d collations, %d mappings\n"
         % (len(tailorings), len(sources), sum(len(t.builder.values) for t in tailorings.values()))
     )
-    write_tailoring_data(os.path.join(OUTPUT_DIR, "collation_tailoring_data.cpp"), tailorings, sources)
+    write_collation_data(
+        os.path.join(OUTPUT_DIR, "collation_data.cpp"),
+        table,
+        builder,
+        stage1,
+        stage2,
+        han_ranges(table.han_order),
+        normalization,
+        tailorings,
+        sources,
+    )
 
 
 if __name__ == "__main__":

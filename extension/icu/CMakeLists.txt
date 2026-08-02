@@ -9,13 +9,13 @@ set_extension_version_sources(icu icu_extension.cpp)
 include_directories(include)
 include_directories(collation/include)
 include_directories(datetime/include)
+include_directories(${CMAKE_SOURCE_DIR}/third_party/zstd/include)
 
 set(ICU_EXTENSION_FILES
     collation/collation_collator.cpp
+    collation/collation_loader.cpp
     collation/collation_normalizer.cpp
-    collation/generated/collation_root_data.cpp
-    collation/generated/collation_normalization_data.cpp
-    collation/generated/collation_tailoring_data.cpp
+    collation/generated/collation_data.cpp
     datetime/astronomy.cpp
     datetime/calendar.cpp
     datetime/chinese.cpp
@@ -44,9 +44,11 @@ set(ICU_EXTENSION_FILES
 
 build_static_extension(icu ${ICU_EXTENSION_FILES})
 link_threads(icu_extension "")
+target_link_libraries(icu_extension duckdb_zstd)
 disable_target_warnings(icu_extension)
 set(PARAMETERS "-no-warnings")
 build_loadable_extension(icu ${PARAMETERS} ${ICU_EXTENSION_FILES})
+target_link_libraries(icu_loadable_extension duckdb_zstd)
 install(
   TARGETS icu_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

@@ -82,14 +82,10 @@ moved.
 
 ## Updating the Collation Data
 
-The collation data lives in `collation/generated/` and is generated from the Unicode collation
-data. You can track updates by following the `unicode-org/icu-data` project on GitHub.
-
-To update to a new release, run the generator from the `extension/icu` directory:
-
-```sh
-$ python3 scripts/generate_collation_data.py
-```
+The collation data lives in `collation/generated/collation_data.cpp` and is generated from the
+CLDR and Unicode data. Updating it changes the order of existing strings, so it is a deliberate
+step rather than something to do on every release: `scripts/README.md` describes when to take it,
+how to review what the new data changed, and how to regenerate the ordering tests that record it.
 
 ## Testing
 
