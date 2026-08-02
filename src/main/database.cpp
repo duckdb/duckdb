@@ -97,6 +97,7 @@ DatabaseInstance::~DatabaseInstance() {
 	}
 	// destroy child elements
 	connection_manager.reset();
+	// Notice, external file cache should be destroyed before object cache.
 	external_file_cache.reset();
 	object_cache.reset();
 	scheduler.reset();

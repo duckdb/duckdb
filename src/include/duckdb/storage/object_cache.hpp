@@ -80,6 +80,7 @@ public:
 private:
 	friend class BoundObjectCache;
 	friend class BufferPool;
+	friend class DatabaseInstance;
 
 	struct ObjectCacheKey {
 		MemoryContextId context_id;
@@ -355,9 +356,6 @@ public:
 	idx_t EvictFromMemoryDomain(idx_t target_bytes) {
 		return cache.EvictToReduceMemory(target_bytes);
 	}
-
-	//! Close this binding and drop every cache-owned entry belonging to its memory context.
-	void Close();
 
 private:
 	friend class ObjectCache;
