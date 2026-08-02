@@ -120,28 +120,28 @@ void ARTConstScanPreorder(const ART &art, const Node &root, CHILD_HANDLER &&chil
 // ARTScanPostorder
 //===--------------------------------------------------------------------===//
 
-struct ScanEntry {
-	ScanEntry(Node node_p, bool children_visited_p) : node(node_p), children_visited(children_visited_p) {
+struct ARTPostOrderScanEntry {
+	ARTPostOrderScanEntry(Node node_p, bool children_visited_p) : node(node_p), children_visited(children_visited_p) {
 	}
 
 	Node node;
 	bool children_visited;
 };
 
-//! Post-order scanner: each node is visited twice via the children_visited flag in ScanEntry.
+//! Post-order scanner: each node is visited twice via the children_visited flag in ARTPostOrderScanEntry.
 //! On the first visit, child_handler runs on each child slot (under the parent's pin) and returns
 //! the node to push, or an empty OptionalNode.
 //! On the second visit, after all descendants have been processed, post_handler runs with no scanner-owned handles
 //! held. The caller may still hold a pin protecting the root slot.
 template <class CHILD_HANDLER, class POST_HANDLER>
 void ARTScanPostorder(ART &art, Node &root, CHILD_HANDLER &&child_handler, POST_HANDLER &&post_handler) {
-	vector<ScanEntry> stack;
+	vector<ARTPostOrderScanEntry> stack;
 	auto push = [&stack](const Node node) {
-		stack.push_back(ScanEntry {node, false});
+		stack.push_back(ARTPostOrderScanEntry {node, false});
 	};
 
 	D_ASSERT(root.HasMetadata());
-	stack.push_back(ScanEntry {root, false});
+	stack.push_back(ARTPostOrderScanEntry {root, false});
 
 	while (!stack.empty()) {
 		if (stack.back().children_visited) {
