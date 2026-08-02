@@ -162,11 +162,11 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	if (constant_value.IsNull()) {
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			return CreateNullCheckExpression(ExpressionType::OPERATOR_IS_NULL,
-			                                column_ref_left ? std::move(left) : std::move(right));
+			                                 column_ref_left ? std::move(left) : std::move(right));
 		}
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 			return CreateNullCheckExpression(ExpressionType::OPERATOR_IS_NOT_NULL,
-			                                column_ref_left ? std::move(left) : std::move(right));
+			                                 column_ref_left ? std::move(left) : std::move(right));
 		}
 	}
 	if (constant_value.IsNull() && !(expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
