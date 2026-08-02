@@ -14,7 +14,9 @@
         "test/sql/table_function/external_resource_logging.test",
         "test/sql/table_function/external_resource_discovery.test",
         "test/sql/table_function/external_resource_discovery_error.test",
-        "test/sql/attach/external_resource_discovery.test"
+        "test/sql/attach/external_resource_discovery.test",
+        "test/sql/settings/external_resources_mode.test",
+        "test/sql/settings/external_resources_type_registration.test"
       ]
     },
     {

@@ -1,0 +1,48 @@
+# name: test/sql/settings/external_resources_mode_off.test
+# description: external_resources_mode = off, reached in one step from the default
+# group: [settings]
+
+statement ok
+CALL register_external_resource_type('quack@aws:ec2', kind := 'catalog', create_function := 'quack_create');
+
+# The ladder can be descended more than one rung at a time.
+statement ok
+SET external_resources_mode = 'off';
+
+query T
+SELECT current_setting('external_resources_mode');
+----
+off
+
+statement error
+SELECT count(*) FROM duckdb_external_resource_types();
+----
+<REGEX>:.*listing external resources is disabled.*external_resources_mode.*off.*
+
+statement error
+CALL register_external_resource_type('pg@aws:rds', kind := 'catalog', create_function := 'pg_create');
+----
+<REGEX>:.*registering external resource types is disabled.*
+
+# `listing` is less restrictive than `off`, so it is refused just like `available` is.
+statement error
+SET external_resources_mode = 'listing';
+----
+<REGEX>:.*Cannot set external_resources_mode to "listing" while it is "off".*
+
+statement error
+SET external_resources_mode = 'on';
+----
+<REGEX>:.*only be made more restrictive.*
+
+query T
+SELECT current_setting('external_resources_mode');
+----
+off
+
+# Re-applying `off` is a no-op, under either spelling.
+statement ok
+SET external_resources_mode = 'off';
+
+statement ok
+SET external_resources_mode = 'none';

@@ -4,16 +4,65 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
+
+//! The minimum mode a capability needs. Modes are ordered by increasing restriction, so a capability is
+//! permitted while the configured mode is no stricter than this.
+static ExternalResourcesMode RequiredMode(ExternalResourceCapability capability) {
+	switch (capability) {
+	case ExternalResourceCapability::LISTING:
+		return ExternalResourcesMode::LISTING;
+	case ExternalResourceCapability::MANAGEMENT:
+	case ExternalResourceCapability::TYPE_REGISTRATION:
+		// Registering a type needs the full mode too, not just LISTING: a type's `list` callback is invoked
+		// by discovery, which LISTING still allows, so a new type would be a way to get a function called.
+		return ExternalResourcesMode::AVAILABLE;
+	default:
+		throw InternalException("Unsupported external resource capability");
+	}
+}
+
+static const char *CapabilityDescription(ExternalResourceCapability capability) {
+	switch (capability) {
+	case ExternalResourceCapability::LISTING:
+		return "listing external resources";
+	case ExternalResourceCapability::MANAGEMENT:
+		return "creating or destroying external resources";
+	case ExternalResourceCapability::TYPE_REGISTRATION:
+		return "registering external resource types";
+	default:
+		throw InternalException("Unsupported external resource capability");
+	}
+}
+
+void ExternalResources::RequireCapability(const DBConfig &config, ExternalResourceCapability capability) {
+	auto mode = config.options.external_resources_mode;
+	if (mode > RequiredMode(capability)) {
+		throw PermissionException("%s is disabled because external_resources_mode is set to \"%s\"",
+		                          CapabilityDescription(capability), StringUtil::Lower(EnumUtil::ToString(mode)));
+	}
+	if (capability == ExternalResourceCapability::TYPE_REGISTRATION &&
+	    !config.options.external_resources_type_registration) {
+		throw PermissionException("%s is disabled because external_resources_type_registration is set to false",
+		                          CapabilityDescription(capability));
+	}
+}
+
+void ExternalResources::RequireCapability(ClientContext &context, ExternalResourceCapability capability) {
+	RequireCapability(DBConfig::GetConfig(context), capability);
+}
 
 ResourceDeleter::ResourceDeleter(DatabaseInstance &db, string deleter_function_p, Value deleter_payload_p,
                                  string resource_type_p, string resource_name_p)

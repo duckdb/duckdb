@@ -1,4 +1,5 @@
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -13,6 +14,9 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(ExternalResourceStatement &stmt) {
+	ExternalResources::RequireCapability(context, stmt.operation == ExternalResourceOperation::SHOW
+	                                                  ? ExternalResourceCapability::LISTING
+	                                                  : ExternalResourceCapability::MANAGEMENT);
 	if (stmt.operation == ExternalResourceOperation::SHOW) {
 		// SHOW [ALL] EXTERNAL RESOURCES desugars to `SELECT * FROM duckdb_external_resources(all := <all>)`.
 		vector<unique_ptr<ParsedExpression>> children;

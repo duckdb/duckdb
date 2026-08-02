@@ -15,6 +15,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/enums/external_resources_mode.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
@@ -144,6 +145,10 @@ struct DBConfigOptions {
 	set<string> allowed_directories;
 	//! Additional configuration options that are allowed to be changed even when the configuration is locked
 	identifier_set_t allowed_configs;
+	//! Which external resource operations are permitted - degrades one way only
+	ExternalResourcesMode external_resources_mode = ExternalResourcesMode::AVAILABLE;
+	//! Whether new external resource types can be registered - degrades one way only
+	bool external_resources_type_registration = true;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)

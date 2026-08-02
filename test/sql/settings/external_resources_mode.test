@@ -1,0 +1,169 @@
+# name: test/sql/settings/external_resources_mode.test
+# description: external_resources_mode gates the EXTERNAL RESOURCE feature and degrades one way only
+# group: [settings]
+
+# The feature is fully available by default.
+query T
+SELECT current_setting('external_resources_mode');
+----
+available
+
+# At the default nothing is gated: these fail on their own merits, not on the gate.
+statement ok
+CALL register_external_resource_type('quack@aws:ec2', kind := 'catalog', create_function := 'quack_create');
+
+query I
+SELECT count(*) FROM duckdb_external_resources();
+----
+0
+
+statement error
+DESTROY EXTERNAL RESOURCE nope;
+----
+<REGEX>:.*not registered.*
+
+# `on` is accepted as a spelling of AVAILABLE, and the canonical name is reported back.
+statement ok
+SET external_resources_mode = 'on';
+
+query T
+SELECT current_setting('external_resources_mode');
+----
+available
+
+# Unknown values are rejected.
+statement error
+SET external_resources_mode = 'sometimes';
+----
+<REGEX>:.*unrecognized value.*
+
+# ---------------------------------------------------------------------------
+# listing: create and destroy are blocked, listing still works
+# ---------------------------------------------------------------------------
+statement ok
+SET external_resources_mode = 'listing';
+
+query T
+SELECT current_setting('external_resources_mode');
+----
+listing
+
+query I
+SELECT count(*) FROM duckdb_external_resources();
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_external_resource_types();
+----
+1
+
+statement ok
+SHOW EXTERNAL RESOURCES;
+
+statement error
+CREATE EXTERNAL RESOURCE 'quack@aws:ec2' AS x;
+----
+<REGEX>:.*creating or destroying external resources is disabled.*external_resources_mode.*listing.*
+
+statement error
+REGISTER EXTERNAL RESOURCE 'quack@aws:ec2' AS x FROM MAP {'id': 'i-123'};
+----
+<REGEX>:.*creating or destroying external resources is disabled.*
+
+statement error
+DESTROY EXTERNAL RESOURCE nope;
+----
+<REGEX>:.*creating or destroying external resources is disabled.*
+
+statement error
+SELECT * FROM create_external_resource('quack@aws:ec2');
+----
+<REGEX>:.*creating or destroying external resources is disabled.*
+
+statement error
+CALL destroy_external_resource('quack_destroy', MAP {'id': 'i-123'});
+----
+<REGEX>:.*creating or destroying external resources is disabled.*
+
+statement error
+CALL register_external_resource('quack@aws:ec2', 'x', MAP {'id': 'i-123'});
+----
+<REGEX>:.*creating or destroying external resources is disabled.*
+
+statement error
+CALL deregister_external_resource('x');
+----
+<REGEX>:.*creating or destroying external resources is disabled.*
+
+# Registering a type needs the full mode, not just listing: a type's `list` callback is invoked by
+# discovery, which listing still allows.
+statement error
+CALL register_external_resource_type('pg@aws:rds', kind := 'catalog', create_function := 'pg_create');
+----
+<REGEX>:.*registering external resource types is disabled.*external_resources_mode.*listing.*
+
+# ---------------------------------------------------------------------------
+# One way only: the mode can never be relaxed again
+# ---------------------------------------------------------------------------
+statement error
+SET external_resources_mode = 'available';
+----
+<REGEX>:.*Cannot set external_resources_mode to "available" while it is "listing".*
+
+statement error
+SET external_resources_mode = 'on';
+----
+<REGEX>:.*only be made more restrictive.*
+
+# ... and RESET cannot smuggle the default back in.
+statement error
+RESET external_resources_mode;
+----
+<REGEX>:.*Cannot reset external_resources_mode.*
+
+query T
+SELECT current_setting('external_resources_mode');
+----
+listing
+
+# Re-applying the current mode is a no-op, not an error.
+statement ok
+SET external_resources_mode = 'listing';
+
+# ---------------------------------------------------------------------------
+# off (spelled `none` here): listing is blocked too
+# ---------------------------------------------------------------------------
+statement ok
+SET external_resources_mode = 'none';
+
+query T
+SELECT current_setting('external_resources_mode');
+----
+off
+
+statement error
+SELECT count(*) FROM duckdb_external_resources();
+----
+<REGEX>:.*listing external resources is disabled.*external_resources_mode.*off.*
+
+statement error
+SELECT count(*) FROM duckdb_external_resource_types();
+----
+<REGEX>:.*listing external resources is disabled.*
+
+statement error
+SHOW EXTERNAL RESOURCES;
+----
+<REGEX>:.*listing external resources is disabled.*
+
+statement error
+CREATE EXTERNAL RESOURCE 'quack@aws:ec2' AS x;
+----
+<REGEX>:.*creating or destroying external resources is disabled.*
+
+# The setting is global, so a connection made after it was lowered is gated too.
+statement error con1
+SELECT count(*) FROM duckdb_external_resources();
+----
+<REGEX>:.*listing external resources is disabled.*

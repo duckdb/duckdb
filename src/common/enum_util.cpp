@@ -38,6 +38,7 @@
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/external_resources_mode.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/enums/file_write_mode.hpp"
@@ -158,6 +159,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
@@ -2332,6 +2334,25 @@ ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const ch
 	return static_cast<ExtensionUpdateResultTag>(StringUtil::StringToEnum(GetExtensionUpdateResultTagValues(), 8, "ExtensionUpdateResultTag", value));
 }
 
+const StringUtil::EnumStringLiteral *GetExternalResourceCapabilityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExternalResourceCapability::LISTING), "LISTING" },
+		{ static_cast<uint32_t>(ExternalResourceCapability::MANAGEMENT), "MANAGEMENT" },
+		{ static_cast<uint32_t>(ExternalResourceCapability::TYPE_REGISTRATION), "TYPE_REGISTRATION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExternalResourceCapability>(ExternalResourceCapability value) {
+	return StringUtil::EnumToString(GetExternalResourceCapabilityValues(), 3, "ExternalResourceCapability", static_cast<uint32_t>(value));
+}
+
+template<>
+ExternalResourceCapability EnumUtil::FromString<ExternalResourceCapability>(const char *value) {
+	return static_cast<ExternalResourceCapability>(StringUtil::StringToEnum(GetExternalResourceCapabilityValues(), 3, "ExternalResourceCapability", value));
+}
+
 const StringUtil::EnumStringLiteral *GetExternalResourceOperationValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExternalResourceOperation::CREATE), "CREATE" },
@@ -2350,6 +2371,25 @@ const char* EnumUtil::ToChars<ExternalResourceOperation>(ExternalResourceOperati
 template<>
 ExternalResourceOperation EnumUtil::FromString<ExternalResourceOperation>(const char *value) {
 	return static_cast<ExternalResourceOperation>(StringUtil::StringToEnum(GetExternalResourceOperationValues(), 4, "ExternalResourceOperation", value));
+}
+
+const StringUtil::EnumStringLiteral *GetExternalResourcesModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExternalResourcesMode::AVAILABLE), "AVAILABLE" },
+		{ static_cast<uint32_t>(ExternalResourcesMode::LISTING), "LISTING" },
+		{ static_cast<uint32_t>(ExternalResourcesMode::OFF), "OFF" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExternalResourcesMode>(ExternalResourcesMode value) {
+	return StringUtil::EnumToString(GetExternalResourcesModeValues(), 3, "ExternalResourcesMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ExternalResourcesMode EnumUtil::FromString<ExternalResourcesMode>(const char *value) {
+	return static_cast<ExternalResourcesMode>(StringUtil::StringToEnum(GetExternalResourcesModeValues(), 3, "ExternalResourcesMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtraDropInfoTypeValues() {

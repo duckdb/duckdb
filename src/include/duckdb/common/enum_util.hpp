@@ -224,7 +224,11 @@ enum class ExtensionLoadResult : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
 
+enum class ExternalResourceCapability : uint8_t;
+
 enum class ExternalResourceOperation : uint8_t;
+
+enum class ExternalResourcesMode : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
@@ -906,7 +910,13 @@ template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
+const char* EnumUtil::ToChars<ExternalResourceCapability>(ExternalResourceCapability value);
+
+template<>
 const char* EnumUtil::ToChars<ExternalResourceOperation>(ExternalResourceOperation value);
+
+template<>
+const char* EnumUtil::ToChars<ExternalResourcesMode>(ExternalResourcesMode value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
@@ -1783,7 +1793,13 @@ template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
+ExternalResourceCapability EnumUtil::FromString<ExternalResourceCapability>(const char *value);
+
+template<>
 ExternalResourceOperation EnumUtil::FromString<ExternalResourceOperation>(const char *value);
+
+template<>
+ExternalResourcesMode EnumUtil::FromString<ExternalResourcesMode>(const char *value);
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);

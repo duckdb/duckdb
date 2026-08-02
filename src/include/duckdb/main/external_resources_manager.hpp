@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/external_resources_mode.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
@@ -15,6 +16,30 @@
 namespace duckdb {
 class DatabaseInstance;
 class ClientContext;
+struct DBConfig;
+
+//! What a caller wants to do with the external resource feature. Every user-facing entry point names one,
+//! and `ExternalResources::RequireCapability` maps it to the settings that govern it — this enum plus that
+//! mapping is the extension point: a new capability is added here, not by adding checks at the callsites.
+enum class ExternalResourceCapability : uint8_t {
+	//! Reading what exists: duckdb_external_resources(), duckdb_external_resource_types(), SHOW EXTERNAL RESOURCES.
+	LISTING,
+	//! Provisioning and teardown: CREATE / REGISTER / DESTROY EXTERNAL RESOURCE and their table functions.
+	MANAGEMENT,
+	//! Registering a new external resource type.
+	TYPE_REGISTRATION
+};
+
+//! The configuration gate for the external resource feature. The C++ APIs below (the manager, the type
+//! registry) stay ungated on purpose: internal paths such as teardown must keep working, and an extension
+//! that is already loaded is inside the trust boundary. Only the SQL entry points are gated - each of them
+//! twice: at bind time so the failure is early and clear, and again where the work happens, because a
+//! statement prepared before the setting was lowered would otherwise still run.
+struct ExternalResources {
+	//! Throws a PermissionException unless the configuration permits `capability`.
+	static void RequireCapability(const DBConfig &config, ExternalResourceCapability capability);
+	static void RequireCapability(ClientContext &context, ExternalResourceCapability capability);
+};
 
 //! An external resource this instance tracks, registered under a local name (from CREATE/REGISTER EXTERNAL
 //! RESOURCE). `name` is the local alias and the only key enforced here: `(type, handle)` identifies the

@@ -933,6 +933,69 @@ bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// External Resources Mode
+//===----------------------------------------------------------------------===//
+//! Accepted spellings on top of the enum names: `on` for AVAILABLE and `none` for OFF.
+static ExternalResourcesMode ParseExternalResourcesMode(const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("external_resources_mode setting cannot be NULL");
+	}
+	auto parameter = StringUtil::Upper(input.ToString());
+	if (parameter == "ON") {
+		return ExternalResourcesMode::AVAILABLE;
+	}
+	if (parameter == "NONE") {
+		return ExternalResourcesMode::OFF;
+	}
+	return EnumUtil::FromString<ExternalResourcesMode>(parameter);
+}
+
+static string ExternalResourcesModeName(ExternalResourcesMode mode) {
+	return StringUtil::Lower(EnumUtil::ToString(mode));
+}
+
+void ExternalResourcesModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto requested = ParseExternalResourcesMode(input);
+	auto &current_mode = config.options.external_resources_mode;
+	// The modes are ordered by increasing restriction, so degrading never decreases the value.
+	if (requested < current_mode) {
+		throw InvalidInputException(
+		    "Cannot set external_resources_mode to \"%s\" while it is \"%s\" - it can only be made more restrictive",
+		    ExternalResourcesModeName(requested), ExternalResourcesModeName(current_mode));
+	}
+	current_mode = requested;
+}
+
+void ExternalResourcesModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	auto default_mode = DBConfigOptions().external_resources_mode;
+	if (config.options.external_resources_mode != default_mode) {
+		throw InvalidInputException(
+		    "Cannot reset external_resources_mode - it is \"%s\" and can only be made more restrictive",
+		    ExternalResourcesModeName(config.options.external_resources_mode));
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// External Resources Type Registration
+//===----------------------------------------------------------------------===//
+void ExternalResourcesTypeRegistrationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto requested = input.GetValue<bool>();
+	if (requested && !config.options.external_resources_type_registration) {
+		throw InvalidInputException(
+		    "Cannot enable external_resources_type_registration - it can only be disabled, not re-enabled");
+	}
+	config.options.external_resources_type_registration = requested;
+}
+
+void ExternalResourcesTypeRegistrationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	auto default_value = DBConfigOptions().external_resources_type_registration;
+	if (config.options.external_resources_type_registration != default_value) {
+		throw InvalidInputException(
+		    "Cannot reset external_resources_type_registration - it is disabled and can only be disabled");
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // External Threads
 //===----------------------------------------------------------------------===//
 void ExternalThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {

@@ -110,6 +110,7 @@ struct CreateExternalResourceState : public GlobalTableFunctionState {
 static unique_ptr<FunctionData> CreateExternalResourceBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types,
                                                            vector<Identifier> &names) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::MANAGEMENT);
 	auto result = make_uniq<CreateExternalResourceBindData>();
 	if (input.inputs[0].IsNull()) {
 		throw InvalidInputException("create_external_resource: the type name must not be NULL");
@@ -158,6 +159,7 @@ static unique_ptr<GlobalTableFunctionState> CreateExternalResourceInit(ClientCon
 }
 
 static void CreateExternalResourceFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::MANAGEMENT);
 	auto &state = data_p.global_state->Cast<CreateExternalResourceState>();
 	if (state.done) {
 		return;
@@ -392,6 +394,7 @@ struct DestroyExternalResourceState : public GlobalTableFunctionState {
 static unique_ptr<FunctionData> DestroyExternalResourceBind(ClientContext &context, TableFunctionBindInput &input,
                                                             vector<LogicalType> &return_types,
                                                             vector<Identifier> &names) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::MANAGEMENT);
 	auto result = make_uniq<DestroyExternalResourceBindData>();
 	if (input.inputs[0].IsNull() || StringValue::Get(input.inputs[0]).empty()) {
 		throw InvalidInputException("destroy_external_resource: the deleter function must not be NULL or empty");
@@ -410,6 +413,7 @@ static unique_ptr<GlobalTableFunctionState> DestroyExternalResourceInit(ClientCo
 }
 
 static void DestroyExternalResourceFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::MANAGEMENT);
 	auto &state = data_p.global_state->Cast<DestroyExternalResourceState>();
 	if (state.done) {
 		return;

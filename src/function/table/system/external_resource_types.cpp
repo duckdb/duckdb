@@ -4,6 +4,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/external_resource_type_registry.hpp"
+#include "duckdb/main/external_resources_manager.hpp"
 
 namespace duckdb {
 
@@ -23,6 +24,7 @@ struct RegisterExternalResourceTypeState : public GlobalTableFunctionState {
 static unique_ptr<FunctionData> RegisterExternalResourceTypeBind(ClientContext &context, TableFunctionBindInput &input,
                                                                  vector<LogicalType> &return_types,
                                                                  vector<Identifier> &names) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::TYPE_REGISTRATION);
 	auto result = make_uniq<RegisterExternalResourceTypeBindData>();
 	auto &type = result->type;
 
@@ -68,6 +70,7 @@ static unique_ptr<GlobalTableFunctionState> RegisterExternalResourceTypeInit(Cli
 
 static void RegisterExternalResourceTypeFunction(ClientContext &context, TableFunctionInput &data_p,
                                                  DataChunk &output) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::TYPE_REGISTRATION);
 	auto &state = data_p.global_state->Cast<RegisterExternalResourceTypeState>();
 	if (state.done) {
 		return;
@@ -93,6 +96,7 @@ struct ExternalResourceTypesData : public GlobalTableFunctionState {
 static unique_ptr<FunctionData> ExternalResourceTypesBind(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types,
                                                           vector<Identifier> &names) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::LISTING);
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("kind");
@@ -114,6 +118,7 @@ static unique_ptr<FunctionData> ExternalResourceTypesBind(ClientContext &context
 
 static unique_ptr<GlobalTableFunctionState> ExternalResourceTypesInit(ClientContext &context,
                                                                       TableFunctionInitInput &input) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::LISTING);
 	auto result = make_uniq<ExternalResourceTypesData>();
 	result->types = ExternalResourceTypeRegistry::Get(context).List();
 	return std::move(result);

@@ -54,6 +54,7 @@ static void DestroyExternalResource(ClientContext &client, const BoundExternalRe
 
 SourceResultType PhysicalExternalResource::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                            OperatorSourceInput &input) const {
+	ExternalResources::RequireCapability(context.client, ExternalResourceCapability::MANAGEMENT);
 	switch (data.operation) {
 	case ExternalResourceOperation::CREATE:
 	case ExternalResourceOperation::REGISTER:

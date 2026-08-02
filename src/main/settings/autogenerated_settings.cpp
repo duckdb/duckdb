@@ -220,6 +220,22 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
+// External Resources Mode
+//===----------------------------------------------------------------------===//
+Value ExternalResourcesModeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.external_resources_mode)));
+}
+
+//===----------------------------------------------------------------------===//
+// External Resources Type Registration
+//===----------------------------------------------------------------------===//
+Value ExternalResourcesTypeRegistrationSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.external_resources_type_registration);
+}
+
+//===----------------------------------------------------------------------===//
 // Force Bitpacking Mode
 //===----------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

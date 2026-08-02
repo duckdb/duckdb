@@ -47,6 +47,7 @@ struct ExternalResourcesGlobalState : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> ExternalResourcesBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::LISTING);
 	auto result = make_uniq<ExternalResourcesBindData>();
 	for (auto &np : input.named_parameters) {
 		if (StringUtil::Lower(np.first.GetIdentifierName()) == "discover" && !np.second.IsNull()) {
@@ -155,6 +156,7 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 
 static unique_ptr<GlobalTableFunctionState> ExternalResourcesInit(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::LISTING);
 	auto &bind_data = input.bind_data->Cast<ExternalResourcesBindData>();
 	auto result = make_uniq<ExternalResourcesGlobalState>();
 
@@ -235,6 +237,7 @@ struct RegisterExternalResourceState : public GlobalTableFunctionState {
 static unique_ptr<FunctionData> RegisterExternalResourceBind(ClientContext &context, TableFunctionBindInput &input,
                                                              vector<LogicalType> &return_types,
                                                              vector<Identifier> &names) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::MANAGEMENT);
 	auto result = make_uniq<RegisterExternalResourceBindData>();
 	auto &resource = result->resource;
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull()) {
@@ -274,6 +277,7 @@ static unique_ptr<GlobalTableFunctionState> RegisterExternalResourceInit(ClientC
 }
 
 static void RegisterExternalResourceFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::MANAGEMENT);
 	auto &state = data_p.global_state->Cast<RegisterExternalResourceState>();
 	if (state.done) {
 		return;
@@ -314,6 +318,7 @@ struct DeregisterExternalResourceState : public GlobalTableFunctionState {
 static unique_ptr<FunctionData> DeregisterExternalResourceBind(ClientContext &context, TableFunctionBindInput &input,
                                                                vector<LogicalType> &return_types,
                                                                vector<Identifier> &names) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::MANAGEMENT);
 	auto result = make_uniq<DeregisterExternalResourceBindData>();
 	if (input.inputs[0].IsNull() || StringValue::Get(input.inputs[0]).empty()) {
 		throw InvalidInputException("deregister_external_resource: the name must not be NULL or empty");
@@ -330,6 +335,7 @@ static unique_ptr<GlobalTableFunctionState> DeregisterExternalResourceInit(Clien
 }
 
 static void DeregisterExternalResourceFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	ExternalResources::RequireCapability(context, ExternalResourceCapability::MANAGEMENT);
 	auto &state = data_p.global_state->Cast<DeregisterExternalResourceState>();
 	if (state.done) {
 		return;

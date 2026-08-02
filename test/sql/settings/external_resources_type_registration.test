@@ -1,0 +1,67 @@
+# name: test/sql/settings/external_resources_type_registration.test
+# description: external_resources_type_registration blocks new external resource types, one way only
+# group: [settings]
+
+# Type registration is allowed by default.
+query T
+SELECT current_setting('external_resources_type_registration');
+----
+true
+
+statement ok
+CALL register_external_resource_type('quack@aws:ec2', kind := 'catalog', create_function := 'quack_create');
+
+statement ok
+SET external_resources_type_registration = false;
+
+query T
+SELECT current_setting('external_resources_type_registration');
+----
+false
+
+statement error
+CALL register_external_resource_type('pg@aws:rds', kind := 'catalog', create_function := 'pg_create');
+----
+<REGEX>:.*registering external resource types is disabled.*external_resources_type_registration.*
+
+# It is the only thing gated: the types registered before it are still usable and listable.
+query I
+SELECT count(*) FROM duckdb_external_resource_types();
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_external_resources();
+----
+0
+
+statement error
+DESTROY EXTERNAL RESOURCE nope;
+----
+<REGEX>:.*not registered.*
+
+# One way only.
+statement error
+SET external_resources_type_registration = true;
+----
+<REGEX>:.*Cannot enable external_resources_type_registration.*
+
+statement error
+RESET external_resources_type_registration;
+----
+<REGEX>:.*Cannot reset external_resources_type_registration.*
+
+query T
+SELECT current_setting('external_resources_type_registration');
+----
+false
+
+# Re-applying the current value is a no-op, not an error.
+statement ok
+SET external_resources_type_registration = false;
+
+# The setting is global, so a connection made after it was disabled is gated too.
+statement error con1
+CALL register_external_resource_type('pg@aws:rds', kind := 'catalog', create_function := 'pg_create');
+----
+<REGEX>:.*registering external resource types is disabled.*

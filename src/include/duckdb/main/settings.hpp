@@ -1182,6 +1182,29 @@ struct ExternalFileCacheRemoteBlockSizeSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ExternalResourcesModeSetting {
+	using RETURN_TYPE = ExternalResourcesMode;
+	static constexpr const char *Name = "external_resources_mode";
+	static constexpr const char *Description =
+	    "Which external resource operations are permitted: AVAILABLE (everything), LISTING (listing and discovery "
+	    "only) or OFF (nothing). Degrades one way only - the mode can be made more restrictive, never less";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ExternalResourcesTypeRegistrationSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "external_resources_type_registration";
+	static constexpr const char *Description = "Whether new external resource types can be registered. Degrades one "
+	                                           "way only - it can be disabled, but not re-enabled";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ExternalThreadsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "external_threads";

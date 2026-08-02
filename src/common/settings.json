@@ -782,6 +782,26 @@
         ]
     },
     {
+        "name": "external_resources_mode",
+        "description": "Which external resource operations are permitted: AVAILABLE (everything), LISTING (listing and discovery only) or OFF (nothing). Degrades one way only - the mode can be made more restrictive, never less",
+        "type": "ENUM<ExternalResourcesMode>",
+        "scope": "global",
+        "custom_implementation": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "external_resources_type_registration",
+        "description": "Whether new external resource types can be registered. Degrades one way only - it can be disabled, but not re-enabled",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": [
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",
