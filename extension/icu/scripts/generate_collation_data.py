@@ -11,9 +11,14 @@ The generated tables are derived exclusively from Unicode Consortium data:
 Run as:
     python3 extension/icu/scripts/generate_collation_data.py
 
-The downloaded source files are cached in a temporary directory, the generated
-C++ file is written to extension/icu/collation/generated. The zstd command line
-tool is used to compress the tables, it has to be installed to run this script.
+The versions above can be overridden with the CLDR_VERSION and UNICODE_VERSION
+environment variables, see scripts/README.md for the steps to take when a new
+release of the data comes out.
+
+The downloaded source files are cached in ~/.cache/duckdb-collation-data, the
+generated C++ file is written to extension/icu/collation/generated. The zstd
+command line tool is used to compress the tables, it has to be installed to run
+this script.
 """
 
 import os
@@ -23,8 +28,9 @@ import subprocess
 import sys
 import urllib.request
 
-CLDR_VERSION = "release-48"
-UNICODE_VERSION = "17.0.0"
+#! the versions of the data the tables are generated from, see scripts/README.md to update them
+CLDR_VERSION = os.environ.get("CLDR_VERSION", "release-48")
+UNICODE_VERSION = os.environ.get("UNICODE_VERSION", "17.0.0")
 
 CLDR_BASE = "https://raw.githubusercontent.com/unicode-org/cldr/%s/common" % CLDR_VERSION
 UCD_BASE = "https://www.unicode.org/Public/%s/ucd" % UNICODE_VERSION
@@ -1793,11 +1799,13 @@ STRENGTH_VALUES = {
 
 
 class Tailoring:
-    def __init__(self, name, builder, settings, reorder_table):
+    def __init__(self, name, builder, settings, reorder_table, mappings=None):
         self.name = name
         self.builder = builder
         self.settings = settings
         self.reorder_table = reorder_table
+        # the strings the rules map, which generate_collation_tests.py orders
+        self.mappings = mappings or {}
 
 
 def collation_settings(rules_settings):
@@ -1910,7 +1918,9 @@ def build_tailorings(root, normalization, implicit_primary):
         builder.close_over_composites()
         reorder_table = build_reorder_table(root, builder.reorder) if builder.reorder else None
         tables = build_tailoring_tables(builder.mappings, root, builder.suppressed, builder.prefix_mappings)
-        tailorings[name] = Tailoring(name, tables, collation_settings(builder.settings), reorder_table)
+        tailorings[name] = Tailoring(
+            name, tables, collation_settings(builder.settings), reorder_table, builder.mappings
+        )
 
     # the locales that use the root collation share an empty tailoring
     tailorings["root"] = Tailoring("root", build_tailoring_tables({}, root, set()), collation_settings({}), None)
