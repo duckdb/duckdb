@@ -23,7 +23,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(null)) {
-			ThrowNullDereference("unique_ptr");
+			ThrowNullUniquePtrDereference();
 		}
 #endif
 	}
@@ -67,7 +67,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(null)) {
-			ThrowNullDereference("unique_ptr");
+			ThrowNullUniquePtrDereference();
 		}
 #endif
 	}
@@ -94,7 +94,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(null)) {
-			ThrowNullDereference("unique_ptr");
+			ThrowNullUniquePtrDereference();
 		}
 #endif
 	}

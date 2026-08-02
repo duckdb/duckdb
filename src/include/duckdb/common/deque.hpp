@@ -41,7 +41,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(index >= size)) {
-			ThrowIndexOutOfBounds("deque", index, size);
+			ThrowDequeIndexOutOfBounds(index, size);
 		}
 #endif
 	}
@@ -89,28 +89,28 @@ public:
 
 	typename original::reference front() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("front", "deque");
+			ThrowDequeFrontOnEmpty();
 		}
 		return get<SAFE>(0);
 	}
 
 	typename original::const_reference front() const { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("front", "deque");
+			ThrowDequeFrontOnEmpty();
 		}
 		return get<SAFE>(0);
 	}
 
 	typename original::reference back() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("back", "deque");
+			ThrowDequeBackOnEmpty();
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	typename original::const_reference back() const { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("back", "deque");
+			ThrowDequeBackOnEmpty();
 		}
 		return get<SAFE>(original::size() - 1);
 	}

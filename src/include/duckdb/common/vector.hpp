@@ -41,7 +41,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(index >= size)) {
-			ThrowIndexOutOfBounds("vector", index, size);
+			ThrowVectorIndexOutOfBounds(index, size);
 		}
 #endif
 	}
@@ -98,21 +98,21 @@ public:
 
 	typename original::reference back() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("back", "vector");
+			ThrowVectorBackOnEmpty();
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	typename original::const_reference back() const { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("back", "vector");
+			ThrowVectorBackOnEmpty();
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	void pop_back() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("pop_back", "vector");
+			ThrowVectorPopBackOnEmpty();
 		}
 		original::pop_back();
 	}

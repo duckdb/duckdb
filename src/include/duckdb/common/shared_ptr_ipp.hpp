@@ -23,7 +23,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(null)) {
-			ThrowNullDereference("shared_ptr");
+			ThrowNullSharedPtrDereference();
 		}
 #endif
 	}

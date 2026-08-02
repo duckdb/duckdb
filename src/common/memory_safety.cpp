@@ -4,24 +4,64 @@
 
 namespace duckdb {
 
-void ThrowNullDereference(const char *pointer_type) {
-	throw InternalException("Attempted to dereference %s that is NULL!", pointer_type);
+void ThrowNullUniquePtrDereference() {
+	throw InternalException("Attempted to dereference unique_ptr that is NULL!");
+}
+
+void ThrowNullSharedPtrDereference() {
+	throw InternalException("Attempted to dereference shared_ptr that is NULL!");
 }
 
 void ThrowOptionalPointerNotSet() {
 	throw InternalException("Attempting to dereference an optional pointer that is not set");
 }
 
-void ThrowIndexOutOfBounds(const char *container, idx_t index, idx_t size) {
-	throw InternalException("Attempted to access index %lld within %s of size %lld", index, container, size);
+void ThrowNullArrayPtrConstruction() {
+	throw InternalException("Attempted to construct an array_ptr from a NULL pointer");
 }
 
-void ThrowEmptyContainer(const char *operation, const char *container) {
-	throw InternalException("'%s' called on an empty %s!", operation, container);
+void ThrowArrayPtrIteratorOutOfRange() {
+	throw InternalException("array_ptr iterator dereferenced while iterator is out of range");
 }
 
-void ThrowVectorError(const char *message) {
-	throw InternalException(message);
+void ThrowVectorIndexOutOfBounds(idx_t index, idx_t size) {
+	throw InternalException("Attempted to access index %lld within vector of size %lld", index, size);
+}
+
+void ThrowDequeIndexOutOfBounds(idx_t index, idx_t size) {
+	throw InternalException("Attempted to access index %lld within deque of size %lld", index, size);
+}
+
+void ThrowArrayPtrIndexOutOfBounds(idx_t index, idx_t size) {
+	throw InternalException("Attempted to access index %lld within array_ptr of size %lld", index, size);
+}
+
+void ThrowVectorBackOnEmpty() {
+	throw InternalException("'back' called on an empty vector!");
+}
+
+void ThrowVectorPopBackOnEmpty() {
+	throw InternalException("'pop_back' called on an empty vector!");
+}
+
+void ThrowDequeFrontOnEmpty() {
+	throw InternalException("'front' called on an empty deque!");
+}
+
+void ThrowDequeBackOnEmpty() {
+	throw InternalException("'back' called on an empty deque!");
+}
+
+void ThrowQueueFrontOnEmpty() {
+	throw InternalException("'front' called on an empty queue!");
+}
+
+void ThrowQueueBackOnEmpty() {
+	throw InternalException("'back' called on an empty queue!");
+}
+
+void ThrowQueuePopOnEmpty() {
+	throw InternalException("'pop' called on an empty queue!");
 }
 
 } // namespace duckdb

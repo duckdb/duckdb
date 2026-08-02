@@ -44,35 +44,35 @@ public:
 
 	reference front() {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("front", "queue");
+			ThrowQueueFrontOnEmpty();
 		}
 		return original::front();
 	}
 
 	const_reference front() const {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("front", "queue");
+			ThrowQueueFrontOnEmpty();
 		}
 		return original::front();
 	}
 
 	reference back() {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("back", "queue");
+			ThrowQueueBackOnEmpty();
 		}
 		return original::back();
 	}
 
 	const_reference back() const {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("back", "queue");
+			ThrowQueueBackOnEmpty();
 		}
 		return original::back();
 	}
 
 	void pop() {
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			ThrowEmptyContainer("pop", "queue");
+			ThrowQueuePopOnEmpty();
 		}
 		original::pop();
 	}
