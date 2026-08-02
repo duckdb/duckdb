@@ -52,6 +52,39 @@ SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_
 19	true
 20	false
 
+# DataPageV1 pages, generated with parquet-rs 58.3.0
+query I
+SELECT value FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_rust_pme_data_page_v1_uncompressed_required.parquet', encryption_config={footer_key: 'arrow_key_generated_files'});
+----
+7
+9
+11
+13
+
+query I
+SELECT value FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_rust_pme_data_page_v1_uncompressed_nullable.parquet', encryption_config={footer_key: 'arrow_key_generated_files'});
+----
+7
+NULL
+11
+13
+
+query I
+SELECT value FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_rust_pme_data_page_v1_snappy_required.parquet', encryption_config={footer_key: 'arrow_key_generated_files'});
+----
+7
+9
+11
+13
+
+query I
+SELECT value FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_rust_pme_data_page_v1_snappy_nullable.parquet', encryption_config={footer_key: 'arrow_key_generated_files'});
+----
+7
+NULL
+11
+13
+
 # DataPageV2 pages, generated with parquet-rs 58.3.0 (from duckdb/duckdb#24406)
 query I
 SELECT value FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_rust_pme_data_page_v2_uncompressed_required.parquet', encryption_config={footer_key: 'arrow_key_generated_files'});
