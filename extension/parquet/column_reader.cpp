@@ -424,21 +424,22 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
+	const auto compressed_page_size = GetPageDataSize(page_hdr);
 	bool uncompressed = false;
 	if (page_hdr.data_page_header_v2.__isset.is_compressed && !page_hdr.data_page_header_v2.is_compressed) {
 		uncompressed = true;
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
-		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
-			const auto &file_name = Reader().GetFileName();
-			throw InvalidInputException(
-			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
-			    page_hdr.uncompressed_page_size, page_hdr.compressed_page_size);
-		}
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		ReadData(block->ptr, page_hdr.compressed_page_size, page_hdr.type);
+		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
+			const auto &file_name = Reader().GetFileName();
+			throw InvalidInputException(
+			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
+			    page_hdr.uncompressed_page_size, compressed_page_size);
+		}
+		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;
 	}
 
@@ -461,16 +462,19 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
 	}
-	if (static_cast<uint64_t>(page_hdr.compressed_page_size) < uncompressed_bytes) {
+	if (compressed_page_size < uncompressed_bytes) {
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is smaller than "
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
 	}
 
-	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
+	ResizeableBuffer compressed_buffer;
+	compressed_buffer.resize(GetAllocator(), compressed_page_size);
+	ReadData(compressed_buffer.ptr, compressed_page_size, page_hdr.type);
+	memcpy(block->ptr, compressed_buffer.ptr, uncompressed_bytes);
 
-	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+	const auto compressed_bytes = compressed_page_size - uncompressed_bytes;
 
 	if (compressed_bytes == 0 && static_cast<uint64_t>(page_hdr.uncompressed_page_size) > uncompressed_bytes) {
 		throw InvalidInputException(
@@ -480,12 +484,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 
 	if (compressed_bytes > 0) {
-		ResizeableBuffer compressed_buffer;
-		compressed_buffer.resize(GetAllocator(), compressed_bytes);
-
-		ReadData(compressed_buffer.ptr, compressed_bytes, page_hdr.type);
-
-		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
+		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr + uncompressed_bytes, compressed_bytes,
 		                   block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
 	}
 }
@@ -500,18 +499,7 @@ void ColumnReader::AllocateBlock(idx_t size) {
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
-	uint32_t compressed_page_size = page_hdr.compressed_page_size;
-
-	if (chunk->__isset.crypto_metadata) {
-		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
-		if (!file_aad.empty()) {
-			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow
-			// Arrow adds the bytes for encryption (len + nonce + tag)
-			// to the compressed page size
-			compressed_page_size -=
-			    (ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES);
-		}
-	}
+	const auto compressed_page_size = GetPageDataSize(page_hdr);
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
@@ -530,6 +518,28 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_page_size, block->ptr,
 	                   page_hdr.uncompressed_page_size);
+}
+
+uint32_t ColumnReader::GetPageDataSize(const PageHeader &page_hdr) {
+	auto page_data_size = NumericCast<uint32_t>(page_hdr.compressed_page_size);
+
+	if (chunk->__isset.crypto_metadata) {
+		auto const file_aad = reader.GetUniqueFileIdentifier(reader.metadata->crypto_metadata->encryption_algorithm);
+		if (!file_aad.empty()) {
+			// If there is a file aad (identifier), this means that the Encrypted file is written by Arrow
+			// Arrow adds the bytes for encryption (len + nonce + tag)
+			// to the compressed page size
+			constexpr auto encryption_overhead =
+			    ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES;
+			if (page_data_size < encryption_overhead) {
+				throw InvalidInputException(
+				    "Failed to read file \"%s\": compressed_page_size is smaller than the encryption overhead",
+				    Reader().GetFileName());
+			}
+			page_data_size -= encryption_overhead;
+		}
+	}
+	return page_data_size;
 }
 
 void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size,
