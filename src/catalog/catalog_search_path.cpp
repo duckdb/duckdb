@@ -191,6 +191,15 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 				}
 			}
 		}
+		if (!path.GetCatalog().empty()) {
+			// "a.b" can also name a nested schema - give a clearer error in that case
+			vector<Identifier> nested_path {path.GetCatalog(), path.GetSchema()};
+			if (Catalog::GetSchema(context, Identifier(), nested_path, OnEntryNotFound::RETURN_NULL)) {
+				throw NotImplementedException("%s: \"%s\" is a nested schema - nested schemas cannot be used in the "
+				                              "search path",
+				                              GetSetName(set_type), path.ToString());
+			}
+		}
 		throw CatalogException("%s: No catalog + schema named \"%s\" found.", GetSetName(set_type), path.ToString());
 	}
 	if (set_type == CatalogSetPathType::SET_SCHEMA) {

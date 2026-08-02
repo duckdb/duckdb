@@ -1,12 +1,13 @@
+#include "core_functions/aggregate/histogram_helpers.hpp"
+#include "core_functions/aggregate/nested_functions.hpp"
+#include "duckdb/common/owning_string_map.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "core_functions/aggregate/nested_functions.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/string_map_set.hpp"
-#include "core_functions/aggregate/histogram_helpers.hpp"
-#include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {
 
@@ -169,7 +170,7 @@ AggregateFunction GetStringMapType(const LogicalType &type) {
 template <bool IS_ORDERED = true>
 AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
-#ifndef DUCKDB_SMALLER_BINARY
+#if !DUCKDB_SMALLER_BINARY(histogram_types)
 	case PhysicalType::BOOL:
 		return GetMapType<HistogramFunctor, bool, IS_ORDERED>(type);
 	case PhysicalType::UINT8:
