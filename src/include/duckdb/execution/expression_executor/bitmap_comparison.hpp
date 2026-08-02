@@ -91,6 +91,27 @@ inline bool IsBitmapSelectCandidate(const Expression &expr) { // comparison or c
 	return IsBitmapComparisonCandidate(expr);
 }
 
+//! Memoize an idempotent expression analysis in Expression::exec_analysis_cache (benign races);
+//! known_bit marks the entry as computed, known_bit << 1 stores the result
+inline bool CachedExprAnalysis(const Expression &expr, uint8_t known_bit, bool (*compute)(const Expression &)) {
+	const auto flags = expr.exec_analysis_cache.load(std::memory_order_relaxed);
+	if (flags & known_bit) {
+		return flags & uint8_t(known_bit << 1);
+	}
+	const bool result = compute(expr);
+	expr.exec_analysis_cache.fetch_or(uint8_t(known_bit | (result ? known_bit << 1 : 0)), std::memory_order_relaxed);
+	return result;
+}
+
+inline bool IsBitmapSelectCandidateCached(const Expression &expr) {
+	return CachedExprAnalysis(expr, 1, IsBitmapSelectCandidate);
+}
+
+inline bool IsStableExpressionCached(const Expression &expr) { // consistent, non-volatile, non-throwing
+	return CachedExprAnalysis(expr, 4,
+	                          [](const Expression &e) { return e.IsConsistent() && !e.IsVolatile() && !e.CanThrow(); });
+}
+
 inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChunk &chunk, const SelectionVector *sel,
                                       idx_t count, SelectionResult *bitmap_sel, SelectionVector *true_sel,
                                       SelectionVector *false_sel, SelectionResult &tmp_sel1, SelectionResult &tmp_sel2,

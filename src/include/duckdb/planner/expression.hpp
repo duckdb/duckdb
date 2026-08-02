@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/base_expression.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
@@ -53,6 +54,9 @@ public:
 	virtual bool PropagatesNullValues() const;
 	virtual bool IsFoldable() const;
 	virtual bool CanThrow() const;
+
+	//! Memo for executor-side analysis to keep instantiation cost down
+	mutable atomic<uint8_t> exec_analysis_cache {0};
 
 	hash_t Hash() const override;
 

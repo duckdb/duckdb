@@ -34,9 +34,9 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
     : ExpressionState(expr, root) {
 	// cached bitmap select shape
 	select_bitmap_capable =
-	    CpuBenefitsFromAutoVec() && IsBitmapComparisonCandidate(expr) && TryGetBitmapComparisonInfo(expr, cmp_info);
+	    CpuBenefitsFromAutoVec() && IsBitmapSelectCandidateCached(expr) && TryGetBitmapComparisonInfo(expr, cmp_info);
 	// Check if the expression is eligible for dictionary optimization
-	if (!expr.IsConsistent() || expr.IsVolatile() || expr.CanThrow()) {
+	if (!IsStableExpressionCached(expr)) {
 		return; // Needs to be consistent, non-volatile, and non-throwing
 	}
 

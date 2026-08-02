@@ -14,7 +14,7 @@ struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root)
 	    : ExpressionState(expr, root), intersect_tmp(STANDARD_VECTOR_SIZE) {
 		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
-			dense_child.push_back(IsBitmapSelectCandidate(*child));
+			dense_child.push_back(IsBitmapSelectCandidateCached(*child));
 			bitmap_capable = bitmap_capable || dense_child.back();
 		}
 		bitmap_capable = bitmap_capable && CpuBenefitsFromAutoVec();
