@@ -68,3 +68,33 @@ ORDER BY k NULLS FIRST;
 ----
 true	1
 false	0
+
+# A present group whose aggregate filter rejects every row is not a missing group.
+query III
+WITH outer_t(k) AS (VALUES (1), (2)),
+     inner_t(k, v) AS (VALUES (1, 10))
+SELECT k,
+       (SELECT regr_count(v, v) FILTER (WHERE false)
+        FROM inner_t WHERE inner_t.k=outer_t.k),
+       (SELECT approx_count_distinct(v) FILTER (WHERE false)
+        FROM inner_t WHERE inner_t.k=outer_t.k)
+FROM outer_t
+ORDER BY k;
+----
+1	0	0
+2	0	0
+
+# GROUP BY and HAVING can suppress the aggregate row; that remains NULL rather than an empty-input result.
+query III
+WITH outer_t(k) AS (VALUES (1), (2)),
+     inner_t(k, v) AS (VALUES (1, 10))
+SELECT k,
+       (SELECT regr_count(v, v)
+        FROM inner_t WHERE inner_t.k=outer_t.k GROUP BY inner_t.k),
+       (SELECT approx_count_distinct(v)
+        FROM inner_t WHERE inner_t.k=outer_t.k HAVING false)
+FROM outer_t
+ORDER BY k;
+----
+1	1	NULL
+2	NULL	NULL
