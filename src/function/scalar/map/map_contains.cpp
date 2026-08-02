@@ -18,13 +18,23 @@ static void MapContainsFunction(DataChunk &input, ExpressionState &state, Vector
 	ListSearchOp<bool>(map_vec, key_vec, arg_vec, result, count);
 }
 
+static bool TypeHasCollation(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::VARCHAR:
+		return !type.HasAlias() && !StringType::GetCollation(type).empty();
+	case LogicalTypeId::LIST:
+		return TypeHasCollation(ListType::GetChildType(type));
+	case LogicalTypeId::ARRAY:
+		return TypeHasCollation(ArrayType::GetChildType(type));
+	default:
+		return false;
+	}
+}
+
 static unique_ptr<Expression> BindMapContainsExpression(FunctionBindExpressionInput &input) {
 	auto &key_type = input.children[1]->GetReturnType();
 	auto &map_key_type = MapType::KeyType(input.children[0]->GetReturnType());
-	auto key_collation = key_type.id() == LogicalTypeId::VARCHAR ? StringType::GetCollation(key_type) : string();
-	auto map_collation =
-	    map_key_type.id() == LogicalTypeId::VARCHAR ? StringType::GetCollation(map_key_type) : string();
-	if (key_collation.empty() && map_collation.empty()) {
+	if (!TypeHasCollation(key_type) && !TypeHasCollation(map_key_type)) {
 		return nullptr;
 	}
 
