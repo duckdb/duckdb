@@ -272,7 +272,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
 
 // LCOV_EXCL_START
-string TypeIdToString(PhysicalType type) {
+const char *TypeIdToChars(PhysicalType type) noexcept {
 	switch (type) {
 	case PhysicalType::BOOL:
 		return "BOOL";
@@ -320,6 +320,10 @@ string TypeIdToString(PhysicalType type) {
 	return "INVALID";
 }
 // LCOV_EXCL_STOP
+
+string TypeIdToString(PhysicalType type) {
+	return string(TypeIdToChars(type));
+}
 
 idx_t GetTypeIdSize(PhysicalType type) {
 	switch (type) {

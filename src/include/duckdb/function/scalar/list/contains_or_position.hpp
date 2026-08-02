@@ -155,7 +155,7 @@ idx_t ListSearchOp(const Vector &list_v, const Vector &source_v, const Vector &t
 		return ListSearchNestedOp<RETURN_TYPE, FIND_NULLS>(list_v, source_v, target_v, result_v, target_count);
 	default:
 		throw NotImplementedException("This function has not been implemented for logical type %s",
-		                              TypeIdToString(type));
+		                              TypeIdToChars(type));
 	}
 }
 

@@ -691,7 +691,7 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
 		break;
 	}
 	default:
-		throw NotImplementedException("RunEndEncoded value type '%s' not supported yet", TypeIdToString(physical_type));
+		throw NotImplementedException("RunEndEncoded value type '%s' not supported yet", TypeIdToChars(physical_type));
 	}
 }
 
@@ -746,7 +746,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 		FlattenRunEndsSwitch<int64_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	default:
-		throw NotImplementedException("Type '%s' not implemented for RunEndEncoding", TypeIdToString(physical_type));
+		throw NotImplementedException("Type '%s' not implemented for RunEndEncoding", TypeIdToChars(physical_type));
 	}
 }
 template <class SRC>
@@ -822,7 +822,7 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	default:
 		throw NotImplementedException("Unsupported physical type for Decimal: %s",
-		                              TypeIdToString(vector.GetType().InternalType()));
+		                              TypeIdToChars(vector.GetType().InternalType()));
 	}
 }
 

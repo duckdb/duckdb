@@ -16,7 +16,7 @@ string TimestampCastErrorMessage(SRC input) {
 		return "Can't get TIME_NS of infinite TIMESTAMP";
 	}
 	if (std::is_same<DST, date_t>()) {
-		return StringUtil::Format("Could not convert Timestamp to %s.", TypeIdToString(GetTypeId<DST>()));
+		return StringUtil::Format("Could not convert Timestamp to %s.", TypeIdToChars(GetTypeId<DST>()));
 	}
 	return "Could not convert Timestamp to higher precision.";
 }

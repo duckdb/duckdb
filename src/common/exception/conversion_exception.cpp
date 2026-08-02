@@ -6,7 +6,7 @@ namespace duckdb {
 
 ConversionException::ConversionException(const PhysicalType orig_type, const PhysicalType new_type)
     : Exception(ExceptionType::CONVERSION,
-                "Type " + TypeIdToString(orig_type) + " can't be cast as " + TypeIdToString(new_type)) {
+                string("Type ") + TypeIdToChars(orig_type) + " can't be cast as " + TypeIdToChars(new_type)) {
 }
 
 ConversionException::ConversionException(const LogicalType &orig_type, const LogicalType &new_type)

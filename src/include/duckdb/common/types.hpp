@@ -598,6 +598,8 @@ DUCKDB_API LogicalType TransformStringToLogicalType(const string &str, ClientCon
 //! The PhysicalType used by the row identifiers column
 extern const PhysicalType ROW_TYPE;
 
+//! Returns the name of a PhysicalType as a string literal - no allocation, cannot fail.
+DUCKDB_API const char *TypeIdToChars(PhysicalType type) noexcept;
 DUCKDB_API string TypeIdToString(PhysicalType type);
 DUCKDB_API idx_t GetTypeIdSize(PhysicalType type);
 DUCKDB_API bool TypeIsConstantSize(PhysicalType type);

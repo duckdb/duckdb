@@ -285,8 +285,8 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported physical type for Decimal" +
-			                         TypeIdToString(result.GetTypes()[col].InternalType()));
+			throw std::runtime_error(string("Unsupported physical type for Decimal") +
+			                         TypeIdToChars(result.GetTypes()[col].InternalType()));
 		}
 		break;
 	}

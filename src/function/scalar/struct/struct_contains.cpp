@@ -172,7 +172,7 @@ static void StructSearchOp(const Vector &input_vector, const vector<Vector> &mem
 		return StructNestedOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
 	default:
 		throw NotImplementedException("This function has not been implemented for logical type %s",
-		                              TypeIdToString(target_type));
+		                              TypeIdToChars(target_type));
 	}
 }
 

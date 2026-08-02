@@ -445,8 +445,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
 				break;
 			default:
-				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
-				                        TypeIdToString(parse_types[chunk_col_id].internal_type));
+				throw InternalException(string("Invalid Physical Type for Decimal Value. Physical Type: ") +
+				                        TypeIdToChars(parse_types[chunk_col_id].internal_type));
 			}
 
 		} else if (decimal_separator == '.') {
@@ -472,8 +472,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
 				break;
 			default:
-				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
-				                        TypeIdToString(parse_types[chunk_col_id].internal_type));
+				throw InternalException(string("Invalid Physical Type for Decimal Value. Physical Type: ") +
+				                        TypeIdToChars(parse_types[chunk_col_id].internal_type));
 			}
 		} else {
 			throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");

@@ -272,8 +272,8 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 			}
 
 			default:
-				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
-				                        TypeIdToString(type.InternalType()));
+				throw InternalException(string("Invalid Physical Type for Decimal Value. Physical Type: ") +
+				                        TypeIdToChars(type.InternalType()));
 			}
 
 		} else if (decimal_separator == '.') {
@@ -299,8 +299,8 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 			}
 
 			default:
-				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
-				                        TypeIdToString(type.InternalType()));
+				throw InternalException(string("Invalid Physical Type for Decimal Value. Physical Type: ") +
+				                        TypeIdToChars(type.InternalType()));
 			}
 		}
 		throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");

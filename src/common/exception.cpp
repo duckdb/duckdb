@@ -226,7 +226,7 @@ void Exception::SetQueryLocation(QueryLocation error_location, unordered_map<str
 }
 
 InvalidTypeException::InvalidTypeException(PhysicalType type, const string &msg)
-    : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
+    : Exception(ExceptionType::INVALID_TYPE, string("Invalid Type [") + TypeIdToChars(type) + "]: " + msg) {
 }
 
 InvalidTypeException::InvalidTypeException(const LogicalType &type, const string &msg)
@@ -237,8 +237,8 @@ InvalidTypeException::InvalidTypeException(const string &msg) : Exception(Except
 }
 
 TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg)
-    : Exception(ExceptionType::MISMATCH_TYPE,
-                "Type " + TypeIdToString(type_1) + " does not match with " + TypeIdToString(type_2) + ". " + msg) {
+    : Exception(ExceptionType::MISMATCH_TYPE, string("Type ") + TypeIdToChars(type_1) + " does not match with " +
+                                                  TypeIdToChars(type_2) + ". " + msg) {
 }
 
 TypeMismatchException::TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg)
@@ -264,31 +264,33 @@ OutOfRangeException::OutOfRangeException(const string &msg) : Exception(Exceptio
 }
 
 OutOfRangeException::OutOfRangeException(const int64_t value, const PhysicalType orig_type, const PhysicalType new_type)
-    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " +
+    : Exception(ExceptionType::OUT_OF_RANGE, string("Type ") + TypeIdToChars(orig_type) + " with value " +
                                                  to_string((intmax_t)value) +
                                                  " can't be cast because the value is out of range "
                                                  "for the destination type " +
-                                                 TypeIdToString(new_type)) {
+                                                 TypeIdToChars(new_type)) {
 }
 
 OutOfRangeException::OutOfRangeException(const double value, const PhysicalType orig_type, const PhysicalType new_type)
-    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
+    : Exception(ExceptionType::OUT_OF_RANGE, string("Type ") + TypeIdToChars(orig_type) + " with value " +
+                                                 to_string(value) +
                                                  " can't be cast because the value is out of range "
                                                  "for the destination type " +
-                                                 TypeIdToString(new_type)) {
+                                                 TypeIdToChars(new_type)) {
 }
 
 OutOfRangeException::OutOfRangeException(const hugeint_t value, const PhysicalType orig_type,
                                          const PhysicalType new_type)
-    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + value.ToString() +
+    : Exception(ExceptionType::OUT_OF_RANGE, string("Type ") + TypeIdToChars(orig_type) + " with value " +
+                                                 value.ToString() +
                                                  " can't be cast because the value is out of range "
                                                  "for the destination type " +
-                                                 TypeIdToString(new_type)) {
+                                                 TypeIdToChars(new_type)) {
 }
 
 OutOfRangeException::OutOfRangeException(const PhysicalType var_type, const idx_t length)
-    : Exception(ExceptionType::OUT_OF_RANGE,
-                "The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
+    : Exception(ExceptionType::OUT_OF_RANGE, string("The value is too long to fit into type ") +
+                                                 TypeIdToChars(var_type) + "(" + to_string(length) + ")") {
 }
 
 ConnectionException::ConnectionException(const string &msg) : Exception(ExceptionType::CONNECTION, msg) {

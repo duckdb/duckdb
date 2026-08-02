@@ -1139,7 +1139,7 @@ static bool TryCastTimestampBase(const SRC &input, DST &result, bool strict = tr
 }
 
 template <typename SRC, typename DST>
-static DST CastTimestampOperation(const SRC &input, const string &error_message) {
+static DST CastTimestampOperation(const SRC &input, const char *error_message) {
 	DST result;
 	if (!TryCast::Operation(input, result)) {
 		throw ConversionException(error_message);
@@ -1154,8 +1154,11 @@ static DST CastTimestampPrecisionOperation(const SRC &input) {
 
 template <typename SRC, typename DST>
 static DST CastTimestampTargetOperation(const SRC &input) {
-	return CastTimestampOperation<SRC, DST>(
-	    input, StringUtil::Format("Could not convert Timestamp to %s.", TypeIdToString(GetTypeId<DST>())));
+	DST result;
+	if (!TryCast::Operation(input, result)) {
+		throw ConversionException("Could not convert Timestamp to %s.", TypeIdToChars(GetTypeId<DST>()));
+	}
+	return result;
 }
 
 template <typename SRC>
@@ -1703,7 +1706,7 @@ bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, CastPara
 	D_ASSERT(input.GetSize() > 1);
 
 	if (input.GetSize() - 1 > sizeof(hugeint_t)) {
-		HandleCastError::AssignError("Bitstring doesn't fit inside of " + TypeIdToString(GetTypeId<hugeint_t>()),
+		HandleCastError::AssignError(string("Bitstring doesn't fit inside of ") + TypeIdToChars(GetTypeId<hugeint_t>()),
 		                             parameters);
 		return false;
 	}
@@ -1716,8 +1719,8 @@ bool CastFromBitToNumeric::Operation(string_t input, uhugeint_t &result, CastPar
 	D_ASSERT(input.GetSize() > 1);
 
 	if (input.GetSize() - 1 > sizeof(uhugeint_t)) {
-		HandleCastError::AssignError("Bitstring doesn't fit inside of " + TypeIdToString(GetTypeId<uhugeint_t>()),
-		                             parameters);
+		HandleCastError::AssignError(
+		    string("Bitstring doesn't fit inside of ") + TypeIdToChars(GetTypeId<uhugeint_t>()), parameters);
 		return false;
 	}
 	Bit::BitToNumeric(input, result);

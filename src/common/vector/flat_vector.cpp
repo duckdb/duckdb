@@ -403,7 +403,7 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 			return Value::DECIMAL(reinterpret_cast<const hugeint_t *>(data_ptr)[index], width, scale);
 		default:
 			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
-			                        TypeIdToString(type.InternalType()));
+			                        TypeIdToChars(type.InternalType()));
 		}
 	}
 	case LogicalTypeId::ENUM: {

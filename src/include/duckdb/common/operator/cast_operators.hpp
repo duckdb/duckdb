@@ -58,15 +58,16 @@ template <class SRC, class DST>
 static string CastExceptionText(SRC input) {
 	if (std::is_same<SRC, string_t>()) {
 		return "Could not convert string '" + ConvertToString::Operation<SRC>(input) + "' to " +
-		       TypeIdToString(GetTypeId<DST>());
+		       TypeIdToChars(GetTypeId<DST>());
 	}
 	if (TypeIsNumber<SRC>() && TypeIsNumber<DST>()) {
-		return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " + ConvertToString::Operation<SRC>(input) +
+		return string("Type ") + TypeIdToChars(GetTypeId<SRC>()) + " with value " +
+		       ConvertToString::Operation<SRC>(input) +
 		       " can't be cast because the value is out of range for the destination type " +
-		       TypeIdToString(GetTypeId<DST>());
+		       TypeIdToChars(GetTypeId<DST>());
 	}
-	return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " + ConvertToString::Operation<SRC>(input) +
-	       " can't be cast to the destination type " + TypeIdToString(GetTypeId<DST>());
+	return string("Type ") + TypeIdToChars(GetTypeId<SRC>()) + " with value " + ConvertToString::Operation<SRC>(input) +
+	       " can't be cast to the destination type " + TypeIdToChars(GetTypeId<DST>());
 }
 
 struct Cast {
@@ -929,7 +930,7 @@ struct CastFromBitToNumeric {
 		// TODO: Allow conversion if the significant bytes of the bitstring can be cast to the target type
 		// Currently only allows bitstring -> numeric if the full bitstring fits inside the numeric type
 		if (input.GetSize() - 1 > sizeof(DST)) {
-			HandleCastError::AssignError("Bitstring doesn't fit inside of " + TypeIdToString(GetTypeId<DST>()),
+			HandleCastError::AssignError(string("Bitstring doesn't fit inside of ") + TypeIdToChars(GetTypeId<DST>()),
 			                             parameters);
 			return false;
 		}

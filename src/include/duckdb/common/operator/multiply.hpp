@@ -74,7 +74,7 @@ struct MultiplyOperatorOverflowCheck {
 	static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TryMultiplyOperator::Operation(left, right, result)) {
-			throw OutOfRangeException("Overflow in multiplication of %s (%s * %s)!", TypeIdToString(GetTypeId<TA>()),
+			throw OutOfRangeException("Overflow in multiplication of %s (%s * %s)!", TypeIdToChars(GetTypeId<TA>()),
 			                          NumericHelper::ToString(left), NumericHelper::ToString(right));
 		}
 		return result;

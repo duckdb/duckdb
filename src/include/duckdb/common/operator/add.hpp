@@ -87,7 +87,7 @@ struct AddOperatorOverflowCheck {
 	static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TryAddOperator::Operation(left, right, result)) {
-			throw OutOfRangeException("Overflow in addition of %s (%s + %s)!", TypeIdToString(GetTypeId<TA>()),
+			throw OutOfRangeException("Overflow in addition of %s (%s + %s)!", TypeIdToChars(GetTypeId<TA>()),
 			                          NumericHelper::ToString(left), NumericHelper::ToString(right));
 		}
 		return result;

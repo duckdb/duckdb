@@ -34,7 +34,7 @@ ExceptionFormatValue::ExceptionFormatValue(const String &str_val) : ExceptionFor
 
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const PhysicalType &value) {
-	return ExceptionFormatValue(TypeIdToString(value));
+	return ExceptionFormatValue(string(TypeIdToChars(value)));
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const LogicalType &value) {

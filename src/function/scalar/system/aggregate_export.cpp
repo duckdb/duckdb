@@ -109,7 +109,7 @@ void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 		break;
 	default:
 		throw NotImplementedException("Unsupported physical type for default aggregate state export: %s",
-		                              TypeIdToString(type));
+		                              TypeIdToChars(type));
 	}
 }
 

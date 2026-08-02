@@ -66,7 +66,7 @@ static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 		function = &ScalarFunction::BinaryFunction<uhugeint_t, uhugeint_t, uhugeint_t, OP>;
 		break;
 	default:
-		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction: %s", TypeIdToString(type));
+		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction: %s", TypeIdToChars(type));
 	}
 	return function;
 }
