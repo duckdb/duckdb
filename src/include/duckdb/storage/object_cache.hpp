@@ -23,6 +23,13 @@ class ClientContext;
 class DatabaseInstance;
 class BoundObjectCache;
 
+struct ObjectCacheStats {
+	idx_t max_memory;
+	idx_t current_memory;
+	size_t entry_count;
+	bool is_empty;
+};
+
 struct BufferPoolPayload {
 	explicit BufferPoolPayload(unique_ptr<TempBufferPoolReservation> &&res) : reservation(std::move(res)) {
 	}
@@ -72,6 +79,7 @@ public:
 
 private:
 	friend class BoundObjectCache;
+	friend class BufferPool;
 	friend class DatabaseInstance;
 
 	struct ObjectCacheKey {
@@ -188,6 +196,8 @@ private:
 		}
 	}
 
+	unique_ptr<BoundObjectCache> Bind(MemoryContextId context_id);
+
 	//! Type-prefixed variants of the methods above. These namespace the caller-provided key with the entry's
 	//! ObjectType so that callers can pass a natural key (e.g. a file path) without having to build a unique
 	//! cache key themselves.
@@ -213,22 +223,17 @@ private:
 	}
 
 public:
-	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);
-	DUCKDB_API static BoundObjectCache Get(ClientContext &context);
-	DUCKDB_API static BoundObjectCache Get(DatabaseInstance &db);
+	DUCKDB_API static BoundObjectCache &Get(ClientContext &context);
+	DUCKDB_API static BoundObjectCache &Get(DatabaseInstance &db);
 
-	idx_t GetMaxMemory() const {
+private:
+	ObjectCacheStats GetMemoryDomainStats() const {
 		const lock_guard<mutex> lock(lock_mutex);
-		return lru_cache.Capacity();
+		return {lru_cache.Capacity(), lru_cache.CurrentTotalWeight(), lru_cache.Size() + non_evictable_entries.size(),
+		        lru_cache.IsEmpty() && non_evictable_entries.empty()};
 	}
-	idx_t GetCurrentMemory() const {
-		const lock_guard<mutex> lock(lock_mutex);
-		return lru_cache.CurrentTotalWeight();
-	}
-	size_t GetEntryCount() const {
-		const lock_guard<mutex> lock(lock_mutex);
-		return lru_cache.Size() + non_evictable_entries.size();
-	}
+
+private:
 	bool IsEmpty() const {
 		const lock_guard<mutex> lock(lock_mutex);
 		return lru_cache.IsEmpty() && non_evictable_entries.empty();
@@ -262,6 +267,9 @@ private:
 
 class BoundObjectCache {
 public:
+	BoundObjectCache(const BoundObjectCache &) = delete;
+	BoundObjectCache &operator=(const BoundObjectCache &) = delete;
+
 	shared_ptr<ObjectCacheEntry> GetObject(const string &key) {
 		return cache.GetObject(context_id, key);
 	}
@@ -303,6 +311,18 @@ public:
 	template <class T>
 	void DeleteWithTypePrefix(const string &key) {
 		cache.DeleteWithTypePrefix<T>(context_id, key);
+	}
+
+	ObjectCacheStats GetMemoryDomainStats() const {
+		return cache.GetMemoryDomainStats();
+	}
+
+	idx_t EvictFromMemoryDomain(idx_t target_bytes) {
+		return cache.EvictToReduceMemory(target_bytes);
+	}
+
+	void DropNonEvictableEntries() {
+		cache.DropNonEvictableEntries(context_id);
 	}
 
 private:

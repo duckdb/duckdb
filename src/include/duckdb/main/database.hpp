@@ -42,6 +42,7 @@ class ExternalFileCache;
 class ResultSetManager;
 struct ParserCache;
 class DatabaseMemoryManager;
+class BoundObjectCache;
 
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -67,7 +68,7 @@ public:
 	DUCKDB_API ExternalFileCache &GetExternalFileCache();
 	DUCKDB_API ResultSetManager &GetResultSetManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
-	DUCKDB_API ObjectCache &GetObjectCache();
+	DUCKDB_API BoundObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
 	DUCKDB_API ExtensionManager &GetExtensionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
@@ -101,6 +102,7 @@ private:
 
 private:
 	const MemoryContextId memory_context_id;
+	unique_ptr<BoundObjectCache> object_cache;
 	shared_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<ExternalResourceTypeRegistry> external_resource_type_registry;

@@ -46,7 +46,7 @@ public:
 	DUCKDB_API BlockAllocator &GetBlockAllocator() const;
 	DUCKDB_API TemporaryMemoryManager &GetTemporaryMemoryManager() const;
 	DUCKDB_API BufferPool &GetBufferPool() const;
-	DUCKDB_API ObjectCache &GetObjectCache() const;
+	ObjectCache &GetSharedObjectCache() const;
 	DUCKDB_API const DatabaseMemoryConfig &GetConfig() const;
 	DUCKDB_API void SetMaximumMemory(idx_t maximum_memory, const char *exception_postscript);
 	DUCKDB_API void SetBlockAllocatorSize(idx_t block_allocator_size);

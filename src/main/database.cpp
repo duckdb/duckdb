@@ -106,9 +106,10 @@ DatabaseInstance::~DatabaseInstance() {
 	external_file_cache.reset();
 	result_set_manager.reset();
 
-	if (config.memory_manager) {
-		config.memory_manager->GetObjectCache().DropNonEvictableEntries(memory_context_id);
+	if (object_cache) {
+		object_cache->DropNonEvictableEntries();
 	}
+	object_cache.reset();
 	buffer_manager.reset();
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
@@ -305,6 +306,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	Configure(*config_ptr, database_path);
+	object_cache = config.memory_manager->GetSharedObjectCache().Bind(memory_context_id);
 
 	create_api_v1 = CreateAPIv1Wrapper;
 
@@ -418,8 +420,8 @@ TaskScheduler &DatabaseInstance::GetScheduler() {
 	return *scheduler;
 }
 
-ObjectCache &DatabaseInstance::GetObjectCache() {
-	return config.memory_manager->GetObjectCache();
+BoundObjectCache &DatabaseInstance::GetObjectCache() {
+	return *object_cache;
 }
 
 FileSystem &DatabaseInstance::GetFileSystem() {

@@ -34,7 +34,7 @@ private:
 };
 
 void EnsureDebugFileSystemInstalled(DatabaseInstance &db) {
-	auto cache = ObjectCache::Get(db);
+	auto &cache = ObjectCache::Get(db);
 	if (cache.GetWithTypePrefix<DebugFileSystemCacheEntry>("instance")) {
 		return;
 	}

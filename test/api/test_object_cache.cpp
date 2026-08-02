@@ -67,7 +67,7 @@ TEST_CASE("Test ObjectCache", "[api][object_cache]") {
 	Connection con(db);
 	auto &context = *con.context;
 
-	auto cache = ObjectCache::Get(context);
+	auto &cache = ObjectCache::Get(context);
 
 	REQUIRE(cache.GetObject("test") == nullptr);
 	cache.Put("test", make_shared_ptr<TestObject>(42));
@@ -94,7 +94,7 @@ TEST_CASE("Database instances share isolated memory managers and object cache", 
 	REQUIRE(first->instance->GetMemoryManager() == second.instance->GetMemoryManager());
 	REQUIRE(&first->instance->GetBufferPool() == &second.instance->GetBufferPool());
 	REQUIRE(&first->instance->GetBufferManager() != &second.instance->GetBufferManager());
-	REQUIRE(&first->instance->GetObjectCache() == &second.instance->GetObjectCache());
+	REQUIRE(&first->instance->GetObjectCache() != &second.instance->GetObjectCache());
 	REQUIRE(first->instance->GetMemoryContextId() != second.instance->GetMemoryContextId());
 	{
 		auto &first_buffer_manager = first->instance->GetBufferManager();
@@ -178,9 +178,8 @@ TEST_CASE("Memory pressure from one database evicts another database's object ca
 	second_config.ShareMemoryWith(*first.instance);
 	DuckDB second(nullptr, &second_config);
 
-	auto &object_cache = first.instance->GetObjectCache();
-	auto first_cache = ObjectCache::Get(*first.instance);
-	auto second_cache = ObjectCache::Get(*second.instance);
+	auto &first_cache = ObjectCache::Get(*first.instance);
+	auto &second_cache = ObjectCache::Get(*second.instance);
 	auto &buffer_pool = first.instance->GetBufferPool();
 	auto &second_buffer_manager = second.instance->GetBufferManager();
 	const auto initial_memory = buffer_pool.GetUsedMemory();
@@ -191,7 +190,7 @@ TEST_CASE("Memory pressure from one database evicts another database's object ca
 
 	first_cache.Put("first-entry", make_shared_ptr<EvictableTestObject>(1, allocation_size));
 	second_cache.Put("second-entry", make_shared_ptr<EvictableTestObject>(2, allocation_size));
-	REQUIRE(object_cache.GetEntryCount() == 2);
+	REQUIRE(first_cache.GetMemoryDomainStats().entry_count == 2);
 
 	vector<BufferHandle> second_pins;
 	second_pins.emplace_back(second_buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, true));
@@ -211,42 +210,41 @@ TEST_CASE("ObjectCache drops non-evictable entries for a memory context", "[api]
 	third_config.ShareMemoryWith(*second->instance);
 	DuckDB third(nullptr, &third_config);
 
-	auto &object_cache = first->instance->GetObjectCache();
-	auto first_cache = ObjectCache::Get(*first->instance);
-	auto second_cache = ObjectCache::Get(*second->instance);
+	auto &third_cache = ObjectCache::Get(*third.instance);
 	constexpr idx_t obj_size = 1024 * 1024;
 
-	REQUIRE(object_cache.IsEmpty());
-	first_cache.Put("first-non-evictable", make_shared_ptr<TestObject>(1));
-	second_cache.Put("second-non-evictable", make_shared_ptr<TestObject>(2));
-	first_cache.Put("first-evictable", make_shared_ptr<EvictableTestObject>(3, obj_size));
+	REQUIRE(third_cache.GetMemoryDomainStats().is_empty);
+	ObjectCache::Get(*first->instance).Put("first-non-evictable", make_shared_ptr<TestObject>(1));
+	ObjectCache::Get(*first->instance).Put("first-evictable", make_shared_ptr<EvictableTestObject>(3, obj_size));
+	ObjectCache::Get(*second->instance).Put("second-non-evictable", make_shared_ptr<TestObject>(2));
 
-	REQUIRE(object_cache.GetCurrentMemory() == obj_size);
-	REQUIRE(object_cache.GetEntryCount() == 3);
+	REQUIRE(third_cache.GetMemoryDomainStats().current_memory == obj_size);
+	REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 3);
 
-	first.reset();
+	{
+		auto &second_cache = ObjectCache::Get(*second->instance);
+		first.reset();
 
-	REQUIRE(first_cache.Get<TestObject>("first-non-evictable") == nullptr);
-	REQUIRE(second_cache.Get<TestObject>("second-non-evictable") != nullptr);
-	REQUIRE(first_cache.Get<EvictableTestObject>("first-evictable") != nullptr);
-	REQUIRE(object_cache.GetCurrentMemory() == obj_size);
-	REQUIRE(object_cache.GetEntryCount() == 2);
-	REQUIRE(!object_cache.IsEmpty());
+		REQUIRE(second_cache.Get<TestObject>("second-non-evictable") != nullptr);
+		REQUIRE(third_cache.GetMemoryDomainStats().current_memory == obj_size);
+		REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 2);
+		REQUIRE(!third_cache.GetMemoryDomainStats().is_empty);
+	}
 
 	second.reset();
-	REQUIRE(object_cache.GetCurrentMemory() == obj_size);
-	REQUIRE(object_cache.GetEntryCount() == 1);
+	REQUIRE(third_cache.GetMemoryDomainStats().current_memory == obj_size);
+	REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 1);
 
-	first_cache.Delete("first-evictable");
-	REQUIRE(object_cache.GetCurrentMemory() == 0);
-	REQUIRE(object_cache.IsEmpty());
+	REQUIRE(third_cache.EvictFromMemoryDomain(obj_size) == obj_size);
+	REQUIRE(third_cache.GetMemoryDomainStats().current_memory == 0);
+	REQUIRE(third_cache.GetMemoryDomainStats().is_empty);
 }
 
 TEST_CASE("Test ObjectCache memory accounting", "[api][object_cache]") {
 	DuckDB db;
 	Connection con(db);
 	auto &context = *con.context;
-	auto cache = ObjectCache::Get(context);
+	auto &cache = ObjectCache::Get(context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
 
@@ -266,11 +264,10 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 	DuckDB db;
 	Connection con(db);
 	auto &context = *con.context;
-	auto cache = ObjectCache::Get(context);
-	auto &object_cache = ObjectCache::GetObjectCache(context);
+	auto &cache = ObjectCache::Get(context);
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 	const idx_t initial_memory = buffer_pool.GetUsedMemory();
-	REQUIRE(object_cache.IsEmpty());
+	REQUIRE(cache.GetMemoryDomainStats().is_empty);
 
 	// Put and check accountable memory for buffer pool.
 	constexpr idx_t obj_size = 1024 * 1024;
@@ -278,16 +275,16 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 	for (idx_t idx = 0; idx < obj_count; ++idx) {
 		cache.Put(StringUtil::Format("evictable%llu", idx), make_shared_ptr<EvictableTestObject>(idx, obj_size));
 	}
-	REQUIRE(object_cache.GetEntryCount() == 10);
+	REQUIRE(cache.GetMemoryDomainStats().entry_count == 10);
 	const idx_t after_put_memory = buffer_pool.GetUsedMemory();
 	REQUIRE(after_put_memory == initial_memory + obj_size * obj_count);
 
 	// Evict 5 objects, leaving 5 objects in cache
 	const idx_t bytes_to_free = 5 * obj_size;
-	idx_t freed = object_cache.EvictToReduceMemory(bytes_to_free);
+	idx_t freed = cache.EvictFromMemoryDomain(bytes_to_free);
 	REQUIRE(freed >= bytes_to_free); // Should free at least the requested amount
-	REQUIRE(object_cache.GetCurrentMemory() == 5 * obj_size);
-	REQUIRE(object_cache.GetEntryCount() == 5);
+	REQUIRE(cache.GetMemoryDomainStats().current_memory == 5 * obj_size);
+	REQUIRE(cache.GetMemoryDomainStats().entry_count == 5);
 
 	// First five items should be evicted.
 	for (idx_t idx = 0; idx < 5; ++idx) {
@@ -300,5 +297,5 @@ TEST_CASE("Test ObjectCache Manual Eviction", "[api][object_cache]") {
 		auto value = cache.GetObject(StringUtil::Format("evictable%llu", idx));
 		REQUIRE(value != nullptr);
 	}
-	REQUIRE(!object_cache.IsEmpty());
+	REQUIRE(!cache.GetMemoryDomainStats().is_empty);
 }

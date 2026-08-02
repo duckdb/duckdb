@@ -1,4 +1,4 @@
-commit 0300ad36c0c3d1290f61d6ef9f65a564a2045372
+commit 6566f29c397b8248dbbb0d2a00b42cca04ca62e5
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Sun Jul 26 15:40:06 2026 -0700
 
@@ -17,7 +17,7 @@ index 69478c4c..a160bf34 100644
  private:
  	mutex name_maps_lock;
 diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
-index 1cbce0f8..9b794205 100644
+index 1cbce0f8..43f4e2ec 100644
 --- a/src/storage/ducklake_catalog.cpp
 +++ b/src/storage/ducklake_catalog.cpp
 @@ -355,7 +355,7 @@ idx_t DuckLakeCatalog::GetBeginSnapshotForSchemaVersion(TableIndex table_id, idx
@@ -25,7 +25,7 @@ index 1cbce0f8..9b794205 100644
  shared_ptr<DuckLakeSchemaCacheEntry> DuckLakeCatalog::GetSchemaCacheEntry(DuckLakeTransaction &transaction,
                                                                            DuckLakeSnapshot snapshot) {
 -	auto &cache = GetObjectCacheInstance();
-+	auto cache = ObjectCache::Get(GetDatabase());
++	auto &cache = ObjectCache::Get(GetDatabase());
  	auto key = SchemaCacheKey(snapshot.schema_version);
  	auto cached = cache.Get<DuckLakeSchemaCacheEntry>(key);
  	if (cached) {
@@ -34,7 +34,7 @@ index 1cbce0f8..9b794205 100644
  shared_ptr<DuckLakeTableStats> DuckLakeCatalog::GetTableStats(DuckLakeTransaction &transaction,
                                                                DuckLakeSnapshot snapshot, TableIndex table_id) {
 -	auto &cache = GetObjectCacheInstance();
-+	auto cache = ObjectCache::Get(GetDatabase());
++	auto &cache = ObjectCache::Get(GetDatabase());
  	auto key = StatsCacheKey(snapshot.next_file_id, table_id);
  	auto cached = cache.Get<DuckLakeTableStatsCacheEntry>(key);
  	if (cached) {

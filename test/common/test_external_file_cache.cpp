@@ -67,10 +67,10 @@ idx_t TotalCachedBytes(ExternalFileCache &cache) {
 	return total;
 }
 
-void EvictObjectCache(ObjectCache &object_cache) {
-	const auto memory = object_cache.GetCurrentMemory();
+void EvictObjectCache(BoundObjectCache &object_cache) {
+	const auto memory = object_cache.GetMemoryDomainStats().current_memory;
 	REQUIRE(memory > 0);
-	REQUIRE(object_cache.EvictToReduceMemory(memory) > 0);
+	REQUIRE(object_cache.EvictFromMemoryDomain(memory) > 0);
 }
 
 } // namespace
@@ -402,7 +402,7 @@ TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[extern
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 	CachingFileSystem cfs(*tracking_fs, db_instance);
 	auto &cache = db_instance.GetExternalFileCache();
-	auto &raw_object_cache = db_instance.GetObjectCache();
+	auto &object_cache = db_instance.GetObjectCache();
 
 	const auto block_size = cache.GetCacheBlockSize(TestDirectoryPath());
 	const auto content = MakeTestContent(block_size);
@@ -414,12 +414,12 @@ TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[extern
 	}
 
 	REQUIRE(CountCachedBlocks(cache) == 1);
-	REQUIRE(raw_object_cache.GetCurrentMemory() > 0);
+	REQUIRE(object_cache.GetMemoryDomainStats().current_memory > 0);
 
 	cache.SetEnabled(false);
 	REQUIRE(CountCachedBlocks(cache) == 0);
 	REQUIRE(cache.GetCachedFileCount() == 0);
-	REQUIRE(raw_object_cache.GetCurrentMemory() == 0);
+	REQUIRE(object_cache.GetMemoryDomainStats().current_memory == 0);
 
 	cache.SetEnabled(true);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
@@ -434,7 +434,7 @@ TEST_CASE("Entry evicted while referenced allows re-creation of the same path", 
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 	CachingFileSystem cfs(*tracking_fs, db_instance);
 	auto &cache = db_instance.GetExternalFileCache();
-	auto &raw_object_cache = db_instance.GetObjectCache();
+	auto &object_cache = db_instance.GetObjectCache();
 
 	const auto block_size = cache.GetCacheBlockSize(TestDirectoryPath());
 	const auto content = MakeTestContent(block_size);
@@ -446,11 +446,10 @@ TEST_CASE("Entry evicted while referenced allows re-creation of the same path", 
 	}
 	REQUIRE(cache.GetCachedFileCount() == 1);
 
-	auto object_cache = ObjectCache::Get(db_instance);
 	auto held_entry = object_cache.GetObject(StringUtil::Format("external_file_cache-%s", test_file.GetPath()));
 	REQUIRE(held_entry);
 
-	EvictObjectCache(raw_object_cache);
+	EvictObjectCache(object_cache);
 	REQUIRE(cache.GetCachedFileCount() == 1);
 
 	{

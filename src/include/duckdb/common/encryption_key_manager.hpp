@@ -84,7 +84,7 @@ public:
 	static constexpr idx_t DERIVED_KEY_LENGTH = 32;
 
 private:
-	static EncryptionKeyManager &GetInternal(BoundObjectCache cache);
+	static EncryptionKeyManager &GetInternal(BoundObjectCache &cache);
 
 private:
 	mutable mutex lock;

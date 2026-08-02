@@ -70,7 +70,7 @@ BufferPool &DatabaseMemoryManager::GetBufferPool() const {
 	return *buffer_pool;
 }
 
-ObjectCache &DatabaseMemoryManager::GetObjectCache() const {
+ObjectCache &DatabaseMemoryManager::GetSharedObjectCache() const {
 	return *object_cache;
 }
 
