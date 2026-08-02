@@ -1344,8 +1344,14 @@ static void MultiplyUint64ForUhugeint(uint64_t lhs, uint64_t rhs, uint64_t &lowe
 }
 
 static uhugeint_t ShiftRight192ToUhugeint(uint64_t lower, uint64_t middle, uint64_t upper, idx_t shift) {
+	if (shift == 0) {
+		return uhugeint_t(middle, lower);
+	}
 	if (shift < 64) {
 		return uhugeint_t((middle >> shift) | (upper << (64 - shift)), (lower >> shift) | (middle << (64 - shift)));
+	}
+	if (shift == 64) {
+		return uhugeint_t(upper, middle);
 	}
 	if (shift < 128) {
 		return uhugeint_t(upper >> (shift - 64), (middle >> (shift - 64)) | (upper << (128 - shift)));
