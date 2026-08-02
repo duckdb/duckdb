@@ -63,6 +63,23 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 		rhs_comparison_type = FlipComparisonExpression(comparison_type);
 	}
 
+	// date_trunc preserves temporal infinities, so only remove the function call.
+	if (IsInfinity(rhs.GetValue())) {
+		if (col_is_lhs) {
+			left = column_part.Copy();
+			if (rhs.GetReturnType().id() != left->GetReturnType().id()) {
+				right = CastAndEvaluate(std::move(right), left->GetReturnType());
+			}
+		} else {
+			right = column_part.Copy();
+			if (rhs.GetReturnType().id() != right->GetReturnType().id()) {
+				left = CastAndEvaluate(std::move(left), right->GetReturnType());
+			}
+		}
+		changes_made = true;
+		return nullptr;
+	}
+
 	// Check whether trunc(date_part, constant_rhs) = constant_rhs.
 	const bool is_truncated = DateIsTruncated(date_part, rhs);
 
@@ -437,6 +454,23 @@ bool DateTruncSimplificationRule::DateIsTruncated(const BoundConstantExpression 
 	}
 
 	return (result == trunc_result);
+}
+
+bool DateTruncSimplificationRule::IsInfinity(const Value &value) {
+	if (value.IsNull()) {
+		return false;
+	}
+	switch (value.type().id()) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return value == Value::Infinity(value.type()) || value == Value::NegativeInfinity(value.type());
+	default:
+		return false;
+	}
 }
 
 unique_ptr<Expression> DateTruncSimplificationRule::CastAndEvaluate(unique_ptr<Expression> rhs,

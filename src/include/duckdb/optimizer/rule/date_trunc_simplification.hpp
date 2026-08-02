@@ -66,6 +66,7 @@ public:
 	                                      const LogicalType &return_type);
 
 	bool DateIsTruncated(const BoundConstantExpression &date_part, const BoundConstantExpression &rhs);
+	bool IsInfinity(const Value &value);
 
 	unique_ptr<Expression> CastAndEvaluate(unique_ptr<Expression> rhs, const LogicalType &return_type);
 };
