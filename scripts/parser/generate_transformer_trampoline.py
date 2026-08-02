@@ -90,6 +90,58 @@ def finalize_name(rule_name):
     return f"Finalize{rule_name}Trampoline"
 
 
+HOOK_SIGNATURE = "(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame)"
+INIT_DEFINITION_PREFIX = "void PEGTransformerFactory::"
+FINALIZE_DEFINITION_PREFIX = "unique_ptr<TransformResultValue> PEGTransformerFactory::"
+
+
+def split_definitions(lines):
+    """Split emitted source lines into (leading_lines, [(hook_name, is_initialize, body_lines)])."""
+    definitions = []
+    leading = []
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        is_initialize = line.startswith(INIT_DEFINITION_PREFIX)
+        if not is_initialize and not line.startswith(FINALIZE_DEFINITION_PREFIX):
+            leading.append(line)
+            idx += 1
+            continue
+        prefix = INIT_DEFINITION_PREFIX if is_initialize else FINALIZE_DEFINITION_PREFIX
+        hook_name = line[len(prefix) : line.index("(")]
+        body = []
+        idx += 1
+        while lines[idx] != "}":
+            body.append(lines[idx])
+            idx += 1
+        idx += 1
+        definitions.append((hook_name, is_initialize, body))
+    return leading, definitions
+
+
+def fold_duplicate_definitions(definitions):
+    """Fold byte-identical hook bodies onto one shared hook.
+
+    The trampoline generator emits one Initialize and one Finalize per grammar rule, and a large
+    share of those bodies are textually identical (e.g. the ~290 rules whose whole Initialize is
+    `frame.ReserveChildSlots(0);`). Emitting each one separately cost ~340 KB of binary.
+    """
+    groups = {}
+    for hook_name, is_initialize, body in definitions:
+        groups.setdefault((is_initialize, tuple(body)), []).append(hook_name)
+    shared_hooks = []
+    replacements = {}
+    for (is_initialize, body), hook_names in groups.items():
+        if len(hook_names) < 2:
+            continue
+        kind = "Initialize" if is_initialize else "Finalize"
+        shared_name = f"Shared{kind}Trampoline{len(shared_hooks) + 1}"
+        shared_hooks.append((shared_name, is_initialize, list(body)))
+        for hook_name in hook_names:
+            replacements[hook_name] = shared_name
+    return shared_hooks, replacements
+
+
 class ManualTransformRegistry:
     def __init__(self, paths):
         self.signatures = {}
@@ -277,6 +329,9 @@ class UseGramPreviewEmitter:
         self.rule_config = rule_config
         self.syntax_only_rules = self.collect_syntax_only_rules()
         self.rule_capabilities = self.collect_rule_capabilities()
+        self.source = None
+        self.shared_hooks = []
+        self.folded_hooks = set()
 
     def collect_syntax_only_rules(self):
         result = {rule_name for rule_name in self.excluded_rules if rule_name not in self.rule_types}
@@ -356,29 +411,40 @@ class UseGramPreviewEmitter:
             return config.finalize
         return finalize_name(rule_name)
 
+    def declare_init_hook(self, hook_name):
+        return (
+            f"\tstatic void {hook_name}(PEGTransformer &transformer, TransformStack &stack, "
+            f"TransformStackFrame &frame);\n"
+        )
+
+    def declare_finalize_hook(self, hook_name):
+        return (
+            f"\tstatic unique_ptr<TransformResultValue> {hook_name}(PEGTransformer &transformer, "
+            f"TransformStack &stack, TransformStackFrame &frame);\n"
+        )
+
     def emit_header_declarations(self):
-        lines = []
+        # Folded hooks have no definition of their own, so they must not be declared either.
+        self.emit_source()
+        lines = ["#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)\n"]
+        for shared_name, is_initialize, _ in self.shared_hooks:
+            if is_initialize:
+                lines.append(self.declare_init_hook(shared_name))
+            else:
+                lines.append(self.declare_finalize_hook(shared_name))
         for rule_name in SPECIAL_DISPATCH_RULES:
-            lines.append(
-                f"\tstatic void {init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
-                f"TransformStackFrame &frame);\n"
-            )
-            lines.append(
-                f"\tstatic unique_ptr<TransformResultValue> {finalize_name(rule_name)}(PEGTransformer &transformer, "
-                f"TransformStack &stack, TransformStackFrame &frame);\n"
-            )
+            lines.append(self.declare_init_hook(init_name(rule_name)))
+            lines.append(self.declare_finalize_hook(finalize_name(rule_name)))
         for rule_name in self.emitted_rules():
             if self.is_manual_rule(rule_name):
                 continue
-            lines.append(
-                f"\tstatic void {self.initialize_hook(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
-                f"TransformStackFrame &frame);\n"
-            )
-            lines.append(
-                f"\tstatic unique_ptr<TransformResultValue> {self.finalize_hook(rule_name)}(PEGTransformer &transformer, "
-                f"TransformStack &stack, TransformStackFrame &frame);\n"
-            )
-        return "".join(lines)
+            lines.append(self.declare_init_hook(self.initialize_hook(rule_name)))
+            lines.append(self.declare_finalize_hook(self.finalize_hook(rule_name)))
+        return "".join(line for line in lines if not self.hook_is_folded(line)) + "#endif\n"
+
+    def hook_is_folded(self, declaration):
+        name = declaration.split("(", 1)[0].rsplit(" ", 1)[-1]
+        return name in self.folded_hooks
 
     def classify_rule(self, rule_name, rule):
         if self.is_excluded_rule(rule_name):
@@ -475,34 +541,63 @@ class UseGramPreviewEmitter:
         sys.exit(1)
 
     def emit_source(self):
-        lines = []
-        lines.append(GENERATED_HEADER)
-        lines.append('\n#include "duckdb/parser/peg/transformer/peg_transformer.hpp"\n\n')
-        lines.append("namespace duckdb {\n\n")
-        lines.append("")
-        for rule_name in self.emitted_ops_rules():
-            lines.append(
-                f"static const TransformFrameOps {ops_name(rule_name)} = "
-                f'{{"{rule_name}", &PEGTransformerFactory::{self.initialize_hook(rule_name)}, '
-                f"&PEGTransformerFactory::{self.finalize_hook(rule_name)}}};"
-            )
-        lines.append("")
-        lines.extend(self.emit_ops_lookup())
-        lines.append("")
-        lines.extend(self.emit_special_dispatch_rules())
-        lines.append("")
+        if self.source is not None:
+            return self.source
+
+        definition_lines = []
+        definition_lines.extend(self.emit_special_dispatch_rules())
+        definition_lines.append("")
         for rule_name, rule in self.rules.items():
             capability = self.rule_capabilities[rule_name]
             if capability.status not in (RuleCapabilityStatus.GENERATED, RuleCapabilityStatus.MANUAL_FINALIZE):
                 continue
             if rule_name in self.matcher_overrides:
-                lines.extend(self.emit_rule(rule_name, None))
-                lines.append("")
+                definition_lines.extend(self.emit_rule(rule_name, None))
+                definition_lines.append("")
                 continue
-            lines.extend(self.emit_rule(rule_name, tokens_to_ast(rule.tokens)))
+            definition_lines.extend(self.emit_rule(rule_name, tokens_to_ast(rule.tokens)))
+            definition_lines.append("")
+
+        leading, definitions = split_definitions(definition_lines)
+        self.shared_hooks, replacements = fold_duplicate_definitions(definitions)
+        self.folded_hooks = set(replacements)
+
+        lines = []
+        lines.append(GENERATED_HEADER)
+        lines.append('\n#include "duckdb/common/smaller_binary.hpp"\n')
+        lines.append('#include "duckdb/parser/peg/transformer/peg_transformer.hpp"\n')
+        lines.append("#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)\n")
+        lines.append("namespace duckdb {\n\n")
+        lines.append("")
+        for rule_name in self.emitted_ops_rules():
+            initialize = replacements.get(self.initialize_hook(rule_name), self.initialize_hook(rule_name))
+            finalize = replacements.get(self.finalize_hook(rule_name), self.finalize_hook(rule_name))
+            lines.append(
+                f"static const TransformFrameOps {ops_name(rule_name)} = "
+                f'{{"{rule_name}", &PEGTransformerFactory::{initialize}, '
+                f"&PEGTransformerFactory::{finalize}}};"
+            )
+        lines.append("")
+        lines.extend(self.emit_ops_lookup())
+        lines.append("")
+        for shared_name, is_initialize, body in self.shared_hooks:
+            lines.extend(self.emit_definition(shared_name, is_initialize, body))
+            lines.append("")
+        lines.extend(leading)
+        for hook_name, is_initialize, body in definitions:
+            if hook_name in replacements:
+                continue
+            lines.extend(self.emit_definition(hook_name, is_initialize, body))
             lines.append("")
         lines.append("} // namespace duckdb")
-        return "\n".join(lines)
+        lines.append("#endif")
+        self.source = "\n".join(lines)
+        return self.source
+
+    @staticmethod
+    def emit_definition(hook_name, is_initialize, body):
+        prefix = INIT_DEFINITION_PREFIX if is_initialize else FINALIZE_DEFINITION_PREFIX
+        return [f"{prefix}{hook_name}{HOOK_SIGNATURE} {{"] + list(body) + ["}"]
 
     def emit(self):
         lines = []
@@ -517,14 +612,27 @@ class UseGramPreviewEmitter:
         return "\n".join(lines)
 
     def emit_ops_lookup(self):
+        # The map is filled by walking a static table rather than from a braced initializer list:
+        # one `{"Rule", &RULE_OPS}` element per rule compiled to ~49 KB of code. Each entry already
+        # carries its own name, so the table needs the ops pointer only.
         lines = []
+        lines.append("// clang-format off")
+        lines.append("static const TransformFrameOps *const GENERATED_TRAMPOLINE_OPS_LIST[] = {")
+        for rule_name in self.emitted_ops_rules():
+            lines.append(f"    &{ops_name(rule_name)},")
+        lines.append("};")
+        lines.append("// clang-format on")
+        lines.append("")
         lines.append(
             "const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::GeneratedTrampolineOps() {"
         )
-        lines.append("\tstatic const case_insensitive_map_t<const TransformFrameOps *> result = {")
-        for rule_name in self.emitted_ops_rules():
-            lines.append(f'\t    {{"{rule_name}", &{ops_name(rule_name)}}},')
-        lines.append("\t};")
+        lines.append("\tstatic const case_insensitive_map_t<const TransformFrameOps *> result = []() {")
+        lines.append("\t\tcase_insensitive_map_t<const TransformFrameOps *> map;")
+        lines.append("\t\tfor (auto *ops : GENERATED_TRAMPOLINE_OPS_LIST) {")
+        lines.append("\t\t\tmap[ops->name] = ops;")
+        lines.append("\t\t}")
+        lines.append("\t\treturn map;")
+        lines.append("\t}();")
         lines.append("\treturn result;")
         lines.append("}")
         return lines

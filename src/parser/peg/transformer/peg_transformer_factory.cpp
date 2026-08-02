@@ -1,3 +1,4 @@
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/common/query_location.hpp"
@@ -29,6 +30,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEGTransformer &transformer,
                                                                              ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -62,6 +64,7 @@ const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const string &r
 	}
 	return *ops_entry->second;
 }
+#endif
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
                                                              const vector<MatcherToken> &tokens, ParseResult &stmt_pr,
@@ -202,7 +205,9 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 
 PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterGenerated();
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 	RegisterGeneratedTrampoline();
+#endif
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterCommon();
 	RegisterCreateTable();
@@ -214,9 +219,11 @@ PEGTransformerFactory::PEGTransformerFactory() {
 
 const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
 PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) {
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 	if (options.debug_transformer_trampoline_style) {
 		return trampoline_transform_functions;
 	}
+#endif
 	return sql_transform_functions;
 }
 

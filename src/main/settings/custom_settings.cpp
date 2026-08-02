@@ -9,6 +9,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/algorithm.hpp"
@@ -140,6 +141,18 @@ void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &in
 	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_community_extensions setting while database is running");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Transformer Trampoline Style
+//===----------------------------------------------------------------------===//
+void DebugTransformerTrampolineStyleSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+#if DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
+	if (input.GetValue<bool>()) {
+		throw InvalidInputException("The trampoline-style transformer is not part of this build "
+		                            "(trimmed via SMALLER_BINARY=peg_trampoline_transformer)");
+	}
+#endif
 }
 
 //===----------------------------------------------------------------------===//

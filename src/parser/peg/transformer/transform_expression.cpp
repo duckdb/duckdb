@@ -1,3 +1,4 @@
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -1589,6 +1590,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 	return expr;
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializePrefixExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                  TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -1610,7 +1612,9 @@ void PEGTransformerFactory::InitializePrefixExpressionTrampoline(PEGTransformer 
 	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("BaseExpression"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePrefixExpressionTrampoline(PEGTransformer &transformer,
                                                                                            TransformStack &stack,
                                                                                            TransformStackFrame &frame) {
@@ -1652,6 +1656,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePrefixExpression
 	}
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(expr));
 }
+#endif
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(PEGTransformer &transformer) {
 	// AnonymousParameter <- '?'
 	auto expr = make_uniq<ParameterExpression>();
@@ -1766,11 +1771,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_result);
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                   TransformStackFrame &frame) {
 	frame.ReserveChildSlots(0);
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                            TransformStackFrame &frame) {
@@ -1801,6 +1809,7 @@ PEGTransformerFactory::FinalizeLiteralExpressionTrampoline(PEGTransformer &trans
 	}
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
+#endif
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParensExpression(PEGTransformer &transformer,
                                                                               unique_ptr<ParsedExpression> expression) {
@@ -2085,6 +2094,7 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformOverClause(PEGTrans
 	return window_frame;
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializeOverClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                            TransformStackFrame &frame) {
 	if (transformer.in_window_definition) {
@@ -2096,7 +2106,9 @@ void PEGTransformerFactory::InitializeOverClauseTrampoline(PEGTransformer &trans
 	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("WindowFrame"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOverClauseTrampoline(PEGTransformer &transformer,
                                                                                      TransformStack &stack,
                                                                                      TransformStackFrame &frame) {
@@ -2104,6 +2116,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOverClauseTrampo
 	transformer.in_window_definition = false;
 	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
 }
+#endif
 
 unique_ptr<WindowExpression> PEGTransformerFactory::TransformIdentifierWindowFrame(PEGTransformer &transformer,
                                                                                    const Identifier &identifier) {

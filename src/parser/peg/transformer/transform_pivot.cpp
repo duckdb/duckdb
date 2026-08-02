@@ -1,3 +1,4 @@
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -150,6 +151,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 	return select_statement;
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializePivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -158,7 +160,9 @@ void PEGTransformerFactory::InitializePivotStatementTrampoline(PEGTransformer &t
 	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("TableRef"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotStatementTrampoline(PEGTransformer &transformer,
                                                                                          TransformStack &stack,
                                                                                          TransformStackFrame &frame) {
@@ -258,6 +262,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotStatementTr
 	result->node = std::move(select_node);
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
 }
+#endif
 
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformPivotUsing(PEGTransformer &transformer,
@@ -358,6 +363,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEG
 	return result;
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializeUnpivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                  TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -366,7 +372,9 @@ void PEGTransformerFactory::InitializeUnpivotStatementTrampoline(PEGTransformer 
 	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("TableRef"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUnpivotStatementTrampoline(PEGTransformer &transformer,
                                                                                            TransformStack &stack,
                                                                                            TransformStackFrame &frame) {
@@ -450,6 +458,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUnpivotStatement
 	result->node = std::move(select_node);
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
 }
+#endif
 
 UnpivotNameValues PEGTransformerFactory::TransformIntoNameValues(PEGTransformer &transformer,
                                                                  const Identifier &col_id_or_string,

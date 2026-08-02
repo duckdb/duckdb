@@ -1,3 +1,4 @@
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -8,6 +9,7 @@
 
 namespace duckdb {
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 TransformFrameResultTarget::TransformFrameResultTarget(transform_frame_index_t frame_index_p, idx_t slot_p)
     : frame_index(frame_index_p), slot(slot_p) {
 }
@@ -180,6 +182,44 @@ string TransformStack::FormatStack() const {
 		result << FormatFrame(frame_stack[i]);
 	}
 	return result.str();
+}
+
+void TransformStackFrame::ThrowMissingResult(idx_t slot, const char *rule_name) {
+	throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, rule_name);
+}
+
+void TransformStackFrame::ThrowUnexpectedResultType(idx_t slot, const char *rule_name) {
+	throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
+	                        rule_name);
+}
+
+void TransformStack::ThrowUnexpectedRootResultType(const char *rule_name) {
+	throw InternalException("Unexpected trampoline transformer result type for root rule '%s'", rule_name);
+}
+#endif
+
+void PEGTransformer::ThrowMissingTransformFunction(const string &rule_name) {
+	throw NotImplementedException("No transformer function found for rule '%s'", rule_name);
+}
+
+void PEGTransformer::ThrowNullTransformResult(const string &rule_name) {
+	throw InternalException("Transformer for rule '%s' returned a nullptr.", rule_name);
+}
+
+void PEGTransformer::ThrowUnexpectedTransformResultType(const string &rule_name) {
+	throw InternalException("Transformer for rule '" + rule_name + "' returned an unexpected type.");
+}
+
+unique_ptr<TransformResultValue> PEGTransformer::RunTransformFunction(ParseResult &parse_result) {
+	auto it = transform_functions.find(parse_result.name);
+	if (it == transform_functions.end()) {
+		ThrowMissingTransformFunction(parse_result.name);
+	}
+	auto base_result = it->second(*this, parse_result);
+	if (!base_result) {
+		ThrowNullTransformResult(parse_result.name);
+	}
+	return base_result;
 }
 
 void PEGTransformer::ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type) {

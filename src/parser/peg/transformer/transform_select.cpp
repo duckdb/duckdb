@@ -1,3 +1,4 @@
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -85,6 +86,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectStatementInter
 	return select_statement;
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 static void PushSelectStatementInternalRemainder(TransformStack &stack, TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &result_modifiers_opt = list_pr.Child<OptionalParseResult>(2);
@@ -95,7 +97,9 @@ static void PushSelectStatementInternalRemainder(TransformStack &stack, Transfor
 	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("SelectSetOpChain"),
 	                TransformFrameResultTarget(frame.frame_index, 1));
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializeSelectStatementInternalTrampoline(PEGTransformer &transformer,
                                                                         TransformStack &stack,
                                                                         TransformStackFrame &frame) {
@@ -111,7 +115,9 @@ void PEGTransformerFactory::InitializeSelectStatementInternalTrampoline(PEGTrans
 	frame.manual_state = 1;
 	PushSelectStatementInternalRemainder(stack, frame);
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeSelectStatementInternalTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                  TransformStackFrame &frame) {
@@ -155,6 +161,7 @@ PEGTransformerFactory::FinalizeSelectStatementInternalTrampoline(PEGTransformer 
 	}
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(select_statement));
 }
+#endif
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(
     PEGTransformer &transformer, unique_ptr<SelectStatement> intersect_chain,
@@ -297,6 +304,7 @@ static void RegisterWindowClause(PEGTransformer &transformer, const Identifier &
 	    unique_ptr_cast<ParsedExpression, WindowExpression>(window_function.Copy());
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 static void PushSimpleSelectRemainder(TransformStack &stack, TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &sample_clause_opt = list_pr.Child<OptionalParseResult>(6);
@@ -327,7 +335,9 @@ static void PushSimpleSelectRemainder(TransformStack &stack, TransformStackFrame
 	stack.PushFrame(list_pr.GetChild(0), PEGTransformerFactory::GetTrampolineOps("SelectFrom"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializeSimpleSelectTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                              TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -342,7 +352,9 @@ void PEGTransformerFactory::InitializeSimpleSelectTrampoline(PEGTransformer &tra
 	frame.manual_state = 1;
 	PushSimpleSelectRemainder(stack, frame);
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSimpleSelectTrampoline(PEGTransformer &transformer,
                                                                                        TransformStack &stack,
                                                                                        TransformStackFrame &frame) {
@@ -380,6 +392,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSimpleSelectTram
 	transformer.window_clauses.clear();
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(select_statement));
 }
+#endif
 
 FunctionArgument PEGTransformerFactory::TransformNamedFunctionArgument(PEGTransformer &transformer,
                                                                        MacroParameter named_parameter) {
@@ -516,6 +529,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &tr
 	return inner_table_ref;
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializeTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                          TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -536,7 +550,9 @@ void PEGTransformerFactory::InitializeTableRefTrampoline(PEGTransformer &transfo
 	stack.PushFrame(list_pr.GetChild(0), PEGTransformerFactory::GetTrampolineOps("InnerTableRef"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampoline(PEGTransformer &transformer,
                                                                                    TransformStack &stack,
                                                                                    TransformStackFrame &frame) {
@@ -569,6 +585,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampoli
 	}
 	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(inner_table_ref));
 }
+#endif
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClauseBody(PEGTransformer &transformer,
                                                                             const vector<string> &unpivot_header,
@@ -1215,6 +1232,7 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 	return result;
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializeWithClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                            TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -1226,7 +1244,9 @@ void PEGTransformerFactory::InitializeWithClauseTrampoline(PEGTransformer &trans
 		                TransformFrameResultTarget(frame.frame_index, child_idx));
 	}
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWithClauseTrampoline(PEGTransformer &transformer,
                                                                                      TransformStack &stack,
                                                                                      TransformStackFrame &frame) {
@@ -1253,6 +1273,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWithClauseTrampo
 	}
 	return make_uniq<TypedTransformResult<CommonTableExpressionMap>>(std::move(result));
 }
+#endif
 
 pair<Identifier, unique_ptr<CommonTableExpressionInfo>>
 PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, const Identifier &col_id_or_string,
@@ -1331,6 +1352,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PE
 	return std::move(window_function);
 }
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 void PEGTransformerFactory::InitializeWindowDefinitionTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                  TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -1339,7 +1361,9 @@ void PEGTransformerFactory::InitializeWindowDefinitionTrampoline(PEGTransformer 
 	stack.PushFrame(list_pr.GetChild(2), PEGTransformerFactory::GetTrampolineOps("WindowFrameDefinition"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
+#endif
 
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWindowDefinitionTrampoline(PEGTransformer &transformer,
                                                                                            TransformStack &stack,
                                                                                            TransformStackFrame &frame) {
@@ -1351,6 +1375,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWindowDefinition
 	unique_ptr<ParsedExpression> result = std::move(window_function);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
+#endif
 
 unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryFunction(
     PEGTransformer &transformer, const optional<SampleMethod> &sample_function, unique_ptr<SampleOptions> sample_count,

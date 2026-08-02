@@ -1,3 +1,4 @@
+#include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
@@ -1597,7 +1598,13 @@ ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
 	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
+#if !DUCKDB_SMALLER_BINARY(peg_trampoline_transformer)
+	// The setting stays registered so it can still be introspected and set, but a build without the
+	// trampoline transformer cannot honour it. Reading it here would brick the session: the flag is
+	// consumed on every parse, so a request that cannot be served would also fail to parse the
+	// statement that turns it back off.
 	options.debug_transformer_trampoline_style = Settings::Get<DebugTransformerTrampolineStyleSetting>(*this);
+#endif
 	options.regex_match_operator_semantics = Settings::Get<RegexMatchOperatorSemanticsSetting>(*this);
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
