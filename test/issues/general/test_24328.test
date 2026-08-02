@@ -13,6 +13,19 @@ SELECT map_contains(MAP {'Apple': 1}, 'apple' COLLATE NOCASE),
 ----
 true	true	true	false
 
+query I
+SELECT map_contains(map([['Apple']], [1]), ['apple' COLLATE NOCASE]);
+----
+true
+
+statement error
+SELECT map_contains(
+    map([['Résumé' COLLATE NOACCENT]], [1]),
+    ['résumé' COLLATE NOCASE]
+);
+----
+Cannot combine types with different collation!
+
 statement ok
 SET debug_verify_serializer = false;
 
@@ -54,3 +67,12 @@ statement error
 SELECT map_contains(map(['Résumé' COLLATE NOACCENT], [1]), 'résumé' COLLATE NOCASE);
 ----
 Cannot combine types with different collation!
+
+# Collation propagation descends through nested LIST/ARRAY key types.
+query IIII
+SELECT map_contains(map([['Apple' COLLATE NOCASE]], [1]), ['apple']),
+       map_contains(map([[['Apple' COLLATE NOCASE]]], [1]), [['apple']]),
+       map_contains(map([array_value('Apple' COLLATE NOCASE)], [1]), array_value('apple')),
+       map_contains(map([['Apple' COLLATE NOCASE]], [1]), ['pear']);
+----
+true	true	true	false
