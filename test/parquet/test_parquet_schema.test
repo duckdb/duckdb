@@ -11,7 +11,7 @@ statement error
 SELECT *
 FROM read_parquet('{TEMP_DIR}/integers.parquet', schema=map{})
 ----
-Invalid Input Error: 'schema' expects a STRUCT as the value type of the map
+Invalid Input Error: 'schema' expects the value type of the map to be either STRUCT or VARIANT
 
 # can't combine with union_by_name
 statement error
@@ -355,3 +355,76 @@ from read_parquet(
 	},
 	filename=True
 ) where x = 1;
+
+# nested child schemas can be defined recursively through children maps
+statement ok
+COPY (
+	SELECT
+		7::INTEGER AS i,
+		struct_pack(inner := struct_pack(x := 42::INTEGER)) AS s,
+		[struct_pack(y := 100::INTEGER)] AS l,
+		MAP([10::INTEGER], [struct_pack(z := 200::INTEGER)]) AS m
+) TO '{TEMP_DIR}/nested_schema.parquet'
+
+query IIII
+SELECT i, s.inner.x, l[1].y, m[10].z
+FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=(
+		map {
+			'i': {name: 'i', type: 'BIGINT', default_value: NULL},
+			's': {
+				name: 's',
+				type: 'STRUCT("inner" STRUCT(x BIGINT))',
+				default_value: NULL,
+				children: (
+					map {
+						'inner': {
+							name: 'inner',
+							type: 'STRUCT(x BIGINT)',
+							default_value: NULL,
+							children: map {
+								'x': {name: 'x', type: 'BIGINT', default_value: NULL}
+							}
+						}
+					}
+				)::MAP(VARCHAR, VARIANT)
+			},
+			'l': {
+				name: 'l',
+				type: 'STRUCT(y BIGINT)[]',
+				default_value: NULL,
+				children: map {
+					'element': {
+						name: 'element',
+						type: 'STRUCT(y BIGINT)',
+						default_value: NULL,
+						children: map {
+							'y': {name: 'y', type: 'BIGINT', default_value: NULL}
+						}
+					}
+				}
+			},
+			'm': {
+				name: 'm',
+				type: 'MAP(BIGINT, STRUCT(z BIGINT))',
+				default_value: NULL,
+				children: (
+					map {
+						'key': {name: 'key', type: 'BIGINT', default_value: NULL},
+						'value': {
+							name: 'value',
+							type: 'STRUCT(z BIGINT)',
+							default_value: NULL,
+							children: map {
+								'z': {name: 'z', type: 'BIGINT', default_value: NULL}
+							}
+						}
+					}
+				)::MAP(VARCHAR, VARIANT)
+			}
+		}
+	)::MAP(VARCHAR, VARIANT)
+)
+----
+7	42	100	200

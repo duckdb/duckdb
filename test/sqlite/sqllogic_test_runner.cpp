@@ -810,7 +810,7 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 	}
 
 	ignore_error_messages.clear();
-	for (auto ignore : test_config.ErrorMessagesToBeSkipped()) {
+	for (auto ignore : test_config.GetIgnoreErrorMessages()) {
 		ignore_error_messages.insert(ignore);
 	}
 

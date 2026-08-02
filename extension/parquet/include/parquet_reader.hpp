@@ -28,6 +28,7 @@
 #include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "column_reader.hpp"
 #include "parquet_prefetch_cost_model.hpp"
@@ -242,6 +243,7 @@ public:
 struct ParquetColumnDefinition {
 public:
 	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
+	MultiFileColumnDefinition ToMultiFileColumnDefinition() const;
 
 public:
 	// DEPRECATED, use 'identifier' instead
@@ -250,6 +252,7 @@ public:
 	LogicalType type;
 	Value default_value;
 	Value identifier;
+	vector<ParquetColumnDefinition> children;
 
 public:
 	void Serialize(Serializer &serializer) const;

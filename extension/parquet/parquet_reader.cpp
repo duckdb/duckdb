@@ -68,6 +68,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
@@ -1219,22 +1220,80 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 }
 
 ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
+	static constexpr const idx_t SCHEMA_NAME_INDEX = 0;
+	static constexpr const idx_t SCHEMA_TYPE_INDEX = 1;
+	static constexpr const idx_t SCHEMA_DEFAULT_VALUE_INDEX = 2;
+	static constexpr const idx_t SCHEMA_CHILDREN_INDEX = 3;
+
 	ParquetColumnDefinition result;
 	auto &identifier = StructValue::GetChildren(column_value)[0];
 	result.identifier = identifier;
 
-	const auto &column_def = StructValue::GetChildren(column_value)[1];
+	auto variant_value = StructValue::GetChildren(column_value)[1];
+	Vector tmp(variant_value, count_t(1));
+	RecursiveUnifiedVectorFormat format;
+	Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+	UnifiedVariantVectorData vector_data(format);
+	auto column_def = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+
 	D_ASSERT(column_def.type().id() == LogicalTypeId::STRUCT);
 
 	const auto children = StructValue::GetChildren(column_def);
-	result.name = StringValue::Get(children[0]);
-	result.type = TransformStringToLogicalType(StringValue::Get(children[1]), context);
+	if (children.size() < 3) {
+		throw BinderException("Parquet schema definition \"%s\" must have at least 'name', 'type' and 'default_value'",
+		                      column_def.ToString());
+	}
+	result.name = StringValue::Get(children[SCHEMA_NAME_INDEX]);
+	result.type = TransformStringToLogicalType(StringValue::Get(children[SCHEMA_TYPE_INDEX]), context);
 	string error_message;
-	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
-		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
-		                      result.type.ToString());
+	if (!children[SCHEMA_DEFAULT_VALUE_INDEX].TryCastAs(context, result.type, result.default_value, &error_message)) {
+		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s",
+		                      children[SCHEMA_DEFAULT_VALUE_INDEX].ToString(), result.type.ToString());
 	}
 
+	if (children.size() > SCHEMA_CHILDREN_INDEX && !children[SCHEMA_CHILDREN_INDEX].IsNull()) {
+		auto &child_values = ListValue::GetChildren(children[SCHEMA_CHILDREN_INDEX]);
+		result.children.reserve(child_values.size());
+		for (const auto &child_value : child_values) {
+			result.children.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, child_value));
+		}
+	}
+
+	return result;
+}
+
+MultiFileColumnDefinition ParquetColumnDefinition::ToMultiFileColumnDefinition() const {
+	MultiFileColumnDefinition result(name, type);
+	result.identifier = identifier;
+	result.default_expression = make_uniq<ConstantExpression>(default_value);
+
+	if (children.empty()) {
+		return result;
+	}
+
+	idx_t expected_children = 0;
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+		expected_children = StructType::GetChildTypes(type).size();
+		break;
+	case LogicalTypeId::LIST:
+		expected_children = 1;
+		break;
+	case LogicalTypeId::MAP:
+		expected_children = 2;
+		break;
+	default:
+		throw BinderException("Parquet schema column \"%s\" of type %s cannot define nested children", name,
+		                      type.ToString());
+	}
+	if (expected_children != children.size()) {
+		throw BinderException("Parquet schema column \"%s\" of type %s expects %d child definitions, not %d", name,
+		                      type.ToString(), expected_children, children.size());
+	}
+	result.children.reserve(children.size());
+	for (const auto &child : children) {
+		result.children.emplace_back(child.ToMultiFileColumnDefinition());
+	}
 	return result;
 }
 

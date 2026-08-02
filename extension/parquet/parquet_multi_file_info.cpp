@@ -32,6 +32,7 @@
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_types.h"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -151,8 +152,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 		schema_col_names.push_back(Identifier(column.name));
 		schema_col_types.push_back(column.type);
 
-		auto res = MultiFileColumnDefinition(column.name, column.type);
-		res.identifier = column.identifier;
+		auto res = column.ToMultiFileColumnDefinition();
 #ifdef DEBUG
 		if (match_by_field_id) {
 			D_ASSERT(res.identifier.type().id() == LogicalTypeId::INTEGER);
@@ -160,8 +160,6 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 			D_ASSERT(res.identifier.type().id() == LogicalTypeId::VARCHAR);
 		}
 #endif
-
-		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
 		reader_bind.schema.emplace_back(res);
 	}
 	ParseFileRowNumberOption(reader_bind, options, return_types, names);
@@ -231,9 +229,6 @@ static bool ParquetScanSupportPushdownExtract(const FunctionData &bind_data_p, c
 }
 
 static void VerifyParquetSchemaParameter(const Value &schema) {
-	LogicalType::MAP(LogicalType::BLOB, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
-	                                                          {"type", LogicalType::VARCHAR},
-	                                                          {"default_value", LogicalType::VARCHAR}}}));
 	auto &map_type = schema.type();
 	if (map_type.id() != LogicalTypeId::MAP) {
 		throw InvalidInputException("'schema' expects a value of type MAP, not %s",
@@ -242,13 +237,21 @@ static void VerifyParquetSchemaParameter(const Value &schema) {
 	auto &key_type = MapType::KeyType(map_type);
 	auto &value_type = MapType::ValueType(map_type);
 
+	if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
+		throw InvalidInputException(
+		    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
+		    LogicalTypeIdToString(key_type.id()));
+	}
+	if (value_type.id() != LogicalTypeId::STRUCT && value_type.id() != LogicalTypeId::VARIANT) {
+		throw InvalidInputException("'schema' expects the value type of the map to be either STRUCT or VARIANT");
+	}
 	if (value_type.id() != LogicalTypeId::STRUCT) {
-		throw InvalidInputException("'schema' expects a STRUCT as the value type of the map");
+		return;
 	}
 	auto &children = StructType::GetChildTypes(value_type);
 	if (children.size() < 3) {
 		throw InvalidInputException(
-		    "'schema' expects the STRUCT to have 3 children, 'name', 'type' and 'default_value");
+		    "'schema' expects the STRUCT to have at least 3 children, 'name', 'type' and 'default_value'");
 	}
 	if (children[0].first != "name") {
 		throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
@@ -266,13 +269,6 @@ static void VerifyParquetSchemaParameter(const Value &schema) {
 	}
 	if (children[2].first != "default_value") {
 		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
-	}
-	//! NOTE: default_value can be any type
-
-	if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
-		throw InvalidInputException(
-		    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
-		    LogicalTypeIdToString(key_type.id()));
 	}
 }
 
@@ -666,7 +662,14 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 		}
 		options.schema.reserve(column_values.size());
 		for (idx_t i = 0; i < column_values.size(); i++) {
-			options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, column_values[i]));
+			auto variant_value = column_values[i];
+
+			Vector tmp(variant_value, count_t(1));
+			RecursiveUnifiedVectorFormat format;
+			Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+			UnifiedVariantVectorData vector_data(format);
+			auto column_def = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+			options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, column_def));
 		}
 		file_options.auto_detect_hive_partitioning = false;
 		return true;
