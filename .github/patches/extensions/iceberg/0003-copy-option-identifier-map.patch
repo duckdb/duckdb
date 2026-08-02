@@ -1,3 +1,16 @@
+diff --git a/src/function/copy/iceberg_copy_function.cpp b/src/function/copy/iceberg_copy_function.cpp
+index c1a33088..1f783e9a 100644
+--- a/src/function/copy/iceberg_copy_function.cpp
++++ b/src/function/copy/iceberg_copy_function.cpp
+@@ -79,7 +79,7 @@ CopyIcebergBindData::CopyIcebergBindData(const CopyInfo &info, vector<string> &&
+ 		if (option.second.empty()) {
+ 			continue;
+ 		}
+-		table_metadata->table_properties[option.first] = option.second[0].ToString();
++		table_metadata->table_properties[option.first.GetIdentifierName()] = option.second[0].ToString();
+ 	}
+ }
+ 
 diff --git a/src/include/execution/operator/iceberg_insert.hpp b/src/include/execution/operator/iceberg_insert.hpp
 index 23cae145..a630b9ff 100644
 --- a/src/include/execution/operator/iceberg_insert.hpp
