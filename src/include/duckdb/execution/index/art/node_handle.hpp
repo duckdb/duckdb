@@ -17,6 +17,9 @@ class ART;
 class Node;
 enum class NType : uint8_t;
 
+//! NodeHandle is a mutable wrapper to access and modify a node.
+//! A segment handle is used for memory management and marks memory as modified.
+//! For read-only access, use ConstNodeHandle instead.
 class NodeHandle {
 public:
 	NodeHandle(ART &art, const Node node);
@@ -47,6 +50,9 @@ private:
 	NType type;
 };
 
+//! ConstNodeHandle is a read-only wrapper to access a node.
+//! A segment handle is used for memory management, but it is not marked as modified.
+//! For mutable access, use NodeHandle instead.
 class ConstNodeHandle {
 public:
 	ConstNodeHandle(const ART &art, const Node node);
