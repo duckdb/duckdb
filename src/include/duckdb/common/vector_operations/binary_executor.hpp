@@ -226,7 +226,7 @@ struct BinaryExecutor {
 		const ValidityMask all_valid;
 		auto &lmask = !args.lconstant && args.lvalidity ? *args.lvalidity : all_valid;
 		auto &rmask = !args.rconstant && args.rvalidity ? *args.rvalidity : all_valid;
-#ifndef DUCKDB_SMALLER_BINARY_ALL
+#if !DUCKDB_SMALLER_BINARY(binary_executor_flat)
 		const bool dense = !args.lsel &&
 		                   !args.rsel
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
