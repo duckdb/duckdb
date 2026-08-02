@@ -103,8 +103,8 @@ void ARTScanPreorderInternal(ART_TYPE &art, NODE_REF &root, CHILD_HANDLER &&chil
 //! child_handler runs on the root and on each child slot. For child slots, it runs while the parent
 //! is pinned and can update the slot in place. It returns the node to continue the traversal with,
 //! or an empty OptionalNode to stop.
-//! on_pop runs on each popped node with no pins held, and decides whether to scan its children.
-//! Work that must not run under a pin belongs in on_pop.
+//! on_pop runs on each popped node with no scanner-owned handles held and decides whether to scan its children.
+//! The caller may still hold a pin protecting the root slot.
 template <class CHILD_HANDLER, class ON_POP>
 void ARTScanPreorder(ART &art, Node &root, CHILD_HANDLER &&child_handler, ON_POP &&on_pop) {
 	ARTScanPreorderInternal<NodeHandle, PrefixHandle>(art, root, child_handler, on_pop);
@@ -131,8 +131,8 @@ struct ScanEntry {
 //! Post-order scanner: each node is visited twice via the children_visited flag in ScanEntry.
 //! On the first visit, child_handler runs on each child slot (under the parent's pin) and returns
 //! the node to push, or an empty OptionalNode.
-//! On the second visit, after all descendants have been processed, post_handler runs on the node
-//! with no pins held.
+//! On the second visit, after all descendants have been processed, post_handler runs with no scanner-owned handles
+//! held. The caller may still hold a pin protecting the root slot.
 template <class CHILD_HANDLER, class POST_HANDLER>
 void ARTScanPostorder(ART &art, Node &root, CHILD_HANDLER &&child_handler, POST_HANDLER &&post_handler) {
 	vector<ScanEntry> stack;
