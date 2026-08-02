@@ -35,4 +35,23 @@ SELECT decode(encode(a)) || a from (values ('hello'), ('world')) tbl(a);
 hellohello
 worldworld
 
+# decode with replacement should not modify its input
+statement ok
+CREATE TABLE invalid_blob(b BLOB);
+
+statement ok
+INSERT INTO invalid_blob VALUES ('AAAAAAAAAAAAAAAAAAAA\xC0'::BLOB);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT decode(b, 'replace') FROM invalid_blob;
+----
+AAAAAAAAAAAAAAAAAAAA?
+
+query I
+SELECT hex(b) FROM invalid_blob;
+----
+4141414141414141414141414141414141414141C0
 

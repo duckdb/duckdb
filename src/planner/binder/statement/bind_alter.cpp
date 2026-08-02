@@ -62,9 +62,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	D_ASSERT(!create_index_info->GetIndexName().empty());
 
 	// Plan the table scan.
-	TableDescription table_description(QualifiedName(table_info.GetQualifiedName().Catalog(),
-	                                                 table_info.GetQualifiedName().Schema(),
-	                                                 table_info.GetQualifiedName().Name()));
+	TableDescription table_description(table_info.GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
@@ -115,7 +113,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		return result;
 	}
 
-	BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
+	// resolve the (possibly nested) catalog/schema qualification of the altered entry
+	stmt.info->SetQualifiedName(BindTableName(stmt.info->GetQualifiedName()));
 
 	optional_ptr<CatalogEntry> entry;
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
@@ -129,12 +128,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		}
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
-		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), QualifiedName(stmt.info->GetQualifiedName().Name()));
-		entry =
-		    entry_retriever.GetEntry(EntryLookupInfo(lookup_info, QualifiedName(stmt.info->GetQualifiedName().Catalog(),
-		                                                                        stmt.info->GetQualifiedName().Schema(),
-		                                                                        lookup_info.GetEntryIdentifier())),
-		                             stmt.info->if_not_found);
+		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->GetQualifiedName());
+		entry = entry_retriever.GetEntry(lookup_info, stmt.info->if_not_found);
 	}
 
 	auto &properties = GetStatementProperties();
@@ -163,8 +158,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// We can only alter temporary tables and views in read-only mode.
 		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 	}
-	stmt.info->SetQualifiedName(
-	    QualifiedName(catalog.GetName(), entry->ParentSchema().name, stmt.info->GetQualifiedName().Name()));
+	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 
 	if (!stmt.info->IsAddPrimaryKey()) {
 		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));

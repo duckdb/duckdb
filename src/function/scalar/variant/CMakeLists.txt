@@ -4,6 +4,7 @@ add_library_unity(
   variant_utils.cpp
   variant_array_length.cpp
   variant_bind_utils.cpp
+  variant_contains.cpp
   variant_exists.cpp
   variant_extract.cpp
   variant_keys.cpp

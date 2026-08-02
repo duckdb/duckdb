@@ -1734,7 +1734,7 @@ unique_ptr<AtClause> PEGTransformerFactory::TransformAtClause(PEGTransformer &tr
 
 unique_ptr<AtClause> PEGTransformerFactory::TransformAtSpecifier(PEGTransformer &transformer, const string &at_unit,
                                                                  unique_ptr<ParsedExpression> expression) {
-	return make_uniq<AtClause>(at_unit, std::move(expression));
+	return make_uniq<AtClause>(Identifier(at_unit), std::move(expression));
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformJoinWithoutOnClause(PEGTransformer &transformer,
