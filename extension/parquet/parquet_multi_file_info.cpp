@@ -32,7 +32,7 @@
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_types.h"
-#include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/common/types/variant_iterator.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -237,13 +237,13 @@ static void VerifyParquetSchemaParameter(const Value &schema) {
 	auto &key_type = MapType::KeyType(map_type);
 	auto &value_type = MapType::ValueType(map_type);
 
+	if (value_type.id() != LogicalTypeId::STRUCT && value_type.id() != LogicalTypeId::VARIANT) {
+		throw InvalidInputException("'schema' expects the value type of the map to be either STRUCT or VARIANT");
+	}
 	if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException(
 		    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
 		    LogicalTypeIdToString(key_type.id()));
-	}
-	if (value_type.id() != LogicalTypeId::STRUCT && value_type.id() != LogicalTypeId::VARIANT) {
-		throw InvalidInputException("'schema' expects the value type of the map to be either STRUCT or VARIANT");
 	}
 	if (value_type.id() != LogicalTypeId::STRUCT) {
 		return;
@@ -661,15 +661,20 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 			throw BinderException("Parquet schema cannot be empty");
 		}
 		options.schema.reserve(column_values.size());
-		for (idx_t i = 0; i < column_values.size(); i++) {
-			auto variant_value = column_values[i];
+		for (const auto &column_value : column_values) {
+			if (MapType::ValueType(schema_value.type()).id() == LogicalTypeId::STRUCT) {
+				options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, column_value));
+				continue;
+			}
 
-			Vector tmp(variant_value, count_t(1));
-			RecursiveUnifiedVectorFormat format;
-			Vector::RecursiveToUnifiedFormat(tmp, 1, format);
-			UnifiedVariantVectorData vector_data(format);
-			auto column_def = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
-			options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, column_def));
+			const auto &entry_values = StructValue::GetChildren(column_value);
+			Vector variant_vector(entry_values[1], count_t(1));
+			const VectorIterator<VectorVariantType> definitions(variant_vector);
+			if (!definitions.RowIsValid(0)) {
+				throw BinderException("Parquet schema definition cannot be NULL");
+			}
+			options.schema.emplace_back(
+			    ParquetColumnDefinition::FromSchemaVariant(context, entry_values[0], definitions[0]));
 		}
 		file_options.auto_detect_hive_partitioning = false;
 		return true;

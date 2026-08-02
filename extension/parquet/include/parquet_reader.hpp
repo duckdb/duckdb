@@ -74,6 +74,8 @@ class FileMetaData;
 } // namespace duckdb_parquet
 
 namespace duckdb {
+
+class VariantNode;
 class Allocator;
 class ClientContext;
 class BaseStatistics;
@@ -243,6 +245,8 @@ public:
 struct ParquetColumnDefinition {
 public:
 	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
+	static ParquetColumnDefinition FromSchemaVariant(ClientContext &context, const Value &identifier,
+	                                                 const VariantNode &column_value);
 	MultiFileColumnDefinition ToMultiFileColumnDefinition() const;
 
 public:

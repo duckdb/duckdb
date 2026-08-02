@@ -366,13 +366,14 @@ COPY (
 		MAP([10::INTEGER], [struct_pack(z := 200::INTEGER)]) AS m
 ) TO '{TEMP_DIR}/nested_schema.parquet'
 
-query IIII
-SELECT i, s.inner.x, l[1].y, m[10].z
+query IIIII
+SELECT i, s.inner.x, l[1].y, m[10].z, missing
 FROM read_parquet(
 	'{TEMP_DIR}/nested_schema.parquet',
 	schema=(
 		map {
 			'i': {name: 'i', type: 'BIGINT', default_value: NULL},
+			'missing': {name: 'missing', type: 'BIGINT', default_value: 9},
 			's': {
 				name: 's',
 				type: 'STRUCT("inner" STRUCT(x BIGINT))',
@@ -395,7 +396,7 @@ FROM read_parquet(
 				type: 'STRUCT(y BIGINT)[]',
 				default_value: NULL,
 				children: map {
-					'element': {
+					'list': {
 						name: 'element',
 						type: 'STRUCT(y BIGINT)',
 						default_value: NULL,
@@ -427,4 +428,49 @@ FROM read_parquet(
 	)::MAP(VARCHAR, VARIANT)
 )
 ----
-7	42	100	200
+7	42	100	200	9
+
+# integer identifiers are supported recursively
+statement ok
+COPY (
+	SELECT struct_pack(f := 42::INTEGER) AS s
+) TO '{TEMP_DIR}/nested_field_ids.parquet' (FIELD_IDS {s: {__duckdb_field_id: 10, f: 11}})
+
+query I
+SELECT s.f
+FROM read_parquet(
+	'{TEMP_DIR}/nested_field_ids.parquet',
+	schema=(
+		map {
+			10: {
+				name: 's',
+				type: 'STRUCT(f BIGINT)',
+				default_value: NULL,
+				children: map {
+					11: {name: 'f', type: 'BIGINT', default_value: NULL}
+				}
+			}
+		}
+	)::MAP(INTEGER, VARIANT)
+)
+----
+42
+
+# supplied children are validated even when the map is empty
+statement error
+SELECT *
+FROM read_parquet(
+	'{TEMP_DIR}/nested_field_ids.parquet',
+	schema=(
+		map {
+			10: {
+				name: 's',
+				type: 'STRUCT(f BIGINT)',
+				default_value: NULL,
+				children: (map {})::MAP(INTEGER, VARIANT)
+			}
+		}
+	)::MAP(INTEGER, VARIANT)
+)
+----
+Binder Error: Parquet schema column "s" of type STRUCT(f BIGINT) expects 1 child definitions, not 0
