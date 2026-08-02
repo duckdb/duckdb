@@ -485,6 +485,7 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
+	config.memory_config = new_config.memory_config;
 	config.user_settings = new_config.user_settings;
 
 	if (Settings::Get<DuckDBAPISetting>(*this).empty()) {
@@ -525,7 +526,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	}
-	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
+	if (new_config.GetMaximumMemory() == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
 	}
 	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
@@ -558,13 +559,51 @@ void DBConfig::ShareMemoryWith(DatabaseInstance &db) {
 	if (memory_manager_options) {
 		throw InvalidInputException("Cannot select a shared memory manager after setting an allocator");
 	}
-	auto &source = DBConfig::GetConfig(db);
 	memory_manager = db.GetMemoryManager();
-	// Only set memory related fields.
-	options.maximum_memory = source.options.maximum_memory;
-	options.block_allocator_size = source.options.block_allocator_size;
-	options.buffer_manager_track_eviction_timestamps = source.options.buffer_manager_track_eviction_timestamps;
-	options.allocator_bulk_deallocation_flush_threshold = source.options.allocator_bulk_deallocation_flush_threshold;
+}
+
+idx_t DBConfig::GetMaximumMemory() const {
+	return GetMemoryConfig().maximum_memory.load();
+}
+
+const DatabaseMemoryConfig &DBConfig::GetMemoryConfig() const {
+	if (memory_manager) {
+		return memory_manager->GetConfig();
+	}
+	return memory_config;
+}
+
+void DBConfig::SetMaximumMemory(idx_t maximum_memory, optional_ptr<DatabaseInstance> db) {
+	if (db) {
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(maximum_memory);
+	} else if (memory_manager) {
+		memory_manager->SetMaximumMemory(maximum_memory, "");
+	} else {
+		memory_config.maximum_memory = maximum_memory;
+	}
+}
+
+void DBConfig::SetBlockAllocatorSize(idx_t block_allocator_size) {
+	if (memory_manager) {
+		memory_manager->SetBlockAllocatorSize(block_allocator_size);
+	} else {
+		memory_config.block_allocator_size = block_allocator_size;
+	}
+}
+
+void DBConfig::SetBufferManagerTrackEvictionTimestamps(bool enabled) {
+	if (memory_manager) {
+		throw InvalidInputException("Cannot change eviction timestamp tracking after the memory manager is created");
+	}
+	memory_config.buffer_manager_track_eviction_timestamps = enabled;
+}
+
+void DBConfig::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {
+	if (memory_manager) {
+		memory_manager->SetAllocatorBulkDeallocationFlushThreshold(threshold);
+	} else {
+		memory_config.allocator_bulk_deallocation_flush_threshold = threshold;
+	}
 }
 
 void DBConfig::SetAllocator(unique_ptr<Allocator> allocator) {

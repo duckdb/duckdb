@@ -252,13 +252,9 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 }
 
 BufferPool::BufferPool(BlockAllocator &block_allocator_p, TemporaryMemoryManager &temporary_memory_manager_p,
-                       idx_t maximum_memory, bool track_eviction_timestamps,
-                       idx_t allocator_bulk_deallocation_flush_threshold)
+                       DatabaseMemoryConfig &config_p)
     : eviction_queue_sizes({BLOCK_AND_EXTERNAL_FILE_QUEUE_SIZE, MANAGED_BUFFER_QUEUE_SIZE, TINY_BUFFER_QUEUE_SIZE}),
-      maximum_memory(maximum_memory),
-      allocator_bulk_deallocation_flush_threshold(allocator_bulk_deallocation_flush_threshold),
-      track_eviction_timestamps(track_eviction_timestamps), temporary_memory_manager(temporary_memory_manager_p),
-      block_allocator(block_allocator_p) {
+      config(config_p), temporary_memory_manager(temporary_memory_manager_p), block_allocator(block_allocator_p) {
 	for (idx_t queue_type_idx = 0; queue_type_idx < EVICTION_QUEUE_TYPES; queue_type_idx++) {
 		const auto types = EvictionQueueTypeIdxToFileBufferTypes(queue_type_idx);
 		const auto &type_queue_size = eviction_queue_sizes[queue_type_idx];
@@ -287,7 +283,7 @@ bool BufferPool::AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &ha
 	}
 
 	auto ts = memory.NextEvictionSequenceNumber();
-	if (track_eviction_timestamps) {
+	if (config.buffer_manager_track_eviction_timestamps) {
 		memory.SetLRUTimestamp(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 		                           .time_since_epoch()
 		                           .count());
@@ -333,7 +329,7 @@ idx_t BufferPool::GetUsedMemory(bool flush) const {
 }
 
 idx_t BufferPool::GetMaxMemory() const {
-	return maximum_memory;
+	return config.maximum_memory.load();
 }
 
 idx_t BufferPool::GetOperatorMemoryLimit() const {
@@ -361,7 +357,7 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
-		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+		if (extra_memory > config.allocator_bulk_deallocation_flush_threshold.load()) {
 			block_allocator.FlushAll(extra_memory);
 		}
 		return {true, std::move(r)};
@@ -388,7 +384,7 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 	success = success || memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit;
 	if (!success) {
 		r.Resize(0);
-	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+	} else if (extra_memory > config.allocator_bulk_deallocation_flush_threshold.load()) {
 		block_allocator.FlushAll(extra_memory);
 	}
 
@@ -416,7 +412,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context,
 	bool found = false;
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
-		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+		if (extra_memory > config.allocator_bulk_deallocation_flush_threshold.load()) {
 			block_allocator.FlushAll(extra_memory);
 		}
 		return {true, std::move(r)};
@@ -445,7 +441,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context,
 
 	if (!found) {
 		r.Resize(0);
-	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+	} else if (extra_memory > config.allocator_bulk_deallocation_flush_threshold.load()) {
 		block_allocator.FlushAll(extra_memory);
 	}
 
@@ -548,13 +544,13 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
 	}
-	idx_t old_limit = maximum_memory;
+	idx_t old_limit = config.maximum_memory.load();
 	// set the global maximum memory to the new limit if successful
-	maximum_memory = limit;
+	config.maximum_memory = limit;
 	// evict again
 	if (!EvictBlocks(QueryContext(), MemoryTag::EXTENSION, 0, limit).success) {
 		// failed: go back to old limit
-		maximum_memory = old_limit;
+		config.maximum_memory = old_limit;
 		throw OutOfMemoryException(
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
@@ -563,11 +559,11 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 }
 
 void BufferPool::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {
-	allocator_bulk_deallocation_flush_threshold = threshold;
+	config.allocator_bulk_deallocation_flush_threshold = threshold;
 }
 
 idx_t BufferPool::GetAllocatorBulkDeallocationFlushThreshold() {
-	return allocator_bulk_deallocation_flush_threshold;
+	return config.allocator_bulk_deallocation_flush_threshold.load();
 }
 
 vector<EvictionQueueInformation> BufferPool::GetEvictionQueueInfo() const {

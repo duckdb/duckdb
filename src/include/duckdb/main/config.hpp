@@ -13,6 +13,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/database_memory_config.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
@@ -86,8 +87,6 @@ struct DBConfigOptions {
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
-	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
-	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
 	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
@@ -101,8 +100,6 @@ struct DBConfigOptions {
 	//! Whether or not to invoke filesystem trim on free blocks after checkpoint. This will reclaim
 	//! space for sparse files, on platforms that support it.
 	bool trim_free_blocks = false;
-	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
-	bool buffer_manager_track_eviction_timestamps = false;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
@@ -130,8 +127,6 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	case_insensitive_map_t<Value> unrecognized_options;
-	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
-	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
 	//! Delta Only! - Fall back to recognizing Variant columns structurally
 	bool variant_legacy_encoding = false;
 	//! Metadata from DuckDB callers
@@ -150,8 +145,6 @@ struct DBConfigOptions {
 	identifier_set_t allowed_configs;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
-	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
-	idx_t block_allocator_size = 0;
 	//! Memory limit for the write buffer per row group (optional)
 	optional_idx write_buffer_row_group_memory_limit;
 	//! Whether to print bindings when printing the plan (debug mode only)
@@ -276,7 +269,16 @@ public:
 	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
 	static idx_t GetSystemAvailableMemory(FileSystem &fs);
 	static optional_idx ParseMemoryLimitSlurm(const string &arg);
-	void SetDefaultMaxMemory();
+	//! Returns the active memory limit from the shared memory manager, or the configured initialization value.
+	DUCKDB_API idx_t GetMaximumMemory() const;
+	//! Returns the active shared memory configuration, or the pending initialization configuration.
+	DUCKDB_API const DatabaseMemoryConfig &GetMemoryConfig() const;
+	//! Sets the active memory limit when initialized, or stores it for memory-manager initialization.
+	DUCKDB_API void SetMaximumMemory(idx_t maximum_memory, optional_ptr<DatabaseInstance> db = nullptr);
+	DUCKDB_API void SetBlockAllocatorSize(idx_t block_allocator_size);
+	DUCKDB_API void SetBufferManagerTrackEvictionTimestamps(bool enabled);
+	DUCKDB_API void SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold);
+	void SetDefaultMaxMemory(optional_ptr<DatabaseInstance> db = nullptr);
 	void SetDefaultTempDirectory();
 	//! Share the complete memory-management domain with an existing database instance.
 	DUCKDB_API void ShareMemoryWith(DatabaseInstance &db);
@@ -308,6 +310,7 @@ public:
 	HTTPUtil &GetHTTPUtil() const;
 
 private:
+	DatabaseMemoryConfig memory_config;
 	unique_ptr<DatabaseMemoryManagerOptions> memory_manager_options;
 	mutable mutex config_lock;
 	unique_ptr<CompressionFunctionSet> compression_functions;

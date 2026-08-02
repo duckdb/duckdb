@@ -128,7 +128,7 @@ template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(QueryContext context, MemoryTag tag,
                                                                     idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
                                                                     ARGS... args) {
-	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, buffer_pool.maximum_memory, buffer);
+	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, GetMaxMemory(), buffer);
 	if (!r.success) {
 		string extra_text = StringUtil::Format(" (%s/%s used)", StringUtil::BytesToHumanReadableString(GetUsedMemory()),
 		                                       StringUtil::BytesToHumanReadableString(GetMaxMemory()));

@@ -129,6 +129,48 @@ TEST_CASE("Database instances share isolated memory managers and object cache", 
 	REQUIRE(result->GetValue(0, 0) == Value::BIGINT(49995000));
 }
 
+TEST_CASE("Shared memory manager settings are consistent across database instances",
+          "[api][object_cache][buffer_pool]") {
+	DuckDB first;
+	DBConfig second_config;
+	second_config.ShareMemoryWith(*first.instance);
+	DuckDB second(nullptr, &second_config);
+	Connection first_connection(first);
+	Connection second_connection(second);
+
+	auto set_result = first_connection.Query("SET GLOBAL memory_limit = '128MB'");
+	REQUIRE_NO_FAIL(*set_result);
+	auto first_result = first_connection.Query("SELECT current_setting('memory_limit')");
+	auto second_result = second_connection.Query("SELECT current_setting('memory_limit')");
+	REQUIRE_NO_FAIL(*first_result);
+	REQUIRE_NO_FAIL(*second_result);
+	REQUIRE(first_result->GetValue(0, 0) == second_result->GetValue(0, 0));
+
+	set_result = second_connection.Query("SET GLOBAL memory_limit = '256MB'");
+	REQUIRE_NO_FAIL(*set_result);
+	first_result = first_connection.Query("SELECT current_setting('memory_limit')");
+	second_result = second_connection.Query("SELECT current_setting('memory_limit')");
+	REQUIRE_NO_FAIL(*first_result);
+	REQUIRE_NO_FAIL(*second_result);
+	REQUIRE(first_result->GetValue(0, 0) == second_result->GetValue(0, 0));
+
+	set_result = first_connection.Query("SET GLOBAL allocator_bulk_deallocation_flush_threshold = '16MB'");
+	REQUIRE_NO_FAIL(*set_result);
+	first_result = first_connection.Query("SELECT current_setting('allocator_bulk_deallocation_flush_threshold')");
+	second_result = second_connection.Query("SELECT current_setting('allocator_bulk_deallocation_flush_threshold')");
+	REQUIRE_NO_FAIL(*first_result);
+	REQUIRE_NO_FAIL(*second_result);
+	REQUIRE(first_result->GetValue(0, 0) == second_result->GetValue(0, 0));
+
+	set_result = second_connection.Query("SET GLOBAL block_allocator_memory = '16MB'");
+	REQUIRE_NO_FAIL(*set_result);
+	first_result = first_connection.Query("SELECT current_setting('block_allocator_memory')");
+	second_result = second_connection.Query("SELECT current_setting('block_allocator_memory')");
+	REQUIRE_NO_FAIL(*first_result);
+	REQUIRE_NO_FAIL(*second_result);
+	REQUIRE(first_result->GetValue(0, 0) == second_result->GetValue(0, 0));
+}
+
 TEST_CASE("Memory pressure from one database evicts another database's object cache entry",
           "[api][object_cache][buffer_pool]") {
 	DuckDB first;

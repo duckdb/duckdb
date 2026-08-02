@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/database_memory_config.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -35,8 +36,7 @@ struct DatabaseMemoryManagerOptions {
 class DatabaseMemoryManager {
 public:
 	DatabaseMemoryManager(unique_ptr<Allocator> allocator, unique_ptr<BlockAllocator> block_allocator,
-	                      idx_t maximum_memory, bool track_eviction_timestamps,
-	                      idx_t allocator_bulk_deallocation_flush_threshold);
+	                      const DatabaseMemoryConfig &config);
 	~DatabaseMemoryManager();
 
 	DUCKDB_API static shared_ptr<DatabaseMemoryManager> Create(unique_ptr<DatabaseMemoryManagerOptions> options,
@@ -47,8 +47,13 @@ public:
 	DUCKDB_API TemporaryMemoryManager &GetTemporaryMemoryManager() const;
 	DUCKDB_API BufferPool &GetBufferPool() const;
 	DUCKDB_API ObjectCache &GetObjectCache() const;
+	DUCKDB_API const DatabaseMemoryConfig &GetConfig() const;
+	DUCKDB_API void SetMaximumMemory(idx_t maximum_memory, const char *exception_postscript);
+	DUCKDB_API void SetBlockAllocatorSize(idx_t block_allocator_size);
+	DUCKDB_API void SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold);
 
 private:
+	DatabaseMemoryConfig config;
 	unique_ptr<Allocator> allocator;
 	unique_ptr<BlockAllocator> block_allocator;
 	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/database_memory_config.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
@@ -46,8 +47,8 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	BufferPool(BlockAllocator &block_allocator, TemporaryMemoryManager &temporary_memory_manager, idx_t maximum_memory,
-	           bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold);
+	BufferPool(BlockAllocator &block_allocator, TemporaryMemoryManager &temporary_memory_manager,
+	           DatabaseMemoryConfig &config);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
@@ -167,12 +168,8 @@ protected:
 
 	//! The lock for changing the memory limit
 	mutex limit_lock;
-	//! The maximum amount of memory that the buffer manager can keep (in bytes)
-	atomic<idx_t> maximum_memory;
-	//! If bulk deallocation larger than this occurs, flush outstanding allocations
-	atomic<idx_t> allocator_bulk_deallocation_flush_threshold;
-	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
-	bool track_eviction_timestamps;
+	//! Configuration shared by every database using this buffer pool.
+	DatabaseMemoryConfig &config;
 	//! Eviction queues
 	vector<unique_ptr<EvictionQueue>> queues;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators

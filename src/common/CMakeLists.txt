@@ -43,6 +43,7 @@ add_library_unity(
   csv_writer.cpp
   compressed_file_system.cpp
   constants.cpp
+  database_memory_config.cpp
   checksum.cpp
   encryption_functions.cpp
   encryption_key_manager.cpp
