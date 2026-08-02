@@ -33,7 +33,7 @@ public:
 	}
 	DATA_TYPE &operator*() const {
 		if (DUCKDB_UNLIKELY(index >= size)) {
-			throw InternalException("array_ptr iterator dereferenced while iterator is out of range");
+			ThrowVectorError("array_ptr iterator dereferenced while iterator is out of range");
 		}
 		return ptr[index];
 	}
@@ -56,7 +56,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(null)) {
-			throw duckdb::InternalException("Attempted to construct an array_ptr from a NULL pointer");
+			ThrowVectorError("Attempted to construct an array_ptr from a NULL pointer");
 		}
 #endif
 	}
@@ -66,7 +66,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(index >= size)) {
-			throw InternalException("Attempted to access index %ld within array_ptr of size %ld", index, size);
+			ThrowIndexOutOfBounds("array_ptr", index, size);
 		}
 #endif
 	}

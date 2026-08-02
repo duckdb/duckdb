@@ -41,7 +41,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(index >= size)) {
-			throw InternalException("Attempted to access index %ld within vector of size %ld", index, size);
+			ThrowIndexOutOfBounds("vector", index, size);
 		}
 #endif
 	}
@@ -98,21 +98,21 @@ public:
 
 	typename original::reference back() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty vector!");
+			ThrowEmptyContainer("back", "vector");
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	typename original::const_reference back() const { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty vector!");
+			ThrowEmptyContainer("back", "vector");
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	void pop_back() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'pop_back' called on an empty vector!");
+			ThrowEmptyContainer("pop_back", "vector");
 		}
 		original::pop_back();
 	}
