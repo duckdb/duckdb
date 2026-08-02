@@ -97,19 +97,15 @@ DatabaseInstance::~DatabaseInstance() {
 	}
 	// destroy child elements
 	connection_manager.reset();
+	external_file_cache.reset();
+	object_cache.reset();
 	scheduler.reset();
 	db_manager.reset();
 
 	// stop the log manager, after this point Logger calls are unsafe.
 	log_manager.reset();
 
-	external_file_cache.reset();
 	result_set_manager.reset();
-
-	if (object_cache) {
-		object_cache->DropNonEvictableEntries();
-	}
-	object_cache.reset();
 	buffer_manager.reset();
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();

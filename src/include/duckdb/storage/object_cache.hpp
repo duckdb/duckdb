@@ -80,7 +80,6 @@ public:
 private:
 	friend class BoundObjectCache;
 	friend class BufferPool;
-	friend class DatabaseInstance;
 
 	struct ObjectCacheKey {
 		MemoryContextId context_id;
@@ -96,9 +95,14 @@ private:
 			return std::hash<hugeint_t> {}(key.context_id.GetUUID()) ^ std::hash<string> {}(key.key);
 		}
 	};
+	using ObjectLruCache =
+	    SharedLruCache<ObjectCacheKey, ObjectCacheEntry, duckdb::BufferPoolPayload, ObjectCacheKeyHash>;
 
-	shared_ptr<ObjectCacheEntry> GetObject(MemoryContextId context_id, const string &key) {
+	shared_ptr<ObjectCacheEntry> GetObject(MemoryContextId context_id, const bool &context_active, const string &key) {
 		const lock_guard<mutex> lock(lock_mutex);
+		if (!context_active) {
+			return nullptr;
+		}
 		auto cache_key = MakeCacheKey(context_id, key);
 		auto non_evictable_it = non_evictable_entries.find(cache_key);
 		if (non_evictable_it != non_evictable_entries.end()) {
@@ -108,8 +112,8 @@ private:
 	}
 
 	template <class T>
-	shared_ptr<T> Get(MemoryContextId context_id, const string &key) {
-		shared_ptr<ObjectCacheEntry> object = GetObject(context_id, key);
+	shared_ptr<T> Get(MemoryContextId context_id, const bool &context_active, const string &key) {
+		shared_ptr<ObjectCacheEntry> object = GetObject(context_id, context_active, key);
 		if (!object || object->GetObjectType() != T::ObjectType()) {
 			return nullptr;
 		}
@@ -117,8 +121,12 @@ private:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(MemoryContextId context_id, const string &key, ARGS &&...args) {
+	shared_ptr<T> GetOrCreate(MemoryContextId context_id, const bool &context_active, const string &key,
+	                          ARGS &&... args) {
 		const lock_guard<mutex> lock(lock_mutex);
+		if (!context_active) {
+			return nullptr;
+		}
 		auto cache_key = MakeCacheKey(context_id, key);
 
 		// Check non-evictable entries first
@@ -155,12 +163,16 @@ private:
 		return value;
 	}
 
-	void Put(MemoryContextId context_id, const string &key, shared_ptr<ObjectCacheEntry> value) {
+	void Put(MemoryContextId context_id, const bool &context_active, const string &key,
+	         shared_ptr<ObjectCacheEntry> value) {
 		if (!value) {
 			return;
 		}
 
 		const lock_guard<mutex> lock(lock_mutex);
+		if (!context_active) {
+			return;
+		}
 		auto cache_key = MakeCacheKey(context_id, key);
 		const auto estimated_memory = value->GetEstimatedCacheMemory();
 		const bool is_evictable = estimated_memory.IsValid();
@@ -174,8 +186,11 @@ private:
 		lru_cache.Put(std::move(cache_key), std::move(value), std::move(reservation));
 	}
 
-	void Delete(MemoryContextId context_id, const string &key) {
+	void Delete(MemoryContextId context_id, const bool &context_active, const string &key) {
 		const lock_guard<mutex> lock(lock_mutex);
+		if (!context_active) {
+			return;
+		}
 		auto cache_key = MakeCacheKey(context_id, key);
 		auto iter = non_evictable_entries.find(cache_key);
 		if (iter != non_evictable_entries.end()) {
@@ -185,14 +200,32 @@ private:
 		lru_cache.Delete(cache_key);
 	}
 
-	void DropNonEvictableEntries(MemoryContextId context_id) {
-		const lock_guard<mutex> lock(lock_mutex);
-		for (auto entry = non_evictable_entries.begin(); entry != non_evictable_entries.end();) {
-			if (entry->first.context_id == context_id) {
-				entry = non_evictable_entries.erase(entry);
-			} else {
-				++entry;
+	void DropEntries(MemoryContextId context_id, bool &context_active) {
+		vector<shared_ptr<ObjectCacheEntry>> deferred_non_evictable_entries;
+		vector<ObjectLruCache::RemovedEntry> deferred_evictable_entries;
+		{
+			const lock_guard<mutex> lock(lock_mutex);
+			if (!context_active) {
+				return;
 			}
+			context_active = false;
+			size_t matching_non_evictable_entries = 0;
+			for (const auto &entry : non_evictable_entries) {
+				if (entry.first.context_id == context_id) {
+					matching_non_evictable_entries++;
+				}
+			}
+			deferred_non_evictable_entries.reserve(matching_non_evictable_entries);
+			for (auto entry = non_evictable_entries.begin(); entry != non_evictable_entries.end();) {
+				if (entry->first.context_id == context_id) {
+					deferred_non_evictable_entries.push_back(std::move(entry->second));
+					entry = non_evictable_entries.erase(entry);
+				} else {
+					++entry;
+				}
+			}
+			deferred_evictable_entries =
+			    lru_cache.RemoveIf([&](const ObjectCacheKey &key) { return key.context_id == context_id; });
 		}
 	}
 
@@ -202,24 +235,25 @@ private:
 	//! ObjectType so that callers can pass a natural key (e.g. a file path) without having to build a unique
 	//! cache key themselves.
 	template <class T>
-	shared_ptr<T> GetWithTypePrefix(MemoryContextId context_id, const string &key) {
-		return Get<T>(context_id, MakeTypedCacheKey<T>(key));
+	shared_ptr<T> GetWithTypePrefix(MemoryContextId context_id, const bool &context_active, const string &key) {
+		return Get<T>(context_id, context_active, MakeTypedCacheKey<T>(key));
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(MemoryContextId context_id, const string &key, ARGS &&...args) {
-		return GetOrCreate<T>(context_id, MakeTypedCacheKey<T>(key), std::forward<ARGS>(args)...);
+	shared_ptr<T> GetOrCreateWithTypePrefix(MemoryContextId context_id, const bool &context_active, const string &key,
+	                                        ARGS &&... args) {
+		return GetOrCreate<T>(context_id, context_active, MakeTypedCacheKey<T>(key), std::forward<ARGS>(args)...);
 	}
 
 	template <class T>
-	void PutWithTypePrefix(MemoryContextId context_id, const string &key,
+	void PutWithTypePrefix(MemoryContextId context_id, const bool &context_active, const string &key,
 	                       shared_ptr<ObjectCacheEntry> value) { // NOLINT(performance-unnecessary-value-param)
-		Put(context_id, MakeTypedCacheKey<T>(key), std::move(value));
+		Put(context_id, context_active, MakeTypedCacheKey<T>(key), std::move(value));
 	}
 
 	template <class T>
-	void DeleteWithTypePrefix(MemoryContextId context_id, const string &key) {
-		Delete(context_id, MakeTypedCacheKey<T>(key));
+	void DeleteWithTypePrefix(MemoryContextId context_id, const bool &context_active, const string &key) {
+		Delete(context_id, context_active, MakeTypedCacheKey<T>(key));
 	}
 
 public:
@@ -258,7 +292,7 @@ private:
 private:
 	mutable mutex lock_mutex;
 	//! LRU cache for evictable entries
-	SharedLruCache<ObjectCacheKey, ObjectCacheEntry, duckdb::BufferPoolPayload, ObjectCacheKeyHash> lru_cache;
+	ObjectLruCache lru_cache;
 	//! Separate storage for non-evictable entries (i.e., encryption keys)
 	unordered_map<ObjectCacheKey, shared_ptr<ObjectCacheEntry>, ObjectCacheKeyHash> non_evictable_entries;
 	//! Used to create buffer pool reservation on entries creation.
@@ -269,48 +303,49 @@ class BoundObjectCache {
 public:
 	BoundObjectCache(const BoundObjectCache &) = delete;
 	BoundObjectCache &operator=(const BoundObjectCache &) = delete;
+	~BoundObjectCache();
 
 	shared_ptr<ObjectCacheEntry> GetObject(const string &key) {
-		return cache.GetObject(context_id, key);
+		return cache.GetObject(context_id, active, key);
 	}
 
 	template <class T>
 	shared_ptr<T> Get(const string &key) {
-		return cache.Get<T>(context_id, key);
+		return cache.Get<T>(context_id, active, key);
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
-		return cache.GetOrCreate<T>(context_id, key, std::forward<ARGS>(args)...);
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
+		return cache.GetOrCreate<T>(context_id, active, key, std::forward<ARGS>(args)...);
 	}
 
 	void Put(const string &key, shared_ptr<ObjectCacheEntry> value) {
-		cache.Put(context_id, key, std::move(value));
+		cache.Put(context_id, active, key, std::move(value));
 	}
 
 	void Delete(const string &key) {
-		cache.Delete(context_id, key);
+		cache.Delete(context_id, active, key);
 	}
 
 	template <class T>
 	shared_ptr<T> GetWithTypePrefix(const string &key) {
-		return cache.GetWithTypePrefix<T>(context_id, key);
+		return cache.GetWithTypePrefix<T>(context_id, active, key);
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&...args) {
-		return cache.GetOrCreateWithTypePrefix<T>(context_id, key, std::forward<ARGS>(args)...);
+	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&... args) {
+		return cache.GetOrCreateWithTypePrefix<T>(context_id, active, key, std::forward<ARGS>(args)...);
 	}
 
 	template <class T>
 	void PutWithTypePrefix(const string &key,
 	                       shared_ptr<ObjectCacheEntry> value) { // NOLINT(performance-unnecessary-value-param)
-		cache.PutWithTypePrefix<T>(context_id, key, std::move(value));
+		cache.PutWithTypePrefix<T>(context_id, active, key, std::move(value));
 	}
 
 	template <class T>
 	void DeleteWithTypePrefix(const string &key) {
-		cache.DeleteWithTypePrefix<T>(context_id, key);
+		cache.DeleteWithTypePrefix<T>(context_id, active, key);
 	}
 
 	ObjectCacheStats GetMemoryDomainStats() const {
@@ -321,9 +356,8 @@ public:
 		return cache.EvictToReduceMemory(target_bytes);
 	}
 
-	void DropNonEvictableEntries() {
-		cache.DropNonEvictableEntries(context_id);
-	}
+	//! Close this binding and drop every cache-owned entry belonging to its memory context.
+	void Close();
 
 private:
 	friend class ObjectCache;
@@ -333,6 +367,7 @@ private:
 
 	ObjectCache &cache;
 	MemoryContextId context_id;
+	bool active = true;
 };
 
 } // namespace duckdb

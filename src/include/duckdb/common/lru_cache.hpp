@@ -37,6 +37,11 @@ public:
 	using hasher = KeyHash;
 	using key_equal = KeyEqual;
 
+	struct RemovedEntry {
+		unique_ptr<Payload> payload;
+		mapped_type value;
+	};
+
 	// @param max_total_weight_p: Maximum total weight (in relevant unit) of entries. 0 means unlimited.
 	explicit SharedLruCache(idx_t max_total_weight_p) : max_total_weight(max_total_weight_p), current_total_weight(0) {
 	}
@@ -120,6 +125,22 @@ public:
 		return freed;
 	}
 
+	//! Remove and return every entry whose key matches the predicate.
+	//! Returning ownership lets the caller destroy values and payloads outside its cache lock.
+	template <typename PREDICATE>
+	vector<RemovedEntry> RemoveIf(PREDICATE predicate) {
+		vector<RemovedEntry> result;
+		for (auto entry = entry_map.begin(); entry != entry_map.end();) {
+			if (!predicate(entry->first)) {
+				++entry;
+				continue;
+			}
+			auto entry_to_remove = entry++;
+			result.push_back(RemoveImpl(entry_to_remove));
+		}
+		return result;
+	}
+
 	idx_t Capacity() const {
 		return max_total_weight;
 	}
@@ -149,6 +170,14 @@ private:
 		current_total_weight -= iter->second.payload_weight;
 		lru_list.erase(iter->second.lru_iterator);
 		entry_map.erase(iter);
+	}
+
+	RemovedEntry RemoveImpl(typename EntryMap::iterator iter) {
+		current_total_weight -= iter->second.payload_weight;
+		lru_list.erase(iter->second.lru_iterator);
+		RemovedEntry result {std::move(iter->second.payload), std::move(iter->second.value)};
+		entry_map.erase(iter);
+		return result;
 	}
 
 	void EvictIfNeeded(idx_t required_weight) {

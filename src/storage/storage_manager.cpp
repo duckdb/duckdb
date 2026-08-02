@@ -184,6 +184,14 @@ unique_ptr<BoundObjectCache> ObjectCache::Bind(MemoryContextId context_id) {
 	return unique_ptr<BoundObjectCache>(new BoundObjectCache(*this, context_id));
 }
 
+BoundObjectCache::~BoundObjectCache() {
+	Close();
+}
+
+void BoundObjectCache::Close() {
+	cache.DropEntries(context_id, active);
+}
+
 BoundObjectCache &ObjectCache::Get(ClientContext &context) {
 	auto &db = DatabaseInstance::GetDatabase(context);
 	return Get(db);

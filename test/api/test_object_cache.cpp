@@ -60,6 +60,34 @@ struct EvictableTestObject : public ObjectCacheEntry {
 	}
 };
 
+struct ContextLifetimeTestObject : public ObjectCacheEntry {
+	ContextLifetimeTestObject(BoundObjectCache &owner_cache_p, BoundObjectCache &reentry_cache_p,
+	                          shared_ptr<BlockHandle> block_p, bool &destroyed_p, bool &reentered_cache_p)
+	    : owner_cache(owner_cache_p), reentry_cache(reentry_cache_p), block(std::move(block_p)), destroyed(destroyed_p),
+	      reentered_cache(reentered_cache_p) {
+	}
+	~ContextLifetimeTestObject() override {
+		owner_cache.Put("context-lifetime-resurrected", make_shared_ptr<TestObject>(42));
+		reentered_cache = reentry_cache.GetObject("context-lifetime-missing") == nullptr;
+		destroyed = true;
+	}
+	string GetObjectType() override {
+		return ObjectType();
+	}
+	static string ObjectType() {
+		return "ContextLifetimeTestObject";
+	}
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx(1);
+	}
+
+	BoundObjectCache &owner_cache;
+	BoundObjectCache &reentry_cache;
+	shared_ptr<BlockHandle> block;
+	bool &destroyed;
+	bool &reentered_cache;
+};
+
 } // namespace
 
 TEST_CASE("Test ObjectCache", "[api][object_cache]") {
@@ -201,7 +229,7 @@ TEST_CASE("Memory pressure from one database evicts another database's object ca
 	REQUIRE(buffer_pool.GetUsedMemory() == initial_memory + allocation_size * 3);
 }
 
-TEST_CASE("ObjectCache drops non-evictable entries for a memory context", "[api][object_cache][buffer_pool]") {
+TEST_CASE("ObjectCache drops all entries for a memory context", "[api][object_cache][buffer_pool]") {
 	auto first = make_uniq<DuckDB>();
 	DBConfig second_config;
 	second_config.ShareMemoryWith(*first->instance);
@@ -226,18 +254,42 @@ TEST_CASE("ObjectCache drops non-evictable entries for a memory context", "[api]
 		first.reset();
 
 		REQUIRE(second_cache.Get<TestObject>("second-non-evictable") != nullptr);
-		REQUIRE(third_cache.GetMemoryDomainStats().current_memory == obj_size);
-		REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 2);
+		REQUIRE(third_cache.GetMemoryDomainStats().current_memory == 0);
+		REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 1);
 		REQUIRE(!third_cache.GetMemoryDomainStats().is_empty);
 	}
 
 	second.reset();
-	REQUIRE(third_cache.GetMemoryDomainStats().current_memory == obj_size);
-	REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 1);
-
-	REQUIRE(third_cache.EvictFromMemoryDomain(obj_size) == obj_size);
 	REQUIRE(third_cache.GetMemoryDomainStats().current_memory == 0);
 	REQUIRE(third_cache.GetMemoryDomainStats().is_empty);
+}
+
+TEST_CASE("ObjectCache entries are destroyed before their database context", "[api][object_cache][buffer_pool]") {
+	auto first = make_uniq<DuckDB>();
+	DBConfig second_config;
+	second_config.ShareMemoryWith(*first->instance);
+	DuckDB second(nullptr, &second_config);
+
+	bool destroyed = false;
+	bool reentered_cache = false;
+	weak_ptr<BlockHandle> weak_block;
+	{
+		auto &cache = ObjectCache::Get(*first->instance);
+		auto &reentry_cache = ObjectCache::Get(*second.instance);
+		auto &buffer_manager = first->instance->GetBufferManager();
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, 1024, true);
+		auto block = pin.GetBlockHandle();
+		weak_block = block;
+		cache.Put("context-lifetime", make_shared_ptr<ContextLifetimeTestObject>(cache, reentry_cache, std::move(block),
+		                                                                         destroyed, reentered_cache));
+	}
+
+	first.reset();
+
+	REQUIRE(destroyed);
+	REQUIRE(reentered_cache);
+	REQUIRE(weak_block.expired());
+	REQUIRE(ObjectCache::Get(*second.instance).GetMemoryDomainStats().is_empty);
 }
 
 TEST_CASE("Test ObjectCache memory accounting", "[api][object_cache]") {
