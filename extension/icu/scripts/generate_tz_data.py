@@ -42,6 +42,20 @@ class Zone:
         self.final_year = 0  # first year in which final_rule applies
 
 
+def read_source(source, url, windows=False):
+    """Read one of the dataset files, from a local directory or from the Unicode repository.
+
+    A source that exists on disk is a path to a zoneinfo64.txt, and the companion file is taken
+    from beside it. Anything else is an IANA version to fetch.
+    """
+    if os.path.exists(source):
+        if windows:
+            source = os.path.join(os.path.dirname(source) or ".", "windowsZones.txt")
+        with open(source, encoding="utf-8-sig") as handle:
+            return handle.read()
+    return urllib.request.urlopen(url.format(version=source)).read().decode("utf-8-sig")
+
+
 def strip_comments(text):
     return re.sub(r"//[^\n]*", "", text)
 
@@ -56,7 +70,7 @@ def read_block(text, pos):
         elif text[i] == "}":
             depth -= 1
             if depth == 0:
-                return text[start + 1:i], i + 1
+                return text[start + 1 : i], i + 1
     raise ValueError("unterminated block")
 
 
@@ -154,7 +168,8 @@ def parse_rules(text):
     rules = {}
     pos = 0
     while True:
-        match = re.compile(r"(\w+)\s*:intvector\s*\{").search(text, pos)
+        # rule names are not always words: releases have carried names like C-Eur
+        match = re.compile(r"([\w-]+)\s*:intvector\s*\{").search(text, pos)
         if not match:
             break
         body, pos = read_block(text, match.start())
@@ -172,7 +187,7 @@ def escape(name):
 def emit_array(out, declaration, values, per_line):
     out.append("static const %s[] = {" % declaration)
     for i in range(0, len(values), per_line):
-        out.append("    " + ", ".join(values[i:i + per_line]) + ("," if i + per_line < len(values) else ""))
+        out.append("    " + ", ".join(values[i : i + per_line]) + ("," if i + per_line < len(values) else ""))
     out.append("};")
 
 
@@ -205,12 +220,9 @@ def generate(version, zones, rules, windows_zones):
     for zone in data_zones:
         suffix = data_index[zone.index]
         if zone.transitions:
-            emit_array(out, "int64_t TRANSITIONS_%d" % suffix,
-                       ["%dLL" % value for value in zone.transitions], 8)
-            emit_array(out, "uint8_t TYPE_MAP_%d" % suffix,
-                       ["%d" % value for value in zone.type_map], 32)
-        emit_array(out, "TZTypeOffset TYPE_OFFSETS_%d" % suffix,
-                   ["{%d, %d}" % pair for pair in zone.type_offsets], 8)
+            emit_array(out, "int64_t TRANSITIONS_%d" % suffix, ["%dLL" % value for value in zone.transitions], 8)
+            emit_array(out, "uint8_t TYPE_MAP_%d" % suffix, ["%d" % value for value in zone.type_map], 32)
+        emit_array(out, "TZTypeOffset TYPE_OFFSETS_%d" % suffix, ["{%d, %d}" % pair for pair in zone.type_offsets], 8)
         if zone.links:
             emit_array(out, "uint16_t LINKS_%d" % suffix, ["%d" % value for value in zone.links], 16)
         out.append("")
@@ -222,9 +234,21 @@ def generate(version, zones, rules, windows_zones):
         type_map = "TYPE_MAP_%d" % suffix if zone.transitions else "nullptr"
         links = "LINKS_%d" % suffix if zone.links else "nullptr"
         final_rule = rule_index[zone.final_rule] if zone.final_rule else -1
-        out.append("    {%s, %d, TYPE_OFFSETS_%d, %d, %s, %s, %d, %d, %d, %d}," %
-                   (transitions, len(zone.transitions), suffix, len(zone.type_offsets), type_map, links,
-                    len(zone.links), final_rule, zone.final_raw, zone.final_year))
+        out.append(
+            "    {%s, %d, TYPE_OFFSETS_%d, %d, %s, %s, %d, %d, %d, %d},"
+            % (
+                transitions,
+                len(zone.transitions),
+                suffix,
+                len(zone.type_offsets),
+                type_map,
+                links,
+                len(zone.links),
+                final_rule,
+                zone.final_raw,
+                zone.final_year,
+            )
+        )
     out.append("};")
     out.append("")
 
@@ -262,24 +286,13 @@ def main():
         sys.stderr.write("usage: generate_tz_data.py <iana-version|path-to-zoneinfo64.txt>\n")
         return 1
     source = sys.argv[1]
-    if os.path.exists(source):
-        with open(source, "r", encoding="utf-8") as handle:
-            text = handle.read()
-    else:
-        text = urllib.request.urlopen(DATA_URL.format(version=source)).read().decode("utf-8")
-
-    text = strip_comments(text)
+    text = strip_comments(read_source(source, DATA_URL))
     version = parse_strings(find_section(text, "TZVersion"))[0]
     names = parse_strings(find_section(text, "Names"))
     zones = parse_zones(find_section(text, "Zones"), names)
     rules = parse_rules(find_section(text, "Rules"))
 
-    if os.path.exists(source):
-        windows_text = open(os.path.join(os.path.dirname(source), "windowsZones.txt"),
-                            encoding="utf-8-sig").read()
-    else:
-        windows_text = urllib.request.urlopen(WINDOWS_URL.format(version=source)).read().decode("utf-8-sig")
-    windows_zones = parse_windows_zones(strip_comments(windows_text))
+    windows_zones = parse_windows_zones(strip_comments(read_source(source, WINDOWS_URL, windows=True)))
 
     sys.stdout.write(generate(version, zones, rules, windows_zones))
     return 0

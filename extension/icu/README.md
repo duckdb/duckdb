@@ -13,24 +13,46 @@ The IANA data changes a few times a year; you can follow the updates by subscrib
 `tz-announce@iana.org`, and the corresponding Unicode drops by following the `unicode-org/icu-data`
 project on GitHub.
 
-To update to a new release, run the generator with the IANA version
-(the year followed by a sequential lowercase letter, e.g. `2026c`):
+To update to a new release, run `update_tz_data.py` with the IANA version (the year followed by
+a sequential lowercase letter, e.g. `2026c`). It rewrites `datetime/generated/tz_data.cpp` and
+reports how the new data differs from the release that is currently checked in:
 
 ```sh
 $ pushd extension/icu
-$ python3 scripts/generate_tz_data.py 2026c > datetime/generated/tz_data.cpp
+$ python3 scripts/update_tz_data.py 2026c
 $ popd
+```
+
+```
+time zone data: 2026b -> 2026c
+  zones: 639 -> 639
+
+changed (5):
+  Africa/Casablanca                  from 2026-09-20 01:00:00 UTC, now +00:00
+  Africa/El_Aaiun                    from 2026-09-20 01:00:00 UTC, now +00:00
+  America/Edmonton                   from 2008-03-09 09:00:00 UTC, now -06:00 dst (recurring rule changed)
+  ...
+```
+
+Pass `--dry-run` to see the report without writing anything, and `--from <version>` to compare
+against a release other than the one checked in. Either version can also be a path to a local
+`zoneinfo64.txt`, in which case `windowsZones.txt` is read from beside it. The lower-level
+`generate_tz_data.py` writes the same file to standard output and does no comparison:
+
+```sh
+$ python3 scripts/generate_tz_data.py 2026c > datetime/generated/tz_data.cpp
 ```
 
 ### Testing the Data
 
-For time zone updates, add a new test to the end of `test/sql/timezone/test_icu_timezone.test`
-that validates one of the changes.
-Typically, this will consist of setting the `timezone` to the zone whose rules changed
-and then running a simple query to see if the offset is correct.
-For example, in early 2026, the Canadian province of British Columbia switched
-to permanent daylight savings time (-07).
-To test this, we pick a date well after the usual transition and check the offset.
+Add a test to the end of `test/sql/timezone/test_icu_timezone.test` for one of the zones the
+report listed as changed. This is what the report is for: the IANA release notes describe the
+change in terms of countries and laws, and the report says which of the zones carried here
+moved and on which date, which is what the test has to be written against.
+
+A test sets the `timezone` to a zone that changed and checks the offset on a date after the
+change. For example, in early 2026 the Canadian province of British Columbia moved to permanent
+daylight savings time, so we pick a date well after the usual transition:
 
 ```sql
 # 2026b
@@ -46,6 +68,17 @@ select '2026-11-10'::timestamptz
 
 To be extra careful, run the test before updating to make sure it actually changes.
 Occasionally, a new zone is introduced, in which case you can only check post-change.
+
+Then rebuild and run the time zone tests:
+
+```sh
+$ make release && ./build/release/test/unittest 'test/sql/timezone/*'
+```
+
+Any release that moves a zone will also change the hash in
+`test/sql/timezone/test_icu_datetime_sweep.test`, which covers every zone at once; update its
+expected value once you are satisfied that the zones the report listed are the only ones that
+moved.
 
 ## Updating the Collation Data
 
