@@ -620,6 +620,8 @@ struct ICUStrftime : public ICUDateFunc {
 		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_t>, Bind));
 		set.AddFunction(ScalarFunction({{"data", LogicalType::TIMESTAMP_TZ_NS}, {"format", LogicalType::VARCHAR}},
 		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_ns_t>, Bind));
+		// throws for unsupported format specifiers
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 

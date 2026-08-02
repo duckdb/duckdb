@@ -252,20 +252,17 @@ static bool NestedCastCanThrow(const LogicalType &source_type, const LogicalType
 }
 
 bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const LogicalType &target_type, bool try_cast) {
-	if (try_cast) {
-		// try_cast turns conversion errors into NULL values instead of throwing
-		return false;
-	}
 	if (source_type == target_type) {
 		return false;
 	}
-	// Casting VARCHAR to JSON involves parsing and validation that can throw on malformed input
-	if (target_type.IsJSONType() && !source_type.IsJSONType()) {
-		return true;
-	}
-	// Casts involving custom types are implemented by extensions, so we cannot reason about them
+	// Casts involving custom types are implemented by extensions, so we cannot reason about them - they can throw
+	// even for a try_cast, e.g. casting JSON into a MAP throws when a key fails to cast, since map keys cannot be NULL
 	if (source_type.HasAlias() || target_type.HasAlias()) {
 		return true;
+	}
+	if (try_cast) {
+		// try_cast turns conversion errors into NULL values instead of throwing
+		return false;
 	}
 	// Every value has a string representation, so casting to VARCHAR never throws. VARCHAR is not the maximum
 	// of the coercion lattice (you do not implicitly widen to it), so the max-type check below would miss this.
@@ -277,6 +274,11 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	// would otherwise be considered safe by the max-type check below.
 	// ENUM values are cast through their string value, so casting from an ENUM parses a string as well
 	if (source_type.id() == LogicalTypeId::VARCHAR || source_type.id() == LogicalTypeId::ENUM) {
+		return true;
+	}
+	// BIGNUM has arbitrary precision, so its values do not necessarily fit in any other type, e.g. BIGNUM -> DOUBLE
+	// overflows for large values, even though BIGNUM implicitly casts to DOUBLE
+	if (source_type.id() == LogicalTypeId::BIGNUM) {
 		return true;
 	}
 	// Casts of nested types are executed on the child types - recurse into them

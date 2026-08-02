@@ -32,6 +32,11 @@ static inline void AssertInSupportedRange(idx_t input_size, int64_t offset, int6
 	}
 }
 
+bool SubstringInSupportedRange(int64_t offset, int64_t length) {
+	return offset >= SUPPORTED_LOWER_BOUND && offset <= SUPPORTED_UPPER_BOUND && length >= SUPPORTED_LOWER_BOUND &&
+	       length <= SUPPORTED_UPPER_BOUND;
+}
+
 static string_t SubstringEmptyString(Vector &result) {
 	auto result_string = StringVector::EmptyString(result, 0);
 	result_string.Finalize();

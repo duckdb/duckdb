@@ -686,6 +686,8 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 		D_ASSERT(bound_function.GetName() == "combine");
 		bound_function.SetReturnType(arguments[0]->GetReturnType());
 	}
+	// these run the finalize/combine of the underlying aggregate, which can throw, e.g. skewness of a large sum
+	bound_function.SetFallible();
 
 	return std::move(bind_data);
 }

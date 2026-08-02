@@ -32,14 +32,12 @@ static void SetCastNullHandling(FUNC &function, const LogicalType &target_type) 
 //! between the types at all, in which case the cast throws for every non-NULL value
 static bool BoundCastCanThrow(const BoundCastInfo &bound_cast, const LogicalType &source_type,
                               const LogicalType &target_type, bool try_cast) {
-	if (try_cast) {
-		return false;
-	}
 	if (bound_cast.IsNopCast()) {
 		return false; // The cast does not do anything
 	}
 	if (bound_cast.IsNullCast()) {
-		return true; // No cast exists between these types - it throws for every non-NULL value
+		// No cast exists between these types - it throws for every non-NULL value, unless this is a try_cast
+		return !try_cast;
 	}
 	return BoundCastExpression::CastCanThrow(source_type, target_type, try_cast);
 }
