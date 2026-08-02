@@ -1,5 +1,18 @@
+diff --git a/src/function/copy/iceberg_copy_function.cpp b/src/function/copy/iceberg_copy_function.cpp
+index c1a33088..1f783e9a 100644
+--- a/src/function/copy/iceberg_copy_function.cpp
++++ b/src/function/copy/iceberg_copy_function.cpp
+@@ -79,7 +79,7 @@ CopyIcebergBindData::CopyIcebergBindData(const CopyInfo &info, vector<string> &&
+ 		if (option.second.empty()) {
+ 			continue;
+ 		}
+-		table_metadata->table_properties[option.first] = option.second[0].ToString();
++		table_metadata->table_properties[option.first.GetIdentifierName()] = option.second[0].ToString();
+ 	}
+ }
+ 
 diff --git a/src/include/execution/operator/iceberg_insert.hpp b/src/include/execution/operator/iceberg_insert.hpp
-index 49078028..e52dbe72 100644
+index 23cae145..a630b9ff 100644
 --- a/src/include/execution/operator/iceberg_insert.hpp
 +++ b/src/include/execution/operator/iceberg_insert.hpp
 @@ -32,7 +32,7 @@ public:
@@ -12,13 +25,13 @@ index 49078028..e52dbe72 100644
  	optional_ptr<const IcebergPartitionSpec> partition_spec;
  	//! Table index for logical plan generation (used when generating partition expressions)
 diff --git a/src/include/planning/iceberg_multi_file_reader.hpp b/src/include/planning/iceberg_multi_file_reader.hpp
-index 9094aa8a..d3d3d9cf 100644
+index a4ffaa75..e0ea0336 100644
 --- a/src/include/planning/iceberg_multi_file_reader.hpp
 +++ b/src/include/planning/iceberg_multi_file_reader.hpp
-@@ -73,7 +73,8 @@ public:
- 	                          const IcebergMultiFileList &multi_file_list,
- 	                          const BoundIcebergManifestEntry &manifest_entry,
- 	                          const vector<MultiFileColumnDefinition> &local_columns);
+@@ -112,7 +112,8 @@ public:
+ 	void FinalizeChunk(ClientContext &context, const MultiFileBindData &bind_data, BaseFileReader &reader,
+ 	                   const MultiFileReaderData &reader_data, DataChunk &input_chunk, DataChunk &output_chunk,
+ 	                   ExpressionExecutor &executor, optional_ptr<MultiFileReaderGlobalState> global_state) override;
 -	bool ParseOption(const string &key, const Value &val, MultiFileOptions &options, ClientContext &context) override;
 +	bool ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
 +	                 ClientContext &context) override;
@@ -26,10 +39,10 @@ index 9094aa8a..d3d3d9cf 100644
  	MultiFileReaderVirtualColumnBinding
  	GetVirtualColumnExpression(ClientContext &context, MultiFileReaderData &reader_data,
 diff --git a/src/planning/iceberg_multi_file_reader.cpp b/src/planning/iceberg_multi_file_reader.cpp
-index 5b4d56cb..ee2d295a 100644
+index 335232c1..3286a9b6 100644
 --- a/src/planning/iceberg_multi_file_reader.cpp
 +++ b/src/planning/iceberg_multi_file_reader.cpp
-@@ -442,24 +442,23 @@ void IcebergMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFi
+@@ -558,24 +558,23 @@ void IcebergMultiFileReader::FinalizeChunk(ClientContext &context, const MultiFi
  	output_chunk.Flatten();
  }
  
@@ -59,7 +72,7 @@ index 5b4d56cb..ee2d295a 100644
  		auto value = StringValue::Get(val);
  		auto string_substitutions = IcebergUtils::CountOccurrences(value, "%s");
  		if (string_substitutions != 2) {
-@@ -469,14 +468,14 @@ bool IcebergMultiFileReader::ParseOption(const string &key, const Value &val, Mu
+@@ -585,14 +584,14 @@ bool IcebergMultiFileReader::ParseOption(const string &key, const Value &val, Mu
  		this->options.version_name_format = value;
  		return true;
  	}

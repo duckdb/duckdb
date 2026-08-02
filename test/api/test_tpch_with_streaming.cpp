@@ -23,7 +23,7 @@ TEST_CASE("Test TPC-H SF0.01 using streaming api", "[tpch][.]") {
 	for (idx_t tpch_num = 1; tpch_num <= 22; tpch_num++) {
 		result = con.SendQuery("pragma tpch(" + to_string(tpch_num) + ");");
 
-		duckdb::ColumnDataCollection collection(duckdb::Allocator::DefaultAllocator(), result->types);
+		duckdb::ColumnDataCollection collection(duckdb::Allocator::DefaultAllocator(), result->GetTypes());
 
 		while (true) {
 			auto chunk = result->Fetch();
