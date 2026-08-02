@@ -270,6 +270,9 @@ static void VerifyParquetSchemaParameter(const Value &schema) {
 	if (children[2].first != "default_value") {
 		throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
 	}
+	if (children.size() > 3 && children[3].first != "children") {
+		throw InvalidInputException("'schema' expects the fourth field of the struct to be called 'children'");
+	}
 }
 
 static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,

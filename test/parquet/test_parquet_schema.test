@@ -373,7 +373,7 @@ FROM read_parquet(
 	schema=(
 		map {
 			'i': {name: 'i', type: 'BIGINT', default_value: NULL},
-			'missing': {name: 'missing', type: 'BIGINT', default_value: 9},
+			'missing': {name: 'missing', type: 'BIGINT', default_value: '9'},
 			's': {
 				name: 's',
 				type: 'STRUCT("inner" STRUCT(x BIGINT))',
@@ -385,11 +385,15 @@ FROM read_parquet(
 							type: 'STRUCT(x BIGINT)',
 							default_value: NULL,
 							children: map {
-								'x': {name: 'x', type: 'BIGINT', default_value: NULL}
+								'x': {
+									name: 'x',
+									type: 'BIGINT',
+									default_value: NULL
+								}
 							}
 						}
 					}
-				)::MAP(VARCHAR, VARIANT)
+				)
 			},
 			'l': {
 				name: 'l',
@@ -401,7 +405,11 @@ FROM read_parquet(
 						type: 'STRUCT(y BIGINT)',
 						default_value: NULL,
 						children: map {
-							'y': {name: 'y', type: 'BIGINT', default_value: NULL}
+							'y': {
+								name: 'y',
+								type: 'BIGINT',
+								default_value: NULL
+							}
 						}
 					}
 				}
@@ -412,29 +420,58 @@ FROM read_parquet(
 				default_value: NULL,
 				children: (
 					map {
-						'key': {name: 'key', type: 'BIGINT', default_value: NULL},
+						'key': {
+							name: 'key',
+							type: 'BIGINT',
+							default_value: NULL
+						},
 						'value': {
 							name: 'value',
 							type: 'STRUCT(z BIGINT)',
 							default_value: NULL,
 							children: map {
-								'z': {name: 'z', type: 'BIGINT', default_value: NULL}
+								'z': {
+									name: 'z',
+									type: 'BIGINT',
+									default_value: NULL
+								}
 							}
 						}
 					}
-				)::MAP(VARCHAR, VARIANT)
+				)
 			}
 		}
-	)::MAP(VARCHAR, VARIANT)
+	)
 )
 ----
 7	42	100	200	9
 
+# non-NULL defaults in VARIANT schema definitions must be VARCHAR
+statement error
+SELECT *
+FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		'i': ({name: 'i', type: 'BIGINT', default_value: 9})::VARIANT
+	}
+)
+----
+Binder Error: Parquet schema default_value must be VARCHAR or NULL
+
 # integer identifiers are supported recursively
 statement ok
 COPY (
-	SELECT struct_pack(f := 42::INTEGER) AS s
-) TO '{TEMP_DIR}/nested_field_ids.parquet' (FIELD_IDS {s: {__duckdb_field_id: 10, f: 11}})
+	SELECT {
+		'f': 42::INTEGER
+	} AS s
+) TO '{TEMP_DIR}/nested_field_ids.parquet' (
+	FIELD_IDS {
+		s: {
+			__duckdb_field_id: 10,
+			f: 11
+		}
+	}
+)
 
 query I
 SELECT s.f
@@ -447,11 +484,15 @@ FROM read_parquet(
 				type: 'STRUCT(f BIGINT)',
 				default_value: NULL,
 				children: map {
-					11: {name: 'f', type: 'BIGINT', default_value: NULL}
+					11: {
+						name: 'f',
+						type: 'BIGINT',
+						default_value: NULL
+					}
 				}
 			}
 		}
-	)::MAP(INTEGER, VARIANT)
+	)
 )
 ----
 42
@@ -467,10 +508,10 @@ FROM read_parquet(
 				name: 's',
 				type: 'STRUCT(f BIGINT)',
 				default_value: NULL,
-				children: (map {})::MAP(INTEGER, VARIANT)
+				children: {}
 			}
 		}
-	)::MAP(INTEGER, VARIANT)
+	)
 )
 ----
 Binder Error: Parquet schema column "s" of type STRUCT(f BIGINT) expects 1 child definitions, not 0

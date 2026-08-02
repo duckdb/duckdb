@@ -69,7 +69,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/common/types/variant/variant_builder.hpp"
+#include "duckdb/common/types/variant_iterator.hpp"
 
 namespace duckdb {
 
@@ -1220,6 +1220,10 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
+static void VerifyParquetSchemaChildCount(const string &name, const LogicalType &type, idx_t child_count);
+static void ParseParquetSchemaValueChildren(ClientContext &context, const Value &children_value,
+                                            vector<ParquetColumnDefinition> &result);
+
 ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
 	ParquetColumnDefinition result;
 	auto &identifier = StructValue::GetChildren(column_value)[0];
@@ -1233,6 +1237,10 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
 		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
 		                      result.type.ToString());
+	}
+	if (children.size() > 3 && !children[3].IsNull()) {
+		ParseParquetSchemaValueChildren(context, children[3], result.children);
+		VerifyParquetSchemaChildCount(result.name, result.type, result.children.size());
 	}
 
 	return result;
@@ -1260,24 +1268,8 @@ static void VerifyParquetSchemaChildCount(const string &name, const LogicalType 
 	}
 }
 
-struct ParquetSchemaVariantSource {
-	explicit ParquetSchemaVariantSource(const VariantNode &node) : node(node) {
-	}
-
-	bool Emit(idx_t row, VariantBuilder &builder) const {
-		D_ASSERT(row == 0);
-		EmitIterator(node, builder);
-		return false;
-	}
-
-	const VariantNode &node;
-};
-
-static Value ParquetSchemaVariantToValue(const VariantNode &node) {
-	Vector result(LogicalType::VARIANT(), 1);
-	ParquetSchemaVariantSource source(node);
-	BuildVariant(source, 1, result);
-	return VariantValue::GetValue(result.GetValue(0));
+static bool ParquetSchemaVariantIsNull(const VariantNode &node) {
+	return node.IsNull() || node.GetTypeId() == VariantLogicalType::VARIANT_NULL;
 }
 
 static Value ParquetSchemaVariantIdentifier(const VariantNode &node) {
@@ -1296,6 +1288,12 @@ static ParquetColumnDefinition ParseParquetSchemaVariant(ClientContext &context,
 
 static void ParseParquetSchemaVariantChildren(ClientContext &context, const VariantNode &children_value,
                                               vector<ParquetColumnDefinition> &result) {
+	if (children_value.GetTypeId() == VariantLogicalType::OBJECT) {
+		auto object = children_value.GetObjectChildren();
+		if (!(object.begin() != object.end())) {
+			return;
+		}
+	}
 	if (children_value.GetTypeId() != VariantLogicalType::ARRAY) {
 		throw BinderException("Parquet schema 'children' must be a MAP(INTEGER/VARCHAR, VARIANT), not %s",
 		                      EnumUtil::ToString(children_value.GetTypeId()));
@@ -1357,13 +1355,19 @@ static ParquetColumnDefinition ParseParquetSchemaVariant(ClientContext &context,
 	result.identifier = identifier;
 	result.name = name->GetString().GetString();
 	result.type = TransformStringToLogicalType(type->GetString().GetString(), context);
-	auto untyped_default = ParquetSchemaVariantToValue(*default_value);
+	Value untyped_default;
+	if (!ParquetSchemaVariantIsNull(*default_value)) {
+		if (default_value->GetTypeId() != VariantLogicalType::VARCHAR) {
+			throw BinderException("Parquet schema default_value must be VARCHAR or NULL");
+		}
+		untyped_default = Value(default_value->GetString().GetString());
+	}
 	string error_message;
 	if (!untyped_default.TryCastAs(context, result.type, result.default_value, &error_message)) {
 		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", untyped_default.ToString(),
 		                      result.type.ToString());
 	}
-	if (children && !children->IsNull() && children->GetTypeId() != VariantLogicalType::VARIANT_NULL) {
+	if (children && !ParquetSchemaVariantIsNull(*children)) {
 		ParseParquetSchemaVariantChildren(context, *children, result.children);
 		VerifyParquetSchemaChildCount(result.name, result.type, result.children.size());
 	}
@@ -1373,6 +1377,42 @@ static ParquetColumnDefinition ParseParquetSchemaVariant(ClientContext &context,
 ParquetColumnDefinition ParquetColumnDefinition::FromSchemaVariant(ClientContext &context, const Value &identifier,
                                                                    const VariantNode &column_value) {
 	return ParseParquetSchemaVariant(context, identifier, column_value);
+}
+
+static void ParseParquetSchemaValueChildren(ClientContext &context, const Value &children_value,
+                                            vector<ParquetColumnDefinition> &result) {
+	if (children_value.type().id() == LogicalTypeId::STRUCT && StructType::GetChildCount(children_value.type()) == 0) {
+		return;
+	}
+	if (children_value.type().id() != LogicalTypeId::MAP) {
+		throw BinderException("Parquet schema 'children' must be a MAP(INTEGER/VARCHAR, STRUCT/VARIANT)");
+	}
+
+	const auto &key_type = MapType::KeyType(children_value.type());
+	const auto &value_type = MapType::ValueType(children_value.type());
+	if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
+		throw BinderException("Parquet schema child identifier must be an INTEGER or VARCHAR");
+	}
+	if (value_type.id() != LogicalTypeId::STRUCT && value_type.id() != LogicalTypeId::VARIANT) {
+		throw BinderException("Parquet schema child definition must be a STRUCT or VARIANT");
+	}
+
+	const auto &entries = ListValue::GetChildren(children_value);
+	result.reserve(entries.size());
+	for (const auto &entry : entries) {
+		if (value_type.id() == LogicalTypeId::STRUCT) {
+			result.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, entry));
+			continue;
+		}
+
+		const auto &entry_values = StructValue::GetChildren(entry);
+		Vector variant_vector(entry_values[1], count_t(1));
+		const VectorIterator<VectorVariantType> definitions(variant_vector);
+		if (!definitions.RowIsValid(0)) {
+			throw BinderException("Parquet schema definition cannot be NULL");
+		}
+		result.emplace_back(ParquetColumnDefinition::FromSchemaVariant(context, entry_values[0], definitions[0]));
+	}
 }
 
 MultiFileColumnDefinition ParquetColumnDefinition::ToMultiFileColumnDefinition() const {
