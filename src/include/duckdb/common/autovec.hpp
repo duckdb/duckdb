@@ -35,6 +35,16 @@
 #define DUCKDB_BITPACKING_RESTRICT __restrict // MSVC cannot parse dependent __restrict pointers
 #endif
 
+// Pin the unroll factor of hot dense loops: ops without a vector instruction (e.g. 64-bit multiply
+// on NEON) otherwise compile to a minimal scalar loop whose throughput varies with code placement.
+#if defined(__clang__)
+#define DUCKDB_UNROLL_LOOP _Pragma("clang loop unroll_count(4)")
+#elif defined(__GNUC__)
+#define DUCKDB_UNROLL_LOOP _Pragma("GCC unroll 4")
+#else
+#define DUCKDB_UNROLL_LOOP
+#endif
+
 namespace duckdb {
 
 inline bool CpuBenefitsFromAutoVec() {
