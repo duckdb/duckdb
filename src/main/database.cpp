@@ -555,9 +555,12 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 }
 
 void DBConfig::ShareMemoryWith(DatabaseInstance &db) {
+	if (memory_manager_options) {
+		throw InvalidInputException("Cannot select a shared memory manager after setting an allocator");
+	}
 	auto &source = DBConfig::GetConfig(db);
-	memory_manager_options.reset();
 	memory_manager = db.GetMemoryManager();
+	// Only set memory related fields.
 	options.maximum_memory = source.options.maximum_memory;
 	options.block_allocator_size = source.options.block_allocator_size;
 	options.buffer_manager_track_eviction_timestamps = source.options.buffer_manager_track_eviction_timestamps;

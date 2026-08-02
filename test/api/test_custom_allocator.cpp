@@ -53,3 +53,25 @@ TEST_CASE("Test using a custom allocator", "[api][.]") {
 	// check that the memory counter usage has decreased after we dropped the table
 	REQUIRE(memory_counter.load() < table_memory_usage);
 }
+
+TEST_CASE("Custom allocator and shared memory manager are mutually exclusive", "[api][.]") {
+	DuckDB source;
+	atomic<idx_t> memory_counter;
+	memory_counter = 0;
+	auto make_allocator = [&]() {
+		return make_uniq<Allocator>(my_allocate_function, my_free_function, my_reallocate_function,
+		                            make_uniq<MyAllocateData>(&memory_counter));
+	};
+
+	SECTION("SetAllocator after ShareMemoryWith") {
+		DBConfig config;
+		config.ShareMemoryWith(*source.instance);
+		REQUIRE_THROWS_AS(config.SetAllocator(make_allocator()), InvalidInputException);
+	}
+
+	SECTION("ShareMemoryWith after SetAllocator") {
+		DBConfig config;
+		config.SetAllocator(make_allocator());
+		REQUIRE_THROWS_AS(config.ShareMemoryWith(*source.instance), InvalidInputException);
+	}
+}
