@@ -1326,6 +1326,63 @@ timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d
 	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
 }
 
+static void MultiplyUint64ForUhugeint(uint64_t lhs, uint64_t rhs, uint64_t &lower, uint64_t &upper) {
+	const auto lhs_lower = lhs & 0xffffffff;
+	const auto lhs_upper = lhs >> 32;
+	const auto rhs_lower = rhs & 0xffffffff;
+	const auto rhs_upper = rhs >> 32;
+
+	const auto product_lower = lhs_lower * rhs_lower;
+	const auto product_middle_left = lhs_lower * rhs_upper;
+	const auto product_middle_right = lhs_upper * rhs_lower;
+	const auto product_upper = lhs_upper * rhs_upper;
+	const auto middle = (product_lower >> 32) + static_cast<uint32_t>(product_middle_left) +
+	                    static_cast<uint32_t>(product_middle_right);
+
+	lower = (product_lower & 0xffffffff) | (middle << 32);
+	upper = product_upper + (product_middle_left >> 32) + (product_middle_right >> 32) + (middle >> 32);
+}
+
+static uhugeint_t ShiftRight192ToUhugeint(uint64_t lower, uint64_t middle, uint64_t upper, idx_t shift) {
+	if (shift < 64) {
+		return uhugeint_t((middle >> shift) | (upper << (64 - shift)), (lower >> shift) | (middle << (64 - shift)));
+	}
+	if (shift < 128) {
+		return uhugeint_t(upper >> (shift - 64), (middle >> (shift - 64)) | (upper << (128 - shift)));
+	}
+	if (shift < 192) {
+		return uhugeint_t(0, upper >> (shift - 128));
+	}
+	return uhugeint_t(0);
+}
+
+// Computes floor(delta * weight) exactly for a non-negative UHUGEINT delta and a finite double weight in [0, 1].
+// The 128-bit delta and the at-most-53-bit double mantissa fit in three 64-bit limbs.
+static uhugeint_t MultiplyUhugeintByDoubleFraction(const uhugeint_t &delta, const double weight) {
+	if (weight == 0) {
+		return uhugeint_t(0);
+	}
+	if (weight == 1) {
+		return delta;
+	}
+
+	int exponent;
+	const auto fraction = std::frexp(weight, &exponent);
+	const auto mantissa = static_cast<uint64_t>(std::ldexp(fraction, 53));
+	const auto shift = static_cast<idx_t>(53 - exponent);
+
+	uint64_t lower_product;
+	uint64_t lower_carry;
+	MultiplyUint64ForUhugeint(delta.lower, mantissa, lower_product, lower_carry);
+
+	uint64_t middle_product;
+	uint64_t upper_product;
+	MultiplyUint64ForUhugeint(static_cast<uint64_t>(delta.upper), mantissa, middle_product, upper_product);
+	const auto middle = lower_carry + middle_product;
+	const auto carry = middle < lower_carry;
+	return ShiftRight192ToUhugeint(lower_product, middle, upper_product + carry, shift);
+}
+
 template <>
 hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
 	hugeint_t delta_hugeint = hi;
@@ -1353,19 +1410,15 @@ uhugeint_t InterpolateOperator::Operation(const uhugeint_t &lo, const double d, 
 		const auto upper = ascending ? hi : lo;
 		auto delta = upper;
 		if (Uhugeint::TrySubtractInPlace(delta, lower)) {
-			const auto double_delta = Uhugeint::Cast<double>(delta);
-			uhugeint_t roundtrip_delta;
-			uhugeint_t offset;
-			if (Uhugeint::TryConvert(double_delta, roundtrip_delta) && roundtrip_delta == delta &&
-			    Uhugeint::TryConvert(double_delta * (ascending ? d : 1 - d), offset)) {
-				auto result = lower;
-				if (Uhugeint::TryAddInPlace(result, offset)) {
-					return result;
-				}
+			const auto weight = ascending ? d : 1 - d;
+			const auto offset = MultiplyUhugeintByDoubleFraction(delta, weight);
+			auto result = lower;
+			if (Uhugeint::TryAddInPlace(result, offset)) {
+				return result;
 			}
 		}
 	}
-	// Retain the endpoint-based fallback if converting or adding the interpolated delta is unsafe.
+	// Retain the endpoint-based fallback for non-finite or out-of-range interpolation weights.
 	return Uhugeint::Convert(Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
 }
 
