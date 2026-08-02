@@ -330,9 +330,7 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 
 	idx_t required_memory;
 	auto &block_memory = handle->GetMemory();
-	if (block_memory.GetMemoryContextId() != memory_context_id) {
-		throw InternalException("Cannot pin a block owned by another database instance");
-	}
+	D_ASSERT(block_memory.GetMemoryContextId() == memory_context_id);
 	{
 		// lock the block
 		auto lock = block_memory.GetLock();
@@ -418,9 +416,7 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	bool purge = false;
 	auto &block_memory = handle->GetMemory();
-	if (block_memory.GetMemoryContextId() != memory_context_id) {
-		throw InternalException("Cannot unpin a block owned by another database instance");
-	}
+	D_ASSERT(block_memory.GetMemoryContextId() == memory_context_id);
 	{
 		auto lock = block_memory.GetLock();
 		if (!block_memory.GetBuffer(lock) || block_memory.GetBufferType() == FileBufferType::TINY_BUFFER) {
