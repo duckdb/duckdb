@@ -7,7 +7,7 @@ duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result) {
 		return nullptr;
 	}
 	auto &result_data = *((duckdb::DuckDBResultData *)result.internal_data);
-	if (result_data.result->type != duckdb::QueryResultType::STREAM_RESULT) {
+	if (result_data.result->GetResultType() != duckdb::QueryResultType::STREAM_RESULT) {
 		// We can only fetch from a StreamQueryResult
 		return nullptr;
 	}

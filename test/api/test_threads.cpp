@@ -140,7 +140,7 @@ TEST_CASE("Test async threads", "[api]") {
 static idx_t ColumnDataScanMaxThreads(Connection &con, MaterializedQueryResult &result,
                                       const OperatorPartitionInfo &partition_info) {
 	PhysicalPlan physical_plan(Allocator::Get(*con.context));
-	auto &scan = physical_plan.Make<PhysicalColumnDataScan>(result.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
+	auto &scan = physical_plan.Make<PhysicalColumnDataScan>(result.GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN,
 	                                                        result.Collection().Count(), result.Collection());
 	auto source_state = scan.GetGlobalSourceState(*con.context, partition_info);
 	return source_state->MaxThreads();
