@@ -23,7 +23,7 @@ public:
 		return uuid;
 	}
 
-	string ToString() const;
+	DUCKDB_API string ToString() const;
 
 	bool operator==(const MemoryContextId &other) const {
 		return uuid == other.uuid;
