@@ -389,6 +389,9 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 	} else {
 		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(client, partition_info)));
 	}
+	if (partition_info.AnyRequired()) {
+		ResetBatchIndexes();
+	}
 	initialized = true;
 }
 
@@ -625,8 +628,15 @@ const vector<reference<PhysicalOperator>> &Pipeline::GetIntermediateOperators() 
 }
 
 void Pipeline::ClearSource() {
-	annotated_lock_guard<annotated_mutex> source_guard(source_state_lock);
-	source_state.reset();
+	{
+		annotated_lock_guard<annotated_mutex> source_guard(source_state_lock);
+		source_state.reset();
+	}
+	ResetBatchIndexes();
+}
+
+void Pipeline::ResetBatchIndexes() {
+	lock_guard<mutex> batch_guard(batch_lock);
 	batch_indexes.clear();
 }
 
