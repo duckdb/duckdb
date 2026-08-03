@@ -101,9 +101,13 @@ char *downcase_identifier(const char *ident, int len, bool warn, bool truncate) 
 	char *result;
 	int i;
 	bool enc_is_single_byte;
+	bool preserve_case;
+	bool capitalize;
 
 	result = (char *)palloc(len + 1);
 	enc_is_single_byte = pg_database_encoding_max_length() == 1;
+	preserve_case = get_preserve_identifier_case();
+	capitalize = get_capitalize_identifier();
 
 	/*
 	 * SQL99 specifies Unicode-aware case normalization, which we don't yet
@@ -117,8 +121,8 @@ char *downcase_identifier(const char *ident, int len, bool warn, bool truncate) 
 	for (i = 0; i < len; i++) {
 		unsigned char ch = (unsigned char)ident[i];
 
-		if (!get_preserve_identifier_case()) {
-			if (get_capitalize_identifier()) {
+		if (!preserve_case) {
+			if (capitalize) {
 				if (ch >= 'a' && ch <= 'z')
 					ch -= 'a' - 'A';
 				else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && islower(ch))
