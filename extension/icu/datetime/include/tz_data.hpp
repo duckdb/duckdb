@@ -71,30 +71,31 @@ struct TZZone {
 	uint16_t data_index;
 };
 
-//! The compressed data of a single zone
-struct TZUnit {
-	const uint8_t *data;
-	uint32_t compressed_size;
-	//! The size the unit has once it is decompressed
-	uint32_t size;
+//! Everything the time zones are described by. The tables point into a single block that is
+//! decompressed the first time any of them is needed and kept for as long as the process runs,
+//! so the pointers handed out of here stay valid.
+struct TZData {
+	//! The zone identifiers, sorted lexicographically by name
+	const TZZone *zones;
+	idx_t zone_count;
+	//! The zone data, indexed by TZZone::data_index
+	const TZZoneData *zone_data;
+	idx_t zone_data_count;
+	//! The recurring rules, indexed by TZZoneData::final_rule
+	const TZRule *rules;
+	idx_t rule_count;
+	//! The Windows time zone names, sorted by name and region
+	const TZWindowsZone *windows_zones;
+	idx_t windows_zone_count;
 };
 
-//! The zone identifiers, sorted lexicographically by name
-extern const TZZone TZ_ZONES[];
-extern const idx_t TZ_ZONE_COUNT;
-//! The compressed zone data, indexed by TZZone::data_index
-extern const TZUnit TZ_UNITS[];
-//! The dictionary the units are compressed against
-extern const uint8_t TZ_DICTIONARY[];
-extern const idx_t TZ_DICTIONARY_SIZE;
-//! The data of a zone, decompressed the first time the zone is used and kept afterwards,
-//! so that the returned reference stays valid for as long as the process runs
-const TZZoneData &GetZoneData(uint16_t data_index);
-//! The recurring rules, indexed by TZZoneData::final_rule
-extern const TZRule TZ_RULES[];
-//! The Windows time zone names, sorted by name and region
-extern const TZWindowsZone TZ_WINDOWS_ZONES[];
-extern const idx_t TZ_WINDOWS_ZONE_COUNT;
+//! The compressed block, decompressed on first use
+const TZData &GetTZData();
+
+//! The compressed bytes and the size they take once decompressed
+extern const uint8_t TZ_COMPRESSED[];
+extern const idx_t TZ_COMPRESSED_SIZE;
+extern const idx_t TZ_UNCOMPRESSED_SIZE;
 //! The IANA release that the data was generated from
 extern const char *const TZ_VERSION;
 

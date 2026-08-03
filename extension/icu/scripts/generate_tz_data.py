@@ -184,17 +184,6 @@ def parse_rules(text):
     return rules
 
 
-def escape(name):
-    return name.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def emit_array(out, declaration, values, per_line):
-    out.append("static const %s[] = {" % declaration)
-    for i in range(0, len(values), per_line):
-        out.append("    " + ", ".join(values[i : i + per_line]) + ("," if i + per_line < len(values) else ""))
-    out.append("};")
-
-
 def emit_bytes(out, declaration, data, per_line=24):
     out.append("const uint8_t %s[] = {" % declaration)
     for start in range(0, len(data), per_line):
@@ -225,39 +214,77 @@ def zone_blob(zone, final_rule):
     return header + body
 
 
-def compress_units(blobs, dictionary_size=16384):
-    """Compresses every zone on its own, against a dictionary trained on all of them.
+class StringPool:
+    """Collects the strings of the block, so that equal ones are stored once."""
 
-    A zone is decompressed when it is first used, so compressing them separately keeps that from
-    pulling in the others, and the shared dictionary is what keeps the small ones small - most
-    zones are only a few hundred bytes, which barely compresses on its own.
+    def __init__(self):
+        self.data = bytearray()
+        self.offsets = {}
+
+    def add(self, value):
+        if value not in self.offsets:
+            self.offsets[value] = len(self.data)
+            self.data.extend(value.encode("utf-8"))
+            self.data.append(0)
+        return self.offsets[value]
+
+
+def pad(data, alignment=8):
+    return data + b"\0" * ((alignment - len(data) % alignment) % alignment)
+
+
+def build_block(zones, data_zones, data_index, rules, rule_index, windows_zones):
+    """Everything the zones are described by, in one block.
+
+    The sections are ordered so that each one is aligned for the widest thing it holds, and the
+    strings come last because they need no alignment at all.
+    """
+    pool = StringPool()
+
+    blobs = [pad(zone_blob(zone, rule_index[zone.final_rule] if zone.final_rule else -1)) for zone in data_zones]
+    offsets = []
+    position = 0
+    for blob in blobs:
+        offsets.append(position)
+        position += len(blob)
+
+    # every string is added before the header is built, which records how large the pool is
+    zone_names = [pool.add(zone.name) for zone in zones]
+    windows_entries = [(pool.add(name), pool.add(region), pool.add(zone)) for name, region, zone in windows_zones]
+
+    zone_region = b"".join(blobs)
+    data_offsets = b"".join(struct.pack("<I", offset) for offset in offsets)
+    # the name and the data index are separate arrays, so that neither needs padding
+    name_offsets = b"".join(struct.pack("<I", offset) for offset in zone_names)
+    data_indexes = b"".join(
+        struct.pack("<H", data_index[zone.index if zone.link_target is None else zone.link_target]) for zone in zones
+    )
+    rule_values = b"".join(struct.pack("<11i", *rules[name]) for name in sorted(rules))
+    windows_index = b"".join(struct.pack("<3I", *entry) for entry in windows_entries)
+
+    header = struct.pack(
+        "<6I", len(zones), len(data_zones), len(rules), len(windows_zones), len(pool.data), len(zone_region)
+    )
+    assert len(header) % 8 == 0, len(header)
+    # the zone data holds 64 bit transitions, so it comes first while the block is still aligned
+    block = header + zone_region + data_offsets + name_offsets + rule_values + windows_index
+    return pad(block, 2) + data_indexes + bytes(pool.data)
+
+
+def compress_block(block):
+    """Compresses the whole block at once, which is smaller than compressing the zones apart.
+
+    The block is decompressed the first time any part of it is needed and kept afterwards, so
+    there is nothing to be gained from being able to decompress a zone on its own.
     """
     directory = tempfile.mkdtemp(prefix="tz-data-")
     try:
-        paths = []
-        for index, blob in enumerate(blobs):
-            path = os.path.join(directory, "%04d.bin" % index)
-            with open(path, "wb") as handle:
-                handle.write(blob)
-            paths.append(path)
-        dictionary_path = os.path.join(directory, "dictionary")
-        subprocess.run(
-            ["zstd", "--train", "-q", "-f", "--maxdict=%d" % dictionary_size, "-o", dictionary_path] + paths,
-            check=True,
-            capture_output=True,
-        )
-        with open(dictionary_path, "rb") as handle:
-            dictionary = handle.read()
-        compressed = []
-        for path in paths:
-            subprocess.run(
-                ["zstd", "-q", "-f", "-19", "-D", dictionary_path, path, "-o", path + ".zst"],
-                check=True,
-                capture_output=True,
-            )
-            with open(path + ".zst", "rb") as handle:
-                compressed.append(handle.read())
-        return dictionary, compressed
+        path = os.path.join(directory, "block.bin")
+        with open(path, "wb") as handle:
+            handle.write(block)
+        subprocess.run(["zstd", "-q", "-f", "-19", path, "-o", path + ".zst"], check=True, capture_output=True)
+        with open(path + ".zst", "rb") as handle:
+            return handle.read()
     finally:
         shutil.rmtree(directory)
 
@@ -289,49 +316,19 @@ def generate(version, zones, rules, windows_zones):
         if zone.link_target is None:
             data_index[index] = len(data_index)
 
-    blobs = [zone_blob(zone, rule_index[zone.final_rule] if zone.final_rule else -1) for zone in data_zones]
-    dictionary, compressed = compress_units(blobs)
+    block = build_block(zones, data_zones, data_index, rules, rule_index, windows_zones)
+    compressed = compress_block(block)
 
-    out.append("// The zone data is compressed with zstd. Every zone is compressed on its own so that")
-    out.append("// using one does not decompress the others, against a dictionary trained on all of")
-    out.append("// them, without which the small ones would barely compress.")
+    out.append("// The zones, their identifiers, the recurring rules and the Windows names are all")
+    out.append("// held in one block that is compressed with zstd, and decompressed the first time")
+    out.append("// any of them is needed. Compressing them together is a good deal smaller than")
+    out.append("// compressing them apart, and there is nothing to be gained from decompressing a")
+    out.append("// zone on its own, because the block is kept once it has been decompressed.")
     out.append("")
-    emit_bytes(out, "TZ_DICTIONARY", dictionary)
+    emit_bytes(out, "TZ_COMPRESSED", compressed)
     out.append("")
-    out.append("const idx_t TZ_DICTIONARY_SIZE = %d;" % len(dictionary))
-    out.append("")
-
-    for index, blob in enumerate(compressed):
-        emit_bytes(out, "TZ_UNIT_%d" % index, blob)
-    out.append("")
-
-    out.append("const TZUnit TZ_UNITS[] = {")
-    for index, blob in enumerate(compressed):
-        out.append("    {TZ_UNIT_%d, %d, %d}," % (index, len(blob), len(blobs[index])))
-    out.append("};")
-    out.append("")
-
-    out.append("const TZZone TZ_ZONES[] = {")
-    for index, zone in enumerate(zones):
-        target = index if zone.link_target is None else zone.link_target
-        out.append('    {"%s", %d},' % (escape(zone.name), data_index[target]))
-    out.append("};")
-    out.append("")
-
-    out.append("const TZRule TZ_RULES[] = {")
-    for name in rule_names:
-        values = rules[name]
-        out.append("    {%s}," % ", ".join(str(value) for value in values))
-    out.append("};")
-    out.append("")
-
-    out.append("const TZWindowsZone TZ_WINDOWS_ZONES[] = {")
-    for name, region, zone in windows_zones:
-        out.append('    {"%s", "%s", "%s"},' % (escape(name), escape(region), escape(zone)))
-    out.append("};")
-    out.append("")
-    out.append("const idx_t TZ_WINDOWS_ZONE_COUNT = %d;" % len(windows_zones))
-    out.append("const idx_t TZ_ZONE_COUNT = %d;" % len(zones))
+    out.append("const idx_t TZ_COMPRESSED_SIZE = %d;" % len(compressed))
+    out.append("const idx_t TZ_UNCOMPRESSED_SIZE = %d;" % len(block))
     out.append('const char *const TZ_VERSION = "%s";' % version)
     out.append("")
     out.append("} // namespace datetime")

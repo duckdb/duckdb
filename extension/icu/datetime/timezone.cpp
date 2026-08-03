@@ -218,8 +218,8 @@ OlsonTimeZone::OlsonTimeZone(string id_p, const TZZoneData &data_p)
 	if (data.final_rule < 0) {
 		return;
 	}
-	final_zone =
-	    make_uniq<SimpleTimeZone>(string(), data.final_raw * int32_t(MILLIS_PER_SECOND), TZ_RULES[data.final_rule]);
+	final_zone = make_uniq<SimpleTimeZone>(string(), data.final_raw * int32_t(MILLIS_PER_SECOND),
+	                                       GetTZData().rules[data.final_rule]);
 	// the final rule applies from the start of its first year onwards
 	final_start_millis = double(Grego::FieldsToDay(data.final_year, 0, 1)) * double(MILLIS_PER_DAY);
 }
@@ -294,13 +294,14 @@ unique_ptr<TimeZone> OlsonTimeZone::Copy() const {
 //===--------------------------------------------------------------------===//
 //! Finds the entry of a zone in the (lexicographically sorted) zone table, or nullptr
 static const TZZone *FindZone(const string &id) {
+	const auto &tz = GetTZData();
 	idx_t lower = 0;
-	idx_t upper = TZ_ZONE_COUNT;
+	idx_t upper = tz.zone_count;
 	while (lower < upper) {
 		const auto middle = (lower + upper) / 2;
-		const auto comparison = id.compare(TZ_ZONES[middle].name);
+		const auto comparison = id.compare(tz.zones[middle].name);
 		if (comparison == 0) {
-			return TZ_ZONES + middle;
+			return tz.zones + middle;
 		} else if (comparison < 0) {
 			upper = middle;
 		} else {
@@ -398,7 +399,7 @@ static bool TryParseCustomOffset(const string &id, int32_t &offset) {
 unique_ptr<TimeZone> TimeZone::TryCreate(const string &id) {
 	const auto zone = FindZone(id);
 	if (zone) {
-		return make_uniq<OlsonTimeZone>(id, GetZoneData(zone->data_index));
+		return make_uniq<OlsonTimeZone>(id, GetTZData().zone_data[zone->data_index]);
 	}
 	int32_t offset;
 	if (TryParseCustomOffset(id, offset)) {
@@ -410,13 +411,14 @@ unique_ptr<TimeZone> TimeZone::TryCreate(const string &id) {
 const vector<string> &TimeZone::GetAvailableIds() {
 	static const auto IDS = []() {
 		vector<string> result;
-		for (idx_t i = 0; i < TZ_ZONE_COUNT; i++) {
+		const auto &tz = GetTZData();
+		for (idx_t i = 0; i < tz.zone_count; i++) {
 			// Etc/Unknown is the placeholder for an unidentified zone, so it is not listed
 			// even though it can be looked up
-			if (StringUtil::Equals(TZ_ZONES[i].name, "Etc/Unknown")) {
+			if (StringUtil::Equals(tz.zones[i].name, "Etc/Unknown")) {
 				continue;
 			}
-			result.emplace_back(TZ_ZONES[i].name);
+			result.emplace_back(tz.zones[i].name);
 		}
 		return result;
 	}();
@@ -429,9 +431,10 @@ vector<string> TimeZone::GetEquivalentIds(const string &id) {
 	if (!zone) {
 		return result;
 	}
-	const auto &data = GetZoneData(zone->data_index);
+	const auto &tz = GetTZData();
+	const auto &data = tz.zone_data[zone->data_index];
 	for (idx_t i = 0; i < data.link_count; i++) {
-		result.emplace_back(TZ_ZONES[data.links[i]].name);
+		result.emplace_back(tz.zones[data.links[i]].name);
 	}
 	return result;
 }
@@ -440,8 +443,9 @@ vector<string> TimeZone::GetEquivalentIds(const string &id) {
 //! The zone that a Windows time zone name maps to, preferring the region of the host
 static unique_ptr<TimeZone> TryCreateFromWindowsName(const string &name, const string &region) {
 	const TZWindowsZone *fallback = nullptr;
-	for (idx_t i = 0; i < TZ_WINDOWS_ZONE_COUNT; i++) {
-		const auto &entry = TZ_WINDOWS_ZONES[i];
+	const auto &tz = GetTZData();
+	for (idx_t i = 0; i < tz.windows_zone_count; i++) {
+		const auto &entry = tz.windows_zones[i];
 		if (name != entry.windows_name) {
 			continue;
 		}
