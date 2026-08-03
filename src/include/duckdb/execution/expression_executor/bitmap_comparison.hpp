@@ -210,9 +210,6 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
                                       idx_t count, SelectionResult *bitmap_sel, SelectionVector *true_sel,
                                       SelectionVector *false_sel, SelectionResult &tmp_sel1, SelectionResult &tmp_sel2,
                                       SelectionResult &tmp_sel3, idx_t &result) {
-	if (!AutoVecCountPaysOff(count)) { // sparse/small inputs stay on the classic select path
-		return false;
-	}
 	auto &col = chunk.data[info.ref->Index()]; // dense compare reads the flat input directly
 	const auto pt = col.GetType().InternalType();
 	if (!BitmapCmpTypeSupported(pt)) {
@@ -242,6 +239,7 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 				    !ResolveNarrowCol(*rchild, r) || l.type != r.type) {
 					return false;
 				}
+				FORVector::KeepAlive(*rchild);
 				FillNarrowCol(l, r, info.op, child_len, child_bm);
 			} else {
 				const auto &constant = info.constant->GetValue();
@@ -251,6 +249,7 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 				}
 				FillConstView(view, info.op, child_len, child_bm);
 			}
+			FORVector::KeepAlive(*lchild); // dict-over-FOR compare exploited the narrow child payload
 			SelectionResult &t = bitmap_sel ? *bitmap_sel : tmp_sel1;
 			auto t_bm = reinterpret_cast<validity_t *>(t.PrepareBitmap(logical_span));
 			for (idx_t w = 0; w < (logical_span + 63) / 64; w++) {
@@ -300,8 +299,10 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 		return false;
 	}
 	// too few selected rows to pay for the dense compare: leave it to the generic gather-select.
-	// FOR columns stay dense regardless: the generic path would widen the whole payload anyway.
-	if (have_sel && !l_for && !DenseAutoVecPaysOff(count, span, GetTypeIdSize(pt))) {
+	// FOR columns stay dense regardless: the generic path would widen the whole payload anyway,
+	// and skipping would starve the FOR keepalive token.
+	if (!l_for && (!AutoVecCountPaysOff(count) ||
+	               (have_sel && !DenseAutoVecPaysOff(count, span, GetTypeIdSize(pt))))) {
 		return false;
 	}
 	if (l_for) {
