@@ -179,7 +179,7 @@ TEST_CASE("Recover a missing or torn WAL flush following a checkpoint marker", "
 			REQUIRE(CHECK_COLUMN(result, 0, {42}));
 		}
 
-		REQUIRE(fs.GetFileSize(*fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ)) < marker_end);
+		REQUIRE(fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ)->GetFileSize() < marker_end);
 		REQUIRE_FALSE(fs.FileExists(database_path + ".wal.recovery"));
 
 		DeleteDatabase(database_path);
