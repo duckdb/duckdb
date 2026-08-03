@@ -1,0 +1,86 @@
+# name: test/sql/optimizer/plan/setop_collation_filter_pushdown.test
+# description: Do not push representation-sensitive filters through collated set operations
+# group: [plan]
+
+statement ok
+SET default_collation = 'nocase'
+
+# A filter on either input must not remove a collation-equivalent match.
+query T
+SELECT x FROM (SELECT 'A' x EXCEPT SELECT 'a' x) q WHERE ascii(x) = 65
+----
+
+query T
+SELECT x FROM (SELECT 'A' x INTERSECT SELECT 'a' x) q WHERE ascii(x) = 65
+----
+A
+
+# Bag set operations use the same collated equality for their row-number partitions.
+query T
+SELECT x FROM (SELECT 'A' x EXCEPT ALL SELECT 'a' x) q WHERE ascii(x) = 65
+----
+
+query T
+SELECT x FROM (SELECT 'A' x INTERSECT ALL SELECT 'a' x) q WHERE ascii(x) = 65
+----
+A
+
+# Nested string values also use their child collation during set equality.
+query T
+SELECT x FROM (SELECT ['A'] x EXCEPT SELECT ['a'] x) q WHERE ascii(x[1]) = 65
+----
+
+statement ok
+SET default_collation = ''
+
+# Explicit collations must follow the same rule without a default collation.
+query T
+SELECT x FROM (SELECT 'A' COLLATE nocase x EXCEPT SELECT 'a' x) q WHERE ascii(x) = 65
+----
+
+# Simplifying EXCEPT ALL with an empty right side must retain the outer filter.
+query T
+SELECT x FROM (SELECT 'a' COLLATE nocase x EXCEPT ALL SELECT 'z' WHERE false) q WHERE ascii(x) = 65
+----
+
+# UNION ALL performs no set equality, so its filters remain safe to push down.
+query T
+SELECT x FROM (SELECT 'a' COLLATE nocase x UNION ALL SELECT 'A' x) q WHERE ascii(x) = 65
+----
+A
+
+statement ok
+CREATE TABLE fp_left(s VARCHAR COLLATE nocase, n INTEGER)
+
+statement ok
+CREATE TABLE fp_right(s VARCHAR COLLATE nocase, n INTEGER)
+
+statement ok
+INSERT INTO fp_left VALUES ('a', 1), ('b', 2)
+
+statement ok
+INSERT INTO fp_right VALUES ('a', 1), ('c', 3)
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'}
+
+statement ok
+SET explain_output = 'optimized_only'
+
+# A filter that only references an uncollated column still pushes into both inputs.
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM fp_left EXCEPT SELECT * FROM fp_right) q WHERE n = 1
+----
+logical_opt	<REGEX>:.*EXCEPT.*Filters: n = 1.*Filters: n = 1.*
+
+# A collated filter stays above both duplicate elimination and the set operation.
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM fp_left EXCEPT SELECT * FROM fp_right) q WHERE ascii(s) = 65
+----
+logical_opt	<REGEX>:.*FILTER.*DISTINCT.*EXCEPT.*
+
+# UNION ALL has no equality boundary, so collated filters still reach its scans.
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM fp_left UNION ALL SELECT * FROM fp_right) q WHERE ascii(s) = 65
+----
+logical_opt	<REGEX>:.*UNION.*Filters: ascii\(s\) = 65.*Filters: ascii\(s\) = 65.*
