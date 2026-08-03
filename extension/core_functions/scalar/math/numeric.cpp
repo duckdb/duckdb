@@ -9,6 +9,7 @@
 #include "core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include <cmath>
@@ -1457,14 +1458,51 @@ struct IsNanOperator {
 		return Value::IsNan(input);
 	}
 };
+
+static unique_ptr<BaseStatistics> PropagateIsNanStats(ClientContext &, FunctionStatisticsInput &input) {
+	D_ASSERT(input.child_stats.size() == 1);
+	auto &child_stats = input.child_stats[0];
+	if (!NumericStats::HasMinMax(child_stats)) {
+		return nullptr;
+	}
+
+	// NaN sorts above every other floating-point value, so a non-NaN maximum proves there is no NaN.
+	bool max_is_nan;
+	switch (input.expr.GetChildren()[0]->GetReturnType().id()) {
+	case LogicalTypeId::FLOAT:
+		max_is_nan = Value::IsNan(NumericStats::GetMax<float>(child_stats));
+		break;
+	case LogicalTypeId::DOUBLE:
+		max_is_nan = Value::IsNan(NumericStats::GetMax<double>(child_stats));
+		break;
+	default:
+		throw InternalException("Unsupported type for isnan statistics propagation");
+	}
+	if (max_is_nan) {
+		return nullptr;
+	}
+
+	auto result = NumericStats::CreateEmpty(LogicalType::BOOLEAN);
+	NumericStats::SetMin(result, false);
+	NumericStats::SetMax(result, false);
+	result.CopyValidity(child_stats);
+	if (!child_stats.CanHaveNull()) {
+		*input.expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+	}
+	return result.ToUnique();
+}
 } // namespace
 
 ScalarFunctionSet IsNanFun::GetFunctions() {
 	ScalarFunctionSet funcs;
-	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
-	                                 ScalarFunction::UnaryFunction<float, bool, IsNanOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
-	                                 ScalarFunction::UnaryFunction<double, bool, IsNanOperator>));
+	ScalarFunction float_function({LogicalType::FLOAT}, LogicalType::BOOLEAN,
+	                              ScalarFunction::UnaryFunction<float, bool, IsNanOperator>);
+	float_function.SetStatisticsCallback(PropagateIsNanStats);
+	funcs.AddFunction(float_function);
+	ScalarFunction double_function({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
+	                               ScalarFunction::UnaryFunction<double, bool, IsNanOperator>);
+	double_function.SetStatisticsCallback(PropagateIsNanStats);
+	funcs.AddFunction(double_function);
 	return funcs;
 }
 
