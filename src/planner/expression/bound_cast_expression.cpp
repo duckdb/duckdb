@@ -296,8 +296,12 @@ bool BoundCastExpression::CastCanThrow(const LogicalType &source_type, const Log
 	}
 	// A cast only succeeds for every input if the target type can represent every value of the source type,
 	// i.e. if the target is the maximum of the two types. Narrowing casts can overflow, and casts between types
-	// that have no ordering in the lattice can fail to convert.
-	return LogicalType::DefaultForceMaxLogicalType(source_type, target_type) != target_type;
+	// that have no ordering in the lattice can fail to convert - or not be implemented at all, e.g. INTEGER -> DATE
+	LogicalType max_type;
+	if (!LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(source_type, target_type, max_type)) {
+		return true;
+	}
+	return max_type != target_type;
 }
 
 } // namespace duckdb
