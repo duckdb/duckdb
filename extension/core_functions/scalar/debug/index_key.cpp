@@ -77,8 +77,8 @@ static string GetStringArgument(const Value &value, const string &param_name) {
 	return StringValue::Get(value);
 }
 
-static shared_ptr<IndexEntry> FindBoundIndex(const TableIndexList &index_list, const Identifier &index_name,
-                                             const TableDescription &path) {
+static shared_ptr<IndexEntry> FindBoundIndexEntry(const TableIndexList &index_list, const Identifier &index_name,
+                                                  const TableDescription &path) {
 	auto found = index_list.FindEntry(index_name);
 	if (found) {
 		return found;
@@ -113,7 +113,6 @@ struct IndexKeyBindData : public FunctionData {
 		return index_entry.get() == other.index_entry.get() && key_types == other.key_types;
 	}
 
-	//! Keep the stable logical index entry alive after its table/index was dropped.
 	shared_ptr<IndexEntry> index_entry;
 	vector<LogicalType> key_types;
 };
@@ -143,7 +142,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	data_table_info.BindIndexes(context);
 
 	const auto &index_list = data_table_info.GetIndexes();
-	const auto index_entry = FindBoundIndex(index_list, Identifier(index_name), path);
+	const auto index_entry = FindBoundIndexEntry(index_list, Identifier(index_name), path);
 	const auto index = index_entry->GetHandle<BoundIndex>();
 
 	const auto &index_type = index->GetIndexType();
@@ -188,10 +187,10 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
 	}
 
-	const auto art_handle = bind_data.index_entry->GetHandle<ART>();
+	const auto art = bind_data.index_entry->GetHandle<ART>();
 	unsafe_vector<ARTKey> keys(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	art_handle->GenerateKeys(allocator, key_chunk, keys);
+	art->GenerateKeys(allocator, key_chunk, keys);
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
