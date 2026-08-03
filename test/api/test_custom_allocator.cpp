@@ -2,6 +2,8 @@
 #include "test_helpers.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 using namespace duckdb;
 
@@ -72,6 +74,28 @@ TEST_CASE("Custom allocator and shared memory manager are mutually exclusive", "
 	SECTION("ShareMemoryWith after SetAllocator") {
 		DBConfig config;
 		config.SetAllocator(make_allocator());
+		REQUIRE_THROWS_AS(config.ShareMemoryWith(*source.instance), InvalidInputException);
+	}
+}
+
+TEST_CASE("Custom block allocator and shared memory manager are mutually exclusive", "[api][.]") {
+	DuckDB source;
+
+	SECTION("SetBlockAllocator after ShareMemoryWith") {
+		Allocator allocator;
+		DBConfig config;
+		config.ShareMemoryWith(*source.instance);
+		auto block_allocator =
+		    make_uniq<BlockAllocator>(allocator, DEFAULT_BLOCK_ALLOC_SIZE, DEFAULT_BLOCK_ALLOC_SIZE * 16, 0);
+		REQUIRE_THROWS_AS(config.SetBlockAllocator(std::move(block_allocator)), InvalidInputException);
+	}
+
+	SECTION("ShareMemoryWith after SetBlockAllocator") {
+		Allocator allocator;
+		DBConfig config;
+		auto block_allocator =
+		    make_uniq<BlockAllocator>(allocator, DEFAULT_BLOCK_ALLOC_SIZE, DEFAULT_BLOCK_ALLOC_SIZE * 16, 0);
+		config.SetBlockAllocator(std::move(block_allocator));
 		REQUIRE_THROWS_AS(config.ShareMemoryWith(*source.instance), InvalidInputException);
 	}
 }

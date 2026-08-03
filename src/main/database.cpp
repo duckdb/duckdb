@@ -483,6 +483,9 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
+	if (new_config.memory_manager && new_config.buffer_manager) {
+		throw InvalidInputException("Cannot combine a shared memory manager with a custom buffer manager");
+	}
 	config.options = new_config.options;
 	config.memory_config = new_config.memory_config;
 	config.user_settings = new_config.user_settings;
@@ -557,6 +560,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 void DBConfig::ShareMemoryWith(DatabaseInstance &db) {
 	if (memory_manager_options) {
 		throw InvalidInputException("Cannot select a shared memory manager after setting an allocator");
+	}
+	if (buffer_manager) {
+		throw InvalidInputException("Cannot select a shared memory manager after setting a custom buffer manager");
 	}
 	memory_manager = db.GetMemoryManager();
 }
