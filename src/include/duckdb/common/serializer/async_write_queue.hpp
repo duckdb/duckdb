@@ -111,7 +111,7 @@ public:
 private:
 	struct PendingRequest {
 		PendingRequest() = default;
-		explicit PendingRequest(AsyncWriteRequest request);
+		PendingRequest(AsyncWriteRequest request, idx_t size) noexcept;
 
 		idx_t Size() const;
 
@@ -201,6 +201,7 @@ public:
 //! Requests may target independent offsets; stream ordering and coalescing live in ManagedAsyncWriteStreamQueue.
 class ManagedAsyncWriteQueue : private AsyncWriteTarget {
 	friend class ManagedAsyncWriteStreamQueue;
+	friend class ManagedAsyncWriteQueueTest;
 
 public:
 	//! Whether registering a payload may schedule an async drain request immediately.
@@ -241,8 +242,10 @@ public:
 	DUCKDB_API void RethrowTaskError();
 
 private:
+	enum class AccountedWriteAdoption : uint8_t { ACCEPTED, REJECTED };
+
 	struct PendingWrite {
-		explicit PendingWrite(AsyncWriteRequest request);
+		PendingWrite(AsyncWriteRequest request, idx_t size) noexcept;
 
 		idx_t Size() const;
 
@@ -251,8 +254,9 @@ private:
 	};
 
 private:
-	//! Add one positional request whose bytes are already tracked as external pending bytes.
-	void RegisterAccountedWrite(AsyncWriteRequest request, ScheduleMode schedule_mode = ScheduleMode::ALLOW);
+	//! Try to adopt one positional request whose bytes are already tracked as external pending bytes.
+	//! The request is consumed if and only if ACCEPTED is returned.
+	AccountedWriteAdoption TryAdoptAccountedWrite(AsyncWriteRequest &request, ErrorData &error);
 	//! Track bytes held by a wrapper before they become positional requests.
 	void AddExternalPendingBytes(idx_t bytes, bool update_memory = true);
 	//! Stop tracking wrapper-held bytes that will never become positional requests.
@@ -275,8 +279,8 @@ private:
 
 	//! Move one pending positional write into a physical async request.
 	bool TakePendingWriteRequest(AsyncWriteRequest &request, SchedulePolicy policy);
-	//! Wrap a request callback so submitted-byte accounting is released before user callbacks run.
-	void AddCompletionAccounting(AsyncWriteRequest &request);
+	//! Prepare a callback that releases submitted-byte accounting before user callbacks run.
+	AsyncWriteCompletionCallback CreateCompletionAccounting(const AsyncWriteCompletionCallback &user_completion);
 	//! Release byte accounting for one submitted physical request.
 	void CompleteSubmittedWrite(idx_t offset, idx_t size, optional_ptr<const ErrorData> error);
 
@@ -378,6 +382,7 @@ private:
 	};
 
 	class CoalescedWritePayload;
+	class MaterializedWritePayload;
 
 private:
 	//! Schedule drain requests from already registered pending writes.
@@ -398,8 +403,14 @@ private:
 	bool TakePendingWriteRequest(AsyncWriteRequest &request, SchedulePolicy policy);
 	//! Convert one or more contiguous pending writes into a lazily materialized payload.
 	unique_ptr<AsyncWritePayload> CreatePayload(deque<PendingWrite> writes, idx_t size);
+	//! Materialize one pending concurrent-sequential physical request before publishing it to the lower queue.
+	unique_ptr<AsyncWritePayload> CreateMaterializedPayload(idx_t end, idx_t size);
 	//! Release byte accounting for one submitted physical request.
 	void CompleteSubmittedWrite(idx_t offset, idx_t size, optional_ptr<const ErrorData> error);
+	//! Latch one local scheduling failure, stop publication, and discard unsubmitted stream work.
+	void FailLocalScheduling(ErrorData error, idx_t unaccepted_size = 0);
+	//! Return the locally latched scheduling failure, if any. Caller must hold lock.
+	shared_ptr<const ErrorData> GetLocalError() const DUCKDB_REQUIRES(lock);
 
 	//! Validate a new registration against the contiguous offset contract.
 	idx_t ValidateRegistrationOffset(idx_t offset, idx_t write_size) const;
@@ -438,6 +449,8 @@ private:
 
 	//! Protects state shared between the registering thread and async completion callbacks.
 	mutex lock;
+	//! Serializes selection, materialization, accounting transfer, and lower-queue publication.
+	mutex submission_lock;
 	//! Pending payloads in registration order with pre-assigned logical offsets.
 	deque<PendingWrite> pending_writes;
 	//! Bytes queued in pending_writes that have not been submitted to AsyncWriteQueue yet.
@@ -454,6 +467,8 @@ private:
 	idx_t next_registration_offset = 0;
 	//! Set after Close() has drained the queue. Further write registration is rejected.
 	bool closed = false;
+	//! First failure that occurred before a request entered the lower async queue.
+	shared_ptr<const ErrorData> local_error DUCKDB_GUARDED_BY(lock);
 };
 
 } // namespace duckdb

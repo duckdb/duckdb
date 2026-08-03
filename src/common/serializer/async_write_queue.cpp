@@ -33,8 +33,8 @@ idx_t AsyncWriteRequest::Size() const {
 	return payload ? payload->Size() : 0;
 }
 
-AsyncWriteQueue::PendingRequest::PendingRequest(AsyncWriteRequest request_p)
-    : request(std::move(request_p)), size(request.Size()) {
+AsyncWriteQueue::PendingRequest::PendingRequest(AsyncWriteRequest request_p, idx_t size_p) noexcept
+    : request(std::move(request_p)), size(size_p) {
 }
 
 idx_t AsyncWriteQueue::PendingRequest::Size() const {
@@ -140,11 +140,17 @@ void AsyncWriteQueue::Submit(AsyncWriteRequest request) {
 		return;
 	}
 
-	{
+	try {
 		lock_guard<mutex> guard(lock);
 		VerifyOpen();
-		pending_requests.emplace_back(std::move(request));
+		pending_requests.emplace_back(std::move(request), request_size);
 		pending_bytes += request_size;
+	} catch (...) {
+		auto error_ptr = std::current_exception();
+		auto error = ErrorDataFromExceptionPtr(error_ptr);
+		request.payload.reset();
+		CompleteRequest(request, request_size, error);
+		std::rethrow_exception(error_ptr);
 	}
 	ScheduleTasksInternal();
 }
@@ -486,8 +492,8 @@ void AsyncWriteQueue::VerifyOpen() const {
 	}
 }
 
-ManagedAsyncWriteQueue::PendingWrite::PendingWrite(AsyncWriteRequest request_p)
-    : request(std::move(request_p)), size(request.Size()) {
+ManagedAsyncWriteQueue::PendingWrite::PendingWrite(AsyncWriteRequest request_p, idx_t size_p) noexcept
+    : request(std::move(request_p)), size(size_p) {
 }
 
 idx_t ManagedAsyncWriteQueue::PendingWrite::Size() const {
@@ -532,12 +538,30 @@ void ManagedAsyncWriteQueue::RegisterWrite(AsyncWriteRequest request, ScheduleMo
 	RegisterWriteInternal(std::move(request), 0, schedule_mode);
 }
 
-void ManagedAsyncWriteQueue::RegisterAccountedWrite(AsyncWriteRequest request, ScheduleMode schedule_mode) {
-	auto request_size = request.Size();
-	RegisterWriteInternal(std::move(request), request_size, ScheduleMode::DEFER);
-	if (schedule_mode == ScheduleMode::ALLOW) {
-		SchedulePendingWrites(SchedulePolicy::FORCE);
-	}
+ManagedAsyncWriteQueue::AccountedWriteAdoption
+ManagedAsyncWriteQueue::TryAdoptAccountedWrite(AsyncWriteRequest &request, ErrorData &error) {
+	try {
+		if (!write_queue->IsAsync()) {
+			throw InternalException("Accounted async writes require an asynchronous write queue");
+		}
+		RethrowTaskError();
+
+		auto request_size = request.Size();
+		lock_guard<mutex> guard(lock);
+		VerifyOpen();
+		if (external_pending_bytes < request_size) {
+			throw InternalException("Accounted async write exceeds externally tracked bytes");
+		}
+		pending_writes.emplace_back(std::move(request), request_size);
+		external_pending_bytes -= request_size;
+		pending_bytes += request_size;
+		return AccountedWriteAdoption::ACCEPTED;
+	} catch (const std::exception &ex) {
+		error = ErrorData(ex);
+	} catch (...) { // LCOV_EXCL_START
+		error = ErrorData("Unknown exception while adopting an accounted async write");
+	} // LCOV_EXCL_STOP
+	return AccountedWriteAdoption::REJECTED;
 }
 
 void ManagedAsyncWriteQueue::AddExternalPendingBytes(idx_t bytes, bool update_memory) {
@@ -590,7 +614,7 @@ void ManagedAsyncWriteQueue::RegisterWriteInternal(AsyncWriteRequest request, id
 			D_ASSERT(external_pending_bytes >= accounted_external_bytes);
 			external_pending_bytes -= accounted_external_bytes;
 		}
-		pending_writes.emplace_back(std::move(request));
+		pending_writes.emplace_back(std::move(request), request_size);
 		pending_bytes += request_size;
 	}
 	UpdateMemoryState();
@@ -674,20 +698,20 @@ bool ManagedAsyncWriteQueue::TakePendingWriteRequest(AsyncWriteRequest &request,
 	}
 
 	auto request_size = pending_writes.front().Size();
+	auto completion = CreateCompletionAccounting(pending_writes.front().request.completion);
 	request = std::move(pending_writes.front().request);
 	pending_writes.pop_front();
 	D_ASSERT(pending_bytes >= request_size);
 	pending_bytes -= request_size;
 	submitted_bytes += request_size;
 	submitted_requests++;
-	// Attach accounting only on submission, so cancelled pending writes never carry it.
-	AddCompletionAccounting(request);
+	request.completion = std::move(completion);
 	return true;
 }
 
-void ManagedAsyncWriteQueue::AddCompletionAccounting(AsyncWriteRequest &request) {
-	auto user_completion = request.completion;
-	request.completion = [this, user_completion](idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
+AsyncWriteCompletionCallback
+ManagedAsyncWriteQueue::CreateCompletionAccounting(const AsyncWriteCompletionCallback &user_completion) {
+	return [this, user_completion](idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
 		CompleteSubmittedWrite(offset, size, error);
 		if (user_completion) {
 			user_completion(offset, size, error);
@@ -914,6 +938,34 @@ private:
 	idx_t size;
 };
 
+class ManagedAsyncWriteStreamQueue::MaterializedWritePayload : public AsyncWritePayload {
+public:
+	MaterializedWritePayload(data_ptr_t data_p, idx_t size_p) : data(data_p), size(size_p) {
+	}
+
+	MaterializedWritePayload(AllocatedData owned_data_p, idx_t size_p)
+	    : owned_data(std::move(owned_data_p)), data(owned_data.get()), size(size_p) {
+	}
+
+	void TakeOwnership(unique_ptr<AsyncWritePayload> payload_p) {
+		payload = std::move(payload_p);
+	}
+
+	data_ptr_t Ptr() override {
+		return data;
+	}
+
+	idx_t Size() const override {
+		return size;
+	}
+
+private:
+	unique_ptr<AsyncWritePayload> payload;
+	AllocatedData owned_data;
+	data_ptr_t data;
+	idx_t size;
+};
+
 ManagedAsyncWriteStreamQueue::ManagedAsyncWriteStreamQueue(ClientContext &client_context_p,
                                                            ManagedAsyncWriteStreamTarget &target_p)
     : client_context(client_context_p), target(target_p) {
@@ -951,15 +1003,24 @@ bool ManagedAsyncWriteStreamQueue::IsAsync() const {
 }
 
 bool ManagedAsyncWriteStreamQueue::HasError() {
-	return write_queue->HasError();
+	if (write_queue->HasError()) {
+		return true;
+	}
+	{
+		lock_guard<mutex> guard(lock);
+		if (local_error) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void ManagedAsyncWriteStreamQueue::RegisterWrite(unique_ptr<AsyncWritePayload> payload, idx_t offset,
                                                  ScheduleMode schedule_mode) {
+	RethrowTaskError();
 	if (!payload || payload->Size() == 0) {
 		return;
 	}
-	RethrowTaskError();
 
 	auto write_size = payload->Size();
 	if (!write_queue->IsAsync()) {
@@ -977,6 +1038,9 @@ void ManagedAsyncWriteStreamQueue::RegisterWrite(unique_ptr<AsyncWritePayload> p
 	try {
 		{
 			lock_guard<mutex> guard(lock);
+			if (local_error) {
+				local_error->Throw();
+			}
 			VerifyOpen();
 			auto next_offset = ValidateRegistrationOffset(offset, write_size);
 			pending_writes.emplace_back(std::move(payload), offset);
@@ -1004,7 +1068,11 @@ void ManagedAsyncWriteStreamQueue::BeginBatch() {
 		VerifyOpen();
 		return;
 	}
+	RethrowTaskError();
 	lock_guard<mutex> guard(lock);
+	if (local_error) {
+		local_error->Throw();
+	}
 	VerifyOpen();
 	batch_depth++;
 }
@@ -1033,6 +1101,7 @@ void ManagedAsyncWriteStreamQueue::SchedulePendingWrites(SchedulePolicy policy) 
 		VerifyOpen();
 		return;
 	}
+	RethrowTaskError();
 	SchedulePendingWritesInternal(policy);
 }
 
@@ -1041,12 +1110,33 @@ void ManagedAsyncWriteStreamQueue::SchedulePendingWritesInternal(SchedulePolicy 
 		return;
 	}
 
+	lock_guard<mutex> submission_guard(submission_lock);
 	while (true) {
 		AsyncWriteRequest request;
-		if (!TakePendingWriteRequest(request, policy)) {
-			return;
+		try {
+			RethrowTaskError();
+			if (!TakePendingWriteRequest(request, policy)) {
+				return;
+			}
+		} catch (...) {
+			FailLocalScheduling(ErrorDataFromExceptionPtr(std::current_exception()));
+			RethrowTaskError();
 		}
-		write_queue->RegisterAccountedWrite(std::move(request));
+
+		auto request_size = request.Size();
+		ErrorData adoption_error;
+		auto adoption = write_queue->TryAdoptAccountedWrite(request, adoption_error);
+		if (adoption == ManagedAsyncWriteQueue::AccountedWriteAdoption::REJECTED) {
+			FailLocalScheduling(std::move(adoption_error), request_size);
+			RethrowTaskError();
+		}
+
+		try {
+			write_queue->SchedulePendingWrites(ManagedAsyncWriteQueue::SchedulePolicy::FORCE);
+		} catch (...) {
+			FailLocalScheduling(ErrorDataFromExceptionPtr(std::current_exception()));
+			RethrowTaskError();
+		}
 	}
 }
 
@@ -1151,6 +1241,9 @@ bool ManagedAsyncWriteStreamQueue::TakePendingWriteRequest(AsyncWriteRequest &re
 	};
 
 	lock_guard<mutex> guard(lock);
+	if (local_error) {
+		local_error->Throw();
+	}
 	if (pending_writes.empty() || batch_depth > 0) {
 		return false;
 	}
@@ -1177,17 +1270,28 @@ bool ManagedAsyncWriteStreamQueue::TakePendingWriteRequest(AsyncWriteRequest &re
 	}
 
 	auto write_offset = pending_writes.front().offset;
-	deque<PendingWrite> writes;
-	for (idx_t write_idx = 0; write_idx < end; write_idx++) {
-		writes.push_back(std::move(pending_writes.front()));
-		pending_writes.pop_front();
+	unique_ptr<AsyncWritePayload> payload;
+	if (write_mode == FileWriteMode::CONCURRENT_SEQUENTIAL) {
+		payload = CreateMaterializedPayload(end, selected_bytes);
+	} else {
+		deque<PendingWrite> writes;
+		for (idx_t write_idx = 0; write_idx < end; write_idx++) {
+			writes.push_back(std::move(pending_writes.front()));
+			pending_writes.pop_front();
+		}
+		payload = CreatePayload(std::move(writes), selected_bytes);
+	}
+	auto prepared_request = AsyncWriteRequest(std::move(payload), write_offset, std::move(completion));
+	if (write_mode == FileWriteMode::CONCURRENT_SEQUENTIAL) {
+		for (idx_t write_idx = 0; write_idx < end; write_idx++) {
+			pending_writes.pop_front();
+		}
 	}
 	D_ASSERT(pending_bytes >= selected_bytes);
 	pending_bytes -= selected_bytes;
 	submitted_bytes += selected_bytes;
 	submitted_requests++;
-	auto payload = CreatePayload(std::move(writes), selected_bytes);
-	request = AsyncWriteRequest(std::move(payload), write_offset, std::move(completion));
+	request = std::move(prepared_request);
 	return true;
 }
 
@@ -1204,6 +1308,36 @@ unique_ptr<AsyncWritePayload> ManagedAsyncWriteStreamQueue::CreatePayload(deque<
 	return make_uniq<CoalescedWritePayload>(client_context, std::move(writes), size);
 }
 
+unique_ptr<AsyncWritePayload> ManagedAsyncWriteStreamQueue::CreateMaterializedPayload(idx_t end, idx_t size) {
+	D_ASSERT(end > 0);
+	D_ASSERT(end <= pending_writes.size());
+	auto expected_offset = pending_writes.front().offset;
+	for (idx_t write_idx = 0; write_idx < end; write_idx++) {
+		auto &write = pending_writes[write_idx];
+		VerifyContiguousWrite(write, expected_offset);
+		expected_offset = NextWriteOffset(expected_offset, write.Size());
+	}
+
+	if (end == 1) {
+		auto &write = pending_writes.front();
+		auto data = write.payload->Ptr();
+		auto result = make_uniq<MaterializedWritePayload>(data, size);
+		result->TakeOwnership(std::move(write.payload));
+		return std::move(result);
+	}
+
+	auto data = BufferAllocator::Get(client_context).Allocate(size);
+	idx_t data_offset = 0;
+	for (idx_t write_idx = 0; write_idx < end; write_idx++) {
+		auto &write = pending_writes[write_idx];
+		auto write_size = write.Size();
+		memcpy(data.get() + data_offset, write.payload->Ptr(), write_size);
+		data_offset += write_size;
+	}
+	D_ASSERT(data_offset == size);
+	return make_uniq<MaterializedWritePayload>(std::move(data), size);
+}
+
 void ManagedAsyncWriteStreamQueue::CompleteSubmittedWrite(idx_t offset, idx_t size,
                                                           optional_ptr<const ErrorData> error) {
 	(void)offset;
@@ -1215,7 +1349,7 @@ void ManagedAsyncWriteStreamQueue::CompleteSubmittedWrite(idx_t offset, idx_t si
 		submitted_requests--;
 		D_ASSERT(submitted_bytes >= size);
 		submitted_bytes -= size;
-		refill = !error && !closed && batch_depth == 0 && !pending_writes.empty();
+		refill = !error && !closed && !local_error && batch_depth == 0 && !pending_writes.empty();
 		if (force_completion_refill) {
 			refill_policy = SchedulePolicy::FORCE;
 		}
@@ -1223,6 +1357,34 @@ void ManagedAsyncWriteStreamQueue::CompleteSubmittedWrite(idx_t offset, idx_t si
 	if (refill) {
 		SchedulePendingWritesInternal(refill_policy);
 	}
+}
+
+void ManagedAsyncWriteStreamQueue::FailLocalScheduling(ErrorData error, idx_t unaccepted_size) {
+	auto new_error = make_shared_ptr<ErrorData>(std::move(error));
+	idx_t discarded_bytes = 0;
+	{
+		lock_guard<mutex> guard(lock);
+		if (local_error) {
+			return;
+		}
+		if (unaccepted_size > 0) {
+			D_ASSERT(submitted_requests > 0);
+			submitted_requests--;
+			D_ASSERT(submitted_bytes >= unaccepted_size);
+			submitted_bytes -= unaccepted_size;
+		}
+		discarded_bytes = pending_bytes + unaccepted_size;
+		pending_writes.clear();
+		pending_bytes = 0;
+		batch_depth = 0;
+		force_completion_refill = false;
+		local_error = std::move(new_error);
+	}
+	write_queue->DiscardExternalPendingBytes(discarded_bytes);
+}
+
+shared_ptr<const ErrorData> ManagedAsyncWriteStreamQueue::GetLocalError() const {
+	return local_error;
 }
 
 void ManagedAsyncWriteStreamQueue::ApplyBackpressure() {
@@ -1389,6 +1551,9 @@ void ManagedAsyncWriteStreamQueue::Close() {
 void ManagedAsyncWriteStreamQueue::ResetNextOffset(idx_t offset) {
 	RethrowTaskError();
 	lock_guard<mutex> guard(lock);
+	if (local_error) {
+		local_error->Throw();
+	}
 	VerifyOpen();
 	VerifyDrained();
 	next_registration_offset = offset;
@@ -1399,6 +1564,14 @@ void ManagedAsyncWriteStreamQueue::ReleaseMemoryReservation() {
 }
 
 void ManagedAsyncWriteStreamQueue::RethrowTaskError() {
+	shared_ptr<const ErrorData> error;
+	{
+		lock_guard<mutex> guard(lock);
+		error = GetLocalError();
+	}
+	if (error) {
+		error->Throw();
+	}
 	write_queue->RethrowTaskError();
 }
 

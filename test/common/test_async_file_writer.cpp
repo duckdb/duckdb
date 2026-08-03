@@ -14,6 +14,35 @@
 
 using namespace duckdb;
 
+namespace duckdb {
+
+class ManagedAsyncWriteQueueTest {
+public:
+	static bool TryAdopt(ManagedAsyncWriteQueue &queue, AsyncWriteRequest &request, ErrorData &error) {
+		return queue.TryAdoptAccountedWrite(request, error) == ManagedAsyncWriteQueue::AccountedWriteAdoption::ACCEPTED;
+	}
+
+	static void AddExternalPendingBytes(ManagedAsyncWriteQueue &queue, idx_t size) {
+		queue.AddExternalPendingBytes(size);
+	}
+
+	static void DiscardExternalPendingBytes(ManagedAsyncWriteQueue &queue, idx_t size) {
+		queue.DiscardExternalPendingBytes(size);
+	}
+
+	static idx_t ExternalPendingBytes(ManagedAsyncWriteQueue &queue) {
+		lock_guard<mutex> guard(queue.lock);
+		return queue.external_pending_bytes;
+	}
+
+	static idx_t PendingBytes(ManagedAsyncWriteQueue &queue) {
+		lock_guard<mutex> guard(queue.lock);
+		return queue.pending_bytes;
+	}
+};
+
+} // namespace duckdb
+
 namespace {
 
 class TrackingWriteFileSystem : public LocalFileSystem {
@@ -236,14 +265,24 @@ public:
 			}
 		}
 
-		TrackingWriteFileSystem::Write(handle, buffer, nr_bytes, location);
-		{
-			lock_guard<mutex> guard(state_lock);
-			D_ASSERT(active_backend_writes > 0);
-			active_backend_writes--;
-			completed_offsets.push_back(location);
+		try {
+			TrackingWriteFileSystem::Write(handle, buffer, nr_bytes, location);
+			{
+				lock_guard<mutex> guard(state_lock);
+				D_ASSERT(active_backend_writes > 0);
+				active_backend_writes--;
+				completed_offsets.push_back(location);
+			}
+			state_cv.notify_all();
+		} catch (...) {
+			{
+				lock_guard<mutex> guard(state_lock);
+				D_ASSERT(active_backend_writes > 0);
+				active_backend_writes--;
+			}
+			state_cv.notify_all();
+			throw;
 		}
-		state_cv.notify_all();
 	}
 
 	bool WaitForBackendWrites(idx_t count) {
@@ -395,6 +434,60 @@ private:
 	string data;
 };
 
+class BlockingMaterializationState {
+public:
+	void Materialize() {
+		unique_lock<mutex> guard(lock);
+		entered = true;
+		cv.notify_all();
+		cv.wait(guard, [&]() { return released; });
+		if (fail) {
+			throw IOException("Injected payload materialization failure");
+		}
+	}
+
+	bool WaitForEntered() {
+		unique_lock<mutex> guard(lock);
+		return cv.wait_for(guard, std::chrono::seconds(5), [&]() { return entered; });
+	}
+
+	void Release(bool fail_p) {
+		{
+			lock_guard<mutex> guard(lock);
+			fail = fail_p;
+			released = true;
+		}
+		cv.notify_all();
+	}
+
+private:
+	mutex lock;
+	std::condition_variable cv;
+	bool entered = false;
+	bool released = false;
+	bool fail = false;
+};
+
+class BlockingMaterializationAsyncWriteBuffer : public AsyncWriteBuffer {
+public:
+	BlockingMaterializationAsyncWriteBuffer(string data_p, shared_ptr<BlockingMaterializationState> state_p)
+	    : data(std::move(data_p)), state(std::move(state_p)) {
+	}
+
+	data_ptr_t Ptr() override {
+		state->Materialize();
+		return data_ptr_cast(data.data());
+	}
+
+	idx_t Size() const override {
+		return data.size();
+	}
+
+private:
+	string data;
+	shared_ptr<BlockingMaterializationState> state;
+};
+
 class TrackingAsyncWriteTarget : public AsyncWriteTarget {
 public:
 	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override {
@@ -406,6 +499,16 @@ public:
 	mutex lock;
 	vector<string> writes;
 	vector<idx_t> offsets;
+};
+
+class FailingAsyncWriteTarget : public AsyncWriteTarget {
+public:
+	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override {
+		(void)buffer;
+		(void)size;
+		(void)offset;
+		throw IOException("Injected managed queue failure");
+	}
 };
 
 class BlockingAsyncWriteTarget : public AsyncWriteTarget {
@@ -540,6 +643,17 @@ static string ReadFile(const string &path) {
 	return result;
 }
 
+static string CaptureException(const std::function<void()> &action) {
+	try {
+		action();
+	} catch (const std::exception &ex) {
+		return ex.what();
+	} catch (...) {
+		return "unknown exception";
+	}
+	return string();
+}
+
 static unique_ptr<Connection> CreateConnectionWithAsyncThreads(DuckDB &db, idx_t async_threads = 1) {
 	auto con = make_uniq<Connection>(db);
 	REQUIRE_NO_FAIL(con->Query("SET async_threads=" + to_string(async_threads)));
@@ -651,6 +765,63 @@ TEST_CASE("ManagedAsyncWriteQueue accepts non-contiguous positional writes", "[a
 	}
 	REQUIRE(saw_first);
 	REQUIRE(saw_second);
+}
+
+TEST_CASE("ManagedAsyncWriteQueue reports accounted request adoption ownership", "[async_write_queue]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db);
+	{
+		TrackingAsyncWriteTarget target;
+		ManagedAsyncWriteQueue queue(*con->context, target);
+		idx_t completion_count = 0;
+		bool completion_error = false;
+		auto completion = [&](idx_t, idx_t, optional_ptr<const ErrorData> error) {
+			completion_count++;
+			completion_error = completion_error || error;
+		};
+		AsyncWriteRequest request(make_uniq<StringAsyncWriteBuffer>("abc"), 7, completion);
+
+		ManagedAsyncWriteQueueTest::AddExternalPendingBytes(queue, 3);
+		ErrorData acceptance_error;
+		auto adopted = ManagedAsyncWriteQueueTest::TryAdopt(queue, request, acceptance_error);
+		REQUIRE(adopted);
+		REQUIRE(!acceptance_error.HasError());
+		REQUIRE(request.payload == nullptr);
+		REQUIRE(ManagedAsyncWriteQueueTest::ExternalPendingBytes(queue) == 0);
+		REQUIRE(ManagedAsyncWriteQueueTest::PendingBytes(queue) == 3);
+
+		queue.SchedulePendingWrites(ManagedAsyncWriteQueue::SchedulePolicy::FORCE);
+		queue.Close();
+		REQUIRE(target.writes == vector<string> {"abc"});
+		REQUIRE(target.offsets == vector<idx_t> {7});
+		REQUIRE(completion_count == 1);
+		REQUIRE(!completion_error);
+	}
+
+	{
+		FailingAsyncWriteTarget target;
+		ManagedAsyncWriteQueue queue(*con->context, target);
+		queue.RegisterWrite(make_uniq<StringAsyncWriteBuffer>("failed"), 0);
+		auto wait_error = CaptureException([&]() { queue.WaitAll(); });
+		REQUIRE(wait_error.find("Injected managed queue failure") != string::npos);
+
+		idx_t completion_count = 0;
+		AsyncWriteRequest request(make_uniq<StringAsyncWriteBuffer>("abc"), 7,
+		                          [&](idx_t, idx_t, optional_ptr<const ErrorData>) { completion_count++; });
+		ManagedAsyncWriteQueueTest::AddExternalPendingBytes(queue, 3);
+		ErrorData rejection_error;
+		auto adopted = ManagedAsyncWriteQueueTest::TryAdopt(queue, request, rejection_error);
+		REQUIRE(!adopted);
+		REQUIRE(rejection_error.HasError());
+		REQUIRE(request.payload != nullptr);
+		REQUIRE(ManagedAsyncWriteQueueTest::ExternalPendingBytes(queue) == 3);
+		REQUIRE(ManagedAsyncWriteQueueTest::PendingBytes(queue) == 0);
+		REQUIRE(completion_count == 0);
+
+		ManagedAsyncWriteQueueTest::DiscardExternalPendingBytes(queue, 3);
+		auto close_error = CaptureException([&]() { queue.Close(); });
+		REQUIRE(close_error == wait_error);
+	}
 }
 
 static void TestQueuedDrainTaskCoversNewTinyTail(bool local_file, const string &path_name) {
@@ -1058,6 +1229,92 @@ TEST_CASE("AsyncFileWriter uses concurrent-sequential offsets without async thre
 	REQUIRE(fs.write_offsets == vector<idx_t> {0});
 	REQUIRE(ReadFile(path) == "abcdef");
 	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter stops concurrent-sequential publication after refill materialization failure",
+          "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 1);
+	ConcurrentSequentialWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_concurrent_sequential_materialization_error.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	auto first_size = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1;
+	auto second_size = AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD + 1;
+	auto materialization = make_shared_ptr<BlockingMaterializationState>();
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(first_size), 'a')));
+	auto first_entered = fs.WaitForBackendWrites(1);
+	writer.WriteData(make_uniq<BlockingMaterializationAsyncWriteBuffer>(
+	    string(UnsafeNumericCast<size_t>(second_size), 'b'), materialization));
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("tail"));
+
+	fs.ReleaseAllWrites();
+	auto materialization_entered = materialization->WaitForEntered();
+	std::atomic<bool> wait_started(false);
+	std::atomic<bool> wait_finished(false);
+	string wait_error;
+	std::thread wait_thread([&]() {
+		wait_started.store(true);
+		wait_error = CaptureException([&]() { writer.WaitAll(); });
+		wait_finished.store(true);
+	});
+	while (!wait_started.load()) {
+		std::this_thread::yield();
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	auto wait_blocked_on_materialization = !wait_finished.load();
+	materialization->Release(true);
+	wait_thread.join();
+
+	auto write_error = CaptureException([&]() { writer.WriteData(make_uniq<StringAsyncWriteBuffer>("later")); });
+	auto close_error = CaptureException([&]() { writer.Close(); });
+	auto repeated_close_error = CaptureException([&]() { writer.Close(); });
+
+	REQUIRE(first_entered);
+	REQUIRE(materialization_entered);
+	REQUIRE(wait_blocked_on_materialization);
+	REQUIRE(wait_error.find("Injected payload materialization failure") != string::npos);
+	REQUIRE(write_error == wait_error);
+	REQUIRE(close_error == wait_error);
+	REQUIRE(repeated_close_error == wait_error);
+	REQUIRE(fs.EnteredBackendWrites() == 1);
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+}
+
+TEST_CASE("AsyncFileWriter drains accepted concurrent-sequential writes before discarding a failed tail",
+          "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	ConcurrentSequentialWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_concurrent_sequential_accepted_error.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	auto write_size = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1;
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(write_size), 'a')));
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(string(UnsafeNumericCast<size_t>(write_size), 'b')));
+	auto accepted_writes_entered = fs.WaitForBackendWrites(2);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("tail"));
+
+	fs.fail_writes = true;
+	fs.ReleaseAllWrites();
+	auto close_error = CaptureException([&]() { writer.Close(); });
+	auto repeated_close_error = CaptureException([&]() { writer.Close(); });
+
+	REQUIRE(accepted_writes_entered);
+	REQUIRE(close_error.find("Injected async write failure") != string::npos);
+	REQUIRE(repeated_close_error == close_error);
+	REQUIRE(fs.EnteredBackendWrites() == 2);
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
 }
 
 TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drain", "[async_file_writer]") {
