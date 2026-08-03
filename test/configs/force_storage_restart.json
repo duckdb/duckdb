@@ -13,7 +13,8 @@
         "test/sql/table_function/register_external_resource.test",
         "test/sql/table_function/external_resource_logging.test",
         "test/sql/table_function/external_resource_discovery.test",
-        "test/sql/table_function/external_resource_discovery_error.test"
+        "test/sql/table_function/external_resource_discovery_error.test",
+        "test/sql/attach/external_resource_discovery.test"
       ]
     },
     {
