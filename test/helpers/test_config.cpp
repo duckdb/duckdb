@@ -92,7 +92,10 @@ static const TestConfigOption test_config_options[] = {
          LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
      nullptr},
     {"skip_compiled", "Skip compiled tests", LogicalType::BOOLEAN, nullptr},
-    {"skip_error_messages", "Skip compiled tests", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
+    {"ignore_error_messages", "Error messages that cause SQLLogic tests to be skipped",
+     LogicalType::LIST(LogicalType::VARCHAR), nullptr},
+    {"skip_error_messages", "Deprecated alias for ignore_error_messages", LogicalType::LIST(LogicalType::VARCHAR),
+     nullptr},
     {"sort_style", "Default sort style if none is configured in the test (none, rowsort, valuesort)",
      LogicalType::VARCHAR, TestConfiguration::CheckSortStyle},
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
@@ -413,9 +416,12 @@ vector<string> TestConfiguration::ExtensionToBeLoadedOnLoad() {
 	return res;
 }
 
-vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
+vector<string> TestConfiguration::GetIgnoreErrorMessages() {
 	vector<string> res;
-	auto entry = options.find("skip_error_messages");
+	auto entry = options.find("ignore_error_messages");
+	if (entry == options.end()) {
+		entry = options.find("skip_error_messages");
+	}
 	if (entry != options.end()) {
 		vector<Value> ext_list = ListValue::GetChildren(entry->second);
 
