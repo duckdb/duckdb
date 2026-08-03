@@ -5505,7 +5505,6 @@ SortKeyType EnumUtil::FromString<SortKeyType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetSourceResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SourceResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
-		{ static_cast<uint32_t>(SourceResultType::BATCH_ADVANCED), "BATCH_ADVANCED" },
 		{ static_cast<uint32_t>(SourceResultType::FINISHED), "FINISHED" },
 		{ static_cast<uint32_t>(SourceResultType::BLOCKED), "BLOCKED" }
 	};
@@ -5514,12 +5513,12 @@ const StringUtil::EnumStringLiteral *GetSourceResultTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value) {
-	return StringUtil::EnumToString(GetSourceResultTypeValues(), 4, "SourceResultType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSourceResultTypeValues(), 3, "SourceResultType", static_cast<uint32_t>(value));
 }
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value) {
-	return static_cast<SourceResultType>(StringUtil::StringToEnum(GetSourceResultTypeValues(), 4, "SourceResultType", value));
+	return static_cast<SourceResultType>(StringUtil::StringToEnum(GetSourceResultTypeValues(), 3, "SourceResultType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStarExpressionTypeValues() {

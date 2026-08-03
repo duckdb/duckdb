@@ -212,7 +212,7 @@ public:
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
 	//! This allows flushing of the current batch (e.g. to disk)
 	virtual SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
-	//! Propagates a minimum batch index change that is not followed by input for this local sink state
+	//! Called after NextBatch when the pipeline minimum advances without subsequent input for this local sink state
 	virtual SinkNextBatchType UpdateMinBatchIndex(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;

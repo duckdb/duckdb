@@ -105,6 +105,7 @@ public:
 private:
 	enum class PipelineInputChunkMode : uint8_t { PUSH_INPUT, RESUME_INPUT };
 	enum class SourceFinishNotificationState : uint8_t { PENDING, SENT };
+	enum class PendingBatchAdvanceState : uint8_t { NONE, NEXT_BATCH, MINIMUM_UPDATE };
 
 	//! The pipeline to process
 	Pipeline &pipeline;
@@ -162,7 +163,7 @@ private:
 	bool next_batch_blocked = false;
 	//! A source advanced its batch index without producing another chunk
 	optional_idx pending_source_batch_index;
-	bool pending_min_batch_update = false;
+	PendingBatchAdvanceState pending_batch_advance_state = PendingBatchAdvanceState::NONE;
 
 	//! Current operator being flushed
 	idx_t flushing_idx;
@@ -179,7 +180,7 @@ private:
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);
-	SourceResultType FetchFromSource(DataChunk &result);
+	SourceResultType FetchFromSource(DataChunk &result, bool &batch_index_advanced);
 
 	void FinishProcessing(int32_t operator_idx = -1);
 	void NotifySourceFinished();
@@ -202,6 +203,7 @@ private:
 	SinkNextBatchType NextBatch(OperatorPartitionData next_data, bool force = false,
 	                            optional_idx external_min_batch_index = optional_idx());
 	OperatorPartitionData ToPipelinePartitionData(const OperatorPartitionData &source_data) const;
+	idx_t MapExternalMinBatchIndex(optional_idx source_min_batch_index) const;
 
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
 	//! case of a blocked sink.

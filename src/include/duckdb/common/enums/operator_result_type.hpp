@@ -37,11 +37,10 @@ enum class OperatorFinalResultType : uint8_t { FINISHED, BLOCKED };
 //! SourceResultType is used to indicate the result of data being pulled out of a source.
 //! There are three possible results:
 //! HAVE_MORE_OUTPUT means the source has more output, this flag should only be set when data is returned, empty results
-//! empty output should only occur for BATCH_ADVANCED, FINISHED and BLOCKED
-//! BATCH_ADVANCED means the source moved to a later partition batch without producing a chunk
+//! empty output should only occur for FINISHED and BLOCKED
 //! FINISHED means the source is exhausted
 //! BLOCKED means the source is currently blocked, e.g. by some async I/O
-enum class SourceResultType : uint8_t { HAVE_MORE_OUTPUT, BATCH_ADVANCED, FINISHED, BLOCKED };
+enum class SourceResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED, BLOCKED };
 
 //! AsyncResultType is used to indicate the result of a AsyncResult, in the context of a wider operation being executed
 enum class AsyncResultType : uint8_t {

@@ -83,7 +83,7 @@ SourceResultType PhysicalCTEConsumerSource::GetDataInternal(ExecutionContext &co
 	auto &gstate = input.global_state.Cast<CTEConsumerGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<CTEConsumerLocalSourceState>();
 	return gstate.exchange->Scan(gstate.consumer_idx, chunk, *lstate.scan_state, lstate.exchange_batch_index,
-	                             input.interrupt_state);
+	                             input.batch_index_advanced, input.interrupt_state);
 }
 
 OperatorPartitionData PhysicalCTEConsumerSource::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
