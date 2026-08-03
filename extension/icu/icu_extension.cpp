@@ -20,11 +20,10 @@
 #include "include/icu-timebucket.hpp"
 #include "include/icu-timezone.hpp"
 #include "include/icu_extension.hpp"
-#include "unicode/calendar.h"
-#include "unicode/stringpiece.h"
-#include "unicode/timezone.h"
 #include "icu-helpers.hpp"
 #include "collation_collator.hpp"
+#include "calendar.hpp"
+#include "timezone.hpp"
 
 #include <cassert>
 
@@ -233,20 +232,13 @@ static ScalarFunction GetICUCollateFunction(const string &collation, const strin
 	return result;
 }
 
-unique_ptr<icu::TimeZone> GetKnownTimeZone(const string &tz_str) {
-	icu::StringPiece tz_name_utf8(tz_str);
-	const auto uid = icu::UnicodeString::fromUTF8(tz_name_utf8);
-	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
-	if (*tz != icu::TimeZone::getUnknown()) {
-		return tz;
-	}
-
-	return nullptr;
+unique_ptr<TimeZone> GetKnownTimeZone(const string &tz_str) {
+	return TimeZone::TryCreate(tz_str);
 }
 
-unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
-	duckdb::unique_ptr<icu::TimeZone> tz;
-	if (tz = GetKnownTimeZone(tz_str)) {
+unique_ptr<TimeZone> GetNormalizedTimeZone(string &tz_str) {
+	auto tz = GetKnownTimeZone(tz_str);
+	if (tz) {
 		return tz;
 	}
 
@@ -266,7 +258,6 @@ unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
 		auto sign = utc;
 		if (utc == '+') {
 			sign = '-';
-			;
 		} else if (utc == '-') {
 			sign = '+';
 		} else {
@@ -326,7 +317,7 @@ unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
 	return nullptr;
 }
 
-unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
+unique_ptr<TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
 	auto tz = GetNormalizedTimeZone(tz_str);
 	if (tz) {
 		return tz;
@@ -335,37 +326,23 @@ unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &ca
 	// Try to be friendlier
 	// Go through all the zone names and look for a case insensitive match
 	// If we don't find one, make a suggestion
-	// FIXME: this is very inefficient
-	UErrorCode status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
-	duckdb::unique_ptr<icu::StringEnumeration> tzs(icu::TimeZone::createEnumeration());
-	for (;;) {
-		auto long_id = tzs->snext(status);
-		if (U_FAILURE(status) || !long_id) {
-			break;
-		}
-		std::string candidate_tz_name;
-		long_id->toUTF8String(candidate_tz_name);
-		if (StringUtil::CIEquals(candidate_tz_name, tz_str)) {
+	for (const auto &candidate : TimeZone::GetAvailableIds()) {
+		if (StringUtil::CIEquals(candidate, tz_str)) {
 			// case insensitive match - return this timezone instead
-			tz_str = candidate_tz_name;
-			icu::StringPiece utf8(tz_str);
-			const auto tz_unicode_str = icu::UnicodeString::fromUTF8(utf8);
-			duckdb::unique_ptr<icu::TimeZone> insensitive_tz(icu::TimeZone::createTimeZone(tz_unicode_str));
-			return insensitive_tz;
+			tz_str = candidate;
+			return TimeZone::TryCreate(tz_str);
 		}
-
-		candidates.emplace_back(candidate_tz_name);
+		candidates.emplace_back(candidate);
 	}
 	return nullptr;
 }
 
-unique_ptr<icu::TimeZone> ICUHelpers::TryGetTimeZone(string &tz_str) {
+unique_ptr<TimeZone> ICUHelpers::TryGetTimeZone(string &tz_str) {
 	vector<string> candidates;
 	return GetTimeZoneInternal(tz_str, candidates);
 }
 
-unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_message) {
+unique_ptr<TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_message) {
 	vector<string> candidates;
 	auto tz = GetTimeZoneInternal(tz_str, candidates);
 	if (tz) {
@@ -389,13 +366,7 @@ static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parame
 }
 
 struct ICUCalendarData : public GlobalTableFunctionState {
-	ICUCalendarData() {
-		// All calendars are available in all locales
-		UErrorCode status = U_ZERO_ERROR;
-		calendars.reset(icu::Calendar::getKeywordValuesForLocale("calendar", icu::Locale::getDefault(), false, status));
-	}
-
-	duckdb::unique_ptr<icu::StringEnumeration> calendars;
+	idx_t offset = 0;
 };
 
 static duckdb::unique_ptr<FunctionData> ICUCalendarBind(ClientContext &context, TableFunctionBindInput &input,
@@ -413,68 +384,31 @@ static duckdb::unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContex
 
 static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<ICUCalendarData>();
-	idx_t index = 0;
+	const auto &types = Calendar::GetAvailableTypes();
 
 	// name, VARCHAR
 	auto &name_col = output.data[0];
 
-	while (index < STANDARD_VECTOR_SIZE) {
-		if (!data.calendars) {
-			break;
-		}
-
-		UErrorCode status = U_ZERO_ERROR;
-		auto calendar = data.calendars->snext(status);
-		if (U_FAILURE(status) || !calendar) {
-			break;
-		}
-
-		//	The calendar name is all we have
-		std::string utf8;
-		calendar->toUTF8String(utf8);
-		name_col.Append(Value(utf8));
-
+	idx_t index = 0;
+	while (index < STANDARD_VECTOR_SIZE && data.offset < types.size()) {
+		name_col.Append(Value(types[data.offset++]));
 		++index;
 	}
 }
 
 static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {
 	const auto name = parameter.Value::GetValueUnsafe<string>();
-	string locale_key = "@calendar=" + name;
-	icu::Locale locale(locale_key.c_str());
-
-	UErrorCode status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(locale, status));
-	if (!U_FAILURE(status) && name == cal->getType()) {
-		return;
-	}
-
-	//	Try to be friendlier
-	//	Go through all the calendar names and look for a case insensitive match
-	//	If we don't find one, make a suggestion
-	status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::StringEnumeration> calendars;
-	calendars.reset(icu::Calendar::getKeywordValuesForLocale("calendar", icu::Locale::getDefault(), false, status));
-
-	vector<string> candidates;
-	for (;;) {
-		auto calendar = calendars->snext(status);
-		if (U_FAILURE(status) || !calendar) {
-			break;
-		}
-
-		std::string utf8;
-		calendar->toUTF8String(utf8);
-		if (StringUtil::CIEquals(utf8, name)) {
-			parameter = Value(utf8);
+	//	Try to be friendlier: look for a case insensitive match, and if we don't find one,
+	//	make a suggestion
+	for (const auto &candidate : Calendar::GetAvailableTypes()) {
+		if (StringUtil::CIEquals(candidate, name)) {
+			parameter = Value(candidate);
 			return;
 		}
-
-		candidates.emplace_back(utf8);
 	}
 
-	string candidate_str =
-	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, name), "Candidate calendars");
+	string candidate_str = StringUtil::CandidatesMessage(
+	    StringUtil::TopNJaroWinkler(Calendar::GetAvailableTypes(), name), "Candidate calendars");
 
 	throw NotImplementedException("Unknown Calendar '%s'!\n%s", name, candidate_str);
 }
@@ -508,15 +442,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
-	icu::UnicodeString tz_id;
-	std::string tz_string;
-	tz->getID(tz_id).toUTF8String(tz_string);
-	// If the environment TZ is invalid, look for some alternatives
-	tz = GetNormalizedTimeZone(tz_string);
-	if (!tz) {
-		tz_string = "UTC";
-	}
+	auto tz = TimeZone::TryCreateDefault();
+	// If the host time zone is unknown, fall back to UTC
+	string tz_string = tz ? tz->GetId() : "UTC";
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
 	                          SetICUTimeZone);
 
@@ -533,9 +461,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	RegisterICUTimeZoneFunctions(loader);
 
 	// Calendars
-	UErrorCode status = U_ZERO_ERROR;
-	duckdb::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
-	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, Value(cal->getType()),
+	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, Value("gregorian"),
 	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
