@@ -152,7 +152,10 @@ idx_t BoundIndex::UnboundExpressionCount() const {
 }
 
 unique_ptr<Expression> BoundIndex::CopyUnboundExpression(const idx_t index) const {
-	return unbound_expressions[index]->Copy();
+	D_ASSERT(index < unbound_expressions.size());
+	auto &expression = unbound_expressions[index];
+	D_ASSERT(expression);
+	return expression->Copy();
 }
 
 unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_expr) {
