@@ -1284,14 +1284,16 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColIdTypeListIn
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMapTypeInternal(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<LogicalType> type;
+	optional<vector<LogicalType>> type {};
 	auto &type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (type_opt.HasResult()) {
-		auto type_items = ExtractParseResultsFromList(ExtractResultFromParens(type_opt.GetResult()));
-		for (auto &type_item : type_items) {
-			auto type_value = transformer.Transform<LogicalType>(type_item.get());
-			type.push_back(type_value);
+		vector<LogicalType> type_value;
+		auto type_value_items_1 = ExtractParseResultsFromList(ExtractResultFromParens(type_opt.GetResult()));
+		for (auto &type_value_item_1 : type_value_items_1) {
+			auto type_value_value_1 = transformer.Transform<LogicalType>(type_value_item_1.get());
+			type_value.push_back(type_value_value_1);
 		}
+		type = type_value;
 	}
 	auto result = TransformMapType(transformer, type);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
