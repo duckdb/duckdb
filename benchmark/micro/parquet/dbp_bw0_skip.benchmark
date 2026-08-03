@@ -1,0 +1,19 @@
+# name: benchmark/micro/parquet/dbp_bw0_skip.benchmark
+# description: Skip over bit-width-0 DELTA_BINARY_PACKED miniblocks (constant-delta columns)
+# group: [parquet]
+
+name DBP bit-width-0 Skip
+group micro
+subgroup parquet
+
+require parquet
+
+load
+PRAGMA threads=1;
+CREATE VIEW dbp_bw0_skip AS SELECT * FROM 'data/parquet-testing/dbp_bw0_skip.parquet';
+
+run
+SELECT SUM(v1) + SUM(v2) + SUM(v3) + SUM(v4), COUNT(*) FROM dbp_bw0_skip WHERE g = 0
+
+result II
+23596732948480	385024
