@@ -87,7 +87,7 @@ timestamp_tz_t ICUCalendarAdd::Operation(timestamp_tz_t timestamp, interval_t in
 	Timestamp::Convert(timestamp_t(us), d, t);
 
 	// Now use the calendar to add the other parts
-	calendar->SetTime(double(millis));
+	calendar->SetTime(millis);
 
 	// Break units apart to avoid overflow
 	auto interval_h = interval.micros / Interval::MICROS_PER_MSEC;
