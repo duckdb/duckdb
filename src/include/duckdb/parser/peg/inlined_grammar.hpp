@@ -160,7 +160,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"SetofType <- 'SETOF' Type\n"
 	"UnionType <- 'UNION' ColIdTypeList\n"
 	"ColIdTypeList <- Parens(List(ColIdType))\n"
-	"MapType <- 'MAP' Parens(List(Type))\n"
+	"MapType <- 'MAP' Parens(List(Type))?\n"
 	"TupleType <- 'TUPLE' Parens(List(Type))\n"
 	"ColIdType <- ColId Type\n"
 	"ArrayBounds <- SquareBracketsArray / ArrayKeyword\n"
