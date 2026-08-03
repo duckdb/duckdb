@@ -16,7 +16,11 @@ file can be used instead by passing a path.
 
 import os
 import re
+import shutil
+import struct
+import subprocess
 import sys
+import tempfile
 import urllib.request
 
 DATA_URL = "https://raw.githubusercontent.com/unicode-org/icu-data/main/tzdata/icunew/{version}/44/zoneinfo64.txt"
@@ -191,6 +195,73 @@ def emit_array(out, declaration, values, per_line):
     out.append("};")
 
 
+def emit_bytes(out, declaration, data, per_line=24):
+    out.append("const uint8_t %s[] = {" % declaration)
+    for start in range(0, len(data), per_line):
+        out.append("    " + " ".join("0x%02X," % byte for byte in data[start : start + per_line]))
+    out.append("};")
+
+
+def zone_blob(zone, final_rule):
+    """The data of one zone, laid out so that every array is aligned once it is decompressed.
+
+    The counts and the scalars come first, then the arrays with the widest element first, which
+    keeps each of them aligned without any padding between them.
+    """
+    header = struct.pack(
+        "<3I3i",
+        len(zone.transitions),
+        len(zone.type_offsets),
+        len(zone.links),
+        zone.final_raw,
+        zone.final_year,
+        final_rule,
+    )
+    assert len(header) % 8 == 0, len(header)
+    body = b"".join(struct.pack("<q", value) for value in zone.transitions)
+    body += b"".join(struct.pack("<ii", raw, dst) for raw, dst in zone.type_offsets)
+    body += b"".join(struct.pack("<H", value) for value in zone.links)
+    body += bytes(zone.type_map)
+    return header + body
+
+
+def compress_units(blobs, dictionary_size=16384):
+    """Compresses every zone on its own, against a dictionary trained on all of them.
+
+    A zone is decompressed when it is first used, so compressing them separately keeps that from
+    pulling in the others, and the shared dictionary is what keeps the small ones small - most
+    zones are only a few hundred bytes, which barely compresses on its own.
+    """
+    directory = tempfile.mkdtemp(prefix="tz-data-")
+    try:
+        paths = []
+        for index, blob in enumerate(blobs):
+            path = os.path.join(directory, "%04d.bin" % index)
+            with open(path, "wb") as handle:
+                handle.write(blob)
+            paths.append(path)
+        dictionary_path = os.path.join(directory, "dictionary")
+        subprocess.run(
+            ["zstd", "--train", "-q", "-f", "--maxdict=%d" % dictionary_size, "-o", dictionary_path] + paths,
+            check=True,
+            capture_output=True,
+        )
+        with open(dictionary_path, "rb") as handle:
+            dictionary = handle.read()
+        compressed = []
+        for path in paths:
+            subprocess.run(
+                ["zstd", "-q", "-f", "-19", "-D", dictionary_path, path, "-o", path + ".zst"],
+                check=True,
+                capture_output=True,
+            )
+            with open(path + ".zst", "rb") as handle:
+                compressed.append(handle.read())
+        return dictionary, compressed
+    finally:
+        shutil.rmtree(directory)
+
+
 def generate(version, zones, rules, windows_zones):
     rule_names = sorted(rules)
     rule_index = {name: i for i, name in enumerate(rule_names)}
@@ -211,44 +282,32 @@ def generate(version, zones, rules, windows_zones):
     out.append("namespace datetime {")
     out.append("")
 
-    # the per-zone data arrays
+    # the zone data, compressed one zone at a time against a shared dictionary
     data_zones = [zone for zone in zones if zone.link_target is None]
     data_index = {}
     for index, zone in enumerate(zones):
         if zone.link_target is None:
             data_index[index] = len(data_index)
-    for zone in data_zones:
-        suffix = data_index[zone.index]
-        if zone.transitions:
-            emit_array(out, "int64_t TRANSITIONS_%d" % suffix, ["%dLL" % value for value in zone.transitions], 8)
-            emit_array(out, "uint8_t TYPE_MAP_%d" % suffix, ["%d" % value for value in zone.type_map], 32)
-        emit_array(out, "TZTypeOffset TYPE_OFFSETS_%d" % suffix, ["{%d, %d}" % pair for pair in zone.type_offsets], 8)
-        if zone.links:
-            emit_array(out, "uint16_t LINKS_%d" % suffix, ["%d" % value for value in zone.links], 16)
-        out.append("")
 
-    out.append("const TZZoneData TZ_ZONE_DATA[] = {")
-    for zone in data_zones:
-        suffix = data_index[zone.index]
-        transitions = "TRANSITIONS_%d" % suffix if zone.transitions else "nullptr"
-        type_map = "TYPE_MAP_%d" % suffix if zone.transitions else "nullptr"
-        links = "LINKS_%d" % suffix if zone.links else "nullptr"
-        final_rule = rule_index[zone.final_rule] if zone.final_rule else -1
-        out.append(
-            "    {%s, %d, TYPE_OFFSETS_%d, %d, %s, %s, %d, %d, %d, %d},"
-            % (
-                transitions,
-                len(zone.transitions),
-                suffix,
-                len(zone.type_offsets),
-                type_map,
-                links,
-                len(zone.links),
-                final_rule,
-                zone.final_raw,
-                zone.final_year,
-            )
-        )
+    blobs = [zone_blob(zone, rule_index[zone.final_rule] if zone.final_rule else -1) for zone in data_zones]
+    dictionary, compressed = compress_units(blobs)
+
+    out.append("// The zone data is compressed with zstd. Every zone is compressed on its own so that")
+    out.append("// using one does not decompress the others, against a dictionary trained on all of")
+    out.append("// them, without which the small ones would barely compress.")
+    out.append("")
+    emit_bytes(out, "TZ_DICTIONARY", dictionary)
+    out.append("")
+    out.append("const idx_t TZ_DICTIONARY_SIZE = %d;" % len(dictionary))
+    out.append("")
+
+    for index, blob in enumerate(compressed):
+        emit_bytes(out, "TZ_UNIT_%d" % index, blob)
+    out.append("")
+
+    out.append("const TZUnit TZ_UNITS[] = {")
+    for index, blob in enumerate(compressed):
+        out.append("    {TZ_UNIT_%d, %d, %d}," % (index, len(blob), len(blobs[index])))
     out.append("};")
     out.append("")
 

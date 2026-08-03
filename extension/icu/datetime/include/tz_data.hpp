@@ -71,11 +71,25 @@ struct TZZone {
 	uint16_t data_index;
 };
 
+//! The compressed data of a single zone
+struct TZUnit {
+	const uint8_t *data;
+	uint32_t compressed_size;
+	//! The size the unit has once it is decompressed
+	uint32_t size;
+};
+
 //! The zone identifiers, sorted lexicographically by name
 extern const TZZone TZ_ZONES[];
 extern const idx_t TZ_ZONE_COUNT;
-//! The zone data, indexed by TZZone::data_index
-extern const TZZoneData TZ_ZONE_DATA[];
+//! The compressed zone data, indexed by TZZone::data_index
+extern const TZUnit TZ_UNITS[];
+//! The dictionary the units are compressed against
+extern const uint8_t TZ_DICTIONARY[];
+extern const idx_t TZ_DICTIONARY_SIZE;
+//! The data of a zone, decompressed the first time the zone is used and kept afterwards,
+//! so that the returned reference stays valid for as long as the process runs
+const TZZoneData &GetZoneData(uint16_t data_index);
 //! The recurring rules, indexed by TZZoneData::final_rule
 extern const TZRule TZ_RULES[];
 //! The Windows time zone names, sorted by name and region

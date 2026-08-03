@@ -27,6 +27,7 @@ set(ICU_EXTENSION_FILES
     datetime/japanese.cpp
     datetime/persian.cpp
     datetime/timezone.cpp
+    datetime/tz_loader.cpp
     datetime/generated/tz_data.cpp
     icu_extension.cpp
     icu-current.cpp

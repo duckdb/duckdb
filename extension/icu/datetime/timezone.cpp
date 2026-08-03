@@ -398,7 +398,7 @@ static bool TryParseCustomOffset(const string &id, int32_t &offset) {
 unique_ptr<TimeZone> TimeZone::TryCreate(const string &id) {
 	const auto zone = FindZone(id);
 	if (zone) {
-		return make_uniq<OlsonTimeZone>(id, TZ_ZONE_DATA[zone->data_index]);
+		return make_uniq<OlsonTimeZone>(id, GetZoneData(zone->data_index));
 	}
 	int32_t offset;
 	if (TryParseCustomOffset(id, offset)) {
@@ -429,7 +429,7 @@ vector<string> TimeZone::GetEquivalentIds(const string &id) {
 	if (!zone) {
 		return result;
 	}
-	const auto &data = TZ_ZONE_DATA[zone->data_index];
+	const auto &data = GetZoneData(zone->data_index);
 	for (idx_t i = 0; i < data.link_count; i++) {
 		result.emplace_back(TZ_ZONES[data.links[i]].name);
 	}
