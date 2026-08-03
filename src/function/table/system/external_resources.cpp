@@ -115,8 +115,8 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 	// Resolve the columns we consume by name; only `handle` is required.
 	idx_t handle_idx = DConstants::INVALID_INDEX, reference_idx = DConstants::INVALID_INDEX,
 	      state_idx = DConstants::INVALID_INDEX;
-	for (idx_t c = 0; c < res->names.size(); c++) {
-		auto col = StringUtil::Lower(res->names[c]);
+	for (idx_t c = 0; c < res->GetNames().size(); c++) {
+		auto col = StringUtil::Lower(res->ColumnName(c).GetIdentifierName());
 		if (col == "handle") {
 			handle_idx = c;
 		} else if (col == "reference") {

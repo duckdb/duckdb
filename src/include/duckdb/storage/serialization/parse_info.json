@@ -549,7 +549,7 @@
       {
         "id": 207,
         "name": "options",
-        "type": "case_insensitive_map_t<vector<Value>>"
+        "type": "identifier_map_t<vector<Value>>"
       },
       {
         "id": 208,
@@ -569,7 +569,7 @@
       {
         "id": 211,
         "name": "parsed_options",
-        "type": "case_insensitive_map_t<ParsedExpression*>"
+        "type": "identifier_map_t<ParsedExpression*>"
       }
     ],
     "methods": {

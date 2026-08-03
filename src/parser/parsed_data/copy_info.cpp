@@ -71,7 +71,7 @@ string CopyInfo::CopyOptionsToString() const {
 	for (auto &opt : parsed_options) {
 		auto &name = opt.first;
 		auto &expr = opt.second;
-		string option_string = name;
+		string option_string = name.GetIdentifierName();
 		if (expr) {
 			option_string += " " + expr->ToString();
 		}

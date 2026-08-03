@@ -33,12 +33,11 @@ struct CCopyFunctionInfo : public CopyFunctionInfo {
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
-Value MakeValueFromCopyOptions(const case_insensitive_map_t<vector<Value>> &options) {
+Value MakeValueFromCopyOptions(const identifier_map_t<vector<Value>> &options) {
 	child_list_t<duckdb::Value> option_list;
-	for (auto &entry : options) {
+	for (auto &[option_name, values] : options) {
 		// Uppercase the option name, to make it simpler for users
-		auto name = StringUtil::Upper(entry.first);
-		auto &values = entry.second;
+		auto name = StringUtil::Upper(option_name.GetIdentifierName());
 
 		if (values.empty()) {
 			// Null!

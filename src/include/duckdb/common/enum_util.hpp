@@ -578,6 +578,8 @@ enum class VacuumIndexStrategy : uint8_t;
 
 enum class VariantChildLookupMode : uint8_t;
 
+enum class VariantComparisonType : uint8_t;
+
 enum class VariantLogicalType : uint8_t;
 
 enum class VariantStatsShreddingState : uint8_t;
@@ -1421,6 +1423,9 @@ const char* EnumUtil::ToChars<VacuumIndexStrategy>(VacuumIndexStrategy value);
 
 template<>
 const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode value);
+
+template<>
+const char* EnumUtil::ToChars<VariantComparisonType>(VariantComparisonType value);
 
 template<>
 const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
@@ -2277,6 +2282,9 @@ VacuumIndexStrategy EnumUtil::FromString<VacuumIndexStrategy>(const char *value)
 
 template<>
 VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value);
+
+template<>
+VariantComparisonType EnumUtil::FromString<VariantComparisonType>(const char *value);
 
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);

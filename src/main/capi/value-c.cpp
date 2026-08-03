@@ -50,7 +50,7 @@ static bool ResultIsDecimal(duckdb_result *result, idx_t col) {
 	}
 	auto result_data = (duckdb::DuckDBResultData *)result->internal_data;
 	auto &query_result = result_data->result;
-	auto &source_type = query_result->types[col];
+	auto &source_type = query_result->GetTypes()[col];
 	return source_type.id() == duckdb::LogicalTypeId::DECIMAL;
 }
 

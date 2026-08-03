@@ -1,9 +1,14 @@
-#include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -15,7 +20,7 @@ static bool TryPrimitiveSelectOperation(const Vector &left, const Vector &right,
                                         optional_ptr<const SelectionVector> sel, idx_t count,
                                         optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
                                         optional_ptr<ValidityMask> null_mask, idx_t &result) {
-#ifdef DUCKDB_SMALLER_BINARY
+#if DUCKDB_SMALLER_BINARY(primitive_select_execute)
 	return false;
 #else
 	if (null_mask) {

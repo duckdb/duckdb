@@ -968,7 +968,7 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	// write a bunch of values to a CSV
 	auto csv_file = TestCreatePath("relationtest.csv");
 
-	case_insensitive_map_t<duckdb::vector<Value>> options;
+	identifier_map_t<duckdb::vector<Value>> options;
 	options["header"] = {duckdb::Value(0)};
 	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file, options);
 	REQUIRE_THROWS(con.Values("(1), (2), (3)", {"i"})->WriteCSV("//fef//gw/g/bla/bla", options));
@@ -1143,8 +1143,7 @@ TEST_CASE("Test materialized relations", "[relation_api]") {
 		auto result = con.Query("insert into tbl values ('test') returning *");
 		auto &materialized_result = result->Cast<MaterializedQueryResult>();
 		auto materialized_relation = make_shared_ptr<MaterializedRelation>(
-		    con.context, materialized_result.TakeCollection(), duckdb::StringsToIdentifiers(result->names),
-		    duckdb::Identifier("vw"));
+		    con.context, materialized_result.TakeCollection(), result->GetNames(), duckdb::Identifier("vw"));
 		materialized_relation->CreateView("vw");
 		materialized_relation.reset();
 
