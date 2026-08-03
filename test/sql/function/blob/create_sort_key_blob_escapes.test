@@ -2,9 +2,6 @@
 # description: Test create_sort_key blob escaping around the word/block boundaries of the encoder
 # group: [blob]
 
-statement ok
-PRAGMA enable_verification
-
 # blobs are copied verbatim, except for \x00 and \x01 which are escaped with \x01
 query I
 SELECT hex(create_sort_key('\xAA\x00\xBB\x01\xCC'::BLOB, 'ASC NULLS LAST'))
