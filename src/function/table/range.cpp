@@ -396,6 +396,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	range_function.cardinality = RangeCardinality;
 	range_function.is_repeatable = RangeIsRepeatable;
 	range_function.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
+	range_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 
 	// single argument range: (end) - implicit start = 0 and increment = 1
 	range.AddFunction(range_function);
@@ -411,6 +412,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	range_in_out.cardinality = RangeDateTimeCardinality;
 	range_in_out.is_repeatable = RangeIsRepeatable;
 	range_in_out.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
+	range_in_out.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 	range.AddFunction(range_in_out);
 	set.AddFunction(range);
 	// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS

@@ -235,6 +235,7 @@ struct ICUTableRange {
 		                             nullptr, Bind<false>, nullptr, RangeDateTimeLocalInit);
 		range_function.in_out_function = ICUTableRangeFunction<false>;
 		range_function.cardinality = Cardinality;
+		range_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 		range.AddFunction(range_function);
 
 		loader.RegisterFunction(range);
