@@ -1102,21 +1102,6 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		get.table_filters = std::move(remapped_filters);
 	}
 
-	if (has_pushdown_extract && !filter_expressions.empty()) {
-		// if we have performed pushdown extract and we have filter expressions we might have adjusted the filter
-		// expressions remove the table filters and push a filter, then try to re-push the filters with the new set of
-		// projections
-		auto filter = make_uniq_base<LogicalOperator, LogicalFilter>();
-		filter->expressions = std::move(filter_expressions);
-		filter->children.push_back(std::move(op_ref));
-		get.table_filters.ClearFilters();
-
-		// try to push filters back into the table scan
-		FilterPushdown pushdown(optimizer);
-		op_ref = pushdown.Rewrite(std::move(filter));
-		return;
-	}
-
 	if (!get.function.filter_prune) {
 		return;
 	}
@@ -1143,6 +1128,21 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 				break;
 			}
 		}
+	}
+
+	if (has_pushdown_extract && !filter_expressions.empty()) {
+		// if we have performed pushdown extract and we have filter expressions we might have adjusted the filter
+		// expressions remove the table filters and push a filter, then try to re-push the filters with the new set of
+		// projections
+		auto filter = make_uniq_base<LogicalOperator, LogicalFilter>();
+		filter->expressions = std::move(filter_expressions);
+		filter->children.push_back(std::move(op_ref));
+		get.table_filters.ClearFilters();
+
+		// try to push filters back into the table scan
+		FilterPushdown pushdown(optimizer);
+		op_ref = pushdown.Rewrite(std::move(filter));
+		return;
 	}
 }
 

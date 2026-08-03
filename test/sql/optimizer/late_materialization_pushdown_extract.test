@@ -1,0 +1,45 @@
+# name: test/sql/optimizer/late_materialization_pushdown_extract.test
+# description: Late materialization with struct pushdown-extract filters and pruned columns
+# group: [optimizer]
+
+statement ok
+SET late_materialization_max_rows = 100;
+
+statement ok
+CREATE TABLE lm_pushdown_extract (
+    id INTEGER,
+    s STRUCT(a INTEGER, b VARCHAR),
+    x INTEGER
+);
+
+statement ok
+INSERT INTO lm_pushdown_extract VALUES (1, {'a': 1, 'b': NULL}, 10), (2, {'a': 2, 'b': 'y'}, 20);
+
+# The RHS scan of the late materialization rewrites the struct filter into a pushdown-extract
+# column and prunes column x. The projection ids must be rebuilt against the pruned column set,
+# otherwise resolving the rowid column fails (issue #24252).
+query II
+SELECT s, x FROM lm_pushdown_extract WHERE s.a = 1 ORDER BY id LIMIT 1
+----
+{'a': 1, 'b': NULL}	10
+
+# Same query without late materialization returns the same result
+statement ok
+SET disabled_optimizers = 'LATE_MATERIALIZATION';
+
+query II
+SELECT s, x FROM lm_pushdown_extract WHERE s.a = 1 ORDER BY id LIMIT 1
+----
+{'a': 1, 'b': NULL}	10
+
+statement ok
+SET disabled_optimizers = '';
+
+# The query must actually be executed as a late materialization (rowid equality join)
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+query II
+EXPLAIN SELECT s, x FROM lm_pushdown_extract WHERE s.a = 1 ORDER BY id LIMIT 1
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*
