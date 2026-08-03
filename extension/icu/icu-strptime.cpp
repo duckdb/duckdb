@@ -165,22 +165,15 @@ struct ICUStrptime : public ICUDateFunc {
 			    str_arg, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
 				    ParseResult parsed;
 				    for (auto &format : info.formats) {
-					    if (!format.Parse(input, parsed)) {
-						    continue;
-					    }
-					    if (parsed.is_special) {
-						    return parsed.ToTimestamp();
-					    }
-					    // Set TZ first. The calendar is shared by all the rows,
-					    // so a row without a zone has to restore the bound one.
-					    if (parsed.tz.empty()) {
-						    calendar->setTimeZone(info.calendar->getTimeZone());
-					    } else if (!TrySetTimeZone(calendar, parsed.tz)) {
-						    continue;
-					    }
-					    timestamp_t result;
-					    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
-						    return result;
+					    if (format.Parse(input, parsed)) {
+						    if (parsed.is_special) {
+							    return parsed.ToTimestamp();
+						    } else if (TrySetTimeZone(calendar, parsed.tz.empty() ? info.tz_setting : parsed.tz)) {
+							    timestamp_t result;
+							    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
+								    return result;
+							    }
+						    }
 					    }
 				    }
 
