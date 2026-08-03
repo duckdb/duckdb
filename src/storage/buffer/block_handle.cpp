@@ -106,7 +106,7 @@ void BlockMemory::ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_heade
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
-bool BlockMemory::TrySpill(QueryContext context) {
+bool BlockMemory::TryWriteToTemporaryFile(QueryContext context) {
 	if (!GetBufferManager().HasTemporaryDirectory()) {
 		return false;
 	}
@@ -128,7 +128,8 @@ bool BlockMemory::CanUnload() const {
 		// There are active readers.
 		return false;
 	}
-	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() && !GetBufferManager().HasTemporaryDirectory()) {
+	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() && !CanDestroyOnTemporaryWriteFailure() &&
+	    !GetBufferManager().HasTemporaryDirectory()) {
 		// The block memory cannot be destroyed upon eviction/unpinning.
 		// In order to unload this block we need to write it to a temporary buffer.
 		// However, no temporary directory is specified, hence, we cannot unload.
@@ -147,15 +148,17 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, QueryContex
 	D_ASSERT(IsSwizzled());
 	D_ASSERT(CanUnload());
 
-	if (BlockId() >= MAXIMUM_BLOCK && WritesToTemporaryFile()) {
-		if (MustWriteToTemporaryFile()) {
+	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
+		if (CanDestroyOnTemporaryWriteFailure()) {
+			if (!TryWriteToTemporaryFile(context)) {
+				// The buffer could not be written to a temporary file, destroy it instead.
+				// Loads of this block now return an invalid handle, like any destroyed buffer.
+				SetDestroyBufferUpon(DestroyBufferUpon::EVICTION);
+			}
+		} else {
 			// This is a temporary block that cannot be destroyed upon evict/unpin.
 			// Thus, we write to it to a temporary file.
 			buffer_manager.WriteTemporaryBuffer(context, GetMemoryTag(), BlockId(), *GetBuffer());
-		} else if (!TrySpill(context)) {
-			// The buffer could not be written to a temporary file, destroy it instead.
-			// Loads of this block now return an invalid handle, like any destroyed buffer.
-			SetDestroyBufferUpon(DestroyBufferUpon::EVICTION);
 		}
 	}
 	memory_charge.Resize(0);
@@ -248,7 +251,7 @@ BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reus
 		block_manager.Read(context, *block);
 		memory.GetBuffer() = std::move(block);
 	} else {
-		if (!memory.WritesToTemporaryFile()) {
+		if (!memory.MustWriteToTemporaryFile()) {
 			// The buffer was destroyed upon unpin/evict, so there is no temporary buffer to read.
 			return BufferHandle();
 		}
