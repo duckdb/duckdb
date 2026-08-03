@@ -51,11 +51,11 @@ int64_t CopticEthiopicCalendar::HandleComputeMonthStart(int32_t eyear, int32_t m
 		month = month % 13 + 12;
 	}
 
-	return int64_t(GetEpochOffset())     // the day the first year starts on
-	       + 365LL * year                // the whole years
-	       + FloorDiv::Divide(year, 4LL) // their leap days
-	       + 30LL * month                // the whole months, which are all thirty days long
-	       - 1;                          // the day before the first of the month
+	return int64_t(GetEpochOffset())            // the day the first year starts on
+	       + 365 * year                         // the whole years
+	       + FloorDiv::Divide(year, int64_t(4)) // their leap days
+	       + 30 * month                         // the whole months, which are all thirty days long
+	       - 1;                                 // the day before the first of the month
 }
 
 void CopticEthiopicCalendar::HandleComputeFields(int32_t julian_day) {

@@ -14,8 +14,9 @@ int64_t Grego::FieldsToDay(int32_t year, int32_t month, int32_t dom) {
 	y--;
 
 	// the Julian calendar day, corrected to the Gregorian calendar and the month/day within the year
-	const int64_t julian = 365LL * y + FloorDiv::Divide(y, 4LL) + (JULIAN_1_CE - 3) + FloorDiv::Divide(y, 400LL) -
-	                       FloorDiv::Divide(y, 100LL) + 2 + DaysBeforeMonth(year, month) + dom;
+	const int64_t julian = 365 * y + FloorDiv::Divide(y, int64_t(4)) + (JULIAN_1_CE - 3) +
+	                       FloorDiv::Divide(y, int64_t(400)) - FloorDiv::Divide(y, int64_t(100)) + 2 +
+	                       DaysBeforeMonth(year, month) + dom;
 
 	return julian - JULIAN_1970_CE;
 }

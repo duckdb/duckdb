@@ -78,7 +78,7 @@ static bool IsPersianLeapYear(int32_t year) {
 
 //! The day the year starts on, relative to the epoch
 static int64_t FirstDayOfYear(int64_t year) {
-	auto julian_day = 365LL * (year - 1LL) + FloorDiv::Divide(8LL * year + 21, 33LL);
+	auto julian_day = 365 * (year - 1) + FloorDiv::Divide(8 * year + 21, int64_t(33));
 	if (year > PERSIAN_MIN_CORRECTION && IsCorrectedYear(year - 1)) {
 		julian_day--;
 	}
@@ -126,7 +126,7 @@ int32_t PersianCalendar::HandleGetExtendedYear() {
 
 void PersianCalendar::HandleComputeFields(int32_t julian_day) {
 	const auto days_since_epoch = int64_t(julian_day) - PERSIAN_EPOCH;
-	auto year = FloorDiv::Divide(33LL * days_since_epoch + 3LL, 12053LL) + 1LL;
+	auto year = FloorDiv::Divide(33 * days_since_epoch + 3, int64_t(12053)) + 1;
 	if (year > NumericLimits<int32_t>::Maximum() || year < NumericLimits<int32_t>::Minimum()) {
 		Fail();
 		return;

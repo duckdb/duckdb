@@ -53,7 +53,7 @@ int64_t GregorianCalendar::HandleComputeMonthStart(int32_t eyear, int32_t month,
 	auto is_leap = eyear % 4 == 0;
 	const int64_t y = int64_t(eyear) - 1;
 	// the Julian calendar day of the day before the first of January
-	int64_t julian_day = 365LL * y + FloorDiv::Divide(y, 4LL) + JULIAN_1_CE - 3LL;
+	int64_t julian_day = 365 * y + FloorDiv::Divide(y, int64_t(4)) + JULIAN_1_CE - 3;
 
 	is_gregorian = (eyear >= cutover_year);
 	if (invert_gregorian) {

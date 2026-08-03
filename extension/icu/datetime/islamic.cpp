@@ -49,12 +49,13 @@ int32_t IslamicCivilCalendar::HandleGetLimit(CalendarField field, LimitType type
 }
 
 int64_t IslamicCivilCalendar::YearStart(int32_t year) const {
-	return 354LL * (year - 1LL) + FloorDiv::Divide(3 + 11LL * year, 30LL);
+	return 354 * (int64_t(year) - 1) + FloorDiv::Divide(3 + 11 * int64_t(year), int64_t(30));
 }
 
 int64_t IslamicCivilCalendar::MonthStart(int32_t year, int32_t month) const {
 	// the months alternate between 30 and 29 days, which averages to 29.5
-	return int64_t(std::ceil(29.5 * month)) + 354LL * (year - 1LL) + FloorDiv::Divide(11LL * int64_t(year) + 3LL, 30LL);
+	return int64_t(std::ceil(29.5 * month)) + 354 * (int64_t(year) - 1) +
+	       FloorDiv::Divide(11 * int64_t(year) + 3, int64_t(30));
 }
 
 int64_t IslamicCivilCalendar::HandleComputeMonthStart(int32_t eyear, int32_t month, bool) const {
@@ -102,7 +103,7 @@ int32_t IslamicCivilCalendar::HandleGetExtendedYear() {
 
 void IslamicCivilCalendar::HandleComputeFields(int32_t julian_day) {
 	const auto days = int64_t(julian_day) - GetEpoch();
-	const auto year = FloorDiv::Divide(30LL * days + 10646LL, 10631LL);
+	const auto year = FloorDiv::Divide(30 * days + 10646, int64_t(10631));
 	auto month = int32_t(std::ceil((double(days) - 29 - double(YearStart(int32_t(year)))) / 29.5));
 	month = MinValue(month, 11);
 

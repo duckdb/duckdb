@@ -110,7 +110,7 @@ static int32_t MonthsInYear(int32_t year) {
 //! The day a year starts on, counted from the epoch. The festivals may not fall on certain days
 //! of the week, so the start of the year is postponed to avoid them.
 static int64_t StartOfYear(int32_t year, bool &failed) {
-	const auto months = FloorDiv::Divide(235LL * int64_t(year) - 234LL, 19LL);
+	const auto months = FloorDiv::Divide(235 * int64_t(year) - 234, int64_t(19));
 	auto fraction = months * MONTH_FRACT + BAHARAD;
 	auto day = months * 29LL + fraction / DAY_PARTS;
 	fraction = fraction % DAY_PARTS;

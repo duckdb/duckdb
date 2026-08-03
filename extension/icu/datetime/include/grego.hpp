@@ -118,7 +118,7 @@ struct Grego {
 	//! The number of days to add to a Julian calendar day to obtain the Gregorian calendar day
 	static int32_t GregorianShift(int32_t eyear) {
 		const int64_t y = static_cast<int64_t>(eyear) - 1;
-		return static_cast<int32_t>(FloorDiv::Divide(y, 400LL) - FloorDiv::Divide(y, 100LL) + 2);
+		return static_cast<int32_t>(FloorDiv::Divide(y, int64_t(400)) - FloorDiv::Divide(y, int64_t(100)) + 2);
 	}
 
 private:
