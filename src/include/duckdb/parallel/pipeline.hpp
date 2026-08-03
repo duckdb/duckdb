@@ -89,7 +89,7 @@ public:
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
 	//! The MetaPipeline that owns this Pipeline (set when the Pipeline is created)
 	optional_ptr<MetaPipeline> GetMetaPipeline() const;
-	vector<reference<Pipeline>> GetAllDependencies() ;
+	vector<reference<Pipeline>> GetAllDependencies();
 
 	void Ready();
 	void Reset();
