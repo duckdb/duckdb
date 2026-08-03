@@ -60,6 +60,12 @@ QuotedName	MixedCol
 statement ok
 DROP TABLE "QuotedName"
 
+# string literals are not folded
+query I
+SELECT 'MyString';
+----
+MyString
+
 # with capitalize_identifier back to false, preserve_identifier_case=false lowercases as before
 statement ok
 SET capitalize_identifier TO false;
@@ -74,3 +80,43 @@ query III
 SELECT duckdb_tables.schema_name, duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
 ----
 myschema	integers	i
+
+statement ok
+DROP SCHEMA myschema CASCADE
+
+# RESET restores the defaults
+statement ok
+SET capitalize_identifier TO true;
+
+statement ok
+RESET capitalize_identifier;
+
+query I
+SELECT value FROM duckdb_settings() WHERE name='capitalize_identifier'
+----
+false
+
+statement ok
+RESET preserve_identifier_case;
+
+query I
+SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
+----
+true
+
+# identifier case is preserved again once both settings are back to their defaults
+statement ok
+CREATE TABLE MyTable(i INTEGER);
+
+query I
+SELECT table_name FROM duckdb_tables;
+----
+MyTable
+
+statement ok
+DROP TABLE MyTable
+
+statement error
+SET capitalize_identifier TO 'bogus';
+----
+<REGEX>:.*Could not convert string 'bogus' to BOOL.*
