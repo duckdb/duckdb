@@ -249,12 +249,6 @@ ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
     : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p), generation(0) {
 }
 
-ExternalFileCache::~ExternalFileCache() {
-	// Object cache is shared among multiple database instances, explicitly disable the cache to evict all
-	// entries.
-	SetEnabled(false);
-}
-
 bool ExternalFileCache::IsEnabled() const {
 	return enable;
 }

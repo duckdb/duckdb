@@ -60,6 +60,45 @@ struct EvictableTestObject : public ObjectCacheEntry {
 	}
 };
 
+struct CountingTestObject : public ObjectCacheEntry {
+	CountingTestObject(bool &destroyed_p) : destroyed(destroyed_p) {
+	}
+	~CountingTestObject() override {
+		destroyed = true;
+	}
+	string GetObjectType() override {
+		return ObjectType();
+	}
+	static string ObjectType() {
+		return "CountingTestObject";
+	}
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
+	}
+
+	bool &destroyed;
+};
+
+struct CountingEvictableTestObject : public ObjectCacheEntry {
+	CountingEvictableTestObject(bool &destroyed_p, idx_t size_p) : destroyed(destroyed_p), size(size_p) {
+	}
+	~CountingEvictableTestObject() override {
+		destroyed = true;
+	}
+	string GetObjectType() override {
+		return ObjectType();
+	}
+	static string ObjectType() {
+		return "CountingEvictableTestObject";
+	}
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx(size);
+	}
+
+	bool &destroyed;
+	idx_t size;
+};
+
 struct ContextLifetimeTestObject : public ObjectCacheEntry {
 	ContextLifetimeTestObject(BoundObjectCache &owner_cache_p, BoundObjectCache &reentry_cache_p,
 	                          shared_ptr<BlockHandle> block_p, bool &destroyed_p, bool &reentered_cache_p)
@@ -240,19 +279,27 @@ TEST_CASE("ObjectCache drops all entries for a memory context", "[api][object_ca
 
 	auto &third_cache = ObjectCache::Get(*third.instance);
 	constexpr idx_t obj_size = 1024 * 1024;
+	bool first_non_evictable_destroyed = false;
+	bool first_evictable_destroyed = false;
 
 	REQUIRE(third_cache.GetMemoryDomainStats().is_empty);
-	ObjectCache::Get(*first->instance).Put("first-non-evictable", make_shared_ptr<TestObject>(1));
-	ObjectCache::Get(*first->instance).Put("first-evictable", make_shared_ptr<EvictableTestObject>(3, obj_size));
+	ObjectCache::Get(*first->instance)
+	    .Put("first-non-evictable", make_shared_ptr<CountingTestObject>(first_non_evictable_destroyed));
+	ObjectCache::Get(*first->instance)
+	    .Put("first-evictable", make_shared_ptr<CountingEvictableTestObject>(first_evictable_destroyed, obj_size));
 	ObjectCache::Get(*second->instance).Put("second-non-evictable", make_shared_ptr<TestObject>(2));
 
 	REQUIRE(third_cache.GetMemoryDomainStats().current_memory == obj_size);
 	REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 3);
+	REQUIRE(!first_non_evictable_destroyed);
+	REQUIRE(!first_evictable_destroyed);
 
 	{
 		auto &second_cache = ObjectCache::Get(*second->instance);
 		first.reset();
 
+		REQUIRE(first_non_evictable_destroyed);
+		REQUIRE(first_evictable_destroyed);
 		REQUIRE(second_cache.Get<TestObject>("second-non-evictable") != nullptr);
 		REQUIRE(third_cache.GetMemoryDomainStats().current_memory == 0);
 		REQUIRE(third_cache.GetMemoryDomainStats().entry_count == 1);
