@@ -672,7 +672,10 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			}
 		}
 
-		cte_entry.everything_referenced = cte_ref.chunk_types.size() == referenced_columns.size();
+		// The flag is shared by all readers, so only ever turn it on: an unaccounted reader needs every column
+		if (everything_referenced || cte_ref.chunk_types.size() == referenced_columns.size()) {
+			cte_entry.everything_referenced = true;
+		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:

@@ -36,6 +36,9 @@ public:
 	column_binding_map_t<unique_ptr<BaseStatistics>> GetStatisticsMap() {
 		return std::move(statistics_map);
 	}
+	bool HasRemovedAggregateChildren() const {
+		return removed_aggregate_children;
+	}
 
 	//! Whether or not we can propagate a cast between two types
 	static bool CanPropagateCast(const LogicalType &source, const LogicalType &target);
@@ -151,6 +154,8 @@ private:
 	};
 	//! The map of CTE index -> statistics of its definition
 	unordered_map<TableIndex, CTEStatistics> cte_stats_map;
+	//! Whether a statistics callback removed aggregate children, leaving columns that may now be unused
+	bool removed_aggregate_children = false;
 	//! Node stats for the current node
 	unique_ptr<NodeStatistics> node_stats;
 };
