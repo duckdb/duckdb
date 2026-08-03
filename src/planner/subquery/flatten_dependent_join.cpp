@@ -1,4 +1,5 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
 
 #include "duckdb/common/operator/add.hpp"
@@ -7,8 +8,8 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
-#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -19,7 +20,6 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 
 #include <algorithm>
 
@@ -262,10 +262,9 @@ static void FinalizeAnyJoins(unique_ptr<LogicalOperator> &plan) {
 	LogicalAnyJoin::TrySpecialize(plan);
 }
 
-unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
-                                                                          unique_ptr<LogicalOperator> plan,
-                                                                          optional_ptr<DelimJoinCTEOptimization>
-                                                                              optimization) {
+unique_ptr<LogicalOperator>
+FlattenDependentJoins::DecorrelateIndependent(Binder &binder, unique_ptr<LogicalOperator> plan,
+                                              optional_ptr<DelimJoinCTEOptimization> optimization) {
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});

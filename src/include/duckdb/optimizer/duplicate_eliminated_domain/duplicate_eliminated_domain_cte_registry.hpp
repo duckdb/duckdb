@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/optional.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/table_index.hpp"
 #include "duckdb/common/unordered_map.hpp"
 

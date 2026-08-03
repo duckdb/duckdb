@@ -14,13 +14,14 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/subquery/duplicate_eliminated_domain_properties.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
 
+enum class DuplicateEliminatedDomainCoverage : uint8_t { EXACT, SUPERSET };
 enum class KeyMatch : uint8_t { IDENTICAL, NULL_SAFE_EQUALITY, EQUALITY };
 
 struct EquivalentBinding {
@@ -398,12 +399,15 @@ private:
 		if (!result || result->column_distinct_count.size() < cte_ref.chunk_types.size()) {
 			return {};
 		}
-		result->column_distinct_count.erase(result->column_distinct_count.begin() + cte_ref.chunk_types.size(),
-		                                    result->column_distinct_count.end());
+		result->column_distinct_count.erase(
+		    result->column_distinct_count.begin() +
+		        NumericCast<vector<DistinctCount>::difference_type>(cte_ref.chunk_types.size()),
+		    result->column_distinct_count.end());
 		if (result->column_names.size() < cte_ref.chunk_types.size()) {
 			result->column_names.resize(cte_ref.chunk_types.size(), Identifier("duplicate_eliminated_cte"));
 		} else {
-			result->column_names.erase(result->column_names.begin() + cte_ref.chunk_types.size(),
+			result->column_names.erase(result->column_names.begin() +
+			                               NumericCast<vector<string>::difference_type>(cte_ref.chunk_types.size()),
 			                           result->column_names.end());
 		}
 		cte_stats.emplace(cte_ref.cte_index, *result);
@@ -412,77 +416,90 @@ private:
 
 	optional<RelationStats> ExtractInternal(LogicalOperator &op, unordered_set<TableIndex> &visiting_ctes) {
 		switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-		return RelationStatisticsHelper::ExtractGetStats(op.Cast<LogicalGet>(), context, false);
-	case LogicalOperatorType::LOGICAL_CTE_REF:
-		return ExtractCTERef(op.Cast<LogicalCTERef>(), visiting_ctes);
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		if (op.children.size() != 1) {
-			return {};
+		case LogicalOperatorType::LOGICAL_GET:
+			return RelationStatisticsHelper::ExtractGetStats(op.Cast<LogicalGet>(), context, false);
+		case LogicalOperatorType::LOGICAL_CTE_REF:
+			return ExtractCTERef(op.Cast<LogicalCTERef>(), visiting_ctes);
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			if (op.children.size() != 1) {
+				return {};
+			}
+			auto child = ExtractInternal(*op.children[0], visiting_ctes);
+			if (!child) {
+				return {};
+			}
+			if (child->cardinality > 0) {
+				child->cardinality = MaxValue<idx_t>(
+				    LossyNumericCast<idx_t>(double(child->cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
+				    1);
+			}
+			for (auto &distinct_count : child->column_distinct_count) {
+				distinct_count.distinct_count = MinValue(distinct_count.distinct_count, child->cardinality);
+			}
+			return child;
 		}
-		return ExtractInternal(*op.children[0], visiting_ctes);
-	}
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
-		if (op.children.size() != 1) {
-			return {};
-		}
+			if (op.children.size() != 1) {
+				return {};
+			}
 			auto child = ExtractInternal(*op.children[0], visiting_ctes);
 			if (!child) {
 				return {};
+			}
+			return RelationStatisticsHelper::ExtractProjectionStats(op.Cast<LogicalProjection>(), *child);
 		}
-		return RelationStatisticsHelper::ExtractProjectionStats(op.Cast<LogicalProjection>(), *child);
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		if (op.children.size() != 1) {
-			return {};
-		}
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			if (op.children.size() != 1) {
+				return {};
+			}
 			auto child = ExtractInternal(*op.children[0], visiting_ctes);
 			if (!child) {
 				return {};
+			}
+			return RelationStatisticsHelper::ExtractAggregationStats(op.Cast<LogicalAggregate>(), *child);
 		}
-		return RelationStatisticsHelper::ExtractAggregationStats(op.Cast<LogicalAggregate>(), *child);
-	}
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		if (op.children.size() != 2 || (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI)) {
-			return {};
-		}
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			auto &join = op.Cast<LogicalComparisonJoin>();
+			if (op.children.size() != 2 || (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI)) {
+				return {};
+			}
 			auto left = ExtractInternal(*op.children[0], visiting_ctes);
 			auto right = ExtractInternal(*op.children[1], visiting_ctes);
 			if (!left || !right) {
 				return {};
-		}
-		RelationStats result;
-		result.cardinality = join.join_type == JoinType::SEMI
-		                         ? left->cardinality
-		                         : MaxValue<idx_t>(left->cardinality, right->cardinality);
-		auto output_bindings = op.GetColumnBindings();
-		auto left_bindings = op.children[0]->GetColumnBindings();
-		auto right_bindings = op.children[1]->GetColumnBindings();
-		for (auto &output_binding : output_bindings) {
-			optional<DistinctCount> distinct_count;
-			for (idx_t binding_idx = 0; binding_idx < left_bindings.size(); binding_idx++) {
-				if (left_bindings[binding_idx] == output_binding && binding_idx < left->column_distinct_count.size()) {
-					distinct_count = left->column_distinct_count[binding_idx];
-					break;
-				}
 			}
-			if (!distinct_count) {
-				for (idx_t binding_idx = 0; binding_idx < right_bindings.size(); binding_idx++) {
-					if (right_bindings[binding_idx] == output_binding &&
-					    binding_idx < right->column_distinct_count.size()) {
-						distinct_count = right->column_distinct_count[binding_idx];
+			RelationStats result;
+			result.cardinality = join.join_type == JoinType::SEMI
+			                         ? left->cardinality
+			                         : MaxValue<idx_t>(left->cardinality, right->cardinality);
+			auto output_bindings = op.GetColumnBindings();
+			auto left_bindings = op.children[0]->GetColumnBindings();
+			auto right_bindings = op.children[1]->GetColumnBindings();
+			for (auto &output_binding : output_bindings) {
+				optional<DistinctCount> distinct_count;
+				for (idx_t binding_idx = 0; binding_idx < left_bindings.size(); binding_idx++) {
+					if (left_bindings[binding_idx] == output_binding &&
+					    binding_idx < left->column_distinct_count.size()) {
+						distinct_count = left->column_distinct_count[binding_idx];
 						break;
 					}
 				}
+				if (!distinct_count) {
+					for (idx_t binding_idx = 0; binding_idx < right_bindings.size(); binding_idx++) {
+						if (right_bindings[binding_idx] == output_binding &&
+						    binding_idx < right->column_distinct_count.size()) {
+							distinct_count = right->column_distinct_count[binding_idx];
+							break;
+						}
+					}
+				}
+				if (!distinct_count) {
+					return {};
+				}
+				distinct_count->distinct_count = MinValue(distinct_count->distinct_count, result.cardinality);
+				result.column_distinct_count.push_back(*distinct_count);
+				result.column_names.emplace_back("duplicate_eliminated_domain");
 			}
-			if (!distinct_count) {
-				return {};
-			}
-			distinct_count->distinct_count = MinValue(distinct_count->distinct_count, result.cardinality);
-			result.column_distinct_count.push_back(*distinct_count);
-			result.column_names.emplace_back("duplicate_eliminated_domain");
-		}
 			result.stats_initialized = true;
 			return result;
 		}
@@ -503,7 +520,7 @@ private:
 		}
 		default:
 			return {};
-	}
+		}
 	}
 
 private:
@@ -592,9 +609,234 @@ static bool FindPayloadKeyIndices(LogicalOperator &op, const vector<unique_ptr<E
 	return true;
 }
 
+struct CTEKeySource {
+	TableIndex cte_index;
+	vector<idx_t> column_indices;
+};
+
+static optional<CTEKeySource> TraceBindingsToCTE(LogicalOperator &op, vector<ColumnBinding> bindings) {
+	reference<LogicalOperator> current = op;
+	while (current.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &projection = current.get().Cast<LogicalProjection>();
+		if (projection.children.size() != 1) {
+			return {};
+		}
+		auto output_bindings = projection.GetColumnBindings();
+		for (auto &binding : bindings) {
+			auto entry = std::find(output_bindings.begin(), output_bindings.end(), binding);
+			if (entry == output_bindings.end()) {
+				return {};
+			}
+			auto expression_idx = NumericCast<idx_t>(entry - output_bindings.begin());
+			if (!GetBinding(*projection.expressions[expression_idx], binding)) {
+				return {};
+			}
+		}
+		current = *projection.children[0];
+	}
+	if (current.get().type != LogicalOperatorType::LOGICAL_CTE_REF) {
+		return {};
+	}
+	auto &cte_ref = current.get().Cast<LogicalCTERef>();
+	vector<idx_t> column_indices;
+	column_indices.reserve(bindings.size());
+	for (auto &binding : bindings) {
+		if (binding.table_index != cte_ref.table_index || binding.column_index >= cte_ref.chunk_types.size()) {
+			return {};
+		}
+		column_indices.push_back(binding.column_index);
+	}
+	return CTEKeySource {cte_ref.cte_index, std::move(column_indices)};
+}
+
+struct DomainKeyMapping {
+	idx_t domain_index;
+	ColumnBinding retained_binding;
+};
+
+class EquivalentSourceDomainAnalyzer {
+public:
+	EquivalentSourceDomainAnalyzer(CTEKeySource payload_source_p, TableIndex domain_cte_index_p)
+	    : payload_source(std::move(payload_source_p)), domain_cte_index(domain_cte_index_p) {
+	}
+
+	bool Analyze(LogicalOperator &rhs) {
+		return Analyze(rhs, false) && found_grouped_restriction;
+	}
+
+private:
+	optional_ptr<LogicalCTERef> GetGeneratedRef(LogicalOperator &op) const {
+		if (op.type != LogicalOperatorType::LOGICAL_CTE_REF) {
+			return nullptr;
+		}
+		auto &cte_ref = op.Cast<LogicalCTERef>();
+		return cte_ref.cte_index == domain_cte_index ? optional_ptr<LogicalCTERef>(cte_ref) : nullptr;
+	}
+
+	bool ValidateMappings(LogicalOperator &retained, LogicalCTERef &domain_ref,
+	                      const vector<DomainKeyMapping> &mappings) const {
+		if (domain_ref.chunk_types.size() != payload_source.column_indices.size() ||
+		    mappings.size() != payload_source.column_indices.size()) {
+			return false;
+		}
+		vector<ColumnBinding> retained_bindings(mappings.size());
+		vector<bool> found(mappings.size(), false);
+		for (auto &mapping : mappings) {
+			if (mapping.domain_index >= found.size() || found[mapping.domain_index]) {
+				return false;
+			}
+			found[mapping.domain_index] = true;
+			retained_bindings[mapping.domain_index] = mapping.retained_binding;
+		}
+		auto retained_source = TraceBindingsToCTE(retained, std::move(retained_bindings));
+		return retained_source && retained_source->cte_index == payload_source.cte_index &&
+		       retained_source->column_indices == payload_source.column_indices;
+	}
+
+	bool AnalyzeComparisonJoin(LogicalComparisonJoin &join, bool under_grouping_operator) {
+		if (join.children.size() != 2) {
+			return false;
+		}
+		auto left_domain = GetGeneratedRef(*join.children[0]);
+		auto right_domain = GetGeneratedRef(*join.children[1]);
+		if (bool(left_domain) == bool(right_domain)) {
+			return false;
+		}
+		auto domain_idx = left_domain ? 0 : 1;
+		auto &domain_ref = left_domain ? *left_domain : *right_domain;
+		auto &retained = *join.children[1 - domain_idx];
+		if (under_grouping_operator) {
+			vector<DomainKeyMapping> mappings;
+			mappings.reserve(join.conditions.size());
+			for (auto &condition : join.conditions) {
+				if (!condition.IsComparison() ||
+				    (condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL &&
+				     condition.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+					return false;
+				}
+				ColumnBinding left_binding;
+				ColumnBinding right_binding;
+				if (!GetBinding(condition.GetLHS(), left_binding) || !GetBinding(condition.GetRHS(), right_binding)) {
+					return false;
+				}
+				auto left_generated = left_binding.table_index == domain_ref.table_index;
+				auto right_generated = right_binding.table_index == domain_ref.table_index;
+				if (left_generated == right_generated) {
+					return false;
+				}
+				auto &generated = left_generated ? left_binding : right_binding;
+				mappings.push_back({generated.column_index, left_generated ? right_binding : left_binding});
+			}
+			if (!ValidateMappings(retained, domain_ref, mappings)) {
+				return false;
+			}
+			found_grouped_restriction = true;
+		}
+		return Analyze(retained, under_grouping_operator);
+	}
+
+	bool AnalyzeFilterCrossProduct(LogicalFilter &filter, bool under_grouping_operator) {
+		if (filter.HasProjectionMap() || filter.children.size() != 1 ||
+		    filter.children[0]->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT ||
+		    filter.children[0]->children.size() != 2) {
+			return false;
+		}
+		auto &cross_product = *filter.children[0];
+		auto left_domain = GetGeneratedRef(*cross_product.children[0]);
+		auto right_domain = GetGeneratedRef(*cross_product.children[1]);
+		if (bool(left_domain) == bool(right_domain)) {
+			return false;
+		}
+		auto domain_idx = left_domain ? 0 : 1;
+		auto &domain_ref = left_domain ? *left_domain : *right_domain;
+		auto &retained = *cross_product.children[1 - domain_idx];
+		if (under_grouping_operator) {
+			vector<DomainKeyMapping> mappings;
+			mappings.reserve(filter.expressions.size());
+			for (auto &expression : filter.expressions) {
+				if (!BoundComparisonExpression::IsComparison(*expression) ||
+				    (expression->GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+				     expression->GetExpressionType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM)) {
+					return false;
+				}
+				auto &comparison = expression->Cast<BoundFunctionExpression>();
+				ColumnBinding left_binding;
+				ColumnBinding right_binding;
+				if (!GetBinding(BoundComparisonExpression::Left(comparison), left_binding) ||
+				    !GetBinding(BoundComparisonExpression::Right(comparison), right_binding)) {
+					return false;
+				}
+				auto left_generated = left_binding.table_index == domain_ref.table_index;
+				auto right_generated = right_binding.table_index == domain_ref.table_index;
+				if (left_generated == right_generated) {
+					return false;
+				}
+				auto &generated = left_generated ? left_binding : right_binding;
+				mappings.push_back({generated.column_index, left_generated ? right_binding : left_binding});
+			}
+			if (!ValidateMappings(retained, domain_ref, mappings)) {
+				return false;
+			}
+			found_grouped_restriction = true;
+		}
+		return Analyze(retained, under_grouping_operator);
+	}
+
+	bool Analyze(LogicalOperator &op, bool under_grouping_operator) {
+		if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN && op.children.size() == 2 &&
+		    (GetGeneratedRef(*op.children[0]) || GetGeneratedRef(*op.children[1]))) {
+			return AnalyzeComparisonJoin(op.Cast<LogicalComparisonJoin>(), under_grouping_operator);
+		}
+		if (op.type == LogicalOperatorType::LOGICAL_FILTER && op.children.size() == 1 &&
+		    op.children[0]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT &&
+		    op.children[0]->children.size() == 2 &&
+		    (GetGeneratedRef(*op.children[0]->children[0]) || GetGeneratedRef(*op.children[0]->children[1]))) {
+			return AnalyzeFilterCrossProduct(op.Cast<LogicalFilter>(), under_grouping_operator);
+		}
+		if (GetGeneratedRef(op)) {
+			return false;
+		}
+		auto child_under_grouping =
+		    under_grouping_operator || op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY;
+		for (auto &child : op.children) {
+			if (!Analyze(*child, child_under_grouping)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+private:
+	CTEKeySource payload_source;
+	TableIndex domain_cte_index;
+	bool found_grouped_restriction = false;
+};
+
+bool DuplicateEliminatedDomainAnalyzer::CanEliminateEquivalentSourceDomain(LogicalComparisonJoin &join,
+                                                                           LogicalOperator &rhs,
+                                                                           TableIndex domain_cte_index) {
+	if (join.children.empty() || join.duplicate_eliminated_columns.empty()) {
+		return false;
+	}
+	vector<ColumnBinding> payload_key_bindings;
+	payload_key_bindings.reserve(join.duplicate_eliminated_columns.size());
+	for (auto &key : join.duplicate_eliminated_columns) {
+		ColumnBinding binding;
+		if (!GetBinding(*key, binding)) {
+			return false;
+		}
+		payload_key_bindings.push_back(binding);
+	}
+	auto payload_source = TraceBindingsToCTE(*join.children[0], std::move(payload_key_bindings));
+	if (!payload_source) {
+		return false;
+	}
+	EquivalentSourceDomainAnalyzer analyzer(std::move(*payload_source), domain_cte_index);
+	return analyzer.Analyze(rhs);
+}
+
 static optional_idx FindBestCandidate(RelationStatsExtractor &stats_extractor, LogicalOperator &payload,
-                                      const vector<unique_ptr<Expression>> &keys,
-                                      const BindingEquivalence &equivalence,
+                                      const vector<unique_ptr<Expression>> &keys, const BindingEquivalence &equivalence,
                                       vector<AnalyzedCandidate> &candidates, bool allow_superset,
                                       idx_t &payload_cardinality, idx_t &payload_domain_cardinality) {
 	auto payload_stats = stats_extractor.Extract(payload);
@@ -623,8 +865,8 @@ static optional_idx FindBestCandidate(RelationStatsExtractor &stats_extractor, L
 			continue;
 		}
 		auto source_stats = stats_extractor.Extract(*candidate.source.get());
-		auto domain_estimate = TryEstimateDomainCardinality(stats_extractor, *candidate.source.get(), candidate.key_indices,
-		                                                         false);
+		auto domain_estimate =
+		    TryEstimateDomainCardinality(stats_extractor, *candidate.source.get(), candidate.key_indices, false);
 		if (!source_stats || !source_stats->stats_initialized || !domain_estimate.IsValid()) {
 			continue;
 		}
@@ -659,8 +901,7 @@ static optional_idx FindBestCandidate(RelationStatsExtractor &stats_extractor, L
 optional<DuplicateEliminatedDomainCandidate>
 DuplicateEliminatedDomainAnalyzer::FindBest(ClientContext &context,
                                             const DuplicateEliminatedDomainCTERegistry &cte_registry,
-                                            LogicalComparisonJoin &join,
-                                            bool can_evaluate_additional_groups) {
+                                            LogicalComparisonJoin &join, bool can_evaluate_additional_groups) {
 	if (join.children.empty() || join.duplicate_eliminated_columns.empty()) {
 		return {};
 	}
@@ -672,33 +913,31 @@ DuplicateEliminatedDomainAnalyzer::FindBest(ClientContext &context,
 	RelationStatsExtractor stats_extractor(context, cte_registry);
 	idx_t payload_cardinality;
 	idx_t payload_domain_cardinality;
-	auto selected_index = FindBestCandidate(stats_extractor, *join.children[0], join.duplicate_eliminated_columns,
-	                                        equivalence, candidates,
-	                                        can_evaluate_additional_groups, payload_cardinality,
-	                                        payload_domain_cardinality);
+	auto selected_index =
+	    FindBestCandidate(stats_extractor, *join.children[0], join.duplicate_eliminated_columns, equivalence,
+	                      candidates, can_evaluate_additional_groups, payload_cardinality, payload_domain_cardinality);
 	if (!selected_index.IsValid()) {
 		return {};
 	}
 	auto &selected = candidates[selected_index.GetIndex()];
 	D_ASSERT(can_evaluate_additional_groups || selected.coverage == DuplicateEliminatedDomainCoverage::EXACT);
 	return DuplicateEliminatedDomainCandidate(
-	    *selected.source.get(), std::move(selected.source_path), std::move(selected.key_indices), selected.coverage,
-	    selected.source_cardinality, selected.domain_cardinality, payload_cardinality, payload_domain_cardinality,
-	    DuplicateEliminatedDomainProperties::HasNonJoinSelection(*selected.source.get()));
+	    *selected.source.get(), std::move(selected.source_path), std::move(selected.key_indices),
+	    selected.source_cardinality, selected.domain_cardinality, payload_cardinality, payload_domain_cardinality);
 }
 
 optional_ptr<unique_ptr<LogicalOperator>>
 DuplicateEliminatedDomainCandidate::TryResolveSource(unique_ptr<LogicalOperator> &payload) const {
-	auto source = &payload;
+	reference<unique_ptr<LogicalOperator>> source = payload;
 	for (auto child_idx : source_path) {
-		if (child_idx >= (*source)->children.size()) {
+		if (child_idx >= source.get()->children.size()) {
 			return nullptr;
 		}
-		source = &(*source)->children[child_idx];
+		source = source.get()->children[child_idx];
 	}
-	(*source)->ResolveOperatorTypes();
-	if ((*source)->type != source_type || (*source)->types != source_types ||
-	    (*source)->GetColumnBindings() != source_bindings) {
+	source.get()->ResolveOperatorTypes();
+	if (source.get()->type != source_type || source.get()->types != source_types ||
+	    source.get()->GetColumnBindings() != source_bindings) {
 		return nullptr;
 	}
 	for (auto key_idx : key_indices) {
@@ -706,7 +945,7 @@ DuplicateEliminatedDomainCandidate::TryResolveSource(unique_ptr<LogicalOperator>
 			return nullptr;
 		}
 	}
-	return source;
+	return source.get();
 }
 
 } // namespace duckdb

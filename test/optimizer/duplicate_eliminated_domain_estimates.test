@@ -56,9 +56,47 @@ JOIN user_engagement u ON u.id IN (
 query II
 EXPLAIN SELECT * FROM dedup_est_pair_in;
 ----
-logical_opt	<REGEX>:.*Join Type: SEMI.*Cross Product[^~]*~[1-9][0-9,]* rows.*
+logical_opt	<REGEX>:.*Join Type: SEMI.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<REGEX>:.*Cross Product[^~]*~[1-9][0-9,]* rows.*
 
 query II
 EXPLAIN SELECT * FROM dedup_est_pair_in;
 ----
 logical_opt	<!REGEX>:.*Join Type: RIGHT_SEMI.*
+
+# Safety to evaluate additional groups does not imply that globally aggregating a large relation is profitable. Keep
+# the observed one-key domain below the aggregate.
+statement ok
+CREATE TABLE dedup_tiny_outer(k INTEGER);
+
+statement ok
+INSERT INTO dedup_tiny_outer VALUES (1);
+
+statement ok
+CREATE TABLE dedup_tiny_measure(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO dedup_tiny_measure SELECT i % 1000, i FROM range(10000) r(i);
+
+statement ok
+ANALYZE dedup_tiny_outer;
+
+statement ok
+ANALYZE dedup_tiny_measure;
+
+query II
+SELECT k, (SELECT sum(v) FROM dedup_tiny_measure m WHERE m.k = o.k)
+FROM dedup_tiny_outer o;
+----
+1	45010
+
+query II
+EXPLAIN
+SELECT k, (SELECT sum(v) FROM dedup_tiny_measure m WHERE m.k = o.k)
+FROM dedup_tiny_outer o;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*Join Type: (RIGHT_)?SEMI.*Aggregate.*

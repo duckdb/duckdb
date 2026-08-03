@@ -27,8 +27,7 @@ void DuplicateEliminatedDomainCTERegistry::Collect(LogicalOperator &op) {
 	}
 }
 
-optional_ptr<LogicalOperator>
-DuplicateEliminatedDomainCTERegistry::FindDefinition(TableIndex cte_index) const {
+optional_ptr<LogicalOperator> DuplicateEliminatedDomainCTERegistry::FindDefinition(TableIndex cte_index) const {
 	auto entry = entries.find(cte_index);
 	if (entry == entries.end()) {
 		return nullptr;

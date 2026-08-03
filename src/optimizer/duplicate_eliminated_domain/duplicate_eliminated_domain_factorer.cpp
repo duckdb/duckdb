@@ -11,7 +11,6 @@
 #include "duckdb/planner/subquery/duplicate_eliminated_domain_builder.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
@@ -25,8 +24,9 @@ static vector<Identifier> GenerateColumnNames(idx_t column_count) {
 	return names;
 }
 
-unique_ptr<FactoredDuplicateEliminatedDomain>
+unique_ptr<DelimJoinCTEOptimizationAlternative>
 DuplicateEliminatedDomainFactorer::TryFactor(Binder &binder, unique_ptr<LogicalOperator> &join_op,
+                                             TableIndex domain_cte_index,
                                              const DuplicateEliminatedDomainCandidate &candidate) {
 	auto &live_join = join_op->Cast<LogicalComparisonJoin>();
 	if (live_join.children.size() != 2 || live_join.duplicate_eliminated_columns.empty()) {
@@ -45,31 +45,30 @@ DuplicateEliminatedDomainFactorer::TryFactor(Binder &binder, unique_ptr<LogicalO
 	}
 	alternative->ResolveOperatorTypes();
 	auto alternative_output_bindings = alternative->GetColumnBindings();
-	if (live_output_bindings.size() != alternative_output_bindings.size() ||
-	    live_output_types != alternative->types) {
+	if (live_output_bindings.size() != alternative_output_bindings.size() || live_output_types != alternative->types) {
 		return nullptr;
 	}
 
-	auto factor = make_uniq<FactoredDuplicateEliminatedDomain>();
+	auto result = make_uniq<DelimJoinCTEOptimizationAlternative>();
 	for (idx_t output_idx = 0; output_idx < live_output_bindings.size(); output_idx++) {
-		if (!factor->output_replacements.TryAdd(
+		if (!result->output_replacements.TryAdd(
 		        ReplacementBinding(live_output_bindings[output_idx], alternative_output_bindings[output_idx]))) {
 			return nullptr;
 		}
 	}
 
 	auto &join = alternative->Cast<LogicalComparisonJoin>();
-	auto source_location = &join.children[0];
+	reference<unique_ptr<LogicalOperator>> source_location = join.children[0];
 	for (auto child_idx : candidate.SourcePath()) {
-		if (child_idx >= (*source_location)->children.size()) {
+		if (child_idx >= source_location.get()->children.size()) {
 			return nullptr;
 		}
-		source_location = &(*source_location)->children[child_idx];
+		source_location = source_location.get()->children[child_idx];
 	}
 
-	auto old_bindings = (*source_location)->GetColumnBindings();
-	auto source_types = (*source_location)->types;
-	if ((*source_location)->type != candidate.SourceType() || source_types != candidate.SourceTypes() ||
+	auto old_bindings = source_location.get()->GetColumnBindings();
+	auto source_types = source_location.get()->types;
+	if (source_location.get()->type != candidate.SourceType() || source_types != candidate.SourceTypes() ||
 	    old_bindings.size() != source_types.size()) {
 		return nullptr;
 	}
@@ -79,17 +78,17 @@ DuplicateEliminatedDomainFactorer::TryFactor(Binder &binder, unique_ptr<LogicalO
 		}
 	}
 
-	factor->cte_index = binder.GenerateTableIndex();
-	factor->cte_name = Identifier("__duckdb_duplicate_eliminated_factor_" + to_string(factor->cte_index.index));
-	factor->column_count = old_bindings.size();
+	auto factor_cte_index = binder.GenerateTableIndex();
+	auto factor_cte_name = Identifier("__duckdb_duplicate_eliminated_factor_" + to_string(factor_cte_index.index));
+	auto factor_column_count = old_bindings.size();
 
 	auto payload_ref_index = binder.GenerateTableIndex();
-	auto payload_ref = make_uniq<LogicalCTERef>(payload_ref_index, factor->cte_index, source_types,
-	                                            GenerateColumnNames(factor->column_count));
+	auto payload_ref = make_uniq<LogicalCTERef>(payload_ref_index, factor_cte_index, source_types,
+	                                            GenerateColumnNames(factor_column_count));
 	auto payload_bindings = payload_ref->GetColumnBindings();
 	for (idx_t binding_idx = 0; binding_idx < old_bindings.size(); binding_idx++) {
 		if (old_bindings[binding_idx] != payload_bindings[binding_idx]) {
-			if (!factor->output_replacements.TryAdd(
+			if (!result->output_replacements.TryAdd(
 			        ReplacementBinding(old_bindings[binding_idx], payload_bindings[binding_idx]))) {
 				return nullptr;
 			}
@@ -97,29 +96,56 @@ DuplicateEliminatedDomainFactorer::TryFactor(Binder &binder, unique_ptr<LogicalO
 	}
 
 	auto domain_ref_index = binder.GenerateTableIndex();
-	auto domain_ref = make_uniq<LogicalCTERef>(domain_ref_index, factor->cte_index, source_types,
-	                                           GenerateColumnNames(factor->column_count));
+	auto domain_ref = make_uniq<LogicalCTERef>(domain_ref_index, factor_cte_index, source_types,
+	                                           GenerateColumnNames(factor_column_count));
 	vector<LogicalType> key_types;
 	key_types.reserve(join.duplicate_eliminated_columns.size());
 	for (idx_t key_idx = 0; key_idx < join.duplicate_eliminated_columns.size(); key_idx++) {
 		auto &key = join.duplicate_eliminated_columns[key_idx];
 		key_types.push_back(key->GetReturnType());
 	}
-	factor->domain =
+	auto domain =
 	    DuplicateEliminatedDomainBuilder::TryBuild(binder, std::move(domain_ref), candidate.KeyIndices(), key_types);
-	if (!factor->domain) {
+	if (!domain) {
 		return nullptr;
 	}
 
 	// Install the factor only after every replacement subplan has been constructed successfully.
-	factor->source = std::move(*source_location);
-	*source_location = std::move(payload_ref);
+	auto source = std::move(source_location.get());
+	source_location.get() = std::move(payload_ref);
 	CorrelatedColumnBindingReplacer replacer;
-	factor->output_replacements.AddTo(replacer);
+	result->output_replacements.AddTo(replacer);
 	replacer.stop_operator = join.children[1];
 	replacer.VisitOperator(*alternative);
-	factor->child = std::move(alternative);
-	return factor;
+
+	join.duplicate_eliminated_columns.clear();
+	BindingReplacementGraph domain_output_replacements;
+	auto domain_cte_child = ColumnBindingRewrite::CreateIdentityProjection(
+	    binder.GenerateTableIndex(), std::move(alternative), domain_output_replacements);
+	if (!result->output_replacements.TryMerge(domain_output_replacements)) {
+		return nullptr;
+	}
+	auto domain_cte_name = Identifier("__duckdb_delim_dedup_" + to_string(domain_cte_index.index));
+	auto domain_cte =
+	    make_uniq<LogicalMaterializedCTE>(domain_cte_name, domain_cte_index, key_types.size(), std::move(domain),
+	                                      std::move(domain_cte_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+
+	BindingReplacementGraph factor_output_replacements;
+	auto factor_child = ColumnBindingRewrite::CreateIdentityProjection(
+	    binder.GenerateTableIndex(), std::move(domain_cte), factor_output_replacements);
+	if (!result->output_replacements.TryMerge(factor_output_replacements)) {
+		return nullptr;
+	}
+	result->plan =
+	    make_uniq<LogicalMaterializedCTE>(factor_cte_name, factor_cte_index, factor_column_count, std::move(source),
+	                                      std::move(factor_child), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	result->plan->ResolveOperatorTypes();
+	if (!ColumnBindingRewrite::TryValidateOutputLayout(live_output_bindings, live_output_types,
+	                                                   result->plan->GetColumnBindings(), result->plan->types,
+	                                                   result->output_replacements)) {
+		return nullptr;
+	}
+	return result;
 }
 
 } // namespace duckdb

@@ -108,12 +108,18 @@ public:
 	                           const BindingReplacementGraph &replacements);
 	//! Verify that a rewrite preserves the complete public output layout, including column order and types.
 	static bool TryValidateOutputLayout(const vector<ColumnBinding> &old_output, const vector<LogicalType> &old_types,
-	                                    const vector<ColumnBinding> &new_output,
-	                                    const vector<LogicalType> &new_types,
+	                                    const vector<ColumnBinding> &new_output, const vector<LogicalType> &new_types,
 	                                    const BindingReplacementGraph &replacements);
 	static void ValidateOutputLayout(const vector<ColumnBinding> &old_output, const vector<LogicalType> &old_types,
 	                                 const vector<ColumnBinding> &new_output, const vector<LogicalType> &new_types,
 	                                 const BindingReplacementGraph &replacements);
+	//! Construct replacements between two positionally equivalent output layouts.
+	static BindingReplacementGraph CreateBindingReplacements(const vector<ColumnBinding> &old_bindings,
+	                                                         const vector<ColumnBinding> &new_bindings);
+	//! Add a projection that preserves the child layout while assigning fresh output bindings.
+	static unique_ptr<LogicalOperator> CreateIdentityProjection(TableIndex projection_index,
+	                                                            unique_ptr<LogicalOperator> child,
+	                                                            BindingReplacementGraph &replacements);
 
 private:
 	static void RemapProjectionMapStrict(vector<ProjectionIndex> &projection_map,

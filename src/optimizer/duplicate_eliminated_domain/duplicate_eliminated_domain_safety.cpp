@@ -20,6 +20,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
@@ -260,8 +261,7 @@ class AdditionalGroupAnalyzer {
 public:
 	AdditionalGroupAnalyzer(ClientContext &context_p, LogicalOperator &root,
 	                        const DuplicateEliminatedDomainCTERegistry &cte_registry_p, TableIndex domain_cte_index_p)
-	    : context(context_p), rewrite_root(root), cte_registry(cte_registry_p),
-	      domain_cte_index(domain_cte_index_p) {
+	    : context(context_p), rewrite_root(root), cte_registry(cte_registry_p), domain_cte_index(domain_cte_index_p) {
 	}
 
 	bool CanEvaluate(LogicalOperator &root) {
@@ -350,9 +350,9 @@ private:
 	TableIndex domain_cte_index;
 };
 
-bool DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(ClientContext &context, LogicalOperator &rewrite_root,
-                                                                  const DuplicateEliminatedDomainCTERegistry &cte_registry,
-                                                                  LogicalOperator &op, TableIndex domain_cte_index) {
+bool DuplicateEliminatedDomainSafety::CanEvaluateAdditionalGroups(
+    ClientContext &context, LogicalOperator &rewrite_root, const DuplicateEliminatedDomainCTERegistry &cte_registry,
+    LogicalOperator &op, TableIndex domain_cte_index) {
 	AdditionalGroupAnalyzer analyzer(context, rewrite_root, cte_registry, domain_cte_index);
 	return analyzer.CanEvaluate(op);
 }
@@ -404,8 +404,8 @@ static bool CanDuplicateSourceInternal(ClientContext &context, const LogicalOper
 	}
 }
 
-bool DuplicateEliminatedDomainSafety::CanDuplicateSource(ClientContext &context, const LogicalOperator &op) {
-	return !op.HasSideEffects() && CanDuplicateSourceInternal(context, op);
+bool DuplicateEliminatedDomainSafety::CanDuplicateSource(ClientContext &context, LogicalOperator &op) {
+	return LogicalSubtreeIsRepeatable(op) && CanDuplicateSourceInternal(context, op);
 }
 
 } // namespace duckdb

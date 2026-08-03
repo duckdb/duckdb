@@ -28,7 +28,7 @@ public:
 	                                        LogicalOperator &op, TableIndex domain_cte_index);
 	//! Local factor eligibility, combined bottom-up by the candidate analyzer.
 	static bool CanFactorOperator(ClientContext &context, const LogicalOperator &op);
-	static bool CanDuplicateSource(ClientContext &context, const LogicalOperator &op);
+	static bool CanDuplicateSource(ClientContext &context, LogicalOperator &op);
 };
 
 } // namespace duckdb

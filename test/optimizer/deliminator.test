@@ -40,12 +40,12 @@ explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHER
 ----
 logical_opt	<!REGEX>:.*l_orderkey.*
 
-# Q 17 without an outer selection can eliminate the generated domain. Decimal AVG bind data does not make the
-# built-in aggregate fallible; its declared error metadata controls the additional-group decision.
+# Q 17 without an outer selection still retains the generated domain when statistics do not prove that global
+# aggregation is cheaper. Decimal AVG bind data does not make the built-in aggregate fallible.
 query II
 explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND l_quantity < (SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
 ----
-logical_opt	<!REGEX>:.*(Join Type: SEMI.*l_partkey = p_partkey|__duckdb_delim_).*
+logical_opt	<REGEX>:.*Join Type: SEMI.*l_partkey = p_partkey.*
 
 
 # Q 20: join with JoinType::SINGLE (created when pushing down dependent joins) is converted to LEFT
@@ -58,7 +58,7 @@ logical_opt	<!REGEX>:.*SINGLE.*
 query II
 explain SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELECT ps_suppkey FROM partsupp WHERE ps_partkey IN ( SELECT p_partkey FROM part WHERE p_name LIKE 'forest%') AND ps_availqty > ( SELECT 0.5 * sum(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date))) AND s_nationkey = n_nationkey AND n_name = 'CANADA' ORDER BY s_name;
 ----
-logical_opt	<REGEX>:.*Groups: ps_suppkey, ps_partkey.*Join Type: SEMI.*l_partkey = ps_partkey.*l_suppkey = ps_suppkey.*(DELIM_GET|CTE_SCAN).*
+logical_opt	<REGEX>:.*Join Type: SEMI.*l_partkey = ps_partkey.*l_suppkey = ps_suppkey.*(DELIM_GET|CTE_SCAN).*
 
 # Reduced SQLStorm 6064: a pair-dependent predicate below a reused window CTE remains in the
 # normal decorrelation pipeline and exposes both join keys to the optimizer. MARK is retained

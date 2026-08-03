@@ -100,6 +100,63 @@ logical_opt	<REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*J
 statement ok
 SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
+# Inlining replaces only the duplicate-free restriction side of the semi join. The retained aggregate input and its
+# per-key row order remain unchanged, including for an aggregate whose result observes that order.
+statement ok
+CREATE TABLE dedup_order_dim(k INTEGER, state VARCHAR);
+
+statement ok
+INSERT INTO dedup_order_dim SELECT i % 2, 'selected' FROM range(100) r(i);
+
+statement ok
+ANALYZE dedup_order_dim;
+
+statement ok
+CREATE TABLE dedup_order_outer(k INTEGER);
+
+statement ok
+INSERT INTO dedup_order_outer SELECT i % 2 FROM range(1000) r(i);
+
+statement ok
+ANALYZE dedup_order_outer;
+
+statement ok
+CREATE TABLE dedup_order_measure(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO dedup_order_measure VALUES (0, 30), (0, 10), (1, 40), (1, 20);
+
+query II rowsort
+SELECT x, count(*)
+FROM (
+    SELECT (SELECT first(m.v) FROM dedup_order_measure m WHERE m.k = d.k) AS x
+    FROM dedup_order_outer o
+    JOIN dedup_order_dim d ON o.k = d.k
+    WHERE d.state = 'selected'
+)
+GROUP BY x;
+----
+30	25000
+40	25000
+
+query II
+EXPLAIN
+SELECT (SELECT first(m.v) FROM dedup_order_measure m WHERE m.k = d.k)
+FROM dedup_order_outer o
+JOIN dedup_order_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
+
+query II
+EXPLAIN
+SELECT (SELECT first(m.v) FROM dedup_order_measure m WHERE m.k = d.k)
+FROM dedup_order_outer o
+JOIN dedup_order_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*Join Type: (RIGHT_)?SEMI.*
+
 # Correlated values remain available above empty static aggregates.
 query II rowsort
 SELECT o.k,

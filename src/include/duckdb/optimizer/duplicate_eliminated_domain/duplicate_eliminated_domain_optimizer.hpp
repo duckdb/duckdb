@@ -20,9 +20,9 @@ public:
 	static bool Enabled(ClientContext &context);
 	void PreparePayload(Binder &binder, unique_ptr<LogicalOperator> &payload) override;
 
-	unique_ptr<DelimJoinCTEOptimizationDecision>
-	Analyze(Binder &binder, LogicalOperator &rewrite_root, LogicalComparisonJoin &join, LogicalOperator &rhs,
-	        TableIndex domain_cte_index) override;
+	unique_ptr<DelimJoinCTEOptimizationDecision> Analyze(Binder &binder, LogicalOperator &rewrite_root,
+	                                                     LogicalComparisonJoin &join, LogicalOperator &rhs,
+	                                                     TableIndex domain_cte_index) override;
 	DelimJoinCTEOptimizationResult TryOptimize(Binder &binder, unique_ptr<LogicalOperator> &join,
 	                                           TableIndex domain_cte_index, idx_t domain_ref_count,
 	                                           const DelimJoinCTEOptimizationDecision &decision) override;

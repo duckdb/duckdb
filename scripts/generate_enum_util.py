@@ -16,7 +16,6 @@ blacklist = [
     "DictFSSTMode",
     "DictFSSTCompressResult",
     "ComplexJSONType",
-    "DuplicateEliminatedDomainCoverage",
     "DelimJoinCTEOptimizationType",
     "UnavailableReason",
     "VirtualColumnBindingType",

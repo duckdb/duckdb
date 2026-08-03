@@ -135,7 +135,7 @@ TEST_CASE("Duplicate-free scalar RHS proof respects join cardinality and proof b
 			auto full_join =
 			    CreateSingleJoinTestPlan(true, comparison_type, JoinType::OUTER, project_left, false, false);
 			REQUIRE_FALSE(DuplicateEliminatedDomainProperties::SingleJoinRHSIsDeduplicated(full_join.single_join,
-			                                                                                *full_join.root));
+			                                                                               *full_join.root));
 		}
 
 		auto grouping_sets = CreateSingleJoinTestPlan(true, comparison_type, JoinType::LEFT, true, true, false);

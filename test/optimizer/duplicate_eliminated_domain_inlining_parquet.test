@@ -1,5 +1,5 @@
 # name: test/optimizer/duplicate_eliminated_domain_inlining_parquet.test
-# description: Inline duplicate-free domains for Parquet scans without synthetic row identity
+# description: Factor duplicate-free domains for Parquet scans without duplicating an externally backed scan
 # group: [optimizer]
 
 require parquet
@@ -24,7 +24,7 @@ statement ok
 COPY (SELECT 1 AS k, 'selected' AS state, 'b' AS tag)
 TO '{TEST_DIR}/direct_identity_b.parquet' (FORMAT PARQUET);
 
-# A single Parquet source can provide an inlined duplicate-free domain without introducing a window.
+# A Parquet source with unknown generic repeatability remains shared through a factored CTE.
 query II rowsort
 SELECT f.v, d.tag
 FROM parquet_fact f
@@ -53,7 +53,7 @@ WHERE d.state = 'selected'
       WHERE i.k = d.k
   );
 ----
-logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
 statement ok
 SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
@@ -88,7 +88,7 @@ WHERE d.state = 'selected'
       WHERE i.k = d.k
   );
 ----
-logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+logical_opt	<!REGEX>:.*(__duckdb_delim_|WINDOW).*
 
 statement ok
 SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');

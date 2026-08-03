@@ -106,6 +106,9 @@ TEST_CASE("Binding replacement graph validates output boundaries", "[optimizer][
 	REQUIRE(ColumnBindingRewrite::TryScopeToOutput({binding_a}, {binding_c}, graph, scoped));
 	REQUIRE(scoped.Resolve(binding_a) == binding_c);
 	REQUIRE_FALSE(ColumnBindingRewrite::TryScopeToOutput({binding_a}, {binding_d}, graph, scoped));
+	REQUIRE_FALSE(ColumnBindingRewrite::TryValidateOutputLayout(
+	    {binding_a, binding_b}, {LogicalType::INTEGER, LogicalType::INTEGER}, {binding_c, binding_c},
+	    {LogicalType::INTEGER, LogicalType::INTEGER}, graph));
 
 #ifndef DUCKDB_CRASH_ON_ASSERT
 	REQUIRE_THROWS(ColumnBindingRewrite::ScopeToOutput({binding_a}, {binding_d}, graph));
@@ -116,6 +119,9 @@ TEST_CASE("Binding replacement graph validates output boundaries", "[optimizer][
 	                                                          {LogicalType::INTEGER}, graph));
 	REQUIRE_THROWS(ColumnBindingRewrite::ValidateOutputLayout(
 	    {binding_a, binding_b}, {LogicalType::INTEGER, LogicalType::INTEGER}, {binding_c, binding_b},
+	    {LogicalType::INTEGER, LogicalType::INTEGER}, graph));
+	REQUIRE_THROWS(ColumnBindingRewrite::ValidateOutputLayout(
+	    {binding_a, binding_b}, {LogicalType::INTEGER, LogicalType::INTEGER}, {binding_c, binding_c},
 	    {LogicalType::INTEGER, LogicalType::INTEGER}, graph));
 	REQUIRE_THROWS(ColumnBindingRewrite::ValidateOutputLayout({binding_a}, {LogicalType::INTEGER}, {binding_c},
 	                                                          {LogicalType::BIGINT}, graph));

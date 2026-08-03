@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
@@ -111,6 +112,38 @@ void BindingReplacementGraph::AddTo(ColumnBindingReplacer &replacer) const {
 			replacer.replacement_bindings.emplace_back(replacement.old_binding, resolved.new_binding);
 		}
 	}
+}
+
+unique_ptr<LogicalOperator> ColumnBindingRewrite::CreateIdentityProjection(TableIndex projection_index,
+                                                                           unique_ptr<LogicalOperator> child,
+                                                                           BindingReplacementGraph &replacements) {
+	child->ResolveOperatorTypes();
+	auto old_bindings = child->GetColumnBindings();
+	vector<unique_ptr<Expression>> expressions;
+	expressions.reserve(old_bindings.size());
+	for (idx_t binding_idx = 0; binding_idx < old_bindings.size(); binding_idx++) {
+		expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(child->types[binding_idx], old_bindings[binding_idx]));
+	}
+	auto projection = make_uniq<LogicalProjection>(projection_index, std::move(expressions));
+	projection->children.push_back(std::move(child));
+	projection->ResolveOperatorTypes();
+	replacements = CreateBindingReplacements(old_bindings, projection->GetColumnBindings());
+	return std::move(projection);
+}
+
+BindingReplacementGraph ColumnBindingRewrite::CreateBindingReplacements(const vector<ColumnBinding> &old_bindings,
+                                                                        const vector<ColumnBinding> &new_bindings) {
+	if (old_bindings.size() != new_bindings.size()) {
+		throw InternalException("Column binding replacement layouts must have the same size");
+	}
+	BindingReplacementGraph result;
+	for (idx_t binding_idx = 0; binding_idx < old_bindings.size(); binding_idx++) {
+		if (old_bindings[binding_idx] != new_bindings[binding_idx]) {
+			result.Add(old_bindings[binding_idx], new_bindings[binding_idx]);
+		}
+	}
+	return result;
 }
 
 ColumnBindingReplacer::ColumnBindingReplacer() {
@@ -344,7 +377,11 @@ bool ColumnBindingRewrite::TryValidateOutputLayout(const vector<ColumnBinding> &
 	if (old_output.size() != new_output.size()) {
 		return false;
 	}
+	column_binding_set_t old_bindings(old_output.begin(), old_output.end());
 	column_binding_set_t new_bindings(new_output.begin(), new_output.end());
+	if (old_bindings.size() != old_output.size() || new_bindings.size() != new_output.size()) {
+		return false;
+	}
 	for (idx_t output_idx = 0; output_idx < old_output.size(); output_idx++) {
 		ReplacementBinding resolved(old_output[output_idx], old_output[output_idx]);
 		if (!TryResolveToOutput(old_output[output_idx], new_bindings, replacements, resolved)) {
