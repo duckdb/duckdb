@@ -927,10 +927,10 @@ ManagedAsyncWriteStreamQueue::ManagedAsyncWriteStreamQueue(ClientContext &client
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
 	auto async_threads = scheduler.NumberOfAsyncThreads();
 
-	// Positional writes let multiple async requests drain one logical write queue concurrently.
-	// Otherwise the stream queue keeps one sequential request active so target ordering remains correct.
-	if (target.SupportsPositionalWrites()) {
-		drain_mode = DrainMode::POSITIONAL;
+	write_mode = target.GetWriteMode();
+	// Explicit-offset writes let multiple async requests drain one logical write queue concurrently. Sequential writes
+	// keep one request active because they use the file handle's shared stream position.
+	if (write_mode != FileWriteMode::SEQUENTIAL) {
 		max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
 	}
 
@@ -1154,8 +1154,8 @@ bool ManagedAsyncWriteStreamQueue::TakePendingWriteRequest(AsyncWriteRequest &re
 	if (pending_writes.empty() || batch_depth > 0) {
 		return false;
 	}
-	if (drain_mode == DrainMode::SEQUENTIAL && submitted_requests > 0) {
-		// Non-positional targets write through the file handle's current position, so only one request may be active.
+	if (write_mode == FileWriteMode::SEQUENTIAL && submitted_requests > 0) {
+		// Cursor targets write through the file handle's current position, so only one request may be active.
 		return false;
 	}
 	if (policy == SchedulePolicy::THRESHOLD) {
@@ -1436,7 +1436,7 @@ void ManagedAsyncWriteStreamQueue::Write(data_ptr_t buffer, idx_t size, idx_t of
 	if (size == 0) {
 		return;
 	}
-	if (drain_mode == DrainMode::POSITIONAL) {
+	if (write_mode != FileWriteMode::SEQUENTIAL) {
 		target.Write(buffer, size, offset);
 	} else {
 		target.Write(buffer, size);

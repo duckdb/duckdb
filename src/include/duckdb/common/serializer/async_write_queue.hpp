@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
+#include "duckdb/common/enums/file_write_mode.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -72,7 +73,7 @@ class AsyncWriteTarget {
 public:
 	virtual ~AsyncWriteTarget() = default;
 
-	//! Write a specific byte range using the target's positional write path.
+	//! Write a specific byte range using the target's explicit-offset write path.
 	virtual void Write(data_ptr_t buffer, idx_t size, idx_t offset) = 0;
 };
 
@@ -186,11 +187,11 @@ class ManagedAsyncWriteStreamTarget {
 public:
 	virtual ~ManagedAsyncWriteStreamTarget() = default;
 
-	//! Whether contiguous registered writes can safely drain concurrently through positional writes.
-	virtual bool SupportsPositionalWrites() = 0;
+	//! Return the target's write ordering contract.
+	virtual FileWriteMode GetWriteMode() = 0;
 	//! Whether this target is a local file-like target. Remote targets use larger coalesced writes.
 	virtual bool IsLocalFile() = 0;
-	//! Write a specific byte range using the target's positional write path.
+	//! Write a specific byte range using the target's explicit-offset write path.
 	virtual void Write(data_ptr_t buffer, idx_t size, idx_t offset) = 0;
 	//! Write bytes using the target's sequential write path.
 	virtual void Write(data_ptr_t buffer, idx_t size) = 0;
@@ -327,8 +328,6 @@ public:
 	enum class ScheduleMode : uint8_t { ALLOW, DEFER };
 	//! Whether to schedule only enough request capacity for normal overlap, or force all pending bytes to drain.
 	enum class SchedulePolicy : uint8_t { THRESHOLD, FORCE };
-	//! Whether async requests can write independent target ranges or must use the target's current stream position.
-	enum class DrainMode : uint8_t { SEQUENTIAL, POSITIONAL };
 	//! Whether waiting for scheduled writes should preserve an open registration batch.
 	enum class BatchDrainMode : uint8_t { PRESERVE_BATCH, FORCE_CLOSE_BATCH };
 
@@ -424,8 +423,8 @@ private:
 
 	//! Managed queue that owns TMM reservation, backpressure, and task scheduling for physical write requests.
 	unique_ptr<ManagedAsyncWriteQueue> write_queue;
-	//! Whether async requests may drain independent ranges concurrently using positional writes.
-	DrainMode drain_mode = DrainMode::SEQUENTIAL;
+	//! The write ordering contract exposed by the target.
+	FileWriteMode write_mode = FileWriteMode::SEQUENTIAL;
 	//! Maximum number of submitted/running drain requests for this queue.
 	idx_t max_active_drain_tasks = 1;
 	//! Size below which adjacent writes are coalesced before reaching the target.
