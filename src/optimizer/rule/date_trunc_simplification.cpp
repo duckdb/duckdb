@@ -63,19 +63,12 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 		rhs_comparison_type = FlipComparisonExpression(comparison_type);
 	}
 
+	auto &column_side = col_is_lhs ? left : right;
+	auto &constant_side = col_is_lhs ? right : left;
+
 	// date_trunc preserves temporal infinities, so only remove the function call.
 	if (IsInfinity(rhs.GetValue())) {
-		if (col_is_lhs) {
-			left = column_part.Copy();
-			if (rhs.GetReturnType().id() != left->GetReturnType().id()) {
-				right = CastAndEvaluate(std::move(right), left->GetReturnType());
-			}
-		} else {
-			right = column_part.Copy();
-			if (rhs.GetReturnType().id() != right->GetReturnType().id()) {
-				left = CastAndEvaluate(std::move(left), right->GetReturnType());
-			}
-		}
+		ReplaceDateTruncWithColumn(column_side, constant_side, column_part);
 		changes_made = true;
 		return nullptr;
 	}
@@ -236,29 +229,12 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					return nullptr; // Something went wrong---don't do the optimization.
 				}
 
-				if (col_is_lhs) {
-					left = column_part.Copy();
-					right = std::move(trunc);
-				} else {
-					right = column_part.Copy();
-					left = std::move(trunc);
-				}
+				column_side = column_part.Copy();
+				constant_side = std::move(trunc);
 			} else {
 				// If the RHS is already truncated (i.e.  date_trunc(part, rhs) = rhs), then we can use
 				// it as-is.
-				if (col_is_lhs) {
-					left = column_part.Copy();
-					// Determine whether the RHS needs to be casted.
-					if (rhs.GetReturnType().id() != left->GetReturnType().id()) {
-						right = CastAndEvaluate(std::move(right), left->GetReturnType());
-					}
-				} else {
-					right = column_part.Copy();
-					// Determine whether the RHS needs to be casted.
-					if (rhs.GetReturnType().id() != right->GetReturnType().id()) {
-						left = CastAndEvaluate(std::move(left), right->GetReturnType());
-					}
-				}
+				ReplaceDateTruncWithColumn(column_side, constant_side, column_part);
 			}
 
 			changes_made = true;
@@ -278,13 +254,8 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				return nullptr; // Something went wrong---don't do the optimization.
 			}
 
-			if (col_is_lhs) {
-				left = column_part.Copy();
-				right = std::move(trunc);
-			} else {
-				right = column_part.Copy();
-				left = std::move(trunc);
-			}
+			column_side = column_part.Copy();
+			constant_side = std::move(trunc);
 
 			// > needs to become >=, and <= needs to become <.
 			if (rhs_comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
@@ -470,6 +441,15 @@ bool DateTruncSimplificationRule::IsInfinity(const Value &value) {
 		return value == Value::Infinity(value.type()) || value == Value::NegativeInfinity(value.type());
 	default:
 		return false;
+	}
+}
+
+void DateTruncSimplificationRule::ReplaceDateTruncWithColumn(unique_ptr<Expression> &column_side,
+                                                             unique_ptr<Expression> &constant_side,
+                                                             const BoundColumnRefExpression &column_part) {
+	column_side = column_part.Copy();
+	if (constant_side->GetReturnType().id() != column_side->GetReturnType().id()) {
+		constant_side = CastAndEvaluate(std::move(constant_side), column_side->GetReturnType());
 	}
 }
 
