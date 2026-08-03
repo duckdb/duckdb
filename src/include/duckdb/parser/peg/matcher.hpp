@@ -155,15 +155,21 @@ struct MatchState {
 		return max_token_index;
 	}
 
-	//! Fold a non-quoted identifier according to the configured case mode
-	string FoldIdentifier(const string &text) const {
+	//! Fold a non-quoted identifier in-place according to the configured case mode
+	void FoldIdentifier(string &text) const {
 		switch (identifier_case_mode) {
 		case IdentifierCaseMode::LOWERCASE:
-			return StringUtil::Lower(text);
+			for (auto &c : text) {
+				c = StringUtil::CharacterToLower(c);
+			}
+			break;
 		case IdentifierCaseMode::UPPERCASE:
-			return StringUtil::Upper(text);
+			for (auto &c : text) {
+				c = StringUtil::CharacterToUpper(c);
+			}
+			break;
 		default:
-			return text;
+			break;
 		}
 	}
 
