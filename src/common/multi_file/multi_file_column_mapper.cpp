@@ -574,6 +574,11 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 
 	// nested type - check if the field identifiers match and if we need to remap
 	D_ASSERT(global_column.type.IsNested());
+	if (global_column.type.id() != local_column.type.id()) {
+		throw BinderException("Failed to map file-column of type '%s' to result-column of type '%s'", local_column.type,
+		                      global_column.type);
+	}
+
 	switch (global_column.type.id()) {
 	case LogicalTypeId::STRUCT:
 		return MapColumnStruct(context, global_column, global_index, local_column, local_id, mapper, std::move(mapping),
