@@ -83,7 +83,7 @@ index ca12c7d..429cdb5 100644
  	vector<StorageIndex> column_ids;
  
  	// Index scan state
-+	unique_ptr<IndexHandle<RTreeIndex>> index_guard;
++	unique_ptr<IndexHandle<RTreeIndex>> index_handle;
  	unique_ptr<IndexScanState> index_state;
  	Vector row_ids = Vector(LogicalType::ROW_TYPE);
  };
@@ -92,8 +92,8 @@ index ca12c7d..429cdb5 100644
  
  	// Initialize the scan state for the index
 -	result->index_state = bind_data.index.Cast<RTreeIndex>().InitializeScan(bind_data.bbox);
-+	result->index_guard = make_uniq<IndexHandle<RTreeIndex>>(bind_data.index_entry->GetHandle<RTreeIndex>());
-+	result->index_state = (*result->index_guard)->InitializeScan(bind_data.bbox);
++	result->index_handle = make_uniq<IndexHandle<RTreeIndex>>(bind_data.index_entry->GetHandle<RTreeIndex>());
++	result->index_state = (*result->index_handle)->InitializeScan(bind_data.bbox);
  
  	// Early out if there is nothing to project
  	if (!input.CanRemoveFilterColumns()) {
@@ -102,7 +102,7 @@ index ca12c7d..429cdb5 100644
  
  	// Scan the index for row id's
 -	auto row_count = bind_data.index.Cast<RTreeIndex>().Scan(*state.index_state, state.row_ids);
-+	auto row_count = (*state.index_guard)->Scan(*state.index_state, state.row_ids);
++	auto row_count = (*state.index_handle)->Scan(*state.index_state, state.row_ids);
  
  	if (row_count == 0) {
  		// Index is exhausted, fetch from local storage instead.
@@ -191,3 +191,123 @@ index b59e6d6..9fe9c13 100644
 -} // namespace duckdb
 \ No newline at end of file
 +} // namespace duckdb
+diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+index a086365..da5077c 100644
+--- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
++++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+@@ -17,6 +17,7 @@
+ #include "duckdb/planner/operator/logical_get.hpp"
+ #include "duckdb/storage/data_table.hpp"
+ #include "duckdb/storage/table/scan_state.hpp"
++#include "duckdb/storage/table/table_index_list.hpp"
+ #include "duckdb/transaction/duck_transaction.hpp"
+ #include "duckdb/transaction/local_storage.hpp"
+ 
+@@ -76,22 +77,22 @@ static void RTreeIndexInfoExecute(ClientContext &context, TableFunctionInput &da
+ 		    context, QualifiedName(index_entry.schema.catalog.GetName(), index_entry.GetSchemaName(),
+ 		                           index_entry.GetTableName()));
+ 		auto &storage = table_entry.GetStorage();
+-		RTreeIndex *rtree_index = nullptr;
++		bool found_index = false;
+ 
+ 		auto &table_info = *storage.GetDataTableInfo();
+ 		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
+-		for (auto &index : table_info.GetIndexes().Indexes()) {
+-			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
++		for (const auto &entry : table_info.GetIndexes().GetEntries()) {
++			auto guard = entry->GetHandle();
++			if (!guard->IsBound() || RTreeIndex::TYPE_NAME != guard->GetIndexType()) {
+ 				continue;
+ 			}
+-			auto &rtree = index.Cast<RTreeIndex>();
+-			if (rtree.name == index_entry.name) {
+-				rtree_index = &rtree;
++			if (guard->GetIndexName() == index_entry.name) {
++				found_index = true;
+ 				break;
+ 			}
+ 		};
+ 
+-		if (!rtree_index) {
++		if (!found_index) {
+ 			throw BinderException("Index %s not found", index_entry.name);
+ 		}
+ 
+@@ -107,7 +108,7 @@ static void RTreeIndexInfoExecute(ClientContext &context, TableFunctionInput &da
+ 	output.SetChildCardinality(row);
+ }
+ 
+-static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string &index_name) {
++static shared_ptr<IndexEntry> TryGetIndex(ClientContext &context, const string &index_name) {
+ 	auto qname = QualifiedName::Parse(index_name);
+ 
+ 	// look up the index name in the catalog
+@@ -120,22 +121,20 @@ static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string
+ 	                        .Cast<TableCatalogEntry>();
+ 
+ 	auto &storage = table_entry.GetStorage();
+-	RTreeIndex *rtree_index = nullptr;
+ 
+ 	auto &table_info = *storage.GetDataTableInfo();
+ 	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
+-	for (auto &index : table_info.GetIndexes().Indexes()) {
+-		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
++	for (const auto &entry : table_info.GetIndexes().GetEntries()) {
++		auto index = entry->GetHandle();
++		if (!index->IsBound() || RTreeIndex::TYPE_NAME != index->GetIndexType()) {
+ 			continue;
+ 		}
+-		auto &rtree = index.Cast<RTreeIndex>();
+-		if (index_entry.name == index_name) {
+-			rtree_index = &rtree;
+-			break;
++		if (index->GetIndexName() == index_entry.name) {
++			return entry;
+ 		}
+ 	};
+ 
+-	return rtree_index;
++	return nullptr;
+ }
+ 
+ //-------------------------------------------------------------------------
+@@ -175,24 +174,24 @@ struct RTreeIndexDumpStackFrame {
+ };
+ 
+ struct RTreeIndexDumpState final : public GlobalTableFunctionState {
+-	const RTreeIndex &index;
++	IndexHandle<RTreeIndex> index_handle;
+ 	RTreeScanner scanner;
+ 
+ public:
+-	explicit RTreeIndexDumpState(const RTreeIndex &index) : index(index) {
++	explicit RTreeIndexDumpState(IndexHandle<RTreeIndex> index_handle_p) : index_handle(std::move(index_handle_p)) {
+ 	}
+ };
+ 
+ static unique_ptr<GlobalTableFunctionState> RTreeIndexDumpInit(ClientContext &context, TableFunctionInitInput &input) {
+ 	auto &bind_data = input.bind_data->Cast<RTreeIndexDumpBindData>();
+ 
+-	auto rtree_index = TryGetIndex(context, bind_data.index_name);
+-	if (!rtree_index) {
++	auto index_entry = TryGetIndex(context, bind_data.index_name);
++	if (!index_entry) {
+ 		throw BinderException("Index %s not found", bind_data.index_name);
+ 	}
+ 
+-	auto result = make_uniq<RTreeIndexDumpState>(*rtree_index);
+-	const auto &root_entry = rtree_index->tree->GetRoot();
++	auto result = make_uniq<RTreeIndexDumpState>(index_entry->GetHandle<RTreeIndex>());
++	const auto &root_entry = result->index_handle->tree->GetRoot();
+ 
+ 	if (root_entry.pointer.IsSet()) {
+ 		result->scanner.Init(root_entry);
+@@ -214,7 +213,7 @@ static void RTreeIndexDumpExecute(ClientContext &context, TableFunctionInput &da
+ 	auto ymax_data = FlatVector::GetDataMutable<float>(bounds_vectors[3]);
+ 	auto rowid_data = FlatVector::GetDataMutable<row_t>(output.data[2]);
+ 
+-	const auto &tree = *state.index.tree;
++	const auto &tree = *state.index_handle->tree;
+ 
+ 	state.scanner.Scan(tree, [&](const RTreeEntry &entry, const idx_t &level) {
+ 		level_data[output_idx] = UnsafeNumericCast<int32_t>(level);
