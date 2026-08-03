@@ -34,9 +34,9 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
     : ExpressionState(expr, root) {
 	// cached bitmap select shape
 	select_bitmap_capable =
-	    CpuBenefitsFromAutoVec() && IsBitmapComparisonCandidate(expr) && TryGetBitmapComparisonInfo(expr, cmp_info);
+	    CpuBenefitsFromAutoVec() && IsBitmapSelectCandidateCached(expr) && TryGetBitmapComparisonInfo(expr, cmp_info);
 	// Check if the expression is eligible for dictionary optimization
-	if (!expr.IsConsistent() || expr.IsVolatile() || expr.CanThrow()) {
+	if (!IsStableExpressionCached(expr)) {
 		return; // Needs to be consistent, non-volatile, and non-throwing
 	}
 
@@ -48,6 +48,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &bound_function = expr.Cast<BoundFunctionExpression>();
+		safe_autovec_arith = IsSafeAutoVecArithmetic(bound_function);
 		auto &children = bound_function.GetChildren();
 		bool eligible = true;
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
@@ -61,7 +62,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 			}
 			dictionary_input_indices.push_back(child_idx);
 		}
-		if (!eligible || (dictionary_input_indices.size() > 1 && !IsSafeAutoVecArithmetic(bound_function))) {
+		if (!eligible || (dictionary_input_indices.size() > 1 && !safe_autovec_arith)) {
 			dictionary_input_indices.clear();
 		}
 		break;
@@ -96,7 +97,8 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	const auto input_dictionary_size = input_dictionary_size_opt.GetIndex();
 	auto &input_sel = DictionaryVector::SelVector(first_input);
 
-	if (IsSafeAutoVecArithmetic(expr) && input_dictionary_size <= STANDARD_VECTOR_SIZE && // dense dictionary arithmetic
+	if (safe_autovec_arith && AutoVecCountPaysOff(args.size()) && // dense dictionary arithmetic
+	    input_dictionary_size <= STANDARD_VECTOR_SIZE &&
 	    DenseAutoVecPaysOff(args.size(), input_dictionary_size, GetTypeIdSize(result.GetType().InternalType()))) {
 		for (idx_t idx = 1; idx < dictionary_input_indices.size(); idx++) {
 			const auto &input = args.data[dictionary_input_indices[idx]];

@@ -14,7 +14,7 @@ struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root)
 	    : ExpressionState(expr, root), intersect_tmp(STANDARD_VECTOR_SIZE) {
 		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
-			dense_child.push_back(IsBitmapSelectCandidate(*child));
+			dense_child.push_back(IsBitmapSelectCandidateCached(*child));
 			bitmap_capable = bitmap_capable || dense_child.back();
 		}
 		bitmap_capable = bitmap_capable && CpuBenefitsFromAutoVec();
@@ -74,7 +74,8 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
                                  SelectionVector *false_sel, SelectionResult *bitmap_sel = nullptr) {
 	auto &state = state_p->Cast<ConjunctionState>();
 	const bool is_and = expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
-	if (state.bitmap_capable && true_sel && !false_sel && (!sel || !sel->IsSet())) { // bitmap AND/OR fast path
+	if (state.bitmap_capable && AutoVecCountPaysOff(count) && true_sel && !false_sel &&
+	    (!sel || !sel->IsSet())) { // bitmap AND/OR fast path
 		auto &children = expr.GetChildren();
 		idx_t result_count = is_and ? count : 0;
 		bool have_accumulator = false;

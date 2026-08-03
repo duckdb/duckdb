@@ -94,6 +94,7 @@ public:
 	unique_ptr<Vector> for_scratch;
 
 private:
+	bool safe_autovec_arith = false;
 	vector<idx_t> dictionary_input_indices;
 	DataChunk dictionary_input_chunk;
 	//! Vector holding the expression executed on the entire dictionary

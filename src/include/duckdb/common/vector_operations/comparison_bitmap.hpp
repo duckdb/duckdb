@@ -265,8 +265,9 @@ inline void DispatchBitmapType(PhysicalType pt, idx_t count, FN &&fn) {
 }
 
 template <class ConstGetter>
-inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const_data_ptr_t data_p, idx_t count,
-                                    const validity_t *validity, validity_t *__restrict bitmap, ConstGetter get_const) {
+DUCKDB_AUTOVEC_TARGET inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const_data_ptr_t data_p,
+                                                          idx_t count, const validity_t *validity,
+                                                          validity_t *__restrict bitmap, ConstGetter get_const) {
 	DispatchBitmapType(pt, count, [&](auto tag) { // typed flat col/constant dispatch
 		using T = decltype(tag);
 		const auto *data = reinterpret_cast<const T *>(data_p);
@@ -278,9 +279,11 @@ inline void DispatchFlatCmpToBitmap(PhysicalType pt, ExpressionType op, const_da
 	});
 }
 
-inline void DispatchFlatColCmpToBitmap(PhysicalType pt, ExpressionType op, const_data_ptr_t ldata_p,
-                                       const_data_ptr_t rdata_p, idx_t count, const validity_t *lvalidity,
-                                       const validity_t *rvalidity, validity_t *__restrict bitmap) {
+DUCKDB_AUTOVEC_TARGET inline void DispatchFlatColCmpToBitmap(PhysicalType pt, ExpressionType op,
+                                                             const_data_ptr_t ldata_p, const_data_ptr_t rdata_p,
+                                                             idx_t count, const validity_t *lvalidity,
+                                                             const validity_t *rvalidity,
+                                                             validity_t *__restrict bitmap) {
 	DispatchBitmapType(pt, count, [&](auto tag) { // typed flat col/constant dispatch
 		using T = decltype(tag);
 		const auto *ldata = reinterpret_cast<const T *>(ldata_p);
