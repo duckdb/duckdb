@@ -21,13 +21,13 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
-#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_optimizer.hpp"
 
 namespace duckdb {
 
@@ -197,11 +197,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		RewriteTriggersToDependent(*this->binder, *this->plan);
 		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
-		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
-		if (Settings::Get<DelimJoinAsCteSetting>(context) &&
-		    Optimizer::OptimizerDisabled(context, OptimizerType::DUPLICATE_ELIMINATED_DOMAIN)) {
-			DelimJoinCTERewriter::Rewrite(*this->binder, this->plan);
-		}
+		auto duplicate_eliminated_domain_strategy = CreateDuplicateEliminatedDomainStrategy(context);
+		this->plan = FlattenDependentJoins::DecorrelateIndependent(
+		    *this->binder, std::move(this->plan), duplicate_eliminated_domain_strategy.get());
 		D_ASSERT(!ContainsDependentJoin(*this->plan));
 		D_ASSERT(VerifyPlannedExpressions(*this->plan));
 		D_ASSERT(VerifyCanonicalComparisonJoins(*this->plan));

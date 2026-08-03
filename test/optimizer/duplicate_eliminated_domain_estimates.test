@@ -1,0 +1,64 @@
+# name: test/optimizer/duplicate_eliminated_domain_estimates.test
+# description: Cardinality estimates after duplicate-eliminated domain lowering
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+SET delim_join_as_cte=true;
+
+statement ok
+CREATE TABLE dedup_est_users(id INTEGER);
+
+statement ok
+INSERT INTO dedup_est_users VALUES (1), (2), (3), (4);
+
+statement ok
+CREATE TABLE dedup_est_posts(id INTEGER, creation_date TIMESTAMP);
+
+statement ok
+INSERT INTO dedup_est_posts VALUES
+    (10, '2024-09-20'), (11, '2024-09-21'), (12, '2024-09-22'), (13, '2024-09-23'), (14, '2020-01-01');
+
+statement ok
+CREATE TABLE dedup_est_votes(id INTEGER, user_id INTEGER, post_id INTEGER);
+
+statement ok
+INSERT INTO dedup_est_votes VALUES
+    (1, 1, 10), (2, 1, 10), (3, 1, 10), (4, 1, 10), (5, 1, 10), (6, 1, 10),
+    (7, 2, 12), (8, 3, 13);
+
+# Preparing the pair payload must invalidate estimates inherited from joins that filter pushdown turns into a cross
+# product. A cached zero makes build/probe selection flip the final SEMI join and build on the complete pair payload.
+statement ok
+CREATE VIEW dedup_est_pair_in AS
+WITH ranked_posts AS (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+), user_engagement AS (
+    SELECT u.id, count(v.id) AS vote_count
+    FROM dedup_est_users u
+    LEFT JOIN dedup_est_votes v ON u.id = v.user_id
+    GROUP BY u.id
+)
+SELECT p.id AS post_id, u.id AS user_id
+FROM ranked_posts p
+JOIN user_engagement u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+);
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<REGEX>:.*Join Type: SEMI.*Cross Product[^~]*~[1-9][0-9,]* rows.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<!REGEX>:.*Join Type: RIGHT_SEMI.*

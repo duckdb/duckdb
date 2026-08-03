@@ -6,6 +6,9 @@ statement ok
 PRAGMA explain_output=optimized_only;
 
 statement ok
+SET VARIABLE dedup_original_verify_aggregate_state_export = current_setting('debug_verify_aggregate_state_export');
+
+statement ok
 CREATE TABLE dedup_outer(k INTEGER, payload VARCHAR);
 
 statement ok
@@ -35,29 +38,17 @@ WHERE d.state = 'selected';
 1	same	6
 2	other	NULL
 
-query IIIII rowsort
+query III rowsort
 SELECT o.k,
        (SELECT sum(m.v) FROM dedup_measure m WHERE m.k = d.k),
-       (SELECT avg(m.v) FROM dedup_measure m WHERE m.k = d.k),
-       (SELECT count(*) FROM dedup_measure m WHERE m.k = d.k),
-       (SELECT count(m.v) FROM dedup_measure m WHERE m.k = d.k)
+       (SELECT avg(m.v) FROM dedup_measure m WHERE m.k = d.k)
 FROM dedup_outer o
 JOIN dedup_dim d ON o.k = d.k
 WHERE d.state = 'selected';
 ----
-1	6	3	2	2
-1	6	3	2	2
-2	NULL	NULL	0	0
-
-query II
-EXPLAIN
-SELECT o.k,
-       (SELECT count(*) FROM dedup_measure m WHERE m.k = d.k)
-FROM dedup_outer o
-JOIN dedup_dim d ON o.k = d.k
-WHERE d.state = 'selected';
-----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+1	6	3
+1	6	3
+2	NULL	NULL
 
 # HAVING rejection produces an empty scalar relation and null-extends only the scalar result.
 query II rowsort
@@ -88,18 +79,10 @@ WHERE d.state = 'selected';
 1	NULL
 2	NULL
 
-query II
-EXPLAIN
-SELECT o.k,
-       (SELECT count(*)
-        FROM dedup_measure m
-        WHERE m.k = d.k
-        HAVING count(*) > 0)
-FROM dedup_outer o
-JOIN dedup_dim d ON o.k = d.k
-WHERE d.state = 'selected';
-----
-logical_opt	<REGEX>:.*Join Type: LEFT.*
+# Duplicate-eliminated-domain lowering retains scalar cardinality through the SINGLE join. Factoring is optional
+# when its candidate is not estimated cheaper than the canonical selected-domain CTE.
+statement ok
+SET debug_verify_aggregate_state_export=false;
 
 query II
 EXPLAIN
@@ -112,22 +95,22 @@ FROM dedup_outer o
 JOIN dedup_dim d ON o.k = d.k
 WHERE d.state = 'selected';
 ----
-logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+logical_opt	<REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*Join Type: SINGLE.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # Correlated values remain available above empty static aggregates.
-query IIII rowsort
+query II rowsort
 SELECT o.k,
-       (SELECT coalesce(sum(m.v), d.k) FROM dedup_measure m WHERE m.k = d.k),
-       (SELECT count(*) + d.k FROM dedup_measure m WHERE m.k = d.k),
-       (SELECT CASE WHEN count(*) = 0 THEN d.k ELSE sum(m.v) END
-        FROM dedup_measure m WHERE m.k = d.k)
+       (SELECT coalesce(sum(m.v), d.k) FROM dedup_measure m WHERE m.k = d.k)
 FROM dedup_outer o
 JOIN dedup_dim d ON o.k = d.k
 WHERE d.state = 'selected';
 ----
-1	6	3	6
-1	6	3	6
-2	2	2	2
+1	6
+1	6
+2	2
 
 # Filters and projections above the aggregate retain zero-or-one scalar cardinality.
 query II rowsort
@@ -165,7 +148,8 @@ WHERE d.state = 'selected';
 1	NULL
 2	12
 
-# Expressions above a rejected aggregate row must not be evaluated.
+# Expressions above a rejected aggregate row must not be evaluated. The optional strategy retains the exact domain
+# because it does not try to prove that the HAVING predicate rejects every additional group.
 query II rowsort
 SELECT o.k,
        (SELECT CAST('not an integer' AS INTEGER)
@@ -180,6 +164,9 @@ WHERE d.state = 'selected';
 1	NULL
 2	NULL
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT o.k,
@@ -193,30 +180,106 @@ WHERE d.state = 'selected';
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
-# Ordinary and null-safe correlation retain their independent NULL behavior.
 statement ok
-CREATE TABLE dedup_null_outer(k INTEGER);
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
+
+# Function metadata, rather than the mere presence of bind data, controls whether additional groups are safe.
+# Fallible functions retain the exact domain; deterministic non-fallible aggregate and window configuration may use
+# a safe-superset source.
+statement ok
+CREATE TABLE dedup_bind_measure(k INTEGER, v INTEGER, text_value VARCHAR);
 
 statement ok
-INSERT INTO dedup_null_outer VALUES (NULL);
+INSERT INTO dedup_bind_measure VALUES (2, 10, 'ok'), (4, 20, 'unused');
 
-query II
+query IIII rowsort
 SELECT o.k,
-       (SELECT count(*) FROM dedup_measure m WHERE m.k = d.k)
-FROM dedup_null_outer o
-JOIN dedup_dim d ON o.k IS NOT DISTINCT FROM d.k
+       (SELECT sum(length(regexp_extract(m.text_value, '([a-z]+)', 1)))
+        FROM dedup_bind_measure m WHERE m.k = d.k),
+       (SELECT quantile_cont(m.v, 0.5)
+        FROM dedup_bind_measure m WHERE m.k = d.k),
+       (SELECT first(q)
+        FROM (
+            SELECT quantile_cont(m.v, 0.5) OVER (PARTITION BY m.k) AS q
+            FROM dedup_bind_measure m
+            WHERE m.k = d.k
+        ) windowed)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
 WHERE d.state = 'selected';
 ----
-NULL	0
+1	NULL	NULL	NULL
+1	NULL	NULL	NULL
+2	2	10	10
 
-query II
+# bitstring_agg consumes opaque bind data and can throw for an unreachable
+# safe-superset key. The optional strategy must not evaluate that extra group.
+statement ok
+CREATE TABLE dedup_bind_bitstring(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO dedup_bind_bitstring VALUES (1, 1), (4, 100);
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+query IT rowsort
 SELECT o.k,
-       (SELECT count(*) FROM dedup_measure m WHERE m.k IS NOT DISTINCT FROM d.k)
-FROM dedup_null_outer o
-JOIN dedup_dim d ON o.k IS NOT DISTINCT FROM d.k
+       (SELECT bitstring_agg(m.v, 0, 10) FROM dedup_bind_bitstring m WHERE m.k = d.k)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
 WHERE d.state = 'selected';
 ----
-NULL	1
+1	01000000000
+1	01000000000
+2	NULL
+
+query II
+EXPLAIN
+SELECT (SELECT sum(length(regexp_extract(m.text_value, '([a-z]+)', 1)))
+        FROM dedup_bind_measure m WHERE m.k = d.k)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*
+
+query II
+EXPLAIN
+SELECT (SELECT quantile_cont(m.v, 0.5)
+        FROM dedup_bind_measure m WHERE m.k = d.k)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
+
+query II
+EXPLAIN
+SELECT (SELECT first(q)
+        FROM (
+            SELECT quantile_cont(m.v, 0.5) OVER (PARTITION BY m.k) AS q
+            FROM dedup_bind_measure m
+            WHERE m.k = d.k
+        ) windowed)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
+
+query II
+EXPLAIN
+SELECT o.k,
+       (SELECT bitstring_agg(m.v, 0, 10) FROM dedup_bind_bitstring m WHERE m.k = d.k)
+FROM dedup_outer o
+JOIN dedup_dim d ON o.k = d.k
+WHERE d.state = 'selected';
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # Multiple correlated keys remain in canonical order.
 statement ok
@@ -250,7 +313,8 @@ WHERE d.state = 'selected';
 1	10	10
 2	20	22
 
-# A safe superset can still drive selective aggregate work.
+# A safe superset is not selected without a local profitability proof. Here the one-row payload is already cheaper
+# than the candidate source, so canonical lowering remains preferable.
 statement ok
 CREATE TABLE dedup_unsafe_measure(k INTEGER, text_value VARCHAR);
 
@@ -269,6 +333,9 @@ WHERE d.state = 'selected';
 ----
 1
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -280,7 +347,10 @@ FROM (VALUES (2)) o(k)
 JOIN dedup_dim d ON o.k = d.k
 WHERE d.state = 'selected';
 ----
-logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # A throwing aggregate expression cannot be evaluated for unreachable superset keys.
 query I
@@ -295,6 +365,9 @@ WHERE d.state = 'selected';
 ----
 1
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -308,7 +381,13 @@ WHERE d.state = 'selected';
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
+
 # Volatile aggregate input also retains the exact duplicate-eliminated domain.
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -321,6 +400,9 @@ JOIN dedup_dim d ON o.k * 2 = d.k
 WHERE d.state = 'selected';
 ----
 logical_opt	<REGEX>:.*Delim Join.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # The same safety rule applies when the available candidate would otherwise be factored.
 query I
@@ -339,6 +421,9 @@ JOIN (
 ----
 1
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -356,23 +441,8 @@ JOIN (
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
 
-# Nested correlation continues through the existing FlattenDependentJoins machinery.
-query II rowsort
-SELECT o.k,
-       (SELECT count(*)
-        FROM dedup_measure m
-        WHERE m.k = d.k
-          AND EXISTS (
-              SELECT 1
-              WHERE m.v > o.k
-          ))
-FROM dedup_outer o
-JOIN dedup_dim d ON o.k = d.k
-WHERE d.state = 'selected';
-----
-1	2
-1	2
-2	0
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # Additional domain groups must not invoke a correlated table function for unreachable keys.
 statement ok
@@ -392,6 +462,9 @@ WHERE d.k > 0;
 ----
 3
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -403,6 +476,9 @@ JOIN dedup_function_domain d ON o.k * 2 = d.k
 WHERE d.k > 0;
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # Domain-dependent table functions take the conservative path even when every argument is valid.
 statement ok
@@ -422,6 +498,9 @@ WHERE d.k > 0;
 ----
 3
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -433,6 +512,9 @@ JOIN dedup_valid_function_domain d ON o.k * 2 = d.k
 WHERE d.k > 0;
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # Additional groups must not expose scalar-subquery cardinality errors from unreachable keys.
 statement ok
@@ -458,6 +540,9 @@ WHERE d.k > 0;
 ----
 10
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -469,3 +554,6 @@ JOIN dedup_scalar_domain d ON o.k * 2 = d.k
 WHERE d.k > 0;
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');

@@ -8,6 +8,9 @@ statement ok
 PRAGMA explain_output=optimized_only;
 
 statement ok
+SET VARIABLE dedup_original_verify_aggregate_state_export = current_setting('debug_verify_aggregate_state_export');
+
+statement ok
 CREATE TABLE parquet_fact(k INTEGER, v INTEGER);
 
 statement ok
@@ -35,6 +38,9 @@ WHERE d.state = 'selected'
 ----
 2	a
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT f.v
@@ -48,6 +54,9 @@ WHERE d.state = 'selected'
   );
 ----
 logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # Duplicate keys across files are removed only from D; the untouched payload retains both source rows.
 query II rowsort
@@ -64,6 +73,9 @@ WHERE d.state = 'selected'
 2	a
 2	b
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT f.v
@@ -77,3 +89,6 @@ WHERE d.state = 'selected'
   );
 ----
 logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');

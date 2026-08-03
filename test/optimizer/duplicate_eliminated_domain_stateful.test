@@ -6,10 +6,19 @@ statement ok
 PRAGMA explain_output=optimized_only;
 
 statement ok
+SET VARIABLE dedup_original_verify_aggregate_state_export = current_setting('debug_verify_aggregate_state_export');
+
+statement ok
 CREATE TABLE state_domain(k INTEGER, selected BOOLEAN);
 
 statement ok
 INSERT INTO state_domain VALUES (2, true), (4, true);
+
+statement ok
+CREATE TABLE state_plan_outer(k INTEGER);
+
+statement ok
+INSERT INTO state_plan_outer SELECT 2 FROM range(100);
 
 statement ok
 CREATE TABLE state_values(k INTEGER, v INTEGER);
@@ -58,6 +67,9 @@ JOIN (
 ----
 2
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -68,7 +80,7 @@ SELECT (
         WHERE s.k = d.k
     ) windowed
 )
-FROM (VALUES (2)) o(k)
+FROM state_plan_outer o
 JOIN (
     SELECT k
     FROM state_domain
@@ -77,6 +89,9 @@ JOIN (
 ) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Window.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # Set operations must compare rows only within the same key domain.
 query I
@@ -95,6 +110,9 @@ JOIN (
 ----
 3
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -105,12 +123,15 @@ SELECT (
         SELECT v FROM state_extra e WHERE e.k = d.k
     ) unioned
 )
-FROM (VALUES (2)) o(k)
+FROM state_plan_outer o
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
 ) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 query I
 SELECT (
@@ -128,6 +149,9 @@ JOIN (
 ----
 1
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -138,12 +162,15 @@ SELECT (
         SELECT v FROM state_extra e WHERE e.k = d.k
     ) excepted
 )
-FROM (VALUES (2)) o(k)
+FROM state_plan_outer o
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
 ) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 query I
 SELECT (
@@ -161,6 +188,9 @@ JOIN (
 ----
 1
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -171,12 +201,15 @@ SELECT (
         SELECT v FROM state_extra e WHERE e.k = d.k
     ) intersected
 )
-FROM (VALUES (2)) o(k)
+FROM state_plan_outer o
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
 ) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # A domain-dependent UNNEST with potentially throwing list construction takes
 # the exact-domain fallback and still keeps generated rows isolated.
@@ -192,18 +225,24 @@ JOIN (
 ----
 5
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
     SELECT sum(x)
     FROM UNNEST([d.k, d.k + 1]) values(x)
 )
-FROM (VALUES (2)) o(k)
+FROM state_plan_outer o
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
 ) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # Every grouping set must include the duplicate-eliminated key.
 query I
@@ -223,6 +262,9 @@ JOIN (
 ----
 4
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -234,12 +276,15 @@ SELECT (
         GROUP BY GROUPING SETS ((s.v), ())
     ) grouped
 )
-FROM (VALUES (2)) o(k)
+FROM state_plan_outer o
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
 ) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # A materialized CTE must carry the active key through its definition and references.
 query I
@@ -256,6 +301,9 @@ JOIN (
 ----
 30
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -264,12 +312,15 @@ SELECT (
     )
     SELECT sum(v) FROM materialized_values
 )
-FROM (VALUES (2)) o(k)
+FROM state_plan_outer o
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
 ) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 # Non-inner joins must match rows independently for each duplicate-eliminated key.
 query I
@@ -286,6 +337,9 @@ JOIN (
 ----
 3
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -294,12 +348,15 @@ SELECT (
     FULL JOIN state_extra b ON a.k = b.k AND a.v = b.v
     WHERE coalesce(a.k, b.k) = d.k
 )
-FROM (VALUES (2)) o(k)
+FROM state_plan_outer o
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
 ) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
 
 query I
 SELECT (
@@ -315,6 +372,9 @@ JOIN (
 ----
 2
 
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 SELECT (
@@ -323,9 +383,12 @@ SELECT (
     ASOF LEFT JOIN state_thresholds t ON e.k = t.k AND e.ts >= t.ts
     WHERE e.k = d.k
 )
-FROM (VALUES (2)) o(k)
+FROM state_plan_outer o
 JOIN (
     SELECT k FROM state_domain WHERE selected GROUP BY k
 ) d ON o.k = d.k;
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');

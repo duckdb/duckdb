@@ -105,13 +105,14 @@ static unique_ptr<LogicalOperator> CreateDuplicateFreeDomain(Binder &binder, uni
 }
 
 bool DuplicateEliminatedDomainInliner::TryInline(Binder &binder, unique_ptr<LogicalOperator> &rhs,
-                                                 TableIndex domain_cte_index, idx_t domain_ref_count,
+                                                 unique_ptr<LogicalOperator> &source, TableIndex domain_cte_index,
+                                                 idx_t domain_ref_count,
                                                  const DuplicateEliminatedDomainCandidate &candidate) {
 	if (domain_ref_count != 1 || !FindDomainAggregateUse(*rhs, domain_cte_index).feeds_aggregate ||
-	    !DuplicateEliminatedDomainSafety::CanDuplicateSource(*candidate.Source())) {
+	    !DuplicateEliminatedDomainSafety::CanDuplicateSource(binder.context, *source)) {
 		return false;
 	}
-	auto scanned_table = GetScannedTable(*candidate.Source());
+	auto scanned_table = GetScannedTable(*source);
 	if (scanned_table && ScansTable(*rhs, *scanned_table, domain_cte_index)) {
 		return false;
 	}
@@ -127,7 +128,7 @@ bool DuplicateEliminatedDomainInliner::TryInline(Binder &binder, unique_ptr<Logi
 	try {
 		for (auto &location : locations) {
 			auto &domain_ref = location.get()->Cast<LogicalCTERef>();
-			auto replacement = CreateDuplicateFreeDomain(binder, candidate.Source(), candidate, domain_ref);
+			auto replacement = CreateDuplicateFreeDomain(binder, source, candidate, domain_ref);
 			if (!replacement) {
 				return false;
 			}

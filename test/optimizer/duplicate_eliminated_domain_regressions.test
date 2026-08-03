@@ -1,0 +1,800 @@
+# name: test/optimizer/duplicate_eliminated_domain_regressions.test
+# description: Regression coverage for duplicate-eliminated domain lowering and optional rewrites
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+SET VARIABLE dedup_reg_original_verify_aggregate_state_export = current_setting('debug_verify_aggregate_state_export');
+
+statement ok
+SET delim_join_as_cte=true;
+
+statement ok
+CREATE TABLE dedup_reg_users(id INTEGER, display_name VARCHAR, reputation INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_users VALUES (1, 'one', 10000), (2, 'two', 2000), (3, 'three', NULL), (4, 'one', 8000);
+
+statement ok
+CREATE TABLE dedup_reg_posts(id INTEGER, owner_user_id INTEGER, accepted_answer_id INTEGER, post_type_id INTEGER,
+                             title VARCHAR, score INTEGER, view_count INTEGER, tags VARCHAR,
+                             creation_date TIMESTAMP);
+
+statement ok
+INSERT INTO dedup_reg_posts VALUES
+    (10, 1, 100, 1, 'first', 10, 1000, '<sql><db>', '2024-09-20'),
+    (11, 1, NULL, 1, 'second', 5, 500, '<sql>', '2024-09-21'),
+    (12, 2, 101, 1, 'third', 7, 700, '<db>', '2024-09-22'),
+    (13, 3, NULL, 2, 'answer', 2, 100, NULL, '2024-09-23'),
+    (14, 1, NULL, 1, 'untagged', 1, 10, NULL, '2020-01-01');
+
+statement ok
+CREATE TABLE dedup_reg_votes(id INTEGER, user_id INTEGER, post_id INTEGER, vote_type_id INTEGER,
+                             bounty_amount INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_votes VALUES
+    (1, 1, 10, 2, NULL), (2, 1, 10, 2, NULL), (3, 1, 10, 2, NULL),
+    (4, 1, 10, 2, NULL), (5, 1, 10, 2, NULL), (6, 1, 10, 8, 50),
+    (7, 2, 12, 2, NULL), (8, 3, 13, 2, NULL);
+
+statement ok
+CREATE TABLE dedup_reg_comments(id INTEGER, post_id INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_comments VALUES (1, 10), (2, 10), (3, 11), (4, 12);
+
+statement ok
+CREATE TABLE dedup_reg_badges(id INTEGER, user_id INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_badges VALUES (1, 1), (2, 1), (3, 2);
+
+statement ok
+CREATE TABLE dedup_reg_history(id INTEGER, post_id INTEGER, creation_date TIMESTAMP);
+
+statement ok
+INSERT INTO dedup_reg_history VALUES
+    (1, 10, '2024-01-01'), (2, 10, '2024-02-01'), (3, 12, '2024-03-01');
+
+# Wide aggregate/projection output retains its type through two scalar predicates.
+statement ok
+CREATE VIEW dedup_reg_optional_projection AS
+WITH r AS (
+    SELECT p.id AS post_id, p.title, p.score, p.view_count,
+           row_number() OVER (PARTITION BY p.post_type_id ORDER BY p.score DESC) AS rank
+    FROM dedup_reg_posts p
+    WHERE p.creation_date >= DATE '2024-10-01' - INTERVAL '30 days'
+), t AS (
+    SELECT post_id, title, score, view_count FROM r WHERE rank <= 5
+), s AS (
+    SELECT u.id AS user_id, u.display_name,
+           count(DISTINCT p.id) AS total_posts,
+           count(DISTINCT c.id) AS total_comments,
+           coalesce(sum(v.bounty_amount), 0) AS total_bounties
+    FROM dedup_reg_users u
+    LEFT JOIN dedup_reg_posts p ON u.id = p.owner_user_id
+    LEFT JOIN dedup_reg_comments c ON p.id = c.post_id
+    LEFT JOIN dedup_reg_votes v ON p.id = v.post_id AND v.vote_type_id = 8
+    GROUP BY u.id, u.display_name
+), e AS (
+    SELECT t.post_id, t.view_count,
+           CASE WHEN s.total_posts IS NULL THEN 'No User' ELSE s.display_name END AS label
+    FROM t LEFT JOIN s ON t.post_id = s.user_id
+)
+SELECT post_id, typeof(post_id)
+FROM e
+WHERE view_count > (SELECT avg(view_count) FROM dedup_reg_posts)
+  AND (SELECT count(*) FROM dedup_reg_comments c WHERE c.post_id = e.post_id) > (
+      SELECT avg((SELECT count(*) FROM dedup_reg_comments c2 WHERE c2.post_id = p.id))
+      FROM dedup_reg_posts p WHERE p.post_type_id = 1
+  );
+
+query IT rowsort
+SELECT * FROM dedup_reg_optional_projection;
+----
+10	INTEGER
+
+# Windowed projected columns remain bound through an UNNEST-derived ANY join.
+statement ok
+CREATE VIEW dedup_reg_window_any AS
+WITH r AS (
+    SELECT id, owner_user_id, title, score, row_number() OVER (ORDER BY score) AS r1
+    FROM dedup_reg_posts
+), p AS (
+    SELECT unnest(string_to_array(tags, '>')) AS tag
+    FROM dedup_reg_posts
+    GROUP BY tag
+), t AS (
+    SELECT r.id, r.title, u.id AS user_id, row_number() OVER (ORDER BY r.score) AS r2
+    FROM r JOIN dedup_reg_users u ON r.owner_user_id = u.id
+    WHERE r1 <= 4
+)
+SELECT t.id, t.user_id
+FROM t JOIN p ON p.tag = ANY(string_to_array(t.title, '>'))
+WHERE t.r2 <= 10;
+
+query II rowsort
+SELECT * FROM dedup_reg_window_any;
+----
+
+# Required CTE lowering preserves projected aggregate output types.
+statement ok
+CREATE VIEW dedup_reg_required_projection AS
+WITH ranked_posts AS (
+    SELECT p.id, p.owner_user_id,
+           row_number() OVER (PARTITION BY p.owner_user_id ORDER BY p.score DESC) AS post_rank
+    FROM dedup_reg_posts p
+    WHERE p.creation_date > TIMESTAMP '2024-10-01 12:34:56' - INTERVAL '1 year'
+), user_scores AS (
+    SELECT u.id AS user_id,
+           sum(CASE WHEN v.vote_type_id = 2 THEN 1 ELSE 0 END) AS upvote_count,
+           count(DISTINCT b.id) AS badge_count,
+           coalesce(sum(CASE WHEN p.accepted_answer_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS accepted_answers
+    FROM dedup_reg_users u
+    LEFT JOIN dedup_reg_votes v ON u.id = v.user_id
+    LEFT JOIN dedup_reg_badges b ON u.id = b.user_id
+    LEFT JOIN dedup_reg_posts p ON u.id = p.owner_user_id
+    GROUP BY u.id
+), post_details AS (
+    SELECT rp.id AS post_id, us.upvote_count, us.badge_count, us.accepted_answers
+    FROM ranked_posts rp
+    JOIN user_scores us ON rp.owner_user_id = us.user_id
+    WHERE rp.post_rank <= 5
+)
+SELECT pd.post_id, typeof(pd.upvote_count), typeof(pd.accepted_answers)
+FROM post_details pd
+LEFT JOIN dedup_reg_history ph ON pd.post_id = ph.post_id
+    AND ph.creation_date = (
+        SELECT max(creation_date) FROM dedup_reg_history WHERE post_id = pd.post_id
+    )
+ORDER BY pd.post_id;
+
+query ITT rowsort
+SELECT * FROM dedup_reg_required_projection;
+----
+10	HUGEINT	HUGEINT
+11	HUGEINT	HUGEINT
+12	HUGEINT	HUGEINT
+13	HUGEINT	HUGEINT
+
+statement ok
+SET disabled_optimizers='duplicate_eliminated_domain';
+
+query ITT rowsort
+SELECT * FROM dedup_reg_required_projection;
+----
+10	HUGEINT	HUGEINT
+11	HUGEINT	HUGEINT
+12	HUGEINT	HUGEINT
+13	HUGEINT	HUGEINT
+
+statement ok
+SET disabled_optimizers='';
+
+# Pair-dependent IN retains grouped evidence, duplicates, NULLs, and empty evidence.
+statement ok
+CREATE VIEW dedup_reg_pair_in AS
+SELECT p.id, u.id
+FROM dedup_reg_posts p
+JOIN dedup_reg_users u ON u.id IN (
+    SELECT user_id FROM dedup_reg_votes
+    WHERE post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+);
+
+query II rowsort
+SELECT * FROM dedup_reg_pair_in;
+----
+10	1
+
+# NULL evidence and an empty evidence group retain ordinary IN three-valued logic.
+statement ok
+CREATE TABLE dedup_reg_in_probes(id INTEGER, probe INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_in_probes VALUES (1, 1), (2, 1), (3, 1), (3, NULL), (4, NULL);
+
+statement ok
+CREATE TABLE dedup_reg_in_evidence(post_id INTEGER, user_id INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_in_evidence VALUES
+    (1, NULL), (1, NULL), (1, NULL), (1, NULL), (1, NULL), (1, NULL),
+    (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1);
+
+statement ok
+CREATE VIEW dedup_reg_pair_in_semantics AS
+WITH matches AS (
+    SELECT p.id,
+           p.probe IN (
+               SELECT user_id FROM dedup_reg_in_evidence e
+               WHERE e.post_id = p.id
+               GROUP BY user_id
+               HAVING count(*) > 5
+           ) AS matched
+    FROM dedup_reg_in_probes p
+)
+SELECT id,
+       CASE WHEN matched THEN 'true' WHEN matched IS NULL THEN 'null' ELSE 'false' END AS match_state
+FROM matches;
+
+query IT rowsort
+SELECT * FROM dedup_reg_pair_in_semantics;
+----
+1	null
+2	false
+3	null
+3	true
+4	false
+
+# A scalar aggregate in a join predicate is evaluated per correlated key.
+statement ok
+CREATE VIEW dedup_reg_scalar_join AS
+WITH t AS (
+    SELECT id, score, tags FROM dedup_reg_posts WHERE post_type_id = 1
+)
+SELECT p.id, u.id
+FROM t p
+JOIN dedup_reg_users u ON p.score = (
+    SELECT max(x.score) FROM t x WHERE x.tags = p.tags
+)
+ORDER BY p.id, u.id;
+
+query II rowsort
+SELECT * FROM dedup_reg_scalar_join;
+----
+10	1
+10	2
+10	3
+10	4
+11	1
+11	2
+11	3
+11	4
+12	1
+12	2
+12	3
+12	4
+
+statement ok
+SET disabled_optimizers='duplicate_eliminated_domain';
+
+query III
+SELECT count(*), sum(id), sum(id_1) FROM dedup_reg_scalar_join;
+----
+12	132	30
+
+statement ok
+SET disabled_optimizers='';
+
+# SUM, AVG, and COUNT in a pair-dependent join predicate retain empty-group
+# semantics through a filtered CTE that is reused by all three subqueries.
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+statement ok
+CREATE TABLE dedup_reg_scalar_expected(k INTEGER, expected_sum BIGINT, expected_avg DOUBLE, expected_count BIGINT);
+
+statement ok
+INSERT INTO dedup_reg_scalar_expected VALUES (1, 6, 3, 2), (2, NULL, NULL, 0), (3, 5, 5, 1);
+
+statement ok
+CREATE TABLE dedup_reg_scalar_dimension(k INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_scalar_dimension VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE dedup_reg_scalar_measure(k INTEGER, v INTEGER, selected BOOLEAN);
+
+statement ok
+INSERT INTO dedup_reg_scalar_measure VALUES (1, 2, true), (1, 4, true), (3, 5, true), (2, 99, false);
+
+statement ok
+CREATE VIEW dedup_reg_scalar_aggregate_join AS
+WITH filtered_measure AS MATERIALIZED (
+    SELECT k, v FROM dedup_reg_scalar_measure WHERE selected
+)
+SELECT o.k
+FROM dedup_reg_scalar_expected o
+JOIN dedup_reg_scalar_dimension d ON
+    o.k = d.k
+    AND o.expected_sum IS NOT DISTINCT FROM (
+        SELECT sum(m.v) FROM filtered_measure m WHERE m.k = d.k
+    )
+    AND o.expected_avg IS NOT DISTINCT FROM (
+        SELECT avg(m.v) FROM filtered_measure m WHERE m.k = d.k
+    )
+    AND o.expected_count = (
+        SELECT count(*) FROM filtered_measure m WHERE m.k = d.k
+    );
+
+query I rowsort
+SELECT * FROM dedup_reg_scalar_aggregate_join;
+----
+1
+2
+3
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_reg_original_verify_aggregate_state_export');
+
+# Reused UNNEST CTEs retain tag multiplicity and ordered aggregate results.
+statement ok
+CREATE TABLE dedup_reg_tag_lists(post_id INTEGER, tags VARCHAR[]);
+
+statement ok
+INSERT INTO dedup_reg_tag_lists VALUES
+    (10, ['sql', 'db', 'db']),
+    (11, ['sql', NULL]),
+    (12, ['db']),
+    (14, [NULL]);
+
+statement ok
+CREATE VIEW dedup_reg_reused_unnest AS
+WITH ranked_posts AS (
+    SELECT p.id AS post_id, p.title, p.creation_date, p.score, p.view_count, p.tags,
+           row_number() OVER (PARTITION BY p.tags ORDER BY p.creation_date DESC) AS tag_rank
+    FROM dedup_reg_posts p
+    JOIN dedup_reg_users u ON p.owner_user_id = u.id
+    WHERE p.post_type_id = 1
+), filtered_posts AS (
+    SELECT post_id, title, creation_date, score, view_count, tags
+    FROM ranked_posts WHERE tag_rank <= 5
+), post_tags AS (
+    SELECT fp.post_id, unnest(tl.tags) AS tag
+    FROM filtered_posts fp
+    JOIN dedup_reg_tag_lists tl ON fp.post_id = tl.post_id
+), tag_usage AS (
+    SELECT tag, count(*) AS post_count, avg(fp.view_count) AS avg_views, avg(fp.score) AS avg_score
+    FROM post_tags pt JOIN filtered_posts fp ON pt.post_id = fp.post_id
+    GROUP BY tag
+)
+SELECT tu.tag, tu.post_count, tu.avg_views, tu.avg_score,
+       string_agg(fp.title, ', ' ORDER BY fp.view_count DESC) AS related_posts
+FROM tag_usage tu
+JOIN filtered_posts fp ON EXISTS (
+    SELECT 1 FROM post_tags pt WHERE pt.post_id = fp.post_id AND pt.tag = tu.tag
+)
+GROUP BY tu.tag, tu.post_count, tu.avg_views, tu.avg_score;
+
+query TIRRT rowsort
+SELECT * FROM dedup_reg_reused_unnest;
+----
+db	3	900.0	9.0	first, third
+sql	2	750.0	7.5	first, second
+
+# Generated-domain cleanup must inspect joins inside CTEs synthesized by required lowering.
+query II
+EXPLAIN SELECT * FROM dedup_reg_reused_unnest;
+----
+logical_opt	<!REGEX>:.*CTE Name: __duckdb_delim_.*
+
+# A factored domain may not expand through a pair-dependent outer-join consumer.
+statement ok
+CREATE VIEW dedup_reg_outer_join_domain AS
+WITH v AS (
+    SELECT u.id AS user_id, count(v.id) AS n
+    FROM dedup_reg_users u
+    LEFT JOIN dedup_reg_votes v ON u.id = v.user_id
+    GROUP BY u.id
+), u AS (
+    SELECT id FROM dedup_reg_users WHERE reputation IS NOT NULL
+)
+SELECT u.id, h.id
+FROM v JOIN u ON v.user_id = u.id
+LEFT JOIN dedup_reg_history h ON h.post_id IN (
+    SELECT post_id FROM dedup_reg_votes WHERE user_id = u.id
+)
+WHERE v.n > 5
+ORDER BY u.id, h.id;
+
+query II rowsort
+SELECT * FROM dedup_reg_outer_join_domain;
+----
+1	1
+1	2
+
+query II
+EXPLAIN SELECT * FROM dedup_reg_outer_join_domain;
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
+
+# Additional-group elimination may not cross UNNEST, windows, and ANY before reduction.
+statement ok
+CREATE VIEW dedup_reg_unnest_any AS
+WITH tag_counts AS (
+    SELECT unnest(string_to_array(trim(both '<>' FROM tags), '><')) AS tag,
+           count(*) AS post_count
+    FROM dedup_reg_posts
+    WHERE post_type_id = 1
+    GROUP BY tag
+), top_tags AS (
+    SELECT tag, post_count, row_number() OVER (ORDER BY post_count DESC) AS rank
+    FROM tag_counts WHERE post_count > 0
+), popular_users AS (
+    SELECT id, display_name, reputation FROM dedup_reg_users WHERE reputation > 1000
+), questions AS (
+    SELECT p.id, p.view_count, u.display_name AS owner
+    FROM dedup_reg_posts p
+    LEFT JOIN dedup_reg_users u ON p.owner_user_id = u.id
+    JOIN top_tags t ON t.tag = ANY(string_to_array(trim(both '<>' FROM p.tags), '><'))
+    WHERE p.post_type_id = 1
+)
+SELECT q.id
+FROM questions q
+JOIN popular_users u ON q.owner = u.display_name
+WHERE u.reputation > 5000
+ORDER BY q.id;
+
+query I rowsort
+SELECT * FROM dedup_reg_unnest_any;
+----
+10
+10
+10
+10
+11
+11
+
+# A duplicate-free nested scalar aggregate cannot force materialization of the complete join-condition payload.
+statement ok
+CREATE TABLE dedup_reg_nested_users(id INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_nested_users VALUES (1), (1), (2), (NULL);
+
+statement ok
+CREATE TABLE dedup_reg_nested_posts(id INTEGER, owner_user_id INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_nested_posts VALUES (10, 1), (11, NULL), (12, 2);
+
+statement ok
+CREATE TABLE dedup_reg_nested_comments(post_id INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_nested_comments VALUES (10), (10), (12);
+
+statement ok
+CREATE VIEW dedup_reg_nested_scalar_domain AS
+WITH keyed AS MATERIALIZED (
+    SELECT p.id, p.owner_user_id,
+           (SELECT count(*) FROM dedup_reg_nested_comments c WHERE c.post_id = p.id) AS comment_count
+    FROM dedup_reg_nested_posts p
+), grouped AS (
+    SELECT id, max(comment_count) AS max_comments FROM keyed GROUP BY id
+)
+SELECT u.id AS user_id, g.id AS post_id
+FROM dedup_reg_nested_users u
+JOIN grouped g ON u.id = (SELECT owner_user_id FROM keyed k WHERE k.id = g.id)
+WHERE u.id IS NULL OR u.id > 0 OR g.max_comments > 0;
+
+query II rowsort
+SELECT * FROM dedup_reg_nested_scalar_domain;
+----
+1	10
+1	10
+2	12
+
+statement ok
+CREATE VIEW dedup_reg_nested_scalar_domain_nullsafe AS
+WITH keyed AS MATERIALIZED (
+    SELECT p.id, p.owner_user_id,
+           (SELECT count(*) FROM dedup_reg_nested_comments c WHERE c.post_id = p.id) AS comment_count
+    FROM dedup_reg_nested_posts p
+), grouped AS (
+    SELECT id, max(comment_count) AS max_comments FROM keyed GROUP BY id
+)
+SELECT u.id AS user_id, g.id AS post_id
+FROM dedup_reg_nested_users u
+JOIN grouped g ON u.id IS NOT DISTINCT FROM (SELECT owner_user_id FROM keyed k WHERE k.id = g.id)
+WHERE u.id IS NULL OR u.id > 0 OR g.max_comments > 0;
+
+query II rowsort
+SELECT * FROM dedup_reg_nested_scalar_domain_nullsafe;
+----
+1	10
+1	10
+2	12
+NULL	11
+
+query II
+EXPLAIN SELECT * FROM dedup_reg_nested_scalar_domain;
+----
+logical_opt	<REGEX>:.*Expressions: id = SUBQUERY.*Join Type: SINGLE.*Any Join.*
+
+# Selected evidence restrictions must reach nested scalar domains. Otherwise the
+# nested aggregate is evaluated globally after generated-domain cleanup.
+statement ok
+CREATE TABLE dedup_reg_evidence_outer(k INTEGER, selected BOOLEAN);
+
+statement ok
+INSERT INTO dedup_reg_evidence_outer VALUES (1, true), (2, true), (3, false), (4, true);
+
+statement ok
+CREATE TABLE dedup_reg_evidence_middle(k INTEGER, selected BOOLEAN);
+
+statement ok
+INSERT INTO dedup_reg_evidence_middle VALUES (1, true), (2, true), (2, false), (3, true);
+
+statement ok
+CREATE TABLE dedup_reg_evidence_inner(k INTEGER);
+
+statement ok
+INSERT INTO dedup_reg_evidence_inner VALUES (1), (1), (3);
+
+# A direct positive IN marker uses the ordinary SEMI rewrite. It must not preserve
+# a second selected payload CTE around the nested evidence domain.
+statement ok
+CREATE VIEW dedup_reg_positive_nested_in AS
+SELECT d.k,
+	       (SELECT sum(1)
+        FROM dedup_reg_evidence_inner u
+        WHERE u.k IN (
+            SELECT t.k
+            FROM dedup_reg_evidence_middle t
+            WHERE t.k = d.k AND t.selected
+        )) AS match_count
+FROM dedup_reg_evidence_outer d
+WHERE d.selected;
+
+query II rowsort
+SELECT * FROM dedup_reg_positive_nested_in;
+----
+1	2
+2	NULL
+4	NULL
+
+query II
+EXPLAIN SELECT * FROM dedup_reg_positive_nested_in;
+----
+logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*__duckdb_delim_[0-9]+.*
+
+query II
+EXPLAIN SELECT * FROM dedup_reg_positive_nested_in;
+----
+logical_opt	<REGEX>:.*Join Type: SEMI.*
+
+query I rowsort
+SELECT d.k
+FROM dedup_reg_evidence_outer d
+WHERE d.selected
+  AND NOT EXISTS (
+        SELECT 1
+        FROM dedup_reg_evidence_middle t
+        WHERE t.k = d.k
+          AND t.selected
+          AND (SELECT count(*) FROM dedup_reg_evidence_inner u WHERE u.k = t.k) > 0
+      );
+----
+2
+4
+
+query II
+EXPLAIN
+SELECT d.k
+FROM dedup_reg_evidence_outer d
+WHERE d.selected
+  AND NOT EXISTS (
+        SELECT 1
+        FROM dedup_reg_evidence_middle t
+        WHERE t.k = d.k
+          AND t.selected
+          AND (SELECT count(*) FROM dedup_reg_evidence_inner u WHERE u.k = t.k) > 0
+      );
+----
+logical_opt	<REGEX>:.*__duckdb_delim_dedup_[0-9]+.*
+
+statement ok
+SET disabled_optimizers='deliminator';
+
+query I rowsort
+SELECT d.k
+FROM dedup_reg_evidence_outer d
+WHERE d.selected
+  AND NOT EXISTS (
+        SELECT 1
+        FROM dedup_reg_evidence_middle t
+        WHERE t.k = d.k
+          AND t.selected
+          AND (SELECT count(*) FROM dedup_reg_evidence_inner u WHERE u.k = t.k) > 0
+      );
+----
+2
+4
+
+statement ok
+SET disabled_optimizers='';
+
+# Every reproducer keeps the same values and output types with the optional strategy disabled.
+statement ok
+SET disabled_optimizers='duplicate_eliminated_domain';
+
+query IT rowsort
+SELECT * FROM dedup_reg_optional_projection;
+----
+10	INTEGER
+
+query II rowsort
+SELECT * FROM dedup_reg_window_any;
+----
+
+query ITT rowsort
+SELECT * FROM dedup_reg_required_projection;
+----
+10	HUGEINT	HUGEINT
+11	HUGEINT	HUGEINT
+12	HUGEINT	HUGEINT
+13	HUGEINT	HUGEINT
+
+query II rowsort
+SELECT * FROM dedup_reg_pair_in;
+----
+10	1
+
+query IT rowsort
+SELECT * FROM dedup_reg_pair_in_semantics;
+----
+1	null
+2	false
+3	null
+3	true
+4	false
+
+query III
+SELECT count(*), sum(id), sum(id_1) FROM dedup_reg_scalar_join;
+----
+12	132	30
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+query I rowsort
+SELECT * FROM dedup_reg_scalar_aggregate_join;
+----
+1
+2
+3
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_reg_original_verify_aggregate_state_export');
+
+query TIRRT rowsort
+SELECT * FROM dedup_reg_reused_unnest;
+----
+db	3	900.0	9.0	first, third
+sql	2	750.0	7.5	first, second
+
+query II rowsort
+SELECT * FROM dedup_reg_outer_join_domain;
+----
+1	1
+1	2
+
+query II
+SELECT count(*), sum(id) FROM dedup_reg_unnest_any;
+----
+6	62
+
+query II rowsort
+SELECT * FROM dedup_reg_nested_scalar_domain;
+----
+1	10
+1	10
+2	12
+
+query II rowsort
+SELECT * FROM dedup_reg_nested_scalar_domain_nullsafe;
+----
+1	10
+1	10
+2	12
+NULL	11
+
+query II rowsort
+SELECT * FROM dedup_reg_positive_nested_in;
+----
+1	2
+2	NULL
+4	NULL
+
+statement ok
+SET disabled_optimizers='';
+
+# The regular duplicate-eliminated join path is an equivalent fallback for every reproducer.
+statement ok
+SET delim_join_as_cte=false;
+
+query IT rowsort
+SELECT * FROM dedup_reg_optional_projection;
+----
+10	INTEGER
+
+# The regular path for the window/ANY reproducer fails on the merge base and is outside this optimizer change.
+
+query ITT rowsort
+SELECT * FROM dedup_reg_required_projection;
+----
+10	HUGEINT	HUGEINT
+11	HUGEINT	HUGEINT
+12	HUGEINT	HUGEINT
+13	HUGEINT	HUGEINT
+
+query II rowsort
+SELECT * FROM dedup_reg_pair_in;
+----
+10	1
+
+query IT rowsort
+SELECT * FROM dedup_reg_pair_in_semantics;
+----
+1	null
+2	false
+3	null
+3	true
+4	false
+
+query III
+SELECT count(*), sum(id), sum(id_1) FROM dedup_reg_scalar_join;
+----
+12	132	30
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+query I rowsort
+SELECT * FROM dedup_reg_scalar_aggregate_join;
+----
+1
+2
+3
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_reg_original_verify_aggregate_state_export');
+
+query TIRRT rowsort
+SELECT * FROM dedup_reg_reused_unnest;
+----
+db	3	900.0	9.0	first, third
+sql	2	750.0	7.5	first, second
+
+query II rowsort
+SELECT * FROM dedup_reg_outer_join_domain;
+----
+1	1
+1	2
+
+query II
+SELECT count(*), sum(id) FROM dedup_reg_unnest_any;
+----
+6	62
+
+query II rowsort
+SELECT * FROM dedup_reg_nested_scalar_domain;
+----
+1	10
+1	10
+2	12
+
+query II rowsort
+SELECT * FROM dedup_reg_nested_scalar_domain_nullsafe;
+----
+1	10
+1	10
+2	12
+NULL	11
+
+query II rowsort
+SELECT * FROM dedup_reg_positive_nested_in;
+----
+1	2
+2	NULL
+4	NULL
+
+statement ok
+SET delim_join_as_cte=true;

@@ -1,0 +1,30 @@
+# name: benchmark/micro/optimizer/duplicate_eliminated_domain_scalar_join.benchmark
+# description: Correlated scalar aggregate in a join predicate
+# group: [optimizer]
+
+name Duplicate-Eliminated Domain Scalar Join
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE dedup_bench_posts AS
+SELECT i::INTEGER AS id, (i % 100)::INTEGER AS score, ('tag-' || (i % 1000))::VARCHAR AS tags,
+       1::INTEGER AS post_type_id
+FROM range(100000) t(i);
+CREATE TABLE dedup_bench_users AS
+SELECT i::INTEGER AS id
+FROM range(20) t(i);
+
+run
+WITH typed_posts AS (
+    SELECT id, score, tags
+    FROM dedup_bench_posts
+    WHERE post_type_id = 1
+)
+SELECT count(*)
+FROM typed_posts p
+JOIN dedup_bench_users u ON p.score = (
+    SELECT max(x.score)
+    FROM typed_posts x
+    WHERE x.tags = p.tags
+);

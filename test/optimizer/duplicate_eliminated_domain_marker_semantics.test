@@ -1,0 +1,249 @@
+# name: test/optimizer/duplicate_eliminated_domain_marker_semantics.test
+# description: Marker evidence semantics for duplicate-eliminated domain lowering
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output=optimized_only;
+
+statement ok
+SET delim_join_as_cte=true;
+
+statement ok
+CREATE TABLE dedup_marker_domain(k INTEGER, selected BOOLEAN);
+
+statement ok
+INSERT INTO dedup_marker_domain VALUES (1, true), (2, true), (3, true), (4, false);
+
+statement ok
+CREATE TABLE dedup_marker_probe(v INTEGER);
+
+statement ok
+INSERT INTO dedup_marker_probe VALUES (1), (2), (NULL);
+
+statement ok
+CREATE TABLE dedup_marker_evidence(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO dedup_marker_evidence VALUES (1, 1), (1, NULL), (2, NULL);
+
+# A direct positive marker only retains TRUE rows. FALSE and UNKNOWN can both be
+# discarded by the ordinary SEMI rewrite, including NULL-only and empty evidence.
+statement ok
+CREATE VIEW dedup_marker_direct AS
+SELECT d.k, p.v
+FROM dedup_marker_domain d
+CROSS JOIN dedup_marker_probe p
+WHERE d.selected
+  AND p.v IN (SELECT e.v FROM dedup_marker_evidence e WHERE e.k = d.k);
+
+# Composed marker expressions can observe or combine FALSE and UNKNOWN, so they
+# must retain selected evidence through lowering.
+statement ok
+CREATE VIEW dedup_marker_is_null AS
+SELECT d.k, p.v
+FROM dedup_marker_domain d
+CROSS JOIN dedup_marker_probe p
+WHERE d.selected
+  AND (p.v IN (SELECT e.v FROM dedup_marker_evidence e WHERE e.k = d.k)) IS NULL;
+
+statement ok
+CREATE VIEW dedup_marker_coalesce AS
+SELECT d.k, p.v
+FROM dedup_marker_domain d
+CROSS JOIN dedup_marker_probe p
+WHERE d.selected
+  AND coalesce(p.v IN (SELECT e.v FROM dedup_marker_evidence e WHERE e.k = d.k), false);
+
+statement ok
+CREATE VIEW dedup_marker_is_false AS
+SELECT d.k, p.v
+FROM dedup_marker_domain d
+CROSS JOIN dedup_marker_probe p
+WHERE d.selected
+  AND (p.v IN (SELECT e.v FROM dedup_marker_evidence e WHERE e.k = d.k)) = false;
+
+statement ok
+CREATE VIEW dedup_marker_not_in AS
+SELECT d.k, p.v
+FROM dedup_marker_domain d
+CROSS JOIN dedup_marker_probe p
+WHERE d.selected
+  AND p.v NOT IN (SELECT e.v FROM dedup_marker_evidence e WHERE e.k = d.k);
+
+statement ok
+CREATE VIEW dedup_marker_or AS
+SELECT d.k, p.v
+FROM dedup_marker_domain d
+CROSS JOIN dedup_marker_probe p
+WHERE d.selected
+  AND (p.v IN (SELECT e.v FROM dedup_marker_evidence e WHERE e.k = d.k) OR p.v = 2);
+
+statement ok
+CREATE VIEW dedup_marker_is_true AS
+SELECT d.k, p.v
+FROM dedup_marker_domain d
+CROSS JOIN dedup_marker_probe p
+WHERE d.selected
+  AND (p.v IN (SELECT e.v FROM dedup_marker_evidence e WHERE e.k = d.k)) = true;
+
+query II rowsort
+SELECT * FROM dedup_marker_direct;
+----
+1	1
+
+query II rowsort
+SELECT * FROM dedup_marker_is_null;
+----
+1	2
+1	NULL
+2	1
+2	2
+2	NULL
+
+query II rowsort
+SELECT * FROM dedup_marker_coalesce;
+----
+1	1
+
+query II rowsort
+SELECT * FROM dedup_marker_is_false;
+----
+3	1
+3	2
+3	NULL
+
+query II rowsort
+SELECT * FROM dedup_marker_not_in;
+----
+3	1
+3	2
+3	NULL
+
+query II rowsort
+SELECT * FROM dedup_marker_or;
+----
+1	1
+1	2
+2	2
+3	2
+
+query II rowsort
+SELECT * FROM dedup_marker_is_true;
+----
+1	1
+
+query II
+EXPLAIN SELECT * FROM dedup_marker_direct;
+----
+logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
+
+query II
+EXPLAIN SELECT * FROM dedup_marker_is_null;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# The optional optimizer may change the implementation, but never marker semantics.
+statement ok
+SET disabled_optimizers='duplicate_eliminated_domain';
+
+query II rowsort
+SELECT * FROM dedup_marker_direct;
+----
+1	1
+
+query II rowsort
+SELECT * FROM dedup_marker_is_null;
+----
+1	2
+1	NULL
+2	1
+2	2
+2	NULL
+
+query II rowsort
+SELECT * FROM dedup_marker_coalesce;
+----
+1	1
+
+query II rowsort
+SELECT * FROM dedup_marker_is_false;
+----
+3	1
+3	2
+3	NULL
+
+query II rowsort
+SELECT * FROM dedup_marker_not_in;
+----
+3	1
+3	2
+3	NULL
+
+query II rowsort
+SELECT * FROM dedup_marker_or;
+----
+1	1
+1	2
+2	2
+3	2
+
+query II rowsort
+SELECT * FROM dedup_marker_is_true;
+----
+1	1
+
+statement ok
+SET disabled_optimizers='';
+
+# The ordinary duplicate-eliminated join path is the semantic fallback.
+statement ok
+SET delim_join_as_cte=false;
+
+query II rowsort
+SELECT * FROM dedup_marker_direct;
+----
+1	1
+
+query II rowsort
+SELECT * FROM dedup_marker_is_null;
+----
+1	2
+1	NULL
+2	1
+2	2
+2	NULL
+
+query II rowsort
+SELECT * FROM dedup_marker_coalesce;
+----
+1	1
+
+query II rowsort
+SELECT * FROM dedup_marker_is_false;
+----
+3	1
+3	2
+3	NULL
+
+query II rowsort
+SELECT * FROM dedup_marker_not_in;
+----
+3	1
+3	2
+3	NULL
+
+query II rowsort
+SELECT * FROM dedup_marker_or;
+----
+1	1
+1	2
+2	2
+3	2
+
+query II rowsort
+SELECT * FROM dedup_marker_is_true;
+----
+1	1
+
+statement ok
+SET delim_join_as_cte=true;

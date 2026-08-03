@@ -20,8 +20,9 @@ class DuplicateEliminatedDomainCandidate;
 //! Replaces generated domain references with duplicate-free copies of a cheap, deterministic source.
 class DuplicateEliminatedDomainInliner {
 public:
-	static bool TryInline(Binder &binder, unique_ptr<LogicalOperator> &rhs, TableIndex domain_cte_index,
-	                      idx_t domain_ref_count, const DuplicateEliminatedDomainCandidate &candidate);
+	static bool TryInline(Binder &binder, unique_ptr<LogicalOperator> &rhs, unique_ptr<LogicalOperator> &source,
+	                      TableIndex domain_cte_index, idx_t domain_ref_count,
+	                      const DuplicateEliminatedDomainCandidate &candidate);
 };
 
 } // namespace duckdb

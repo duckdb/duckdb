@@ -14,17 +14,21 @@
 namespace duckdb {
 
 class LogicalOperator;
+class ClientContext;
+class DuplicateEliminatedDomainCTERegistry;
 
 //! Conservative eligibility checks for duplicate-eliminated domain rewrites.
-//! Unsupported operators and opaque function bind data always decline the optimization.
+//! Unsupported operators and expressions always decline the optimization.
 class DuplicateEliminatedDomainSafety {
 public:
-	//! Whether optional rewrites may remove the full-payload CTE without exposing expression evaluation.
-	static bool CanOptimizePayload(const LogicalOperator &op);
-	static bool CanEvaluateAdditionalGroups(const LogicalOperator &op, TableIndex domain_cte_index);
+	//! Whether local filter pushdown can prepare this payload without changing its public layout.
+	static bool CanPreparePayload(ClientContext &context, const LogicalOperator &op);
+	static bool CanEvaluateAdditionalGroups(ClientContext &context, LogicalOperator &rewrite_root,
+	                                        const DuplicateEliminatedDomainCTERegistry &cte_registry,
+	                                        LogicalOperator &op, TableIndex domain_cte_index);
 	//! Local factor eligibility, combined bottom-up by the candidate analyzer.
-	static bool CanFactorOperator(const LogicalOperator &op);
-	static bool CanDuplicateSource(const LogicalOperator &op);
+	static bool CanFactorOperator(ClientContext &context, const LogicalOperator &op);
+	static bool CanDuplicateSource(ClientContext &context, const LogicalOperator &op);
 };
 
 } // namespace duckdb

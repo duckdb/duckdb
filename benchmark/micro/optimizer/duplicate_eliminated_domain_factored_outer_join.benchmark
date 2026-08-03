@@ -1,0 +1,39 @@
+# name: benchmark/micro/optimizer/duplicate_eliminated_domain_factored_outer_join.benchmark
+# description: Factored duplicate-eliminated domain below a pair-dependent outer join
+# group: [optimizer]
+
+name Duplicate-Eliminated Domain Factored Outer Join
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE dedup_bench_users AS
+SELECT i::INTEGER AS id, (i % 1000)::INTEGER AS reputation
+FROM range(20000) t(i);
+CREATE TABLE dedup_bench_votes AS
+SELECT i::INTEGER AS id, (i % 20000)::INTEGER AS user_id, (i % 100000)::INTEGER AS post_id
+FROM range(400000) t(i);
+CREATE TABLE dedup_bench_history AS
+SELECT i::INTEGER AS id, i::INTEGER AS post_id
+FROM range(100000) t(i);
+
+run
+WITH vote_counts AS (
+    SELECT u.id AS user_id, count(v.id) AS n
+    FROM dedup_bench_users u
+    LEFT JOIN dedup_bench_votes v ON u.id = v.user_id
+    GROUP BY u.id
+), selected_users AS (
+    SELECT id
+    FROM dedup_bench_users
+    WHERE reputation % 10 = 0
+)
+SELECT count(*)
+FROM vote_counts v
+JOIN selected_users u ON v.user_id = u.id
+LEFT JOIN dedup_bench_history h ON h.post_id IN (
+    SELECT post_id
+    FROM dedup_bench_votes
+    WHERE user_id = u.id
+)
+WHERE v.n > 5;

@@ -8,6 +8,7 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -18,6 +19,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 
 #include <algorithm>
 
@@ -261,10 +263,15 @@ static void FinalizeAnyJoins(unique_ptr<LogicalOperator> &plan) {
 }
 
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
-                                                                          unique_ptr<LogicalOperator> plan) {
+                                                                          unique_ptr<LogicalOperator> plan,
+                                                                          optional_ptr<DelimJoinCTEOptimization>
+                                                                              optimization) {
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
+	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
+		DelimJoinCTERewriter::Rewrite(binder, plan, optimization);
+	}
 	// ANY joins must retain their general shape until enclosing decorrelation and binding rewrites are complete.
 	FinalizeAnyJoins(plan);
 	return plan;
@@ -528,6 +535,10 @@ void FlattenDependentJoins::AddCorrelatedJoinConditions(LogicalJoin &join, const
 	                         join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN)
 	                            ? join.Cast<LogicalComparisonJoin>().conditions.size()
 	                            : 0;
+	if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		join.Cast<LogicalComparisonJoin>().conditions.reserve(condition_offset + correlated_columns.size());
+	}
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto left = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_state[i]);
 		auto right = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_state[i]);
@@ -548,13 +559,20 @@ void FlattenDependentJoins::AddCorrelatedJoinConditions(LogicalJoin &join, const
 	}
 	if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-		auto &conditions = join.Cast<LogicalComparisonJoin>().conditions;
-		D_ASSERT(conditions.size() == condition_offset + correlated_columns.size());
+		D_ASSERT(join.Cast<LogicalComparisonJoin>().conditions.size() == condition_offset + correlated_columns.size());
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			auto &condition = conditions[condition_offset + i];
-			D_ASSERT(condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-			D_ASSERT(condition.GetLHS().Cast<BoundColumnRefExpression>().Binding() == left_state[i]);
-			D_ASSERT(condition.GetRHS().Cast<BoundColumnRefExpression>().Binding() == right_state[i]);
+			D_ASSERT(join.Cast<LogicalComparisonJoin>().conditions[condition_offset + i].GetComparisonType() ==
+			         ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+			D_ASSERT(join.Cast<LogicalComparisonJoin>()
+			             .conditions[condition_offset + i]
+			             .GetLHS()
+			             .Cast<BoundColumnRefExpression>()
+			             .Binding() == left_state[i]);
+			D_ASSERT(join.Cast<LogicalComparisonJoin>()
+			             .conditions[condition_offset + i]
+			             .GetRHS()
+			             .Cast<BoundColumnRefExpression>()
+			             .Binding() == right_state[i]);
 		}
 	}
 }
@@ -1176,10 +1194,10 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownWindow(uniq
 		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &w = expr->Cast<BoundWindowExpression>();
 		AppendCorrelatedColumns(w.PartitionsMutable(), result.bindings, false);
-		auto partition_offset = w.Partitions().size() - result.bindings.size();
 		for (idx_t i = 0; i < result.bindings.size(); i++) {
-			D_ASSERT(w.Partitions()[partition_offset + i]->Cast<BoundColumnRefExpression>().Binding() ==
-			         result.bindings[i]);
+			D_ASSERT(w.Partitions()[w.Partitions().size() - result.bindings.size() + i]
+			             ->Cast<BoundColumnRefExpression>()
+			             .Binding() == result.bindings[i]);
 		}
 	}
 	return result;
@@ -1247,10 +1265,10 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownDistinct(un
 	auto result = PushDownChild(plan, true, std::move(state), false);
 	auto &distinct = plan->Cast<LogicalDistinct>();
 	AppendCorrelatedColumns(distinct.distinct_targets, result.bindings, false);
-	auto target_offset = distinct.distinct_targets.size() - result.bindings.size();
 	for (idx_t i = 0; i < result.bindings.size(); i++) {
-		D_ASSERT(distinct.distinct_targets[target_offset + i]->Cast<BoundColumnRefExpression>().Binding() ==
-		         result.bindings[i]);
+		D_ASSERT(distinct.distinct_targets[distinct.distinct_targets.size() - result.bindings.size() + i]
+		             ->Cast<BoundColumnRefExpression>()
+		             .Binding() == result.bindings[i]);
 	}
 	return result;
 }

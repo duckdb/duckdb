@@ -32,7 +32,7 @@ logical_opt	<!REGEX>:.*SINGLE.*
 query II
 explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
 ----
-logical_opt	<!REGEX>:.*(DELIM_GET|CTE_SCAN|__duckdb_duplicate_eliminated_factor_|WINDOW).*
+logical_opt	<REGEX>:.*Join Type: SEMI.*l_partkey = p_partkey.*
 
 # Q 17: the generated delimiter CTE should not preserve unused columns from the lineitem input
 query II
@@ -40,11 +40,12 @@ explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHER
 ----
 logical_opt	<!REGEX>:.*l_orderkey.*
 
-# Q 17: if we remove the filters """ p_brand = 'Brand#23' AND p_container = 'MED BOX' """ we can remove the whole DELIM join
+# Q 17 without an outer selection can eliminate the generated domain. Decimal AVG bind data does not make the
+# built-in aggregate fallible; its declared error metadata controls the additional-group decision.
 query II
 explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND l_quantity < (SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
 ----
-logical_opt	<!REGEX>:(.*DELIM_JOIN.*)|(.*CTE Name:.*__duckdb_delim.*)
+logical_opt	<!REGEX>:.*(Join Type: SEMI.*l_partkey = p_partkey|__duckdb_delim_).*
 
 
 # Q 20: join with JoinType::SINGLE (created when pushing down dependent joins) is converted to LEFT
@@ -262,11 +263,12 @@ EXPLAIN SELECT x FROM range(1000000) o(x) WHERE x < 10000 AND EXISTS (SELECT 1 F
 ----
 logical_opt	<REGEX>:.*Join Type: MARK.*x IS NOT DISTINCT FROM x.*Join Type: SEMI.*y = x.*
 
-# Q 22: the factored duplicate-eliminated domain should still restrict the NOT EXISTS evidence side
+# Q 22: the selected duplicate-eliminated domain should still restrict the NOT EXISTS evidence side. Factoring is
+# optional: if its source is not estimated cheaper, retain the canonical selected-domain CTE.
 query II
 EXPLAIN SELECT cntrycode, count(*) AS numcust, sum(c_acctbal) AS totacctbal FROM (SELECT substring(c_phone FROM 1 FOR 2) AS cntrycode, c_acctbal FROM customer WHERE substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17') AND c_acctbal > (SELECT avg(c_acctbal) FROM customer WHERE c_acctbal > 0.00 AND substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17')) AND NOT EXISTS (SELECT * FROM orders WHERE o_custkey = c_custkey)) AS custsale GROUP BY cntrycode ORDER BY cntrycode;
 ----
-logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_.*Join Type: MARK.*Join Type: (SEMI|RIGHT_SEMI).*o_custkey = c_custkey.*
+logical_opt	<REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_).*Join Type: MARK.*Join Type: (SEMI|RIGHT_SEMI).*o_custkey = c_custkey.*
 
 # Delimiter CTE fanout should stay runnable with grouped build-side consumers
 query I

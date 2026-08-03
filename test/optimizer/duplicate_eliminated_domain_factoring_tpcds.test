@@ -13,8 +13,14 @@ SET delim_join_as_cte=true;
 statement ok
 PRAGMA explain_output=optimized_only;
 
+statement ok
+SET VARIABLE dedup_original_verify_aggregate_state_export = current_setting('debug_verify_aggregate_state_export');
+
 # TPC-DS Q1: derive the store-key domain from filtered store instead of materializing the
 # complete customer_total_return/store/customer payload solely to obtain ctr_store_sk
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 WITH customer_total_return AS
@@ -43,6 +49,12 @@ LIMIT 100;
 ----
 logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|WINDOW).*
 
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
 query II
 EXPLAIN
 WITH customer_total_return AS
@@ -70,3 +82,6 @@ ORDER BY c_customer_id
 LIMIT 100;
 ----
 logical_opt	<REGEX>:.*c_customer_sk = ctr_customer_sk.*ctr_store_sk = s_store_sk.*
+
+statement ok
+SET debug_verify_aggregate_state_export=getvariable('dedup_original_verify_aggregate_state_export');

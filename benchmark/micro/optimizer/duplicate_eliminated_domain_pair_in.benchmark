@@ -1,0 +1,29 @@
+# name: benchmark/micro/optimizer/duplicate_eliminated_domain_pair_in.benchmark
+# description: Pair-dependent IN with grouped evidence
+# group: [optimizer]
+
+name Duplicate-Eliminated Domain Pair IN
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE dedup_bench_posts AS
+SELECT i::INTEGER AS id
+FROM range(20000) t(i);
+CREATE TABLE dedup_bench_users AS
+SELECT i::INTEGER AS id
+FROM range(5000) t(i);
+CREATE TABLE dedup_bench_votes AS
+SELECT (i // 10)::INTEGER AS post_id, ((i // 10) % 5000)::INTEGER AS user_id
+FROM range(200000) t(i);
+
+run
+SELECT count(*)
+FROM dedup_bench_posts p
+JOIN dedup_bench_users u ON u.id IN (
+    SELECT user_id
+    FROM dedup_bench_votes
+    WHERE post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+);

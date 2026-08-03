@@ -14,7 +14,35 @@
 
 namespace duckdb {
 
-enum class DuplicateEliminatedDomainExpansion : uint8_t { UNSAFE, SAFE };
+class GeneratedDomainJoinRewriter;
+
+class DelimJoinCTEOptimizationDecision {
+public:
+	virtual ~DelimJoinCTEOptimizationDecision() = default;
+
+	bool CanEvaluateAdditionalGroups() const {
+		return can_evaluate_additional_groups;
+	}
+	bool HasCandidate() const {
+		return has_candidate;
+	}
+	bool CandidateHasSelection() const {
+		D_ASSERT(has_candidate);
+		return candidate_has_selection;
+	}
+
+protected:
+	DelimJoinCTEOptimizationDecision(bool can_evaluate_additional_groups_p, bool has_candidate_p,
+	                                bool candidate_has_selection_p)
+	    : can_evaluate_additional_groups(can_evaluate_additional_groups_p), has_candidate(has_candidate_p),
+	      candidate_has_selection(candidate_has_selection_p) {
+	}
+
+private:
+	bool can_evaluate_additional_groups;
+	bool has_candidate;
+	bool candidate_has_selection;
+};
 
 struct FactoredDuplicateEliminatedDomain {
 	TableIndex cte_index;
@@ -22,6 +50,7 @@ struct FactoredDuplicateEliminatedDomain {
 	idx_t column_count;
 	unique_ptr<LogicalOperator> source;
 	unique_ptr<LogicalOperator> domain;
+	unique_ptr<LogicalOperator> child;
 	BindingReplacementGraph output_replacements;
 };
 
@@ -71,11 +100,13 @@ class DelimJoinCTEOptimization {
 public:
 	virtual ~DelimJoinCTEOptimization() = default;
 
-	virtual bool CanOptimizePayload(const LogicalOperator &payload) = 0;
-	virtual bool CanEvaluateAdditionalGroups(const LogicalOperator &rhs, TableIndex domain_cte_index) = 0;
+	virtual void PreparePayload(Binder &binder, unique_ptr<LogicalOperator> &payload) = 0;
+	virtual unique_ptr<DelimJoinCTEOptimizationDecision>
+	Analyze(Binder &binder, LogicalOperator &rewrite_root, LogicalComparisonJoin &join, LogicalOperator &rhs,
+	        TableIndex domain_cte_index) = 0;
 	virtual DelimJoinCTEOptimizationResult TryOptimize(Binder &binder, unique_ptr<LogicalOperator> &join,
 	                                                   TableIndex domain_cte_index, idx_t domain_ref_count,
-	                                                   bool can_evaluate_additional_groups) = 0;
+	                                                   const DelimJoinCTEOptimizationDecision &decision) = 0;
 };
 
 //! Rewrites fully decorrelated DelimJoins into materialized CTEs.
@@ -90,17 +121,19 @@ private:
 
 	void RewriteInternal(unique_ptr<LogicalOperator> &plan);
 	BindingReplacementGraph RewriteDelimJoinsToCTEs(unique_ptr<LogicalOperator> &plan, LogicalOperator &rewrite_root,
-	                                                bool null_rejecting_filter_above = false,
-	                                                bool preserve_evidence_side = false);
+	                                                GeneratedDomainJoinRewriter &generated_domain_rewriter,
+	                                                bool &plan_changed, bool null_rejecting_filter_above = false,
+	                                                bool preserve_evidence_side = false,
+	                                                bool under_preserved_evidence = false);
 	BindingReplacementGraph RewriteDuplicateEliminatedJoin(unique_ptr<LogicalOperator> &plan,
 	                                                       LogicalOperator &rewrite_root,
+	                                                       GeneratedDomainJoinRewriter &generated_domain_rewriter,
 	                                                       bool null_rejecting_filter_above,
-	                                                       bool preserve_evidence_side);
+	                                                       bool preserve_evidence_side, bool under_preserved_evidence);
 
 private:
 	Binder &binder;
 	optional_ptr<DelimJoinCTEOptimization> optimization;
-	unordered_map<TableIndex, DuplicateEliminatedDomainExpansion> generated_dedup_ctes;
 };
 
 } // namespace duckdb

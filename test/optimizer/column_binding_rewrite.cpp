@@ -96,6 +96,35 @@ TEST_CASE("Binding replacement graph validates output boundaries", "[optimizer][
 	REQUIRE_NOTHROW(ColumnBindingRewrite::ValidateOutput({binding_b}, {binding_b}, graph));
 	REQUIRE_NOTHROW(ColumnBindingRewrite::ValidateOutput({binding_a}, {binding_c}, graph));
 	REQUIRE_NOTHROW(ColumnBindingRewrite::ValidateOutput({binding_d}, {binding_d}, graph));
+	REQUIRE_NOTHROW(ColumnBindingRewrite::ValidateOutputLayout({binding_a}, {LogicalType::INTEGER}, {binding_c},
+	                                                           {LogicalType::INTEGER}, graph));
+	BindingReplacementGraph typed_graph;
+	typed_graph.Add(ReplacementBinding(binding_a, binding_c, LogicalType::INTEGER));
+	REQUIRE_NOTHROW(ColumnBindingRewrite::ValidateOutputLayout({binding_a}, {LogicalType::INTEGER}, {binding_c},
+	                                                           {LogicalType::INTEGER}, typed_graph));
+	BindingReplacementGraph scoped;
+	REQUIRE(ColumnBindingRewrite::TryScopeToOutput({binding_a}, {binding_c}, graph, scoped));
+	REQUIRE(scoped.Resolve(binding_a) == binding_c);
+	REQUIRE_FALSE(ColumnBindingRewrite::TryScopeToOutput({binding_a}, {binding_d}, graph, scoped));
+
+#ifndef DUCKDB_CRASH_ON_ASSERT
+	REQUIRE_THROWS(ColumnBindingRewrite::ScopeToOutput({binding_a}, {binding_d}, graph));
+	REQUIRE_THROWS(ColumnBindingRewrite::ValidateOutputLayout({binding_a}, {LogicalType::INTEGER}, {binding_d},
+	                                                          {LogicalType::INTEGER}, graph));
+	REQUIRE_THROWS(ColumnBindingRewrite::ValidateOutputLayout({binding_a, binding_b},
+	                                                          {LogicalType::INTEGER, LogicalType::INTEGER}, {binding_c},
+	                                                          {LogicalType::INTEGER}, graph));
+	REQUIRE_THROWS(ColumnBindingRewrite::ValidateOutputLayout(
+	    {binding_a, binding_b}, {LogicalType::INTEGER, LogicalType::INTEGER}, {binding_c, binding_b},
+	    {LogicalType::INTEGER, LogicalType::INTEGER}, graph));
+	REQUIRE_THROWS(ColumnBindingRewrite::ValidateOutputLayout({binding_a}, {LogicalType::INTEGER}, {binding_c},
+	                                                          {LogicalType::BIGINT}, graph));
+
+	BindingReplacementGraph mismatched_type;
+	mismatched_type.Add(ReplacementBinding(binding_a, binding_c, LogicalType::BIGINT));
+	REQUIRE_THROWS(ColumnBindingRewrite::ValidateOutputLayout({binding_a}, {LogicalType::INTEGER}, {binding_c},
+	                                                          {LogicalType::INTEGER}, mismatched_type));
+#endif
 }
 
 static unique_ptr<LogicalOperator> CreateBoundaryTestPlan(TableIndex child_index, ColumnBinding filter_binding) {
