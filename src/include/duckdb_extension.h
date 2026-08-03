@@ -725,6 +725,8 @@ typedef struct {
 	                               idx_t src_offset, idx_t dst_offset);
 	void (*duckdb_unsafe_vector_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
 	                                                       idx_t str_len);
+	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v1;
@@ -2343,6 +2345,12 @@ typedef struct {
 #endif
 #if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
 #define duckdb_unsafe_vector_assign_string_element_len duckdb_ext_api.duckdb_unsafe_vector_assign_string_element_len
+#endif
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
+#define duckdb_create_timestamp_tz_ns duckdb_ext_api.duckdb_create_timestamp_tz_ns
+#endif
+#if DUCKDB_API_VERSION_AT_LEAST(1, 5, 6)
+#define duckdb_get_timestamp_tz_ns duckdb_ext_api.duckdb_get_timestamp_tz_ns
 #endif
 // capigen:end appended
 //===--------------------------------------------------------------------===//

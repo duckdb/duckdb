@@ -307,7 +307,8 @@ functions:
     return_description: The value. This must be destroyed with `duckdb_destroy_value`.
   create_timestamp_tz_ns:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - [ "stable", "v1.5.6", "2026-07-30" ]
+      - [ "unstable", "v1.5.4", "2026-05-18"]
     parameters:
       input:
         type: timestamp_ns
@@ -662,7 +663,8 @@ functions:
     return_description: A duckdb_timestamp, or MinValue<timestamp_tz> if the value cannot be converted
   get_timestamp_tz_ns:
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - [ "stable", "v1.5.6", "2026-07-30" ]
+      - [ "unstable", "v1.5.4", "2026-05-18"]
     parameters:
       val:
         type: value
