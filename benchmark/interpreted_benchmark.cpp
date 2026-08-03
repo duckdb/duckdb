@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "debug_fs_extension.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -47,6 +48,9 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	explicit InterpretedBenchmarkState(string path, const string &version)
 	    : benchmark_config(GetBenchmarkConfig(version)),
 	      db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()), con(db) {
+		//! Statically load the debug_fs extension so benchmarks can inject artificial I/O latency
+		//! (e.g. SET GLOBAL debug_fs_delay_mean_ms=...), mirroring how the unittest runner loads it.
+		db.LoadStaticExtension<DebugFsExtension>();
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(!res->HasError());
