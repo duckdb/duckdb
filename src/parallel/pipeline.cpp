@@ -13,6 +13,7 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 
 namespace duckdb {
 
@@ -257,6 +258,28 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 
 vector<weak_ptr<Pipeline>> Pipeline::GetDependencies() const {
 	return dependencies;
+}
+
+optional_ptr<MetaPipeline> Pipeline::GetMetaPipeline() const {
+	return meta_pipeline;
+}
+
+vector<reference<Pipeline>> Pipeline::GetAllDependencies() {
+	vector<reference<Pipeline>> result;
+	if (meta_pipeline) {
+		auto &deps = meta_pipeline->GetDependencies();
+		auto it = deps.find(*this);
+		if (it != deps.end()) {
+			result.insert(result.end(), it->second.begin(), it->second.end());
+		}
+	}
+	for (auto &weak_dep : dependencies) {
+		auto dep = weak_dep.lock();
+		if (dep) {
+			result.push_back(*dep);
+		}
+	}
+	return result;
 }
 
 string Pipeline::ToString() const {

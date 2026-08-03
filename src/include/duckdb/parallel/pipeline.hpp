@@ -87,6 +87,9 @@ public:
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
+	//! The MetaPipeline that owns this Pipeline (set when the Pipeline is created)
+	optional_ptr<MetaPipeline> GetMetaPipeline() const;
+	vector<reference<Pipeline>> GetAllDependencies() ;
 
 	void Ready();
 	void Reset();
@@ -144,6 +147,8 @@ private:
 	vector<weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline
 	vector<weak_ptr<Pipeline>> dependencies;
+	//! The MetaPipeline that owns this pipeline
+	optional_ptr<MetaPipeline> meta_pipeline;
 
 	//! The base batch index of this pipeline
 	idx_t base_batch_index = 0;

@@ -110,7 +110,9 @@ MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalO
 }
 
 Pipeline &MetaPipeline::CreatePipeline() {
-	pipelines.emplace_back(make_shared_ptr<Pipeline>(executor));
+	auto pipeline = make_shared_ptr<Pipeline>(executor);
+	pipeline->meta_pipeline = this;
+	pipelines.emplace_back(pipeline);
 	state.SetPipelineSink(*pipelines.back(), sink, next_batch_index++);
 	return *pipelines.back();
 }
@@ -243,6 +245,7 @@ void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator &op, 
 	pipelines.emplace_back(state.CreateChildPipeline(executor, current, op));
 	auto &child_pipeline = *pipelines.back();
 	child_pipeline.base_batch_index = current.base_batch_index;
+	child_pipeline.meta_pipeline = this;
 
 	// child pipeline has a dependency (within this MetaPipeline on all pipelines that were scheduled
 	// between 'current' and now (including 'current') - set them up
