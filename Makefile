@@ -46,7 +46,7 @@ ifndef CMAKE_BUILD_PARALLEL_LEVEL
 CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
 endif
 export CMAKE_BUILD_PARALLEL_LEVEL
-export CI_TIDY_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 25 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
+export CI_TIDY_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 50 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
 
 # Assume Ninja is the default generator (if missing), but verify ninja exists.
 # Cache Ninja detection so we only probe `ninja --version` once.
@@ -275,8 +275,11 @@ endif
 ifeq (${FORCE_DEBUG}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_DEBUG=1
 endif
-ifeq (${SMALLER_BINARY}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY=1
+ifneq (${SMALLER_BINARY},)
+	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY='${SMALLER_BINARY}'
+endif
+ifneq (${SMALLER_BINARY_EXCEPT},)
+	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY_EXCEPT='${SMALLER_BINARY_EXCEPT}'
 endif
 ifeq (${DISABLE_STRING_INLINE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_STR_INLINE=1
@@ -520,6 +523,7 @@ TEST_CONFIGS := \
 	test/configs/verify_statement_explain.json \
 	test/configs/verify_statement_prepare.json \
 	test/configs/verify_serializer.json \
+	test/configs/verify_compression.json \
 	test/configs/verify_stats.json \
 	test/configs/verify_statement_serialization.json \
 	test/configs/force_storage.json \
@@ -711,6 +715,10 @@ spell_tools:
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
 
+.PHONY: extension-patch-check
+extension-patch-check:
+	cmake -DCONFIG_DIR=.github/config -DPATCH_DIR=.github/patches/extensions -P scripts/check_extension_patches.cmake
+
 .PHONY: format_venv
 format_venv:
 	@if [ ! -x "$(FORMAT_PYTHON)" ]; then \
@@ -849,10 +857,12 @@ coverage-check:
 	./scripts/coverage_check.sh
 
 generate-files-deps:
-	pip install cxxheaderparser pcpp
+	$(PYTHON) -m pip install -U pip
+	$(PYTHON) -m pip install --group api_spec/pyproject.toml:generate
+	$(PYTHON) -m pip install cxxheaderparser pcpp
 
 generate-files:
-	$(PYTHON) scripts/generate_c_api.py
+	./scripts/capi_v1_regen.sh
 	$(PYTHON) scripts/generate_functions.py
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py

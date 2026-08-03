@@ -159,7 +159,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
     MethodArguments function_expression_arguments, optional<vector<OrderByNode>> within_group_clause,
     optional<unique_ptr<ParsedExpression>> filter_clause, const bool &has_result,
     optional<unique_ptr<WindowExpression>> over_clause) {
-	auto qualified_function = function_identifier;
+	const auto &qualified_function = function_identifier;
 	bool export_clause = has_result;
 	auto distinct = function_expression_arguments.distinct;
 	auto function_children = std::move(function_expression_arguments.arguments);
@@ -762,6 +762,9 @@ PEGTransformerFactory::TransformIsDistinctFromExpression(PEGTransformer &transfo
 	if (!is_distinct_from_tail) {
 		return expr;
 	}
+	if (is_distinct_from_tail->size() > 1) {
+		throw ParserException("Chained comparisons are not supported, use AND to combine comparisons");
+	}
 	for (auto &is_distinct : *is_distinct_from_tail) {
 		auto distinct_operator = make_uniq<ComparisonExpression>(is_distinct.comparison_type, std::move(expr),
 		                                                         std::move(is_distinct.expression));
@@ -776,6 +779,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformComparisonExpressio
 	auto expr = std::move(between_in_like_expression);
 	if (!comparison_expression_tail) {
 		return expr;
+	}
+	if (comparison_expression_tail->size() > 1) {
+		throw ParserException("Chained comparisons are not supported, use AND to combine comparisons");
 	}
 	auto cmp_depth_guard = transformer.StackCheck(comparison_expression_tail->size());
 	for (auto &comparison_expr : *comparison_expression_tail) {

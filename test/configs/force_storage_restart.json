@@ -6,6 +6,17 @@
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_tests": [
     {
+      "reason": "In-memory external resource type registry is instance-scoped and does not survive database restarts.",
+      "paths": [
+        "test/sql/table_function/external_resource_types.test",
+        "test/sql/table_function/create_external_resource.test",
+        "test/sql/table_function/register_external_resource.test",
+        "test/sql/table_function/external_resource_logging.test",
+        "test/sql/table_function/external_resource_discovery.test",
+        "test/sql/table_function/external_resource_discovery_error.test"
+      ]
+    },
+    {
       "reason": "Contains explicit use of the memory catalog.",
       "paths": [
         "test/sql/attach/attach_use_rollback.test",
@@ -34,6 +45,8 @@
         "test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow",
         "test/sql/logging/logging_memory_after_truncate.test",
         "test/sql/logging/physical_operator_logging.test_slow",
+        "test/sql/cte/recursive_cte_logging.test",
+        "test/sql/cte/recursive_cte_invariant_build_logging.test",
         "test/logging/warnings_as_errors.test",
         "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
@@ -43,6 +56,8 @@
         "test/sql/copy/parquet/parquet_prefetch_cost_model.test",
         "test/sql/copy/parquet/parquet_prefetch_cost_model_remote.test",
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
+        "test/sql/copy/parquet/read_ahead/readahead_depth_learning.test",
+        "test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow",
         "test/sql/parallelism/async_task_schedule_pool.test"
       ]
     },
@@ -83,8 +98,7 @@
       "reason": "total_string_length requires exact per-row-group stats; force_restart causes persistent row groups with unloaded columns where only bound-expansion is possible, making the stat unknown.",
       "paths": [
         "test/sql/storage/total_string_length_repeated_insert.test",
-        "test/sql/storage/compression/dictionary/total_string_length_dictionary.test",
-        "test/sql/storage/extended_string_stats.test"
+        "test/sql/storage/compression/dictionary/total_string_length_dictionary.test"
       ]
     },
     {
@@ -96,11 +110,10 @@
       ]
     },
     {
-      "reason": "Test checks which columns are loaded",
+      "reason": "Test asserts on same-process/before-checkpoint plan state (e.g. exact count before a checkpoint); force_restart checkpoints and restarts after every statement, so that intermediate state never exists.",
       "paths": [
-        "test/sql/storage/metadata/partial_column_metadata_reuse.test",
-        "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
-        "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
+        "test/optimizer/partition_stats_exactness.test",
+        "test/optimizer/partition_stats_prepared.test"
       ]
     }
   ]

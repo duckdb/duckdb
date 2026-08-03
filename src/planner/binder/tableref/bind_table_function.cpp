@@ -372,15 +372,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-	Identifier catalog = fexpr.GetQualifiedName().Catalog();
-	Identifier schema = fexpr.GetQualifiedName().Schema();
-	Binder::BindSchemaOrCatalog(context, catalog, schema);
-
-	// fetch the function from the catalog
-
+	// fetch the function from the catalog. Resolve the qualification first: a leading component is the catalog when
+	// it names an attached database, and otherwise the outermost schema of a (possibly nested) schema path.
 	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(fexpr.FunctionName()),
 	                                      error_context);
-	auto &func_catalog = *GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+	auto bound_name = BindTableName(fexpr.GetQualifiedName());
+	auto &func_catalog =
+	    *GetCatalogEntry(EntryLookupInfo(table_function_lookup, bound_name), OnEntryNotFound::THROW_EXCEPTION);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();

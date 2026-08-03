@@ -164,6 +164,9 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
 
 	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
+	if (input.interrupt_state.CanCallback()) {
+		data.interrupt_state = &input.interrupt_state;
+	}
 
 	if (function.function) {
 		data.async_result = AsyncResultType::IMPLICIT;
@@ -184,9 +187,11 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 		                            initial_async_result, output_async_result, chunk.size());
 
 		// Handle results
-		switch (output_async_result) {
-		case AsyncResultType::BLOCKED: {
-			D_ASSERT(data.async_result.HasTasks());
+		if (output_async_result == AsyncResultType::BLOCKED) {
+			if (!data.async_result.HasTasks()) {
+				// the function parked
+				return SourceResultType::BLOCKED;
+			}
 			{
 				annotated_lock_guard<annotated_mutex> guard(g_state.lock);
 				if (g_state.CanBlock()) {
@@ -197,21 +202,7 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 			data.async_result.ExecuteTasksSynchronously();
 			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
-		case AsyncResultType::IMPLICIT:
-			if (chunk.size() > 0) {
-				return SourceResultType::HAVE_MORE_OUTPUT;
-			}
-			return SourceResultType::FINISHED;
-		case AsyncResultType::FINISHED:
-			return SourceResultType::FINISHED;
-		case AsyncResultType::HAVE_MORE_OUTPUT:
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		default:
-			throw InternalException(
-			    "PhysicalTableScan::GetData call of function.function returned unexpected return '%'",
-			    EnumUtil::ToChars(data.async_result.GetResultType()));
-		}
-		throw InternalException("PhysicalTableScan::GetData hasn't handled a function.function return");
+		return AsyncResult::GetSourceResultType(output_async_result, chunk.size());
 	}
 
 	if (g_state.in_out_final) {

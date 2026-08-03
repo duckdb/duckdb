@@ -2,7 +2,8 @@
   {
     "class": "CommonTableExpressionInfo",
     "includes": [
-      "duckdb/parser/common_table_expression_info.hpp"
+      "duckdb/parser/common_table_expression_info.hpp",
+      "duckdb/parser/statement/select_statement.hpp"
     ],
     "members": [
       {
@@ -149,6 +150,40 @@
       "constant_percentage",
       "expression"
     ]
+  },
+  {
+    "class": "BoundExternalResource",
+    "includes": [
+      "duckdb/planner/operator/logical_external_resource.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "operation",
+        "type": "ExternalResourceOperation"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "params",
+        "type": "unordered_map<string, Value>"
+      },
+      {
+        "id": 104,
+        "name": "handle",
+        "type": "Value"
+      }
+    ],
+    "pointer_type": "none"
   },
   {
     "class": "CaseCheck",
@@ -1202,9 +1237,21 @@
         "id": 5,
         "name": "not_null_columns",
         "type": "vector<Identifier>"
+      },
+      {
+        "id": 6,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "default": "QualifiedName()",
+        "deserialize_skip_assign": true
       }
     ],
     "pointer_type": "none",
+    "finalize_deserialization": [
+      "if (!qualified_name.Path().empty()) {",
+      "\tresult.qualified_name = std::move(qualified_name);",
+      "}"
+    ],
     "methods": {
       "SetQualifiedName": [
         "database_name",

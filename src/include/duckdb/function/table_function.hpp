@@ -15,6 +15,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
@@ -181,11 +182,17 @@ public:
 	}
 
 public:
+	//! Handles a BLOCKED result per the execution mode, returns true when the function must return to yield
+	DUCKDB_API bool HandleBlocked(AsyncResult &blocked_result);
+
+public:
 	optional_ptr<const FunctionData> bind_data;
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
 	AsyncResult async_result {};
 	AsyncResultsExecutionMode results_execution_mode {AsyncResultsExecutionMode::SYNCHRONOUS};
+	//! Interrupt state of the calling task, so the function might park and wake-up by returning a taskless Blocked res
+	optional_ptr<const InterruptState> interrupt_state;
 };
 
 struct TableFunctionPartitionInput {
@@ -200,7 +207,8 @@ struct TableFunctionPartitionInput {
 struct TableFunctionProjectionExpressionInput {
 	const LogicalGet &get;
 	const Expression &expr;
-	idx_t proj_index;
+	//! Position of pushed down column within get, usage: get.GetColumnIds()[column_index]
+	ProjectionIndex column_index;
 };
 
 struct TableFunctionToStringInput {
@@ -338,6 +346,9 @@ typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)(co
 typedef bool (*table_function_supports_pushdown_type_t)(const FunctionData &bind_data, idx_t col_idx);
 
 typedef bool (*table_function_supports_pushdown_extract_t)(const FunctionData &bind_data, const LogicalIndex &col_idx);
+
+//! Whether repeated executions with the same bound data are stable within one query.
+typedef bool (*table_function_is_repeatable_t)(optional_ptr<const FunctionData> bind_data);
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
@@ -487,6 +498,8 @@ public:
 	table_function_supports_pushdown_type_t supports_pushdown_type;
 	//! (Optional) If this scanner supports projection pushdown of struct extracts
 	table_function_supports_pushdown_extract_t supports_pushdown_extract;
+	//! Optional repeatability capability. An absent callback is treated conservatively as unknown.
+	table_function_is_repeatable_t is_repeatable;
 	//! Get partition info of the table
 	table_function_get_partition_info_t get_partition_info;
 	//! (Optional) get a list of all the partition stats of the table

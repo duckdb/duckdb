@@ -667,6 +667,13 @@
         "default_value": "false"
     },
     {
+        "name": "enable_optimistic_write",
+        "description": "Whether or not to optimistically write large appends to disk before committing. Disable this to keep bulk appends in memory (e.g. for in-memory benchmarks).",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
+    },
+    {
         "name": "enable_optimizer",
         "description": "Whether or not query optimization is enabled",
         "type": "BOOLEAN",
@@ -1213,6 +1220,16 @@
         "type": "BIGINT",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "read_ahead_depth",
+        "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
+        "type": "BIGINT",
+        "default_scope": "global",
+        "default_value": "-1",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "regex_match_operator_semantics",

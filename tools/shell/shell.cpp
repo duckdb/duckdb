@@ -965,7 +965,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;
 	}
-	auto &properties = res.properties;
+	auto &properties = res.GetStatementProperties();
 	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
 		auto result_chunk = res.Fetch();
 		if (result_chunk && result_chunk->size() == 1) {
@@ -981,7 +981,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// only SELECT statements return results that need to be rendered
 		return SuccessState::SUCCESS;
 	}
-	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
+	if (res.GetResultType() == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
 	// analyze the query result so we know how long/wide the result will be
@@ -1030,8 +1030,8 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			if (!statement) {
 				continue; // a peel that preprocessing swallowed
 			}
-			idx_t start_pos = statement->stmt_location;
-			idx_t len = statement->stmt_length;
+			idx_t start_pos = statement->stmt_location.offset;
+			idx_t len = statement->stmt_location.length;
 			while (len > 0 && IsSpace(zSql[start_pos])) {
 				start_pos++;
 				len--;
@@ -1858,7 +1858,7 @@ ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(duckdb::Connection
 		result_value = result->GetError();
 		return ExecuteSQLSingleValueResult::EXECUTION_ERROR;
 	}
-	auto is_query = result->properties.return_type == duckdb::StatementReturnType::QUERY_RESULT;
+	auto is_query = result->GetStatementProperties().return_type == duckdb::StatementReturnType::QUERY_RESULT;
 	if (!is_query) {
 		return ExecuteSQLSingleValueResult::EMPTY_RESULT;
 	}
@@ -2103,6 +2103,12 @@ bool ShellState::ReadFromFile(const string &file) {
 		PrintF(PrintOutput::STDERR, ".read cannot be used in -safe mode\n");
 		return false;
 	}
+	duckdb::LocalFileSystem lfs;
+	auto canonical_file = lfs.CanonicalizePath(file, nullptr);
+	if (!active_read_files.insert(canonical_file).second) {
+		PrintF(PrintOutput::STDERR, "Error: recursive .read of \"%s\"\n", file);
+		return false;
+	}
 	FILE *inSaved = in;
 	int savedLineno = lineno;
 	int rc;
@@ -2113,6 +2119,7 @@ bool ShellState::ReadFromFile(const string &file) {
 		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
 	}
+	active_read_files.erase(canonical_file);
 	in = inSaved;
 	lineno = savedLineno;
 	return rc == 0;

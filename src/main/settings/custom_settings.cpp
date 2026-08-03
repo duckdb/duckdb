@@ -1349,6 +1349,18 @@ Value ProgressBarTimeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Read Ahead Depth
+//===----------------------------------------------------------------------===//
+void ReadAheadDepthSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("read_ahead_depth setting cannot be NULL");
+	}
+	if (BigIntValue::Get(input) < -1) {
+		throw InvalidInputException("read_ahead_depth must be -1 (automatic), 0 (disabled) or a positive number");
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Schema
 //===----------------------------------------------------------------------===//
 void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {

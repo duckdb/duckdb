@@ -33,9 +33,9 @@ class Vector;
 class WriteAheadLog;
 struct ColumnFetchState;
 struct LocalAppendState;
-struct DataTableInfo;
 struct ParallelCollectionScanState;
 struct TableAppendState;
+struct TransactionData;
 
 class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
@@ -44,7 +44,7 @@ public:
 	//! Create a LocalTableStorage from an ALTER TYPE.
 	LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
 	                  const idx_t alter_column_index, const LogicalType &target_type,
-	                  const vector<StorageIndex> &bound_columns, Expression &cast_expr);
+	                  const vector<StorageIndex> &bound_columns, Expression &cast_expr, TransactionData transaction);
 	//! Create a LocalTableStorage from a DROP COLUMN.
 	LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent, const idx_t drop_column_index);
 	// Create a LocalTableStorage from an ADD COLUMN
@@ -158,8 +158,7 @@ public:
 	void InitializeStorage(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
 
 	//! Append a chunk to the local storage
-	static void Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk,
-	                   DataTableInfo &data_table_info);
+	static void Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk);
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
@@ -192,7 +191,7 @@ public:
 	bool Find(DataTable &table);
 
 	idx_t AddedRows(DataTable &table);
-	vector<PartitionStatistics> GetPartitionStats(DataTable &table) const;
+	vector<PartitionStatistics> GetPartitionStats(DataTable &table, TransactionData transaction) const;
 
 	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
 	               ExpressionExecutor &default_executor);

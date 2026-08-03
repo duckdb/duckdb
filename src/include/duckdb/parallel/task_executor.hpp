@@ -38,9 +38,15 @@ public:
 
 	//! Work on tasks until all tasks are finished. Throws an exception if any error occurred while executing the tasks.
 	void WorkOnTasks();
+	//! Cancel tasks that have not started yet and work on tasks until all tasks are finished. Does not throw.
+	void CancelAndDrain();
 
 	//! Get a task - returns true if a task was found
 	bool GetTask(shared_ptr<Task> &task);
+
+private:
+	//! Work on tasks until all tasks are finished
+	void DrainTasks();
 
 private:
 	friend class BaseExecutorTask;
@@ -51,6 +57,7 @@ private:
 	unique_ptr<ProducerToken> token;
 	idx_t completed_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
 	idx_t total_tasks DUCKDB_GUARDED_BY(token->producer_lock) = 0;
+	atomic<bool> cancelled {false};
 	optional_ptr<ClientContext> context;
 };
 

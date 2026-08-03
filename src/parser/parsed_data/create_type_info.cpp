@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -31,12 +32,12 @@ string CreateTypeInfo::ToString() const {
 
 		result += " AS ENUM ( ";
 		for (idx_t i = 0; i < size; i++) {
-			result += "'" + values_insert_order.GetValue(i).ToString() + "'";
+			result += SQLString(values_insert_order.GetValue(i).ToString());
 			if (i != size - 1) {
 				result += ", ";
 			}
 		}
-		result += " );";
+		result += " )";
 	} else if (type.id() == LogicalTypeId::INVALID) {
 		// CREATE TYPE mood AS ENUM (SELECT 'happy')
 		D_ASSERT(query);

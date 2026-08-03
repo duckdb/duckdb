@@ -12,6 +12,10 @@ SET debug_physical_table_scan_execution_strategy=DEFAULT
 statement ok
 SET threads=1
 
+# disable read-ahead so the I/O is scheduled by the per-thread scan path this test asserts
+statement ok
+SET read_ahead_depth=0
+
 statement ok
 COPY (SELECT range AS i FROM range(100000)) TO '{TEST_DIR}/async_pool.parquet' (ROW_GROUP_SIZE 10000)
 

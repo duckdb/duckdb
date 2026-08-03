@@ -3,6 +3,7 @@ Program <- TopLevelStatement*
 TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
+	ExternalResourceStatement /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /
@@ -37,6 +38,8 @@ Statement <-
 	ConnectStatement /
 	DisconnectStatement /
 	ExpressionStatement
+
+AnalyzeKeyword <- 'ANALYZE' / 'ANALYSE'
 
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
@@ -393,6 +396,7 @@ UnreservedKeyword <- 'ABORT' /
 'ALSO' /
 'ALTER' /
 'ALWAYS' /
+'APPROX' /
 'ASSERTION' /
 'ASSIGNMENT' /
 'ATTACH' /
@@ -454,6 +458,7 @@ UnreservedKeyword <- 'ABORT' /
 'DISABLE' /
 'DISCARD' /
 'DISCONNECT' /
+'DISTANCE' /
 'DOCUMENT' /
 'DOMAIN' /
 'DOUBLE' /
@@ -466,6 +471,7 @@ UnreservedKeyword <- 'ABORT' /
 'ERROR' /
 'ESCAPE' /
 'EVENT' /
+'EXACT' /
 'EXCLUDE' /
 'EXCLUDING' /
 'EXCLUSIVE' /
@@ -553,6 +559,7 @@ UnreservedKeyword <- 'ABORT' /
 'MOVE' /
 'NAME' /
 'NAMES' /
+'NEAREST' /
 'NEW' /
 'NEXT' /
 'NO' /
@@ -615,6 +622,7 @@ UnreservedKeyword <- 'ABORT' /
 'REPLACE' /
 'REPLICA' /
 'RESET' /
+'RESOURCE' /
 'RESPECT' /
 'RESTART' /
 'RESTRICT' /
@@ -644,6 +652,7 @@ UnreservedKeyword <- 'ABORT' /
 'SET' /
 'SETS' /
 'SHARE' /
+'SIMILARITY' /
 'SIMPLE' /
 'SKIP' /
 'SNAPSHOT' /
@@ -767,9 +776,10 @@ SetSequenceOption <- SequenceOption+
 
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
 
-AnalyzeStatement <- 'ANALYZE' AnalyzeVerbose? AnalyzeTarget?
+AnalyzeStatement <- AnalyzeKeyword AnalyzeVerbose? AnalyzeTarget?
 AnalyzeTarget <- BaseTableName NameList?
 AnalyzeVerbose <- 'VERBOSE'
+
 AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
 Database <- 'DATABASE'
@@ -1078,7 +1088,7 @@ DeleteUsingClause <- 'USING' List(TableRef)
 DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
 
 ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal
-ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
+ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'?
 ShowQualifiedName <- ShowOrDescribeOrSummarize DescribeTarget?
 ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
 DescribeTarget <- DescribeBaseTableName / DescribeStringLiteral
@@ -1141,11 +1151,10 @@ IfExists <- 'IF' 'EXISTS'
 DropSecretStorage <- 'FROM' Identifier
 
 ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?
-ExplainStatement <- 'EXPLAIN' ExplainAnalyze? ExplainOptionList? ExplainableStatements
-ExplainAnalyze <- 'ANALYZE'
+ExplainStatement <- 'EXPLAIN' AnalyzeKeyword? ExplainOptionList? ExplainableStatements
 ExplainOptionList <- Parens(List(ExplainOption))
 ExplainOption <- ExplainOptionName Expression?
-ExplainOptionName <- 'ANALYZE' / 'ANALYSE' / ColId / FuncNameKeyword / TypeNameKeyword
+ExplainOptionName <- AnalyzeKeyword / ColId / FuncNameKeyword / TypeNameKeyword
 
 ExplainSelectStatement <- SelectStatementInternal
 
@@ -1171,6 +1180,7 @@ ExplainableStatements <-
     VacuumStatement /
     SetStatement /
     ResetStatement
+
 ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
 ExportSource <- CatalogName 'TO'
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
@@ -1515,6 +1525,14 @@ ExtractDatePart <-
     MillisecondKeyword / MicrosecondKeyword / WeekKeyword / QuarterKeyword / DecadeKeyword /
     CenturyKeyword / MillenniumKeyword
 
+ExternalResourceStatement <- CreateExternalResourceStmt / RegisterExternalResourceStmt / DestroyExternalResourceStmt / ShowExternalResourcesStmt
+
+CreateExternalResourceStmt <- 'CREATE' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? AttachOptions?
+RegisterExternalResourceStmt <- 'REGISTER' 'EXTERNAL' 'RESOURCE' StringLiteral AttachAlias? 'FROM' Expression
+DestroyExternalResourceStmt <- 'DESTROY' 'EXTERNAL' 'RESOURCE' ColId
+ShowExternalResourcesStmt <- 'SHOW' ShowAllModifier? 'EXTERNAL' 'RESOURCES'
+ShowAllModifier <- 'ALL'
+
 InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 
 OrAction <- InsertOrReplace / InsertOrIgnore
@@ -1726,7 +1744,25 @@ AtUnit <- VersionAtUnit / TimestampAtUnit
 VersionAtUnit <- 'VERSION'
 TimestampAtUnit <- 'TIMESTAMP'
 
-JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause
+JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause / NearestJoinClause
+# NEAREST BY has two alternatives so PEG can backtrack: the bare form uses alias-less target mirrors (tried
+# first, so an unaliased target does not greedily consume NEAREST/APPROX/EXACT as an alias), and the aliased
+# form falls back to a full TableRef when a real alias identifier follows the target.
+NearestJoinClause <- NearestJoinBare / NearestJoinAliased
+NearestJoinAliased <- JoinType? 'JOIN' TableRef ApproxOrExact? 'NEAREST' NumberLiteral? 'BY' DistanceOrSimilarity Expression
+NearestJoinBare <- JoinType? 'JOIN' NearestBareTableRef ApproxOrExact? 'NEAREST' NumberLiteral? 'BY' DistanceOrSimilarity Expression
+NearestBareTableRef <- NearestValuesRef / NearestTableFunction / NearestTableSubquery / NearestBaseTableRef / NearestParensTableRef
+NearestValuesRef <- ValuesClause
+NearestTableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality?
+NearestTableSubquery <- Lateral? SubqueryReference
+NearestBaseTableRef <- BaseTableName AtClause? SampleClause?
+NearestParensTableRef <- Parens(TableRef) SampleClause?
+ApproxOrExact <- NearestApprox / NearestExact
+NearestApprox <- 'APPROX'
+NearestExact <- 'EXACT'
+DistanceOrSimilarity <- NearestDistance / NearestSimilarity
+NearestDistance <- 'DISTANCE'
+NearestSimilarity <- 'SIMILARITY'
 RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
 JoinByClause <- 'JOIN' 'BY' Parens('TYPE' ColLabel) TableRef JoinQualifier
 Asof <- 'ASOF'
@@ -1891,9 +1927,10 @@ VacuumParensOptions <- Parens(List(VacuumOption))
 VacuumLegacyOptions <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
 VacuumOption <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier
 
-OptAnalyze <- 'ANALYZE'
+OptAnalyze <- AnalyzeKeyword
 OptFull <- 'FULL'
 OptFreeze <- 'FREEZE'
 OptVerbose <- 'VERBOSE'
 
 NameList <- Parens(List(ColId))
+

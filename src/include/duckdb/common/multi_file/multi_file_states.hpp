@@ -21,6 +21,8 @@
 namespace duckdb {
 struct MultiFileReader;
 struct MultiFileReaderInterface;
+class MultiFileReadAhead;
+class ReadAheadJobCompletion;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -39,18 +41,22 @@ struct MultiFileReaderBindData {
 
 //! Global state for MultiFileReads
 struct MultiFileReaderGlobalState {
-	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p)
-	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p) {};
+	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p,
+	                           bool supports_local_extra_columns_p = false)
+	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p),
+	      supports_local_extra_columns(supports_local_extra_columns_p) {};
 	virtual ~MultiFileReaderGlobalState();
 
 	//! extra columns that will be produced during scanning
 	const vector<LogicalType> extra_columns;
 	// the file list driving the current scan
 	const optional_ptr<const MultiFileList> file_list;
+	//! Whether individual readers can add extra columns during InitializeReader
+	const bool supports_local_extra_columns;
 
 	//! Indicates that the MultiFileReader has added columns to be scanned that are not in the projection
-	bool RequiresExtraColumns() {
-		return !extra_columns.empty();
+	bool RequiresExtraColumns() const {
+		return !extra_columns.empty() || supports_local_extra_columns;
 	}
 
 	template <class TARGET>
@@ -133,17 +139,24 @@ struct MultiFileReaderData {
 	MultiFileConstantMap constant_map;
 	//! The set of expressions that should be evaluated to obtain the final result
 	vector<unique_ptr<Expression>> expressions;
+	//! Extra columns required by FinalizeChunk for this file, appended after any global extra columns
+	//! Is only allowed to be populated when MultiFileReaderGlobalState::supports_local_extra_columns is set
+	vector<LogicalType> extra_columns;
+
+	vector<LogicalType> GetExtraColumns(const MultiFileReaderGlobalState &global_state) const {
+		auto result = global_state.extra_columns;
+		result.insert(result.end(), extra_columns.begin(), extra_columns.end());
+		return result;
+	}
 
 	//! (only set when file_state is UNOPENED) the file to be opened
 	OpenFileInfo file_to_be_opened;
 };
 
 struct MultiFileGlobalState : public GlobalTableFunctionState {
-	explicit MultiFileGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {
-	}
-	explicit MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p)
-	    : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
-	}
+	explicit MultiFileGlobalState(MultiFileList &file_list_p);
+	explicit MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p);
+	~MultiFileGlobalState() override;
 
 	//! The file list to scan
 	MultiFileList &file_list;
@@ -174,9 +187,10 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	vector<LogicalType> scanned_types;
 	vector<ColumnIndex> column_indexes;
 	optional_ptr<TableFilterSet> filters;
-	atomic<bool> finished {false};
 
 	unique_ptr<GlobalTableFunctionState> global_state;
+
+	unique_ptr<MultiFileReadAhead> read_ahead;
 
 	optional_ptr<const PhysicalOperator> op;
 
@@ -189,14 +203,26 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	}
 };
 
-//! Phase of a scan job: we are either scheduling its I/O or decoding it
-enum class MultiFileScanPhase : uint8_t { SCHEDULE, DECODE };
+//! Lifecycle of the job a scanning thread currently holds
+enum class MultiFileJobState : uint8_t {
+	NONE,     //! no job claimed
+	SCHEDULE, //! I/O still needs scheduling
+	WAIT_IO,  //! parked until the job's scheduled I/O completes
+	DECODE    //! job ready to decode
+};
 
-//! Outcome of decoding the current scan job (see MultiFileFunction::DecodeCurrentJob)
+//! Outcome of decoding the current scan job
 enum class MultiFileDecodeResult : uint8_t {
 	CONTINUE,         //! keep looping
 	RETURN_TO_CALLER, //! return from the scan (a chunk was emitted, or the operator parked on async I/O)
 	JOB_FINISHED      //! job is done
+};
+
+//! Outcome of acquiring the next scan job
+enum class MultiFileAcquireResult : uint8_t {
+	ACQUIRED,  //! a ready-to-decode job is now current
+	EXHAUSTED, //! the scan is exhausted, we have no more jobs
+	PARKED     //! the operator parked on schedule-time async I/O,  return from the scan
 };
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
@@ -211,18 +237,23 @@ struct MultiFileScanJob {
 	idx_t batch_index = 0;
 	//! Index of the file this job belongs to
 	idx_t file_index = DConstants::INVALID_INDEX;
-	//! Whether this job still needs its I/O scheduled or is ready to decode
-	MultiFileScanPhase phase = MultiFileScanPhase::SCHEDULE;
+	//! Completion state of the read-ahead I/O tasks for this job.
+	shared_ptr<ReadAheadJobCompletion> io_completion;
+	//! Total bytes of scheduled read-ahead I/O for this job
+	idx_t io_bytes = 0;
 };
 
 struct MultiFileLocalState : public LocalTableFunctionState {
 public:
 	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
 	}
+	~MultiFileLocalState() override;
 
 public:
 	//! The job currently being scanned by this thread
 	MultiFileScanJob job;
+	//! Job's state
+	MultiFileJobState job_state = MultiFileJobState::NONE;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
 	//! Set when the previous Scan() returned BLOCKED, so the next Scan() preserves the partial chunk

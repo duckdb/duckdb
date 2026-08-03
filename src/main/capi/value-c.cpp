@@ -50,7 +50,7 @@ static bool ResultIsDecimal(duckdb_result *result, idx_t col) {
 	}
 	auto result_data = (duckdb::DuckDBResultData *)result->internal_data;
 	auto &query_result = result_data->result;
-	auto &source_type = query_result->types[col];
+	auto &source_type = query_result->GetTypes()[col];
 	return source_type.id() == duckdb::LogicalTypeId::DECIMAL;
 }
 
@@ -164,6 +164,9 @@ duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 		duckdb_blob result_blob;
 		result_blob.data = malloc(internal_result.size);
 		result_blob.size = internal_result.size;
+		if (!result_blob.data) {
+			return FetchDefaultValue::Operation<duckdb_blob>();
+		}
 		memcpy(result_blob.data, internal_result.data, internal_result.size);
 		return result_blob;
 	}

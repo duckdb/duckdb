@@ -254,6 +254,35 @@ SELECT * FROM t1 LEFT JOIN t2 ON a=b WHERE a IN (SELECT c FROM t3) AND b IS NOT 
 2	2
 3	3
 
+# A post-LEFT SEMI join must not be reconstructed as a filter, which would preserve RHS duplicates.
+statement ok
+CREATE TABLE semi_l(id INTEGER);
+
+statement ok
+INSERT INTO semi_l VALUES (1), (2);
+
+statement ok
+CREATE TABLE semi_r(id INTEGER);
+
+statement ok
+INSERT INTO semi_r VALUES (1);
+
+statement ok
+CREATE TABLE semi_s(id INTEGER);
+
+statement ok
+INSERT INTO semi_s VALUES (1), (1), (NULL), (NULL);
+
+query II
+SELECT l.id, r.id
+FROM semi_l l
+LEFT JOIN semi_r r ON l.id = r.id
+WHERE EXISTS (SELECT * FROM semi_s s WHERE s.id IS NOT DISTINCT FROM r.id)
+ORDER BY ALL;
+----
+1	1
+2	NULL
+
 # ===== ANTI JOINS (NOT IN / NOT EXISTS) =====
 
 # LOJ followed by anti join via NOT IN (no NULLs in subquery)
@@ -273,6 +302,45 @@ query II
 SELECT * FROM t1 LEFT JOIN t2 ON a=b WHERE NOT EXISTS (SELECT 1 FROM t3 WHERE a=c) ORDER BY ALL;
 ----
 1	1
+
+# A post-LEFT ANTI join must retain its join type during reconstruction.
+statement ok
+CREATE TABLE anti_s(id INTEGER);
+
+statement ok
+INSERT INTO anti_s VALUES (1), (1);
+
+query II
+SELECT l.id, r.id
+FROM semi_l l
+LEFT JOIN semi_r r ON l.id = r.id
+WHERE NOT EXISTS (SELECT * FROM anti_s s WHERE s.id IS NOT DISTINCT FROM r.id)
+ORDER BY ALL;
+----
+2	NULL
+
+# An actual INNER join above a LEFT join must remain a join rather than a cross product plus filter.
+statement ok
+CREATE TABLE inner_s(id INTEGER);
+
+statement ok
+INSERT INTO inner_s VALUES (1), (2);
+
+query III
+SELECT l.id, r.id, s.id
+FROM (semi_l l LEFT JOIN semi_r r ON l.id = r.id)
+JOIN inner_s s ON coalesce(r.id, l.id) = s.id
+ORDER BY ALL;
+----
+1	1	1
+2	NULL	2
+
+query II
+EXPLAIN SELECT l.id, r.id, s.id
+FROM (semi_l l LEFT JOIN semi_r r ON l.id = r.id)
+JOIN inner_s s ON coalesce(r.id, l.id) = s.id;
+----
+physical_plan	<REGEX>:.*Hash Join.*INNER.*Hash Join.*LEFT.*
 
 # ===== MIXED SEMI/ANTI WITH THREE TABLES =====
 

@@ -23,6 +23,7 @@
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
@@ -50,6 +51,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/async_result.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "parquet_column_schema.hpp"
 #include "thrift/protocol/TProtocol.h"
 
@@ -80,6 +82,7 @@ class ParquetReader;
 class DataChunk;
 class Deserializer;
 class EncryptionUtil;
+enum class ParquetIntervalBloomFilterVersion : uint8_t;
 class PhysicalOperator;
 class Serializer;
 class TableFilter;
@@ -296,6 +299,24 @@ struct ParquetUnionData : public BaseUnionData {
 	unique_ptr<ParquetColumnSchema> root_schema;
 };
 
+enum class ParquetReaderProjectionExpressionType : uint8_t {
+	BYTE_LENGTH,
+};
+
+template <>
+const char *EnumUtil::ToChars<ParquetReaderProjectionExpressionType>(ParquetReaderProjectionExpressionType value);
+
+template <>
+ParquetReaderProjectionExpressionType EnumUtil::FromString<ParquetReaderProjectionExpressionType>(const char *value);
+
+struct ParquetReaderProjectionExpression {
+	ParquetReaderProjectionExpressionType type;
+	LogicalType return_type;
+
+	void Serialize(Serializer &serializer) const;
+	static ParquetReaderProjectionExpression Deserialize(Deserializer &deserializer);
+};
+
 class ParquetReader : public BaseFileReader {
 public:
 	//! Virtual column identifier for the "file_row_group_number" column (the file-relative row group index of each row)
@@ -303,7 +324,8 @@ public:
 
 public:
 	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
-	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
+	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr,
+	              unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions = {});
 	~ParquetReader() override;
 
 	mutable CachingFileSystem fs;
@@ -314,6 +336,9 @@ public:
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! How many rows have been read from this file
 	atomic<idx_t> rows_read;
+	ParquetIntervalBloomFilterVersion interval_bloom_filter_version {};
+	//! Storage indices of columns where expressions like strlen/octet_length are pushed down
+	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;
 
 public:
 	string GetReaderType() const override {
@@ -333,8 +358,10 @@ public:
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
+	void PrepareReadAhead(ClientContext &context, GlobalTableFunctionState &gstate) override;
 
 public:
+	//! Initialize the state for the next rowgroup to read
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const;
 
 	idx_t NumRows() const;
@@ -343,6 +370,9 @@ public:
 	idx_t GetDataSize() const;
 
 	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
+	ParquetIntervalBloomFilterVersion GetIntervalBloomFilterVersion() const {
+		return interval_bloom_filter_version;
+	}
 	string static GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) const;
@@ -432,9 +462,19 @@ private:
 	                                                ParquetColumnSchema &element);
 	unique_ptr<AdditionalAuthenticatedData> GenerateAAD(uint8_t module_type, uint16_t row_group_ordinal,
 	                                                    uint16_t column_ordinal, uint16_t page_ordinal) const;
+	optional_ptr<const BaseStatistics> GetVariantStats(const ParquetColumnSchema &schema) const;
+	//! Open a file handle for scanning, resolving the open flags from the prefetch mode
+	unique_ptr<CachingFileHandle> OpenScanHandle(ClientContext &context) const;
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
+	//! Scan handle pre-opened by PrepareReadAhead while the file was opened, adopted by the first InitializeScan
+	mutable mutex prewarm_lock;
+	mutable unique_ptr<CachingFileHandle> prewarmed_scan_handle;
+	//! Scan handle shared by all scan states of this reader
+	mutable shared_ptr<CachingFileHandle> shared_scan_handle;
+	mutable annotated_mutex variant_stats_lock;
+	mutable unordered_map<idx_t, unique_ptr<BaseStatistics>> variant_stats_cache;
 };
 
 } // namespace duckdb

@@ -3,6 +3,7 @@
         "brkitr_rules" : "exclude",
         "brkitr_dictionaries" : "exclude",
         "brkitr_tree"   : "exclude",
+        "coll_tree"     : "exclude",
         "conversion_mappings"   : "exclude",
         "confusables"   : "exclude",
         "curr_supplemental" : "exclude",

@@ -4,9 +4,18 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
-      "reason": "Type pushdown optimizer collapses projections and checks for that",
+      "reason": "Type and function pushdown optimizers collapses projections and check for that",
       "paths": [
-        "test/optimizer/pushdown/csv_type_pushdown.test"
+        "test/optimizer/pushdown/csv_type_pushdown.test",
+        "test/optimizer/pushdown/scalar_function_pushdown.test"
+      ]
+    },
+    {
+      "reason": "Synthetic verification projections intentionally hide the direct recursive-state scan.",
+      "paths": [
+        "test/sql/cte/recursive_cte_key_probe.test",
+        "test/sql/cte/recursive_cte_logging.test",
+        "test/sql/optimizer/expression/test_row_comparison_simplification.test"
       ]
     }
   ]

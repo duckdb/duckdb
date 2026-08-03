@@ -18,6 +18,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -68,11 +69,11 @@ DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), s
 vector<Identifier> DependencyManager::GetSchemaPath(const CatalogEntry &entry) {
 	// the path of (nested) schemas that contain this entry, outermost first - the parent chain for a schema entry, or
 	// the containing schema's full path for any other entry. This is uniform across entry types: no special-casing.
-	const SchemaCatalogEntry *schema;
+	optional_ptr<const SchemaCatalogEntry> schema;
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
 		schema = entry.Cast<SchemaCatalogEntry>().GetParentSchema().get();
 	} else {
-		schema = &entry.ParentSchema();
+		schema = entry.ParentSchema();
 	}
 	vector<Identifier> path;
 	while (schema) {
@@ -245,9 +246,20 @@ void DependencyManager::CreateDependent(CatalogTransaction transaction, const De
 	set.CreateEntry(transaction, entry_name, std::move(dep));
 }
 
+static string CatalogEntryInfoToString(const CatalogEntryInfo &entry) {
+	auto schema = StringUtil::Join(entry.schema_path, entry.schema_path.size(), ".", [](const Identifier &id) {
+		return SQLIdentifier::ToString(id.GetIdentifierName());
+	});
+	return schema + "." + SQLIdentifier::ToString(entry.name.GetIdentifierName()) +
+	       StringUtil::Format("(%s)", CatalogTypeToString(entry.type));
+}
+
 void DependencyManager::CreateDependency(CatalogTransaction transaction, DependencyInfo &info) {
 	auto subject_entry = LookupEntry(transaction, info.subject.entry);
 	info.subject.oid = subject_entry ? subject_entry->oid : optional_idx();
+	if (!subject_entry) {
+		throw InternalException("Couldn't locate entry: '%s'", CatalogEntryInfoToString(info.subject.entry));
+	}
 
 	DependencyCatalogSet subjects(Subjects(), info.dependent.entry);
 	DependencyCatalogSet dependents(Dependents(), info.subject.entry);

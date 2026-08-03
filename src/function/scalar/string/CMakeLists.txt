@@ -19,6 +19,7 @@ add_library_unity(
   sha256.cpp
   strip_accents.cpp
   string_split.cpp
+  string_slice.cpp
   suffix.cpp
   contains.cpp)
 set(ALL_OBJECT_FILES

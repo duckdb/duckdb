@@ -65,6 +65,7 @@ add_library_unity(
   memory_mapped_file.cpp
   error_data.cpp
   opener_file_system.cpp
+  optional_idx.cpp
   printer.cpp
   radix_partitioning.cpp
   re2_regex.cpp

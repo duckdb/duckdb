@@ -40,7 +40,6 @@ WHERE path = '{DATA_DIR}/csv/big_number.csv';
 ----
 CONNECTION	{DATA_DIR}/csv/big_number.csv	OPEN
 CONNECTION	{DATA_DIR}/csv/big_number.csv	READ
-CONNECTION	{DATA_DIR}/csv/big_number.csv	READ
 CONNECTION	{DATA_DIR}/csv/big_number.csv	CLOSE
 
 statement ok
@@ -73,7 +72,6 @@ FROM "{TEMP_DIR}/logging_csv_logs_normalized/duckdb_log_entries.csv"
 WHERE path = '{DATA_DIR}/csv/big_number.csv';
 ----
 1	{DATA_DIR}/csv/big_number.csv	OPEN
-1	{DATA_DIR}/csv/big_number.csv	READ
 1	{DATA_DIR}/csv/big_number.csv	READ
 1	{DATA_DIR}/csv/big_number.csv	CLOSE
 
