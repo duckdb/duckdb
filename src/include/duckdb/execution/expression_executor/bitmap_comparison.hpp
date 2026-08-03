@@ -301,8 +301,7 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 	// too few selected rows to pay for the dense compare: leave it to the generic gather-select.
 	// FOR columns stay dense regardless: the generic path would widen the whole payload anyway,
 	// and skipping would starve the FOR keepalive token.
-	if (!l_for && (!AutoVecCountPaysOff(count) ||
-	               (have_sel && !DenseAutoVecPaysOff(count, span, GetTypeIdSize(pt))))) {
+	if (!l_for && (!AutoVecCountPaysOff(count) || (have_sel && !DenseAutoVecPaysOff(count, span, GetTypeIdSize(pt))))) {
 		return false;
 	}
 	if (l_for) {
