@@ -1,8 +1,10 @@
 module: log_storage
 functions:
   create_log_storage:
+    offset: 494
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: constructor
     belongs_to: log_storage
     parameters: {}
@@ -11,8 +13,10 @@ functions:
       Creates a new log storage object.
     return_description: A log storage object. Must be destroyed with `duckdb_destroy_log_storage`.
   destroy_log_storage:
+    offset: 495
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     role: destructor
     belongs_to: log_storage
     parameters:
@@ -24,8 +28,10 @@ functions:
     description: |
       Destroys a log storage object.
   log_storage_set_write_log_entry:
+    offset: 496
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       log_storage:
         type: log_storage
@@ -37,8 +43,10 @@ functions:
     description: |
       Sets the callback function for writing log entries.
   log_storage_set_extra_data:
+    offset: 497
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       log_storage:
         type: log_storage
@@ -53,8 +61,10 @@ functions:
     description: |
       Sets the extra data of the custom log storage.
   log_storage_set_name:
+    offset: 498
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       log_storage:
         type: log_storage
@@ -68,8 +78,10 @@ functions:
     description: |
       Sets the name of the log storage.
   register_log_storage:
+    offset: 499
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       database:
         type: database

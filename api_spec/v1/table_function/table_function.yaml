@@ -1,8 +1,9 @@
 module: table_function
 functions:
   create_table_function:
+    offset: 242
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     role: constructor
     belongs_to: table_function
     parameters: {}
@@ -13,8 +14,9 @@ functions:
       The return value should be destroyed with `duckdb_destroy_table_function`.
     return_description: The table function object.
   destroy_table_function:
+    offset: 243
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     role: destructor
     belongs_to: table_function
     parameters:
@@ -26,8 +28,9 @@ functions:
     description: |
       Destroys the given table function object.
   table_function_set_name:
+    offset: 244
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       table_function:
         type: table_function
@@ -41,8 +44,9 @@ functions:
     description: |
       Sets the name of the given table function.
   table_function_add_parameter:
+    offset: 245
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       table_function:
         type: table_function
@@ -54,8 +58,9 @@ functions:
     description: |
       Adds a parameter to the table function.
   table_function_add_named_parameter:
+    offset: 246
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.8.0", "2023-05-17"]
     parameters:
       table_function:
         type: table_function
@@ -72,8 +77,9 @@ functions:
     description: |
       Adds a named parameter to the table function.
   table_function_set_extra_info:
+    offset: 247
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       table_function:
         type: table_function
@@ -89,8 +95,9 @@ functions:
     description: |
       Assigns extra information to the table function that can be fetched during binding, etc.
   table_function_set_bind:
+    offset: 248
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       table_function:
         type: table_function
@@ -102,8 +109,9 @@ functions:
     description: |
       Sets the bind function of the table function.
   table_function_set_init:
+    offset: 249
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       table_function:
         type: table_function
@@ -115,8 +123,9 @@ functions:
     description: |
       Sets the init function of the table function.
   table_function_set_local_init:
+    offset: 250
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
       table_function:
         type: table_function
@@ -128,8 +137,9 @@ functions:
     description: |
       Sets the thread-local init function of the table function.
   table_function_set_function:
+    offset: 251
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       table_function:
         type: table_function
@@ -141,8 +151,9 @@ functions:
     description: |
       Sets the main function of the table function.
   table_function_supports_projection_pushdown:
+    offset: 252
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       table_function:
         type: table_function
@@ -158,8 +169,9 @@ functions:
       the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
       If this is set to false (the default), the system will expect all columns to be projected.
   register_table_function:
+    offset: 253
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       con:
         type: connection
@@ -176,8 +188,9 @@ functions:
       If the function is incomplete or a function with this name already exists DuckDBError is returned.
     return_description: Whether or not the registration was successful.
   bind_get_extra_info:
+    offset: 254
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: bind_info
@@ -188,8 +201,10 @@ functions:
       Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
     return_description: The extra info
   table_function_get_client_context:
+    offset: 531
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.4.0", "2025-09-15"]
     parameters:
       info:
         type: bind_info
@@ -203,8 +218,9 @@ functions:
     description: |
       Retrieves the client context of the bind info of a table function.
   bind_add_result_column:
+    offset: 255
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: bind_info
@@ -221,8 +237,9 @@ functions:
     description: |
       Adds a result column to the output of the table function.
   bind_get_parameter_count:
+    offset: 256
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: bind_info
@@ -232,8 +249,9 @@ functions:
       Retrieves the number of regular (non-named) parameters to the function.
     return_description: The number of parameters
   bind_get_parameter:
+    offset: 257
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: bind_info
@@ -248,8 +266,9 @@ functions:
       The result must be destroyed with `duckdb_destroy_value`.
     return_description: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
   bind_get_named_parameter:
+    offset: 258
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.8.0", "2023-05-17"]
     parameters:
       info:
         type: bind_info
@@ -266,8 +285,9 @@ functions:
       The result must be destroyed with `duckdb_destroy_value`.
     return_description: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
   bind_set_bind_data:
+    offset: 259
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: bind_info
@@ -284,8 +304,9 @@ functions:
       Sets the user-provided bind data in the bind object of the table function.
       This object can be retrieved again during execution.
   bind_set_cardinality:
+    offset: 260
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.5.0", "2022-09-04"]
     parameters:
       info:
         type: bind_info
@@ -299,8 +320,9 @@ functions:
     description: |
       Sets the cardinality estimate for the table function, used for optimization.
   bind_set_error:
+    offset: 261
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: bind_info
@@ -314,8 +336,9 @@ functions:
     description: |
       Report that an error has occurred while calling bind on a table function.
   init_get_extra_info:
+    offset: 262
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: init_info
@@ -326,8 +349,9 @@ functions:
       Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
     return_description: The extra info
   init_get_bind_data:
+    offset: 263
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: init_info
@@ -341,8 +365,9 @@ functions:
       For tracking state, use the init data instead.
     return_description: The bind data object
   init_set_init_data:
+    offset: 264
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: init_info
@@ -358,8 +383,9 @@ functions:
     description: |
       Sets the user-provided init data in the init object. This object can be retrieved again during execution.
   init_get_column_count:
+    offset: 265
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: init_info
@@ -371,8 +397,9 @@ functions:
       This function must be used if projection pushdown is enabled to figure out which columns to emit.
     return_description: The number of projected columns.
   init_get_column_index:
+    offset: 266
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: init_info
@@ -387,8 +414,9 @@ functions:
       This function must be used if projection pushdown is enabled to figure out which columns to emit.
     return_description: The column index of the projected column.
   init_set_max_threads:
+    offset: 267
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
       info:
         type: init_info
@@ -400,8 +428,9 @@ functions:
     description: |
       Sets how many threads can process this table function in parallel (default: 1)
   init_set_error:
+    offset: 268
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: init_info
@@ -415,8 +444,9 @@ functions:
     description: |
       Report that an error has occurred while calling init.
   function_get_extra_info:
+    offset: 269
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: function_info
@@ -427,8 +457,9 @@ functions:
       Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
     return_description: The extra info
   function_get_bind_data:
+    offset: 270
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: function_info
@@ -442,8 +473,9 @@ functions:
       For tracking state, use the init data instead.
     return_description: The bind data object.
   function_get_init_data:
+    offset: 271
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: function_info
@@ -454,8 +486,9 @@ functions:
       Gets the init data set by `duckdb_init_set_init_data` during the init.
     return_description: The init data object
   function_get_local_init_data:
+    offset: 272
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.4.0", "2022-06-19"]
     parameters:
       info:
         type: function_info
@@ -466,8 +499,9 @@ functions:
       Gets the thread-local init data set by `duckdb_init_set_init_data` during the local_init.
     return_description: The init data object
   function_set_error:
+    offset: 273
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v0.3.3", "2022-04-11"]
     parameters:
       info:
         type: function_info
@@ -481,8 +515,10 @@ functions:
     description: |
       Report that an error has occurred while executing the function.
   table_function_bind_get_result_column_count:
+    offset: 465
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: bind_info
@@ -494,8 +530,10 @@ functions:
       If the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the number of columns in the target table at the start of the bind callback.
     return_description: The number of result columns.
   table_function_bind_get_result_column_name:
+    offset: 466
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: bind_info
@@ -514,8 +552,10 @@ functions:
       The result is valid for the duration of the bind callback or until the next call to `duckdb_bind_add_result_column`, so it must not be destroyed.
     return_description: The name of the result column.
   table_function_bind_get_result_column_type:
+    offset: 467
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       info:
         type: bind_info
