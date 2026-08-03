@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -276,6 +277,128 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 	return true;
 }
 
+//! A VARIANT built from a MAP is stored as an ARRAY of key/value structs, while one built
+//! from a JSON object is an OBJECT. Only the latter can take the direct key/value path
+//! below; ARRAY-shaped variants keep going through ConvertVariantToList, as they always
+//! have. The first valid row decides - a mixed batch then fails in whichever path was
+//! chosen and falls through to the Value-based conversion, exactly as before.
+static bool VariantRowsAreObjects(const UnifiedVariantVectorData &variant, const SelectionVector &sel, idx_t count,
+                                  optional_idx row) {
+	for (idx_t i = 0; i < count; i++) {
+		auto row_index = row.IsValid() ? row.GetIndex() : i;
+		if (!variant.RowIsValid(row_index)) {
+			continue;
+		}
+		return variant.GetTypeId(row_index, sel[i]) == VariantLogicalType::OBJECT;
+	}
+	return false;
+}
+
+//! Convert VARIANT(OBJECT) -> MAP(VARCHAR, ...).
+//!
+//! A MAP is physically LIST(STRUCT(key, value)), so this is ConvertVariantToList over the
+//! object's children, plus the object's keys written into the key child. Without it MAP
+//! fell through to the per-row Value fallback at the bottom of CastVariant, which builds a
+//! heap Value tree per row: ~40x slower than the equivalent STRUCT cast (measured on 200k
+//! rows of a 6-key object: 1216ms as MAP vs 30ms as STRUCT).
+//!
+//! Only VARCHAR keys are handled here; a MAP with any other key type keeps using the
+//! fallback, which can cast the keys.
+static bool ConvertVariantToMap(FromVariantConversionData &conversion_data, Vector &result, const SelectionVector &sel,
+                                idx_t offset, idx_t count, optional_idx row) {
+	const auto owned_child_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	const array_ptr child_data(owned_child_data.get(), count);
+
+	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
+	//! respect that)
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	ValidityMask validity(count);
+	for (idx_t i = 0; i < count; i++) {
+		if (!result_validity.RowIsValid(offset + i)) {
+			validity.SetInvalid(i);
+		}
+	}
+
+	auto collection_result = VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::OBJECT, sel,
+	                                                         count, row, offset, child_data, validity);
+	if (!collection_result.success) {
+		conversion_data.error =
+		    StringUtil::Format("Expected to find VARIANT(OBJECT), found VARIANT(%s) instead, can't convert",
+		                       EnumUtil::ToString(collection_result.wrong_type));
+		return false;
+	}
+
+	idx_t total_children = 0;
+	idx_t max_children = 0;
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity.RowIsValid(i)) {
+			continue;
+		}
+		auto &child_data_entry = child_data[i];
+		if (child_data_entry.child_count > max_children) {
+			max_children = child_data_entry.child_count;
+		}
+		total_children += child_data_entry.child_count;
+	}
+
+	SelectionVector new_sel;
+	new_sel.Initialize(max_children);
+	idx_t total_offset = 0;
+	if (offset) {
+		total_offset += ListVector::GetListSize(result);
+	}
+
+	//! Sized once up front, so the key data pointer below stays valid for the whole loop.
+	ListVector::Reserve(result, total_offset + total_children);
+	auto &keys = MapVector::GetKeys(result);
+	auto &values = MapVector::GetValues(result);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto key_data = FlatVector::GetDataMutable<string_t>(keys);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto row_index = row.IsValid() ? row.GetIndex() : i;
+		auto &child_data_entry = child_data[i];
+
+		if (!validity.RowIsValid(i)) {
+			FlatVector::SetNull(result, offset + i, true);
+			continue;
+		}
+
+		auto &entry = list_data[i + offset];
+		entry.offset = total_offset;
+		entry.length = child_data_entry.child_count;
+		total_offset += entry.length;
+
+		for (idx_t child_idx = 0; child_idx < child_data_entry.child_count; child_idx++) {
+			auto children_idx = child_data_entry.children_idx + child_idx;
+			if (!conversion_data.variant.KeysIndexIsValid(row_index, children_idx)) {
+				conversion_data.error = "VARIANT(OBJECT) child is missing its key, can't convert to MAP";
+				return false;
+			}
+			auto keys_index = conversion_data.variant.GetKeysIndex(row_index, children_idx);
+			auto &key = conversion_data.variant.GetKey(row_index, keys_index);
+			key_data[entry.offset + child_idx] = StringVector::AddStringOrBlob(keys, key);
+		}
+
+		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
+		if (!CastVariant(conversion_data, values, new_sel, entry.offset, child_data_entry.child_count, row_index)) {
+			return false;
+		}
+	}
+	ListVector::SetListSize(result, total_offset);
+
+	//! Reject duplicate/NULL keys, as the Value-based path did. Only the rows written by
+	//! this call are checked: with offset > 0 the earlier rows belong to a previous chunk
+	//! (or are not written yet), and verifying those reports failures that aren't ours.
+	SelectionVector verify_sel;
+	verify_sel.Initialize(count);
+	for (idx_t i = 0; i < count; i++) {
+		verify_sel.set_index(i, offset + i);
+	}
+	MapVector::EvalMapInvalidReason(MapVector::CheckMapValidity(result, count, verify_sel));
+	return true;
+}
+
 static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Vector &result,
                                   const SelectionVector &sel, idx_t offset, idx_t count, optional_idx row) {
 	const auto owned_child_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
@@ -546,9 +669,22 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 				return true;
 			}
 			break;
-		case LogicalTypeId::LIST:
-		case LogicalTypeId::MAP: {
+		case LogicalTypeId::LIST: {
 			if (ConvertVariantToList(conversion_data, result, sel, offset, count, row)) {
+				return true;
+			}
+			break;
+		}
+		case LogicalTypeId::MAP: {
+			//! An OBJECT maps onto MAP(VARCHAR, ...) directly; anything else (notably the
+			//! ARRAY a variant-from-MAP produces) keeps using the LIST path. Non-VARCHAR
+			//! keys fall through to the Value-based path below, which can cast them.
+			if (MapType::KeyType(target_type).id() == LogicalTypeId::VARCHAR &&
+			    VariantRowsAreObjects(conversion_data.variant, sel, count, row)) {
+				if (ConvertVariantToMap(conversion_data, result, sel, offset, count, row)) {
+					return true;
+				}
+			} else if (ConvertVariantToList(conversion_data, result, sel, offset, count, row)) {
 				return true;
 			}
 			break;
