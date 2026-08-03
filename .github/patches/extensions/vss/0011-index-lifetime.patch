@@ -132,71 +132,78 @@ index 3f2b26d..19d1ec1 100644
  // Register Index Type
  //------------------------------------------------------------------------------
 diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
-index 6d6965b..0695fbf 100644
+index 0354fab..d5ba76c 100644
 --- a/src/hnsw/hnsw_index_pragmas.cpp
 +++ b/src/hnsw/hnsw_index_pragmas.cpp
-@@ -121,13 +121,11 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
+@@ -115,25 +115,26 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
+ 		    context, QualifiedName(index_entry.schema.catalog.GetName(), index_entry.GetSchemaName(),
+ 		                           index_entry.GetTableName()));
+ 		auto &storage = table_entry.GetStorage();
+-		HNSWIndex *hnsw_index = nullptr;
++		shared_ptr<IndexEntry> found_entry;
+ 
+ 		auto &table_info = *storage.GetDataTableInfo();
  
  		table_info.BindIndexes(context, HNSWIndex::TYPE_NAME);
- 		for (const auto &entry : table_info.GetIndexes().GetEntries()) {
--			auto access = entry->GetAccess();
--			auto &index = access.GetIndex();
+-		for (auto &index : table_info.GetIndexes().Indexes()) {
 -			if (!index.IsBound() || HNSWIndex::TYPE_NAME != index.GetIndexType()) {
-+			auto guard = entry->ReadLock();
-+			if (!guard.IsBound() || HNSWIndex::TYPE_NAME != guard.GetIndexType()) {
++		for (const auto &entry : table_info.GetIndexes().GetEntries()) {
++			auto guard = entry->GetHandle();
++			if (!guard->IsBound() || HNSWIndex::TYPE_NAME != guard->GetIndexType()) {
  				continue;
  			}
 -			auto &cast_index = index.Cast<HNSWIndex>();
 -			if (cast_index.name == index_entry.name) {
-+			if (guard.GetIndexName() == index_entry.name) {
- 				found_entry = entry;
+-				hnsw_index = &cast_index;
++			if (guard->GetIndexName() == index_entry.name) {
++				found_entry = entry;
  				break;
  			}
-@@ -136,8 +134,7 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
- 		if (!found_entry) {
+ 		}
+ 
+-		if (!hnsw_index) {
++		if (!found_entry) {
  			throw BinderException("Index %s not found", index_entry.name);
  		}
--		auto access = found_entry->GetAccess();
--		auto &hnsw_index = access.GetIndex().Cast<HNSWIndex>();
-+		auto guard = found_entry->ReadLock();
++		auto guard = found_entry->GetHandle<HNSWIndex>();
  
  		idx_t col = 0;
  
-@@ -146,10 +143,10 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
+@@ -142,10 +143,10 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
  		output.data[col++].SetValue(row, Value(index_entry.name.GetIdentifierName()));
  		output.data[col++].SetValue(row, Value(table_entry.name.GetIdentifierName()));
  
--		auto stats = hnsw_index.GetStats();
-+		auto stats = guard.Invoke(&HNSWIndex::GetStats);
+-		auto stats = hnsw_index->GetStats();
++		auto stats = guard->GetStats();
  
--		output.data[col++].SetValue(row, Value(hnsw_index.GetMetric()));
--		output.data[col++].SetValue(row, Value::BIGINT(hnsw_index.GetVectorSize()));
-+		output.data[col++].SetValue(row, Value(guard.Invoke(&HNSWIndex::GetMetric)));
-+		output.data[col++].SetValue(row, Value::BIGINT(guard.Invoke(&HNSWIndex::GetVectorSize)));
+-		output.data[col++].SetValue(row, Value(hnsw_index->GetMetric()));
+-		output.data[col++].SetValue(row, Value::BIGINT(hnsw_index->GetVectorSize()));
++		output.data[col++].SetValue(row, Value(guard->GetMetric()));
++		output.data[col++].SetValue(row, Value::BIGINT(guard->GetVectorSize()));
  		output.data[col++].SetValue(row, Value::BIGINT(stats->count));
  		output.data[col++].SetValue(row, Value::BIGINT(stats->capacity));
  		output.data[col++].SetValue(row, Value::BIGINT(stats->approx_size));
-@@ -206,14 +203,12 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+@@ -201,13 +202,13 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+ 
  	auto &table_info = *storage.GetDataTableInfo();
  	table_info.BindIndexes(context, HNSWIndex::TYPE_NAME);
- 	for (const auto &entry : table_info.GetIndexes().GetEntries()) {
--		auto access = entry->GetAccess();
--		auto &index = access.GetIndex();
+-	for (auto &index : table_info.GetIndexes().Indexes()) {
 -		if (!index.IsBound() || HNSWIndex::TYPE_NAME != index.GetIndexType()) {
-+		auto guard = entry->WriteLock();
-+		if (!guard.IsBound() || HNSWIndex::TYPE_NAME != guard.GetIndexType()) {
++	for (const auto &entry : table_info.GetIndexes().GetEntries()) {
++		auto guard = entry->GetMutableHandle();
++		if (!guard->IsBound() || HNSWIndex::TYPE_NAME != guard->GetIndexType()) {
  			continue;
  		}
 -		auto &cast_index = index.Cast<HNSWIndex>();
 -		if (cast_index.name == index_entry.name) {
 -			cast_index.Compact();
-+		if (guard.GetIndexName() == index_entry.name) {
-+			guard.Invoke(&HNSWIndex::Compact);
++		if (guard->GetIndexName() == index_entry.name) {
++			guard->Cast<HNSWIndex>().Compact();
  			found_index = true;
  			break;
  		}
 diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
-index c1b8ce7..a240b88 100644
+index 456c6c9..ec5b304 100644
 --- a/src/hnsw/hnsw_index_scan.cpp
 +++ b/src/hnsw/hnsw_index_scan.cpp
 @@ -7,13 +7,12 @@
@@ -214,57 +221,52 @@ index c1b8ce7..a240b88 100644
  #include "hnsw/hnsw.hpp"
  #include "hnsw/hnsw_index.hpp"
  
-@@ -28,7 +27,7 @@ BindInfo HNSWIndexScanBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+@@ -28,6 +27,7 @@ BindInfo HNSWIndexScanBindInfo(const optional_ptr<FunctionData> bind_data_p) {
  // Global State
  //-------------------------------------------------------------------------
  struct HNSWIndexScanGlobalState : public GlobalTableFunctionState {
--	unique_ptr<IndexEntryAccess> index_access;
-+	unique_ptr<IndexEntryReadGuard> index_guard;
++	unique_ptr<IndexHandle<HNSWIndex>> index_guard;
  	ColumnFetchState fetch_state;
  	TableScanState local_storage_state;
  	vector<StorageIndex> column_ids;
-@@ -46,7 +45,7 @@ static unique_ptr<GlobalTableFunctionState> HNSWIndexScanInitGlobal(ClientContex
+@@ -45,6 +45,7 @@ static unique_ptr<GlobalTableFunctionState> HNSWIndexScanInitGlobal(ClientContex
  	auto &bind_data = input.bind_data->Cast<HNSWIndexScanBindData>();
  
  	auto result = make_uniq<HNSWIndexScanGlobalState>();
--	result->index_access = make_uniq<IndexEntryAccess>(bind_data.index_entry->GetAccess());
-+	result->index_guard = make_uniq<IndexEntryReadGuard>(bind_data.index_entry->ReadLock());
++	result->index_guard = make_uniq<IndexHandle<HNSWIndex>>(bind_data.index_entry->GetHandle<HNSWIndex>());
  
  	// Setup the scan state for the local storage
  	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
-@@ -66,8 +65,8 @@ static unique_ptr<GlobalTableFunctionState> HNSWIndexScanInitGlobal(ClientContex
- 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
+@@ -65,7 +66,7 @@ static unique_ptr<GlobalTableFunctionState> HNSWIndexScanInitGlobal(ClientContex
  
  	// Initialize the scan state for the index
--	result->index_state = result->index_access->GetIndex().Cast<HNSWIndex>().InitializeScan(
--	    bind_data.query.get(), bind_data.limit, context);
-+	result->index_state =
-+	    result->index_guard->Invoke(&HNSWIndex::InitializeScan, bind_data.query.get(), bind_data.limit, context);
+ 	result->index_state =
+-	    bind_data.index.Cast<HNSWIndex>().InitializeScan(bind_data.query.get(), bind_data.limit, context);
++	    (*result->index_guard)->InitializeScan(bind_data.query.get(), bind_data.limit, context);
  
  	if (!input.CanRemoveFilterColumns()) {
  		return std::move(result);
-@@ -101,7 +100,7 @@ static void HNSWIndexScanExecute(ClientContext &context, TableFunctionInput &dat
+@@ -99,7 +100,7 @@ static void HNSWIndexScanExecute(ClientContext &context, TableFunctionInput &dat
  	auto &transaction = DuckTransaction::Get(context, bind_data.table.catalog);
  
  	// Scan the index for row id's
--	auto row_count = state.index_access->GetIndex().Cast<HNSWIndex>().Scan(*state.index_state, state.row_ids);
-+	auto row_count = state.index_guard->Invoke(&HNSWIndex::Scan, *state.index_state, state.row_ids, 0);
+-	auto row_count = bind_data.index.Cast<HNSWIndex>().Scan(*state.index_state, state.row_ids);
++	auto row_count = (*state.index_guard)->Scan(*state.index_state, state.row_ids, 0);
  	if (row_count == 0) {
  		// Short-circuit if the index had no more rows
  		output.SetCardinality(0);
-@@ -162,8 +161,8 @@ static InsertionOrderPreservingMap<string> HNSWIndexScanToString(TableFunctionTo
+@@ -160,7 +161,8 @@ static InsertionOrderPreservingMap<string> HNSWIndexScanToString(TableFunctionTo
  	InsertionOrderPreservingMap<string> result;
  	auto &bind_data = input.bind_data->Cast<HNSWIndexScanBindData>();
  	result["Table"] = bind_data.table.name.GetIdentifierName();
--	auto access = bind_data.index_entry->GetAccess();
--	result["HNSW Index"] = access.GetIndex().GetIndexName().GetIdentifierName();
-+	auto guard = bind_data.index_entry->ReadLock();
-+	result["HNSW Index"] = guard.GetIndexName().GetIdentifierName();
+-	result["HNSW Index"] = bind_data.index.GetIndexName().GetIdentifierName();
++	auto guard = bind_data.index_entry->GetHandle();
++	result["HNSW Index"] = guard->GetIndexName().GetIdentifierName();
  	return result;
  }
  
 diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
-index 9ba0a39..76ee473 100644
+index e653d9f..166f158 100644
 --- a/src/hnsw/hnsw_optimize_join.cpp
 +++ b/src/hnsw/hnsw_optimize_join.cpp
 @@ -1,11 +1,12 @@
@@ -296,121 +298,170 @@ index 9ba0a39..76ee473 100644
  #include "hnsw/hnsw.hpp"
  #include "hnsw/hnsw_index.hpp"
  
-@@ -36,8 +35,7 @@ public:
+@@ -35,10 +34,10 @@ public:
+ 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXTENSION;
  
  	PhysicalHNSWIndexJoin(PhysicalPlan &physical_plan, const vector<LogicalType> &types_p,
- 	                      const idx_t estimated_cardinality, DuckTableEntry &table_p,
--	                      shared_ptr<IndexEntry> index_entry_p,
+-	                      const idx_t estimated_cardinality, DuckTableEntry &table_p, HNSWIndex &hnsw_index_p,
 -	                      const idx_t limit_p)
++	                      const idx_t estimated_cardinality, DuckTableEntry &table_p,
 +	                      shared_ptr<IndexEntry> index_entry_p, const idx_t limit_p)
  	    : PhysicalOperator(physical_plan, TYPE, types_p, estimated_cardinality), table(table_p),
- 	      index_entry(std::move(index_entry_p)), limit(limit_p) {
+-	      hnsw_index(hnsw_index_p), limit(limit_p) {
++	      index_entry(std::move(index_entry_p)), limit(limit_p) {
  	}
-@@ -74,7 +72,7 @@ bool PhysicalHNSWIndexJoin::ParallelOperator() const {
+ 
+ public:
+@@ -51,7 +50,7 @@ public:
+ 
+ public:
+ 	DuckTableEntry &table;
+-	HNSWIndex &hnsw_index;
++	shared_ptr<IndexEntry> index_entry;
+ 	idx_t limit;
+ 
+ 	vector<column_t> inner_column_ids;
+@@ -73,6 +72,7 @@ bool PhysicalHNSWIndexJoin::ParallelOperator() const {
  class HNSWIndexJoinState final : public OperatorState {
  public:
  	idx_t input_idx = 0;
--	unique_ptr<IndexEntryAccess> index_access;
-+	unique_ptr<IndexEntryReadGuard> index_guard;
++	unique_ptr<IndexHandle<HNSWIndex>> index_guard;
  
  	ColumnFetchState fetch_state;
  	TableScanState local_storage_state;
-@@ -108,8 +106,8 @@ unique_ptr<OperatorState> PhysicalHNSWIndexJoin::GetOperatorState(ExecutionConte
+@@ -106,7 +106,8 @@ unique_ptr<OperatorState> PhysicalHNSWIndexJoin::GetOperatorState(ExecutionConte
  	local_storage.InitializeScan(table.GetStorage(), result->local_storage_state.local_state, nullptr);
  
  	// Initialize the index scan state
--	result->index_access = make_uniq<IndexEntryAccess>(index_entry->GetAccess());
--	result->index_state = result->index_access->GetIndex().Cast<HNSWIndex>().InitializeMultiScan(context.client);
-+	result->index_guard = make_uniq<IndexEntryReadGuard>(index_entry->ReadLock());
-+	result->index_state = result->index_guard->Invoke(&HNSWIndex::InitializeMultiScan, context.client);
+-	result->index_state = hnsw_index.InitializeMultiScan(context.client);
++	result->index_guard = make_uniq<IndexHandle<HNSWIndex>>(index_entry->GetHandle<HNSWIndex>());
++	result->index_state = (*result->index_guard)->InitializeMultiScan(context.client);
  
  	return std::move(result);
  }
-@@ -118,7 +116,6 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
-                                                   GlobalOperatorState &gstate, OperatorState &ostate) const {
- 	auto &state = ostate.Cast<HNSWIndexJoinState>();
- 	auto &transcation = DuckTransaction::Get(context.client, table.catalog);
--	auto &hnsw_index = state.index_access->GetIndex().Cast<HNSWIndex>();
- 
- 	input.Flatten();
- 
-@@ -136,7 +133,7 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
+@@ -132,7 +133,7 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
  	// We mimic the window row_number() operator here and output the row number in each batch, basically.
  	const auto row_number_vector = FlatVector::GetDataMutable<int64_t>(chunk.data[MATCH_COLUMN_OFFSET]);
  
 -	hnsw_index.ResetMultiScan(*state.index_state);
-+	state.index_guard->Invoke(&HNSWIndex::ResetMultiScan, *state.index_state);
++	(*state.index_guard)->ResetMultiScan(*state.index_state);
  
  	// How many batches are we going to process?
  	const auto batch_count = MinValue(input.size() - state.input_idx, STANDARD_VECTOR_SIZE / limit);
-@@ -147,7 +144,8 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
+@@ -143,7 +144,7 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
  		const auto rhs_vector_data = rhs_vector_ptr + state.input_idx * rhs_vector_size;
  
  		// Scan the index for row ids
 -		const auto match_count = hnsw_index.ExecuteMultiScan(*state.index_state, rhs_vector_data, limit);
-+		const auto match_count =
-+		    state.index_guard->Invoke(&HNSWIndex::ExecuteMultiScan, *state.index_state, rhs_vector_data, limit);
++		const auto match_count = (*state.index_guard)->ExecuteMultiScan(*state.index_state, rhs_vector_data, limit);
  		for (idx_t i = 0; i < match_count; i++) {
  			state.match_sel.set_index(output_idx, state.input_idx);
  			row_number_vector[output_idx] = i + 1; // Note: 1-indexed!
-@@ -155,7 +153,8 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
+@@ -151,7 +152,8 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
  		}
  	}
  
 -	const auto &row_ids = hnsw_index.GetMultiScanResult(*state.index_state);
 +	Vector row_ids(LogicalType::ROW_TYPE);
-+	state.index_guard->Invoke(&HNSWIndex::GetMultiScanResult, *state.index_state, row_ids);
++	(*state.index_guard)->GetMultiScanResult(*state.index_state, row_ids);
  
  	// Execute one big fetch for the LHS
  	table.GetStorage().Fetch(transcation, chunk, state.physical_column_ids, row_ids, output_idx, state.fetch_state);
-@@ -177,9 +176,8 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
+@@ -173,7 +175,8 @@ OperatorResultType PhysicalHNSWIndexJoin::Execute(ExecutionContext &context, Dat
  InsertionOrderPreservingMap<string> PhysicalHNSWIndexJoin::ParamsToString() const {
  	InsertionOrderPreservingMap<string> result;
  	auto table_name = table.name;
--	auto access = index_entry->GetAccess();
--	auto &hnsw_index = access.GetIndex().Cast<HNSWIndex>();
 -	auto index_name = hnsw_index.name;
-+	auto guard = index_entry->ReadLock();
-+	auto index_name = guard.GetIndexName();
++	auto guard = index_entry->GetHandle();
++	auto index_name = guard->GetIndexName();
  	result.insert("table", table_name.GetIdentifierName());
  	result.insert("index", index_name.GetIdentifierName());
  	result.insert("limit", to_string(limit));
-@@ -522,20 +520,18 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+@@ -187,9 +190,9 @@ InsertionOrderPreservingMap<string> PhysicalHNSWIndexJoin::ParamsToString() cons
+ 
+ class LogicalHNSWIndexJoin final : public LogicalExtensionOperator {
+ public:
+-	explicit LogicalHNSWIndexJoin(const TableIndex table_index_p, DuckTableEntry &table_p, HNSWIndex &hnsw_index_p,
+-	                              const idx_t limit_p)
+-	    : table_index(table_index_p), table(table_p), hnsw_index(hnsw_index_p), limit(limit_p) {
++	explicit LogicalHNSWIndexJoin(const TableIndex table_index_p, DuckTableEntry &table_p,
++	                              shared_ptr<IndexEntry> index_entry_p, const idx_t limit_p)
++	    : table_index(table_index_p), table(table_p), index_entry(std::move(index_entry_p)), limit(limit_p) {
+ 	}
+ 
+ public:
+@@ -205,7 +208,7 @@ public:
+ 	TableIndex table_index;
+ 
+ 	DuckTableEntry &table;
+-	HNSWIndex &hnsw_index;
++	shared_ptr<IndexEntry> index_entry;
+ 	idx_t limit;
+ 
+ 	vector<column_t> inner_column_ids;
+@@ -290,7 +293,7 @@ vector<ColumnBinding> LogicalHNSWIndexJoin::GetColumnBindings() {
+ 
+ PhysicalOperator &LogicalHNSWIndexJoin::CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) {
+ 
+-	auto &result = planner.Make<PhysicalHNSWIndexJoin>(types, estimated_cardinality, table, hnsw_index, limit);
++	auto &result = planner.Make<PhysicalHNSWIndexJoin>(types, estimated_cardinality, table, index_entry, limit);
+ 	auto &cast_result = result.Cast<PhysicalHNSWIndexJoin>();
+ 	cast_result.limit = limit;
+ 	cast_result.inner_column_ids = inner_column_ids;
+@@ -511,23 +514,24 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	auto &duck_table = table.Cast<DuckTableEntry>();
+ 	auto &table_info = *table.GetStorage().GetDataTableInfo();
+ 
+-	HNSWIndex *index_ptr = nullptr;
++	shared_ptr<IndexEntry> found_entry;
+ 	vector<reference<Expression>> bindings;
  
  	table_info.BindIndexes(context, HNSWIndex::TYPE_NAME);
- 	for (const auto &index_entry : table_info.GetIndexes().GetEntries()) {
--		auto access = index_entry->GetAccess();
--		auto &index = access.GetIndex();
+-	for (auto &index : table_info.GetIndexes().Indexes()) {
 -		if (!index.IsBound() || HNSWIndex::TYPE_NAME != index.GetIndexType()) {
-+		auto guard = index_entry->ReadLock();
-+		if (!guard.IsBound() || HNSWIndex::TYPE_NAME != guard.GetIndexType()) {
++	for (const auto &index_entry : table_info.GetIndexes().GetEntries()) {
++		auto index = index_entry->GetHandle();
++		if (!index->IsBound() || HNSWIndex::TYPE_NAME != index->GetIndexType()) {
  			continue;
  		}
 -		auto &cast_index = index.Cast<HNSWIndex>();
++		auto guard = index.Into<HNSWIndex>();
  
  		// Reset the bindings
  		bindings.clear();
 -		if (!cast_index.TryMatchDistanceFunction(distance_expr_ptr, bindings)) {
-+		if (!guard.Invoke(&HNSWIndex::TryMatchDistanceFunction, distance_expr_ptr, bindings)) {
++		if (!guard->TryMatchDistanceFunction(distance_expr_ptr, bindings)) {
  			continue;
  		}
  		unique_ptr<Expression> bound_index_expr = nullptr;
 -		if (!cast_index.TryBindIndexExpression(inner_get, bound_index_expr)) {
-+		if (!guard.Invoke(&HNSWIndex::TryBindIndexExpression, inner_get, bound_index_expr)) {
++		if (!guard->TryBindIndexExpression(inner_get, bound_index_expr)) {
  			continue;
  		}
  
-@@ -590,8 +586,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+@@ -555,10 +559,10 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 		}
+ 
+ 		// Save the pointer to the index
+-		index_ptr = &cast_index;
++		found_entry = index_entry;
+ 		break;
+ 	}
+-	if (!index_ptr) {
++	if (!found_entry) {
+ 		return false;
+ 	}
+ 
+@@ -582,7 +586,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
  	// Now create the HNSWIndexJoin operator
  	//------------------------------------------------------------------------------
  
--	auto index_join =
--	    make_uniq<LogicalHNSWIndexJoin>(binder.GenerateTableIndex(), duck_table, found_entry, k_value);
+-	auto index_join = make_uniq<LogicalHNSWIndexJoin>(binder.GenerateTableIndex(), duck_table, *index_ptr, k_value);
 +	auto index_join = make_uniq<LogicalHNSWIndexJoin>(binder.GenerateTableIndex(), duck_table, found_entry, k_value);
  	for (auto &column_id : inner_get.GetColumnIds()) {
  		index_join->inner_column_ids.emplace_back(column_id.GetPrimaryIndex());
  	}
-@@ -671,7 +666,8 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+@@ -662,7 +666,8 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
  		// Special case: the window row number expression. Forward this to the index join
  		else if (ref.Binding().table_index == window.window_index) {
  			// The special "row_number" expression is always the last column of the index_join itself
@@ -421,7 +472,7 @@ index 9ba0a39..76ee473 100644
  		}
  	}
 diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
-index 992ac5a..2e4c140 100644
+index 157bab2..7748eab 100644
 --- a/src/hnsw/hnsw_optimize_scan.cpp
 +++ b/src/hnsw/hnsw_optimize_scan.cpp
 @@ -1,21 +1,20 @@
@@ -448,55 +499,55 @@ index 992ac5a..2e4c140 100644
  
  namespace duckdb {
  
-@@ -103,23 +102,21 @@ public:
+@@ -102,22 +101,23 @@ public:
+ 		vector<reference<Expression>> bindings;
  
  		table_info.BindIndexes(context, HNSWIndex::TYPE_NAME);
- 		for (const auto &index_entry : table_info.GetIndexes().GetEntries()) {
--			auto access = index_entry->GetAccess();
--			auto &index = access.GetIndex();
+-		for (auto &index : table_info.GetIndexes().Indexes()) {
 -			if (!index.IsBound() || HNSWIndex::TYPE_NAME != index.GetIndexType()) {
-+			auto guard = index_entry->ReadLock();
-+			if (!guard.IsBound() || HNSWIndex::TYPE_NAME != guard.GetIndexType()) {
++		for (const auto &index_entry : table_info.GetIndexes().GetEntries()) {
++			auto index = index_entry->GetHandle();
++			if (!index->IsBound() || HNSWIndex::TYPE_NAME != index->GetIndexType()) {
  				continue;
  			}
 -			auto &cast_index = index.Cast<HNSWIndex>();
++			auto guard = index.Into<HNSWIndex>();
  
  			// Reset the bindings
  			bindings.clear();
  
  			// Check that the projection expression is a distance function that matches the index
 -			if (!cast_index.TryMatchDistanceFunction(projection_expr, bindings)) {
-+			if (!guard.Invoke(&HNSWIndex::TryMatchDistanceFunction, projection_expr, bindings)) {
++			if (!guard->TryMatchDistanceFunction(projection_expr, bindings)) {
  				continue;
  			}
  			// Check that the HNSW index actually indexes the expression
  			unique_ptr<Expression> index_expr;
 -			if (!cast_index.TryBindIndexExpression(get, index_expr)) {
-+			if (!guard.Invoke(&HNSWIndex::TryBindIndexExpression, get, index_expr)) {
++			if (!guard->TryBindIndexExpression(get, index_expr)) {
  				continue;
  			}
  
-@@ -138,7 +135,7 @@ public:
+@@ -136,7 +136,7 @@ public:
  				}
  			}
  
 -			const auto vector_size = cast_index.GetVectorSize();
-+			const auto vector_size = guard.Invoke(&HNSWIndex::GetVectorSize);
++			const auto vector_size = guard->GetVectorSize();
  			const auto &matched_vector = const_expr_ref.get().Cast<BoundConstantExpression>().GetValue();
  			auto query_vector = make_unsafe_uniq_array<float>(vector_size);
  			auto vector_elements = ArrayValue::GetChildren(matched_vector);
-@@ -146,8 +143,7 @@ public:
+@@ -144,7 +144,7 @@ public:
  				query_vector[i] = vector_elements[i].GetValue<float>();
  			}
  
--			bind_data =
--			    make_uniq<HNSWIndexScanBindData>(duck_table, index_entry, top_n.limit, std::move(query_vector));
+-			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, cast_index, top_n.limit, std::move(query_vector));
 +			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, index_entry, top_n.limit, std::move(query_vector));
  			break;
  		}
  
 diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
-index eadc4db..d795608 100644
+index 79a5e6a..8b0de7e 100644
 --- a/src/hnsw/hnsw_optimize_topk.cpp
 +++ b/src/hnsw/hnsw_optimize_topk.cpp
 @@ -1,18 +1,17 @@
@@ -534,44 +585,54 @@ index eadc4db..d795608 100644
  	if (!func_entry) {
  		return nullptr;
  	}
-@@ -128,23 +126,21 @@ public:
+@@ -127,22 +125,23 @@ public:
+ 		vector<reference<Expression>> bindings;
  
  		table_info.BindIndexes(context, HNSWIndex::TYPE_NAME);
- 		for (const auto &index_entry : table_info.GetIndexes().GetEntries()) {
--			auto access = index_entry->GetAccess();
--			auto &index = access.GetIndex();
+-		for (auto &index : table_info.GetIndexes().Indexes()) {
 -			if (!index.IsBound() || HNSWIndex::TYPE_NAME != index.GetIndexType()) {
-+			auto guard = index_entry->ReadLock();
-+			if (!guard.IsBound() || HNSWIndex::TYPE_NAME != guard.GetIndexType()) {
++		for (const auto &index_entry : table_info.GetIndexes().GetEntries()) {
++			auto index = index_entry->GetHandle();
++			if (!index->IsBound() || HNSWIndex::TYPE_NAME != index->GetIndexType()) {
  				continue;
  			}
 -			auto &cast_index = index.Cast<HNSWIndex>();
++			auto guard = index.Into<HNSWIndex>();
  
  			// Reset the bindings
  			bindings.clear();
  
  			// Check that the projection expression is a distance function that matches the index
 -			if (!cast_index.TryMatchDistanceFunction(dist_expr, bindings)) {
-+			if (!guard.Invoke(&HNSWIndex::TryMatchDistanceFunction, dist_expr, bindings)) {
++			if (!guard->TryMatchDistanceFunction(dist_expr, bindings)) {
  				continue;
  			}
  			// Check that the HNSW index actually indexes the expression
  			unique_ptr<Expression> index_expr;
 -			if (!cast_index.TryBindIndexExpression(get, index_expr)) {
-+			if (!guard.Invoke(&HNSWIndex::TryBindIndexExpression, get, index_expr)) {
++			if (!guard->TryBindIndexExpression(get, index_expr)) {
  				continue;
  			}
  
-@@ -163,7 +159,7 @@ public:
+@@ -161,7 +160,7 @@ public:
  				}
  			}
  
 -			const auto vector_size = cast_index.GetVectorSize();
-+			const auto vector_size = guard.Invoke(&HNSWIndex::GetVectorSize);
++			const auto vector_size = guard->GetVectorSize();
  			const auto &matched_vector = const_expr_ref.get().Cast<BoundConstantExpression>().GetValue();
  
  			auto query_vector = make_unsafe_uniq_array<float>(vector_size);
-@@ -192,8 +188,9 @@ public:
+@@ -173,7 +172,7 @@ public:
+ 			if (k_limit <= 0 || k_limit >= STANDARD_VECTOR_SIZE) {
+ 				continue;
+ 			}
+-			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, cast_index, k_limit, std::move(query_vector));
++			bind_data = make_uniq<HNSWIndexScanBindData>(duck_table, index_entry, k_limit, std::move(query_vector));
+ 			break;
+ 		}
+ 
+@@ -190,8 +189,9 @@ public:
  		get.bind_data = std::move(bind_data);
  
  		// Replace the aggregate with a list() aggregate function ordered by the distance
@@ -649,3 +710,32 @@ index d8d2899..baa4dab 100644
  	atomic<idx_t> index_size = {0};
  	unique_ptr<ExpressionMatcher> function_matcher;
  	unique_ptr<ExpressionMatcher> MakeFunctionMatcher() const;
+diff --git a/src/include/hnsw/hnsw_index_scan.hpp b/src/include/hnsw/hnsw_index_scan.hpp
+index 4139d6a..30f72f7 100644
+--- a/src/include/hnsw/hnsw_index_scan.hpp
++++ b/src/include/hnsw/hnsw_index_scan.hpp
+@@ -6,20 +6,19 @@
+ #include "duckdb/function/function.hpp"
+ #include "duckdb/function/table_function.hpp"
+ #include "duckdb/function/table/table_scan.hpp"
++#include "duckdb/storage/table/table_index_list.hpp"
+ 
+ namespace duckdb {
+ 
+-class Index;
+-
+ // This is created by the optimizer rule
+ struct HNSWIndexScanBindData final : public TableScanBindData {
+-	explicit HNSWIndexScanBindData(TableCatalogEntry &table, Index &index, idx_t limit,
++	explicit HNSWIndexScanBindData(TableCatalogEntry &table, shared_ptr<IndexEntry> index_entry, idx_t limit,
+ 	                               unsafe_unique_array<float> query)
+-	    : TableScanBindData(table), index(index), limit(limit), query(std::move(query)) {
++	    : TableScanBindData(table), index_entry(std::move(index_entry)), limit(limit), query(std::move(query)) {
+ 	}
+ 
+ 	//! The index to use
+-	Index &index;
++	shared_ptr<IndexEntry> index_entry;
+ 
+ 	//! The limit of the scan
+ 	idx_t limit;
