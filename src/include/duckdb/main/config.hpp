@@ -179,7 +179,7 @@ public:
 	unique_ptr<ErrorManager> error_manager;
 	//! The shared owner of all memory-management components.
 	shared_ptr<DatabaseMemoryManager> memory_manager;
-	//! Provide a custom buffer manager implementation (if desired).
+	//! Provide a custom buffer manager implementation and adopt its owning database's memory manager.
 	shared_ptr<BufferManager> buffer_manager;
 	//! Encryption Util for OpenSSL and MbedTLS
 	shared_ptr<EncryptionUtil> encryption_util;

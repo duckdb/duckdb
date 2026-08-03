@@ -483,9 +483,20 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
-	if (new_config.memory_manager && new_config.buffer_manager) {
-		throw InvalidInputException("Cannot combine a shared memory manager with a custom buffer manager");
+	if (new_config.buffer_manager) {
+		if (new_config.memory_manager_options) {
+			throw InvalidInputException("Cannot combine a custom buffer manager with a custom allocator");
+		}
+		auto custom_memory_manager = new_config.buffer_manager->GetDatabase().GetMemoryManager();
+		if (new_config.memory_manager && new_config.memory_manager != custom_memory_manager) {
+			throw InvalidInputException("Cannot combine a custom buffer manager with a different memory manager");
+		}
+		if (&new_config.buffer_manager->GetBufferPool() != &custom_memory_manager->GetBufferPool()) {
+			throw InvalidInputException("The custom buffer manager does not belong to its database's memory manager");
+		}
+		new_config.memory_manager = std::move(custom_memory_manager);
 	}
+
 	config.options = new_config.options;
 	config.memory_config = new_config.memory_config;
 	config.user_settings = new_config.user_settings;
@@ -538,6 +549,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.options.async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
 	}
 	config.memory_manager = std::move(new_config.memory_manager);
+	config.buffer_manager = std::move(new_config.buffer_manager);
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	if (new_config.callback_manager) {
 		config.callback_manager = std::move(new_config.callback_manager);
@@ -561,8 +573,8 @@ void DBConfig::ShareMemoryWith(DatabaseInstance &db) {
 	if (memory_manager_options) {
 		throw InvalidInputException("Cannot select a shared memory manager after setting an allocator");
 	}
-	if (buffer_manager) {
-		throw InvalidInputException("Cannot select a shared memory manager after setting a custom buffer manager");
+	if (buffer_manager && buffer_manager->GetDatabase().GetMemoryManager() != db.GetMemoryManager()) {
+		throw InvalidInputException("Cannot combine a custom buffer manager with a different memory manager");
 	}
 	memory_manager = db.GetMemoryManager();
 }
@@ -615,6 +627,9 @@ void DBConfig::SetAllocator(unique_ptr<Allocator> allocator) {
 	if (memory_manager) {
 		throw InvalidInputException("Cannot set a custom allocator after selecting a shared memory manager");
 	}
+	if (buffer_manager) {
+		throw InvalidInputException("Cannot set a custom allocator after setting a custom buffer manager");
+	}
 	if (!memory_manager_options) {
 		memory_manager_options = make_uniq<DatabaseMemoryManagerOptions>();
 	}
@@ -624,6 +639,9 @@ void DBConfig::SetAllocator(unique_ptr<Allocator> allocator) {
 void DBConfig::SetBlockAllocator(unique_ptr<BlockAllocator> block_allocator) {
 	if (memory_manager) {
 		throw InvalidInputException("Cannot set a custom block allocator after selecting a shared memory manager");
+	}
+	if (buffer_manager) {
+		throw InvalidInputException("Cannot set a custom block allocator after setting a custom buffer manager");
 	}
 	if (!memory_manager_options) {
 		memory_manager_options = make_uniq<DatabaseMemoryManagerOptions>();

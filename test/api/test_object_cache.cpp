@@ -196,6 +196,25 @@ TEST_CASE("Database instances share isolated memory managers and object cache", 
 	REQUIRE(result->GetValue(0, 0) == Value::BIGINT(49995000));
 }
 
+TEST_CASE("Database instance uses its configured custom buffer manager", "[api][object_cache][buffer_pool]") {
+	DuckDB buffer_manager_source;
+	auto custom_buffer_manager =
+	    shared_ptr<BufferManager>(buffer_manager_source.instance, &buffer_manager_source.instance->GetBufferManager());
+
+	DBConfig config;
+	config.buffer_manager = custom_buffer_manager;
+	DuckDB db(nullptr, &config);
+
+	REQUIRE(&db.instance->GetBufferManager() == custom_buffer_manager.get());
+	REQUIRE(db.instance->GetMemoryManager() == buffer_manager_source.instance->GetMemoryManager());
+	REQUIRE(&db.instance->GetBufferPool() == &buffer_manager_source.instance->GetBufferPool());
+
+	Connection connection(db);
+	auto result = connection.Query("SELECT sum(i) FROM range(10000) t(i)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->GetValue(0, 0) == Value::BIGINT(49995000));
+}
+
 TEST_CASE("Shared memory manager rejects a buffer manager from another memory domain",
           "[api][object_cache][buffer_pool]") {
 	DuckDB memory_manager_source;
@@ -214,6 +233,15 @@ TEST_CASE("Shared memory manager rejects a buffer manager from another memory do
 		config.ShareMemoryWith(*memory_manager_source.instance);
 		config.buffer_manager = custom_buffer_manager;
 		REQUIRE_THROWS_AS(DuckDB(nullptr, &config), InvalidInputException);
+	}
+
+	SECTION("Custom buffer manager and shared memory manager use the same domain") {
+		DBConfig config;
+		config.buffer_manager = custom_buffer_manager;
+		config.ShareMemoryWith(*buffer_manager_source.instance);
+		DuckDB db(nullptr, &config);
+		REQUIRE(&db.instance->GetBufferManager() == custom_buffer_manager.get());
+		REQUIRE(db.instance->GetMemoryManager() == buffer_manager_source.instance->GetMemoryManager());
 	}
 }
 
