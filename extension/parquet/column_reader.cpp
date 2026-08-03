@@ -469,19 +469,18 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		    Reader().GetFileName());
 	}
 
-	ResizeableBuffer compressed_buffer;
-	compressed_buffer.resize(GetAllocator(), compressed_page_size);
-	ReadData(compressed_buffer.ptr, compressed_page_size, page_hdr.type);
-	memcpy(block->ptr, compressed_buffer.ptr, uncompressed_bytes);
-
 	const auto compressed_bytes = compressed_page_size - uncompressed_bytes;
-
 	if (compressed_bytes == 0 && static_cast<uint64_t>(page_hdr.uncompressed_page_size) > uncompressed_bytes) {
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is too small for the "
 		    "declared value region",
 		    Reader().GetFileName());
 	}
+
+	ResizeableBuffer compressed_buffer;
+	compressed_buffer.resize(GetAllocator(), compressed_page_size + 1);
+	ReadData(compressed_buffer.ptr, compressed_page_size, page_hdr.type);
+	memcpy(block->ptr, compressed_buffer.ptr, uncompressed_bytes);
 
 	if (compressed_bytes > 0) {
 		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr + uncompressed_bytes, compressed_bytes,
