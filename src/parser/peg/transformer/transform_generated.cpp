@@ -4955,9 +4955,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCaseElseInterna
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeLiteralInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(0));
+	auto type = transformer.Transform<LogicalType>(list_pr.GetChild(0));
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(1));
-	auto result = TransformTypeLiteral(transformer, col_id, string_literal);
+	auto result = TransformTypeLiteral(transformer, type, string_literal);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 

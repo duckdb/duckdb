@@ -13572,16 +13572,16 @@ void PEGTransformerFactory::InitializeTypeLiteralTrampoline(PEGTransformer &tran
                                                             TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	frame.ReserveChildSlots(1);
-	stack.PushFrame(list_pr.GetChild(0), COL_ID_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+	stack.PushFrame(list_pr.GetChild(0), TYPE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTypeLiteralTrampoline(PEGTransformer &transformer,
                                                                                       TransformStack &stack,
                                                                                       TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto col_id = frame.TakeResult<Identifier>(0);
+	auto type = frame.TakeResult<LogicalType>(0);
 	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(1));
-	auto result = TransformTypeLiteral(transformer, col_id, string_literal);
+	auto result = TransformTypeLiteral(transformer, type, string_literal);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 

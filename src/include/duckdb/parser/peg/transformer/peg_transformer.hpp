@@ -6503,7 +6503,7 @@ public:
 	                                                      unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformTypeLiteralInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformTypeLiteral(PEGTransformer &transformer, const Identifier &col_id,
+	static unique_ptr<ParsedExpression> TransformTypeLiteral(PEGTransformer &transformer, const LogicalType &type,
 	                                                         const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformIntervalLiteralInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);

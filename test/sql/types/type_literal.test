@@ -1,0 +1,19 @@
+# name: test/sql/types/type_literal.test
+# description: Test type literals with type modifiers
+# group: [types]
+
+query III
+SELECT typeof(DECIMAL(4,2) '1.23'), DECIMAL(4,2) '1.23', typeof(STRUCT(a INTEGER) '{"a": 42}');
+----
+DECIMAL(4,2)	1.23	STRUCT(a INTEGER)
+
+statement ok
+CREATE TABLE Produce AS
+  SELECT 'Kale' AS product, 51 AS sales, 'Q1' AS quarter, 2020 AS year;
+
+statement error
+SELECT * FROM Produce
+PIVOT(SUM(sales) FOR quarter IN ('Q1', 'Q2', Q3', $Q4'))
+ORDER BY ALL;
+----
+Type with name Q3 does not exist
