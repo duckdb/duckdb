@@ -12,6 +12,41 @@ SELECT INTEGER[] '[1,2,3]';
 ----
 [1, 2, 3]
 
+query I
+SELECT typeof(TIMESTAMP WITH TIME ZONE '2023-01-01 00:00:00+00');
+----
+TIMESTAMP WITH TIME ZONE
+
+query I
+SELECT typeof(TIME WITH TIME ZONE '12:00:00+00');
+----
+TIME WITH TIME ZONE
+
+query I
+SELECT typeof(CHARACTER VARYING 'text');
+----
+VARCHAR
+
+query I
+SELECT typeof(NATIONAL CHARACTER 'x');
+----
+VARCHAR
+
+query I
+SELECT typeof(NUMERIC(10, 2) '5.5');
+----
+DECIMAL(10,2)
+
+query I
+SELECT typeof(VARCHAR(5) '12345');
+----
+VARCHAR
+
+query I
+SELECT typeof(TIMESTAMP(3) '2024-01-01 00:00:00');
+----
+TIMESTAMP_MS
+
 statement ok
 CREATE TABLE Produce AS
   SELECT 'Kale' AS product, 51 AS sales, 'Q1' AS quarter, 2020 AS year;
