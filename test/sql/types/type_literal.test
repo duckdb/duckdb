@@ -7,6 +7,11 @@ SELECT typeof(DECIMAL(4,2) '1.23'), DECIMAL(4,2) '1.23', typeof(STRUCT(a INTEGER
 ----
 DECIMAL(4,2)	1.23	STRUCT(a INTEGER)
 
+query I
+SELECT INTEGER[] '[1,2,3]';
+----
+[1, 2, 3]
+
 statement ok
 CREATE TABLE Produce AS
   SELECT 'Kale' AS product, 51 AS sales, 'Q1' AS quarter, 2020 AS year;
