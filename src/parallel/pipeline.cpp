@@ -260,17 +260,12 @@ vector<weak_ptr<Pipeline>> Pipeline::GetDependencies() const {
 	return dependencies;
 }
 
-optional_ptr<MetaPipeline> Pipeline::GetMetaPipeline() const {
-	return meta_pipeline;
-}
-
-vector<reference<Pipeline>> Pipeline::GetAllDependencies() {
+vector<reference<Pipeline>> Pipeline::GetAllDependencies() const {
 	vector<reference<Pipeline>> result;
-	if (meta_pipeline) {
-		auto &deps = meta_pipeline->GetDependencies();
-		auto it = deps.find(*this);
-		if (it != deps.end()) {
-			result.insert(result.end(), it->second.begin(), it->second.end());
+	for (auto &weak_dep : intra_dependencies) {
+		auto dep = weak_dep.lock();
+		if (dep) {
+			result.push_back(*dep);
 		}
 	}
 	for (auto &weak_dep : dependencies) {
