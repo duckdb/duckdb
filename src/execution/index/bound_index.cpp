@@ -32,7 +32,7 @@ BoundIndex::BoundIndex(const Identifier &name, const string &index_type, IndexCo
 	}
 }
 
-void BoundIndex::InitializeLock(IndexLock &state) {
+void BoundIndex::InitializeLock(IndexLock &state) const {
 	state.index_lock = unique_lock<mutex>(lock);
 }
 
@@ -137,7 +137,7 @@ void BoundIndex::Vacuum() {
 	Vacuum(state);
 }
 
-idx_t BoundIndex::GetInMemorySize() {
+idx_t BoundIndex::GetInMemorySize() const {
 	IndexLock state;
 	InitializeLock(state);
 	return GetInMemorySize(state);

@@ -101,7 +101,7 @@ void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<
 	collection.InitializeScan(context, state, state.GetColumnIds(), table_filters.get());
 }
 
-idx_t LocalTableStorage::EstimatedSize() {
+idx_t LocalTableStorage::EstimatedSize() const {
 	// count the appended rows
 	auto &collection = *row_groups->collection;
 	idx_t data_size = 0;
@@ -128,11 +128,11 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	// get the index size
 	idx_t index_sizes = 0;
-	for (auto index : append_indexes.MutableIndexHandles()) {
+	for (auto index : append_indexes.IndexHandles()) {
 		if (!index->IsBound()) {
 			continue;
 		}
-		auto bound_index = std::move(index).Into<BoundIndex>();
+		const auto bound_index = std::move(index).Into<BoundIndex>();
 		index_sizes += bound_index->GetInMemorySize();
 	}
 

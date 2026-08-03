@@ -86,7 +86,7 @@ public:
 	void WriteNewRowGroup(idx_t flushed_row_group_idx);
 	void FlushBlocks();
 	void Rollback();
-	idx_t EstimatedSize();
+	idx_t EstimatedSize() const;
 
 	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
 	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);

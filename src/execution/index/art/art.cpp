@@ -1143,11 +1143,11 @@ void ART::SetPrefixCount(const IndexStorageInfo &info) {
 	prefix_count = exceeds_max ? max_aligned : NumericCast<uint8_t>(key_aligned);
 }
 
-idx_t ART::GetInMemorySize(IndexLock &index_lock) {
+idx_t ART::GetInMemorySize(IndexLock &index_lock) const {
 	D_ASSERT(owns_data);
 
 	idx_t in_memory_size = 0;
-	for (auto &allocator : *allocators) {
+	for (const auto &allocator : *allocators) {
 		in_memory_size += allocator->GetInMemorySize();
 	}
 	return in_memory_size;

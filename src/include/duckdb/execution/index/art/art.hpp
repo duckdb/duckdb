@@ -139,7 +139,7 @@ public:
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
 
 	//! Returns the in-memory usage of the ART.
-	idx_t GetInMemorySize(IndexLock &index_lock) override;
+	idx_t GetInMemorySize(IndexLock &index_lock) const override;
 
 	bool SupportsDeltaIndexes() const override;
 	unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const override;

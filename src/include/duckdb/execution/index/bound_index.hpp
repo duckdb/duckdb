@@ -115,7 +115,7 @@ public:
 
 public:
 	//! Obtains a lock on the index.
-	void InitializeLock(IndexLock &state);
+	void InitializeLock(IndexLock &state) const;
 	//! Appends data to the locked index.
 	virtual ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) = 0;
 	//! Obtains a lock and calls Append while holding that lock.
@@ -174,9 +174,9 @@ public:
 	virtual unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const;
 
 	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
-	virtual idx_t GetInMemorySize(IndexLock &state) = 0;
+	virtual idx_t GetInMemorySize(IndexLock &state) const = 0;
 	//! Returns the in-memory usage of the index
-	idx_t GetInMemorySize();
+	idx_t GetInMemorySize() const;
 
 	//! Returns the string representation of an index, or only traverses and verifies the index.
 	virtual void Verify(IndexLock &l) = 0;
