@@ -111,7 +111,7 @@ const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement) {
 	if (!wrapper->statement || !wrapper->statement->HasError()) {
 		return nullptr;
 	}
-	return wrapper->statement->error.Message().c_str();
+	return wrapper->statement->GetError().c_str();
 }
 
 idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement) {

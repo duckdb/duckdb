@@ -129,7 +129,7 @@ public:
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
-	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,
+	DUCKDB_API virtual bool ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,

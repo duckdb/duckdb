@@ -55,18 +55,6 @@ public:
 	PreparedStatement &operator=(const PreparedStatement &) = delete;
 
 public:
-	//! The client context this prepared statement belongs to
-	weak_ptr<ClientContext> context;
-	//! The name of the prepared statement within the client context
-	string name;
-	//! The query that is being prepared
-	string query;
-	//! Whether or not the statement was successfully prepared
-	bool success;
-	//! The error message (if success = false)
-	ErrorData error;
-
-public:
 	//! Returns the stored error message
 	DUCKDB_API const string &GetError();
 	//! Returns the stored error object
@@ -75,6 +63,10 @@ public:
 	DUCKDB_API bool HasError() const;
 	//! Returns the client context this statement was prepared in - or nullptr if it has been destroyed
 	DUCKDB_API shared_ptr<ClientContext> TryGetContext() const;
+	//! Returns the name of the prepared statement within the client context
+	DUCKDB_API const string &GetName() const;
+	//! Returns the query that was prepared
+	DUCKDB_API const string &GetQuery() const;
 	//! Returns the number of columns in the result
 	DUCKDB_API idx_t ColumnCount() const;
 	//! Returns the statement type of the underlying prepared statement object
@@ -196,6 +188,16 @@ public:
 	}
 
 private:
+	//! The client context this prepared statement belongs to
+	weak_ptr<ClientContext> context;
+	//! The name of the prepared statement within the client context
+	string name;
+	//! The query that is being prepared
+	string query;
+	//! Whether or not the statement was successfully prepared
+	bool success;
+	//! The error message (if success = false)
+	ErrorData error;
 	//! The metadata of the statement, as it was prepared
 	PreparedStatementInfo info;
 

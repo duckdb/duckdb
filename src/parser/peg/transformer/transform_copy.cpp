@@ -13,46 +13,44 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyStatement(PEGTransf
 }
 
 void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &options) {
-	case_insensitive_string_set_t option_names;
+	identifier_set_t option_names;
 	for (auto &option : options) {
-		if (option_names.find(option.name.GetIdentifierName()) != option_names.end()) {
-			throw ParserException("Unexpected duplicate option \"%s\"", option.name);
+		if (option_names.find(option.name) != option_names.end()) {
+			throw ParserException("Unexpected duplicate option %s", option.name);
 		}
-		option_names.insert(option.name.GetIdentifierName());
+		option_names.insert(option.name);
 		if (option.name == "PARTITION_BY" || option.name == "FORCE_QUOTE" || option.name == "FORCE_NOT_NULL" ||
 		    option.name == "FORCE_NULL") {
 			if (option.expression) {
-				info->parsed_options[option.name.GetIdentifierName()] = std::move(option.expression);
+				info->parsed_options[option.name] = std::move(option.expression);
 			} else {
 				if (option.children.empty()) {
-					throw BinderException("\"%s\" expects a column list or * as parameter", option.name);
+					throw BinderException("%s expects a column list or * as parameter", option.name);
 				}
 				vector<unique_ptr<ParsedExpression>> func_children;
 				for (const auto &partition : option.children) {
 					func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<Identifier>()));
 				}
 				auto row_func = make_uniq<FunctionExpression>("row", std::move(func_children));
-				info->parsed_options[option.name.GetIdentifierName()] = std::move(row_func);
+				info->parsed_options[option.name] = std::move(row_func);
 			}
 		} else if (option.name == "HEADER" || option.name == "ESCAPE") {
 			if (option.children.empty()) {
-				info->parsed_options[option.name.GetIdentifierName()] = nullptr;
+				info->parsed_options[option.name] = nullptr;
 			} else {
-				info->parsed_options[option.name.GetIdentifierName()] =
-				    make_uniq<ConstantExpression>(option.children[0]);
+				info->parsed_options[option.name] = make_uniq<ConstantExpression>(option.children[0]);
 			}
 		} else if (option.name == "NULL" || option.name == "NULLSTR") {
 			if (option.children.empty()) {
-				info->parsed_options[option.name.GetIdentifierName()] = std::move(option.expression);
+				info->parsed_options[option.name] = std::move(option.expression);
 			} else {
-				info->parsed_options[option.name.GetIdentifierName()] =
-				    make_uniq<ConstantExpression>(option.children[0]);
+				info->parsed_options[option.name] = make_uniq<ConstantExpression>(option.children[0]);
 			}
 		} else {
 			if (option.expression) {
-				info->parsed_options[option.name.GetIdentifierName()] = std::move(option.expression);
+				info->parsed_options[option.name] = std::move(option.expression);
 			} else {
-				info->options[option.name.GetIdentifierName()] = option.children;
+				info->options[option.name] = option.children;
 			}
 		}
 	}

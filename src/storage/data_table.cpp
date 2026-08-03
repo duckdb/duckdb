@@ -9,6 +9,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
@@ -688,9 +689,12 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 		dst_keys_ptr = bound_foreign_key.info.fk_keys;
 	}
 
-	// Get the column types in their physical order.
+	// Get the column types in their physical order. A foreign key always references a table in the same (possibly
+	// nested) schema, so we qualify it with this table's schema path.
+	auto schema_path = info->GetSchemaPath();
+	schema_path.insert(schema_path.begin(), db.GetName());
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-	    context, QualifiedName(db.GetName(), bound_foreign_key.info.schema, bound_foreign_key.info.table));
+	    context, QualifiedName(std::move(schema_path), bound_foreign_key.info.table));
 	vector<LogicalType> types;
 	for (auto &col : table_entry.GetColumns().Physical()) {
 		types.emplace_back(col.Type());
