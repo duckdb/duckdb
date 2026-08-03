@@ -13,6 +13,21 @@
 
 namespace duckdb {
 
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+bool PipelineExecutor::TryDebugBlock(int &debug_counter, const InterruptState &interrupt_state_p) {
+	if (debug_counter >= debug_blocked_target_count) {
+		return false;
+	}
+	debug_counter++;
+	std::thread rewake_thread([interrupt_state_p] {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		interrupt_state_p.Callback();
+	});
+	rewake_thread.detach();
+	return true;
+}
+#endif
+
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p, optional_idx reserved_batch_index)
     : pipeline(pipeline_p), thread(context_p), context(context_p, thread, &pipeline_p) {
 	if (pipeline.sink) {
@@ -281,16 +296,7 @@ SinkNextBatchType PipelineExecutor::NextBatch(OperatorPartitionData next_data, b
 		    next_data.batch_index, partition_info.batch_index.GetIndex());
 	}
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	if (debug_blocked_next_batch_count < debug_blocked_target_count) {
-		debug_blocked_next_batch_count++;
-
-		auto &callback_state = interrupt_state;
-		std::thread rewake_thread([callback_state] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			callback_state.Callback();
-		});
-		rewake_thread.detach();
-
+	if (TryDebugBlock(debug_blocked_next_batch_count, interrupt_state)) {
 		return SinkNextBatchType::BLOCKED;
 	}
 #endif
@@ -642,16 +648,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	OperatorSinkCombineInput combine_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	if (debug_blocked_combine_count < debug_blocked_target_count) {
-		debug_blocked_combine_count++;
-
-		auto &callback_state = combine_input.interrupt_state;
-		std::thread rewake_thread([callback_state] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			callback_state.Callback();
-		});
-		rewake_thread.detach();
-
+	if (TryDebugBlock(debug_blocked_combine_count, combine_input.interrupt_state)) {
 		return PipelineExecuteResult::INTERRUPTED;
 	}
 #endif
@@ -777,16 +774,7 @@ void PipelineExecutor::SetInterruptState(InterruptState interrupt_state_p) {
 SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput &input) {
 	//! Testing feature to enable async source on every operator
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	if (debug_blocked_source_count < debug_blocked_target_count) {
-		debug_blocked_source_count++;
-
-		auto &callback_state = input.interrupt_state;
-		std::thread rewake_thread([callback_state] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			callback_state.Callback();
-		});
-		rewake_thread.detach();
-
+	if (TryDebugBlock(debug_blocked_source_count, input.interrupt_state)) {
 		return SourceResultType::BLOCKED;
 	}
 #endif
@@ -797,16 +785,7 @@ SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput
 SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input) {
 	//! Testing feature to enable async sink on every operator
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	if (debug_blocked_sink_count < debug_blocked_target_count) {
-		debug_blocked_sink_count++;
-
-		auto &callback_state = input.interrupt_state;
-		std::thread rewake_thread([callback_state] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			callback_state.Callback();
-		});
-		rewake_thread.detach();
-
+	if (TryDebugBlock(debug_blocked_sink_count, input.interrupt_state)) {
 		return SinkResultType::BLOCKED;
 	}
 #endif

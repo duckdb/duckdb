@@ -426,16 +426,20 @@ extern "C" u32 duckdb_fsst_export(duckdb_fsst_encoder_t *encoder, u8 *buf) {
 
 #define FSST_CORRUPT 32774747032022883 /* 7-byte number in little endian containing "corrupt" */
 
-extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf) {
+extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf, size_t buf_size) {
 	u64 version = 0;
 	u32 code, pos = 17;
 	u8 lenHisto[8];
+
+	// the fixed header (version + zeroTerminated + lenHisto) needs 17 bytes; less than that cannot hold a table
+	if (buf_size < pos) return DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS;
 
 	// version field (first 8 bytes) is now there just for future-proofness, unused still (skipped)
 	memcpy(&version, buf, 8);
 	version = swap64_if_be(version); // version is always little-endian encoded
 
-	if ((version>>32) != FSST_VERSION) return 0;
+	// version mismatch is not corruption: it is how an absent symbol table (all empty/null strings) is encoded
+	if ((version>>32) != FSST_VERSION) return DUCKDB_FSST_IMPORT_VERSION_MISMATCH;
 	decoder->zeroTerminated = buf[8]&1;
 	memcpy(lenHisto, buf+9, 8);
 
@@ -450,10 +454,15 @@ extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf) {
 	// now get all symbols from the buffer
 	for(u32 l=1; l<=8; l++) { /* l = 1,2,3,4,5,6,7,8 */
 		for(u32 i=0; i < lenHisto[(l&7) /* 1,2,3,4,5,6,7,0 */]; i++, code++)  {
+			// a corrupt histogram (buf[9..16]) could describe more than 255 symbols (writing past the decoder
+			// arrays) or more bytes than buf_size (reading past the buffer); reject both as out-of-bounds
+			if (code >= 255) return DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS;
 			decoder->len[code] = (l&7)+1; /* len = 2,3,4,5,6,7,8,1  */
 			decoder->symbol[code] = 0;
-			for(u32 j=0; j<decoder->len[code]; j++)
+			for(u32 j=0; j<decoder->len[code]; j++) {
+				if (pos >= buf_size) return DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS;
 				((u8*) &decoder->symbol[code])[j] = buf[pos++]; // note this enforces 'little endian' symbols
+			}
 		}
 	}
 	if (decoder->zeroTerminated) lenHisto[0]++;
@@ -511,7 +520,7 @@ extern "C" duckdb_fsst_decoder_t duckdb_fsst_decoder(duckdb_fsst_encoder_t *enco
 	u8 buf[sizeof(duckdb_fsst_decoder_t)];
 	u32 cnt1 = duckdb_fsst_export(encoder, buf);
 	duckdb_fsst_decoder_t decoder;
-	u32 cnt2 = duckdb_fsst_import(&decoder, buf);
+	u32 cnt2 = duckdb_fsst_import(&decoder, buf, sizeof(buf));
 	assert(cnt1 == cnt2); (void) cnt1; (void) cnt2;
 	return decoder;
 }

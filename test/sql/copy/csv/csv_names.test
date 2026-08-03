@@ -6,18 +6,18 @@
 statement error
 from read_csv('{DATA_DIR}/csv/header_bug.csv', names=['col1', 'col1']) LIMIT 1;
 ----
-read_csv names must have unique values
+read_csv "names" must have unique values
 
 # Empty Names should not be accepted
 statement error
 from read_csv('{DATA_DIR}/csv/header_bug.csv', names=['']) LIMIT 1;
 ----
-read_csv names cannot have empty (or all whitespace) value
+read_csv "names" cannot have empty (or all whitespace) value
 
 statement error
 from read_csv('{DATA_DIR}/csv/header_bug.csv', names=[' ', '  '], header = 0);
 ----
-read_csv names cannot have empty (or all whitespace) value
+read_csv "names" cannot have empty (or all whitespace) value
 
 # no names provided
 query IIII
@@ -59,7 +59,7 @@ select yr, Quarter from read_csv_auto('{DATA_DIR}/csv/real/ontime_sample.csv', n
 statement error
 select column00, column01, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=NULL) LIMIT 1;
 ----
-read_csv names cannot be NULL
+read_csv "names" cannot be NULL
 
 # specify the names twice
 statement error
@@ -82,7 +82,7 @@ CSV Reader function option delim and sep are aliases, only one can be supplied
 statement error
 select l_orderkey, l_partkey, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_orderkey']) LIMIT 1;
 ----
-read_csv names must have unique values. "l_orderkey" is repeated.
+read_csv "names" must have unique values. "l_orderkey" is repeated.
 
 query I
 select Columns FROM sniff_csv('{DATA_DIR}/csv/header.csv', names = ['a'])

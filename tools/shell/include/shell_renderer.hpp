@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
@@ -186,8 +187,8 @@ private:
 	// Warnings/errors that have already been printed, to avoid spamming the shell (loud logs only)
 	duckdb::unordered_set<uint64_t> printed_logs;
 
-	// Timestamp (micros) at storage construction (CLI launch), the zero point for elapsed time
-	int64_t start_micros = 0;
+	// Monotonic zero point for elapsed time in compact log lines.
+	duckdb::TimePoint start_time;
 
 	// lock to ensure thread safety of the printed_logs set and the elapsed-time state
 	mutable duckdb::mutex lock;

@@ -25,12 +25,8 @@ SHOW EXTERNAL RESOURCES;
 
 # SHOW ALL (the discovery union) desugars to duckdb_external_resources(discover := true); the discover
 # parameter and the list-callback union land in the external-resource discovery part, so skip it here.
-mode skip "discover not yet landed"
-
 statement ok
 SHOW ALL EXTERNAL RESOURCES;
-
-mode unskip
 
 # The grammar requires the pieces: DESTROY needs a name, REGISTER needs a handle. These are parser errors.
 statement error

@@ -3,6 +3,7 @@ duckdb_extension_load(test_utils
   # Use the commit before "Update extensions" (that contains the binaries of
   # the commit before that).
   GIT_TAG 61e38820957b51bfbc734e8b6c0403feb7e4883b
+  APPLY_PATCHES
   # For local dev:
   # SOURCE_DIR "${EXTENSION_CONFIG_BASE_DIR}/../../../../test-utils"
 )
