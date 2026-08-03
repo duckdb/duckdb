@@ -63,6 +63,20 @@ NULL	1	0	0	1	0	1	1	0
 1	0	1	1	0	1	0	0	1
 2	0	1	1	0	1	0	1	0
 
+query ITTTT
+SELECT
+    x,
+    (x + 1) IS DISTINCT FROM NULL,
+    (x + 1) IS NOT DISTINCT FROM NULL,
+    NULL IS DISTINCT FROM (x + 1),
+    NULL IS NOT DISTINCT FROM (x + 1)
+FROM (VALUES (NULL), (1), (2)) t(x)
+ORDER BY x
+----
+NULL	0	1	0	1
+1	1	0	1	0
+2	1	0	1	0
+
 # Comparisons
 query TTTT
 SELECT NULL = NULL, NULL <> NULL, 42 = NULL, 42 <> NULL

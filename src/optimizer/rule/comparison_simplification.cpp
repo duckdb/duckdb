@@ -159,7 +159,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), constant_expr, constant_value)) {
 		return nullptr;
 	}
-	if (constant_value.IsNull() && column_ref_expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+	if (constant_value.IsNull()) {
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			return CreateNullCheckExpression(ExpressionType::OPERATOR_IS_NULL,
 			                                 column_ref_left ? std::move(left) : std::move(right));
