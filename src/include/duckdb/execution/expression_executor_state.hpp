@@ -90,6 +90,7 @@ public:
 	SelectionResult tmp_sel1, tmp_sel2, tmp_sel3;
 
 private:
+	bool safe_autovec_arith = false;
 	vector<idx_t> dictionary_input_indices;
 	DataChunk dictionary_input_chunk;
 	//! Vector holding the expression executed on the entire dictionary

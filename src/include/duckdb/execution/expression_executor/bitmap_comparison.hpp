@@ -116,6 +116,9 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
                                       idx_t count, SelectionResult *bitmap_sel, SelectionVector *true_sel,
                                       SelectionVector *false_sel, SelectionResult &tmp_sel1, SelectionResult &tmp_sel2,
                                       SelectionResult &tmp_sel3, idx_t &result) {
+	if (!AutoVecCountPaysOff(count)) { // sparse/small inputs stay on the classic select path
+		return false;
+	}
 	auto &col = chunk.data[info.ref->Index()]; // dense compare reads the flat input directly
 	const auto pt = col.GetType().InternalType();
 	if (col.GetVectorType() != VectorType::FLAT_VECTOR || !BitmapCmpTypeSupported(pt)) { // sliced inputs fall back

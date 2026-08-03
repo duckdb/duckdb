@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/smaller_binary.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -60,6 +61,10 @@ inline bool CpuBenefitsFromAutoVec() {
 
 inline bool DenseAutoVecPaysOff(size_t selected, size_t span, size_t type_width) {
 	return selected * (32 / type_width) >= span; // lane-adjusted dense-vs-gather guard
+}
+
+inline bool AutoVecCountPaysOff(size_t count) {
+	return count >= STANDARD_VECTOR_SIZE / 4; // widened-kernel entry overhead needs a reasonably full vector
 }
 
 #if DUCKDB_AUTOVEC

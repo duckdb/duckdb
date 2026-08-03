@@ -152,7 +152,9 @@ private:
 	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		auto dispatch_type = input.GetVectorType();
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
-		if (!CpuBenefitsFromAutoVec() && dispatch_type != VectorType::CONSTANT_VECTOR) {
+		// the flat loop carries the widened-ISA target: pre-AVX2 CPUs and small counts gather instead
+		if ((!CpuBenefitsFromAutoVec() || !AutoVecCountPaysOff(count)) &&
+		    dispatch_type != VectorType::CONSTANT_VECTOR) {
 			dispatch_type = VectorType::SEQUENCE_VECTOR;
 		}
 #endif

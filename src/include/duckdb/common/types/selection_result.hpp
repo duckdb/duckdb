@@ -62,7 +62,8 @@ struct SelectionResult : private SelectionVector {
 		}
 	}
 
-	idx_t Intersect(SelectionResult &other, idx_t count, idx_t other_count, idx_t row_span) { // AND + popcount
+	// AND + popcount; target attr fuses ToBitmap with the word loops (only reachable behind CpuBenefitsFromAutoVec)
+	DUCKDB_AUTOVEC_TARGET idx_t Intersect(SelectionResult &other, idx_t count, idx_t other_count, idx_t row_span) {
 		ToBitmap(count, row_span);
 		if (!other.IsSet()) {
 			D_ASSERT(other_count == row_span);
@@ -78,7 +79,7 @@ struct SelectionResult : private SelectionVector {
 		other_result.ToBitmap(other_count, row_span);
 		return IntersectBitmap(other_result);
 	}
-	idx_t Union(SelectionResult &other) { // OR + popcount
+	DUCKDB_AUTOVEC_TARGET idx_t Union(SelectionResult &other) { // OR + popcount
 		D_ASSERT(IsBitmap() && other.IsBitmap());
 		D_ASSERT(RowSpan() == other.RowSpan());
 		auto other_bitmap = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
