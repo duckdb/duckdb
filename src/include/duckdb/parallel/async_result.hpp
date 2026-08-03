@@ -16,6 +16,7 @@
 
 namespace duckdb {
 
+class DataChunk;
 class InterruptState;
 class TaskExecutor;
 class Executor;
@@ -57,6 +58,13 @@ public:
 	void ExecuteTasksSynchronously();
 
 	static AsyncResultType GetAsyncResultType(SourceResultType s);
+	//! Wraps tasks into a BLOCKED result, or HAVE_MORE_OUTPUT when there are none
+	static AsyncResult FromTasks(vector<unique_ptr<AsyncTask>> &&tasks,
+	                             TaskSchedulerType pool_type = TaskSchedulerType::REGULAR);
+	//! FINISHED when the chunk is empty, HAVE_MORE_OUTPUT otherwise
+	static AsyncResult FromChunk(const DataChunk &chunk);
+	//! Maps a non-BLOCKED result to a SourceResultType, IMPLICIT resolves through the chunk size
+	static SourceResultType GetSourceResultType(AsyncResultType type, idx_t chunk_size);
 
 	//! Check whether there are tasks associated
 	bool HasTasks() const;
@@ -65,7 +73,8 @@ public:
 	vector<unique_ptr<AsyncTask>> &&ExtractAsyncTasks();
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	static vector<unique_ptr<AsyncTask>> GenerateTestTasks();
+	//! Randomly generate a BLOCKED test result, returns false if no test tasks were generated
+	static bool TryGenerateTestResult(AsyncResult &result);
 #endif
 
 	static AsyncResultsExecutionMode

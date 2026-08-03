@@ -237,35 +237,23 @@ BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag
 	return Pin(context, block);
 }
 
-void StandardBufferManager::BatchRead(QueryContext context, vector<shared_ptr<BlockHandle>> &handles,
-                                      const map<block_id_t, idx_t> &load_map, block_id_t first_block,
-                                      block_id_t last_block) {
-	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
-	if (block_count == 1) {
-		if (Settings::Get<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
-			// prefetching with block_count == 1 has no performance impact since we can't batch reads
-			// skip the prefetch in this case
-			// we do it anyway if alternative_verify is on for extra testing
-			return;
-		}
-	}
+void StandardBufferManager::BatchRead(QueryContext context, PrefetchRun &run) {
+	idx_t block_count = run.handles.size();
 
 	// Allocate a buffer to hold the data of all blocks.
-	auto block_alloc_size = handles[0]->GetBlockAllocSize();
+	auto block_alloc_size = run.handles[0]->GetBlockAllocSize();
 	auto total_block_size = block_count * block_alloc_size;
 	auto batch_memory = RegisterMemory(MemoryTag::BASE_TABLE, total_block_size, 0, true);
 	auto intermediate_buffer = Pin(batch_memory);
 
 	// perform a batch read of the blocks into the buffer
-	auto &block_manager = handles[0]->GetBlockManager();
-	block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), first_block, block_count);
+	auto &block_manager = run.handles[0]->GetBlockManager();
+	block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), run.first_block, block_count);
 
 	// the blocks are read - now we need to assign them to the individual blocks
 	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
-		block_id_t block_id = first_block + NumericCast<block_id_t>(block_idx);
-		auto entry = load_map.find(block_id);
-		D_ASSERT(entry != load_map.end()); // if we allow gaps we might not return true here
-		auto &handle = handles[entry->second];
+		auto &handle = run.handles[block_idx];
+		D_ASSERT(handle->BlockId() == run.first_block + NumericCast<block_id_t>(block_idx));
 
 		// reserve memory for the block
 		auto &block_memory = handle->GetMemory();
@@ -291,43 +279,41 @@ void StandardBufferManager::BatchRead(QueryContext context, vector<shared_ptr<Bl
 	}
 }
 
-void StandardBufferManager::Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) {
+vector<StandardBufferManager::PrefetchRun>
+StandardBufferManager::RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles) {
 	// figure out which set of blocks we should load
-	map<block_id_t, idx_t> to_be_loaded;
-	for (idx_t block_idx = 0; block_idx < handles.size(); block_idx++) {
-		auto &handle = handles[block_idx];
+	map<block_id_t, shared_ptr<BlockHandle>> to_be_loaded;
+	for (auto &handle : handles) {
 		if (handle->GetMemory().GetState() != BlockState::BLOCK_LOADED) {
-			// need to load this block - add it to the map
-			to_be_loaded.insert(make_pair(handle->BlockId(), block_idx));
+			to_be_loaded.insert(make_pair(handle->BlockId(), handle));
 		}
 	}
-	if (to_be_loaded.empty()) {
-		// nothing to fetch
-		return;
-	}
-	// iterate over the blocks and perform bulk reads
-	block_id_t first_block = -1;
-	block_id_t previous_block_id = -1;
+	vector<PrefetchRun> plan;
 	for (auto &entry : to_be_loaded) {
-		if (previous_block_id < 0) {
-			// this the first block we are seeing
-			first_block = entry.first;
-			previous_block_id = first_block;
-		} else if (previous_block_id + 1 == entry.first) {
-			// this block is adjacent to the previous block - add it to the batch read
-			previous_block_id = entry.first;
-		} else {
-			// this block is not adjacent to the previous block
-			// perform the batch read for the previous batch
-			BatchRead(context, handles, to_be_loaded, first_block, previous_block_id);
-
-			// set the first_block and previous_block_id to the current block
-			first_block = entry.first;
-			previous_block_id = entry.first;
+		if (plan.empty() ||
+		    plan.back().first_block + NumericCast<block_id_t>(plan.back().handles.size()) != entry.first) {
+			// this block is not adjacent to the previous block, start a new run
+			plan.push_back(PrefetchRun {entry.first, {}});
 		}
+		plan.back().handles.push_back(std::move(entry.second));
 	}
-	// batch read the final batch
-	BatchRead(context, handles, to_be_loaded, first_block, previous_block_id);
+	return plan;
+}
+
+void StandardBufferManager::ExecutePrefetch(QueryContext context, vector<PrefetchRun> &plan) {
+	for (auto &run : plan) {
+		if (run.handles.size() == 1 &&
+		    Settings::Get<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
+			// skip runs of a single block unless debug_force_always is set, a single read cannot be batched
+			continue;
+		}
+		BatchRead(context, run);
+	}
+}
+
+void StandardBufferManager::Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) {
+	auto plan = RegisterPrefetch(handles);
+	ExecutePrefetch(context, plan);
 }
 
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {

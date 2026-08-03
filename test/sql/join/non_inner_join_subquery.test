@@ -1,0 +1,189 @@
+# name: test/sql/join/non_inner_join_subquery.test
+# description: Test subqueries in non-inner join conditions
+# group: [join]
+
+statement ok
+CREATE TABLE non_inner_l(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE non_inner_r(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE non_inner_s(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO non_inner_l VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+INSERT INTO non_inner_r VALUES (1, 100), (2, 200), (4, 400), (NULL, 999);
+
+statement ok
+INSERT INTO non_inner_s VALUES (1, 10), (2, 20), (NULL, 99);
+
+# The subquery only depends on the left input. It is decorrelated into the
+# left input, but the resulting predicate must remain an outer join predicate.
+query II
+SELECT l.i, r.i
+FROM non_inner_l l
+LEFT JOIN non_inner_r r ON l.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = l.i)
+ORDER BY l.i, r.i NULLS LAST;
+----
+1	1
+1	2
+1	4
+1	NULL
+2	1
+2	2
+2	4
+2	NULL
+3	NULL
+
+# The subquery only depends on the right input. This is safe to push into the
+# right side for a left join.
+query II
+SELECT l.i, r.i
+FROM non_inner_l l
+LEFT JOIN non_inner_r r ON r.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = r.i)
+ORDER BY l.i, r.i NULLS LAST;
+----
+1	1
+1	2
+2	1
+2	2
+3	1
+3	2
+
+# The subquery is in a comparison condition and depends on the left input.
+query II
+SELECT l.i, r.i
+FROM non_inner_l l
+LEFT JOIN non_inner_r r ON r.i = CASE
+	WHEN l.j >= 20 THEN (SELECT s.i FROM non_inner_s s WHERE s.i = l.i LIMIT 1)
+	ELSE NULL
+END
+ORDER BY l.i, r.i NULLS LAST;
+----
+1	NULL
+2	2
+3	NULL
+
+# Uncorrelated subqueries inside comparison keys must be planned into the same
+# side as their containing expression, otherwise the comparison join key no
+# longer belongs to a single input side.
+query II
+SELECT l.i, r.i
+FROM non_inner_l l
+LEFT JOIN non_inner_r r ON l.i + (SELECT 1) = r.i + (SELECT 0)
+ORDER BY l.i, r.i NULLS LAST;
+----
+1	2
+2	NULL
+3	4
+
+# The NOT IN marker is decorrelated before evaluating the arbitrary ON
+# predicate.
+query III
+SELECT l.i, r.i, r.j
+FROM non_inner_l l
+LEFT JOIN non_inner_r r ON r.i IS NULL OR (r.i = l.i AND l.i NOT IN (SELECT i FROM non_inner_s))
+ORDER BY l.i, r.i NULLS LAST, r.j NULLS LAST;
+----
+1	NULL	999
+2	NULL	999
+3	NULL	999
+
+# Deferred join-condition subquery planning must propagate through the child
+# binders used for nested join trees.
+query IIII
+SELECT l.i, r.i, r.j, nested.i
+FROM non_inner_l l
+LEFT JOIN non_inner_r r ON EXISTS (
+	SELECT 1 FROM non_inner_s s WHERE s.i = l.i AND s.j * 10 = r.j
+)
+LEFT JOIN non_inner_s nested ON FALSE
+ORDER BY l.i, r.i NULLS LAST, r.j NULLS LAST;
+----
+1	1	100	NULL
+2	2	200	NULL
+3	NULL	NULL	NULL
+
+# An uncorrelated scalar subquery on the right-hand comparison key is planned
+# into the right input. The join predicate remains an outer join predicate.
+query III
+SELECT l.i, r.i, r.j
+FROM non_inner_l l
+FULL OUTER JOIN non_inner_r r ON l.i = (SELECT MIN(i) FROM non_inner_s)
+ORDER BY l.i, r.i NULLS LAST, r.j NULLS LAST;
+----
+1	1	100
+1	2	200
+1	4	400
+1	NULL	999
+2	NULL	NULL
+3	NULL	NULL
+
+# FULL OUTER joins with side-local subqueries are not accepted by PostgreSQL
+# for this arbitrary predicate shape, but DuckDB can evaluate the predicate
+# while preserving both unmatched sides.
+query III
+SELECT l.i, r.i, r.j
+FROM non_inner_l l
+FULL OUTER JOIN non_inner_r r ON l.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = l.i)
+ORDER BY l.i NULLS LAST, r.i NULLS LAST, r.j NULLS LAST;
+----
+1	1	100
+1	2	200
+1	4	400
+1	NULL	999
+2	1	100
+2	2	200
+2	4	400
+2	NULL	999
+3	NULL	NULL
+
+query III
+SELECT l.i, r.i, r.j
+FROM non_inner_l l
+FULL OUTER JOIN non_inner_r r ON r.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = r.i)
+ORDER BY l.i NULLS LAST, r.i NULLS LAST, r.j NULLS LAST;
+----
+1	1	100
+1	2	200
+2	1	100
+2	2	200
+3	1	100
+3	2	200
+NULL	4	400
+NULL	NULL	999
+
+# RIGHT joins with side-local subqueries are normalized to LEFT joins by the
+# planner and should retain PostgreSQL-compatible results.
+query III
+SELECT l.i, r.i, r.j
+FROM non_inner_l l
+RIGHT JOIN non_inner_r r ON l.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = l.i)
+ORDER BY l.i NULLS LAST, r.i NULLS LAST, r.j NULLS LAST;
+----
+1	1	100
+1	2	200
+1	4	400
+1	NULL	999
+2	1	100
+2	2	200
+2	4	400
+2	NULL	999
+
+query III
+SELECT l.i, r.i, r.j
+FROM non_inner_l l
+RIGHT JOIN non_inner_r r ON r.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = r.i)
+ORDER BY l.i NULLS LAST, r.i NULLS LAST, r.j NULLS LAST;
+----
+1	1	100
+1	2	200
+2	1	100
+2	2	200
+3	1	100
+3	2	200
+NULL	4	400
+NULL	NULL	999

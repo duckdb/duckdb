@@ -59,6 +59,9 @@ class SQLQuotedIdentifier {
 public:
 	explicit SQLQuotedIdentifier(const string &raw_string) : raw_string(raw_string) {
 	}
+	explicit SQLQuotedIdentifier(const char *raw_string) : raw_string(raw_string) {
+	}
+	explicit SQLQuotedIdentifier(const Identifier &id);
 
 	//! Emits an optionally quoted identifier including required escapes (i.e. ident -> ident, table -> "table")
 	static string ToString(const string &identifier);

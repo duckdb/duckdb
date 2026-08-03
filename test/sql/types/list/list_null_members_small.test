@@ -22,3 +22,23 @@ SELECT tbl.a, tbl.b,
 FROM list_int tbl
 ----
 [1]	[NULL]	1	1	NULL	NULL	0	0	0	1
+
+query I
+SELECT [NULL,1.0] = [2,1.0];
+----
+NULL
+
+query I
+SELECT [NULL,1.0] <> [2,1.0];
+----
+NULL
+
+query I
+SELECT [NULL,1.0] = [2,3.0];
+----
+False
+
+query I
+SELECT [NULL,1.0] <> [2,3.0];
+----
+True

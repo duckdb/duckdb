@@ -133,6 +133,12 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 	return make_uniq<GlobalSourceState>();
 }
 
+unique_ptr<GlobalSourceState>
+PhysicalOperator::GetGlobalSourceState(ClientContext &context, const OperatorPartitionInfo &partition_info) const {
+	(void)partition_info;
+	return GetGlobalSourceState(context);
+}
+
 // LCOV_EXCL_START
 SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk,
                                            OperatorSourceInput &input) const {
@@ -210,6 +216,8 @@ OperatorCachingMode PhysicalOperator::SelectOperatorCachingMode(ExecutionContext
 	if (!Settings::Get<EnableCachingOperatorsSetting>(context.client)) {
 		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline) {
+		return OperatorCachingMode::NONE;
+	} else if (context.pipeline->CanStopSourceEarly()) {
 		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline->GetSink()) {
 		return OperatorCachingMode::NONE;

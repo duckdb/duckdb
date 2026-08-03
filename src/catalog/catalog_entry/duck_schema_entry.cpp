@@ -48,7 +48,6 @@ namespace duckdb {
 static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyType alter_fk_type,
                                       vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
 	auto &constraints = table.GetConstraints();
-	auto &catalog = table.ParentCatalog();
 	auto &name = table.name;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto &cond = constraints[i];
@@ -57,8 +56,8 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 		}
 		auto &fk = cond->Cast<ForeignKeyConstraint>();
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			AlterEntryData alter_data(QualifiedName(catalog.GetName(), fk.info.schema, fk.info.table),
-			                          OnEntryNotFound::THROW_EXCEPTION);
+			// the referenced table lives in the same (possibly nested) schema as this table
+			AlterEntryData alter_data(table.schema.GetQualifiedName(fk.info.table), OnEntryNotFound::THROW_EXCEPTION);
 			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), name, fk.pk_columns,
 			                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
 			                                                   alter_fk_type));
@@ -189,6 +188,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
 	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
+	auto &dependencies = info.Base().dependencies;
 
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
@@ -200,13 +200,13 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.GetQualifiedName().Name()));
+		dependencies.AddDependency(*set.GetEntry(transaction, fk_info.GetQualifiedName().Name()));
 	}
-	for (auto &dep : info.dependencies.Set()) {
+	for (auto &dep : dependencies.Set()) {
 		table->dependencies.AddDependency(dep);
 	}
 
-	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, info.dependencies);
+	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, dependencies);
 	if (!entry) {
 		return nullptr;
 	}

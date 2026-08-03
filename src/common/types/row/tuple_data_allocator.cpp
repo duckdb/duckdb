@@ -382,22 +382,13 @@ void TemplatedSortKeySetPayload(const data_ptr_t row_locations[], const idx_t of
 void SortKeySetPayload(const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
                        const SortKeyPayloadState &sort_key_payload_state) {
 	switch (sort_key_payload_state.sort_key_type) {
-	case SortKeyType::PAYLOAD_FIXED_16:
-		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_FIXED_16>(row_locations, offset, count,
-		                                                          sort_key_payload_state.sort_key_chunk_state);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		TemplatedSortKeySetPayload<SortKeyType::SORT_KEY_TYPE>(row_locations, offset, count,                           \
+		                                                       sort_key_payload_state.sort_key_chunk_state);           \
 		break;
-	case SortKeyType::PAYLOAD_FIXED_24:
-		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_FIXED_24>(row_locations, offset, count,
-		                                                          sort_key_payload_state.sort_key_chunk_state);
-		break;
-	case SortKeyType::PAYLOAD_FIXED_32:
-		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_FIXED_32>(row_locations, offset, count,
-		                                                          sort_key_payload_state.sort_key_chunk_state);
-		break;
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_VARIABLE_32>(row_locations, offset, count,
-		                                                             sort_key_payload_state.sort_key_chunk_state);
-		break;
+		DUCKDB_FOR_EACH_PAYLOAD_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("SortKeySetPayload for %s",
 		                              EnumUtil::ToString(sort_key_payload_state.sort_key_type));

@@ -46,7 +46,7 @@ ifndef CMAKE_BUILD_PARALLEL_LEVEL
 CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
 endif
 export CMAKE_BUILD_PARALLEL_LEVEL
-export CI_TIDY_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 25 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
+export CI_TIDY_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 50 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
 
 # Assume Ninja is the default generator (if missing), but verify ninja exists.
 # Cache Ninja detection so we only probe `ninja --version` once.
@@ -275,8 +275,11 @@ endif
 ifeq (${FORCE_DEBUG}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_DEBUG=1
 endif
-ifeq (${SMALLER_BINARY}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY=1
+ifneq (${SMALLER_BINARY},)
+	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY='${SMALLER_BINARY}'
+endif
+ifneq (${SMALLER_BINARY_EXCEPT},)
+	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY_EXCEPT='${SMALLER_BINARY_EXCEPT}'
 endif
 ifeq (${DISABLE_STRING_INLINE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_STR_INLINE=1

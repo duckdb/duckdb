@@ -13,17 +13,38 @@
 
 namespace duckdb {
 
-PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+bool PipelineExecutor::TryDebugBlock(int &debug_counter, const InterruptState &interrupt_state_p) {
+	if (debug_counter >= debug_blocked_target_count) {
+		return false;
+	}
+	debug_counter++;
+	std::thread rewake_thread([interrupt_state_p] {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		interrupt_state_p.Callback();
+	});
+	rewake_thread.detach();
+	return true;
+}
+#endif
+
+PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p, optional_idx reserved_batch_index)
     : pipeline(pipeline_p), thread(context_p), context(context_p, thread, &pipeline_p) {
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
 		required_partition_info = pipeline.sink->RequiredPartitionInfo();
 		if (required_partition_info.AnyRequired()) {
-			D_ASSERT(pipeline.source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex()));
+			D_ASSERT(pipeline.source->SupportsPartitioning(required_partition_info));
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
 			// batch index is not set yet - initialize before fetching anything
-			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
+			if (pipeline.IsExternalInput()) {
+				D_ASSERT(!reserved_batch_index.IsValid());
+				partition_info.batch_index = pipeline.GetBaseBatchIndex();
+			} else {
+				partition_info.batch_index =
+				    reserved_batch_index.IsValid() ? reserved_batch_index.GetIndex() : pipeline.RegisterNewBatchIndex();
+			}
 			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
@@ -65,6 +86,7 @@ void PipelineExecutor::Reset() {
 	done_flushing = false;
 	remaining_sink_chunk = false;
 	next_batch_blocked = false;
+	external_batch_initialized = false;
 	finished_processing_idx = -1;
 	source_profiling_finalized = false;
 	source_finish_notification_state = SourceFinishNotificationState::PENDING;
@@ -83,10 +105,11 @@ void PipelineExecutor::Reset() {
 		required_partition_info = pipeline.sink->RequiredPartitionInfo();
 		local_sink_state->partition_info = SourcePartitionInfo();
 		if (required_partition_info.AnyRequired()) {
-			D_ASSERT(pipeline.source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex()));
+			D_ASSERT(pipeline.source->SupportsPartitioning(required_partition_info));
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
-			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
+			partition_info.batch_index =
+			    pipeline.IsExternalInput() ? pipeline.GetBaseBatchIndex() : pipeline.RegisterNewBatchIndex();
 			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
@@ -214,20 +237,55 @@ SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk, const boo
 		D_ASSERT(local_source_state);
 		D_ASSERT(global_source_state);
 		// if we retrieved data - initialize the next batch index
-		auto partition_data = pipeline.source->GetPartitionData(context, source_chunk, *global_source_state,
-		                                                        *local_source_state, required_partition_info);
-		auto batch_index = partition_data.batch_index;
-		// we start with the base_batch_index as a valid starting value. Make sure that next batch is called below
-		next_data = std::move(partition_data);
-		next_data.batch_index = pipeline.base_batch_index + batch_index + 1;
-		if (next_data.batch_index >= max_batch_index) {
-			throw InternalException("Pipeline batch index - invalid batch index %llu returned by source operator",
-			                        batch_index);
-		}
+		auto source_data = pipeline.source->GetPartitionData(context, source_chunk, *global_source_state,
+		                                                     *local_source_state, required_partition_info);
+		next_data = ToPipelinePartitionData(source_data);
 	} else if (have_more_output) {
 		next_data.batch_index = partition_info.batch_index.GetIndex();
 	}
-	if (next_data.batch_index == partition_info.batch_index.GetIndex()) {
+	return NextBatch(std::move(next_data));
+}
+
+OperatorPartitionData PipelineExecutor::ToPipelinePartitionData(const OperatorPartitionData &source_data) const {
+	auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
+	OperatorPartitionData result(pipeline.base_batch_index + source_data.batch_index + 1);
+	result.partition_data = source_data.partition_data;
+	if (result.batch_index >= max_batch_index) {
+		throw InternalException("Pipeline batch index - invalid batch index %llu returned by source operator",
+		                        source_data.batch_index);
+	}
+	return result;
+}
+
+SinkNextBatchType PipelineExecutor::NextBatch(OperatorPartitionData next_data, bool force,
+                                              optional_idx external_min_batch_index) {
+	auto &partition_info = local_sink_state->partition_info;
+	optional_idx mapped_external_min_batch_index;
+	if (pipeline.IsExternalInput()) {
+		if (!external_min_batch_index.IsValid()) {
+			throw InternalException("External pipeline did not provide a minimum batch index");
+		}
+		auto min_batch_offset = external_min_batch_index.GetIndex();
+		if (min_batch_offset >= PipelineBuildState::BATCH_INCREMENT) {
+			throw InternalException("External pipeline minimum batch index is outside its pipeline");
+		}
+		auto min_batch_index = pipeline.GetBaseBatchIndex() + min_batch_offset;
+		if (min_batch_index > next_data.batch_index) {
+			throw InternalException("External pipeline minimum batch index %llu exceeds current batch index %llu",
+			                        min_batch_index, next_data.batch_index);
+		}
+		if (min_batch_index < partition_info.min_batch_index.GetIndex()) {
+			throw InternalException("External pipeline minimum batch index decreased from %llu to %llu",
+			                        partition_info.min_batch_index.GetIndex(), min_batch_index);
+		}
+		mapped_external_min_batch_index = min_batch_index;
+	} else if (external_min_batch_index.IsValid()) {
+		throw InternalException("Source-driven pipeline received an external minimum batch index");
+	}
+	if (!force && next_data.batch_index == partition_info.batch_index.GetIndex()) {
+		if (mapped_external_min_batch_index.IsValid()) {
+			partition_info.min_batch_index = mapped_external_min_batch_index;
+		}
 		// no changes, return
 		return SinkNextBatchType::READY;
 	}
@@ -238,16 +296,7 @@ SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk, const boo
 		    next_data.batch_index, partition_info.batch_index.GetIndex());
 	}
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	if (debug_blocked_next_batch_count < debug_blocked_target_count) {
-		debug_blocked_next_batch_count++;
-
-		auto &callback_state = interrupt_state;
-		std::thread rewake_thread([callback_state] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			callback_state.Callback();
-		});
-		rewake_thread.detach();
-
+	if (TryDebugBlock(debug_blocked_next_batch_count, interrupt_state)) {
 		return SinkNextBatchType::BLOCKED;
 	}
 #endif
@@ -263,7 +312,11 @@ SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk, const boo
 		return SinkNextBatchType::BLOCKED;
 	}
 
-	partition_info.min_batch_index = pipeline.UpdateBatchIndex(current_batch, next_data.batch_index);
+	if (mapped_external_min_batch_index.IsValid()) {
+		partition_info.min_batch_index = mapped_external_min_batch_index;
+	} else {
+		partition_info.min_batch_index = pipeline.UpdateBatchIndex(current_batch, next_data.batch_index);
+	}
 
 	return SinkNextBatchType::READY;
 }
@@ -293,7 +346,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			// the operators have to be called with the same input chunk to produce the rest of the output
 			D_ASSERT(source_chunk.size() > 0);
 			result = ExecutePushInternal(source_chunk, chunk_budget);
-		} else if (exhausted_pipeline && !next_batch_blocked && !done_flushing) {
+		} else if (exhausted_pipeline && (!next_batch_blocked || done_flushing)) {
 			// The pipeline was exhausted, try flushing all operators
 			return FlushAndFinalize(chunk_budget);
 		} else if (!exhausted_pipeline || next_batch_blocked) {
@@ -311,7 +364,8 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				}
 			}
 
-			if (required_partition_info.AnyRequired()) {
+			if (required_partition_info.AnyRequired() &&
+			    (source_result != SourceResultType::FINISHED || source_chunk.size() > 0)) {
 				auto next_batch_result = NextBatch(source_chunk, source_result == SourceResultType::HAVE_MORE_OUTPUT);
 				next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
 				if (next_batch_blocked) {
@@ -355,13 +409,21 @@ PipelineExecuteResult PipelineExecutor::Execute() {
 	return Execute(NumericLimits<idx_t>::Maximum());
 }
 
-PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input) {
+PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input,
+                                                     const OperatorPartitionData &source_partition_data,
+                                                     optional_idx source_min_batch_index) {
 	D_ASSERT(pipeline.sink);
 	D_ASSERT(pipeline.IsExternalInput());
 	if (IsFinished()) {
 		return PipelineExecuteResult::FINISHED;
 	}
-	if (!remaining_sink_chunk) {
+	if (required_partition_info.AnyRequired() && !remaining_sink_chunk) {
+		auto next_batch_result = NextBatchExternal(source_partition_data, source_min_batch_index);
+		if (next_batch_result != PipelineExecuteResult::NOT_FINISHED) {
+			return next_batch_result;
+		}
+	}
+	if (!remaining_sink_chunk && !next_batch_blocked) {
 		context.thread.profiler.StartOperator(pipeline.source.get());
 		context.thread.profiler.EndOperator(&input);
 	}
@@ -370,17 +432,60 @@ PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input) {
 	return PushInputChunk(input, chunk_budget, PipelineInputChunkMode::PUSH_INPUT);
 }
 
-PipelineExecuteResult PipelineExecutor::FinishExternal() {
+PipelineExecuteResult PipelineExecutor::NextBatchExternal(const OperatorPartitionData &source_partition_data,
+                                                          optional_idx source_min_batch_index) {
+	D_ASSERT(pipeline.sink);
+	D_ASSERT(pipeline.IsExternalInput());
+	if (IsFinished()) {
+		return PipelineExecuteResult::FINISHED;
+	}
+	if (!required_partition_info.AnyRequired()) {
+		return PipelineExecuteResult::NOT_FINISHED;
+	}
+	auto next_batch_result =
+	    NextBatch(ToPipelinePartitionData(source_partition_data), !external_batch_initialized, source_min_batch_index);
+	next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
+	if (next_batch_blocked) {
+		return PipelineExecuteResult::INTERRUPTED;
+	}
+	external_batch_initialized = true;
+	return PipelineExecuteResult::NOT_FINISHED;
+}
+
+PipelineExecuteResult PipelineExecutor::FinishExternal(optional_idx source_min_batch_index) {
 	D_ASSERT(pipeline.sink);
 	D_ASSERT(pipeline.IsExternalInput());
 	if (finalized) {
 		return PipelineExecuteResult::FINISHED;
+	}
+	auto finish_batch_result = FinishBatchExternal(source_min_batch_index);
+	if (finish_batch_result == PipelineExecuteResult::INTERRUPTED) {
+		return finish_batch_result;
 	}
 
 	ExecutionBudget chunk_budget(NumericLimits<idx_t>::Maximum());
 	exhausted_source = true;
 	exhausted_pipeline = true;
 	return FlushAndFinalize(chunk_budget);
+}
+
+PipelineExecuteResult PipelineExecutor::FinishBatchExternal(optional_idx source_min_batch_index) {
+	D_ASSERT(pipeline.sink);
+	D_ASSERT(pipeline.IsExternalInput());
+	if (finalized) {
+		return PipelineExecuteResult::FINISHED;
+	}
+	if (required_partition_info.AnyRequired()) {
+		auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
+		auto next_batch_result =
+		    NextBatch(OperatorPartitionData(max_batch_index), !external_batch_initialized, source_min_batch_index);
+		next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
+		if (next_batch_blocked) {
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+		external_batch_initialized = true;
+	}
+	return PipelineExecuteResult::NOT_FINISHED;
 }
 
 bool PipelineExecutor::IsFinishedProcessing() const {
@@ -521,6 +626,14 @@ PipelineExecuteResult PipelineExecutor::FlushAndFinalize(ExecutionBudget &chunk_
 		}
 		done_flushing = true;
 	}
+	if (required_partition_info.AnyRequired() && !pipeline.IsExternalInput()) {
+		DataChunk empty_chunk;
+		auto next_batch_result = NextBatch(empty_chunk, false);
+		next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
+		if (next_batch_blocked) {
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+	}
 	return PushFinalize();
 }
 
@@ -535,16 +648,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	OperatorSinkCombineInput combine_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	if (debug_blocked_combine_count < debug_blocked_target_count) {
-		debug_blocked_combine_count++;
-
-		auto &callback_state = combine_input.interrupt_state;
-		std::thread rewake_thread([callback_state] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			callback_state.Callback();
-		});
-		rewake_thread.detach();
-
+	if (TryDebugBlock(debug_blocked_combine_count, combine_input.interrupt_state)) {
 		return PipelineExecuteResult::INTERRUPTED;
 	}
 #endif
@@ -670,16 +774,7 @@ void PipelineExecutor::SetInterruptState(InterruptState interrupt_state_p) {
 SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput &input) {
 	//! Testing feature to enable async source on every operator
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	if (debug_blocked_source_count < debug_blocked_target_count) {
-		debug_blocked_source_count++;
-
-		auto &callback_state = input.interrupt_state;
-		std::thread rewake_thread([callback_state] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			callback_state.Callback();
-		});
-		rewake_thread.detach();
-
+	if (TryDebugBlock(debug_blocked_source_count, input.interrupt_state)) {
 		return SourceResultType::BLOCKED;
 	}
 #endif
@@ -690,16 +785,7 @@ SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput
 SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input) {
 	//! Testing feature to enable async sink on every operator
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	if (debug_blocked_sink_count < debug_blocked_target_count) {
-		debug_blocked_sink_count++;
-
-		auto &callback_state = input.interrupt_state;
-		std::thread rewake_thread([callback_state] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			callback_state.Callback();
-		});
-		rewake_thread.detach();
-
+	if (TryDebugBlock(debug_blocked_sink_count, input.interrupt_state)) {
 		return SinkResultType::BLOCKED;
 	}
 #endif
