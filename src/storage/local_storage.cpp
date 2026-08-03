@@ -31,7 +31,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 		if (!index->IsBound()) {
 			continue;
 		}
-		const auto bound_index = index.Into<BoundIndex>();
+		const auto bound_index = std::move(index).Into<BoundIndex>();
 		if (!bound_index->SupportsDeltaIndexes()) {
 			continue;
 		}
@@ -132,7 +132,7 @@ idx_t LocalTableStorage::EstimatedSize() {
 		if (!index->IsBound()) {
 			continue;
 		}
-		auto bound_index = index.Into<BoundIndex>();
+		auto bound_index = std::move(index).Into<BoundIndex>();
 		index_sizes += bound_index->GetInMemorySize();
 	}
 
@@ -454,7 +454,7 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 		if (!index->IsUnique()) {
 			continue;
 		}
-		auto bound_index = index.Into<BoundIndex>();
+		auto bound_index = std::move(index).Into<BoundIndex>();
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
 		auto result = bound_index->Append(committed_chunk, committed_row_ids, index_append_info);
 		if (result.HasError()) {

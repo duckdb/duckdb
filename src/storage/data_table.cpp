@@ -371,7 +371,7 @@ void DataTable::SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info)
 void DataTable::VacuumIndexes() {
 	for (auto index : info->indexes.MutableIndexHandles()) {
 		if (index->IsBound()) {
-			auto bound_index = index.Into<BoundIndex>();
+			auto bound_index = std::move(index).Into<BoundIndex>();
 			bound_index->Vacuum();
 		}
 	}
@@ -384,7 +384,7 @@ void DataTable::RebuildIndexes() {
 		if (!index->IsBound()) {
 			throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
 		}
-		auto bound_index = index.Into<BoundIndex>();
+		auto bound_index = std::move(index).Into<BoundIndex>();
 		bound_index->ResetStorage();
 
 		auto col_ids = bound_index->GetColumnIds();
@@ -442,7 +442,7 @@ void DataTableInfo::VerifyIndexBuffers() const {
 			index.GetDelta<BoundIndex>(IndexEntryDelta::DELETED_ROWS_IN_USE).VerifyBuffers();
 		}
 		if (index->IsBound()) {
-			auto bound_index = index.Into<BoundIndex>();
+			auto bound_index = std::move(index).Into<BoundIndex>();
 			bound_index->VerifyBuffers();
 		}
 	}
@@ -838,7 +838,7 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 				continue;
 			}
 			D_ASSERT(index->IsBound());
-			auto bound_index = index.Into<BoundIndex>();
+			auto bound_index = std::move(index).Into<BoundIndex>();
 
 			IndexAppendInfo index_append_info;
 			unique_ptr<IndexHandle<BoundIndex>> delete_handle;
@@ -906,7 +906,7 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 			continue;
 		}
 		D_ASSERT(index->IsBound());
-		auto bound_index = index.Into<BoundIndex>();
+		auto bound_index = std::move(index).Into<BoundIndex>();
 		if (storage) {
 			auto delete_entry = storage->delete_indexes.FindEntry(bound_index->GetIndexName());
 			unique_ptr<IndexHandle<BoundIndex>> delete_handle;
@@ -1364,7 +1364,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 						// We cannot add to unbound indexes, so there is no need to revert them.
 						continue;
 					}
-					auto bound_index = index.Into<BoundIndex>();
+					auto bound_index = std::move(index).Into<BoundIndex>();
 					bound_index->Delete(chunk, row_identifiers);
 				}
 			}
@@ -1376,7 +1376,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 	// Verify that our index memory is stable.
 	for (auto index : info->indexes.MutableIndexHandles()) {
 		if (index->IsBound()) {
-			auto bound_index = index.Into<BoundIndex>();
+			auto bound_index = std::move(index).Into<BoundIndex>();
 			bound_index->VerifyBuffers();
 		}
 	}
@@ -1415,11 +1415,11 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		auto index = entry.GetMutableHandle();
 		if (!index->IsBound()) {
 			// Buffer the append: the unbound index buffers its own columns of the table chunk.
-			auto unbound_index = index.Into<UnboundIndex>();
+			auto unbound_index = std::move(index).Into<UnboundIndex>();
 			unbound_index->BufferChunk(table_chunk, row_ids, BufferedIndexReplay::INSERT_ENTRY);
 			continue;
 		}
-		auto bound_index = index.Into<BoundIndex>();
+		auto bound_index = std::move(index).Into<BoundIndex>();
 
 		// Find the matching delete index.
 		unique_ptr<IndexHandle<BoundIndex>> delete_handle;
@@ -1523,7 +1523,7 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row
 void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
 	D_ASSERT(IsMainTable());
 	for (auto index : info->indexes.MutableIndexHandles()) {
-		auto bound_index = index.Into<BoundIndex>();
+		auto bound_index = std::move(index).Into<BoundIndex>();
 		bound_index->Delete(chunk, row_identifiers);
 	}
 }
@@ -1739,7 +1739,7 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 	// Instead, we must rewrite these updates into DELETE + INSERT.
 	for (auto index : info->indexes.IndexHandles()) {
 		D_ASSERT(index->IsBound());
-		auto bound_index = index.Into<BoundIndex>();
+		auto bound_index = std::move(index).Into<BoundIndex>();
 		D_ASSERT(!bound_index->IndexIsUpdated(column_ids));
 	}
 #endif

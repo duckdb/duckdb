@@ -458,10 +458,10 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 		auto index = entry->GetMutableHandle();
 		IndexStorageInfo storage_info;
 		if (index->IsBound()) {
-			auto bound_index = index.Into<BoundIndex>();
+			auto bound_index = std::move(index).Into<BoundIndex>();
 			storage_info = bound_index->SerializeToDisk(context, info.options);
 		} else {
-			auto unbound_index = index.Into<UnboundIndex>();
+			auto unbound_index = std::move(index).Into<UnboundIndex>();
 			storage_info = unbound_index->CopyStorageInfo();
 		}
 		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());

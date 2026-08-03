@@ -657,7 +657,7 @@ bool TryScanIndex(IndexEntry &entry, const ColumnList &column_list, TableFunctio
 	if (!index->IsBound() || index->GetIndexType() != ART::TYPE_NAME) {
 		return false;
 	}
-	const auto art = index.Into<ART>();
+	const auto art = std::move(index).Into<ART>();
 
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.

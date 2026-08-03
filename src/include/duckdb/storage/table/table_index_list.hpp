@@ -68,9 +68,9 @@ public:
 	const TARGET *operator->() const && = delete;
 
 	template <class OTHER>
-	[[nodiscard]] IndexHandle<OTHER> Into() &;
+	[[nodiscard]] IndexHandle<OTHER> Into() &&;
 	template <class OTHER>
-	IndexHandle<OTHER> Into() && = delete;
+	IndexHandle<OTHER> Into() & = delete;
 
 	template <class OTHER>
 	const OTHER &GetDelta(IndexEntryDelta delta) const &;
@@ -109,9 +109,9 @@ public:
 	TARGET *operator->() && = delete;
 
 	template <class OTHER>
-	[[nodiscard]] MutableIndexHandle<OTHER> Into() &;
+	[[nodiscard]] MutableIndexHandle<OTHER> Into() &&;
 	template <class OTHER>
-	MutableIndexHandle<OTHER> Into() && = delete;
+	MutableIndexHandle<OTHER> Into() & = delete;
 
 	template <class OTHER>
 	OTHER &GetDelta(IndexEntryDelta delta) &;
@@ -213,7 +213,7 @@ const TARGET *IndexHandle<TARGET>::operator->() const & {
 
 template <class TARGET>
 template <class OTHER>
-IndexHandle<OTHER> IndexHandle<TARGET>::Into() & {
+IndexHandle<OTHER> IndexHandle<TARGET>::Into() && {
 	GetEntry().owned_index->template Cast<OTHER>();
 	auto result = IndexHandle<OTHER>(std::move(entry), std::move(lock));
 	D_ASSERT(!entry);
@@ -250,7 +250,7 @@ TARGET *MutableIndexHandle<TARGET>::operator->() & {
 
 template <class TARGET>
 template <class OTHER>
-MutableIndexHandle<OTHER> MutableIndexHandle<TARGET>::Into() & {
+MutableIndexHandle<OTHER> MutableIndexHandle<TARGET>::Into() && {
 	GetMutableEntry().owned_index->template Cast<OTHER>();
 	auto result = MutableIndexHandle<OTHER>(std::move(this->entry), std::move(this->lock));
 	D_ASSERT(!this->entry);

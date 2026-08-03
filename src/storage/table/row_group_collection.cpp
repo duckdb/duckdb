@@ -65,7 +65,7 @@ static bool CanVacuumRemap(DataTableInfo &table_info, AttachedDatabase &attached
 			}
 			return false;
 		}
-		const auto art = index.Into<ART>();
+		const auto art = std::move(index).Into<ART>();
 		// Remap regenerates keys from column values, which cannot reproduce legacy-encoded geometry keys.
 		if (art->HasLegacyGeometryKeys()) {
 			if (remap_indexes) {
@@ -1190,7 +1190,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 
 	for (auto index : indexes.MutableIndexHandles()) {
 		if (index->IsBound()) {
-			auto bound_index = index.Into<BoundIndex>();
+			auto bound_index = std::move(index).Into<BoundIndex>();
 			// check which indexes we should append to or remove from
 			// note that this method might also involve appending to indexes
 			// the reason for that is that we have "delta" indexes that we must fill with data we are removing
@@ -1252,7 +1252,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			continue;
 		}
 		// Buffer the delete: result_chunk is in table layout with all indexed columns populated.
-		auto unbound_index = index.Into<UnboundIndex>();
+		auto unbound_index = std::move(index).Into<UnboundIndex>();
 		unbound_index->BufferChunk(result_chunk, row_identifiers, BufferedIndexReplay::DEL_ENTRY);
 	}
 }

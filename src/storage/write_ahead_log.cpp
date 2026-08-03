@@ -401,7 +401,7 @@ void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, T
 		if (name == index->GetIndexName()) {
 			// We never write an unbound index to the WAL.
 			D_ASSERT(index->IsBound());
-			auto bound_index = index.Into<BoundIndex>();
+			auto bound_index = std::move(index).Into<BoundIndex>();
 			auto info = bound_index->SerializeToWAL(options);
 			serializer.WriteProperty(102, "index_storage_info", info);
 			serializer.WriteList(103, "index_storage", info.buffers.size(), [&](Serializer::List &list, idx_t i) {
