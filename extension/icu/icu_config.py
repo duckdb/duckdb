@@ -3,12 +3,24 @@ import os
 # list all include directories
 include_directories = [
     os.path.sep.join(x.split('/'))
-    for x in ['extension/icu/include', 'extension/icu/third_party/icu/common', 'extension/icu/third_party/icu/i18n']
+    for x in [
+        'extension/icu/include',
+        'extension/icu/collation/include',
+        'extension/icu/third_party/icu/common',
+        'extension/icu/third_party/icu/i18n',
+    ]
 ]
 # source files
 source_directories = [
     os.path.sep.join(x.split('/'))
-    for x in ['.', 'third_party/icu/common', 'third_party/icu/i18n', 'third_party/icu/stubdata']
+    for x in [
+        '.',
+        'collation',
+        'collation/generated',
+        'third_party/icu/common',
+        'third_party/icu/i18n',
+        'third_party/icu/stubdata',
+    ]
 ]
 source_files = []
 base_path = os.path.dirname(os.path.abspath(__file__))
