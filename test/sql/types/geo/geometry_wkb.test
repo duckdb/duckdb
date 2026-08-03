@@ -29,6 +29,17 @@ select id, ST_AsText(ST_GeomFromWKB(ST_AsWKB(g))) from t1 order by id;
 7	GEOMETRYCOLLECTION (POINT (1 1), LINESTRING (0 0, 1 1))
 8	NULL
 
+# A WKB blob encodes exactly one root geometry
+statement error
+SELECT ST_GeomFromWKB(ST_AsWKB('POINT(1 2)'::GEOMETRY) || ST_AsWKB('POINT(9 9)'::GEOMETRY));
+----
+Unexpected trailing data at position 21
+
+query I
+SELECT TRY_CAST(ST_AsWKB('POINT(1 2)'::GEOMETRY) || ST_AsWKB('POINT(9 9)'::GEOMETRY) AS GEOMETRY) IS NULL;
+----
+true
+
 # Create a table with all types and all z/m combinations
 statement ok
 create table t_all_types(id INT, g GEOMETRY);
