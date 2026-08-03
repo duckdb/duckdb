@@ -23,8 +23,6 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 
 		VisitOperator(*comp_join.children[0]);
-		auto left_bindings = bindings;
-		auto left_types = types;
 		for (auto &cond : comp_join.conditions) {
 			if (cond.IsComparison()) {
 				VisitExpression(&cond.LeftReference());
@@ -36,8 +34,6 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		}
 
 		VisitOperator(*comp_join.children[1]);
-		auto right_bindings = bindings;
-		auto right_types = types;
 		for (auto &cond : comp_join.conditions) {
 			if (cond.IsComparison()) {
 				VisitExpression(&cond.RightReference());
@@ -45,22 +41,13 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		}
 
 		// combine bindings to resolve predicate
-		auto combined_bindings = left_bindings;
-		combined_bindings.insert(combined_bindings.end(), right_bindings.begin(), right_bindings.end());
-		auto combined_types = left_types;
-		combined_types.insert(combined_types.end(), right_types.begin(), right_types.end());
-
-		bindings = combined_bindings;
-		types = combined_types;
+		bindings = op.GetColumnBindings();
+		types = op.types;
 		for (auto &cond : comp_join.conditions) {
 			if (!cond.IsComparison()) {
 				VisitExpression(&cond.JoinExpressionReference());
 			}
 		}
-
-		// update to join output bindings
-		bindings = op.GetColumnBindings();
-		types = op.types;
 
 		return;
 	}
