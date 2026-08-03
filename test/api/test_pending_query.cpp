@@ -301,7 +301,7 @@ TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
 		REQUIRE(!pending->HasError());
 
 		auto result = pending->Execute();
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		idx_t count = 0;
 		while (auto chunk = result->Fetch()) {
 			REQUIRE(chunk->GetValue(0, 0).GetValue<int64_t>() == NumericCast<int64_t>(count));
@@ -317,7 +317,7 @@ TEST_CASE("Stream results from materialized CTE exchanges", "[api]") {
 		                            "SELECT i FROM integers WHERE i >= 500000) "
 		                            "SELECT i FROM c");
 		REQUIRE(!result->HasError());
-		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		REQUIRE(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		REQUIRE(result->Fetch());
 
 		result->Cast<StreamQueryResult>().Close();
