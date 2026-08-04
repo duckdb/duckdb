@@ -12,6 +12,12 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/secret/secret.hpp"
 
 namespace duckdb {
 
@@ -319,6 +325,132 @@ void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound 
 		}
 		throw;
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// ConnectionSecretStorage
+//===--------------------------------------------------------------------===//
+namespace {
+
+constexpr const char *CONNECTION_SECRET_STATE_KEY = "connection_secret_storage";
+
+//! Per-connection secret container. Lives on the ClientContext's RegisteredStateManager, so it is destroyed exactly
+//! when the connection (its ClientContext) goes away - giving automatic, crash-robust cleanup with no cooperation.
+//! The secrets are held in a CatalogSet so that they follow the transaction they were created in: an aborted
+//! transaction undoes the CREATE/DROP, exactly like the global storages. No mutex is needed, CatalogSet locks itself.
+struct ConnectionSecretState : public ClientContextState {
+	explicit ConnectionSecretState(Catalog &catalog) : secrets(make_uniq<CatalogSet>(catalog)) {
+	}
+
+	unique_ptr<CatalogSet> secrets;
+};
+
+//! Fetch the calling connection's secret container. With create=false returns nullptr when there is no context or no
+//! container yet; with create=true it allocates the container on the context (used by StoreSecret).
+optional_ptr<ConnectionSecretState> GetConnectionState(optional_ptr<CatalogTransaction> transaction, bool create) {
+	if (!transaction || !transaction->HasContext()) {
+		return nullptr;
+	}
+	auto &context = transaction->GetContext();
+	if (create) {
+		auto &catalog = Catalog::GetSystemCatalog(*context.db);
+		return context.registered_state->GetOrCreate<ConnectionSecretState>(CONNECTION_SECRET_STATE_KEY, catalog).get();
+	}
+	return context.registered_state->Get<ConnectionSecretState>(CONNECTION_SECRET_STATE_KEY).get();
+}
+
+} // namespace
+
+unique_ptr<SecretEntry> ConnectionSecretStorage::StoreSecret(unique_ptr<const BaseSecret> secret,
+                                                             OnCreateConflict on_conflict,
+                                                             optional_ptr<CatalogTransaction> transaction) {
+	auto state = GetConnectionState(transaction, true);
+	if (!state) {
+		throw InvalidInputException("Cannot create a connection-scoped secret without an active client context");
+	}
+	auto &secrets = *state->secrets;
+	// Copy the name: we std::move(secret) below, after which a reference into it would dangle.
+	auto name = secret->GetName();
+
+	if (secrets.GetEntry(*transaction, name)) {
+		switch (on_conflict) {
+		case OnCreateConflict::ERROR_ON_CONFLICT:
+			throw InvalidInputException("Connection secret with name '%s' already exists", name.GetIdentifierName());
+		case OnCreateConflict::IGNORE_ON_CONFLICT:
+			return nullptr;
+		case OnCreateConflict::REPLACE_ON_CONFLICT:
+			secrets.DropEntry(*transaction, name, true, true);
+			break;
+		default:
+			throw InternalException("unknown OnCreateConflict found while registering connection secret");
+		}
+	}
+
+	auto secret_entry = make_uniq<SecretCatalogEntry>(std::move(secret), Catalog::GetSystemCatalog(*transaction->db));
+	secret_entry->temporary = true;
+	secret_entry->secret->storage_mode = storage_name;
+	secret_entry->secret->persist_type = SecretPersistType::TEMPORARY;
+	LogicalDependencyList dependencies;
+	secrets.CreateEntry(*transaction, name, std::move(secret_entry), dependencies);
+
+	auto &stored = secrets.GetEntry(*transaction, name)->Cast<SecretCatalogEntry>();
+	return make_uniq<SecretEntry>(*stored.secret);
+}
+
+SecretMatch ConnectionSecretStorage::LookupSecret(const string &path, const string &type,
+                                                  optional_ptr<CatalogTransaction> transaction) {
+	auto state = GetConnectionState(transaction, false);
+	if (!state) {
+		// No connection context (or nothing stored yet) - decline, so the global storages serve this lookup.
+		return SecretMatch();
+	}
+	auto best_match = SecretMatch();
+	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
+		auto &cast_entry = entry.Cast<SecretCatalogEntry>();
+		if (cast_entry.secret->secret->GetType() == type) {
+			best_match = SelectBestMatch(*cast_entry.secret, path, tie_break_offset, best_match);
+		}
+	};
+	state->secrets->Scan(*transaction, callback);
+	return best_match;
+}
+
+unique_ptr<SecretEntry> ConnectionSecretStorage::GetSecretByName(const string &name,
+                                                                 optional_ptr<CatalogTransaction> transaction) {
+	auto state = GetConnectionState(transaction, false);
+	if (!state) {
+		return nullptr;
+	}
+	auto entry = state->secrets->GetEntry(*transaction, Identifier(name));
+	if (!entry) {
+		return nullptr;
+	}
+	return make_uniq<SecretEntry>(*entry->Cast<SecretCatalogEntry>().secret);
+}
+
+void ConnectionSecretStorage::DropSecretByName(const Identifier &name, OnEntryNotFound on_entry_not_found,
+                                               optional_ptr<CatalogTransaction> transaction) {
+	auto state = GetConnectionState(transaction, false);
+	if (state && state->secrets->GetEntry(*transaction, name)) {
+		state->secrets->DropEntry(*transaction, name, true, true);
+		return;
+	}
+	if (on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+		throw InvalidInputException("Connection secret with name '%s' not found", name.GetIdentifierName());
+	}
+}
+
+vector<SecretEntry> ConnectionSecretStorage::AllSecrets(optional_ptr<CatalogTransaction> transaction) {
+	vector<SecretEntry> result;
+	auto state = GetConnectionState(transaction, false);
+	if (!state) {
+		return result;
+	}
+	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
+		result.push_back(*entry.Cast<SecretCatalogEntry>().secret);
+	};
+	state->secrets->Scan(*transaction, callback);
+	return result;
 }
 
 } // namespace duckdb

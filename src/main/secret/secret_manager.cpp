@@ -173,10 +173,12 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 	if (persist_type == SecretPersistType::DEFAULT) {
 		if (storage.empty()) {
 			persist_type = config.default_persist_type;
-		} else if (storage == TEMPORARY_STORAGE_NAME) {
-			persist_type = SecretPersistType::TEMPORARY;
 		} else {
-			persist_type = SecretPersistType::PERSISTENT;
+			// Derive the persist type from the named storage's own flag, so that *any* registered temporary storage
+			// (not only "memory") accepts a default `CREATE SECRET ... IN <storage>` without the TEMPORARY keyword.
+			auto storage_backend = GetSecretStorage(storage);
+			persist_type = (storage_backend && !storage_backend->Persistent()) ? SecretPersistType::TEMPORARY
+			                                                                   : SecretPersistType::PERSISTENT;
 		}
 	}
 
@@ -619,6 +621,10 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 
 		// load the tmp storage
 		LoadSecretStorageInternal(make_uniq<TemporarySecretStorage>(TEMPORARY_STORAGE_NAME, *transaction.db));
+
+		// load the connection-scoped storage: secrets created `IN connection_storage` are visible only to the
+		// connection that created them, and are dropped automatically when that connection closes.
+		LoadSecretStorageInternal(make_uniq<ConnectionSecretStorage>(CONNECTION_STORAGE_NAME));
 
 		if (config.allow_persistent_secrets) {
 			// load the persistent storage if enabled
