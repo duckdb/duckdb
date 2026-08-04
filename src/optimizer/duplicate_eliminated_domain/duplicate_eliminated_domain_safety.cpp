@@ -366,10 +366,17 @@ bool DuplicateEliminatedDomainSafety::CanFactorOperator(ClientContext &context, 
 		auto &get = op.Cast<LogicalGet>();
 		return ScanIsSafe(context, get);
 	}
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+		return op.children.empty() && !op.Cast<LogicalCTERef>().is_recurring;
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		if (op.children.size() != 1) {
+			return false;
+		}
+		break;
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+		if (op.children.size() != 2) {
 			return false;
 		}
 		break;

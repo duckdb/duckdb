@@ -140,7 +140,7 @@ logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
 query II
 EXPLAIN SELECT * FROM dedup_marker_is_null;
 ----
-logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*
 
 # The optional optimizer may change the implementation, but never marker semantics.
 statement ok

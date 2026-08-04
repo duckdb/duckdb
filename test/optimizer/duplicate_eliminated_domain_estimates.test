@@ -54,6 +54,11 @@ JOIN user_engagement u ON u.id IN (
 );
 
 query II
+SELECT * FROM dedup_est_pair_in ORDER BY ALL;
+----
+10	1
+
+query II
 EXPLAIN SELECT * FROM dedup_est_pair_in;
 ----
 logical_opt	<REGEX>:.*Join Type: SEMI.*
@@ -67,6 +72,161 @@ query II
 EXPLAIN SELECT * FROM dedup_est_pair_in;
 ----
 logical_opt	<!REGEX>:.*Join Type: RIGHT_SEMI.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<!REGEX>:.*__duckdb_delim_[0-9]+.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*
+
+query II
+EXPLAIN SELECT * FROM dedup_est_pair_in;
+----
+logical_opt	<!REGEX>:.*Join Type: MARK.*
+
+# A materialized candidate can safely provide the domain through a second CTE reference without introducing a new
+# factor boundary around the marker filter and join.
+query II
+WITH ranked_posts AS MATERIALIZED (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+)
+SELECT p.id, u.id
+FROM ranked_posts p
+JOIN dedup_est_users u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+)
+ORDER BY ALL;
+----
+10	1
+
+query II
+EXPLAIN
+WITH ranked_posts AS MATERIALIZED (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+)
+SELECT p.id, u.id
+FROM ranked_posts p
+JOIN dedup_est_users u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+);
+----
+logical_opt	<!REGEX>:.*(__duckdb_duplicate_eliminated_factor_|__duckdb_delim_|Join Type: MARK).*
+
+# NOT MATERIALIZED requires the window definition to be copied. Since it is outside the bounded source-duplication
+# proof, retain the canonical generated domain.
+query II
+WITH ranked_posts AS NOT MATERIALIZED (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+)
+SELECT p.id, u.id
+FROM ranked_posts p
+JOIN dedup_est_users u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+)
+ORDER BY ALL;
+----
+10	1
+
+query II
+EXPLAIN
+WITH ranked_posts AS NOT MATERIALIZED (
+    SELECT id, row_number() OVER (ORDER BY id) AS rank
+    FROM dedup_est_posts
+    WHERE creation_date >= DATE '2024-09-01'
+)
+SELECT p.id, u.id
+FROM ranked_posts p
+JOIN dedup_est_users u ON u.id IN (
+    SELECT user_id
+    FROM dedup_est_votes v
+    WHERE v.post_id = p.id
+    GROUP BY user_id
+    HAVING count(*) > 5
+);
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# Aggregate statistics contain both child and aggregate-output entries. A CTE reference must rank candidates using the
+# output entries. Here the aggregate output has a conservative NDV, so the equivalent base-table key wins.
+statement ok
+CREATE TABLE dedup_agg_source(group_id INTEGER, constant_k INTEGER);
+
+statement ok
+INSERT INTO dedup_agg_source SELECT i, 0 FROM range(10) r(i);
+
+statement ok
+CREATE TABLE dedup_agg_equivalent(n BIGINT, payload INTEGER);
+
+statement ok
+INSERT INTO dedup_agg_equivalent
+SELECT CASE WHEN i % 2 = 0 THEN 1 ELSE 2 END, i FROM range(6) r(i);
+
+statement ok
+CREATE TABLE dedup_agg_probe(v INTEGER);
+
+statement ok
+INSERT INTO dedup_agg_probe SELECT i FROM range(100) r(i);
+
+statement ok
+ANALYZE;
+
+query I
+WITH grouped AS (
+    SELECT group_id, count(*) AS n
+    FROM dedup_agg_source
+    GROUP BY group_id
+)
+SELECT count(*)
+FROM (
+    SELECT g.n, p.v
+    FROM grouped g
+    JOIN dedup_agg_equivalent e ON g.n = e.n
+    CROSS JOIN dedup_agg_probe p
+    WHERE p.v < (
+        SELECT avg(x.payload) FROM dedup_agg_equivalent x WHERE x.n = g.n
+    )
+);
+----
+60
+
+query II
+EXPLAIN
+WITH grouped AS (
+    SELECT group_id, count(*) AS n
+    FROM dedup_agg_source
+    GROUP BY group_id
+)
+SELECT g.n, p.v
+FROM grouped g
+JOIN dedup_agg_equivalent e ON g.n = e.n
+CROSS JOIN dedup_agg_probe p
+WHERE p.v < (
+    SELECT avg(x.payload) FROM dedup_agg_equivalent x WHERE x.n = g.n
+);
+----
+logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*
 
 # Safety to evaluate additional groups does not imply that globally aggregating a large relation is profitable. Keep
 # the observed one-key domain below the aggregate.

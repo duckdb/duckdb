@@ -77,6 +77,15 @@ static void FindDomainReferences(unique_ptr<LogicalOperator> &op, TableIndex dom
 	}
 }
 
+static bool CanDuplicateCandidateSource(ClientContext &context, LogicalOperator &source) {
+	if (source.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &cte_ref = source.Cast<LogicalCTERef>();
+		// Candidate analysis has already validated the referenced definition and its materialization policy.
+		return source.children.empty() && !cte_ref.is_recurring;
+	}
+	return DuplicateEliminatedDomainSafety::CanDuplicateSource(context, source);
+}
+
 static unique_ptr<LogicalOperator> CreateDuplicateFreeDomain(Binder &binder, unique_ptr<LogicalOperator> &source,
                                                              const DuplicateEliminatedDomainCandidate &candidate,
                                                              LogicalCTERef &domain_ref) {
@@ -109,7 +118,7 @@ bool DuplicateEliminatedDomainInliner::TryInline(Binder &binder, unique_ptr<Logi
                                                  idx_t domain_ref_count,
                                                  const DuplicateEliminatedDomainCandidate &candidate) {
 	if (domain_ref_count != 1 || !FindDomainAggregateUse(*rhs, domain_cte_index).feeds_aggregate ||
-	    !DuplicateEliminatedDomainSafety::CanDuplicateSource(binder.context, *source)) {
+	    !CanDuplicateCandidateSource(binder.context, *source)) {
 		return false;
 	}
 	auto scanned_table = GetScannedTable(*source);

@@ -19,8 +19,7 @@ DuplicateEliminatedDomainCTERegistry::DuplicateEliminatedDomainCTERegistry(Logic
 void DuplicateEliminatedDomainCTERegistry::Collect(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE && op.children.size() == 2) {
 		auto &cte = op.Cast<LogicalMaterializedCTE>();
-		entries.emplace(cte.table_index,
-		                Entry(*op.children[0], cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS));
+		entries.emplace(cte.table_index, Entry(*op.children[0], cte.materialize));
 	}
 	for (auto &child : op.children) {
 		Collect(*child);
@@ -37,7 +36,12 @@ optional_ptr<LogicalOperator> DuplicateEliminatedDomainCTERegistry::FindDefiniti
 
 bool DuplicateEliminatedDomainCTERegistry::IsAlwaysMaterialized(TableIndex cte_index) const {
 	auto entry = entries.find(cte_index);
-	return entry != entries.end() && entry->second.always_materialized;
+	return entry != entries.end() && entry->second.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+}
+
+bool DuplicateEliminatedDomainCTERegistry::IsNeverMaterialized(TableIndex cte_index) const {
+	auto entry = entries.find(cte_index);
+	return entry != entries.end() && entry->second.materialize == CTEMaterialize::CTE_MATERIALIZE_NEVER;
 }
 
 } // namespace duckdb

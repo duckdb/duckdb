@@ -113,3 +113,14 @@ TEST_CASE("Equivalent-source domain elimination validates every grouped restrict
 	REQUIRE_FALSE(
 	    DuplicateEliminatedDomainAnalyzer::CanEliminateEquivalentSourceDomain(*outer, *mixed, generated_cte_index));
 }
+
+TEST_CASE("Equivalent-source domain elimination traces keys through cross products", "[optimizer][subquery]") {
+	auto source_cte_index = TableIndex(1);
+	auto generated_cte_index = TableIndex(2);
+	auto outer = CreateCandidateOuterJoin(source_cte_index);
+	outer->children[0] = LogicalCrossProduct::Create(std::move(outer->children[0]),
+	                                                 CreateCandidateCTERef(TableIndex(90), TableIndex(3)));
+
+	auto rhs = CreateCandidateGroupedRHS(CreateCandidateRestriction(generated_cte_index, source_cte_index, {0, 1}, 0));
+	REQUIRE(DuplicateEliminatedDomainAnalyzer::CanEliminateEquivalentSourceDomain(*outer, *rhs, generated_cte_index));
+}

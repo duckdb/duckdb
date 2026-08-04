@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/table_index.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -24,15 +25,16 @@ public:
 
 	optional_ptr<LogicalOperator> FindDefinition(TableIndex cte_index) const;
 	bool IsAlwaysMaterialized(TableIndex cte_index) const;
+	bool IsNeverMaterialized(TableIndex cte_index) const;
 
 private:
 	struct Entry {
-		Entry(LogicalOperator &definition_p, bool always_materialized_p)
-		    : definition(definition_p), always_materialized(always_materialized_p) {
+		Entry(LogicalOperator &definition_p, CTEMaterialize materialize_p)
+		    : definition(definition_p), materialize(materialize_p) {
 		}
 
 		reference<LogicalOperator> definition;
-		bool always_materialized;
+		CTEMaterialize materialize;
 	};
 
 	void Collect(LogicalOperator &op);

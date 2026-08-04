@@ -8,6 +8,7 @@
 
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_candidate.hpp"
 
+#include "duckdb/optimizer/cte_inlining.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_safety.hpp"
 #include "duckdb/optimizer/duplicate_eliminated_domain/duplicate_eliminated_domain_cte_registry.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
@@ -228,11 +229,31 @@ static bool FindCandidateKeys(LogicalOperator &op, const vector<unique_ptr<Expre
 	return true;
 }
 
+static bool CanAddCTEReference(ClientContext &context, const DuplicateEliminatedDomainCTERegistry &cte_registry,
+                               LogicalCTERef &cte_ref) {
+	if (cte_ref.is_recurring) {
+		return false;
+	}
+	auto definition = cte_registry.FindDefinition(cte_ref.cte_index);
+	if (!definition) {
+		return false;
+	}
+	if (cte_registry.IsAlwaysMaterialized(cte_ref.cte_index)) {
+		return true;
+	}
+	if (!cte_registry.IsNeverMaterialized(cte_ref.cte_index) && !definition->HasVolatileExpressions() &&
+	    CTEInlining::EndsInAggregateOrDistinct(*definition)) {
+		// A multiply referenced default CTE ending in an aggregate, DISTINCT, or window remains shared.
+		return true;
+	}
+	return DuplicateEliminatedDomainSafety::CanDuplicateSource(context, *definition);
+}
+
 class CandidateAnalyzer {
 public:
-	CandidateAnalyzer(ClientContext &context_p, const vector<unique_ptr<Expression>> &keys_p,
-	                  const BindingEquivalence &equivalence_p)
-	    : context(context_p), keys(keys_p), equivalence(equivalence_p) {
+	CandidateAnalyzer(ClientContext &context_p, const DuplicateEliminatedDomainCTERegistry &cte_registry_p,
+	                  const vector<unique_ptr<Expression>> &keys_p, const BindingEquivalence &equivalence_p)
+	    : context(context_p), cte_registry(cte_registry_p), keys(keys_p), equivalence(equivalence_p) {
 	}
 
 	vector<AnalyzedCandidate> Analyze(unique_ptr<LogicalOperator> &root) {
@@ -270,6 +291,12 @@ private:
 					child_coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
 				}
 				break;
+			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+				discover_child = discover && can_factor_operator;
+				if (discover_child) {
+					child_coverage = DuplicateEliminatedDomainCoverage::SUPERSET;
+				}
+				break;
 			default:
 				break;
 			}
@@ -285,6 +312,14 @@ private:
 		switch (op->type) {
 		case LogicalOperatorType::LOGICAL_GET: {
 			result.supported_source = can_factor_operator;
+			auto bindings = op->GetColumnBindings();
+			result.source_bindings.insert(bindings.begin(), bindings.end());
+			result.base_relation_count = 1;
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_CTE_REF: {
+			auto &cte_ref = op->Cast<LogicalCTERef>();
+			result.supported_source = can_factor_operator && CanAddCTEReference(context, cte_registry, cte_ref);
 			auto bindings = op->GetColumnBindings();
 			result.source_bindings.insert(bindings.begin(), bindings.end());
 			result.base_relation_count = 1;
@@ -347,6 +382,13 @@ private:
 			}
 			break;
 		}
+		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+			if (children.size() == 2) {
+				result.source_bindings = children[0].source_bindings;
+				result.source_bindings.insert(children[1].source_bindings.begin(), children[1].source_bindings.end());
+				result.supported_source = children[0].supported_source && children[1].supported_source;
+			}
+			break;
 		default:
 			break;
 		}
@@ -364,6 +406,7 @@ private:
 
 private:
 	ClientContext &context;
+	const DuplicateEliminatedDomainCTERegistry &cte_registry;
 	const vector<unique_ptr<Expression>> &keys;
 	const BindingEquivalence &equivalence;
 	vector<AnalyzedCandidate> candidates;
@@ -396,19 +439,9 @@ private:
 		}
 		auto result = ExtractInternal(*definition, visiting_ctes);
 		visiting_ctes.erase(cte_ref.cte_index);
-		if (!result || result->column_distinct_count.size() < cte_ref.chunk_types.size()) {
+		if (!result || result->column_distinct_count.size() != cte_ref.chunk_types.size() ||
+		    result->column_names.size() != cte_ref.chunk_types.size()) {
 			return {};
-		}
-		result->column_distinct_count.erase(
-		    result->column_distinct_count.begin() +
-		        NumericCast<vector<DistinctCount>::difference_type>(cte_ref.chunk_types.size()),
-		    result->column_distinct_count.end());
-		if (result->column_names.size() < cte_ref.chunk_types.size()) {
-			result->column_names.resize(cte_ref.chunk_types.size(), Identifier("duplicate_eliminated_cte"));
-		} else {
-			result->column_names.erase(result->column_names.begin() +
-			                               NumericCast<vector<string>::difference_type>(cte_ref.chunk_types.size()),
-			                           result->column_names.end());
 		}
 		cte_stats.emplace(cte_ref.cte_index, *result);
 		return result;
@@ -456,11 +489,38 @@ private:
 			if (!child) {
 				return {};
 			}
-			return RelationStatisticsHelper::ExtractAggregationStats(op.Cast<LogicalAggregate>(), *child);
+			auto result = RelationStatisticsHelper::ExtractAggregationStats(op.Cast<LogicalAggregate>(), *child);
+			auto output_count = op.GetColumnBindings().size();
+			if (result.column_distinct_count.size() < output_count || result.column_names.size() < output_count) {
+				return {};
+			}
+			auto column_offset = result.column_distinct_count.size() - output_count;
+			auto name_offset = result.column_names.size() - output_count;
+			result.column_distinct_count.erase(result.column_distinct_count.begin(),
+			                                   result.column_distinct_count.begin() +
+			                                       NumericCast<vector<DistinctCount>::difference_type>(column_offset));
+			result.column_names.erase(result.column_names.begin(),
+			                          result.column_names.begin() +
+			                              NumericCast<vector<Identifier>::difference_type>(name_offset));
+			D_ASSERT(result.column_distinct_count.size() == output_count);
+			D_ASSERT(result.column_names.size() == output_count);
+			return result;
+		}
+		case LogicalOperatorType::LOGICAL_WINDOW: {
+			if (op.children.size() != 1) {
+				return {};
+			}
+			auto child = ExtractInternal(*op.children[0], visiting_ctes);
+			if (!child) {
+				return {};
+			}
+			return RelationStatisticsHelper::ExtractWindowStats(op.Cast<LogicalWindow>(), *child);
 		}
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 			auto &join = op.Cast<LogicalComparisonJoin>();
-			if (op.children.size() != 2 || (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI)) {
+			if (op.children.size() != 2 || (join.join_type != JoinType::INNER && join.join_type != JoinType::SEMI &&
+			                                join.join_type != JoinType::LEFT && join.join_type != JoinType::RIGHT &&
+			                                join.join_type != JoinType::OUTER)) {
 				return {};
 			}
 			auto left = ExtractInternal(*op.children[0], visiting_ctes);
@@ -616,23 +676,53 @@ struct CTEKeySource {
 
 static optional<CTEKeySource> TraceBindingsToCTE(LogicalOperator &op, vector<ColumnBinding> bindings) {
 	reference<LogicalOperator> current = op;
-	while (current.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		auto &projection = current.get().Cast<LogicalProjection>();
-		if (projection.children.size() != 1) {
+	while (true) {
+		if (current.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &projection = current.get().Cast<LogicalProjection>();
+			if (projection.children.size() != 1) {
+				return {};
+			}
+			auto output_bindings = projection.GetColumnBindings();
+			for (auto &binding : bindings) {
+				auto entry = std::find(output_bindings.begin(), output_bindings.end(), binding);
+				if (entry == output_bindings.end()) {
+					return {};
+				}
+				auto expression_idx = NumericCast<idx_t>(entry - output_bindings.begin());
+				if (!GetBinding(*projection.expressions[expression_idx], binding)) {
+					return {};
+				}
+			}
+			current = *projection.children[0];
+			continue;
+		}
+		if (current.get().type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT || current.get().children.size() != 2) {
+			break;
+		}
+		optional_idx source_child;
+		for (auto &binding : bindings) {
+			optional_idx binding_child;
+			for (idx_t child_idx = 0; child_idx < current.get().children.size(); child_idx++) {
+				auto child_bindings = current.get().children[child_idx]->GetColumnBindings();
+				if (std::find(child_bindings.begin(), child_bindings.end(), binding) != child_bindings.end()) {
+					if (binding_child.IsValid()) {
+						return {};
+					}
+					binding_child = child_idx;
+				}
+			}
+			if (!binding_child.IsValid()) {
+				return {};
+			}
+			if (source_child.IsValid() && source_child != binding_child) {
+				return {};
+			}
+			source_child = binding_child;
+		}
+		if (!source_child.IsValid()) {
 			return {};
 		}
-		auto output_bindings = projection.GetColumnBindings();
-		for (auto &binding : bindings) {
-			auto entry = std::find(output_bindings.begin(), output_bindings.end(), binding);
-			if (entry == output_bindings.end()) {
-				return {};
-			}
-			auto expression_idx = NumericCast<idx_t>(entry - output_bindings.begin());
-			if (!GetBinding(*projection.expressions[expression_idx], binding)) {
-				return {};
-			}
-		}
-		current = *projection.children[0];
+		current = *current.get().children[source_child.GetIndex()];
 	}
 	if (current.get().type != LogicalOperatorType::LOGICAL_CTE_REF) {
 		return {};
@@ -908,7 +998,7 @@ DuplicateEliminatedDomainAnalyzer::FindBest(ClientContext &context,
 	join.children[0]->ResolveOperatorTypes();
 	BindingEquivalence equivalence;
 	CollectEquivalences(*join.children[0], equivalence);
-	CandidateAnalyzer analyzer(context, join.duplicate_eliminated_columns, equivalence);
+	CandidateAnalyzer analyzer(context, cte_registry, join.duplicate_eliminated_columns, equivalence);
 	auto candidates = analyzer.Analyze(join.children[0]);
 	RelationStatsExtractor stats_extractor(context, cte_registry);
 	idx_t payload_cardinality;
