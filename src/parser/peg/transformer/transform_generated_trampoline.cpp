@@ -6415,13 +6415,19 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColIdTypeListTra
 void PEGTransformerFactory::InitializeMapTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                         TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
-	auto dynamic_child_count = list_items.size();
-	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
-	for (idx_t i = list_items.size(); i > 0; i--) {
-		auto child_idx = i - 1;
-		stack.PushFrame(list_items[child_idx].get(), TYPE_OPS,
-		                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+	auto &list_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
+	if (list_opt.HasResult()) {
+		auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_opt.GetResult()));
+		dynamic_child_count = list_items.size();
+		frame.ReserveChildSlots(1 + dynamic_child_count - 1);
+		for (idx_t i = list_items.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			stack.PushFrame(list_items[child_idx].get(), TYPE_OPS,
+			                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+		}
+	} else {
+		frame.ReserveChildSlots(1 - 1);
 	}
 }
 
@@ -6429,11 +6435,20 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeMapTypeTrampolin
                                                                                   TransformStack &stack,
                                                                                   TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
-	auto dynamic_child_count = dynamic_list_items.size();
-	vector<LogicalType> type;
-	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
-		type.push_back(frame.TakeResult<LogicalType>(i));
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_list_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (dynamic_list_opt.HasResult()) {
+		auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(dynamic_list_opt.GetResult()));
+		dynamic_child_count = dynamic_list_items.size();
+	}
+	optional<vector<LogicalType>> type {};
+	auto &type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (type_opt.HasResult()) {
+		vector<LogicalType> type_value;
+		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+			type_value.push_back(frame.TakeResult<LogicalType>(i));
+		}
+		type = std::move(type_value);
 	}
 	auto result = TransformMapType(transformer, type);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -13572,16 +13587,16 @@ void PEGTransformerFactory::InitializeTypeLiteralTrampoline(PEGTransformer &tran
                                                             TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	frame.ReserveChildSlots(1);
-	stack.PushFrame(list_pr.GetChild(0), COL_ID_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+	stack.PushFrame(list_pr.GetChild(0), TYPE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTypeLiteralTrampoline(PEGTransformer &transformer,
                                                                                       TransformStack &stack,
                                                                                       TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto col_id = frame.TakeResult<Identifier>(0);
+	auto type = frame.TakeResult<LogicalType>(0);
 	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(1));
-	auto result = TransformTypeLiteral(transformer, col_id, string_literal);
+	auto result = TransformTypeLiteral(transformer, type, string_literal);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 

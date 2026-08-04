@@ -1284,11 +1284,16 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColIdTypeListIn
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMapTypeInternal(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<LogicalType> type;
-	auto type_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
-	for (auto &type_item : type_items) {
-		auto type_value = transformer.Transform<LogicalType>(type_item.get());
-		type.push_back(type_value);
+	optional<vector<LogicalType>> type {};
+	auto &type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (type_opt.HasResult()) {
+		vector<LogicalType> type_value;
+		auto type_value_items_1 = ExtractParseResultsFromList(ExtractResultFromParens(type_opt.GetResult()));
+		for (auto &type_value_item_1 : type_value_items_1) {
+			auto type_value_value_1 = transformer.Transform<LogicalType>(type_value_item_1.get());
+			type_value.push_back(type_value_value_1);
+		}
+		type = type_value;
 	}
 	auto result = TransformMapType(transformer, type);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -4955,9 +4960,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCaseElseInterna
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeLiteralInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(0));
+	auto type = transformer.Transform<LogicalType>(list_pr.GetChild(0));
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(1));
-	auto result = TransformTypeLiteral(transformer, col_id, string_literal);
+	auto result = TransformTypeLiteral(transformer, type, string_literal);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
