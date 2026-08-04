@@ -120,17 +120,31 @@ private:
 	string wal_path;
 };
 
-TEST_CASE("WAL checkpoint prescan skips framed DML payloads", "[storage][wal]") {
+TEST_CASE("WAL checkpoint prescan skips unnecessary framed payloads", "[storage][wal]") {
 	struct TestCase {
 		const char *name;
 		WALType wal_type;
 		const char *statement;
+		const char *query;
 		vector<Value> expected;
 	};
 	vector<TestCase> test_cases {
-	    {"insert", WALType::INSERT_TUPLE, "INSERT INTO integers VALUES (4)", {1, 2, 3, 4}},
-	    {"delete", WALType::DELETE_TUPLE, "DELETE FROM integers WHERE i = 2", {1, 3}},
-	    {"update", WALType::UPDATE_TUPLE, "UPDATE integers SET i = 20 WHERE i = 2", {1, 3, 20}},
+	    {"create_table", WALType::CREATE_TABLE, "CREATE TABLE created(i INTEGER)", "SELECT count(*) FROM created", {0}},
+	    {"insert",
+	     WALType::INSERT_TUPLE,
+	     "INSERT INTO integers VALUES (4)",
+	     "SELECT i FROM integers ORDER BY i",
+	     {1, 2, 3, 4}},
+	    {"delete",
+	     WALType::DELETE_TUPLE,
+	     "DELETE FROM integers WHERE i = 2",
+	     "SELECT i FROM integers ORDER BY i",
+	     {1, 3}},
+	    {"update",
+	     WALType::UPDATE_TUPLE,
+	     "UPDATE integers SET i = 20 WHERE i = 2",
+	     "SELECT i FROM integers ORDER BY i",
+	     {1, 3, 20}},
 	};
 
 	for (const auto &test : test_cases) {
@@ -149,14 +163,14 @@ TEST_CASE("WAL checkpoint prescan skips framed DML payloads", "[storage][wal]") 
 			REQUIRE_FAIL(con.Query("CHECKPOINT"));
 		}
 
-		// Keep the entry framing and checksum valid while making the DataChunk payload unreadable.
+		// Keep the entry framing and checksum valid while making the payload unreadable.
 		helper.CorruptPayload(test.wal_type);
 
 		auto config = GetTestConfig();
 		config->options.abort_on_wal_failure = true;
 		DuckDB db(helper.GetDatabasePath(), config.get());
 		Connection con(db);
-		auto result = con.Query("SELECT i FROM integers ORDER BY i");
+		auto result = con.Query(test.query);
 		REQUIRE_NO_FAIL(*result);
 		REQUIRE(CHECK_COLUMN(result, 0, test.expected));
 	}
