@@ -1,12 +1,12 @@
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -22,7 +22,7 @@ unique_ptr<AggregateRewriteResult> RewriteOrderedFirst(AggregateRewriteInput &in
 	}
 	auto aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(input.aggregate.Copy());
 
-	FunctionBinder binder(input.optimizer.context);
+	FunctionBinder binder(input.context);
 	vector<unique_ptr<Expression>> sort_children;
 	for (auto &order : aggregate->GetOrderBysMutable()->orders) {
 		sort_children.emplace_back(std::move(order.expression));
@@ -48,14 +48,14 @@ unique_ptr<AggregateRewriteResult> RewriteOrderedFirst(AggregateRewriteInput &in
 		function_name = "arg_min_null";
 	}
 
-	auto &catalog = Catalog::GetSystemCatalog(input.optimizer.context);
+	auto &catalog = Catalog::GetSystemCatalog(input.context);
 	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
-	    input.optimizer.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), function_name));
+	    input.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), function_name));
 	vector<LogicalType> child_types;
 	for (auto &child : children) {
 		child_types.push_back(child->GetReturnType());
 	}
-	const auto &function = entry.functions.GetFunctionByArguments(input.optimizer.context, child_types);
+	const auto &function = entry.functions.GetFunctionByArguments(input.context, child_types);
 	auto result = binder.BindAggregateFunction(function, std::move(children), std::move(aggregate->GetFilterMutable()),
 	                                           aggregate->GetAggregateType());
 	return AggregateRewriteResult::Direct(std::move(result));
@@ -529,12 +529,14 @@ void AddFirstOperator(AggregateFunctionSet &set) {
 AggregateFunction FirstFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<false, false>(type);
 	fun.SetName("first");
+	fun.SetRewriteCallback(RewriteOrderedFirst<false, false>);
 	return fun;
 }
 
 AggregateFunction LastFunctionGetter::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<true, false>(type);
 	fun.SetName("last");
+	fun.SetRewriteCallback(RewriteOrderedFirst<true, false>);
 	return fun;
 }
 

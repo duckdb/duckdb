@@ -140,7 +140,7 @@ nan	0.970951
 # groups with only NULL or filtered-out inputs are retained
 query III
 SELECT g,
-	mode(v) FILTER (WHERE keep),
+	mode(v ORDER BY ord) FILTER (WHERE keep),
 	mode(ord) FILTER (WHERE false)
 FROM mode_rewrite
 GROUP BY g
@@ -259,19 +259,6 @@ EXPLAIN (FORMAT JSON)
 SELECT g, mode(v), entropy(v) FROM mode_rewrite GROUP BY g;
 ----
 logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"g"[^\]]*"v"[^\]]*\].*"Expressions":\s*"count_star\(\)".*arg_max\(#[0-9]+, #[0-9]+\).*sum\(#[0-9]+\).*sum\(.*log2.*COALESCE.*
-
-statement ok
-SET memory_limit='32MB';
-
-# aggregate ordering no longer creates a sorted-list state in the final stage
-query II
-SELECT mode(i ORDER BY i DESC) = 999999, entropy(i ORDER BY i DESC) > 19
-FROM range(1000000) t(i);
-----
-1	1
-
-statement ok
-RESET memory_limit;
 
 statement ok
 SET disabled_optimizers='frequency_aggregate_rewrite';

@@ -13,7 +13,6 @@
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -79,7 +78,7 @@ static FrequencyAggregateFinalizeResult FinalizeModeRewrite(FrequencyAggregateFi
 		sort_children.push_back(make_uniq<BoundConstantExpression>(Value("DESC NULLS LAST")));
 		sort_children.push_back(std::move(input.order_key));
 		sort_children.push_back(make_uniq<BoundConstantExpression>(Value("ASC NULLS LAST")));
-		auto sort_key = BindScalar(input.rewrite_input.optimizer.context, "create_sort_key", std::move(sort_children));
+		auto sort_key = BindScalar(input.rewrite_input.context, "create_sort_key", std::move(sort_children));
 		children.push_back(std::move(sort_key));
 		aggregate_name = "arg_min";
 	} else {
@@ -88,8 +87,8 @@ static FrequencyAggregateFinalizeResult FinalizeModeRewrite(FrequencyAggregateFi
 	}
 
 	FrequencyAggregateFinalizeResult result;
-	auto aggregate = BindAggregate(input.rewrite_input.optimizer.context, aggregate_name, std::move(children),
-	                               std::move(input.filter));
+	auto aggregate =
+	    BindAggregate(input.rewrite_input.context, aggregate_name, std::move(children), std::move(input.filter));
 	D_ASSERT(aggregate->GetReturnType() == input.rewrite_input.aggregate.GetReturnType());
 	result.aggregates.push_back(std::move(aggregate));
 	result.result = make_uniq<BoundColumnRefExpression>(input.rewrite_input.aggregate.GetReturnType(),
@@ -621,17 +620,17 @@ AggregateFunctionSet ModeFun::GetFunctions() {
 namespace {
 
 static FrequencyAggregateFinalizeResult FinalizeEntropyRewrite(FrequencyAggregateFinalizeInput &input) {
-	auto &optimizer = input.rewrite_input.optimizer;
+	auto &context = input.rewrite_input.context;
 	vector<unique_ptr<Expression>> total_children;
 	total_children.push_back(input.frequency->Copy());
-	auto total = BindAggregate(optimizer.context, "sum", std::move(total_children),
-	                           input.filter ? input.filter->Copy() : nullptr);
+	auto total =
+	    BindAggregate(context, "sum", std::move(total_children), input.filter ? input.filter->Copy() : nullptr);
 
-	auto log_frequency = BindScalar(optimizer.context, "log2", input.frequency->Copy());
-	auto weighted_frequency = BindScalar(optimizer.context, "*", std::move(input.frequency), std::move(log_frequency));
+	auto log_frequency = BindScalar(context, "log2", input.frequency->Copy());
+	auto weighted_frequency = BindScalar(context, "*", std::move(input.frequency), std::move(log_frequency));
 	vector<unique_ptr<Expression>> weighted_children;
 	weighted_children.push_back(std::move(weighted_frequency));
-	auto weighted = BindAggregate(optimizer.context, "sum", std::move(weighted_children), std::move(input.filter));
+	auto weighted = BindAggregate(context, "sum", std::move(weighted_children), std::move(input.filter));
 
 	FrequencyAggregateFinalizeResult result;
 	auto total_type = total->GetReturnType();
@@ -643,9 +642,9 @@ static FrequencyAggregateFinalizeResult FinalizeEntropyRewrite(FrequencyAggregat
 	    make_uniq<BoundColumnRefExpression>(total_type, ColumnBinding(input.aggregate_index, ProjectionIndex(0)));
 	auto weighted_ref =
 	    make_uniq<BoundColumnRefExpression>(weighted_type, ColumnBinding(input.aggregate_index, ProjectionIndex(1)));
-	auto log_total = BindScalar(optimizer.context, "log2", total_ref->Copy());
-	auto normalized = BindScalar(optimizer.context, "/", std::move(weighted_ref), std::move(total_ref));
-	auto entropy = BindScalar(optimizer.context, "-", std::move(log_total), std::move(normalized));
+	auto log_total = BindScalar(context, "log2", total_ref->Copy());
+	auto normalized = BindScalar(context, "/", std::move(weighted_ref), std::move(total_ref));
+	auto entropy = BindScalar(context, "-", std::move(log_total), std::move(normalized));
 	auto coalesce = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, LogicalType::DOUBLE);
 	coalesce->GetChildrenMutable().push_back(std::move(entropy));
 	coalesce->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(Value::DOUBLE(0)));

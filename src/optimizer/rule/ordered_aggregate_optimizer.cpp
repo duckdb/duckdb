@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -13,7 +14,7 @@ OrderedAggregateOptimizer::OrderedAggregateOptimizer(ExpressionRewriter &rewrite
 	root->expr_class = ExpressionClass::BOUND_AGGREGATE;
 }
 
-unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &, BoundAggregateExpression &aggr,
+unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, BoundAggregateExpression &aggr,
                                                         vector<unique_ptr<Expression>> &groups,
                                                         optional_ptr<vector<GroupingSet>> grouping_sets,
                                                         bool &changes_made) {
@@ -35,7 +36,10 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &, BoundAg
 		return nullptr;
 	}
 
-	return nullptr;
+	AggregateRewriteInput input(context, aggr, AggregateRewriteMode::DIRECT);
+	auto rewrite = TryDirectAggregateRewrite(input);
+	changes_made |= rewrite != nullptr;
+	return rewrite;
 }
 
 unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
