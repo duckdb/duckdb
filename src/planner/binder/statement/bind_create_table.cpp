@@ -569,13 +569,15 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 
 		// Resolve the table reference in the same catalog/schema as the table being
 		// created, so FK references work for external catalogs (not just the default).
-		Identifier fk_catalog =
-		    fk.info.schema.empty() ? schema.ParentCatalog().GetName() : Identifier::InvalidCatalog();
-		string fk_schema =
-		    fk.info.schema.empty() ? schema.name.GetIdentifierName() : fk.info.schema.GetIdentifierName();
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(fk.info.table));
-		auto table_entry = entry_retriever.GetEntry(EntryLookupInfo(
-		    table_lookup, QualifiedName(fk_catalog, Identifier(fk_schema), table_lookup.GetEntryIdentifier())));
+		QualifiedName fk_name;
+		if (fk.info.schema.empty() || fk.info.schema == schema.name) {
+			// a foreign key can only reference a table in the same (possibly nested) schema
+			fk_name = schema.GetQualifiedName(fk.info.table);
+		} else {
+			fk_name = QualifiedName(Identifier::InvalidCatalog(), fk.info.schema, fk.info.table);
+		}
+		auto table_entry = entry_retriever.GetEntry(EntryLookupInfo(table_lookup, fk_name));
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}

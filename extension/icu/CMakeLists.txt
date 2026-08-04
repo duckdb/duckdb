@@ -7,16 +7,28 @@ project(ICUExtension)
 set_extension_version_sources(icu icu_extension.cpp)
 
 include_directories(include)
-option(WITH_INTERNAL_ICU "Use vendored copy of icu" TRUE)
-if(WITH_INTERNAL_ICU)
-  include_directories(third_party/icu/common)
-  include_directories(third_party/icu/i18n)
-
-  add_subdirectory(third_party)
-endif()
+include_directories(collation/include)
+include_directories(datetime/include)
+include_directories(${CMAKE_SOURCE_DIR}/third_party/zstd/include)
 
 set(ICU_EXTENSION_FILES
-    ${ICU_LIBRARY_FILES}
+    collation/collation_collator.cpp
+    collation/collation_loader.cpp
+    collation/collation_normalizer.cpp
+    collation/generated/collation_data.cpp
+    datetime/astronomy.cpp
+    datetime/calendar.cpp
+    datetime/chinese.cpp
+    datetime/coptic.cpp
+    datetime/grego.cpp
+    datetime/gregorian.cpp
+    datetime/hebrew.cpp
+    datetime/islamic.cpp
+    datetime/japanese.cpp
+    datetime/persian.cpp
+    datetime/timezone.cpp
+    datetime/tz_loader.cpp
+    datetime/generated/tz_data.cpp
     icu_extension.cpp
     icu-current.cpp
     icu-dateadd.cpp
@@ -33,19 +45,11 @@ set(ICU_EXTENSION_FILES
 
 build_static_extension(icu ${ICU_EXTENSION_FILES})
 link_threads(icu_extension "")
-if(NOT WITH_INTERNAL_ICU)
-  find_package(
-    ICU
-    COMPONENTS i18n uc data
-    REQUIRED)
-  target_link_libraries(icu_extension ICU::i18n ICU::uc ICU::data)
-endif()
+target_link_libraries(icu_extension duckdb_zstd)
 disable_target_warnings(icu_extension)
 set(PARAMETERS "-no-warnings")
 build_loadable_extension(icu ${PARAMETERS} ${ICU_EXTENSION_FILES})
-if(NOT WITH_INTERNAL_ICU)
-  target_link_libraries(icu_loadable_extension ICU::i18n ICU::uc ICU::data)
-endif()
+target_link_libraries(icu_loadable_extension duckdb_zstd)
 install(
   TARGETS icu_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

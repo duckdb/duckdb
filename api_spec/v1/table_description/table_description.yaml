@@ -1,8 +1,9 @@
 module: table_description
 functions:
   table_description_create:
+    offset: 292
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: constructor
     belongs_to: table_description
     parameters:
@@ -29,8 +30,9 @@ functions:
       Creates a table description object. Note that `duckdb_table_description_destroy` should always be called on the resulting table_description, even if the function returns `DuckDBError`.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   table_description_create_ext:
+    offset: 293
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     role: constructor
     belongs_to: table_description
     parameters:
@@ -62,8 +64,9 @@ functions:
       Creates a table description object. Note that `duckdb_table_description_destroy` must be called on the resulting table_description, even if the function returns `DuckDBError`.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   table_description_destroy:
+    offset: 294
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     role: destructor
     belongs_to: table_description
     parameters:
@@ -75,8 +78,9 @@ functions:
     description: |
       Destroy the TableDescription object.
   table_description_error:
+    offset: 295
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       table_description:
         type: table_description
@@ -90,8 +94,9 @@ functions:
       The error message should not be freed. It will be de-allocated when `duckdb_table_description_destroy` is called.
     return_description: The error message, or `nullptr` if there is none.
   column_has_default:
+    offset: 296
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.1.0", "2024-09-08"]
     parameters:
       table_description:
         type: table_description
@@ -109,8 +114,10 @@ functions:
       Check if the column at 'index' index of the table has a DEFAULT expression.
     return_description: '`DuckDBSuccess` on success or `DuckDBError` on failure.'
   table_description_get_column_count:
+    offset: 529
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       table_description:
         type: table_description
@@ -120,8 +127,9 @@ functions:
       Return the number of columns of the described table.
     return_description: The column count.
   table_description_get_column_name:
+    offset: 297
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.2.0", "2025-02-05"]
     parameters:
       table_description:
         type: table_description
@@ -136,8 +144,10 @@ functions:
       The out result must be destroyed with `duckdb_free`.
     return_description: The column name.
   table_description_get_column_type:
+    offset: 530
     lifecycle:
-      - ["frozen", "v1.5.4", "2026-05-18"]
+      - ["stable", "v1.5.6", "2026-07-30"]
+      - ["unstable", "v1.5.0", "2026-03-06"]
     parameters:
       table_description:
         type: table_description

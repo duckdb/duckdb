@@ -5,8 +5,6 @@
 # The whole test exercises discovery — the type's `list_function` callback and
 # duckdb_external_resources(discover := true) — which lands in the external-resource discovery part.
 # Skip until that lands (then remove this mode skip / mode unskip).
-mode skip "discover not yet landed"
-
 # A resource type whose `list` callback enumerates what exists externally (handle/reference/state).
 statement ok
 CREATE MACRO qk_create(p) AS TABLE SELECT MAP {'id': 'q1'} AS handle;
@@ -56,4 +54,3 @@ SELECT reference, state FROM duckdb_external_resources(discover := true) WHERE m
 ----
 ref-q2	running
 
-mode unskip

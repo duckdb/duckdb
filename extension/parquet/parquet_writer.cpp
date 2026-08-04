@@ -16,6 +16,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -40,6 +41,7 @@
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_geometry.hpp"
+#include "parquet_statistics.hpp"
 #include "thrift/TBase.h"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/protocol/TProtocol.h"
@@ -535,6 +537,21 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 		kv.__set_value(kv_pair.second);
 		file_meta_data.key_value_metadata.push_back(kv);
 		file_meta_data.__isset.key_value_metadata = true;
+	}
+
+	if (options.enable_bloom_filters) {
+		for (const auto &type : options.sql_types) {
+			if (!TypeVisitor::Contains(type, LogicalTypeId::INTERVAL)) {
+				continue;
+			}
+			duckdb_parquet::KeyValue kv;
+			kv.__set_key(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_KEY);
+			kv.__set_value(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_VALUE);
+			// Readers require this capability before probing the additional normalized hashes.
+			file_meta_data.key_value_metadata.push_back(std::move(kv));
+			file_meta_data.__isset.key_value_metadata = true;
+			break;
+		}
 	}
 
 	InitializeColumnWriters();

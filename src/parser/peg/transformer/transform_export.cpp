@@ -27,9 +27,9 @@ PEGTransformerFactory::TransformExportStatement(PEGTransformer &transformer, con
 				info->format = option.children[0].GetValue<string>();
 				info->is_format_auto_detected = false;
 			} else if (option.expression) {
-				info->parsed_options[StringUtil::Upper(option.name.GetIdentifierName())] = option.expression->Copy();
+				info->parsed_options[option.name] = option.expression->Copy();
 			} else {
-				info->options[StringUtil::Upper(option.name.GetIdentifierName())] = option.children;
+				info->options[option.name] = option.children;
 			}
 		}
 	}

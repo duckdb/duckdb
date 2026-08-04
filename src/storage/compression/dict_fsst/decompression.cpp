@@ -85,8 +85,11 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	case DictFSSTMode::FSST_ONLY:
 	case DictFSSTMode::DICT_FSST: {
 		decoder = new duckdb_fsst_decoder_t;
-		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), baseptr + symbol_table_dest);
-		if (ret == 0) {
+		// in FSST_ONLY / DICT_FSST modes a symbol table is always present, so any failure (out-of-bounds or a
+		// version mismatch) means the segment is corrupted
+		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), baseptr + symbol_table_dest,
+		                              symbol_table_size);
+		if (ret == DUCKDB_FSST_IMPORT_VERSION_MISMATCH || ret == DUCKDB_FSST_IMPORT_OUT_OF_BOUNDS) {
 			throw IOException("Failed to scan DICT_FSST string segment: invalid FSST symbol table. Database file "
 			                  "appears to be corrupted.");
 		}

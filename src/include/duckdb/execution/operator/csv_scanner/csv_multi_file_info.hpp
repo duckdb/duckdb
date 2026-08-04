@@ -36,10 +36,10 @@ struct CSVMultiFileInfo : MultiFileReaderInterface {
 
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
-	bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
 	                     BaseFileReaderOptions &options, vector<string> &expected_names,
 	                     vector<LogicalType> &expected_types) override;
-	bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
+	bool ParseOption(ClientContext &context, const Identifier &key, const Value &val, MultiFileOptions &file_options,
 	                 BaseFileReaderOptions &options) override;
 	void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options, const vector<string> &expected_names,
 	                      const vector<LogicalType> &expected_types) override;
