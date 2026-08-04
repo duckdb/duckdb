@@ -1,4 +1,5 @@
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -31,6 +32,13 @@
 
 namespace duckdb {
 
+// AVX2 lacks packed int64 multiplication and generates an expensive loop for selected vectors.
+static void Int64MultiplyNoAVX2(DataChunk &input, ExpressionState &, Vector &result) {
+	D_ASSERT(input.ColumnCount() == 2);
+	BinaryExecutor::ExecuteStandardNoAVX2Generic<int64_t, int64_t, int64_t, MultiplyOperator>(input.data[0],
+	                                                                                          input.data[1], result);
+}
+
 template <class OP>
 static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 	scalar_function_t function;
@@ -45,7 +53,11 @@ static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 		function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
 		break;
 	case PhysicalType::INT64:
-		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+		if constexpr (std::is_same_v<OP, MultiplyOperator>) {
+			function = &Int64MultiplyNoAVX2;
+		} else {
+			function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+		}
 		break;
 	case PhysicalType::INT128:
 		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
