@@ -1328,7 +1328,8 @@ timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d
 
 template <>
 hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
-	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
+	const auto delta = Hugeint::Cast<double>(hi-lo);
+	return lo + Hugeint::Convert(delta * d);
 }
 
 template <>
