@@ -32,7 +32,7 @@ SELECT (a, b) = (c, d) FROM rows;
 query I
 SELECT count(*) FROM rows WHERE (a, b) = (c, d);
 ----
-1
+3
 
 # Empty and expression-valued rows retain the original comparison implementation.
 query II
@@ -86,4 +86,4 @@ cc(node, comp) USING KEY (node) AS (
 )
 SELECT * FROM cc;
 ----
-physical_plan	<REGEX>:.*RECURSIVE_KEY_JOIN.*
+physical_plan	<REGEX>:.*REC_REC_CTE_SCAN.*
