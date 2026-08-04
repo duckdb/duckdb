@@ -24,6 +24,12 @@
 #define DUCKDB_POSIX
 #endif
 
+#if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
+#define DUCKDB_NO_AVX2 __attribute__((target("no-avx2")))
+#else
+#define DUCKDB_NO_AVX2
+#endif
+
 namespace duckdb {
 
 // explicit fallthrough for switch_statementss
