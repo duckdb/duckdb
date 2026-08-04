@@ -92,8 +92,11 @@ struct ICUStrptime : public ICUDateFunc {
 		calendar->set(UCAL_MILLISECOND, UnsafeNumericCast<int32_t>(micros / Interval::MICROS_PER_MSEC));
 		micros %= Interval::MICROS_PER_MSEC;
 
-		// This overrides the TZ setting, so only use it if an offset was parsed.
+		// The offset fields override the TZ setting, so they have to be cleared for every row,
+		// or a row without an offset would inherit the one installed by an earlier row.
 		// Note that we don't bother/worry about the DST setting because the two just combine.
+		calendar->clear(UCAL_ZONE_OFFSET);
+		calendar->clear(UCAL_DST_OFFSET);
 		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
 			calendar->set(UCAL_ZONE_OFFSET, UnsafeNumericCast<int32_t>(parsed.data[7] * Interval::MSECS_PER_SEC));
 		}
@@ -124,8 +127,11 @@ struct ICUStrptime : public ICUDateFunc {
 						if (parsed.is_special) {
 							return parsed.ToTimestamp();
 						} else {
-							// Set TZ first, if any.
-							if (!parsed.tz.empty()) {
+							// Set TZ first. The calendar is shared by all the rows,
+							// so a row without a zone has to restore the bound one.
+							if (parsed.tz.empty()) {
+								calendar->setTimeZone(info.calendar->getTimeZone());
+							} else {
 								SetTimeZone(calendar, parsed.tz);
 							}
 
@@ -162,7 +168,7 @@ struct ICUStrptime : public ICUDateFunc {
 					    if (format.Parse(input, parsed)) {
 						    if (parsed.is_special) {
 							    return parsed.ToTimestamp();
-						    } else if (parsed.tz.empty() || TrySetTimeZone(calendar, parsed.tz)) {
+						    } else if (TrySetTimeZone(calendar, parsed.tz.empty() ? info.tz_setting : parsed.tz)) {
 							    timestamp_t result;
 							    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
 								    return result;
