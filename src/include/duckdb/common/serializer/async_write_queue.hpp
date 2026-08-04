@@ -448,7 +448,7 @@ private:
 	bool limit_coalesced_write_size = false;
 
 	//! Protects state shared between the registering thread and async completion callbacks.
-	mutex lock;
+	mutable annotated_mutex lock;
 	//! Serializes selection, materialization, accounting transfer, and lower-queue publication.
 	mutex submission_lock;
 	//! Pending payloads in registration order with pre-assigned logical offsets.

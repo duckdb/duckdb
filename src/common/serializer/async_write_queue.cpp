@@ -991,7 +991,7 @@ ManagedAsyncWriteStreamQueue::ManagedAsyncWriteStreamQueue(ClientContext &client
 }
 
 ManagedAsyncWriteStreamQueue::~ManagedAsyncWriteStreamQueue() {
-	lock_guard<mutex> guard(lock);
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	auto drained = batch_depth == 0 && pending_writes.empty() && pending_bytes == 0 && submitted_bytes == 0 &&
 	               submitted_requests == 0;
 	D_ASSERT(closed || drained);
@@ -1007,7 +1007,7 @@ bool ManagedAsyncWriteStreamQueue::HasError() {
 		return true;
 	}
 	{
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		if (local_error) {
 			return true;
 		}
@@ -1037,7 +1037,7 @@ void ManagedAsyncWriteStreamQueue::RegisterWrite(unique_ptr<AsyncWritePayload> p
 	bool update_memory = true;
 	try {
 		{
-			lock_guard<mutex> guard(lock);
+			annotated_lock_guard<annotated_mutex> guard(lock);
 			if (local_error) {
 				local_error->Throw();
 			}
@@ -1069,7 +1069,7 @@ void ManagedAsyncWriteStreamQueue::BeginBatch() {
 		return;
 	}
 	RethrowTaskError();
-	lock_guard<mutex> guard(lock);
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	if (local_error) {
 		local_error->Throw();
 	}
@@ -1081,7 +1081,7 @@ void ManagedAsyncWriteStreamQueue::LeaveBatch() noexcept {
 	if (!write_queue->IsAsync()) {
 		return;
 	}
-	lock_guard<mutex> guard(lock);
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	if (batch_depth == 0) {
 		return;
 	}
@@ -1092,7 +1092,7 @@ bool ManagedAsyncWriteStreamQueue::HasOpenBatch() {
 	if (!write_queue->IsAsync()) {
 		return false;
 	}
-	lock_guard<mutex> guard(lock);
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	return batch_depth > 0;
 }
 
@@ -1240,7 +1240,7 @@ bool ManagedAsyncWriteStreamQueue::TakePendingWriteRequest(AsyncWriteRequest &re
 		CompleteSubmittedWrite(offset, size, error);
 	};
 
-	lock_guard<mutex> guard(lock);
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	if (local_error) {
 		local_error->Throw();
 	}
@@ -1344,7 +1344,7 @@ void ManagedAsyncWriteStreamQueue::CompleteSubmittedWrite(idx_t offset, idx_t si
 	bool refill = false;
 	auto refill_policy = SchedulePolicy::THRESHOLD;
 	{
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		D_ASSERT(submitted_requests > 0);
 		submitted_requests--;
 		D_ASSERT(submitted_bytes >= size);
@@ -1363,7 +1363,7 @@ void ManagedAsyncWriteStreamQueue::FailLocalScheduling(ErrorData error, idx_t un
 	auto new_error = make_shared_ptr<ErrorData>(std::move(error));
 	idx_t discarded_bytes = 0;
 	{
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		if (local_error) {
 			return;
 		}
@@ -1401,7 +1401,7 @@ void ManagedAsyncWriteStreamQueue::ApplyBackpressure() {
 	while (true) {
 		idx_t current_pending_bytes;
 		{
-			lock_guard<mutex> guard(lock);
+			annotated_lock_guard<annotated_mutex> guard(lock);
 			if (batch_depth > 0) {
 				return;
 			}
@@ -1419,7 +1419,7 @@ void ManagedAsyncWriteStreamQueue::ApplyBackpressure() {
 void ManagedAsyncWriteStreamQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 	bool already_closed;
 	{
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		already_closed = closed;
 	}
 	if (already_closed) {
@@ -1441,7 +1441,7 @@ void ManagedAsyncWriteStreamQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 		if (batch_opened_for_drain) {
 			return;
 		}
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		previous_batch_depth = batch_depth;
 		batch_depth = 0;
 		batch_opened_for_drain = true;
@@ -1450,11 +1450,11 @@ void ManagedAsyncWriteStreamQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 		if (!preserve_batch || !batch_opened_for_drain) {
 			return;
 		}
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		batch_depth = previous_batch_depth;
 	};
 	auto set_force_completion_refill = [&](bool enabled) {
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		force_completion_refill = enabled;
 	};
 
@@ -1467,7 +1467,7 @@ void ManagedAsyncWriteStreamQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 				SchedulePendingWritesInternal(SchedulePolicy::FORCE);
 			}
 			write_queue->WaitAll();
-			lock_guard<mutex> guard(lock);
+			annotated_lock_guard<annotated_mutex> guard(lock);
 			if (pending_writes.empty() && pending_bytes == 0 && submitted_bytes == 0 && submitted_requests == 0) {
 				break;
 			}
@@ -1499,7 +1499,7 @@ void ManagedAsyncWriteStreamQueue::VerifyDrained() const {
 void ManagedAsyncWriteStreamQueue::CancelPendingWritesAfterFailure() noexcept {
 	idx_t discarded_bytes;
 	{
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		D_ASSERT(submitted_requests == 0);
 		D_ASSERT(submitted_bytes == 0);
 		if (submitted_requests != 0 || submitted_bytes != 0) {
@@ -1518,7 +1518,7 @@ void ManagedAsyncWriteStreamQueue::CancelPendingWritesAfterFailure() noexcept {
 void ManagedAsyncWriteStreamQueue::Close() {
 	bool already_closed;
 	{
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		already_closed = closed;
 	}
 	if (already_closed) {
@@ -1543,14 +1543,14 @@ void ManagedAsyncWriteStreamQueue::Close() {
 		std::rethrow_exception(error);
 	}
 
-	lock_guard<mutex> guard(lock);
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	VerifyDrained();
 	closed = true;
 }
 
 void ManagedAsyncWriteStreamQueue::ResetNextOffset(idx_t offset) {
 	RethrowTaskError();
-	lock_guard<mutex> guard(lock);
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	if (local_error) {
 		local_error->Throw();
 	}
@@ -1566,7 +1566,7 @@ void ManagedAsyncWriteStreamQueue::ReleaseMemoryReservation() {
 void ManagedAsyncWriteStreamQueue::RethrowTaskError() {
 	shared_ptr<const ErrorData> error;
 	{
-		lock_guard<mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		error = GetLocalError();
 	}
 	if (error) {
