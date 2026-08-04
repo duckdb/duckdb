@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/function.hpp"
 #include "tz_calendar.hpp"
@@ -42,13 +44,51 @@ struct ICUDateFunc {
 		duckdb::unique_ptr<FunctionData> info;
 	};
 
+	//! Per-thread cache of resolved time zones. Resolving a time zone name looks the name up and
+	//! then builds a zone and a calendar for it, so functions with per-row time zone arguments
+	//! must resolve each distinct zone only once per thread.
+	struct CalendarCacheState : public FunctionLocalState {
+		struct CacheEntry {
+			//! The resolved time zone (nullptr if the name is invalid)
+			duckdb::unique_ptr<TimeZone> tz;
+			//! Copy of the base calendar with the time zone applied (nullptr if the name is invalid)
+			CalendarPtr calendar;
+			//! The resolution error for invalid time zone names
+			string error;
+		};
+
+		explicit CalendarCacheState(Calendar &base) : base_calendar(base.Copy()) {
+		}
+
+		//! Returns a calendar for the time zone. Throws for unknown zones.
+		Calendar *GetCalendar(const string_t &tz_id);
+		//! Sets the time zone for the calendar.
+		//! For unknown zones, fills error_message if provided and throws otherwise.
+		void SetTimeZone(Calendar *calendar, const string_t &tz_id, string *error_message = nullptr);
+		//! Sets the time zone for the calendar and returns false if it is not valid.
+		bool TrySetTimeZone(Calendar *calendar, const string_t &tz_id);
+
+		Calendar *GetBaseCalendar() {
+			return base_calendar.get();
+		}
+
+	private:
+		const CacheEntry &GetEntry(const string_t &tz_id);
+
+		CalendarPtr base_calendar;
+		unordered_map<string, CacheEntry> cache;
+		//! Exploit locality for timestamp rows
+		const std::pair<const string, CacheEntry> *last = nullptr;
+	};
+
 	//! Binds a default calendar object for use by the function
 	static duckdb::unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
+	//! Initializes a CalendarCacheState from the function's BindData
+	static duckdb::unique_ptr<FunctionLocalState>
+	InitCalendarCache(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data);
+	//! Initializes a CalendarCacheState from a cast's CastData
+	static duckdb::unique_ptr<FunctionLocalState> InitCastCalendarCache(CastLocalStateParameters &parameters);
 
-	//! Tries to set the time zone for the calendar and returns false if it is not valid.
-	static bool TrySetTimeZone(Calendar *calendar, const string_t &tz_id);
-	//! Sets the time zone for the calendar. Throws if it is not valid
-	static void SetTimeZone(Calendar *calendar, const string_t &tz_id, string *error_message = nullptr);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
 	static bool TryGetTime(Calendar *calendar, uint64_t micros, timestamp_tz_t &result);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.

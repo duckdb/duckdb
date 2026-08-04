@@ -367,7 +367,7 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 		}
 
 		auto cast_type = UnboundType::TryDefaultBind(cast.TargetType());
-		if (cast_type == LogicalType::INVALID || cast_type == LogicalTypeId::UNBOUND) {
+		if (cast_type.id() == LogicalTypeId::INVALID || cast_type.id() == LogicalTypeId::UNBOUND) {
 			return false;
 		}
 

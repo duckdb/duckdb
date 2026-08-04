@@ -81,6 +81,13 @@ public:
 	DUCKDB_API const ScalarFunction &GetFunctionByArguments(ClientContext &context,
 	                                                        const vector<LogicalType> &arguments);
 
+	//! Mark every overload in the set as fallible (can throw runtime errors)
+	void SetFallible() {
+		for (auto &fun : functions) {
+			fun.SetFallible();
+		}
+	}
+
 	//! Apply the same per-arg property to every overload in the set.
 	void SetArgProperties(idx_t arg_idx, ArgProperties props) {
 		for (auto &fun : functions) {

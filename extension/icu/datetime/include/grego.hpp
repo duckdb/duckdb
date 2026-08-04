@@ -54,9 +54,9 @@ struct FloorDiv {
 		return quotient;
 	}
 	//! Divides a millisecond count by a whole number of milliseconds, keeping the remainder exact
-	static double Divide(double numerator, int32_t denominator, int32_t &remainder) {
-		const auto quotient = std::floor(numerator / denominator);
-		remainder = static_cast<int32_t>(std::floor(numerator) - (quotient * denominator));
+	static int64_t Divide(int64_t numerator, int32_t denominator, int32_t &remainder) {
+		const auto quotient = Divide(numerator, int64_t(denominator));
+		remainder = static_cast<int32_t>(numerator - quotient * denominator);
 		return quotient;
 	}
 };
@@ -95,7 +95,7 @@ struct Grego {
 	static void DayToFields(int32_t day, int32_t &year, int8_t &month, int8_t &dom, int8_t &dow, int16_t &doy);
 	//! Converts milliseconds since 1970-01-01 to date fields and the milliseconds within the day.
 	//! Returns false if the time is outside of the supported range.
-	static bool TimeToFields(double time, int32_t &year, int8_t &month, int8_t &dom, int8_t &dow, int16_t &doy,
+	static bool TimeToFields(int64_t time, int32_t &year, int8_t &month, int8_t &dom, int8_t &dow, int16_t &doy,
 	                         int32_t &mid);
 	//! The 1-based day of week (1 == Sunday) of a day since 1970-01-01
 	static int32_t DayOfWeek(int32_t day);
@@ -108,12 +108,12 @@ struct Grego {
 	static int32_t DayOfWeekInMonth(int32_t year, int32_t month, int32_t dom);
 
 	//! Converts a Julian day to milliseconds since 1970-01-01
-	static double JulianDayToMillis(int32_t julian) {
-		return (static_cast<double>(julian) - JULIAN_1970_CE) * static_cast<double>(MILLIS_PER_DAY);
+	static int64_t JulianDayToMillis(int32_t julian) {
+		return (static_cast<int64_t>(julian) - JULIAN_1970_CE) * static_cast<int64_t>(MILLIS_PER_DAY);
 	}
 	//! Converts milliseconds since 1970-01-01 to a Julian day
-	static int32_t MillisToJulianDay(double millis) {
-		return static_cast<int32_t>(JULIAN_1970_CE + FloorDiv::Divide(millis, static_cast<double>(MILLIS_PER_DAY)));
+	static int32_t MillisToJulianDay(int64_t millis) {
+		return static_cast<int32_t>(JULIAN_1970_CE + FloorDiv::Divide(millis, int64_t(MILLIS_PER_DAY)));
 	}
 	//! The number of days to add to a Julian calendar day to obtain the Gregorian calendar day
 	static int32_t GregorianShift(int32_t eyear) {

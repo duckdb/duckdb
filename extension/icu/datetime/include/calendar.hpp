@@ -60,8 +60,10 @@ enum class LimitType : uint8_t { MINIMUM = 0, GREATEST_MINIMUM = 1, LEAST_MAXIMU
 //! A calendar system combined with a time zone: converts between an instant and the fields
 //! (year, month, day, ...) that describe it, and performs arithmetic on those fields.
 //!
-//! Times are milliseconds since 1970-01-01 UTC, held as a double for the same reason that ICU
-//! does: it keeps the behaviour at the extremes of the representable range unchanged.
+//! Times are whole milliseconds since 1970-01-01 UTC, which is what an int64_t holds exactly
+//! over the whole range the calendars cover. The astronomical calculations that the lunisolar
+//! calendars need work in fractional milliseconds, and those are doubles, but they are the only
+//! place where an instant is not a whole number.
 class Calendar {
 public:
 	virtual ~Calendar() = default;
@@ -72,7 +74,7 @@ public:
 	//! The names of all supported calendar systems, in lexicographic order
 	static const vector<string> &GetAvailableTypes();
 	//! The current time, in milliseconds since 1970-01-01 UTC
-	static double GetNow();
+	static int64_t GetNow();
 
 	virtual unique_ptr<Calendar> Copy() const = 0;
 	//! The name of the calendar system, e.g. "gregorian"
@@ -83,9 +85,9 @@ public:
 	virtual bool Equals(const Calendar &other) const = 0;
 
 	//! Sets the calendar to an instant, discarding all field values
-	virtual void SetTime(double millis) = 0;
+	virtual void SetTime(int64_t millis) = 0;
 	//! The instant that the calendar is set to, computing it from the fields if needed
-	virtual double GetTime() = 0;
+	virtual int64_t GetTime() = 0;
 	//! The value of a field, computing the fields from the time if needed
 	virtual int32_t Get(CalendarField field) = 0;
 	//! Whether the last operation ran into a value that the calendar cannot represent
@@ -97,7 +99,7 @@ public:
 	//! next call to SetTime rather than being cleared by the add that follows it.
 	virtual void Add(CalendarField field, int32_t amount) = 0;
 	//! The number of times the field has to be incremented to reach the target instant
-	virtual int32_t FieldDifference(double target, CalendarField field) = 0;
+	virtual int32_t FieldDifference(int64_t target, CalendarField field) = 0;
 
 	//! The largest value a field can ever have
 	virtual int32_t GetMaximum(CalendarField field) const = 0;
@@ -134,15 +136,15 @@ public:
 	void SetTimeZone(unique_ptr<TimeZone> zone_p) override;
 	bool Equals(const Calendar &other) const override;
 
-	void SetTime(double millis) override;
-	double GetTime() override;
+	void SetTime(int64_t millis) override;
+	int64_t GetTime() override;
 	int32_t Get(CalendarField field) override;
 	bool HasFailed() const override {
 		return failed;
 	}
 	void Set(CalendarField field, int32_t value) override;
 	void Add(CalendarField field, int32_t amount) override;
-	int32_t FieldDifference(double target, CalendarField field) override;
+	int32_t FieldDifference(int64_t target, CalendarField field) override;
 
 	int32_t GetMaximum(CalendarField field) const override {
 		return GetLimit(field, LimitType::MAXIMUM);
@@ -215,7 +217,7 @@ protected:
 		return stamp[alternate] > stamp[field] ? alternate : field;
 	}
 	//! The instant the calendar is set to, without recomputing it
-	double GetTimeInternal() const {
+	int64_t GetTimeInternal() const {
 		return time;
 	}
 
@@ -249,13 +251,13 @@ protected:
 
 	//! Tries to work out the difference from the average length of the field, which avoids the
 	//! search when the guess turns out to bracket the answer. Returns false if it does not.
-	int32_t TryGuessDifference(double start, double target, CalendarField field, int32_t &result);
+	int32_t TryGuessDifference(int64_t start, int64_t target, CalendarField field, int32_t &result);
 
 	//! The operations that make up a public one. Like ICU, which threads a single error code
 	//! through an operation, they do nothing once something has gone wrong, so that a failure
 	//! is reported instead of a value computed from a broken intermediate state.
-	void SetTimeChecked(double millis);
-	double GetTimeChecked();
+	void SetTimeChecked(int64_t millis);
+	int64_t GetTimeChecked();
 	int32_t GetChecked(CalendarField field);
 	//! Calendar systems whose months do not simply follow one another override this
 	virtual void AddChecked(CalendarField field, int32_t amount);
@@ -277,9 +279,9 @@ private:
 	//! Recomputes the fields from the time
 	void ComputeFields();
 	void ComputeWeekFields();
-	double ComputeMillisInDay() const;
+	int64_t ComputeMillisInDay() const;
 	//! The total offset that applies to a local time that is split into a day and a time of day
-	int32_t ComputeZoneOffset(double millis, double millis_in_day) const;
+	int32_t ComputeZoneOffset(int64_t millis, int64_t millis_in_day) const;
 	int32_t ComputeJulianDay();
 	void UpdateTime();
 	//! The highest stamp of a range of fields
@@ -311,7 +313,7 @@ protected:
 private:
 	unique_ptr<TimeZone> zone;
 	//! The instant the calendar is set to, valid if time_set
-	double time;
+	int64_t time;
 	int32_t fields[CAL_FIELD_COUNT];
 	//! For every field, when it was set relative to the other fields
 	int32_t stamp[CAL_FIELD_COUNT];
