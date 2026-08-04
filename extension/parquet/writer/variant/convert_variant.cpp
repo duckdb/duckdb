@@ -923,6 +923,40 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
 }
 
+static optional_ptr<ColumnWriter> FindChildWriterByName(ColumnWriter &parent, const char *name) {
+	for (auto &child : parent.ChildWriters()) {
+		if (child->Schema().name == name) {
+			return *child;
+		}
+	}
+	return nullptr;
+}
+
+static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value);
+
+// Field/element group: mark REQUIRED, then recurse into nested typed_value if present
+static void MarkShreddedGroupRequired(ColumnWriter &group) {
+	D_ASSERT(StructType::IsStruct(group.Type().id()));
+	group.MarkRepetitionRequired();
+	auto nested_typed_value = FindChildWriterByName(group, "typed_value");
+	if (nested_typed_value) {
+		MarkTypedValueShreddingGroupsRequired(*nested_typed_value);
+	}
+}
+
+// Field/element groups under typed_value must be REQUIRED (VariantShredding.md)
+static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value) {
+	auto type_id = typed_value.Type().id();
+	if (StructType::IsStruct(type_id)) {
+		for (auto &field_group : typed_value.ChildWriters()) {
+			MarkShreddedGroupRequired(*field_group);
+		}
+	} else if (type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::ARRAY) {
+		D_ASSERT(typed_value.ChildWriters().size() == 1);
+		MarkShreddedGroupRequired(*typed_value.ChildWriters()[0]);
+	}
+}
+
 idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
@@ -932,6 +966,12 @@ idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> 
 	auto &repetition_type = schema.repetition_type;
 	auto &name = schema.name;
 	auto &field_id = schema.field_id;
+
+	// Mark shredded field/element groups REQUIRED (reserved Parquet names only)
+	auto typed_value = FindChildWriterByName(*this, "typed_value");
+	if (typed_value) {
+		MarkTypedValueShreddingGroupsRequired(*typed_value);
+	}
 
 	// variant group
 	duckdb_parquet::SchemaElement top_element;
