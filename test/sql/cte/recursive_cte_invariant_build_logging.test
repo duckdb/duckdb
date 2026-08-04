@@ -1,0 +1,191 @@
+# name: test/sql/cte/recursive_cte_invariant_build_logging.test
+# description: Report runtime metrics for retained invariant recursive CTE builds
+# group: [cte]
+
+statement ok
+SET threads=8
+
+statement ok
+SET enable_caching_operators=true
+
+# Unseeded sampling is non-repeatable and cannot be frozen in an invariant build.
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+WITH RECURSIVE r(i, sampled) AS (
+	VALUES (0, 0::BIGINT)
+	UNION ALL
+	SELECT r.i + 1, build.sampled
+	FROM r
+	CROSS JOIN (
+		SELECT count(*) AS sampled
+		FROM range(1000) USING SAMPLE 50% (bernoulli)
+	) build
+	WHERE r.i < 3
+)
+SELECT count(*) FROM r;
+----
+4
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.retained_build_executions::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+0
+
+# SYSTEM sampling is pushed into a table scan and must keep the same classification.
+statement ok
+CREATE TABLE repeatability_sample AS SELECT i FROM range(1000) t(i);
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+WITH RECURSIVE r(i, sampled) AS (
+	VALUES (0, 0::BIGINT)
+	UNION ALL
+	SELECT r.i + 1, build.sampled
+	FROM r
+	CROSS JOIN (
+		SELECT count(*) AS sampled
+		FROM repeatability_sample USING SAMPLE 50% (system)
+	) build
+	WHERE r.i < 3
+)
+SELECT count(*) FROM r;
+----
+4
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.retained_build_executions::UBIGINT
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+0
+
+# An explicitly seeded sample has DuckDB's repeatable sampling semantics.
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+WITH RECURSIVE r(i, sampled) AS (
+	VALUES (0, 0::BIGINT)
+	UNION ALL
+	SELECT r.i + 1, build.sampled
+	FROM r
+	CROSS JOIN (
+		SELECT count(*) AS sampled
+		FROM range(1000) USING SAMPLE 50% (bernoulli, 42)
+	) build
+	WHERE r.i < 3
+)
+SELECT count(*) FROM r;
+----
+4
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.retained_build_executions::UBIGINT >= 1
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+# Stable window aggregates are repeatable and can back a retained hash build.
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query II
+WITH RECURSIVE r(i, outgoing) AS (
+	VALUES (0, 0::BIGINT)
+	UNION ALL
+	SELECT r.i + 1, build.outgoing
+	FROM r
+	JOIN (
+		SELECT i AS k, count(*) OVER (PARTITION BY i % 10) AS outgoing
+		FROM range(10000) t(i)
+	) build ON build.k = r.i
+	WHERE r.i < 3
+)
+SELECT max(i), max(outgoing) FROM r;
+----
+3	1000
+
+statement ok
+CALL disable_logging();
+
+query I
+SELECT info.retained_build_executions::UBIGINT >= 1
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1
+
+statement ok
+RESET disabled_optimizers;
+
+# A physically materialized, recursion-independent CTE is produced once and scanned each epoch.
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+statement ok
+CALL enable_logging('PhysicalOperator');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+WITH RECURSIVE r(i, x) AS (
+	SELECT 0, 0::BIGINT
+	UNION ALL
+	(
+		WITH invariant AS MATERIALIZED (SELECT i AS k FROM range(10000) t(i))
+		SELECT r.i + 1, a.k
+		FROM invariant a
+		JOIN r ON a.k = 0
+		JOIN invariant b ON b.k = a.k
+		WHERE r.i < 3
+	)
+)
+SELECT list(x ORDER BY i) FROM r;
+----
+[0, 0, 0, 0]
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT info.retained_cte_materializations::UBIGINT,
+       info.retained_cte_reuses::UBIGINT >= 2
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+1	1
+
+statement ok
+RESET disabled_optimizers;

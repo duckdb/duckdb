@@ -1,0 +1,91 @@
+schema_version: "0.7"
+versions:
+  - "v0.1.0"
+  - "v0.1.1"
+  - "v0.1.2"
+  - "v0.2.1"
+  - "v0.2.5"
+  - "v0.2.7"
+  - "v0.2.8"
+  - "v0.2.9"
+  - "v0.3.3"
+  - "v0.4.0"
+  - "v0.5.0"
+  - "v0.6.0"
+  - "v0.7.0"
+  - "v0.8.0"
+  - "v0.9.0"
+  - "v0.10.0"
+  - "v0.10.1"
+  - "v1.0.0"
+  - "v1.1.0"
+  - "v1.2.0"
+  - "v1.3.0"
+  - "v1.4.0"
+  - "v1.5.0"
+  - "v1.5.2"
+  - "v1.5.4"
+  - "v1.5.6"
+prefix: "duckdb_"
+lifecycle_states:
+  stable:
+    visibility: always
+  deprecated:
+    visibility: opt_out
+    guard: DUCKDB_API_NO_DEPRECATED
+  # Nothing is currently unstable: everything previously opt-in behind
+  # DUCKDB_EXTENSION_API_VERSION_UNSTABLE was stabilized into v1.5.6. The state is
+  # still needed for the 174 histories that pass through it, which is what lets a
+  # consumer targeting a pre-v1.5.6 version opt back into those symbols.
+  unstable:
+    visibility: opt_in
+    guard: DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+suffixes:
+  handles: ""
+  callbacks: ""
+  aliases: ""
+primitives:
+  - name: void
+    c_type: void
+  - name: opaque
+    c_type: void
+  - name: char
+    c_type: char
+  - name: bool
+    c_type: bool
+  - name: i8
+    c_type: int8_t
+  - name: i16
+    c_type: int16_t
+  - name: i32
+    c_type: int32_t
+  - name: i64
+    c_type: int64_t
+  - name: u8
+    c_type: uint8_t
+  - name: u16
+    c_type: uint16_t
+  - name: u32
+    c_type: uint32_t
+  - name: u64
+    c_type: uint64_t
+  - name: f32
+    c_type: float
+  - name: f64
+    c_type: double
+  - name: idx
+    c_type: idx_t
+    underlying: uint64_t
+  - name: size
+    c_type: size_t
+  # Hand rolled types here; leverage primitive to materialize in the spec, but
+  # definition is hand-rolled in C.
+  - name: duckdb_string_t
+    c_type: duckdb_string_t
+  - name: state
+    c_type: duckdb_state
+  # Arrow external defs
+  - name: ArrowSchema
+    c_type: struct ArrowSchema
+  - name: ArrowArray
+    c_type: struct ArrowArray

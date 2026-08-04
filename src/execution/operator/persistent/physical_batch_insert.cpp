@@ -9,6 +9,7 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -19,14 +20,19 @@ PhysicalBatchInsert::PhysicalBatchInsert(PhysicalPlan &physical_plan, vector<Log
                                          DuckTableEntry &table, vector<unique_ptr<BoundConstraint>> bound_constraints_p,
                                          idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_INSERT, std::move(types_p), estimated_cardinality),
-      insert_table(&table), insert_types(table.GetTypes()), bound_constraints(std::move(bound_constraints_p)) {
+      insert_table(&table), insert_types(table.GetTypes()), bound_constraints(std::move(bound_constraints_p)),
+      preferred_batch_size(table.GetStorage().GetRowGroupSize()) {
 }
 
 PhysicalBatchInsert::PhysicalBatchInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
                                          unique_ptr<BoundCreateTableInfo> info_p, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_CREATE_TABLE_AS, op.types, estimated_cardinality),
-      insert_table(nullptr), schema(&schema), info(std::move(info_p)) {
+      insert_table(nullptr), schema(&schema), info(std::move(info_p)), preferred_batch_size(DEFAULT_ROW_GROUP_SIZE) {
 	PhysicalInsert::GetInsertInfo(*info, insert_types);
+}
+
+OperatorPartitionInfo PhysicalBatchInsert::RequiredPartitionInfo() const {
+	return OperatorPartitionInfo::BatchIndex(preferred_batch_size);
 }
 
 //===--------------------------------------------------------------------===//

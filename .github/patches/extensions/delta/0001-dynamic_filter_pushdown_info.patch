@@ -1,0 +1,38 @@
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index 3f01498..a0d2c28 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -1002,9 +1002,14 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ }
+ 
+ unique_ptr<MultiFileList>
+-DeltaMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-                                          const vector<Identifier> &names, const vector<LogicalType> &types,
+-                                          const vector<column_t> &column_ids, TableFilterSet &filters) const {
++DeltaMultiFileList::DynamicFilterPushdown(MultiFileDynamicPushdownInfo &dynamic_pushdown_info) const {
++	auto &options = dynamic_pushdown_info.options;
++	auto &names = dynamic_pushdown_info.column_names;
++	auto &types = dynamic_pushdown_info.column_types;
++	auto &column_ids = dynamic_pushdown_info.column_ids;
++	auto &context = dynamic_pushdown_info.context;
++	auto &filters = dynamic_pushdown_info.filters;
++
+ 	auto pushdown_mode = GetDeltaFilterPushdownMode(context, options);
+ 	if (pushdown_mode == DeltaFilterPushdownMode::NONE || pushdown_mode == DeltaFilterPushdownMode::CONSTANT_ONLY) {
+ 		return nullptr;
+diff --git a/src/include/functions/delta_scan/delta_multi_file_list.hpp b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+index 3e95151..24b3ffd 100644
+--- a/src/include/functions/delta_scan/delta_multi_file_list.hpp
++++ b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+@@ -108,10 +108,7 @@ public:
+ 	                                                MultiFilePushdownInfo &info,
+ 	                                                vector<unique_ptr<Expression>> &filters) const override;
+ 
+-	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-	                                                const vector<Identifier> &names, const vector<LogicalType> &types,
+-	                                                const vector<column_t> &column_ids,
+-	                                                TableFilterSet &filters) const override;
++	unique_ptr<MultiFileList> DynamicFilterPushdown(MultiFileDynamicPushdownInfo &pushdown_info) const override;
+ 
+ 	unique_ptr<DeltaMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters,
+ 	                                                vector<column_t> column_indexes) const;

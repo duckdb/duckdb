@@ -9,7 +9,16 @@ statement ok
 CREATE TYPE "group" AS ENUM ( 'one', 'two');
 
 statement ok
+CREATE TYPE quoted_enum AS ENUM ('a''b', 'x,y', 'semi;');
+
+statement ok
 CREATE TABLE table1(col1 "group");
+
+statement ok
+CREATE TABLE table2(col1 quoted_enum);
+
+statement ok
+INSERT INTO table2 VALUES ('a''b'), ('x,y'), ('semi;');
 
 statement ok
 EXPORT DATABASE '{TEST_DIR}/export_enum' (FORMAT CSV);
@@ -19,3 +28,10 @@ ROLLBACK
 
 statement ok
 IMPORT DATABASE '{TEST_DIR}/export_enum'
+
+query I
+SELECT col1::VARCHAR FROM table2 ORDER BY col1::VARCHAR
+----
+a'b
+semi;
+x,y

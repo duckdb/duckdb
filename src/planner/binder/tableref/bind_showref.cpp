@@ -175,9 +175,18 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 		// Check for unqualified name, promote schema to catalog if unambiguous, and set schema_name to empty if so
 		Binder::BindSchemaOrCatalog(catalog_name, schema_name);
 
+		optional_idx schema_oid;
 		// If fully qualified, check if the schema exists
 		if (!catalog_name.empty() && !schema_name.empty()) {
 			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
+			if (!schema_entry) {
+				// "a.b" can also name a nested schema
+				vector<Identifier> nested_path {catalog_name, schema_name};
+				schema_entry = Catalog::GetSchema(context, Identifier(), nested_path, OnEntryNotFound::RETURN_NULL);
+				if (schema_entry) {
+					schema_oid = schema_entry->oid;
+				}
+			}
 			if (!schema_entry) {
 				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.",
 				                       catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
@@ -193,7 +202,7 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 				                       catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
 			}
 		}
-		sql = PragmaShowTables(catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
+		sql = PragmaShowTables(catalog_name.GetIdentifierName(), schema_name.GetIdentifierName(), schema_oid);
 	} else if (lname == "\"variables\"") {
 		sql = PragmaShowVariables();
 	} else if (lname == "__show_tables_expanded") {

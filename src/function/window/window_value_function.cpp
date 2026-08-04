@@ -863,11 +863,11 @@ void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eva
 
 			if (frame_width) {
 				const auto first_idx = gvstate.value_tree->SelectNth(frames, 0);
-				D_ASSERT(first_idx.second == 0);
-				if (first_idx.first < cursor.Count()) {
-					cursor.CopyCell(0, first_idx.first, result, i);
-				} else {
+				if (first_idx.second || first_idx.first >= cursor.Count()) {
+					//	No first value - give up.
 					FlatVector::SetNull(result, i, true);
+				} else {
+					cursor.CopyCell(0, first_idx.first, result, i);
 				}
 			} else {
 				FlatVector::SetNull(result, i, true);
@@ -1249,12 +1249,17 @@ static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_vali
 	const auto x0 = LossyFillCast<double>(cursor.GetCell<T>(0, prev_valid));
 	const auto x1 = LossyFillCast<double>(cursor.GetCell<T>(0, next_valid));
 
-	const auto den = (x1 - x0);
+	auto den = (x1 - x0);
 	if (den == 0) {
 		// Duplicate X values, so pick the first.
 		return 0;
 	}
-	const auto num = (x - x0);
+	auto num = x - x0;
+	if (!std::isfinite(den)) {
+		const auto scale = MaxValue(std::abs(x0), std::abs(x1));
+		num = x / scale - x0 / scale;
+		den = x1 / scale - x0 / scale;
+	}
 	return num / den;
 }
 

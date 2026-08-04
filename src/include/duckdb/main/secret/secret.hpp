@@ -159,6 +159,18 @@ protected:
 	Identifier name;
 	//! Whether the secret can be serialized/deserialized
 	bool serializable;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! The KeyValueSecret is a class that implements a Secret as a set of key -> values. This class can be used

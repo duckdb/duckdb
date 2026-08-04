@@ -9,6 +9,7 @@
 #include "core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include <cmath>
@@ -624,18 +625,22 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 namespace {
 
 struct RoundPrecisionFunctionData : public FunctionData {
-	explicit RoundPrecisionFunctionData(int32_t target_scale) : target_scale(target_scale) {
+	RoundPrecisionFunctionData(int32_t target_scale, uint8_t source_width, bool check_overflow)
+	    : target_scale(target_scale), source_width(source_width), check_overflow(check_overflow) {
 	}
 
 	int32_t target_scale;
+	uint8_t source_width;
+	bool check_overflow;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<RoundPrecisionFunctionData>(target_scale);
+		return make_uniq<RoundPrecisionFunctionData>(target_scale, source_width, check_overflow);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<RoundPrecisionFunctionData>();
-		return target_scale == other.target_scale;
+		return target_scale == other.target_scale && source_width == other.source_width &&
+		       check_overflow == other.check_overflow;
 	}
 };
 
@@ -644,7 +649,7 @@ void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vect
 	OP::template Operation<T, POWERS_OF_TEN>(input, state, result);
 }
 
-template <typename NEGOP, typename POSOP>
+template <typename NEGOP, typename POSOP, bool CAN_CARRY = false>
 unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -659,9 +664,20 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	uint8_t target_scale;
 	auto width = DecimalType::GetWidth(decimal_type);
 	auto scale = DecimalType::GetScale(decimal_type);
+	auto result_width = width;
+	auto argument_type = decimal_type;
+	bool check_overflow = false;
 	if (round_value < 0) {
 		target_scale = 0;
-		switch (decimal_type.InternalType()) {
+		if (CAN_CARRY && scale == 0 && round_value >= -int32_t(width)) {
+			if (result_width < Decimal::MAX_WIDTH_DECIMAL) {
+				result_width++;
+			} else {
+				check_overflow = true;
+			}
+		}
+		auto result_type = LogicalType::DECIMAL(result_width, target_scale);
+		switch (result_type.InternalType()) {
 		case PhysicalType::INT16:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int16_t, NumericHelper, NEGOP>);
 			break;
@@ -674,6 +690,9 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 		default:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, NEGOP>);
 			break;
+		}
+		if (result_type.InternalType() != decimal_type.InternalType()) {
+			argument_type = LogicalType::DECIMAL(result_width, scale);
 		}
 	} else {
 		if (round_value >= (int32_t)scale) {
@@ -698,9 +717,9 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 			}
 		}
 	}
-	bound_function.GetArguments()[0] = decimal_type;
-	bound_function.SetReturnType(LogicalType::DECIMAL(width, target_scale));
-	return make_uniq<RoundPrecisionFunctionData>(round_value);
+	bound_function.GetArguments()[0] = argument_type;
+	bound_function.SetReturnType(LogicalType::DECIMAL(result_width, target_scale));
+	return make_uniq<RoundPrecisionFunctionData>(round_value, width, check_overflow);
 }
 
 struct TruncOperatorPrecision {
@@ -971,8 +990,7 @@ struct DecimalRoundNegativePrecisionOperator {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.BindInfo()->Cast<RoundPrecisionFunctionData>();
 		auto source_scale = DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType());
-		auto width = DecimalType::GetWidth(func_expr.GetChildren()[0]->GetReturnType());
-		if (info.target_scale <= -int32_t(width - source_scale)) {
+		if (info.target_scale < -int32_t(info.source_width - source_scale)) {
 			// scale too big for width
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			result.SetValue(0, Value::INTEGER(0));
@@ -989,7 +1007,14 @@ struct DecimalRoundNegativePrecisionOperator {
 			} else {
 				input += addition;
 			}
-			return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
+			auto rounded = UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
+			if constexpr (std::is_same_v<T, hugeint_t>) {
+				if (info.check_overflow && (rounded <= -Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL] ||
+				                            rounded >= Hugeint::POWERS_OF_TEN[Decimal::MAX_WIDTH_DECIMAL])) {
+					throw OutOfRangeException("Overflow in ROUND of DECIMAL(38)");
+				}
+			}
+			return rounded;
 		});
 	}
 };
@@ -1031,8 +1056,8 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			break;
 		case LogicalTypeId::DECIMAL:
 			bind_func = BindGenericRoundFunctionDecimal<RoundDecimalOperator>;
-			bind_prec_func =
-			    BindDecimalRoundPrecision<DecimalRoundNegativePrecisionOperator, DecimalRoundPositivePrecisionOperator>;
+			bind_prec_func = BindDecimalRoundPrecision<DecimalRoundNegativePrecisionOperator,
+			                                           DecimalRoundPositivePrecisionOperator, true>;
 			break;
 		case LogicalTypeId::TINYINT:
 			round_func = ScalarFunction::NopFunction;
@@ -1086,7 +1111,7 @@ struct ExpOperator {
 ScalarFunction ExpFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, ExpOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1204,7 +1229,7 @@ ScalarFunction SqrtFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<SqrtOperator, IEEESqrtOperator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1225,7 +1250,7 @@ struct CbRtOperator {
 ScalarFunction CbrtFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1259,7 +1284,7 @@ ScalarFunction LnFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<LnOperator, IEEELnOperator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1294,7 +1319,7 @@ ScalarFunction Log10Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1327,9 +1352,9 @@ ScalarFunctionSet LogFun::GetFunctions() {
 	ScalarFunctionSet funcs;
 	ScalarFunction log10({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                     BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
-	// single-argument log is base-10: strictly increasing. the two-arg log(base, x) is only
+	// single-argument log is base-10: non-decreasing. the two-arg log(base, x) is only
 	// monotone in x for a fixed base, and decreasing for base < 1, so it is left unannotated.
-	log10.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	log10.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	funcs.AddFunction(std::move(log10));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                                 BindIEEEFloatingBinary<LogBaseOperator, IEEELogBaseOperator>));
@@ -1368,7 +1393,7 @@ ScalarFunction Log2Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                        BindIEEEFloatingUnary<Log2Operator, IEEELog2Operator>);
 	function.SetFallible();
-	function.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -1400,7 +1425,7 @@ struct DegreesOperator {
 ScalarFunction DegreesFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, DegreesOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1419,7 +1444,7 @@ struct RadiansOperator {
 ScalarFunction RadiansFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, RadiansOperator>);
-	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 
@@ -1433,14 +1458,51 @@ struct IsNanOperator {
 		return Value::IsNan(input);
 	}
 };
+
+static unique_ptr<BaseStatistics> PropagateIsNanStats(ClientContext &, FunctionStatisticsInput &input) {
+	D_ASSERT(input.child_stats.size() == 1);
+	auto &child_stats = input.child_stats[0];
+	if (!NumericStats::HasMinMax(child_stats)) {
+		return nullptr;
+	}
+
+	// NaN sorts above every other floating-point value, so a non-NaN maximum proves there is no NaN.
+	bool max_is_nan;
+	switch (input.expr.GetChildren()[0]->GetReturnType().id()) {
+	case LogicalTypeId::FLOAT:
+		max_is_nan = Value::IsNan(NumericStats::GetMax<float>(child_stats));
+		break;
+	case LogicalTypeId::DOUBLE:
+		max_is_nan = Value::IsNan(NumericStats::GetMax<double>(child_stats));
+		break;
+	default:
+		throw InternalException("Unsupported type for isnan statistics propagation");
+	}
+	if (max_is_nan) {
+		return nullptr;
+	}
+
+	auto result = NumericStats::CreateEmpty(LogicalType::BOOLEAN);
+	NumericStats::SetMin(result, false);
+	NumericStats::SetMax(result, false);
+	result.CopyValidity(child_stats);
+	if (!child_stats.CanHaveNull()) {
+		*input.expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+	}
+	return result.ToUnique();
+}
 } // namespace
 
 ScalarFunctionSet IsNanFun::GetFunctions() {
 	ScalarFunctionSet funcs;
-	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
-	                                 ScalarFunction::UnaryFunction<float, bool, IsNanOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
-	                                 ScalarFunction::UnaryFunction<double, bool, IsNanOperator>));
+	ScalarFunction float_function({LogicalType::FLOAT}, LogicalType::BOOLEAN,
+	                              ScalarFunction::UnaryFunction<float, bool, IsNanOperator>);
+	float_function.SetStatisticsCallback(PropagateIsNanStats);
+	funcs.AddFunction(float_function);
+	ScalarFunction double_function({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
+	                               ScalarFunction::UnaryFunction<double, bool, IsNanOperator>);
+	double_function.SetStatisticsCallback(PropagateIsNanStats);
+	funcs.AddFunction(double_function);
 	return funcs;
 }
 

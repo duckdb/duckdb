@@ -98,7 +98,12 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				return std::move(op);
 			} else {
 				if (!is_truncated) {
-					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+					// unsatisfiable - but only IS NOT DISTINCT FROM may fold a NULL input to FALSE;
+					// plain = must still propagate NULL
+					if (rhs_comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+					}
+					return ExpressionRewriter::ConstantOrNull(column_part.Copy(), Value::BOOLEAN(false));
 				}
 
 				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());
@@ -166,7 +171,12 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				return std::move(op);
 			} else {
 				if (!is_truncated) {
-					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+					// always true - but only IS DISTINCT FROM may fold a NULL input to TRUE;
+					// plain <> must still propagate NULL
+					if (rhs_comparison_type == ExpressionType::COMPARE_DISTINCT_FROM) {
+						return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+					}
+					return ExpressionRewriter::ConstantOrNull(column_part.Copy(), Value::BOOLEAN(true));
 				}
 
 				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());

@@ -41,3 +41,98 @@ select cast(-1.5::{src} as {dst}) as x;
 endloop
 
 endloop
+
+# The range check applies to the ROUNDED value, like PG's dtoi2/dtoi4. A value below the destination
+# maximum can still round above it, and a value below the destination minimum can still round back
+# onto it - checking before rounding got both of those wrong, and the first one used to reach a
+# static_cast that is undefined behaviour for an out-of-range float (127.6::TINYINT returned -128).
+
+foreach src FLOAT DOUBLE
+
+# rounds up past the maximum
+
+statement error
+select cast(127.5::{src} as TINYINT)
+----
+can't be cast because the value is out of range for the destination type INT8
+
+statement error
+select cast(127.6::{src} as TINYINT)
+----
+can't be cast because the value is out of range for the destination type INT8
+
+statement error
+select cast(255.5::{src} as UTINYINT)
+----
+can't be cast because the value is out of range for the destination type UINT8
+
+statement error
+select cast(32767.5::{src} as SMALLINT)
+----
+can't be cast because the value is out of range for the destination type INT16
+
+statement error
+select cast(65535.5::{src} as USMALLINT)
+----
+can't be cast because the value is out of range for the destination type UINT16
+
+# just below it, and Banker's rounding still applies at the boundary
+
+query IIII
+select cast(127.4::{src} as TINYINT), cast(126.5::{src} as TINYINT),
+       cast(255.4::{src} as UTINYINT), cast(32766.5::{src} as SMALLINT)
+----
+127	126	255	32766
+
+# rounds back onto the minimum, so it fits after all
+
+query IIII
+select cast(-128.4::{src} as TINYINT), cast(-128.5::{src} as TINYINT),
+       cast(-0.4::{src} as UTINYINT), cast(-0.5::{src} as UTINYINT)
+----
+-128	-128	0	0
+
+# but one ulp further out does not
+
+statement error
+select cast(-128.6::{src} as TINYINT)
+----
+can't be cast because the value is out of range for the destination type INT8
+
+statement error
+select cast(-0.6::{src} as UTINYINT)
+----
+can't be cast because the value is out of range for the destination type UINT8
+
+# TRY_CAST reports the same thing as NULL rather than erroring
+
+query IIII
+select try_cast(127.6::{src} as TINYINT), try_cast(-128.6::{src} as TINYINT),
+       try_cast(-128.5::{src} as TINYINT), try_cast(-0.6::{src} as UTINYINT)
+----
+NULL	NULL	-128	NULL
+
+endloop
+
+# the wider destinations, where only DOUBLE carries enough precision to sit next to the boundary
+
+statement error
+select cast(2147483647.5::DOUBLE as INTEGER)
+----
+can't be cast because the value is out of range for the destination type INT32
+
+statement error
+select cast(-2147483648.6::DOUBLE as INTEGER)
+----
+can't be cast because the value is out of range for the destination type INT32
+
+query III
+select cast(2147483647.4::DOUBLE as INTEGER), cast(-2147483648.4::DOUBLE as INTEGER),
+       cast(4294967295.4::DOUBLE as UINTEGER)
+----
+2147483647	-2147483648	4294967295
+
+statement error
+select cast(4294967295.5::DOUBLE as UINTEGER)
+----
+can't be cast because the value is out of range for the destination type UINT32

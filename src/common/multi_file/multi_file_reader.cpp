@@ -133,12 +133,11 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return CreateFileList(context, paths, glob_input);
 }
 
-bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileOptions &options,
+bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
                                   ClientContext &context) {
-	auto loption = StringUtil::Lower(key);
-	if (loption == "filename") {
+	if (key == "filename") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type() == LogicalType::VARCHAR) {
 			// If not, we interpret it as the name of the column containing the filename
@@ -152,30 +151,30 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 				options.filename = BooleanValue::Get(boolean_value);
 			}
 		}
-	} else if (loption == "hive_partitioning") {
+	} else if (key == "hive_partitioning") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
-	} else if (loption == "union_by_name") {
+	} else if (key == "union_by_name") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.union_by_name = BooleanValue::Get(val);
-	} else if (loption == "allow_empty") {
+	} else if (key == "allow_empty") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.allow_empty = BooleanValue::Get(val);
-	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
+	} else if (key == "hive_types_autocast" || key == "hive_type_autocast") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_types_autocast = BooleanValue::Get(val);
-	} else if (loption == "hive_types" || loption == "hive_type") {
+	} else if (key == "hive_types" || key == "hive_type") {
 		if (val.IsNull()) {
-			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
@@ -209,13 +208,21 @@ unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &
 	return files.ComplexFilterPushdown(context, options, info, filters);
 }
 
-unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(ClientContext &context, const MultiFileList &files,
-                                                                 const MultiFileOptions &options,
-                                                                 const vector<Identifier> &names,
-                                                                 const vector<LogicalType> &types,
-                                                                 const vector<column_t> &column_ids,
-                                                                 TableFilterSet &filters) {
-	return files.DynamicFilterPushdown(context, options, names, types, column_ids, filters);
+MultiFileDynamicPushdownInfo::MultiFileDynamicPushdownInfo(ClientContext &context, const MultiFileOptions &options,
+                                                           const vector<Identifier> &column_names,
+                                                           const vector<LogicalType> &column_types,
+                                                           const vector<ColumnIndex> &column_indexes,
+                                                           TableFilterSet &filters)
+    : context(context), options(options), column_names(column_names), column_types(column_types),
+      column_indexes(column_indexes), filters(filters) {
+	for (auto &column_id : column_indexes) {
+		column_ids.push_back(column_id.GetPrimaryIndex());
+	}
+}
+
+unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(const MultiFileList &files,
+                                                                 MultiFileDynamicPushdownInfo &pushdown_info) {
+	return files.DynamicFilterPushdown(pushdown_info);
 }
 
 bool MultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
@@ -415,11 +422,11 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 		// not a cast
 		return string();
 	}
-	auto &cast_expr = expr.Cast<BoundCastExpression>();
-	if (cast_expr.Child().GetExpressionType() != ExpressionType::BOUND_REF) {
+	auto &cast_expr = expr.Cast<BoundFunctionExpression>();
+	if (BoundCastExpression::Child(cast_expr).GetExpressionType() != ExpressionType::BOUND_REF) {
 		return string();
 	}
-	auto &ref = cast_expr.Child().Cast<BoundReferenceExpression>();
+	auto &ref = BoundCastExpression::Child(cast_expr).Cast<BoundReferenceExpression>();
 	auto &source_type = ref.GetReturnType();
 	auto &target_type = cast_expr.GetReturnType();
 	auto &columns = reader.GetColumns();
