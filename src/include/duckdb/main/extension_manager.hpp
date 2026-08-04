@@ -29,9 +29,10 @@ public:
 
 class ExtensionActiveLoad {
 public:
-	ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, Identifier extension_name_p, Identifier alias_p)
+	ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, Identifier extension_name_p, Identifier alias_p,
+	                    string reason_p = "")
 	    : db(db), load_lock(info.lock), info(info), extension_name(std::move(extension_name_p)),
-	      alias(std::move(alias_p)) {};
+	      alias(std::move(alias_p)), reason(std::move(reason_p)) {};
 
 	~ExtensionActiveLoad() = default;
 
@@ -40,6 +41,8 @@ public:
 	ExtensionInfo &info;
 	Identifier extension_name;
 	Identifier alias;
+	//! Optional reason describing why this load was triggered
+	string reason;
 
 public:
 	void FinishLoad(ExtensionInstallInfo &install_info);

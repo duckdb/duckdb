@@ -29,14 +29,16 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 
 	for (const auto &entry : EXTENSION_FILE_POSTFIXES) {
 		if (StringUtil::EndsWith(lower_name, entry.name)) {
-			ExtensionHelper::AutoLoadExtension(context, entry.extension);
+			ExtensionHelper::AutoLoadExtension(context, entry.extension,
+			                                   "autoload for replacement scan of '" + table_name + "'");
 			return true;
 		}
 	}
 
 	for (const auto &entry : EXTENSION_FILE_CONTAINS) {
 		if (StringUtil::Contains(lower_name, entry.name)) {
-			ExtensionHelper::AutoLoadExtension(context, entry.extension);
+			ExtensionHelper::AutoLoadExtension(context, entry.extension,
+			                                   "autoload for replacement scan of '" + table_name + "'");
 			return true;
 		}
 	}

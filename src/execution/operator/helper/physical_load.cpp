@@ -24,6 +24,7 @@ static void InstallFromRepository(ClientContext &context, const LoadInfo &info) 
 	options.throw_on_origin_mismatch = true;
 	options.version = info.version;
 	options.repository = repository;
+	options.reason = "explicit SQL INSTALL statement";
 
 	ExtensionHelper::InstallExtension(context, info.filename, options);
 }
@@ -36,6 +37,7 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 			options.force_install = info->load_type == LoadType::FORCE_INSTALL;
 			options.throw_on_origin_mismatch = true;
 			options.version = info->version;
+			options.reason = "explicit SQL INSTALL statement";
 			ExtensionHelper::InstallExtension(context.client, info->filename, options);
 		} else {
 			InstallFromRepository(context.client, *info);
@@ -45,6 +47,7 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 		ExtensionLoadOptions options;
 		options.extension_name = info->filename;
 		options.alias = info->alias;
+		options.reason = "explicit SQL LOAD statement";
 		ExtensionHelper::LoadExternalExtension(context.client, options);
 		// adds an explicitly set extension schema to the search path
 		ExtensionLoader::RefreshSearchPath(context.client);

@@ -91,6 +91,10 @@ struct ExtensionInstallOptions {
 	bool use_etags = false;
 	//! Throw an error when installing an extension with a different origin than the one that is installed
 	bool throw_on_origin_mismatch = false;
+	//! Optional human-readable reason describing why this install was triggered
+	//! (e.g. explicit SQL, or autoinstall of a dependency). Surfaced by the
+	//! ExtensionLoadInstall log type.
+	string reason;
 };
 
 class ExtensionHelper {
@@ -109,12 +113,15 @@ public:
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options);
 
 	//! Autoload an extension (depending on config, potentially a nop. Throws when installation fails)
-	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
-	static void AutoLoadExtension(DatabaseInstance &db, const string &extension_name);
+	//! The optional reason describes why the autoload was triggered (surfaced by the ExtensionLoadInstall log type)
+	static void AutoLoadExtension(ClientContext &context, const string &extension_name, const string &reason = "");
+	static void AutoLoadExtension(DatabaseInstance &db, const string &extension_name, const string &reason = "");
 
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
-	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
-	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
+	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name,
+	                                            const string &reason = "") noexcept;
+	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name,
+	                                            const string &reason = "") noexcept;
 
 	//! Autoload an extension, only if available locally
 	DUCKDB_API static bool TryAutoLoadAvailableExtension(DatabaseInstance &instance,
