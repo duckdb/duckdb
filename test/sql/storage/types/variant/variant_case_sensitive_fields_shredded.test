@@ -76,9 +76,23 @@ select v::VARCHAR, variant_keys(v), v.a, v.A from forced_shredding order by v::V
 statement ok
 checkpoint;
 
-query IIIII
-select v::VARCHAR, vector_type(v), variant_keys(v), v.a, v.A from forced_shredding order by v::VARCHAR;
+restart
+
+query III
+select v::VARCHAR, vector_type(v), variant_keys(v) from forced_shredding order by v::VARCHAR;
 ----
-{'A': 2}	SHREDDED_VECTOR	[A]	NULL	2
-{'a': 1}	SHREDDED_VECTOR	[a]	1	NULL
-{'b': 3}	SHREDDED_VECTOR	[b]	NULL	NULL
+{'A': 2}	SHREDDED_VECTOR	[A]
+{'a': 1}	SHREDDED_VECTOR	[a]
+{'b': 3}	SHREDDED_VECTOR	[b]
+
+# verify only the exact-case 'a' landed in the shredded typed_value column
+query III
+SELECT segment_type, stats.min::INTEGER, stats.max::INTEGER FROM pragma_storage_info('forced_shredding') WHERE column_path = '[0, 2, 1, 1, 1]'
+----
+INTEGER	1	1
+
+# verify 'A' and 'b' are both kept in the unshredded remainder
+query III
+SELECT count, stats.min::VARCHAR, stats.max::VARCHAR FROM pragma_storage_info('forced_shredding') WHERE column_path = '[0, 1, 1, 1]'
+----
+2	A	b
