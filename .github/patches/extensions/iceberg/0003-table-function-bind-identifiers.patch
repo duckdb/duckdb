@@ -1,3 +1,5 @@
+diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
+index 1fcedeb0..77410ba1 100644
 --- a/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
 +++ b/src/catalog/rest/catalog_entry/table/iceberg_table_entry.cpp
 @@ -92,9 +92,7 @@ TableFunction IcebergTableEntry::GetScanFunction(ClientContext &context, unique_
@@ -11,6 +13,46 @@
  	bind_data = std::move(result);
  	auto &file_bind_data = bind_data->Cast<MultiFileBindData>();
  	file_bind_data.virtual_columns = GetVirtualColumns();
+diff --git a/src/core/deletes/iceberg_equality_delete.cpp b/src/core/deletes/iceberg_equality_delete.cpp
+index b3320b21..35aad91c 100644
+--- a/src/core/deletes/iceberg_equality_delete.cpp
++++ b/src/core/deletes/iceberg_equality_delete.cpp
+@@ -14,12 +14,13 @@ static void InitializeFromOtherChunk(DataChunk &target, DataChunk &other, const
+ 
+ static void ColumnsReferencedByEqualityIds(DataChunk &source, DataChunk &result,
+                                            const vector<MultiFileColumnDefinition> &local_columns,
+-                                           const vector<string> &source_names, const vector<int32_t> &equality_ids) {
++                                           const vector<Identifier> &source_names,
++                                           const vector<int32_t> &equality_ids) {
+ 	// The equality-delete file can physically contain more columns than the reader models for it - e.g. Spark
+ 	// embeds the partition columns next to the equality-key columns - and not necessarily in the same order. So
+ 	// resolve each equality field-id to its physical position in 'source' by name rather than by its position in
+ 	// 'local_columns', which only covers the modeled subset.
+-	unordered_map<string, column_t> name_to_source_index;
++	identifier_map_t<column_t> name_to_source_index;
+ 	for (column_t i = 0; i < source_names.size(); i++) {
+ 		name_to_source_index[source_names[i]] = i;
+ 	}
+@@ -28,7 +29,7 @@ static void ColumnsReferencedByEqualityIds(DataChunk &source, DataChunk &result,
+ 	unordered_map<int32_t, column_t> id_to_column;
+ 	for (auto &col : local_columns) {
+ 		D_ASSERT(!col.identifier.IsNull());
+-		auto entry = name_to_source_index.find(col.name.GetIdentifierName());
++		auto entry = name_to_source_index.find(col.name);
+ 		if (entry == name_to_source_index.end()) {
+ 			continue;
+ 		}
+@@ -49,7 +50,7 @@ static void ColumnsReferencedByEqualityIds(DataChunk &source, DataChunk &result,
+ void IcebergMultiFileList::ScanEqualityDeleteFile(const BoundIcebergManifestEntry &bound_manifest_entry,
+                                                   DataChunk &source,
+                                                   const vector<MultiFileColumnDefinition> &local_columns,
+-                                                  const vector<string> &source_names) const {
++                                                  const vector<Identifier> &source_names) const {
+ 	auto &manifest_entry = bound_manifest_entry.entry;
+ 	auto &data_file = manifest_entry.data_file;
+ 	auto &manifest_file = GetManifestFileForEntry(bound_manifest_entry, IcebergManifestContentType::DELETE);
+diff --git a/src/function/ducklake/iceberg_to_ducklake.cpp b/src/function/ducklake/iceberg_to_ducklake.cpp
+index bf283d27..6079da94 100644
 --- a/src/function/ducklake/iceberg_to_ducklake.cpp
 +++ b/src/function/ducklake/iceberg_to_ducklake.cpp
 @@ -796,7 +796,7 @@ public:
@@ -22,6 +64,8 @@
  	auto ret = make_uniq<IcebergToDuckLakeBindData>();
  	auto input_string = input.inputs[0].ToString();
  	ret->ducklake_catalog = input.inputs[1].ToString();
+diff --git a/src/function/metadata/iceberg_column_stats.cpp b/src/function/metadata/iceberg_column_stats.cpp
+index caab1833..cd66c692 100644
 --- a/src/function/metadata/iceberg_column_stats.cpp
 +++ b/src/function/metadata/iceberg_column_stats.cpp
 @@ -57,7 +57,7 @@ static string GeometryBoundJson(const GeometryExtent &extent, bool lower_corner)
@@ -33,9 +77,11 @@
  	// return a TableRef that contains the scans for the
  	auto ret = make_uniq<IcebergColumnStatsBindData>();
  
+diff --git a/src/function/metadata/iceberg_load_table_response.cpp b/src/function/metadata/iceberg_load_table_response.cpp
+index 5ddd4640..aa4014fc 100644
 --- a/src/function/metadata/iceberg_load_table_response.cpp
 +++ b/src/function/metadata/iceberg_load_table_response.cpp
-@@ -67,7 +67,7 @@ static unique_ptr<HTTPResponse> MakeRequest(ClientContext &context, const Iceber
+@@ -65,7 +65,7 @@ static unique_ptr<HTTPResponse> MakeRequest(ClientContext &context, const Iceber
  }
  
  static unique_ptr<FunctionData> IcebergLoadTableResponseBind(ClientContext &context, TableFunctionBindInput &input,
@@ -44,6 +90,8 @@
  	auto input_string = input.inputs[0].ToString();
  	auto qualified_name = QualifiedName::ParseComponents(input_string);
  
+diff --git a/src/function/metadata/iceberg_metadata.cpp b/src/function/metadata/iceberg_metadata.cpp
+index d35eacb6..f236e94b 100644
 --- a/src/function/metadata/iceberg_metadata.cpp
 +++ b/src/function/metadata/iceberg_metadata.cpp
 @@ -94,7 +94,7 @@ public:
@@ -71,6 +119,8 @@
  
  	D_ASSERT(manifest_types.size() == manifest_names.size());
  
+diff --git a/src/function/metadata/iceberg_partition_stats.cpp b/src/function/metadata/iceberg_partition_stats.cpp
+index 93ecebf9..10d54afd 100644
 --- a/src/function/metadata/iceberg_partition_stats.cpp
 +++ b/src/function/metadata/iceberg_partition_stats.cpp
 @@ -54,7 +54,7 @@ public:
@@ -82,6 +132,8 @@
  	// return a TableRef that contains the scans for the
  	auto ret = make_uniq<IcebergPartitionStatsBindData>();
  
+diff --git a/src/function/metadata/iceberg_rewrite_data_files.cpp b/src/function/metadata/iceberg_rewrite_data_files.cpp
+index b48babdd..f5fb7fff 100644
 --- a/src/function/metadata/iceberg_rewrite_data_files.cpp
 +++ b/src/function/metadata/iceberg_rewrite_data_files.cpp
 @@ -148,7 +148,7 @@ static unique_ptr<LogicalOperator> BindGroupCopy(Binder &binder, const RewritePl
@@ -93,6 +145,8 @@
  	if (!input.binder) {
  		throw InternalException("iceberg_rewrite_data_files: bind_operator called without a binder");
  	}
+diff --git a/src/function/metadata/iceberg_schema_properties_functions.cpp b/src/function/metadata/iceberg_schema_properties_functions.cpp
+index 63ba97e3..b23843d5 100644
 --- a/src/function/metadata/iceberg_schema_properties_functions.cpp
 +++ b/src/function/metadata/iceberg_schema_properties_functions.cpp
 @@ -61,7 +61,7 @@ static bool CheckEntryIsIcebergSchema(optional_ptr<SchemaCatalogEntry> entry) {
@@ -147,6 +201,8 @@
  	return std::move(ret);
  }
  
+diff --git a/src/function/metadata/iceberg_snapshots.cpp b/src/function/metadata/iceberg_snapshots.cpp
+index ad0909fd..5ad863d6 100644
 --- a/src/function/metadata/iceberg_snapshots.cpp
 +++ b/src/function/metadata/iceberg_snapshots.cpp
 @@ -51,7 +51,7 @@ public:
@@ -158,6 +214,8 @@
  	auto bind_data = make_uniq<IcebergSnaphotsBindData>();
  	IcebergOptions options;
  	for (auto &kv : input.named_parameters) {
+diff --git a/src/function/metadata/iceberg_table_properties_functions.cpp b/src/function/metadata/iceberg_table_properties_functions.cpp
+index 66f02925..0ac90acc 100644
 --- a/src/function/metadata/iceberg_table_properties_functions.cpp
 +++ b/src/function/metadata/iceberg_table_properties_functions.cpp
 @@ -70,7 +70,7 @@ static void VerifyInputIsNotAFile(ClientContext &context, string &input_string,
@@ -212,6 +270,21 @@
  	return std::move(ret);
  }
  
+diff --git a/src/include/planning/iceberg_multi_file_list.hpp b/src/include/planning/iceberg_multi_file_list.hpp
+index 6ed86976..a568bf25 100644
+--- a/src/include/planning/iceberg_multi_file_list.hpp
++++ b/src/include/planning/iceberg_multi_file_list.hpp
+@@ -257,7 +257,7 @@ private:
+ 	    DUCKDB_REQUIRES(shared_state->lock, shared_state->delete_lock);
+ 	void ScanEqualityDeleteFile(const BoundIcebergManifestEntry &manifest_entry, DataChunk &result,
+ 	                            const vector<MultiFileColumnDefinition> &columns,
+-	                            const vector<string> &source_names) const
++	                            const vector<Identifier> &source_names) const
+ 	    DUCKDB_REQUIRES(shared_state->lock, shared_state->delete_lock);
+ 	void ScanPuffinFile(const BoundIcebergManifestEntry &entry) const
+ 	    DUCKDB_REQUIRES(shared_state->lock, shared_state->delete_lock);
+diff --git a/src/include/planning/metadata_io/avro/avro_scan.hpp b/src/include/planning/metadata_io/avro/avro_scan.hpp
+index 6c4eec4d..55c9a255 100644
 --- a/src/include/planning/metadata_io/avro/avro_scan.hpp
 +++ b/src/include/planning/metadata_io/avro/avro_scan.hpp
 @@ -48,7 +48,7 @@ public:
@@ -223,9 +296,11 @@
  	vector<column_t> column_ids;
  
  	shared_ptr<IcebergAvroScanInfo> scan_info;
+diff --git a/src/planning/iceberg_multi_file_list.cpp b/src/planning/iceberg_multi_file_list.cpp
+index c3bb7032..8abe147a 100644
 --- a/src/planning/iceberg_multi_file_list.cpp
 +++ b/src/planning/iceberg_multi_file_list.cpp
-@@ -1635,7 +1635,7 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
+@@ -1591,7 +1591,7 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
  	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
  	                                  delete_scan_function, empty);
  	vector<LogicalType> return_types;
