@@ -1677,13 +1677,10 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 					has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
 					              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
 				}
-				if (is_expression) {
-					// no pruning possible for expressions
-					prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-				} else if (!is_generated_column && has_min_max &&
-				           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
-				            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
-				           parquet_options.can_have_nan) {
+				if (!is_expression && !is_generated_column && has_min_max &&
+				    (column_reader.Type().id() == LogicalTypeId::FLOAT ||
+				     column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
+				    parquet_options.can_have_nan) {
 					// floating point columns can have NaN values in addition to the min/max bounds defined in the file
 					// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
 					// based on nan
