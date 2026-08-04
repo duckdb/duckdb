@@ -18,6 +18,7 @@ class ParserExtension;
 
 struct ParserOptions {
 	bool preserve_identifier_case = true;
+	bool capitalize_identifier = false;
 	bool integer_division = false;
 	idx_t max_expression_depth = 1000;
 	optional_ptr<const ExtensionCallbackManager> extensions;

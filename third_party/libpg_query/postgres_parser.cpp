@@ -48,4 +48,8 @@ void PostgresParser::SetPreserveIdentifierCase(bool preserve) {
 	duckdb_libpgquery::set_preserve_identifier_case(preserve);
 }
 
+void PostgresParser::SetCapitalizeIdentifier(bool capitalize) {
+	duckdb_libpgquery::set_capitalize_identifier(capitalize);
+}
+
 }

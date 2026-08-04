@@ -79,6 +79,21 @@ bool get_preserve_identifier_case() {
 	return pg_preserve_identifier_case;
 }
 
+#ifdef __MVS__
+static __tlssim<bool> pg_capitalize_identifier_impl(false);
+#define pg_capitalize_identifier (*pg_capitalize_identifier_impl.access())
+#else
+static __thread bool pg_capitalize_identifier = false;
+#endif
+
+void set_capitalize_identifier(bool capitalize) {
+	pg_capitalize_identifier = capitalize;
+}
+
+bool get_capitalize_identifier() {
+	return pg_capitalize_identifier;
+}
+
 /*
  * a workhorse for downcase_truncate_identifier
  */
@@ -86,9 +101,13 @@ char *downcase_identifier(const char *ident, int len, bool warn, bool truncate) 
 	char *result;
 	int i;
 	bool enc_is_single_byte;
+	bool preserve_case;
+	bool capitalize;
 
 	result = (char *)palloc(len + 1);
 	enc_is_single_byte = pg_database_encoding_max_length() == 1;
+	preserve_case = get_preserve_identifier_case();
+	capitalize = get_capitalize_identifier();
 
 	/*
 	 * SQL99 specifies Unicode-aware case normalization, which we don't yet
@@ -102,11 +121,18 @@ char *downcase_identifier(const char *ident, int len, bool warn, bool truncate) 
 	for (i = 0; i < len; i++) {
 		unsigned char ch = (unsigned char)ident[i];
 
-		if (!get_preserve_identifier_case()) {
-			if (ch >= 'A' && ch <= 'Z')
-				ch += 'a' - 'A';
-			else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && isupper(ch))
-				ch = tolower(ch);
+		if (!preserve_case) {
+			if (capitalize) {
+				if (ch >= 'a' && ch <= 'z')
+					ch -= 'a' - 'A';
+				else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && islower(ch))
+					ch = toupper(ch);
+			} else {
+				if (ch >= 'A' && ch <= 'Z')
+					ch += 'a' - 'A';
+				else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && isupper(ch))
+					ch = tolower(ch);
+			}
 		}
 		result[i] = (char)ch;
 	}

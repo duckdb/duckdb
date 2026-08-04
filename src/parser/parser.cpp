@@ -265,6 +265,7 @@ void Parser::ParseQuery(const string &query) {
 			}
 		}
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
+		PostgresParser::SetCapitalizeIdentifier(options.capitalize_identifier);
 		bool parsing_succeed = false;
 		// Creating a new scope to prevent multiple PostgresParser destructors being called
 		// which led to some memory issues

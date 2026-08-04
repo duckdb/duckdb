@@ -45,6 +45,7 @@
       "reason": "Tests that list types / tables / schemas DB-wide, so can't come with extra schemas",
       "paths": [
         "test/sql/settings/setting_preserve_identifier_case.test",
+        "test/sql/settings/setting_capitalize_identifier.test",
         "test/sql/types/enum/test_enum_duckdb_types.test",
         "test/sql/generated_columns/virtual/gcol_duckdb_columns.test",
         "test/sql/constraints/foreignkey/fk_4365.test",
