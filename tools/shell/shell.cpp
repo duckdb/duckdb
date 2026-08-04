@@ -940,7 +940,8 @@ static bool ResultIsDescribeShaped(const duckdb::QueryResult &result) {
 	// The describe renderer reads the fixed column layout produced by DESCRIBE / a table describe (column_name,
 	// column_type, null, key, default, extra). Anything else - e.g. a setting value from a bareword "SHOW name" - is a
 	// regular result that must not be rendered in describe mode.
-	return result.names.size() == 6 && result.names[0] == "column_name" && result.names[1] == "column_type";
+	auto &names = result.GetNames();
+	return names.size() == 6 && names[0] == "column_name" && names[1] == "column_type";
 }
 
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
