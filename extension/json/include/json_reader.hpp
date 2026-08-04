@@ -18,6 +18,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
 #include "json_enums.hpp"
+#include "yyjson_memory.hpp"
 
 namespace duckdb {
 struct JSONScanGlobalState;

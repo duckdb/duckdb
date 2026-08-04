@@ -222,7 +222,177 @@ yyjson_mut_val *JSONConverter::VisitInteger<uhugeint_t>(uhugeint_t val, yyjson_m
 	return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
 }
 
+template <VariantIterationOrder OBJECT_ORDER>
+struct NodeJSONConverter {
+	using result_type = yyjson_mut_val *;
+
+	static yyjson_mut_val *VisitNull(yyjson_mut_doc *doc) {
+		return yyjson_mut_null(doc);
+	}
+
+	static yyjson_mut_val *VisitBoolean(bool val, yyjson_mut_doc *doc) {
+		return val ? yyjson_mut_true(doc) : yyjson_mut_false(doc);
+	}
+
+	template <typename T>
+	static yyjson_mut_val *VisitInteger(T val, yyjson_mut_doc *doc) {
+		if constexpr (std::is_same<T, int8_t>::value || std::is_same<T, int16_t>::value ||
+		              std::is_same<T, int32_t>::value || std::is_same<T, int64_t>::value ||
+		              std::is_same<T, uint8_t>::value || std::is_same<T, uint16_t>::value ||
+		              std::is_same<T, uint32_t>::value) {
+			return yyjson_mut_sint(doc, val);
+		} else if constexpr (std::is_same<T, uint64_t>::value) {
+			return yyjson_mut_uint(doc, val);
+		} else {
+			auto val_str = val.ToString();
+			return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
+		}
+	}
+
+	static yyjson_mut_val *VisitTime(dtime_t val, yyjson_mut_doc *doc) {
+		auto val_str = Time::ToString(val);
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitTimeNanos(dtime_ns_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::TIME_NS(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitTimeTZ(dtime_tz_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::TIMETZ(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitTimestampSec(timestamp_sec_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::TIMESTAMPSEC(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitTimestampMs(timestamp_ms_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::TIMESTAMPMS(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitTimestamp(timestamp_t val, yyjson_mut_doc *doc) {
+		auto val_str = Timestamp::ToString(val);
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitTimestampNanos(timestamp_ns_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::TIMESTAMPNS(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitTimestampTZ(timestamp_tz_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::TIMESTAMPTZ(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitTimestampTZNanos(timestamp_tz_ns_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::TIMESTAMPTZNS(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitFloat(float val, yyjson_mut_doc *doc) {
+		return yyjson_mut_real(doc, val);
+	}
+
+	static yyjson_mut_val *VisitDouble(double val, yyjson_mut_doc *doc) {
+		return yyjson_mut_real(doc, val);
+	}
+
+	static yyjson_mut_val *VisitUUID(hugeint_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::UUID(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitDate(date_t val, yyjson_mut_doc *doc) {
+		auto val_str = Date::ToString(val);
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitInterval(interval_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::INTERVAL(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitString(const string_t &str, yyjson_mut_doc *doc) {
+		return yyjson_mut_strncpy(doc, str.GetData(), str.GetSize());
+	}
+
+	static yyjson_mut_val *VisitBlob(const string_t &str, yyjson_mut_doc *doc) {
+		auto val_str = Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitBignum(const string_t &str, yyjson_mut_doc *doc) {
+		auto val_str = Value::BIGNUM(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString();
+		return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitGeometry(const string_t &str, yyjson_mut_doc *doc) {
+		auto val_str = Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitBitstring(const string_t &str, yyjson_mut_doc *doc) {
+		auto val_str = Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	template <typename T>
+	static yyjson_mut_val *VisitDecimal(T val, uint32_t width, uint32_t scale, yyjson_mut_doc *doc) {
+		string val_str;
+		if (std::is_same<T, int16_t>::value) {
+			val_str = Decimal::ToString(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+		} else if (std::is_same<T, int32_t>::value) {
+			val_str = Decimal::ToString(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+		} else if (std::is_same<T, int64_t>::value) {
+			val_str = Decimal::ToString(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+		} else if (std::is_same<T, hugeint_t>::value) {
+			val_str = Decimal::ToString(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+		} else {
+			throw InternalException("Unhandled decimal type");
+		}
+		return yyjson_mut_rawncpy(doc, val_str.c_str(), val_str.size());
+	}
+
+	static yyjson_mut_val *VisitArray(const VariantNode &variant, yyjson_mut_doc *doc) {
+		const auto arr = yyjson_mut_arr(doc);
+		const auto array_items = VariantVisitor<NodeJSONConverter<OBJECT_ORDER>>::VisitArrayItems(variant, doc);
+		for (const auto &entry : array_items) {
+			yyjson_mut_arr_add_val(arr, entry);
+		}
+		return arr;
+	}
+
+	static yyjson_mut_val *VisitObject(const VariantNode &variant, yyjson_mut_doc *doc) {
+		const auto obj = yyjson_mut_obj(doc);
+		for (const auto &[key, value] : variant.GetObjectChildren(OBJECT_ORDER)) {
+			const auto key_value = yyjson_mut_strncpy(doc, key.GetData(), key.GetSize());
+			const auto json_value = VariantVisitor<NodeJSONConverter<OBJECT_ORDER>>::Visit(value, doc);
+			if (!yyjson_mut_obj_add(obj, key_value, json_value)) {
+				throw InternalException("Failed to append VARIANT object child to yyjson value");
+			}
+		}
+		return obj;
+	}
+
+	static yyjson_mut_val *VisitDefault(VariantLogicalType type_id, const_data_ptr_t, yyjson_mut_doc *) {
+		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+	}
+};
+
 } // namespace
+
+yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const VariantNode &variant,
+                                                   bool sort_object_keys) {
+	if (sort_object_keys) {
+		return VariantVisitor<NodeJSONConverter<VariantIterationOrder::LEXICOGRAPHIC>>::Visit(variant, doc);
+	}
+	return VariantVisitor<NodeJSONConverter<VariantIterationOrder::INTERNAL>>::Visit(variant, doc);
+}
 
 yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const UnifiedVariantVectorData &variant,
                                                    idx_t row, uint32_t values_idx) {
