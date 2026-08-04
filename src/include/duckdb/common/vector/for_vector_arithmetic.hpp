@@ -217,6 +217,9 @@ static bool TryFORConstant(Vector &left, Vector &right, Vector &result, idx_t co
 		using EXECUTOR = FORStandardExecutor<typename TRAITS::ExecOp>;
 		// the payload stays at its stored width; the constant carries the result width
 		const auto compute = EXECUTOR::MaxStored(result_stored, scan.stored_type);
+		if (TRAITS::IS_SUBTRACT && left_for && compute != scan.stored_type) {
+			return false; // FOR - constant keeps the payload on the left, so a widened result cannot canonicalise
+		}
 		auto fill_result = [&](Vector &target, idx_t target_count) {
 			FORVector::Create<DOMAIN_T>(target, compute, result_max);
 			// little-endian: reading the low bytes of the u64 storage truncates modularly (exact by bounds)
@@ -226,6 +229,13 @@ static bool TryFORConstant(Vector &left, Vector &right, Vector &result, idx_t co
 			args.result_data = FORVector::GetData(target);
 			args.result_validity = &FORVector::Validity(target);
 			if (TRAITS::IS_SUBTRACT && !left_for) {
+				args.ldata = const_data_ptr_cast(&cval);
+				args.lconstant = true;
+				args.rdata = FORVector::GetData(*scan.for_vec);
+				args.rvalidity = scan.validity.get();
+				EXECUTOR::Kernel(compute, scan.stored_type, compute)(args);
+			} else if (compute != scan.stored_type) {
+				// widened result: only the constant carries the compute width, so it must sit on the left
 				args.ldata = const_data_ptr_cast(&cval);
 				args.lconstant = true;
 				args.rdata = FORVector::GetData(*scan.for_vec);
