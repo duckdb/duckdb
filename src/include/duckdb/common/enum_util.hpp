@@ -42,8 +42,6 @@ enum class ARTScanResult : uint8_t;
 
 enum class AccessMode : uint8_t;
 
-enum class AccountedWriteAdoption : uint8_t;
-
 enum class AdaptiveFilterSource : uint8_t;
 
 enum class AggregateCombineType : uint8_t;
@@ -625,9 +623,6 @@ const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
-
-template<>
-const char* EnumUtil::ToChars<AccountedWriteAdoption>(AccountedWriteAdoption value);
 
 template<>
 const char* EnumUtil::ToChars<AdaptiveFilterSource>(AdaptiveFilterSource value);
@@ -1493,9 +1488,6 @@ ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
-
-template<>
-AccountedWriteAdoption EnumUtil::FromString<AccountedWriteAdoption>(const char *value);
 
 template<>
 AdaptiveFilterSource EnumUtil::FromString<AdaptiveFilterSource>(const char *value);

@@ -23,6 +23,7 @@ blacklist = [
     "MemoryUpdateMode",
     "SchedulePolicy",
     "BatchDrainMode",
+    "AccountedWriteAdoption",
     "PendingTaskCountMode",
     "PartitionKeyTrackerState",
     "ClaimState",

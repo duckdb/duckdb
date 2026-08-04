@@ -100,7 +100,6 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/query_parameters.hpp"
-#include "duckdb/common/serializer/async_write_queue.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
@@ -326,24 +325,6 @@ const char* EnumUtil::ToChars<AccessMode>(AccessMode value) {
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value) {
 	return static_cast<AccessMode>(StringUtil::StringToEnum(GetAccessModeValues(), 4, "AccessMode", value));
-}
-
-const StringUtil::EnumStringLiteral *GetAccountedWriteAdoptionValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(AccountedWriteAdoption::ACCEPTED), "ACCEPTED" },
-		{ static_cast<uint32_t>(AccountedWriteAdoption::REJECTED), "REJECTED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<AccountedWriteAdoption>(AccountedWriteAdoption value) {
-	return StringUtil::EnumToString(GetAccountedWriteAdoptionValues(), 2, "AccountedWriteAdoption", static_cast<uint32_t>(value));
-}
-
-template<>
-AccountedWriteAdoption EnumUtil::FromString<AccountedWriteAdoption>(const char *value) {
-	return static_cast<AccountedWriteAdoption>(StringUtil::StringToEnum(GetAccountedWriteAdoptionValues(), 2, "AccountedWriteAdoption", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAdaptiveFilterSourceValues() {
