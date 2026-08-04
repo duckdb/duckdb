@@ -194,7 +194,7 @@ for run in range(1, runs + 1):
             self.assertIn("paired median, 20-100 timed runs", plain_output)
             self.assertRegex(plain_output, r"fake\s+1\.000s\s+0\.950s\s+-0\.050s\s+-5\.0%\s+20")
 
-    def test_runner_without_timed_run_support_uses_legacy_sampling(self):
+    def test_runner_without_timed_run_support_fails_early(self):
         repository_root = Path(__file__).resolve().parents[2]
         runner_source = '''#!/usr/bin/env python3
 import os
@@ -244,13 +244,9 @@ for run in range(1, 6):
                 check=False,
             )
 
-            self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
-            self.assertIn("Adaptive paired sampling disabled", process.stdout)
-            self.assertEqual(
-                order_log.read_text(encoding="utf-8").splitlines(),
-                ["old", "new", "old", "new", "old", "new", "old", "new"],
-            )
-            self.assertIn("timing: median of 20 timed runs", process.stdout)
+            self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+            self.assertIn("requires both benchmark runners to support --timed-runs", process.stdout)
+            self.assertFalse(order_log.exists())
 
 
 if __name__ == "__main__":

@@ -107,8 +107,6 @@ if max_adaptive_time_seconds <= 0:
     parser.error("--max-adaptive-time-seconds must be greater than zero")
 
 
-# Legacy runners without --timed-runs support retain the old confirmation loop.
-NUMBER_REPETITIONS = 5
 # the threshold at which we consider something a regression (percentage)
 REGRESSION_THRESHOLD_PERCENTAGE = 0.1
 # minimal seconds diff for something to be a regression (for very fast benchmarks)
@@ -374,13 +372,10 @@ def print_benchmark_report(
     if common_prefix:
         print(f"common prefix: {common_prefix}")
     print(f"benchmarks: {total_count}")
-    if adaptive_sampling:
-        print(
-            f"timing: paired median, {timed_runs}-{max_timed_runs} timed runs, "
-            f"{max_adaptive_time_seconds:g}s adaptive budget"
-        )
-    else:
-        print(f"timing: median of {timed_runs} timed runs")
+    print(
+        f"timing: paired median, {timed_runs}-{max_timed_runs} timed runs, "
+        f"{max_adaptive_time_seconds:g}s adaptive budget"
+    )
     print(f"threshold: +{REGRESSION_THRESHOLD_PERCENTAGE * 100.0:.1f}% and +{REGRESSION_THRESHOLD_SECONDS:.3f}s")
     print(f"display threshold: +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
     print(f"hidden noise: {hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
@@ -470,62 +465,6 @@ class BenchmarkResult:
     runs: int = 0
 
 
-def run_benchmarks_legacy(old_runner: BenchmarkRunner, new_runner: BenchmarkRunner, benchmark_list: List[str]):
-    old_results = {}
-    new_results = {}
-    old_failures = {}
-    new_failures = {}
-    run_counts = {}
-    requested_runs = max(timed_runs, 1) if timed_runs is not None else 1
-
-    for benchmark in benchmark_list:
-        old_timings = []
-        new_timings = []
-        old_failure = None
-        new_failure = None
-
-        while len(old_timings) < requested_runs or len(new_timings) < requested_runs:
-            if len(old_timings) < requested_runs:
-                timed_runs_override = None
-                if timed_runs is not None:
-                    timed_runs_override = min(TIMED_RUN_BATCH_SIZE, requested_runs - len(old_timings))
-
-                old_run_timings, old_failure = old_runner.run_benchmark_once(benchmark, timed_runs_override)
-                if old_failure is None and not old_run_timings:
-                    old_failure = "Benchmark did not produce any timings"
-                if old_run_timings:
-                    old_timings.extend(old_run_timings)
-
-            if len(new_timings) < requested_runs:
-                timed_runs_override = None
-                if timed_runs is not None:
-                    timed_runs_override = min(TIMED_RUN_BATCH_SIZE, requested_runs - len(new_timings))
-
-                new_run_timings, new_failure = new_runner.run_benchmark_once(benchmark, timed_runs_override)
-                if new_failure is None and not new_run_timings:
-                    new_failure = "Benchmark did not produce any timings"
-                if new_run_timings:
-                    new_timings.extend(new_run_timings)
-
-            if old_failure or new_failure:
-                break
-
-        if old_failure:
-            old_results[benchmark] = 'Failed to run benchmark ' + benchmark
-            old_failures[benchmark] = old_failure
-        else:
-            old_results[benchmark], old_failures[benchmark] = old_runner.complete_benchmark(benchmark, old_timings)
-
-        if new_failure:
-            new_results[benchmark] = 'Failed to run benchmark ' + benchmark
-            new_failures[benchmark] = new_failure
-        else:
-            new_results[benchmark], new_failures[benchmark] = new_runner.complete_benchmark(benchmark, new_timings)
-        run_counts[benchmark] = min(len(old_timings), len(new_timings))
-
-    return old_results, old_failures, new_results, new_failures, run_counts
-
-
 def run_paired_benchmark(old_runner: BenchmarkRunner, new_runner: BenchmarkRunner, benchmark: str) -> BenchmarkResult:
     old_timings = []
     new_timings = []
@@ -596,45 +535,11 @@ def run_paired_benchmark(old_runner: BenchmarkRunner, new_runner: BenchmarkRunne
 
 
 multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
-adaptive_sampling = old_runner.supports_timed_runs and new_runner.supports_timed_runs
-if adaptive_sampling:
-    all_results = [run_paired_benchmark(old_runner, new_runner, benchmark) for benchmark in benchmark_list]
-else:
-    print("Adaptive paired sampling disabled because a benchmark runner does not support --timed-runs")
-    other_results: List[BenchmarkResult] = []
-    error_list: List[BenchmarkResult] = []
-    for i in range(NUMBER_REPETITIONS):
-        regression_list: List[BenchmarkResult] = []
-        if len(benchmark_list) == 0:
-            break
-        print(
-            f'''====================================================
-==============      ITERATION {i}        =============
-==============      REMAINING {len(benchmark_list)}        =============
-====================================================
-'''
-        )
+if not old_runner.supports_timed_runs or not new_runner.supports_timed_runs:
+    print("Adaptive paired sampling requires both benchmark runners to support --timed-runs")
+    exit(1)
 
-        old_results, old_failures, new_results, new_failures, run_counts = run_benchmarks_legacy(
-            old_runner, new_runner, benchmark_list
-        )
-
-        for benchmark in benchmark_list:
-            old_res = old_results[benchmark]
-            new_res = new_results[benchmark]
-            old_fail = old_failures[benchmark]
-            new_fail = new_failures[benchmark]
-            runs = run_counts[benchmark]
-
-            if isinstance(old_res, str) or isinstance(new_res, str):
-                error_list.append(BenchmarkResult(benchmark, old_res, new_res, old_fail, new_fail, runs))
-            elif (not no_regression_fail) and is_regression(old_res, new_res):
-                regression_list.append(BenchmarkResult(benchmark, old_res, new_res, runs=runs))
-            else:
-                other_results.append(BenchmarkResult(benchmark, old_res, new_res, runs=runs))
-        benchmark_list = [res.benchmark for res in regression_list]
-
-    all_results = other_results + regression_list + error_list
+all_results = [run_paired_benchmark(old_runner, new_runner, benchmark) for benchmark in benchmark_list]
 
 final_regression_results = [
     result
