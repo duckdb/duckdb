@@ -44,6 +44,17 @@ public:
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
 };
 
+//! A file system without validators that grants a freshness deadline, simulating servers that send
+//! no ETag/Last-Modified but do send Cache-Control max-age.
+class FreshnessOnlyFileSystem : public NoValidationMetadataFileSystem {
+public:
+	string GetName() const override;
+	FileMetadata Stats(FileHandle &handle) override;
+
+	//! Freshness lifetime granted on each stat; negative values produce an already-expired deadline.
+	int64_t max_age_micros = 600 * 1000000LL;
+};
+
 //! In-memory DuckDB with the external file cache forced to also cache local files (off by default), so the external
 //! file cache tests can exercise the cache machinery on local temp files.
 DuckDB MakeCacheLocalFilesDB();

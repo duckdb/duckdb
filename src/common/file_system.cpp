@@ -485,7 +485,12 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 }
 
 FileMetadata FileSystem::Stats(FileHandle &handle) {
-	throw NotImplementedException("%s: Stats is not implemented!", GetName());
+	// Synthesized from the individual accessors for file systems without a native stat call
+	FileMetadata metadata;
+	metadata.file_size = GetFileSize(handle);
+	metadata.last_modification_time = GetLastModifiedTime(handle);
+	metadata.file_type = GetFileType(handle);
+	return metadata;
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {

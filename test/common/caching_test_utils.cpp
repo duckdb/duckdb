@@ -63,4 +63,15 @@ timestamp_t NoValidationMetadataFileSystem::GetLastModifiedTime(FileHandle &hand
 	return timestamp_t(0);
 }
 
+string FreshnessOnlyFileSystem::GetName() const {
+	return "FreshnessOnlyFileSystem";
+}
+
+FileMetadata FreshnessOnlyFileSystem::Stats(FileHandle &handle) {
+	auto metadata = LocalFileSystem::Stats(handle);
+	metadata.last_modification_time = timestamp_t(0);
+	metadata.cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value + max_age_micros);
+	return metadata;
+}
+
 } // namespace duckdb

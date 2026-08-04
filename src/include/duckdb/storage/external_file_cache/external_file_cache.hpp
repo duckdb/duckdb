@@ -43,8 +43,9 @@ public:
 		CachedFile(string path_p, idx_t generation_p);
 
 	public:
-		//! Whether the CachedFile is still valid given the current modified/version tag
-		bool IsValid(bool validate, const string &current_version_tag, timestamp_t current_last_modified);
+		//! Whether the CachedFile is still valid given the current modified/version tag/file size
+		bool IsValid(bool validate, const string &current_version_tag, timestamp_t current_last_modified,
+		             idx_t current_file_size);
 
 		const string path;
 		const idx_t generation;
@@ -59,6 +60,9 @@ public:
 		idx_t file_size DUCKDB_GUARDED_BY(meta_lock) = 0;
 		timestamp_t last_modified DUCKDB_GUARDED_BY(meta_lock) = timestamp_t(0);
 		string version_tag DUCKDB_GUARDED_BY(meta_lock);
+		//! Freshness deadline for files without validators (e.g., HTTP Cache-Control).
+		//! If unset (infinite), the storage backend does not provide expiry information.
+		timestamp_t cache_valid_until DUCKDB_GUARDED_BY(meta_lock) = timestamp_t::infinity();
 		bool can_seek DUCKDB_GUARDED_BY(meta_lock) = false;
 		bool on_disk_file DUCKDB_GUARDED_BY(meta_lock) = false;
 	};
@@ -87,8 +91,19 @@ public:
 	//! When caching is disabled, returns a transient CachedFile that is not tracked in the cached file map.
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
 
+	//! Validator-only variant (version tag/last modified), e.g., used by the Parquet metadata cache
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
+	//! Variant that can also validate files without validators using the freshness deadline and file size
+	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
+	                               timestamp_t cached_valid_until, idx_t cached_file_size,
+	                               const string &current_version_tag, timestamp_t current_last_modified,
+	                               idx_t current_file_size);
+	//! Whether the last modified timestamp is usable as a cache validator
+	//! (some storage backends do not provide it)
+	DUCKDB_API static bool HasUsableLastModified(timestamp_t last_modified);
+	//! Whether the version tag/last modified time provide any cache validation metadata
+	DUCKDB_API static bool HasValidationMetadata(const string &version_tag, timestamp_t last_modified);
 
 private:
 	class ExternalFileCacheObjectCacheEntry;
