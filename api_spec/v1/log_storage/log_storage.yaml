@@ -1,0 +1,83 @@
+module: log_storage
+functions:
+  create_log_storage:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: log_storage
+    parameters: {}
+    return_type: log_storage
+    description: |
+      Creates a new log storage object.
+    return_description: A log storage object. Must be destroyed with `duckdb_destroy_log_storage`.
+  destroy_log_storage:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: log_storage
+    parameters:
+      log_storage:
+        type: log_storage
+        indirection: 1
+        description: The log storage object to destroy.
+    return_type: opaque
+    description: |
+      Destroys a log storage object.
+  log_storage_set_write_log_entry:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      log_storage:
+        type: log_storage
+        description: The log storage object.
+      function:
+        type: logger_write_log_entry_t
+        description: The function to call.
+    return_type: opaque
+    description: |
+      Sets the callback function for writing log entries.
+  log_storage_set_extra_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      log_storage:
+        type: log_storage
+        description: The log storage object.
+      extra_data:
+        type: opaque
+        indirection: 1
+        description: The extra data that is passed back into the callbacks.
+      delete_callback:
+        type: delete_callback_t
+    return_type: opaque
+    description: |
+      Sets the extra data of the custom log storage.
+  log_storage_set_name:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      log_storage:
+        type: log_storage
+        description: The log storage object.
+      name:
+        type: char
+        indirection: 1
+        const: true
+        description: The name of the log storage.
+    return_type: opaque
+    description: |
+      Sets the name of the log storage.
+  register_log_storage:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      database:
+        type: database
+        description: A database object.
+      log_storage:
+        type: log_storage
+        description: The log storage object.
+    return_type: state
+    description: |
+      Registers a custom log storage for the logger.
+    return_description: Whether the registration was successful.

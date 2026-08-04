@@ -310,6 +310,12 @@ duckdb_statement_type StatementTypeToC(const StatementType type) {
 		return DUCKDB_STATEMENT_TYPE_DETACH;
 	case StatementType::MULTI_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_MULTI;
+	case StatementType::COPY_DATABASE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_COPY_DATABASE;
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_UPDATE_EXTENSIONS;
+	case StatementType::MERGE_INTO_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_MERGE_INTO;
 	default:
 		return DUCKDB_STATEMENT_TYPE_INVALID;
 	}
@@ -401,6 +407,8 @@ duckdb_error_type ErrorTypeToC(const ExceptionType type) {
 		return DUCKDB_ERROR_AUTOLOAD;
 	case ExceptionType::SEQUENCE:
 		return DUCKDB_ERROR_SEQUENCE;
+	case ExceptionType::DATA_CORRUPTION:
+		return DUCKDB_ERROR_DATA_CORRUPTION;
 	case ExceptionType::INVALID_CONFIGURATION:
 		return DUCKDB_INVALID_CONFIGURATION;
 	default:
@@ -494,6 +502,8 @@ ExceptionType ErrorTypeFromC(const duckdb_error_type type) {
 		return ExceptionType::AUTOLOAD;
 	case DUCKDB_ERROR_SEQUENCE:
 		return ExceptionType::SEQUENCE;
+	case DUCKDB_ERROR_DATA_CORRUPTION:
+		return ExceptionType::DATA_CORRUPTION;
 	case DUCKDB_INVALID_CONFIGURATION:
 		return ExceptionType::INVALID_CONFIGURATION;
 	default:

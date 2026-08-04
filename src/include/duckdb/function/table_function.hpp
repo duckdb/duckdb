@@ -15,6 +15,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
@@ -202,7 +203,8 @@ struct TableFunctionPartitionInput {
 struct TableFunctionProjectionExpressionInput {
 	const LogicalGet &get;
 	const Expression &expr;
-	idx_t proj_index;
+	//! Position of pushed down column within get, usage: get.GetColumnIds()[column_index]
+	ProjectionIndex column_index;
 };
 
 struct TableFunctionToStringInput {

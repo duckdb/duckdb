@@ -1044,8 +1044,8 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			if (!statement) {
 				continue; // a peel that preprocessing swallowed
 			}
-			idx_t start_pos = statement->stmt_location;
-			idx_t len = statement->stmt_length;
+			idx_t start_pos = statement->stmt_location.offset;
+			idx_t len = statement->stmt_location.length;
 			while (len > 0 && IsSpace(zSql[start_pos])) {
 				start_pos++;
 				len--;
@@ -2117,6 +2117,12 @@ bool ShellState::ReadFromFile(const string &file) {
 		PrintF(PrintOutput::STDERR, ".read cannot be used in -safe mode\n");
 		return false;
 	}
+	duckdb::LocalFileSystem lfs;
+	auto canonical_file = lfs.CanonicalizePath(file, nullptr);
+	if (!active_read_files.insert(canonical_file).second) {
+		PrintF(PrintOutput::STDERR, "Error: recursive .read of \"%s\"\n", file);
+		return false;
+	}
 	FILE *inSaved = in;
 	int savedLineno = lineno;
 	int rc;
@@ -2127,6 +2133,7 @@ bool ShellState::ReadFromFile(const string &file) {
 		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
 	}
+	active_read_files.erase(canonical_file);
 	in = inSaved;
 	lineno = savedLineno;
 	return rc == 0;

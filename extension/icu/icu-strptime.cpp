@@ -265,15 +265,9 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &bound_function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
 
-		if (arguments[1]->HasParameter()) {
-			throw ParameterNotResolvedException();
-		}
-		if (!arguments[1]->IsFoldable()) {
-			throw InvalidInputException("strptime format must be a constant");
-		}
 		const bool is_try = (bound_function.GetName() == "try_strptime");
 		scalar_function_t function = is_try ? TryParse<timestamp_tz_t> : Parse<timestamp_tz_t>;
-		Value format_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+		Value format_value = input.GetConstant(1);
 		string format_string;
 		StrpTimeFormat format;
 		bool has_tz = false;
@@ -330,7 +324,8 @@ struct ICUStrptime : public ICUDateFunc {
 
 		// Fall back to faster, non-TZ parsing
 		bound_function.SetBindCallback(bind_strptime);
-		BindScalarFunctionInput new_input(context, bound_function, arguments,
+		auto argument_names = input.GetArgumentNames();
+		BindScalarFunctionInput new_input(context, bound_function, arguments, *argument_names,
 		                                  input.HasBinder() ? &input.GetBinder() : nullptr);
 		return bound_function.GetBindCallback()(new_input);
 	}
@@ -621,10 +616,10 @@ struct ICUStrftime : public ICUDateFunc {
 
 	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
-		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-		                               ICUStrftimeFunction<timestamp_tz_t>, Bind));
-		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-		                               ICUStrftimeFunction<timestamp_tz_ns_t>, Bind));
+		set.AddFunction(ScalarFunction({{"data", LogicalType::TIMESTAMP_TZ}, {"format", LogicalType::VARCHAR}},
+		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_t>, Bind));
+		set.AddFunction(ScalarFunction({{"data", LogicalType::TIMESTAMP_TZ_NS}, {"format", LogicalType::VARCHAR}},
+		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_ns_t>, Bind));
 		loader.RegisterFunction(set);
 	}
 

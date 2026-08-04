@@ -35,6 +35,12 @@ public:
 
 	OrderPreservationType OperatorOrder() const override;
 	bool ParallelOperator() const override;
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
+	}
+	PipelineSourceConsumption GetSourceConsumption() const override {
+		return PipelineSourceConsumption::MAY_STOP_EARLY;
+	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };

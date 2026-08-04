@@ -83,6 +83,9 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 	auto base_pipeline = meta_pipeline->GetBasePipeline();
 	auto base_initialize_event = make_shared_ptr<PipelineInitializeEvent>(base_pipeline);
 	auto base_event = make_shared_ptr<PipelineEvent>(base_pipeline);
+	if (base_pipeline->IsExternalInput()) {
+		base_pipeline->SetExternalInputEvent(base_event);
+	}
 	auto base_prepare_finish_event = make_shared_ptr<PipelinePrepareFinishEvent>(base_pipeline);
 	auto base_finish_event = make_shared_ptr<PipelineFinishEvent>(base_pipeline);
 	auto base_complete_event =
@@ -110,6 +113,9 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 		// create events/stack for this pipeline
 		auto pipeline_event = make_shared_ptr<PipelineEvent>(pipeline);
+		if (pipeline->IsExternalInput()) {
+			pipeline->SetExternalInputEvent(pipeline_event);
+		}
 
 		auto finish_group = meta_pipeline->GetFinishGroup(*pipeline);
 		if (finish_group) {
@@ -202,6 +208,27 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			auto &dep_entry = event_map_entry->second;
 			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_complete_event);
 		}
+		for (auto &dependency : pipeline.dataflow_dependencies) {
+			auto dep = dependency.lock();
+			D_ASSERT(dep);
+			auto event_map_entry = event_map.find(*dep);
+			if (event_map_entry == event_map.end()) {
+				continue;
+			}
+			auto &dep_entry = event_map_entry->second;
+			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_initialize_event);
+		}
+		for (auto &dependency : pipeline.external_finish_dependencies) {
+			auto dep = dependency.lock();
+			D_ASSERT(dep);
+			auto event_map_entry = event_map.find(*dep);
+			if (event_map_entry == event_map.end()) {
+				continue;
+			}
+			auto &dep_entry = event_map_entry->second;
+			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_event);
+			entry.second.pipeline_prepare_finish_event.AddDependency(dep_entry.pipeline_event);
+		}
 	}
 
 	// set the dependencies for pipeline event
@@ -265,6 +292,9 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	for (auto &event : events) {
 		if (!event->HasDependencies()) {
 			event->Schedule();
+			if (!event->HasTasks() && !event->IsFinished() && event->AutoFinishWithoutTasks()) {
+				event->Finish();
+			}
 		}
 	}
 }
@@ -477,6 +507,18 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 	task_reschedule.notify_one();
 }
 
+void Executor::UnregisterTask() {
+#ifndef DUCKDB_NO_THREADS
+	{
+		// Wake any thread blocked in `WaitForTask`.
+		// A finished task may have scheduled follow-up tasks or completed the query.
+		lock_guard<mutex> l(executor_lock);
+		task_reschedule.notify_all();
+	}
+#endif
+	executor_tasks--;
+}
+
 void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
@@ -484,7 +526,8 @@ void Executor::WaitForTask() {
 	std::unique_lock<mutex> l(executor_lock);
 	auto end = TimePoint::Tick();
 	auto blocked_micros = NumericCast<idx_t>(TimePoint::ElapsedMicros(begin, end));
-	if (to_be_rescheduled_tasks.empty()) {
+
+	if (ExecutionIsFinished()) {
 		blocked_thread_time += blocked_micros;
 		return;
 	}
@@ -493,7 +536,14 @@ void Executor::WaitForTask() {
 		blocked_thread_time += blocked_micros;
 		return;
 	}
-
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	if (scheduler.GetTaskCountForProducer(*producer) > 0) {
+		// A task is available for the calling thread, the next step will make progress without waiting
+		blocked_thread_time += blocked_micros;
+		return;
+	}
+	// Nothing to run on this thread, all remaining tasks are either running on other threads or descheduled.
+	// Wait (bounded), but wake up on task completion or reschedule.
 	blocked_thread_time += blocked_micros + WAIT_TIME_MS.count();
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
 #endif
@@ -521,20 +571,9 @@ bool Executor::ResultCollectorIsBlocked() {
 	if (!HasStreamingResultCollector()) {
 		return false;
 	}
-	if (completed_pipelines + 1 != total_pipelines) {
-		// The result collector is always in the last pipeline
-		return false;
-	}
-	if (to_be_rescheduled_tasks.empty()) {
-		return false;
-	}
 	for (auto &kv : to_be_rescheduled_tasks) {
 		auto &task = kv.second;
 		if (task->TaskBlockedOnResult()) {
-			// At least one of the blocked tasks is connected to a result collector
-			// This task could be the only task that could unblock the other non-result-collector tasks
-			// To prevent a scenario where we halt indefinitely, we return here so it can be unblocked by a call to
-			// Fetch
 			return true;
 		}
 	}
@@ -686,6 +725,10 @@ void Executor::PushError(ErrorData exception) {
 	error_manager.PushError(std::move(exception));
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupt_state = ClientInterruptState::INTERRUPTED;
+	for (auto &pipeline : pipelines) {
+		pipeline->FinishSourceAndPreventBlocking(context);
+		pipeline->PreventSinkBlocking();
+	}
 }
 
 bool Executor::HasError() {

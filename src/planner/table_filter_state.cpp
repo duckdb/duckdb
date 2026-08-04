@@ -360,7 +360,7 @@ private:
 class PrefixRangeFilterExecutor final : public ExpressionFilterExecutor {
 public:
 	PrefixRangeFilterExecutor(const PrefixRangeFunctionData &data, bool inside_selectivity_optional)
-	    : filter(data.filter) {
+	    : filter(data.filter), filters_null_values(data.filters_null_values) {
 		if (!inside_selectivity_optional && data.n_vectors_to_check != 0) {
 			stats = make_uniq<SelectivityOptionalFilterState::SelectivityStats>(data.n_vectors_to_check,
 			                                                                    data.selectivity_threshold);
@@ -381,31 +381,55 @@ public:
 		}
 
 		PrepareCapacity(approved_tuple_count);
-		if (sel.IsSet()) {
-			const auto result_count = filter->LookupKeys(vector, sel, local_sel, approved_tuple_count);
-			if (result_count != approved_tuple_count) {
+		const auto has_selection = sel.IsSet();
+		const auto result_count = has_selection ? filter->LookupKeys(vector, sel, local_sel, approved_tuple_count)
+		                                        : filter->LookupKeys(vector, local_sel, approved_tuple_count);
+		idx_t final_count;
+		if (!filters_null_values && result_count != approved_tuple_count) {
+			final_count = AddNullsToSelection(sel, vector, result_count, approved_tuple_count);
+		} else {
+			final_count = result_count;
+			if (result_count != approved_tuple_count && has_selection) {
 				TranslateSelection(sel, result_count);
+			} else if (result_count != approved_tuple_count) {
+				sel.Initialize(local_sel);
 			}
-			if (stats) {
-				stats->Update(result_count, approved_tuple_count);
-			}
-			approved_tuple_count = result_count;
-			return approved_tuple_count;
 		}
-
-		const auto before_count = approved_tuple_count;
-		const auto result_count = filter->LookupKeys(vector, local_sel, approved_tuple_count);
 		if (stats) {
-			stats->Update(result_count, approved_tuple_count);
+			stats->Update(final_count, approved_tuple_count);
 		}
-		approved_tuple_count = result_count;
-		if (result_count != before_count) {
-			sel.Initialize(local_sel);
-		}
+		approved_tuple_count = final_count;
 		return approved_tuple_count;
 	}
 
 private:
+	idx_t AddNullsToSelection(SelectionVector &sel, Vector &vector, idx_t filter_count, idx_t approved_tuple_count) {
+		UnifiedVectorFormat input_data;
+		vector.ToUnifiedFormat(input_data);
+		if (input_data.validity.CannotHaveNull()) {
+			if (sel.IsSet()) {
+				TranslateSelection(sel, filter_count);
+			} else if (filter_count != approved_tuple_count) {
+				sel.Initialize(local_sel);
+			}
+			return filter_count;
+		}
+
+		idx_t result_count = 0;
+		idx_t filter_idx = 0;
+		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			const auto matched = filter_idx < filter_count && local_sel.get_index_unsafe(filter_idx) == i;
+			filter_idx += matched;
+			const auto idx = sel.IsSet() ? sel.get_index(i) : i;
+			const auto input_idx = input_data.sel->get_index(idx);
+			if (matched || !input_data.validity.RowIsValid(input_idx)) {
+				result_sel.set_index(result_count++, idx);
+			}
+		}
+		sel.Initialize(result_sel);
+		return result_count;
+	}
+
 	void PrepareCapacity(idx_t count) {
 		if (current_capacity >= count) {
 			return;
@@ -423,6 +447,7 @@ private:
 	}
 
 	optional_ptr<PrefixRangeFilter> filter;
+	bool filters_null_values;
 	SelectionVector local_sel;
 	SelectionVector result_sel;
 	idx_t current_capacity = 0;

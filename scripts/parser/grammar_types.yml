@@ -102,6 +102,11 @@ SQLStatement:
     - UseStatement
     - VacuumStatement
     - PragmaAssignOrFunction
+    - ExternalResourceStatement
+    - CreateExternalResourceStmt
+    - RegisterExternalResourceStmt
+    - DestroyExternalResourceStmt
+    - ShowExternalResourcesStmt
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -546,6 +551,15 @@ TableRef:
     - JoinOrPivot
     - JoinClause
     - RegularJoinClause
+    - NearestJoinClause
+    - NearestJoinAliased
+    - NearestJoinBare
+    - NearestBareTableRef
+    - NearestValuesRef
+    - NearestTableFunction
+    - NearestTableSubquery
+    - NearestBaseTableRef
+    - NearestParensTableRef
     - JoinByClause
     - JoinWithoutOnClause
     - TableUnpivotClause
@@ -1096,6 +1110,9 @@ Bool:
     - Lateral
     - WithOrdinality
     - Asof
+    - ApproxOrExact
+    - NearestApprox
+    - NearestExact
     - Materialized
     - SampleUnit
     - DropBehavior
@@ -1118,6 +1135,7 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - ShowAllModifier
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword
     - FunctionTypeFunction
@@ -1126,7 +1144,6 @@ Bool:
     - FunctionKeyword
     - DeallocatePrepare
     - CreateRecursive
-    - ExplainAnalyze
     - WithOrWithoutOids
     - WithOids
     - WithoutOids
@@ -1343,6 +1360,9 @@ OrderTypeValue:
   rules:
     - DescendingOrder
     - AscendingOrder
+    - DistanceOrSimilarity
+    - NearestDistance
+    - NearestSimilarity
 
 OrderByNullTypeValue:
   type: "OrderByNullType"
@@ -1626,6 +1646,7 @@ IdentifierType:
   type: "Identifier"
   by_value: false
   rules:
+    - AnalyzeKeyword
     - ColId
     - ColIdOrString
     - ColLabelOrString

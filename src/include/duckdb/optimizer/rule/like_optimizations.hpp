@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+enum class PatternMatchType : uint8_t { LIKE, GLOB };
+
 // The Like Optimization rule rewrites LIKE to optimized scalar functions (e.g.: prefix, suffix, and contains)
 class LikeOptimizationRule : public Rule {
 public:
@@ -22,7 +24,7 @@ public:
 	                             bool is_root) override;
 
 	unique_ptr<Expression> ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function, string pattern,
-	                                 bool is_not_like) const;
+	                                 bool is_not_like, PatternMatchType match_type) const;
 };
 
 } // namespace duckdb

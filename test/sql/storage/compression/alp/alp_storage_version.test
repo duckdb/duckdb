@@ -1,0 +1,53 @@
+# name: test/sql/storage/compression/alp/alp_storage_version.test
+# group: [alp]
+
+statement ok
+ATTACH '{TEST_DIR}/alp-v1_4_0-16k.db' AS alp_v1_4_0 (STORAGE_VERSION 'v1.4.0', BLOCK_SIZE 16384);
+
+statement ok
+ATTACH '{TEST_DIR}/alp-v1_4_0-default.db' AS alp_v1_4_0_default (STORAGE_VERSION 'v1.4.0', BLOCK_SIZE 262144);
+
+statement ok
+ATTACH '{TEST_DIR}/alp-v1_5_0-16k.db' AS alp_v1_5_0 (STORAGE_VERSION 'v1.5.0', BLOCK_SIZE 16384);
+
+statement ok
+SET force_compression='alp';
+
+statement ok
+CREATE TABLE alp_v1_4_0.t AS SELECT round(i * 0.001, 6)::DOUBLE AS x FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE alp_v1_4_0_default.t AS SELECT round(i * 0.001, 6)::DOUBLE AS x FROM range(10000) t(i);
+
+statement ok
+CREATE TABLE alp_v1_5_0.t AS SELECT round(i * 0.001, 6)::DOUBLE AS x FROM range(10000) t(i);
+
+statement ok
+CHECKPOINT alp_v1_4_0;
+
+statement ok
+CHECKPOINT alp_v1_4_0_default;
+
+statement ok
+CHECKPOINT alp_v1_5_0;
+
+# Before storage version v1.5.0 should disable ALP with block sizes smaller than the default
+
+query I
+SELECT compression FROM pragma_storage_info('alp_v1_4_0.t') WHERE segment_type = 'DOUBLE' ORDER BY compression LIMIT 1;
+----
+Uncompressed
+
+# Before storage version v1.5.0 should use ALP with block sizes equal to or larger than the default
+
+query I
+SELECT compression FROM pragma_storage_info('alp_v1_4_0_default.t') WHERE segment_type = 'DOUBLE' ORDER BY compression LIMIT 1;
+----
+ALP
+
+# From storage version v1.5.0 should use ALP for any block sizes
+
+query I
+SELECT compression FROM pragma_storage_info('alp_v1_5_0.t') WHERE segment_type = 'DOUBLE' ORDER BY compression LIMIT 1;
+----
+ALP

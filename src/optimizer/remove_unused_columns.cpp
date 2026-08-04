@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -22,7 +23,6 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
-#include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
@@ -326,6 +326,12 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		}
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		auto &get = op.Cast<LogicalColumnDataGet>();
+		RemoveColumnsFromLogicalColumnDataGet(get);
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		auto &distinct = op.Cast<LogicalDistinct>();
 		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
@@ -580,8 +586,6 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 
 static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &context, unique_ptr<Expression> target,
                                                              const ColumnIndex &path) {
-	auto extract_function = GetKeyExtractFunction();
-
 	auto &struct_type = target->GetReturnType();
 	D_ASSERT(struct_type.id() == LogicalTypeId::STRUCT);
 	reference<const LogicalType> type_iter(struct_type);
@@ -590,13 +594,19 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		auto child_index = path_iter.get().GetPrimaryIndex();
 		auto &child_types = StructType::GetChildTypes(type_iter.get());
 		D_ASSERT(child_index < child_types.size());
-		auto &key = child_types[child_index].first;
+		auto is_unnamed = StructType::IsUnnamed(type_iter.get());
+		auto function = is_unnamed ? GetIndexExtractFunction() : GetKeyExtractFunction();
+
 		type_iter = child_types[child_index].second;
 
 		vector<unique_ptr<Expression>> arguments(2);
 		arguments[0] = (std::move(target));
-		arguments[1] = (make_uniq<BoundConstantExpression>(Value(key)));
-		target = extract_function.Bind(context, std::move(arguments));
+		if (is_unnamed) {
+			arguments[1] = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_index + 1)));
+		} else {
+			arguments[1] = make_uniq<BoundConstantExpression>(Value(child_types[child_index].first));
+		}
+		target = function.Bind(context, std::move(arguments));
 		if (!path_iter.get().HasChildren()) {
 			break;
 		}
@@ -732,6 +742,16 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 		throw InternalException("CheckPushdownExtract not supported for LogicalOperatorType::%s",
 		                        EnumUtil::ToString(op.type));
 	}
+}
+
+void RemoveUnusedColumns::RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get) {
+	if (everything_referenced) {
+		return;
+	}
+
+	auto column_ids = get.GetColumnIds();
+	ClearUnusedExpressions(column_ids, get.table_index);
+	get.SetColumnIds(std::move(column_ids));
 }
 
 void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref) {
@@ -1206,13 +1226,13 @@ static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_pt
 	if (expr->GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 		return false;
 	}
-	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_CAST);
-	auto &cast = expr->Cast<BoundCastExpression>();
-	if (cast.IsTryCast()) {
+	D_ASSERT(BoundCastExpression::IsCast(*expr));
+	auto &cast = expr->Cast<BoundFunctionExpression>();
+	if (BoundCastExpression::IsTryCast(cast)) {
 		return false;
 	}
 
-	child = cast.ChildMutable();
+	child = BoundCastExpression::ChildMutable(cast);
 	return true;
 }
 

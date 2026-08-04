@@ -1,0 +1,24 @@
+# name: test/sql/copy/parquet/writer/parquet_timetz_roundtrip.test
+# description: TIME WITH TIME ZONE is written as UTC-adjusted Parquet TIME
+# group: [writer]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT *
+	FROM (VALUES
+		(TIMETZ '12:34:56+02'),
+		(TIMETZ '01:00:00+02'),
+		(TIMETZ '23:30:00-02')
+	) tbl(x)
+) TO '{TEST_DIR}/timetz_roundtrip.parquet' (FORMAT PARQUET)
+
+query II
+SELECT x::VARCHAR, typeof(x)
+FROM read_parquet('{TEST_DIR}/timetz_roundtrip.parquet')
+ORDER BY 1
+----
+01:30:00+00	TIME WITH TIME ZONE
+10:34:56+00	TIME WITH TIME ZONE
+23:00:00+00	TIME WITH TIME ZONE

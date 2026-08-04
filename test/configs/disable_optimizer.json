@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Requires the join order optimizer to enforce debug_force_no_cross_product.",
+      "paths": [
+        "test/optimizer/joins/required_cross_product_activation.test"
+      ]
+    },
+    {
       "reason": "Zone map pruning requires filter pushdown from optimizer.",
       "paths": [
         "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
@@ -97,9 +103,10 @@
       ]
     },
     {
-      "reason": "Type pushdown optimizer changes output types",
+      "reason": "Type and function pushdown optimizers changes output types",
       "paths": [
         "test/optimizer/pushdown/csv_type_pushdown.test",
+        "test/optimizer/pushdown/scalar_function_pushdown.test",
         "test/sql/copy/csv/test_insert_into_types.test",
         "test/sql/copy/csv/test_csv_error_message_type.test",
         "test/sql/copy/csv/test_timestamptz_12926.test"

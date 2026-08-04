@@ -49,11 +49,14 @@ bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference<Expressio
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
+	if (!BoundCastExpression::IsCast(expr_p)) {
+		return false;
+	}
 	if (!matcher) {
 		return true;
 	}
-	auto &expr = expr_p.Cast<BoundCastExpression>();
-	return matcher->Match(*expr.ChildMutable(), bindings);
+	auto &expr = expr_p.Cast<BoundFunctionExpression>();
+	return matcher->Match(*BoundCastExpression::ChildMutable(expr), bindings);
 }
 
 bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
@@ -68,15 +71,18 @@ bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expre
 	return SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy);
 }
 
+InUniformExpressionMatcher::InUniformExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_OPERATOR) {
+	vector<ExpressionType> types;
+	types.emplace_back(ExpressionType::COMPARE_IN);
+	types.emplace_back(ExpressionType::COMPARE_NOT_IN);
+	expr_type = make_uniq<ManyExpressionTypeMatcher>(types);
+}
+
 bool InUniformExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundOperatorExpression>();
-	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN ||
-	    expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) {
-		return false;
-	}
 
 	auto &entries = expr.GetChildrenMutable();
 	if (entries.size() < 2) {

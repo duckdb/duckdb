@@ -12,6 +12,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -28,9 +29,6 @@
  */
 
 namespace duckdb {
-
-TypePushdown::TypePushdown(ClientContext &context) : context(context) {
-}
 
 // A passthrough projection only forwards its child columns, e.g. a VIEW's
 // "SELECT col".
@@ -58,10 +56,24 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 		LogicalProjection &projection = op.Cast<LogicalProjection>();
 		D_ASSERT(projection.children.size() == 1);
 		auto &child = *projection.children[0];
-		if (!IsPassthrough(projection) || child.type != LogicalOperatorType::LOGICAL_GET) {
+		if (!IsPassthrough(projection)) {
 			break;
 		}
-		if (auto &get = child.Cast<LogicalGet>(); get.function.projection_expression_pushdown != nullptr) {
+
+		LogicalGet *get = nullptr;
+
+		// queries with LIMIT may include a STREAMING_LIMIT between PROJECTION and GET.
+		// See test/optimizer/pushdown/scalar_function_pushdown_limit.test
+		if (child.type == LogicalOperatorType::LOGICAL_LIMIT) {
+			if (auto &limit = child.Cast<LogicalLimit>();
+			    limit.children.size() == 1 && limit.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+				get = &limit.children[0]->Cast<LogicalGet>();
+			}
+		} else if (child.type == LogicalOperatorType::LOGICAL_GET) {
+			get = &child.Cast<LogicalGet>();
+		}
+
+		if (get != nullptr && get->function.projection_expression_pushdown != nullptr) {
 			projections.emplace(projection.table_index, projection);
 		}
 		break;
@@ -75,9 +87,9 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 	}
 }
 
-std::optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Projections &projections) {
+optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Projections &projections) {
 	if (IsVirtualColumn(binding.column_index)) {
-		return std::nullopt;
+		return nullopt;
 	}
 	if (const auto it = analyses.find(binding.table_index); it != analyses.end()) {
 		return {{it->second, binding.column_index, nullptr}};
@@ -85,22 +97,22 @@ std::optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, con
 
 	const auto projection_it = projections.find(binding.table_index);
 	if (projection_it == projections.end()) {
-		return std::nullopt;
+		return nullopt;
 	}
 
 	LogicalProjection &projection = projection_it->second;
 	const auto &inner = projection.expressions[binding.column_index];
 	if (inner->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-		return std::nullopt;
+		return nullopt;
 	}
 	const ColumnBinding get_binding = inner->Cast<BoundColumnRefExpression>().Binding();
 	if (IsVirtualColumn(get_binding.column_index)) {
-		return std::nullopt;
+		return nullopt;
 	}
 	if (const auto it = analyses.find(get_binding.table_index); it != analyses.end()) {
 		return {{it->second, get_binding.column_index, &projection}};
 	}
-	return std::nullopt;
+	return nullopt;
 }
 
 /**
@@ -154,18 +166,14 @@ void CastCollect::VisitOperator(LogicalOperator &op) {
 	// nested cast to VARCHAR must not).
 	bool clean = ReachesPushdownGet(projection);
 	for (const auto &e : projection.expressions) {
-		switch (e->GetExpressionClass()) {
-		case ExpressionClass::BOUND_COLUMN_REF:
-		case ExpressionClass::BOUND_CAST:
+		if (e->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF || BoundCastExpression::IsCast(*e)) {
 			continue;
-		default:
-			clean = false;
-			break;
 		}
+		clean = false;
 	}
 	if (clean) {
 		for (const auto &e : projection.expressions) {
-			if (e->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
+			if (BoundCastExpression::IsCast(*e)) {
 				top_level_casts.insert(e.get());
 			}
 		}
@@ -182,23 +190,28 @@ unique_ptr<Expression> CastCollect::VisitReplace(BoundColumnRefExpression &expr,
 	if (const auto binding = Resolve(expr.Binding(), analyses, projections)) {
 		// Column is used without cast applied to it, register a conflict.
 		// Not emplace() as we need to update the value if it was present
-		binding->analysis.col_to_cast[binding->column_index] = nullptr;
+		binding->analysis.col_to_expr[binding->column_index] = nullptr;
 	}
 	return std::move(*ptr);
 }
 
-unique_ptr<Expression> CastCollect::VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *ptr) {
-	if (expr.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+unique_ptr<Expression> CastCollect::VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *ptr) {
+	if (!BoundCastExpression::IsCast(expr)) {
+		// Descend into non-cast function children so e.g. fn(col, other) still sees "col"
+		return nullptr;
+	}
+	auto &cast_child = BoundCastExpression::Child(expr);
+	if (cast_child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		// Descend into children so e.g. fn(col, other) still sees "col" and
 		// registers a conflict
 		return nullptr;
 	}
-	const auto &bound_col = expr.Child().Cast<BoundColumnRefExpression>();
+	const auto &bound_col = cast_child.Cast<BoundColumnRefExpression>();
 	const auto binding = Resolve(bound_col.Binding(), analyses, projections);
 	if (!binding) {
 		return nullptr;
 	}
-	auto &col_to_cast = binding->analysis.col_to_cast;
+	auto &col_to_cast = binding->analysis.col_to_expr;
 
 	if (auto it = col_to_cast.find(binding->column_index); it == col_to_cast.end()) {
 		// Only a top-level projection cast starts a candidate.
@@ -206,7 +219,8 @@ unique_ptr<Expression> CastCollect::VisitReplace(BoundCastExpression &expr, uniq
 			col_to_cast.emplace(binding->column_index, &expr);
 		}
 	} else if (it->second == nullptr || it->second->GetReturnType() != expr.GetReturnType() ||
-	           it->second->Cast<BoundCastExpression>().IsTryCast() != expr.IsTryCast()) {
+	           BoundCastExpression::IsTryCast(it->second->Cast<BoundFunctionExpression>()) !=
+	               BoundCastExpression::IsTryCast(expr)) {
 		// Different target type, or already a conflict.
 		// If reader can push CAST but not TRY_CAST or vice versa, we can't
 		// pretend thery are the same
@@ -216,11 +230,6 @@ unique_ptr<Expression> CastCollect::VisitReplace(BoundCastExpression &expr, uniq
 	return std::move(*ptr);
 }
 
-static bool can_pushdown_column(const GetAnalysis &analysis, ProjectionIndex idx) {
-	const auto it = analysis.col_to_cast.find(idx);
-	return it != analysis.col_to_cast.end() && it->second != nullptr;
-}
-
 unique_ptr<Expression> CastReplace::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *ptr) {
 	const auto binding = Resolve(expr.Binding(), analyses, projections);
 	if (!binding) {
@@ -228,9 +237,8 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundColumnRefExpression &expr,
 	}
 
 	const auto &[analysis, column_index, projection] = *binding;
-	if (can_pushdown_column(analysis, column_index)) {
-		const idx_t storage_index = analysis.get.GetColumnIds()[column_index].GetPrimaryIndex();
-		const LogicalType return_type = analysis.get.returned_types[storage_index];
+	if (CanPushdownColumn(analysis, column_index)) {
+		const LogicalType return_type = analysis.get.returned_types[analysis.StorageIndex(column_index)];
 		expr.SetReturnType(return_type);
 		// LogicalProjection types are resolved by calling
 		// LogicalProjection::ResolveTypes, so we need to check whether types in
@@ -243,11 +251,14 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundColumnRefExpression &expr,
 	return std::move(*ptr);
 }
 
-unique_ptr<Expression> CastReplace::VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *ptr) {
-	if (expr.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+unique_ptr<Expression> CastReplace::VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *ptr) {
+	if (!BoundCastExpression::IsCast(expr)) {
+		return nullptr;
+	}
+	if (BoundCastExpression::Child(expr).GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr; // Same as in ScalarFnCollect::VisitReplace
 	}
-	auto &bound_col_base = expr.ChildMutable();
+	auto &bound_col_base = BoundCastExpression::ChildMutable(expr);
 	const auto &bound_col = bound_col_base->Cast<BoundColumnRefExpression>();
 	const auto binding = Resolve(bound_col.Binding(), analyses, projections);
 	if (!binding) {
@@ -255,12 +266,11 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundCastExpression &expr, uniq
 	}
 
 	const auto &[analysis, column_index, projection] = *binding;
-	if (!can_pushdown_column(analysis, column_index)) {
+	if (!CanPushdownColumn(analysis, column_index)) {
 		return std::move(*ptr);
 	}
 
-	const idx_t storage_index = analysis.get.GetColumnIds()[column_index].GetPrimaryIndex();
-	const LogicalType return_type = analysis.get.returned_types[storage_index];
+	const LogicalType return_type = analysis.get.returned_types[analysis.StorageIndex(column_index)];
 	bound_col_base->SetReturnType(return_type);
 	// Same as in CastReplace::VisitReplace(BoundColumnRefExpression)
 	if (projection != nullptr && !projection->types.empty()) {
@@ -277,36 +287,12 @@ CastReplace::CastReplace(Analyses &analyses, const Projections &projections)
     : analyses(analyses), projections(projections) {
 }
 
-unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> op) {
-	Analyses analyses;
-	Projections projections;
-	FindGetsAndProjections(*op, analyses, projections);
-	if (analyses.empty()) {
-		return op;
-	}
-	CastCollect(analyses, projections).VisitOperator(*op);
+bool CanPushdownColumn(const GetAnalysis &analysis, ProjectionIndex idx) {
+	const auto it = analysis.col_to_expr.find(idx);
+	return it != analysis.col_to_expr.end() && it->second != nullptr;
+}
 
-	bool any_pushed = false;
-	for (auto &[_, analysis] : analyses) {
-		for (auto &[column_index, expr] : analysis.col_to_cast) {
-			if (expr == nullptr) { // Conflict for column
-				continue;
-			}
-			const idx_t storage_index = analysis.get.GetColumnIds()[column_index].GetPrimaryIndex();
-			TableFunctionProjectionExpressionInput input {analysis.get, *expr, storage_index};
-			if (analysis.get.function.projection_expression_pushdown(context, input)) {
-				// LOGICAL_GET doesn't initialize .types of LogicalOperator
-				analysis.get.returned_types[storage_index] = expr->GetReturnType();
-				any_pushed = true;
-			} else { // failed to push down expression, can't replace it
-				expr = nullptr;
-			}
-		}
-	}
-
-	if (any_pushed) {
-		CastReplace(analyses, projections).VisitOperator(*op);
-	}
-	return op;
+idx_t GetAnalysis::StorageIndex(ProjectionIndex idx) const {
+	return get.GetColumnIds()[idx].GetPrimaryIndex();
 }
 } // namespace duckdb

@@ -4,7 +4,7 @@ DescribeStatement <- ShowTables / ShowDeprecatedSelect / DescribeSelect / ShowAl
 # so ShowDeprecatedSelect is parsed yet suppressed from autocomplete (matcher.cpp) - SHOW won't offer to complete a query.
 ShowDeprecatedSelect <- ShowRule SelectStatementInternal
 DescribeSelect <- DescribeOrSummarize SelectStatementInternal
-ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
+ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'?
 ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
 
 # "SHOW name" is settings-first, so its target autocompletes setting names (and the special MySQL forms), not

@@ -149,6 +149,9 @@ public:
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
 	                        unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
+	//! Returns true if this ART may hold GEOMETRY keys in the legacy pre-v1.5.0 encoding,
+	//! which key generation cannot reproduce byte-identically.
+	bool HasLegacyGeometryKeys() const;
 
 	//! Verifies the nodes.
 	void Verify(IndexLock &l) override;

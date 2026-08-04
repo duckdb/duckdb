@@ -65,7 +65,8 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
 }
 
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransformer &transformer,
-                                                                    const ShowType &show_or_describe) {
+                                                                    const ShowType &show_or_describe,
+                                                                    const bool &has_result) {
 	auto showref = make_uniq<ShowRef>();
 	SetShowAllTables(*showref);
 	return WrapShowRef(std::move(showref));

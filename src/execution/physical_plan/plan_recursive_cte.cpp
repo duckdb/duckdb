@@ -1,7 +1,9 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
+#include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -29,7 +31,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	if (op.key_targets.empty()) {
 		auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 		recurring_cte_tables[op.table_index] = recurring_table;
+		planning_recursive_cte_depth++;
 		auto &right = CreatePlan(*op.children[1]);
+		planning_recursive_cte_depth--;
 		auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
 		                                       op.estimated_cardinality);
 		auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
@@ -78,7 +82,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 	recurring_cte_tables[op.table_index] = recurring_table;
 
+	planning_recursive_cte_depth++;
 	auto &right = CreatePlan(*op.children[1]);
+	planning_recursive_cte_depth--;
 	auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
 	                                       op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
@@ -114,6 +120,19 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 
 		auto &cast_chunk_scan = chunk_scan.Cast<PhysicalColumnDataScan>();
 		cast_chunk_scan.collection = cte->second.get();
+		auto cte_order = materialized_cte_orders.find(op.cte_index);
+		if (cte_order != materialized_cte_orders.end()) {
+			cast_chunk_scan.source_order = cte_order->second;
+		}
+
+		auto exchange = materialized_cte_exchanges.find(op.cte_index);
+		if (exchange != materialized_cte_exchanges.end()) {
+			// Exchange consumers can still be converted to materialized scans during pipeline construction.
+			auto consumer_idx = exchange->second->RegisterConsumer();
+			auto &source = Make<PhysicalCTEConsumerSource>(op.chunk_types, op.estimated_cardinality, op.cte_index,
+			                                               exchange->second, consumer_idx);
+			cast_chunk_scan.cte_source = source;
+		}
 		materialized_cte->second.push_back(cast_chunk_scan);
 		return chunk_scan;
 	}

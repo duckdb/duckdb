@@ -1,0 +1,463 @@
+module: scalar_function
+functions:
+  create_scalar_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: scalar_function
+    parameters: {}
+    return_type: scalar_function
+    description: |
+      Creates a new empty scalar function.
+
+      The return value must be destroyed with `duckdb_destroy_scalar_function`.
+    return_description: The scalar function object.
+  destroy_scalar_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: scalar_function
+    parameters:
+      scalar_function:
+        type: scalar_function
+        indirection: 1
+        description: The scalar function to destroy
+    return_type: opaque
+    description: |
+      Destroys the given scalar function object.
+  scalar_function_set_name:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function
+      name:
+        type: char
+        indirection: 1
+        const: true
+        description: The name of the scalar function
+    return_type: opaque
+    description: |
+      Sets the name of the given scalar function.
+  scalar_function_set_varargs:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function.
+      type:
+        type: logical_type
+        description: The type of the arguments.
+    return_type: opaque
+    description: |
+      Sets the parameters of the given scalar function to varargs. Does not require adding parameters with
+      duckdb_scalar_function_add_parameter.
+    return_description: The parameter type. Cannot contain INVALID.
+  scalar_function_set_special_handling:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function.
+    return_type: opaque
+    description: |
+      Sets the scalar function's null-handling behavior to special.
+  scalar_function_set_volatile:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function.
+    return_type: opaque
+    description: |
+      Sets the Function Stability of the scalar function to VOLATILE, indicating the function should be re-run for every row.
+      This limits optimization that can be performed for the function.
+  scalar_function_add_parameter:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function.
+      type:
+        type: logical_type
+        description: The parameter type. Cannot contain INVALID.
+    return_type: opaque
+    description: |
+      Adds a parameter to the scalar function.
+  scalar_function_set_return_type:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function
+      type:
+        type: logical_type
+        description: Cannot contain INVALID or ANY.
+    return_type: opaque
+    description: |
+      Sets the return type of the scalar function.
+  scalar_function_set_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function
+      extra_info:
+        type: opaque
+        indirection: 1
+        description: The extra information
+      destroy:
+        type: delete_callback_t
+        description: The callback that will be called to destroy the extra information (if any)
+    return_type: opaque
+    description: |
+      Assigns extra information to the scalar function that can be fetched during binding, etc.
+  scalar_function_set_bind:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function.
+      bind:
+        type: scalar_function_bind_t
+        description: The bind function.
+    return_type: opaque
+    description: |
+      Sets the (optional) bind function of the scalar function.
+  scalar_function_set_bind_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info of the scalar function.
+      bind_data:
+        type: opaque
+        indirection: 1
+        description: The bind data object.
+      destroy:
+        type: delete_callback_t
+        description: The callback to destroy the bind data (if any).
+    return_type: opaque
+    description: |
+      Sets the user-provided bind data in the bind object of the scalar function.
+      The bind data object can be retrieved again during execution.
+      In most case, you also need to set the copy-callback of your bind data via duckdb_scalar_function_set_bind_data_copy.
+  scalar_function_set_bind_data_copy:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info of the scalar function.
+      copy:
+        type: copy_callback_t
+        description: The callback to copy the bind data (if any).
+    return_type: opaque
+    description: |
+      Sets the copy-callback for the user-provided bind data in the bind object of the scalar function.
+  scalar_function_bind_set_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info object.
+      error:
+        type: char
+        indirection: 1
+        const: true
+        description: The error message.
+    return_type: opaque
+    description: |
+      Report that an error has occurred while calling bind on a scalar function.
+  scalar_function_set_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function
+      function:
+        type: scalar_function_t
+        description: The function
+    return_type: opaque
+    description: |
+      Sets the main function of the scalar function.
+  register_scalar_function:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      con:
+        type: connection
+        description: The connection to register it in.
+      scalar_function:
+        type: scalar_function
+        description: The function pointer
+    return_type: state
+    description: |
+      Register the scalar function object within the given connection.
+
+      The function requires at least a name, a function and a return type.
+
+      If the function is incomplete or a function with this name already exists DuckDBError is returned.
+    return_description: Whether or not the registration was successful.
+  scalar_function_get_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object.
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Retrieves the extra info of the function as set in `duckdb_scalar_function_set_extra_info`.
+    return_description: The extra info.
+  scalar_function_bind_get_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The info object.
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Retrieves the extra info of the function as set in the bind info.
+    return_description: The extra info.
+  scalar_function_get_bind_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The function info.
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`.
+      Note that the bind data is read-only.
+    return_description: The bind data object.
+  scalar_function_get_client_context:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info object of the scalar function.
+      out_context:
+        type: client_context
+        indirection: 1
+        kind: OUT
+        description: The client context of the bind info. Must be destroyed with `duckdb_destroy_client_context`.
+    return_type: opaque
+    description: |
+      Retrieves the client context of the bind info of a scalar function.
+  scalar_function_set_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The info object.
+      error:
+        type: char
+        indirection: 1
+        const: true
+        description: The error message
+    return_type: opaque
+    description: |
+      Report that an error has occurred while executing the scalar function.
+  create_scalar_function_set:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: constructor
+    belongs_to: scalar_function_set
+    parameters:
+      name:
+        type: char
+        indirection: 1
+        const: true
+    return_type: scalar_function_set
+    description: |
+      Creates a new empty scalar function set.
+
+      The return value must be destroyed with `duckdb_destroy_scalar_function_set`.
+    return_description: The scalar function set object.
+  destroy_scalar_function_set:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    role: destructor
+    belongs_to: scalar_function_set
+    parameters:
+      scalar_function_set:
+        type: scalar_function_set
+        indirection: 1
+    return_type: opaque
+    description: |
+      Destroys the given scalar function set object.
+  add_scalar_function_to_set:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      set:
+        type: scalar_function_set
+        description: The scalar function set
+      function:
+        type: scalar_function
+        description: The function to add
+    return_type: state
+    description: |
+      Adds the scalar function as a new overload to the scalar function set.
+
+      Returns DuckDBError if the function could not be added, for example if the overload already exists.
+  register_scalar_function_set:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      con:
+        type: connection
+        description: The connection to register it in.
+      set:
+        type: scalar_function_set
+        description: The function set to register
+    return_type: state
+    description: |
+      Register the scalar function set within the given connection.
+
+      The set requires at least a single valid overload.
+
+      If the set is incomplete or a function with this name already exists DuckDBError is returned.
+    return_description: Whether or not the registration was successful.
+  scalar_function_bind_get_argument_count:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info.
+    return_type: idx
+    description: |
+      Returns the number of input arguments of the scalar function.
+    return_description: The number of input arguments.
+  scalar_function_bind_get_argument:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: bind_info
+        description: The bind info.
+      index:
+        type: idx
+        description: The argument index.
+    return_type: expression
+    description: |
+      Returns the input argument at index of the scalar function.
+    return_description: The input argument at index. Must be destroyed with `duckdb_destroy_expression`.
+  scalar_function_get_state:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: function_info
+        description: The function info object.
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Retrieves the state pointer of the function info.
+    return_description: The state pointer.
+  scalar_function_set_init:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      scalar_function:
+        type: scalar_function
+        description: The scalar function.
+      init:
+        type: scalar_function_init_t
+        description: The init function.
+    return_type: opaque
+    description: |
+      Sets the (optional) state init function of the scalar function.
+      This is called once for each worker thread that begins executing the function
+  scalar_function_init_set_error:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The init info object.
+      error:
+        type: char
+        indirection: 1
+        const: true
+        description: The error message.
+    return_type: opaque
+    description: |
+      Report that an error has occurred while calling init on a scalar function.
+  scalar_function_init_set_state:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The init info object.
+      state:
+        type: opaque
+        indirection: 1
+        description: The state pointer.
+      destroy:
+        type: delete_callback_t
+        description: The callback to destroy the state (if any).
+    return_type: opaque
+    description: |
+      Sets the state pointer in the init info of the scalar function.
+  scalar_function_init_get_client_context:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The init info object of the scalar function.
+      out_context:
+        type: client_context
+        indirection: 1
+        kind: OUT
+        description: The client context of the init info. Must be destroyed with `duckdb_destroy_client_context`.
+    return_type: opaque
+    description: |
+      Retrieves the client context of the init info of a scalar function.
+  scalar_function_init_get_bind_data:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The init info object.
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`.
+      Note that the bind data is read-only.
+    return_description: The bind data object.
+  scalar_function_init_get_extra_info:
+    lifecycle:
+      - ["frozen", "v1.5.4", "2026-05-18"]
+    parameters:
+      info:
+        type: init_info
+        description: The init info object.
+    return_type: opaque
+    return_pointer: 1
+    description: |
+      Retrieves the extra info of the function as set in the init info.
+    return_description: The extra info.

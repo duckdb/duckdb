@@ -30,6 +30,19 @@ class DataChunk;
 
 enum class ReaderInitializeType { INITIALIZED, SKIP_READING_FILE };
 
+struct MultiFileDynamicPushdownInfo {
+	MultiFileDynamicPushdownInfo(ClientContext &context, const MultiFileOptions &options,
+	                             const vector<Identifier> &column_names, const vector<LogicalType> &column_types,
+	                             const vector<ColumnIndex> &column_indexes, TableFilterSet &filters);
+	ClientContext &context;
+	const MultiFileOptions &options;
+	const vector<Identifier> &column_names;
+	const vector<LogicalType> &column_types;
+	const vector<ColumnIndex> &column_indexes;
+	vector<column_t> column_ids;
+	TableFilterSet &filters;
+};
+
 struct MultiFileReaderVirtualColumnBinding {
 public:
 	enum class VirtualColumnBindingType : uint8_t { COLUMN_REFERENCE, EXPRESSION, CONSTANT };
@@ -123,10 +136,8 @@ public:
 	                                                                   const MultiFileOptions &options,
 	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
-	DUCKDB_API virtual unique_ptr<MultiFileList>
-	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileOptions &options,
-	                      const vector<Identifier> &names, const vector<LogicalType> &types,
-	                      const vector<column_t> &column_ids, TableFilterSet &filters);
+	DUCKDB_API virtual unique_ptr<MultiFileList> DynamicFilterPushdown(const MultiFileList &files,
+	                                                                   MultiFileDynamicPushdownInfo &pushdown_info);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.
