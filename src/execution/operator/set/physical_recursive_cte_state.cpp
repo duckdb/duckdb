@@ -231,14 +231,6 @@ void RecursiveCTESchedulerState::CompleteInlineStage(const RecursiveCTEPipelineS
 	}
 }
 
-void RecursiveCTESchedulerState::SetEpochThreadLimit(idx_t limit) {
-	recursive_epoch_thread_limit = MaxValue<idx_t>(limit, 1);
-}
-
-idx_t RecursiveCTESchedulerState::EpochThreadLimit() const {
-	return recursive_epoch_thread_limit;
-}
-
 void RecursiveCTESchedulerState::PrepareExecutorEntry(Pipeline &pipeline) {
 	cached_executors.emplace(reference<Pipeline>(pipeline), vector<unique_ptr<PipelineExecutor>>());
 }
