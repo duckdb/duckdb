@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/helper.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -219,6 +218,37 @@ struct BinaryExecutor {
 	}
 #endif
 
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
+	          bool LEFT_HAS_SEL, bool RIGHT_HAS_SEL>
+	static void ExecuteGenericLoopNoNull(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+	                                     RESULT_TYPE *__restrict result_data, const sel_t *__restrict lsel,
+	                                     const sel_t *__restrict rsel, idx_t count, ValidityMask &result_validity,
+	                                     FUNC fun) {
+		auto result_ptr = result_data;
+		auto result_end = result_data + count;
+		idx_t result_idx = 0;
+		while (result_ptr != result_end) {
+			idx_t lindex;
+			idx_t rindex;
+			if constexpr (LEFT_HAS_SEL) {
+				lindex = *lsel++;
+			} else {
+				lindex = result_idx;
+			}
+			if constexpr (RIGHT_HAS_SEL) {
+				rindex = *rsel++;
+			} else {
+				rindex = result_idx;
+			}
+			auto lentry = ldata[lindex];
+			auto rentry = rdata[rindex];
+			*result_ptr = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
+			    fun, lentry, rentry, result_validity, result_idx);
+			result_ptr++;
+			result_idx++;
+		}
+	}
+
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static void ExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                               RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
@@ -237,13 +267,25 @@ struct BinaryExecutor {
 					result_validity.SetInvalid(i);
 				}
 			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				auto lentry = ldata[lsel->get_index(i)];
-				auto rentry = rdata[rsel->get_index(i)];
-				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-				    fun, lentry, rentry, result_validity, i);
+			return;
+		}
+
+		auto lsel_data = lsel->data();
+		auto rsel_data = rsel->data();
+		if (lsel_data) {
+			if (rsel_data) {
+				ExecuteGenericLoopNoNull<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, true, true>(
+				    ldata, rdata, result_data, lsel_data, rsel_data, count, result_validity, fun);
+			} else {
+				ExecuteGenericLoopNoNull<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, true, false>(
+				    ldata, rdata, result_data, lsel_data, nullptr, count, result_validity, fun);
 			}
+		} else if (rsel_data) {
+			ExecuteGenericLoopNoNull<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, true>(
+			    ldata, rdata, result_data, nullptr, rsel_data, count, result_validity, fun);
+		} else {
+			ExecuteGenericLoopNoNull<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, false>(
+			    ldata, rdata, result_data, nullptr, nullptr, count, result_validity, fun);
 		}
 	}
 
