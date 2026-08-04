@@ -252,8 +252,10 @@ static bool CanAddCTEReference(ClientContext &context, const DuplicateEliminated
 class CandidateAnalyzer {
 public:
 	CandidateAnalyzer(ClientContext &context_p, const DuplicateEliminatedDomainCTERegistry &cte_registry_p,
-	                  const vector<unique_ptr<Expression>> &keys_p, const BindingEquivalence &equivalence_p)
-	    : context(context_p), cte_registry(cte_registry_p), keys(keys_p), equivalence(equivalence_p) {
+	                  const vector<unique_ptr<Expression>> &keys_p, const BindingEquivalence &equivalence_p,
+	                  bool allow_cte_candidates_p)
+	    : context(context_p), cte_registry(cte_registry_p), keys(keys_p), equivalence(equivalence_p),
+	      allow_cte_candidates(allow_cte_candidates_p) {
 	}
 
 	vector<AnalyzedCandidate> Analyze(unique_ptr<LogicalOperator> &root) {
@@ -319,7 +321,8 @@ private:
 		}
 		case LogicalOperatorType::LOGICAL_CTE_REF: {
 			auto &cte_ref = op->Cast<LogicalCTERef>();
-			result.supported_source = can_factor_operator && CanAddCTEReference(context, cte_registry, cte_ref);
+			result.supported_source =
+			    allow_cte_candidates && can_factor_operator && CanAddCTEReference(context, cte_registry, cte_ref);
 			auto bindings = op->GetColumnBindings();
 			result.source_bindings.insert(bindings.begin(), bindings.end());
 			result.base_relation_count = 1;
@@ -409,6 +412,7 @@ private:
 	const DuplicateEliminatedDomainCTERegistry &cte_registry;
 	const vector<unique_ptr<Expression>> &keys;
 	const BindingEquivalence &equivalence;
+	bool allow_cte_candidates;
 	vector<AnalyzedCandidate> candidates;
 	idx_t next_order = 0;
 };
@@ -998,7 +1002,10 @@ DuplicateEliminatedDomainAnalyzer::FindBest(ClientContext &context,
 	join.children[0]->ResolveOperatorTypes();
 	BindingEquivalence equivalence;
 	CollectEquivalences(*join.children[0], equivalence);
-	CandidateAnalyzer analyzer(context, cte_registry, join.duplicate_eliminated_columns, equivalence);
+	// Reusing a CTE as a MARK domain removes the generated pair domain and lets the ordinary MARK-to-SEMI rewrite
+	// fire. Other join types can evaluate many additional groups without that compensating topology improvement.
+	CandidateAnalyzer analyzer(context, cte_registry, join.duplicate_eliminated_columns, equivalence,
+	                           join.join_type == JoinType::MARK);
 	auto candidates = analyzer.Analyze(join.children[0]);
 	RelationStatsExtractor stats_extractor(context, cte_registry);
 	idx_t payload_cardinality;

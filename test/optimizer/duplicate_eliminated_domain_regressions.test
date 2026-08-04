@@ -404,6 +404,11 @@ EXPLAIN SELECT * FROM dedup_reg_outer_join_domain;
 ----
 logical_opt	<!REGEX>:.*__duckdb_duplicate_eliminated_factor_.*
 
+query II
+EXPLAIN SELECT * FROM dedup_reg_outer_join_domain;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
 # Additional-group elimination may not cross UNNEST, windows, and ANY before reduction.
 statement ok
 CREATE VIEW dedup_reg_unnest_any AS

@@ -228,6 +228,66 @@ WHERE p.v < (
 ----
 logical_opt	<REGEX>:.*__duckdb_duplicate_eliminated_factor_[0-9]+.*
 
+# A reusable CTE is only an alternative domain source for a MARK join. A SINGLE join retains the observed payload
+# domain because using the broader CTE keys would evaluate scalar groups that later payload joins can discard.
+statement ok
+CREATE TABLE dedup_cte_keys AS SELECT i::INTEGER AS k FROM range(100) r(i);
+
+statement ok
+CREATE TABLE dedup_cte_payload AS SELECT (i % 100)::INTEGER AS k FROM range(10000) r(i);
+
+statement ok
+CREATE TABLE dedup_cte_measure AS SELECT (i % 100)::INTEGER AS k, i::INTEGER AS v FROM range(1000) r(i);
+
+statement ok
+ANALYZE;
+
+query I
+WITH keyed AS (
+    SELECT k, row_number() OVER (ORDER BY k) AS rn
+    FROM dedup_cte_keys
+)
+SELECT count(*)
+FROM (
+    SELECT p.k, (SELECT count(*) FROM dedup_cte_measure m WHERE m.k = keyed.k) AS n
+    FROM dedup_cte_payload p
+    JOIN keyed ON p.k = keyed.k
+);
+----
+10000
+
+query II
+EXPLAIN
+WITH keyed AS (
+    SELECT k, row_number() OVER (ORDER BY k) AS rn
+    FROM dedup_cte_keys
+)
+SELECT p.k, (SELECT count(*) FROM dedup_cte_measure m WHERE m.k = keyed.k) AS n
+FROM dedup_cte_payload p
+JOIN keyed ON p.k = keyed.k;
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
+# The same rule applies when a correlated IN predicate is the condition of a LEFT join. The broader CTE key set must
+# not replace the exact payload domain merely because the CTE source itself is cheaper to scan.
+statement ok
+CREATE TABLE dedup_cte_probe AS SELECT i::INTEGER AS v FROM range(100) r(i);
+
+query II
+EXPLAIN
+WITH keyed AS (
+    SELECT k, row_number() OVER (ORDER BY k) AS rn
+    FROM dedup_cte_keys
+)
+SELECT p.k, q.v
+FROM dedup_cte_payload p
+JOIN keyed ON p.k = keyed.k
+LEFT JOIN dedup_cte_probe q ON q.v IN (
+    SELECT m.v FROM dedup_cte_measure m WHERE m.k = keyed.k
+);
+----
+logical_opt	<REGEX>:.*__duckdb_delim_[0-9]+.*
+
 # Safety to evaluate additional groups does not imply that globally aggregating a large relation is profitable. Keep
 # the observed one-key domain below the aggregate.
 statement ok
