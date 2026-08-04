@@ -132,19 +132,53 @@ true	true
 # Nested values requiring quotes
 
 query I
-SELECT variant_extract_string({
-	'uuid': uuid,
-	'blob': blob,
-	'bit': bit,
-	'interval': interval,
-	'timestamp': timestamp,
-	'timestamp_tz': timestamp_tz,
-	'geometry': geometry
-}::VARIANT, '')
+SELECT variant_extract_string({'uuid': uuid}::VARIANT, '')
 FROM test_all_types()
 WHERE bool = false;
 ----
-{"uuid":"00000000-0000-0000-0000-000000000000","blob":"thisisalongblob\\x00withnullbytes","bit":"0010001001011100010101011010111","interval":"00:00:00","timestamp":"290309-12-22 (BC) 00:00:00","timestamp_tz":"290309-12-22 (BC) 00:00:00+00","geometry":"POINT EMPTY"}
+{"uuid":"00000000-0000-0000-0000-000000000000"}
+
+query I
+SELECT variant_extract_string({'blob': blob}::VARIANT, '')
+FROM test_all_types()
+WHERE bool = false;
+----
+{"blob":"thisisalongblob\\x00withnullbytes"}
+
+query I
+SELECT variant_extract_string({'bit': bit}::VARIANT, '')
+FROM test_all_types()
+WHERE bool = false;
+----
+{"bit":"0010001001011100010101011010111"}
+
+query I
+SELECT variant_extract_string({'interval': interval}::VARIANT, '')
+FROM test_all_types()
+WHERE bool = false;
+----
+{"interval":"00:00:00"}
+
+query I
+SELECT variant_extract_string({'timestamp': timestamp}::VARIANT, '')
+FROM test_all_types()
+WHERE bool = false;
+----
+{"timestamp":"290309-12-22 (BC) 00:00:00"}
+
+query I
+SELECT variant_extract_string({'timestamp_tz': timestamp_tz}::VARIANT, '')
+FROM test_all_types()
+WHERE bool = false;
+----
+{"timestamp_tz":"290309-12-22 (BC) 00:00:00+00"}
+
+query I
+SELECT variant_extract_string({'geometry': geometry}::VARIANT, '')
+FROM test_all_types()
+WHERE bool = false;
+----
+{"geometry":"POINT EMPTY"}
 
 # Escape Sequences
 
