@@ -267,3 +267,29 @@ query I
 SELECT current_query();
 ----
 SELECT current_query();
+
+statement ok
+SET search_path = information_schema;
+
+query I
+SELECT current_setting('search_path');
+----
+information_schema
+
+query I
+SELECT count(*) > 0 FROM schemata WHERE schema_name = 'main';
+----
+true
+
+statement ok
+SET schema = information_schema;
+
+query I
+SELECT current_schema();
+----
+information_schema
+
+query I
+SELECT count(*) > 0 FROM schemata WHERE schema_name = 'main';
+----
+true
