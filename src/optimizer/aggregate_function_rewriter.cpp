@@ -5,6 +5,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -17,6 +18,29 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
+
+static void RewriteAggregateCallbacks(Optimizer &optimizer, unique_ptr<LogicalOperator> &op) {
+	if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		auto &aggregate_op = op->Cast<LogicalAggregate>();
+		for (auto &expr : aggregate_op.expressions) {
+			auto &aggregate = expr->Cast<BoundAggregateExpression>();
+			if (!aggregate.Function().HasRewriteCallback() ||
+			    aggregate.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+				continue;
+			}
+			AggregateRewriteInput input(optimizer, aggregate_op, aggregate, AggregateRewriteMode::DIRECT);
+			auto rewrite = aggregate.Function().GetRewriteCallback()(input);
+			if (!rewrite || !rewrite->expression) {
+				continue;
+			}
+			D_ASSERT(rewrite->expression->GetReturnType() == expr->GetReturnType());
+			expr = std::move(rewrite->expression);
+		}
+	}
+	for (auto &child : op->children) {
+		RewriteAggregateCallbacks(optimizer, child);
+	}
+}
 
 class AggregateRewriteRule {
 public:
@@ -416,6 +440,7 @@ AggregateFunctionRewriter::~AggregateFunctionRewriter() {
 }
 
 void AggregateFunctionRewriter::Optimize(unique_ptr<LogicalOperator> &op) {
+	RewriteAggregateCallbacks(optimizer, op);
 	// Run each rule as an independent pass so that transformations by an earlier rule affect later rules
 	for (auto &rule : rules) {
 		AggregateFunctionRewriterInternal rewriter(optimizer, *rule);

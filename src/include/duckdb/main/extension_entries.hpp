@@ -59,7 +59,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"__aws__cloudformation__quack_on_ec2__destroy", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"__aws__cloudformation__quack_on_ec2__list", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"__aws__cloudformation__quack_on_ec2__status", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"__internal_entropy_from_counts", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"__internal_json_copy_to_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"abs", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"acos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},

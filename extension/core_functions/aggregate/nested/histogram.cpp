@@ -3,15 +3,34 @@
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/types/sql_value_map.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/function/aggregate/list_aggregate.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
 
 namespace {
+static unique_ptr<Expression> BindScalar(ClientContext &context, const char *name,
+                                         vector<unique_ptr<Expression>> children) {
+	FunctionBinder function_binder(context);
+	ErrorData error;
+	auto result = function_binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children), error);
+	if (!result) {
+		error.Throw();
+	}
+	return result;
+}
+
 template <class MAP_TYPE>
 struct HistogramFunction {
 	template <class STATE>
@@ -138,11 +157,13 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	using HIST_FUNC = HistogramFunction<MAP_TYPE>;
 
 	auto struct_type = LogicalType::MAP(type, LogicalType::UBIGINT);
-	return AggregateFunction(
+	auto function = AggregateFunction(
 	    "histogram", {type}, struct_type, AggregateFunction::StateSize<STATE_TYPE>,
 	    AggregateFunction::StateInitialize<STATE_TYPE, HIST_FUNC>, HistogramUpdateFunction<OP, T, MAP_TYPE>,
 	    AggregateFunction::StateCombine<STATE_TYPE, HIST_FUNC>, HistogramFinalizeFunction<OP, T, MAP_TYPE>, nullptr,
 	    nullptr, AggregateFunction::StateDestroy<STATE_TYPE, HIST_FUNC>);
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	return function;
 }
 
 template <class OP, class T, class MAP_TYPE>
@@ -153,9 +174,9 @@ AggregateFunction GetMapTypeInternal(const LogicalType &type) {
 template <class OP, class T, bool IS_ORDERED>
 AggregateFunction GetMapType(const LogicalType &type) {
 	if (IS_ORDERED) {
-		return GetMapTypeInternal<OP, T, DefaultMapType<map<T, idx_t>>>(type);
+		return GetMapTypeInternal<OP, T, DefaultMapType<sql_value_ordered_map_t<T, idx_t>>>(type);
 	}
-	return GetMapTypeInternal<OP, T, DefaultMapType<unordered_map<T, idx_t>>>(type);
+	return GetMapTypeInternal<OP, T, DefaultMapType<sql_value_map_t<T, idx_t>>>(type);
 }
 
 template <class OP, bool IS_ORDERED>
@@ -201,6 +222,40 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	}
 }
 
+static FrequencyAggregateFinalizeResult FinalizeHistogramRewrite(FrequencyAggregateFinalizeInput &input) {
+	auto &optimizer = input.rewrite_input.optimizer;
+	auto frequency =
+	    BoundCastExpression::AddCastToType(optimizer.context, std::move(input.frequency), LogicalType::UBIGINT);
+	vector<unique_ptr<Expression>> entry_children;
+	entry_children.push_back(std::move(input.value));
+	entry_children.push_back(std::move(frequency));
+	auto entry = BindScalar(optimizer.context, "row", std::move(entry_children));
+
+	vector<unique_ptr<Expression>> list_children;
+	list_children.push_back(std::move(entry));
+	FunctionBinder function_binder(optimizer.context);
+	auto list = function_binder.BindAggregateFunction(ListFun::GetFunction(), std::move(list_children),
+	                                                  std::move(input.filter));
+	auto list_type = list->GetReturnType();
+
+	FrequencyAggregateFinalizeResult result;
+	result.aggregates.push_back(std::move(list));
+	auto list_ref = make_uniq<BoundColumnRefExpression>(
+	    list_type, ColumnBinding(input.aggregate_index, ProjectionIndex(result.aggregates.size() - 1)));
+	vector<unique_ptr<Expression>> sort_children;
+	sort_children.push_back(std::move(list_ref));
+	auto sorted_entries = BindScalar(optimizer.context, "list_sort", std::move(sort_children));
+	vector<unique_ptr<Expression>> map_children;
+	map_children.push_back(std::move(sorted_entries));
+	result.result = BindScalar(optimizer.context, "map_from_entries", std::move(map_children));
+	D_ASSERT(result.result->GetReturnType() == input.rewrite_input.aggregate.GetReturnType());
+	return result;
+}
+
+static unique_ptr<AggregateRewriteResult> RewriteHistogram(AggregateRewriteInput &input) {
+	return FrequencyAggregateRewrite::Create(input, true, false, FinalizeHistogramRewrite);
+}
+
 template <bool IS_ORDERED = true>
 unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
@@ -211,6 +266,7 @@ unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input
 		throw ParameterNotResolvedException();
 	}
 	function.ReplaceImplementation(GetHistogramFunction<IS_ORDERED>(arguments[0]->GetReturnType()));
+	function.SetRewriteCallback(RewriteHistogram);
 	return make_uniq<VariableReturnBindData>(function.GetReturnType());
 }
 

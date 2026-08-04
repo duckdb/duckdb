@@ -9,6 +9,7 @@ add_subdirectory(statistics)
 add_library_unity(
   duckdb_optimizer
   OBJECT
+  aggregate_rewrite.cpp
   aggregate_function_rewriter.cpp
   aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp

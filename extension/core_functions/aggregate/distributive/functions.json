@@ -101,13 +101,6 @@
         "aliases": ["countif"]
     },
     {
-        "name": "__internal_entropy_from_counts",
-        "parameters": "frequency",
-        "description": "Internal finalizer for entropy over precomputed frequencies.",
-        "example": "",
-        "type": "aggregate_function"
-    },
-    {
         "name": "entropy",
         "parameters": "x",
         "description": "Returns the log-2 entropy of count input-values.",
