@@ -591,7 +591,7 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		if (entries.empty()) {
 			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
 			if (catalog_entry) {
-				entries.emplace_back(catalog, Identifier(catalog_entry->GetDefaultSchema()));
+				entries.emplace_back(catalog, catalog_entry->GetDefaultSchema());
 			} else {
 				entries.emplace_back(catalog, DEFAULT_SCHEMA);
 			}
@@ -1156,8 +1156,8 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 		auto transaction = catalog_by_name->GetCatalogTransaction(retriever.GetContext());
 		QueryErrorContext context;
 
-		string table_schema = catalog_by_name->GetDefaultTableSchema();
-		string table_name = catalog_by_name->GetDefaultTable();
+		auto table_schema = catalog_by_name->GetDefaultTableSchema();
+		auto table_name = catalog_by_name->GetDefaultTable();
 
 		optional_ptr<BoundAtClause> at_clause;
 		if (!catalog_by_name->SupportsTimeTravel() && allow_ignore_at_clause) {
@@ -1166,10 +1166,8 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 			at_clause = lookup_info.GetAtClause();
 		}
 
-		EntryLookupInfo info(
-		    CatalogType::TABLE_ENTRY,
-		    QualifiedName(catalog_by_name->GetName(), Identifier(table_schema), Identifier(table_name)), at_clause,
-		    context);
+		EntryLookupInfo info(CatalogType::TABLE_ENTRY,
+		                     QualifiedName(catalog_by_name->GetName(), table_schema, table_name), at_clause, context);
 		return catalog_by_name->TryLookupEntryInternal(transaction, info);
 	}
 
@@ -1186,9 +1184,9 @@ CatalogEntryLookup Catalog::TryLookupDefaultSchema(CatalogEntryRetriever &retrie
 			continue;
 		}
 		auto transaction = catalog_entry->GetCatalogTransaction(retriever.GetContext());
-		EntryLookupInfo default_schema_lookup(lookup_info, QualifiedName(catalog_entry->GetName(),
-		                                                                 Identifier(catalog_entry->GetDefaultSchema()),
-		                                                                 lookup_info.GetEntryIdentifier()));
+		EntryLookupInfo default_schema_lookup(lookup_info,
+		                                      QualifiedName(catalog_entry->GetName(), catalog_entry->GetDefaultSchema(),
+		                                                    lookup_info.GetEntryIdentifier()));
 		auto result = catalog_entry->TryLookupEntryInternal(transaction, default_schema_lookup);
 		if (result.Found() || result.error.HasError()) {
 			return result;
@@ -1470,7 +1468,7 @@ ErrorData Catalog::SupportsCreateTable(BoundCreateTableInfo &info) {
 	return ErrorData();
 }
 
-string Catalog::GetDefaultSchema() const {
+Identifier Catalog::GetDefaultSchema() const {
 	return DEFAULT_SCHEMA;
 }
 
@@ -1480,15 +1478,15 @@ bool Catalog::HasDefaultTable() const {
 }
 
 void Catalog::SetDefaultTable(const Identifier &schema, const Identifier &name) {
-	default_table = name.GetIdentifierName();
-	default_table_schema = schema.GetIdentifierName();
+	default_table = name;
+	default_table_schema = schema;
 }
 
-string Catalog::GetDefaultTable() const {
+Identifier Catalog::GetDefaultTable() const {
 	return default_table;
 }
 
-string Catalog::GetDefaultTableSchema() const {
+Identifier Catalog::GetDefaultTableSchema() const {
 	return !default_table_schema.empty() ? default_table_schema : DEFAULT_SCHEMA;
 }
 
