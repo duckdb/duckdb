@@ -26,6 +26,7 @@ add_library_unity(
   test_strftime.cpp
   test_string_util.cpp
   test_substring_oob.cpp
+  test_nested_copy_null_child.cpp
   test_utf8_codepoint_oob.cpp
   test_temporary_memory_manager.cpp
   test_versioning_utils.cpp
