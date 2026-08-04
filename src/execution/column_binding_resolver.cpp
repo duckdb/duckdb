@@ -8,7 +8,6 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -23,6 +22,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 
 		VisitOperator(*comp_join.children[0]);
+		auto left_bindings = bindings;
+		auto left_types = types;
 		for (auto &cond : comp_join.conditions) {
 			if (cond.IsComparison()) {
 				VisitExpression(&cond.LeftReference());
@@ -34,6 +35,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		}
 
 		VisitOperator(*comp_join.children[1]);
+		auto right_bindings = bindings;
+		auto right_types = types;
 		for (auto &cond : comp_join.conditions) {
 			if (cond.IsComparison()) {
 				VisitExpression(&cond.RightReference());
@@ -41,13 +44,22 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		}
 
 		// combine bindings to resolve predicate
-		bindings = op.GetColumnBindings();
-		types = op.types;
+		auto combined_bindings = left_bindings;
+		combined_bindings.insert(combined_bindings.end(), right_bindings.begin(), right_bindings.end());
+		auto combined_types = left_types;
+		combined_types.insert(combined_types.end(), right_types.begin(), right_types.end());
+
+		bindings = combined_bindings;
+		types = combined_types;
 		for (auto &cond : comp_join.conditions) {
 			if (!cond.IsComparison()) {
 				VisitExpression(&cond.JoinExpressionReference());
 			}
 		}
+
+		// update to join output bindings
+		bindings = op.GetColumnBindings();
+		types = op.types;
 
 		return;
 	}
@@ -117,6 +129,10 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			throw InternalException("RIGHT SEMI/ANTI any join not supported yet");
 		}
 		VisitOperatorExpressions(op);
+
+		//	Restore bindings for the caller
+		bindings = op.GetColumnBindings();
+		types = op.types;
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX: {
