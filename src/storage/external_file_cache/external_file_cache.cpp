@@ -134,7 +134,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 			}
 			const idx_t new_size = new_end - new_start;
 
-			auto buf = AllocateCacheBuffer(buffer_manager, new_size);
+			auto buf = AllocateCacheBuffer(buffer_manager, cached_file.path, new_size);
 
 			// Copy from each contributing old block in the run.
 			const idx_t contrib_first = new_start / old_block_size;
@@ -338,12 +338,11 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
-BufferHandle ExternalFileCache::AllocateCacheBuffer(BufferManager &buffer_manager, idx_t nr_bytes) {
-	if (nr_bytes < buffer_manager.GetBlockAllocSize() ||
-	    !Settings::Get<ExternalFileCacheSpillSetting>(buffer_manager.GetDatabase())) {
-		return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-	}
-	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes, false);
+BufferHandle ExternalFileCache::AllocateCacheBuffer(BufferManager &buffer_manager, const string &path, idx_t nr_bytes) {
+	const bool can_destroy = !FileSystem::IsRemoteFile(path) || nr_bytes < buffer_manager.GetBlockAllocSize() ||
+	                         !buffer_manager.HasTemporaryDirectory() ||
+	                         !Settings::Get<ExternalFileCacheSpillSetting>(buffer_manager.GetDatabase());
+	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes, can_destroy);
 }
 
 void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &paths) {

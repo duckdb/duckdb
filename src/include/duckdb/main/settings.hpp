@@ -1174,8 +1174,8 @@ struct ExternalFileCacheSpillSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "external_file_cache_spill";
 	static constexpr const char *Description =
-	    "Whether evicted external file cache blocks spill to the temporary directory instead of being dropped, so that "
-	    "they are re-read from there rather than from the source";
+	    "Whether evicted external file cache blocks of remote files spill to the temporary directory instead of being "
+	    "dropped, so that they are re-read from there rather than re-fetched from the source";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;

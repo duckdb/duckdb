@@ -776,7 +776,7 @@
     },
     {
         "name": "external_file_cache_spill",
-        "description": "Whether evicted external file cache blocks spill to the temporary directory instead of being dropped, so that they are re-read from there rather than from the source",
+        "description": "Whether evicted external file cache blocks of remote files spill to the temporary directory instead of being dropped, so that they are re-read from there rather than re-fetched from the source",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "false"

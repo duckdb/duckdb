@@ -150,11 +150,6 @@ public:
 	bool MustWriteToTemporaryFile() const {
 		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
 	}
-	//! Returns true, if this buffer may be destroyed when writing it to temporary storage fails.
-	//! Cached external file data can always be re-read from its source, so dropping it is safe.
-	bool CanDestroyOnTemporaryWriteFailure() const {
-		return tag == MemoryTag::EXTERNAL_FILE_CACHE;
-	}
 	//! Returns the memory usage.
 	idx_t GetMemoryUsage() const {
 		return memory_usage;
@@ -213,8 +208,6 @@ public:
 	bool CanUnload() const;
 	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l, QueryContext context = QueryContext());
 	void Unload(BlockLock &l, QueryContext context = QueryContext());
-	//! Try to write the buffer to a temporary file, returns false if it cannot be written
-	bool TryWriteToTemporaryFile(QueryContext context);
 
 private:
 	//! A reference to the buffer manager.

@@ -106,19 +106,6 @@ void BlockMemory::ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_heade
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
-bool BlockMemory::TryWriteToTemporaryFile(QueryContext context) {
-	if (!GetBufferManager().HasTemporaryDirectory()) {
-		return false;
-	}
-	try {
-		buffer_manager.WriteTemporaryBuffer(context, GetMemoryTag(), BlockId(), *GetBuffer());
-		return true;
-	} catch (std::exception &) {
-		// The temporary directory is full or cannot be written to
-		return false;
-	}
-}
-
 bool BlockMemory::CanUnload() const {
 	if (GetState() == BlockState::BLOCK_UNLOADED) {
 		// The block has already been unloaded.
@@ -128,8 +115,7 @@ bool BlockMemory::CanUnload() const {
 		// There are active readers.
 		return false;
 	}
-	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() && !CanDestroyOnTemporaryWriteFailure() &&
-	    !GetBufferManager().HasTemporaryDirectory()) {
+	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() && !GetBufferManager().HasTemporaryDirectory()) {
 		// The block memory cannot be destroyed upon eviction/unpinning.
 		// In order to unload this block we need to write it to a temporary buffer.
 		// However, no temporary directory is specified, hence, we cannot unload.
@@ -149,17 +135,9 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, QueryContex
 	D_ASSERT(CanUnload());
 
 	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
-		if (CanDestroyOnTemporaryWriteFailure()) {
-			if (!TryWriteToTemporaryFile(context)) {
-				// The buffer could not be written to a temporary file, destroy it instead.
-				// Loads of this block now return an invalid handle, like any destroyed buffer.
-				SetDestroyBufferUpon(DestroyBufferUpon::EVICTION);
-			}
-		} else {
-			// This is a temporary block that cannot be destroyed upon evict/unpin.
-			// Thus, we write to it to a temporary file.
-			buffer_manager.WriteTemporaryBuffer(context, GetMemoryTag(), BlockId(), *GetBuffer());
-		}
+		// This is a temporary block that cannot be destroyed upon evict/unpin.
+		// Thus, we write to it to a temporary file.
+		buffer_manager.WriteTemporaryBuffer(context, GetMemoryTag(), BlockId(), *GetBuffer());
 	}
 	memory_charge.Resize(0);
 	SetState(BlockState::BLOCK_UNLOADED);
