@@ -258,6 +258,8 @@ enum class LimitNodeType : uint8_t;
 
 enum class LoadType : uint8_t;
 
+enum class LocalStorageTableFlushCheck : uint8_t;
+
 enum class LogContextScope : uint8_t;
 
 enum class LogLevel : uint8_t;
@@ -845,6 +847,9 @@ const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
+
+template<>
+const char* EnumUtil::ToChars<LocalStorageTableFlushCheck>(LocalStorageTableFlushCheck value);
 
 template<>
 const char* EnumUtil::ToChars<LogContextScope>(LogContextScope value);
@@ -1557,6 +1562,9 @@ LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
 
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
+
+template<>
+LocalStorageTableFlushCheck EnumUtil::FromString<LocalStorageTableFlushCheck>(const char *value);
 
 template<>
 LogContextScope EnumUtil::FromString<LogContextScope>(const char *value);

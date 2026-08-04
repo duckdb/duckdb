@@ -190,6 +190,7 @@
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 
 namespace duckdb {
@@ -2723,6 +2724,25 @@ const char* EnumUtil::ToChars<LoadType>(LoadType value) {
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value) {
 	return static_cast<LoadType>(StringUtil::StringToEnum(GetLoadTypeValues(), 3, "LoadType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLocalStorageTableFlushCheckValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LocalStorageTableFlushCheck::CAN_FLUSH), "CAN_FLUSH" },
+		{ static_cast<uint32_t>(LocalStorageTableFlushCheck::TABLE_DROPPED), "TABLE_DROPPED" },
+		{ static_cast<uint32_t>(LocalStorageTableFlushCheck::ROWS_DELETED), "ROWS_DELETED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LocalStorageTableFlushCheck>(LocalStorageTableFlushCheck value) {
+	return StringUtil::EnumToString(GetLocalStorageTableFlushCheckValues(), 3, "LocalStorageTableFlushCheck", static_cast<uint32_t>(value));
+}
+
+template<>
+LocalStorageTableFlushCheck EnumUtil::FromString<LocalStorageTableFlushCheck>(const char *value) {
+	return static_cast<LocalStorageTableFlushCheck>(StringUtil::StringToEnum(GetLocalStorageTableFlushCheckValues(), 3, "LocalStorageTableFlushCheck", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogContextScopeValues() {
