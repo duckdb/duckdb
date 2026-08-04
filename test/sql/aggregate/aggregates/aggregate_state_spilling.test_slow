@@ -56,3 +56,31 @@ SELECT count(*) FROM (
 WHERE w != repeat(md5(k::VARCHAR), 25) || ',' || repeat(md5(k::VARCHAR), 25);
 ----
 0
+
+statement ok
+SET memory_limit='64MB';
+
+# exported states must survive parallel combines under the memory limit
+statement ok
+PRAGMA verify_parallelism;
+
+query I
+SELECT count(*) FROM (
+    SELECT g, first(s) AS f
+    FROM (SELECT i % 300000 AS g, repeat(md5((i % 300000)::VARCHAR), 10) AS s FROM range(600000) t(i)) input
+    GROUP BY g
+) grouped
+WHERE f <> repeat(md5(g::VARCHAR), 10);
+----
+0
+
+# state export of the same aggregates keeps working alongside the spilling
+query I
+SELECT count(*) FROM (
+    SELECT g, finalize(first(s) EXPORT_STATE) AS f
+    FROM (SELECT i % 300000 AS g, repeat(md5((i % 300000)::VARCHAR), 10) AS s FROM range(600000) t(i)) input
+    GROUP BY g
+) grouped
+WHERE f <> repeat(md5(g::VARCHAR), 10);
+----
+0
