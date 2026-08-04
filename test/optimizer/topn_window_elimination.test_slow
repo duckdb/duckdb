@@ -470,3 +470,54 @@ ORDER BY 1;
 1	1	1	/User/hawkfish/file.txt	file.txt
 2	2	2	/User/hawkfish/file.txt	file.txt
 7	3	0	/User/hawkfish/file.txt	file.txt
+
+# Issue 24363: Top-N window elimination with ORDER BY NULL
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY NULL) AS c1
+    FROM (VALUES (3),(3)) AS t(c0)
+) AS u WHERE c1 <= 7;
+----
+3	1
+3	2
+
+# ORDER BY NULL with LIMIT 1
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY NULL) AS c1
+    FROM (VALUES (3),(3)) AS t(c0)
+) AS u WHERE c1 <= 1;
+----
+3	1
+
+# ORDER BY constant integer (ORDER BY 1)
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY 1) AS c1
+    FROM (VALUES (3),(3)) AS t(c0)
+) AS u WHERE c1 <= 7;
+----
+3	1
+3	2
+
+# ORDER BY expression evaluating to NULL
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY 1 + NULL) AS c1
+    FROM (VALUES (3),(3)) AS t(c0)
+) AS u WHERE c1 <= 7;
+----
+3	1
+3	2
+
+# Multiple partitions with ORDER BY NULL
+query II
+SELECT * FROM (
+    SELECT c0, row_number() OVER (PARTITION BY c0 ORDER BY NULL) AS c1
+    FROM (VALUES (1), (1), (2), (2), (2)) AS t(c0)
+) AS u WHERE c1 <= 2 ORDER BY c0, c1;
+----
+1	1
+1	2
+2	1
+2	2

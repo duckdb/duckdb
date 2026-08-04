@@ -868,11 +868,15 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	if (params.payload_type == TopNPayloadType::SINGLE_COLUMN && !aggregate_payload.empty()) {
 		VisitExpression(&aggregate_payload[0]);
 	}
-	for (const auto &column_ref : column_references) {
-		const auto &column_stats = stats->find(column_ref.first);
-		if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
-			params.can_be_null = true;
-			break;
+	if (column_references.empty()) {
+		params.can_be_null = true;
+	} else {
+		for (const auto &column_ref : column_references) {
+			const auto &column_stats = stats->find(column_ref.first);
+			if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
+				params.can_be_null = true;
+				break;
+			}
 		}
 	}
 	column_references.clear();
