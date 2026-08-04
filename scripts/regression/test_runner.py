@@ -2,7 +2,8 @@ import os
 import math
 import functools
 import shutil
-from benchmark import BenchmarkRunner, BenchmarkRunnerConfig, DEFAULT_TIMED_RUNS
+from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
+from comparison import paired_measurement, sampling_decision
 from dataclasses import dataclass
 from typing import Optional, List, Union, Dict
 from pathlib import Path
@@ -48,8 +49,20 @@ parser.add_argument("--no-summary", type=str, default=False, help="No summary in
 parser.add_argument(
     "--timed-runs",
     type=int,
-    default=DEFAULT_TIMED_RUNS,
-    help=f"Number of timed runs per benchmark (default: {DEFAULT_TIMED_RUNS}).",
+    default=20,
+    help="Minimum number of timed runs per benchmark (default: 20).",
+)
+parser.add_argument(
+    "--max-timed-runs",
+    type=int,
+    default=100,
+    help="Maximum number of timed runs per benchmark (default: 100).",
+)
+parser.add_argument(
+    "--max-adaptive-time-seconds",
+    type=float,
+    default=10.0,
+    help="Maximum combined measured time before adaptive sampling stops (default: 10 seconds).",
 )
 parser.add_argument(
     "--clear-benchmark-cache", action="store_true", help="Clear benchmark caches prior to running", default=False
@@ -83,9 +96,18 @@ clear_benchmark_cache = args.clear_benchmark_cache
 keep_benchmark_data = args.keep_benchmark_data
 regression_threshold_seconds = args.regression_threshold_seconds
 timed_runs = args.timed_runs
+max_timed_runs = args.max_timed_runs
+max_adaptive_time_seconds = args.max_adaptive_time_seconds
+
+if timed_runs <= 0:
+    parser.error("--timed-runs must be greater than zero")
+if max_timed_runs < timed_runs:
+    parser.error("--max-timed-runs must be greater than or equal to --timed-runs")
+if max_adaptive_time_seconds <= 0:
+    parser.error("--max-adaptive-time-seconds must be greater than zero")
 
 
-# how many times we will run the experiment, to be sure of the regression
+# Legacy runners without --timed-runs support retain the old confirmation loop.
 NUMBER_REPETITIONS = 5
 # the threshold at which we consider something a regression (percentage)
 REGRESSION_THRESHOLD_PERCENTAGE = 0.1
@@ -175,7 +197,9 @@ def report_regression(regression: "BenchmarkResult", summary: List[dict], summar
         message = f"{suite_name()}: {regression.benchmark} failed while comparing base and PR benchmark runs"
         summary_delta = "benchmark run failed"
     emit_github_error(error_title, message)
-    summary_lines.append(f"| `{regression.benchmark}` | `{old_timing}` | `{new_timing}` | `{summary_delta}` |")
+    summary_lines.append(
+        f"| `{regression.benchmark}` | `{old_timing}` | `{new_timing}` | `{summary_delta}` | `{regression.runs}` |"
+    )
     if regression.old_failure or regression.new_failure:
         new_data = {
             "benchmark": regression.benchmark,
@@ -193,6 +217,7 @@ class BenchmarkRow:
     new_timing: str
     delta: str
     change: str
+    runs: str
     bucket: str
     percentage: float = 0
 
@@ -245,6 +270,7 @@ def benchmark_row(result: "BenchmarkResult", display_name: str) -> BenchmarkRow:
             new_timing=format_seconds(result.new_result),
             delta="failed",
             change="failed",
+            runs=str(result.runs),
             bucket=BUCKET_FAILURE,
         )
     delta = result.new_result - result.old_result
@@ -256,6 +282,7 @@ def benchmark_row(result: "BenchmarkResult", display_name: str) -> BenchmarkRow:
         new_timing=format_seconds(result.new_result),
         delta=format_delta_seconds(delta),
         change=format_percentage(percentage),
+        runs=str(result.runs),
         bucket=classify_result(result),
         percentage=percentage,
     )
@@ -297,8 +324,8 @@ def row_sort_key(row: BenchmarkRow):
 def render_table(rows: List[BenchmarkRow]):
     if len(rows) == 0:
         return
-    headers = ["benchmark", "old", "new", "delta", "change"]
-    plain_rows = [[row.display_name, row.old_timing, row.new_timing, row.delta, row.change] for row in rows]
+    headers = ["benchmark", "old", "new", "delta", "change", "runs"]
+    plain_rows = [[row.display_name, row.old_timing, row.new_timing, row.delta, row.change, row.runs] for row in rows]
     widths = [len(header) for header in headers]
     for plain_row in plain_rows:
         for index, value in enumerate(plain_row):
@@ -347,10 +374,13 @@ def print_benchmark_report(
     if common_prefix:
         print(f"common prefix: {common_prefix}")
     print(f"benchmarks: {total_count}")
-    if timed_runs:
-        print(f"timing: median of {timed_runs} timed runs")
+    if adaptive_sampling:
+        print(
+            f"timing: paired median, {timed_runs}-{max_timed_runs} timed runs, "
+            f"{max_adaptive_time_seconds:g}s adaptive budget"
+        )
     else:
-        print("timing: median")
+        print(f"timing: median of {timed_runs} timed runs")
     print(f"threshold: +{REGRESSION_THRESHOLD_PERCENTAGE * 100.0:.1f}% and +{REGRESSION_THRESHOLD_SECONDS:.3f}s")
     print(f"display threshold: +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
     print(f"hidden noise: {hidden_noise_count} benchmarks below +/-{DISPLAY_THRESHOLD_PERCENTAGE:.1f}%")
@@ -390,6 +420,7 @@ def print_geomean_summary(time_a: Union[float, str], time_b: Union[float, str]):
         new_timing=format_seconds(time_b),
         delta=format_delta_seconds(time_b - time_a),
         change=format_percentage(delta_pct),
+        runs="",
         bucket=BUCKET_SLOWER if delta_pct > 0 else BUCKET_FASTER if delta_pct < 0 else BUCKET_UNCHANGED,
         percentage=delta_pct,
     )
@@ -436,13 +467,15 @@ class BenchmarkResult:
     new_result: Union[float, str]
     old_failure: Optional[str] = None
     new_failure: Optional[str] = None
+    runs: int = 0
 
 
-def run_benchmarks_alternating(old_runner: BenchmarkRunner, new_runner: BenchmarkRunner, benchmark_list: List[str]):
+def run_benchmarks_legacy(old_runner: BenchmarkRunner, new_runner: BenchmarkRunner, benchmark_list: List[str]):
     old_results = {}
     new_results = {}
     old_failures = {}
     new_failures = {}
+    run_counts = {}
     requested_runs = max(timed_runs, 1) if timed_runs is not None else 1
 
     for benchmark in benchmark_list:
@@ -488,49 +521,128 @@ def run_benchmarks_alternating(old_runner: BenchmarkRunner, new_runner: Benchmar
             new_failures[benchmark] = new_failure
         else:
             new_results[benchmark], new_failures[benchmark] = new_runner.complete_benchmark(benchmark, new_timings)
+        run_counts[benchmark] = min(len(old_timings), len(new_timings))
 
-    return old_results, old_failures, new_results, new_failures
+    return old_results, old_failures, new_results, new_failures, run_counts
+
+
+def run_paired_benchmark(old_runner: BenchmarkRunner, new_runner: BenchmarkRunner, benchmark: str) -> BenchmarkResult:
+    old_timings = []
+    new_timings = []
+    batch_index = 0
+
+    while len(old_timings) < max_timed_runs:
+        batch_size = min(TIMED_RUN_BATCH_SIZE, max_timed_runs - len(old_timings))
+        if batch_index % 2 == 0:
+            old_batch, old_failure = old_runner.run_benchmark_once(benchmark, batch_size)
+            new_batch, new_failure = new_runner.run_benchmark_once(benchmark, batch_size)
+        else:
+            new_batch, new_failure = new_runner.run_benchmark_once(benchmark, batch_size)
+            old_batch, old_failure = old_runner.run_benchmark_once(benchmark, batch_size)
+
+        old_batch = old_batch or []
+        new_batch = new_batch or []
+        if old_failure or new_failure:
+            failure_result = 'Failed to run benchmark ' + benchmark
+            return BenchmarkResult(
+                benchmark,
+                failure_result,
+                failure_result,
+                old_failure,
+                new_failure,
+                min(len(old_timings), len(new_timings)),
+            )
+        if not old_batch or not new_batch:
+            failure = "Benchmark did not produce any timings"
+            failure_result = 'Failed to run benchmark ' + benchmark
+            return BenchmarkResult(
+                benchmark,
+                failure_result,
+                failure_result,
+                failure if not old_batch else None,
+                failure if not new_batch else None,
+                min(len(old_timings), len(new_timings)),
+            )
+        if len(old_batch) != len(new_batch):
+            failure = f"Paired benchmark batches produced different run counts: {len(old_batch)} and {len(new_batch)}"
+            failure_result = 'Failed to run benchmark ' + benchmark
+            return BenchmarkResult(benchmark, failure_result, failure_result, failure, failure, len(old_timings))
+
+        old_timings.extend(old_batch)
+        new_timings.extend(new_batch)
+        batch_index += 1
+
+        measurement = paired_measurement(old_timings, new_timings)
+        measured_seconds = math.fsum(old_timings) + math.fsum(new_timings)
+        decision = sampling_decision(
+            measurement,
+            measured_seconds,
+            timed_runs,
+            max_timed_runs,
+            max_adaptive_time_seconds,
+            DISPLAY_THRESHOLD_PERCENTAGE,
+            REGRESSION_THRESHOLD_PERCENTAGE,
+            REGRESSION_THRESHOLD_SECONDS,
+        )
+        if verbose:
+            print(
+                f"adaptive sampling: {benchmark}: {measurement.runs} paired runs, "
+                f"{(measurement.ratio - 1.0) * 100.0:+.1f}% ({decision.reason})"
+            )
+        if not decision.collect_more:
+            return BenchmarkResult(benchmark, measurement.old_timing, measurement.new_timing, runs=measurement.runs)
+
+    raise RuntimeError("Adaptive benchmark loop exceeded its configured run limit")
 
 
 multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
-other_results: List[BenchmarkResult] = []
-error_list: List[BenchmarkResult] = []
-for i in range(NUMBER_REPETITIONS):
-    regression_list: List[BenchmarkResult] = []
-    if len(benchmark_list) == 0:
-        break
-    print(
-        f'''====================================================
+adaptive_sampling = old_runner.supports_timed_runs and new_runner.supports_timed_runs
+if adaptive_sampling:
+    all_results = [run_paired_benchmark(old_runner, new_runner, benchmark) for benchmark in benchmark_list]
+else:
+    print("Adaptive paired sampling disabled because a benchmark runner does not support --timed-runs")
+    other_results: List[BenchmarkResult] = []
+    error_list: List[BenchmarkResult] = []
+    for i in range(NUMBER_REPETITIONS):
+        regression_list: List[BenchmarkResult] = []
+        if len(benchmark_list) == 0:
+            break
+        print(
+            f'''====================================================
 ==============      ITERATION {i}        =============
 ==============      REMAINING {len(benchmark_list)}        =============
 ====================================================
 '''
-    )
+        )
 
-    old_results, old_failures, new_results, new_failures = run_benchmarks_alternating(
-        old_runner, new_runner, benchmark_list
-    )
+        old_results, old_failures, new_results, new_failures, run_counts = run_benchmarks_legacy(
+            old_runner, new_runner, benchmark_list
+        )
 
-    for benchmark in benchmark_list:
-        old_res = old_results[benchmark]
-        new_res = new_results[benchmark]
+        for benchmark in benchmark_list:
+            old_res = old_results[benchmark]
+            new_res = new_results[benchmark]
+            old_fail = old_failures[benchmark]
+            new_fail = new_failures[benchmark]
+            runs = run_counts[benchmark]
 
-        old_fail = old_failures[benchmark]
-        new_fail = new_failures[benchmark]
+            if isinstance(old_res, str) or isinstance(new_res, str):
+                error_list.append(BenchmarkResult(benchmark, old_res, new_res, old_fail, new_fail, runs))
+            elif (not no_regression_fail) and is_regression(old_res, new_res):
+                regression_list.append(BenchmarkResult(benchmark, old_res, new_res, runs=runs))
+            else:
+                other_results.append(BenchmarkResult(benchmark, old_res, new_res, runs=runs))
+        benchmark_list = [res.benchmark for res in regression_list]
 
-        if isinstance(old_res, str) or isinstance(new_res, str):
-            # benchmark failed to run - always a regression
-            error_list.append(BenchmarkResult(benchmark, old_res, new_res, old_fail, new_fail))
-        elif (no_regression_fail == False) and (
-            (old_res + REGRESSION_THRESHOLD_SECONDS) * multiply_percentage < new_res
-        ):
-            regression_list.append(BenchmarkResult(benchmark, old_res, new_res))
-        else:
-            other_results.append(BenchmarkResult(benchmark, old_res, new_res))
-    benchmark_list = [res.benchmark for res in regression_list]
+    all_results = other_results + regression_list + error_list
 
-final_regression_results = regression_list + error_list
-all_results = other_results + final_regression_results
+final_regression_results = [
+    result
+    for result in all_results
+    if isinstance(result.old_result, str)
+    or isinstance(result.new_result, str)
+    or ((not no_regression_fail) and is_regression(result.old_result, result.new_result))
+]
 display_names = benchmark_display_names([result.benchmark for result in all_results])
 rows = [benchmark_row(result, display_names[result.benchmark]) for result in all_results]
 rows.sort(key=row_sort_key)
@@ -544,8 +656,8 @@ if len(final_regression_results) > 0:
     summary_lines = [
         f"## Regression Suite: `{suite_name()}`",
         "",
-        "| Benchmark | Base | PR | Delta |",
-        "| --- | --- | --- | --- |",
+        "| Benchmark | Base | PR | Delta | Runs |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for regression in final_regression_results:
         report_regression(regression, summary, summary_lines)
@@ -561,8 +673,13 @@ else:
     result_text = "no regressions detected"
 
 common_prefix = benchmark_common_prefix([result.benchmark for result in all_results])
-time_a = geomean(old_runner.complete_timings)
-time_b = geomean(new_runner.complete_timings)
+successful_results = [
+    result
+    for result in all_results
+    if not isinstance(result.old_result, str) and not isinstance(result.new_result, str)
+]
+time_a = geomean([result.old_result for result in successful_results])
+time_b = geomean([result.new_result for result in successful_results])
 print_benchmark_report(visible_rows, common_prefix, result_text, len(rows), hidden_noise_count, time_a, time_b)
 
 # nuke cached benchmark data between runs
