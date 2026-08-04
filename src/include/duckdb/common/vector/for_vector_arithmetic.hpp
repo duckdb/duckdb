@@ -102,30 +102,36 @@ struct FORWidenOperatorWrapper {
 
 // Resolves the buffer-level kernel for any (left width, right width, result width) triple: both payloads
 // are read at their stored width and promoted in registers, so no operand is ever materialised wider.
-// No arithmetic loop exists on the FOR side at all.
+// No arithmetic loop exists on the FOR side at all. The caller canonicalises commutative pairs so the
+// wider payload is always on the left, and the widening wrapper is only instantiated when the result
+// outgrows both operands (plain promotion is exact otherwise): this keeps the kernel set small.
 template <class OP>
 struct FORStandardExecutor {
 	static PhysicalType MaxStored(PhysicalType a, PhysicalType b) {
 		return GetTypeIdSize(a) >= GetTypeIdSize(b) ? a : b;
 	}
+	//! plain argument promotion is exact when the wider operand carries the result width
+	template <class TL, class TRES>
+	using Wrapper = typename std::conditional<sizeof(TL) == sizeof(TRES), BinaryStandardOperatorWrapper,
+	                                          FORWidenOperatorWrapper>::type;
 	template <class TL, class TR, class TRES>
 	static void RunKernel(const BinaryBufferArgs &args) {
-		BinaryExecutor::ExecuteBuffers<TL, TR, TRES, FORWidenOperatorWrapper, OP, bool>(args, false);
+		BinaryExecutor::ExecuteBuffers<TL, TR, TRES, Wrapper<TL, TRES>, OP, bool>(args, false);
 	}
-	//! an operand never outgrows the result: clamping collapses the impossible instantiations
+	//! an operand never outgrows the result (or the left operand): clamping collapses the impossible instantiations
 	template <class T, class TRES>
 	using Operand = typename std::conditional<sizeof(T) <= sizeof(TRES), T, TRES>::type;
 	template <class TL, class TRES>
 	static binary_buffer_kernel_t KernelRight(PhysicalType rw) {
 		switch (rw) {
 		case PhysicalType::UINT8:
-			return &RunKernel<TL, Operand<uint8_t, TRES>, TRES>;
+			return &RunKernel<TL, Operand<uint8_t, TL>, TRES>;
 		case PhysicalType::UINT16:
-			return &RunKernel<TL, Operand<uint16_t, TRES>, TRES>;
+			return &RunKernel<TL, Operand<uint16_t, TL>, TRES>;
 		case PhysicalType::UINT32:
-			return &RunKernel<TL, Operand<uint32_t, TRES>, TRES>;
+			return &RunKernel<TL, Operand<uint32_t, TL>, TRES>;
 		default:
-			return &RunKernel<TL, Operand<uint64_t, TRES>, TRES>;
+			return &RunKernel<TL, Operand<uint64_t, TL>, TRES>;
 		}
 	}
 	template <class TRES>
@@ -143,6 +149,7 @@ struct FORStandardExecutor {
 	}
 	static binary_buffer_kernel_t Kernel(PhysicalType lw, PhysicalType rw, PhysicalType res) {
 		D_ASSERT(GetTypeIdSize(res) >= GetTypeIdSize(MaxStored(lw, rw)));
+		D_ASSERT(GetTypeIdSize(lw) >= GetTypeIdSize(rw)); // caller canonicalises the commutative pair
 		switch (res) {
 		case PhysicalType::UINT8:
 			return KernelPair<uint8_t>(lw, rw);
@@ -309,19 +316,23 @@ static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t coun
 		if (child_count > STANDARD_VECTOR_SIZE || (sel && rscan.for_vec->size() != child_count)) {
 			return false;
 		}
+		// + and * are commutative: keep the wider payload on the left so only canonical kernels exist
+		const bool swap_pair = GetTypeIdSize(lscan.stored_type) < GetTypeIdSize(rscan.stored_type);
+		const auto &wide = swap_pair ? rscan : lscan;
+		const auto &narrow = swap_pair ? lscan : rscan;
 		auto fill_result = [&](Vector &target, idx_t n, const SelectionVector *gather_sel) {
 			FORVector::Create<DOMAIN_T>(target, compute, result_max);
 			BinaryBufferArgs args;
-			args.ldata = FORVector::GetData(*lscan.for_vec);
-			args.rdata = FORVector::GetData(*rscan.for_vec);
+			args.ldata = FORVector::GetData(*wide.for_vec);
+			args.rdata = FORVector::GetData(*narrow.for_vec);
 			args.result_data = FORVector::GetData(target);
 			args.count = n;
 			args.lsel = gather_sel;
 			args.rsel = gather_sel;
-			args.lvalidity = lscan.validity.get();
-			args.rvalidity = rscan.validity.get();
+			args.lvalidity = wide.validity.get();
+			args.rvalidity = narrow.validity.get();
 			args.result_validity = &FORVector::Validity(target);
-			EXECUTOR::Kernel(lscan.stored_type, rscan.stored_type, compute)(args);
+			EXECUTOR::Kernel(wide.stored_type, narrow.stored_type, compute)(args);
 		};
 		FORVector::KeepAlive(*lscan.for_vec);
 		FORVector::KeepAlive(*rscan.for_vec);
