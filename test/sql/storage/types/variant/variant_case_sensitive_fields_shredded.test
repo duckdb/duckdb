@@ -48,3 +48,37 @@ restart
 
 statement ok
 checkpoint;
+
+statement ok
+set variant_minimum_shredding_size = 0;
+
+statement ok
+set force_variant_shredding = 'STRUCT(a INTEGER)';
+
+statement ok
+create or replace table forced_shredding(v VARIANT);
+
+statement ok
+insert into forced_shredding values
+	({'A': 2}),
+	({'a': 1}),
+	({'b': 3})
+;
+
+# the keys are intact before the checkpoint shreds the column
+query IIII
+select v::VARCHAR, variant_keys(v), v.a, v.A from forced_shredding order by v::VARCHAR;
+----
+{'A': 2}	[A]	NULL	2
+{'a': 1}	[a]	1	NULL
+{'b': 3}	[b]	NULL	NULL
+
+statement ok
+checkpoint;
+
+query IIIII
+select v::VARCHAR, vector_type(v), variant_keys(v), v.a, v.A from forced_shredding order by v::VARCHAR;
+----
+{'A': 2}	SHREDDED_VECTOR	[A]	NULL	2
+{'a': 1}	SHREDDED_VECTOR	[a]	1	NULL
+{'b': 3}	SHREDDED_VECTOR	[b]	NULL	NULL

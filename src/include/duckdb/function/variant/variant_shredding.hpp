@@ -106,7 +106,7 @@ public:
 public:
 	bool ValueIsShredded(UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index);
 	void SetShredded(uint32_t row, uint32_t values_index, uint32_t result_idx);
-	case_insensitive_string_set_t ObjectFields();
+	string_set_t ObjectFields();
 	virtual const unordered_set<VariantLogicalType> &GetVariantTypes() = 0;
 
 public:
