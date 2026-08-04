@@ -248,35 +248,6 @@ struct BinaryExecutor {
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
-	DUCKDB_NO_AVX2 static void
-	ExecuteGenericLoopNoAVX2(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                         RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
-	                         const SelectionVector *__restrict rsel, idx_t count, const ValidityMask &lvalidity,
-	                         const ValidityMask &rvalidity, ValidityMask &result_validity, FUNC fun) {
-		if (lvalidity.CanHaveNull() || rvalidity.CanHaveNull()) {
-			for (idx_t i = 0; i < count; i++) {
-				auto lindex = lsel->get_index(i);
-				auto rindex = rsel->get_index(i);
-				if (lvalidity.RowIsValid(lindex) && rvalidity.RowIsValid(rindex)) {
-					auto lentry = ldata[lindex];
-					auto rentry = rdata[rindex];
-					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-					    fun, lentry, rentry, result_validity, i);
-				} else {
-					result_validity.SetInvalid(i);
-				}
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				auto lentry = ldata[lsel->get_index(i)];
-				auto rentry = rdata[rsel->get_index(i)];
-				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-				    fun, lentry, rentry, result_validity, i);
-			}
-		}
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static void ExecuteGeneric(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
 		UnifiedVectorFormat ldata, rdata;
 
@@ -295,25 +266,6 @@ struct BinaryExecutor {
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
-	static void ExecuteGenericNoAVX2(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
-		UnifiedVectorFormat ldata, rdata;
-
-		left.ToUnifiedFormat(ldata);
-		right.ToUnifiedFormat(rdata);
-
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		if (result.size() != count) {
-			FlatVector::SetSize(result, count);
-		}
-		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		ExecuteGenericLoopNoAVX2<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
-		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
-		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity,
-		    FlatVector::ValidityMutable(result), fun);
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
-	          bool NO_AVX2_GENERIC = false>
 	static void ExecuteSwitch(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
 		auto left_vector_type = left.GetVectorType();
 		auto right_vector_type = right.GetVectorType();
@@ -331,13 +283,7 @@ struct BinaryExecutor {
 			                                                                                   count, fun);
 #endif
 		} else {
-			if constexpr (NO_AVX2_GENERIC) {
-				ExecuteGenericNoAVX2<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result,
-				                                                                              count, fun);
-			} else {
-				ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, count,
-				                                                                        fun);
-			}
+			ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, count, fun);
 		}
 	}
 
@@ -361,12 +307,6 @@ public:
 	static void ExecuteStandard(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(left, right, result,
 		                                                                                           count, false);
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-	static void ExecuteStandardNoAVX2Generic(const Vector &left, const Vector &right, Vector &result, idx_t count) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool, true>(
-		    left, right, result, count, false);
 	}
 
 private:
@@ -396,12 +336,6 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 	static void ExecuteStandard(const Vector &left, const Vector &right, Vector &result) {
 		ExecuteStandard<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result, CheckExecuteCount(left, right));
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-	static void ExecuteStandardNoAVX2Generic(const Vector &left, const Vector &right, Vector &result) {
-		ExecuteStandardNoAVX2Generic<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result,
-		                                                                     CheckExecuteCount(left, right));
 	}
 
 public:

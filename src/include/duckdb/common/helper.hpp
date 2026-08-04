@@ -25,9 +25,9 @@
 #endif
 
 #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
-#define DUCKDB_NO_AVX2 __attribute__((target("no-avx2")))
+#define DUCKDB_NO_AVX __attribute__((target("no-avx,no-avx2"), noinline))
 #else
-#define DUCKDB_NO_AVX2
+#define DUCKDB_NO_AVX
 #endif
 
 namespace duckdb {
