@@ -40,7 +40,8 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		// (backend-safe), and unguessable, so it is not referenceable in SQL. It is owned by this
 		// connection and detached again by DISCONNECT (see PhysicalDisconnect).
 		AttachInfo attach_info;
-		attach_info.name = Identifier("__connect_" + UUID::ToString(UUID::GenerateRandomUUID()));
+		attach_info.name = Identifier(string(AttachedDatabase::GENERATED_CONNECT_NAME_PREFIX) +
+		                              UUID::ToString(UUID::GenerateRandomUUID()));
 		attach_info.path = info->name.GetIdentifierName();
 		attach_info.options = info->options;
 

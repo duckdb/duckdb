@@ -4,7 +4,9 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/checkpoint_on_detach.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
@@ -176,6 +178,15 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name.GetIdentifierName(), info, options);
+	// The attach function may rename the database: extensions that resolve the path themselves know a
+	// better name for it than the caller did. Adopt it before anything reads the name back.
+	if (info.name != name) {
+		if (NameIsReserved(info.name)) {
+			throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name",
+			                      info.name.GetIdentifierName());
+		}
+		SetName(info.name);
+	}
 	stored_database_path = std::move(options.stored_database_path);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
@@ -210,6 +221,10 @@ bool AttachedDatabase::IsTemporary() const {
 }
 bool AttachedDatabase::IsReadOnly() const {
 	return type == AttachedDatabaseType::READ_ONLY_DATABASE;
+}
+
+bool AttachedDatabase::HasGeneratedConnectName() const {
+	return StringUtil::StartsWith(name.GetIdentifierName(), GENERATED_CONNECT_NAME_PREFIX);
 }
 
 bool AttachedDatabase::NameIsReserved(const Identifier &name) {

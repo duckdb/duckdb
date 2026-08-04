@@ -284,11 +284,13 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 			auto connected = context.TryGetConnectedCatalog();
 			if (connected) {
 				auto &catalog = connected->GetCatalog();
-				// Ephemeral connections (CONNECT '<uri>') have no user-facing name; show the display (URI).
-				if (catalog.GetAttached().IsEphemeral()) {
+				auto &attached = catalog.GetAttached();
+				// If ephemeral connections (CONNECT '<uri>') have no user-facing name; show the display (URI)
+				// instead - unless the storage extension replaced it with a readable one during attach.
+				if (attached.IsEphemeral() && attached.HasGeneratedConnectName()) {
 					return catalog.GetConnectDisplay() + " ";
 				}
-				return catalog.GetAttached().GetName() + " ";
+				return attached.GetName() + " ";
 			}
 			return string();
 		}

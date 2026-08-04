@@ -137,6 +137,10 @@ public:
 	void SetName(const Identifier &new_name) {
 		name = new_name;
 	}
+	//! Prefix of the generated name given to the implicit attach behind `CONNECT '<uri>'`.
+	static constexpr const char *GENERATED_CONNECT_NAME_PREFIX = "__connect_";
+	//! Whether this database still carries that generated name, i.e. has no user-facing name.
+	bool HasGeneratedConnectName() const;
 	bool IsSystem() const;
 	bool IsTemporary() const;
 	bool IsReadOnly() const;
