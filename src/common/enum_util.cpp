@@ -133,7 +133,6 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
-#include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -163,6 +162,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
@@ -419,21 +419,22 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 	return static_cast<AggregateOrderDependent>(StringUtil::StringToEnum(GetAggregateOrderDependentValues(), 2, "AggregateOrderDependent", value));
 }
 
-const StringUtil::EnumStringLiteral *GetAggregateRewriteTypeValues() {
+const StringUtil::EnumStringLiteral *GetAggregateRewriteModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(AggregateRewriteType::FREQUENCY), "FREQUENCY" }
+		{ static_cast<uint32_t>(AggregateRewriteMode::DIRECT), "DIRECT" },
+		{ static_cast<uint32_t>(AggregateRewriteMode::MULTI_STAGE), "MULTI_STAGE" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<AggregateRewriteType>(AggregateRewriteType value) {
-	return StringUtil::EnumToString(GetAggregateRewriteTypeValues(), 1, "AggregateRewriteType", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<AggregateRewriteMode>(AggregateRewriteMode value) {
+	return StringUtil::EnumToString(GetAggregateRewriteModeValues(), 2, "AggregateRewriteMode", static_cast<uint32_t>(value));
 }
 
 template<>
-AggregateRewriteType EnumUtil::FromString<AggregateRewriteType>(const char *value) {
-	return static_cast<AggregateRewriteType>(StringUtil::StringToEnum(GetAggregateRewriteTypeValues(), 1, "AggregateRewriteType", value));
+AggregateRewriteMode EnumUtil::FromString<AggregateRewriteMode>(const char *value) {
+	return static_cast<AggregateRewriteMode>(StringUtil::StringToEnum(GetAggregateRewriteModeValues(), 2, "AggregateRewriteMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAggregateStateExportModeValues() {

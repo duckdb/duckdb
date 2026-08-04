@@ -61,6 +61,18 @@ WHERE g = 1;
 ----
 a	b
 
+# ordered ties retain the first value according to the complete order specification
+query TTT
+WITH d(v, ord) AS (
+	VALUES ('a', NULL), ('a', 4), ('b', 3), ('b', 5)
+)
+SELECT mode(v ORDER BY ord ASC NULLS LAST),
+	mode(v ORDER BY ord DESC NULLS FIRST),
+	mode(v ORDER BY ord DESC NULLS LAST)
+FROM d;
+----
+b	a	b
+
 # mixed frequency, distinct and regular branches
 query TII
 SELECT mode(v), count(DISTINCT ord), sum(ord)
@@ -246,7 +258,20 @@ query II
 EXPLAIN (FORMAT JSON)
 SELECT g, mode(v), entropy(v) FROM mode_rewrite GROUP BY g;
 ----
-logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"g"[^\]]*"v"[^\]]*\].*"Expressions":\s*"count_star\(\)".*arg_max\(#[0-9]+, #[0-9]+\).*entropy_from_counts\(#[0-9]+\).*
+logical_opt	<REGEX>:.*"Groups":\s*\[[^\]]*"g"[^\]]*"v"[^\]]*\].*"Expressions":\s*"count_star\(\)".*arg_max\(#[0-9]+, #[0-9]+\).*sum\(#[0-9]+\).*sum\(.*log2.*COALESCE.*
+
+statement ok
+SET memory_limit='32MB';
+
+# aggregate ordering no longer creates a sorted-list state in the final stage
+query II
+SELECT mode(i ORDER BY i DESC) = 999999, entropy(i ORDER BY i DESC) > 19
+FROM range(1000000) t(i);
+----
+1	1
+
+statement ok
+RESET memory_limit;
 
 statement ok
 SET disabled_optimizers='frequency_aggregate_rewrite';

@@ -7,12 +7,17 @@
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/types/sql_value_map.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/aggregate_rewrite.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 // MODE( <expr1> )
 // Returns the most frequent value for the values within expr1.
@@ -24,38 +29,76 @@ namespace duckdb {
 
 namespace {
 
-class ModeAggregateRewriteInfo : public AggregateRewriteInfo {
-public:
-	AggregateRewriteType GetType() const override {
-		return AggregateRewriteType::FREQUENCY;
+static unique_ptr<BoundAggregateExpression> BindAggregate(ClientContext &context, const char *name,
+                                                          vector<unique_ptr<Expression>> children,
+                                                          unique_ptr<Expression> filter = nullptr) {
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), name));
+	vector<LogicalType> child_types;
+	for (auto &child : children) {
+		child_types.push_back(child->GetReturnType());
 	}
-	bool IgnoreNulls() const override {
-		return true;
+	const auto &function = entry.functions.GetFunctionByArguments(context, child_types);
+	FunctionBinder function_binder(context);
+	return function_binder.BindAggregateFunction(function, std::move(children), std::move(filter));
+}
+
+static unique_ptr<Expression> BindScalar(ClientContext &context, const char *name,
+                                         vector<unique_ptr<Expression>> children) {
+	FunctionBinder function_binder(context);
+	ErrorData error;
+	auto result = function_binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children), error);
+	if (!result) {
+		error.Throw();
+	}
+	return result;
+}
+
+static unique_ptr<Expression> BindScalar(ClientContext &context, const char *name, unique_ptr<Expression> child) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(child));
+	return BindScalar(context, name, std::move(children));
+}
+
+static unique_ptr<Expression> BindScalar(ClientContext &context, const char *name, unique_ptr<Expression> left,
+                                         unique_ptr<Expression> right) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(left));
+	children.push_back(std::move(right));
+	return BindScalar(context, name, std::move(children));
+}
+
+static FrequencyAggregateFinalizeResult FinalizeModeRewrite(FrequencyAggregateFinalizeInput &input) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(input.value));
+	const char *aggregate_name;
+	if (input.order_key) {
+		vector<unique_ptr<Expression>> sort_children;
+		sort_children.push_back(std::move(input.frequency));
+		sort_children.push_back(make_uniq<BoundConstantExpression>(Value("DESC NULLS LAST")));
+		sort_children.push_back(std::move(input.order_key));
+		sort_children.push_back(make_uniq<BoundConstantExpression>(Value("ASC NULLS LAST")));
+		auto sort_key = BindScalar(input.rewrite_input.optimizer.context, "create_sort_key", std::move(sort_children));
+		children.push_back(std::move(sort_key));
+		aggregate_name = "arg_min";
+	} else {
+		children.push_back(std::move(input.frequency));
+		aggregate_name = "arg_max";
 	}
 
-	unique_ptr<BoundAggregateExpression> CreateFinalAggregate(ClientContext &context,
-	                                                          const BoundAggregateExpression &source,
-	                                                          vector<unique_ptr<Expression>> children,
-	                                                          unique_ptr<Expression> filter,
-	                                                          unique_ptr<BoundOrderModifier> order_bys) const override {
-		D_ASSERT(children.size() == 2);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
-		    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "arg_max"));
-		const auto &function = entry.functions.GetFunctionByArguments(
-		    context, {children[0]->GetReturnType(), children[1]->GetReturnType()});
+	FrequencyAggregateFinalizeResult result;
+	auto aggregate = BindAggregate(input.rewrite_input.optimizer.context, aggregate_name, std::move(children),
+	                               std::move(input.filter));
+	D_ASSERT(aggregate->GetReturnType() == input.rewrite_input.aggregate.GetReturnType());
+	result.aggregates.push_back(std::move(aggregate));
+	result.result = make_uniq<BoundColumnRefExpression>(input.rewrite_input.aggregate.GetReturnType(),
+	                                                    ColumnBinding(input.aggregate_index, ProjectionIndex(0)));
+	return result;
+}
 
-		FunctionBinder function_binder(context);
-		auto result = function_binder.BindAggregateFunction(function, std::move(children), std::move(filter));
-		result->GetOrderBysMutable() = std::move(order_bys);
-		D_ASSERT(result->GetReturnType() == source.GetReturnType());
-		return result;
-	}
-};
-
-const AggregateRewriteInfo &GetModeAggregateRewriteInfo() {
-	static ModeAggregateRewriteInfo info;
-	return info;
+static unique_ptr<AggregateRewriteResult> RewriteMode(AggregateRewriteInput &input) {
+	return FrequencyAggregateRewrite::Create(input, true, true, FinalizeModeRewrite);
 }
 
 struct ModeAttr {
@@ -66,22 +109,8 @@ struct ModeAttr {
 };
 
 template <class T>
-struct ModeHash {
-	size_t operator()(const T &key) const {
-		return duckdb::Hash(key);
-	}
-};
-
-template <class T>
-struct ModeEquality {
-	bool operator()(const T &left, const T &right) const {
-		return Equals::Operation(left, right);
-	}
-};
-
-template <class T>
 struct ModeStandard {
-	using MAP_TYPE = unordered_map<T, ModeAttr, ModeHash<T>, ModeEquality<T>>;
+	using MAP_TYPE = sql_value_map_t<T, ModeAttr>;
 
 	static MAP_TYPE *CreateEmpty(ArenaAllocator &) {
 		return new MAP_TYPE();
@@ -572,7 +601,7 @@ unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	function.ReplaceImplementation(GetModeAggregate(arguments[0]->GetReturnType()));
 	function.SetName("mode");
-	function.SetRewriteCallback(GetModeAggregateRewriteInfo);
+	function.SetRewriteCallback(RewriteMode);
 	return nullptr;
 }
 
@@ -591,83 +620,41 @@ AggregateFunctionSet ModeFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 namespace {
 
-struct EntropyCountsState {
-	uint64_t count;
-	double weighted_count;
-};
+static FrequencyAggregateFinalizeResult FinalizeEntropyRewrite(FrequencyAggregateFinalizeInput &input) {
+	auto &optimizer = input.rewrite_input.optimizer;
+	vector<unique_ptr<Expression>> total_children;
+	total_children.push_back(input.frequency->Copy());
+	auto total = BindAggregate(optimizer.context, "sum", std::move(total_children),
+	                           input.filter ? input.filter->Copy() : nullptr);
 
-struct EntropyCountsFunction {
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
-		const auto count = static_cast<double>(input);
-		state.count += static_cast<uint64_t>(input);
-		state.weighted_count += count * log2(count);
-	}
+	auto log_frequency = BindScalar(optimizer.context, "log2", input.frequency->Copy());
+	auto weighted_frequency = BindScalar(optimizer.context, "*", std::move(input.frequency), std::move(log_frequency));
+	vector<unique_ptr<Expression>> weighted_children;
+	weighted_children.push_back(std::move(weighted_frequency));
+	auto weighted = BindAggregate(optimizer.context, "sum", std::move(weighted_children), std::move(input.filter));
 
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t input_count) {
-		const auto count = static_cast<double>(input);
-		state.count += static_cast<uint64_t>(input) * input_count;
-		state.weighted_count += count * log2(count) * static_cast<double>(input_count);
-	}
+	FrequencyAggregateFinalizeResult result;
+	auto total_type = total->GetReturnType();
+	auto weighted_type = weighted->GetReturnType();
+	result.aggregates.push_back(std::move(total));
+	result.aggregates.push_back(std::move(weighted));
 
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		target.count += source.count;
-		target.weighted_count += source.weighted_count;
-	}
-
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &) {
-		if (state.count == 0) {
-			target = 0;
-			return;
-		}
-		const auto count = static_cast<double>(state.count);
-		target = log2(count) - state.weighted_count / count;
-	}
-
-	static bool IgnoreNull() {
-		return true;
-	}
-};
-
-AggregateFunction GetEntropyCountsAggregate() {
-	auto function = AggregateFunction::UnaryAggregate<EntropyCountsState, int64_t, double, EntropyCountsFunction>(
-	    LogicalType::BIGINT, LogicalType::DOUBLE);
-	function.SetName(InternalEntropyFromCountsFun::Name);
-	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	return function;
+	auto total_ref =
+	    make_uniq<BoundColumnRefExpression>(total_type, ColumnBinding(input.aggregate_index, ProjectionIndex(0)));
+	auto weighted_ref =
+	    make_uniq<BoundColumnRefExpression>(weighted_type, ColumnBinding(input.aggregate_index, ProjectionIndex(1)));
+	auto log_total = BindScalar(optimizer.context, "log2", total_ref->Copy());
+	auto normalized = BindScalar(optimizer.context, "/", std::move(weighted_ref), std::move(total_ref));
+	auto entropy = BindScalar(optimizer.context, "-", std::move(log_total), std::move(normalized));
+	auto coalesce = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, LogicalType::DOUBLE);
+	coalesce->GetChildrenMutable().push_back(std::move(entropy));
+	coalesce->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(Value::DOUBLE(0)));
+	result.result = std::move(coalesce);
+	return result;
 }
 
-class EntropyAggregateRewriteInfo : public AggregateRewriteInfo {
-public:
-	AggregateRewriteType GetType() const override {
-		return AggregateRewriteType::FREQUENCY;
-	}
-	bool IgnoreNulls() const override {
-		return true;
-	}
-
-	unique_ptr<BoundAggregateExpression> CreateFinalAggregate(ClientContext &context,
-	                                                          const BoundAggregateExpression &source,
-	                                                          vector<unique_ptr<Expression>> children,
-	                                                          unique_ptr<Expression> filter,
-	                                                          unique_ptr<BoundOrderModifier> order_bys) const override {
-		D_ASSERT(children.size() == 2);
-		children.erase(children.begin());
-		FunctionBinder function_binder(context);
-		auto result =
-		    function_binder.BindAggregateFunction(GetEntropyCountsAggregate(), std::move(children), std::move(filter));
-		result->GetOrderBysMutable() = std::move(order_bys);
-		D_ASSERT(result->GetReturnType() == source.GetReturnType());
-		return result;
-	}
-};
-
-const AggregateRewriteInfo &GetEntropyAggregateRewriteInfo() {
-	static EntropyAggregateRewriteInfo info;
-	return info;
+static unique_ptr<AggregateRewriteResult> RewriteEntropy(AggregateRewriteInput &input) {
+	return FrequencyAggregateRewrite::Create(input, true, false, FinalizeEntropyRewrite);
 }
 
 template <class STATE>
@@ -707,6 +694,7 @@ AggregateFunction GetTypedEntropyFunction(const LogicalType &type) {
 	auto func = AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, double, OP, AggregateDestructorType::LEGACY>(
 	    type, LogicalType::DOUBLE);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return func;
 }
 
@@ -720,6 +708,7 @@ AggregateFunction GetFallbackEntropyFunction(const LogicalType &type) {
 	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate());
 	func.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return func;
 }
 
@@ -755,15 +744,11 @@ unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input)
 	auto &arguments = input.GetArguments();
 	function.ReplaceImplementation(GetEntropyFunction(arguments[0]->GetReturnType()));
 	function.SetName("entropy");
-	function.SetRewriteCallback(GetEntropyAggregateRewriteInfo);
+	function.SetRewriteCallback(RewriteEntropy);
 	return nullptr;
 }
 
 } // namespace
-
-AggregateFunction InternalEntropyFromCountsFun::GetFunction() {
-	return GetEntropyCountsAggregate();
-}
 
 AggregateFunctionSet EntropyFun::GetFunctions() {
 	AggregateFunctionSet entropy("entropy");
