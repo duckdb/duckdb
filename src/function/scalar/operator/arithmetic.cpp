@@ -32,11 +32,60 @@
 
 namespace duckdb {
 
-// AVX2 lacks packed int64 multiplication and generates an expensive loop for selected vectors.
-static void Int64MultiplyNoAVX2(DataChunk &input, ExpressionState &, Vector &result) {
+DUCKDB_NO_AVX static void Int64MultiplyNoAVXLoop(const int64_t *__restrict left_data,
+                                                 const int64_t *__restrict right_data, int64_t *__restrict result_data,
+                                                 const sel_t *left_sel, const sel_t *right_sel, idx_t count) {
+	if (left_sel) {
+		if (right_sel) {
+			for (idx_t i = 0; i < count; i++) {
+				result_data[i] = left_data[left_sel[i]] * right_data[right_sel[i]];
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				result_data[i] = left_data[left_sel[i]] * right_data[i];
+			}
+		}
+	} else if (right_sel) {
+		for (idx_t i = 0; i < count; i++) {
+			result_data[i] = left_data[i] * right_data[right_sel[i]];
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			result_data[i] = left_data[i] * right_data[i];
+		}
+	}
+}
+
+// AVX2 emulates packed int64 multiplication, making selected-vector execution slower than scalar execution.
+static void Int64MultiplyNoAVX(DataChunk &input, ExpressionState &, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 2);
-	BinaryExecutor::ExecuteStandardNoAVX2Generic<int64_t, int64_t, int64_t, MultiplyOperator>(input.data[0],
-	                                                                                          input.data[1], result);
+	auto &left = input.data[0];
+	auto &right = input.data[1];
+	auto left_type = left.GetVectorType();
+	auto right_type = right.GetVectorType();
+	if ((left_type == VectorType::FLAT_VECTOR || left_type == VectorType::CONSTANT_VECTOR) &&
+	    (right_type == VectorType::FLAT_VECTOR || right_type == VectorType::CONSTANT_VECTOR)) {
+		BinaryExecutor::ExecuteStandard<int64_t, int64_t, int64_t, MultiplyOperator>(left, right, result);
+		return;
+	}
+
+	UnifiedVectorFormat left_format, right_format;
+	left.ToUnifiedFormat(left_format);
+	right.ToUnifiedFormat(right_format);
+	if (left_format.validity.CanHaveNull() || right_format.validity.CanHaveNull()) {
+		BinaryExecutor::ExecuteStandard<int64_t, int64_t, int64_t, MultiplyOperator>(left, right, result);
+		return;
+	}
+
+	auto count = input.size();
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	if (result.size() != count) {
+		FlatVector::SetSize(result, count);
+	}
+	FlatVector::ValidityMutable(result).Reset(count);
+	Int64MultiplyNoAVXLoop(
+	    UnifiedVectorFormat::GetData<int64_t>(left_format), UnifiedVectorFormat::GetData<int64_t>(right_format),
+	    FlatVector::GetDataMutable<int64_t>(result), left_format.sel->data(), right_format.sel->data(), count);
 }
 
 template <class OP>
@@ -54,7 +103,7 @@ static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 		break;
 	case PhysicalType::INT64:
 		if constexpr (std::is_same_v<OP, MultiplyOperator>) {
-			function = &Int64MultiplyNoAVX2;
+			function = &Int64MultiplyNoAVX;
 		} else {
 			function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		}
