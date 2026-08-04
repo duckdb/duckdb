@@ -62,14 +62,6 @@ inline bool DenseAutoVecPaysOff(size_t selected, size_t span, size_t type_width)
 	return selected * (32 / type_width) >= span; // lane-adjusted dense-vs-gather guard
 }
 
-#ifndef STANDARD_VECTOR_SIZE
-#define STANDARD_VECTOR_SIZE 2048U // keep in sync with DEFAULT_STANDARD_VECTOR_SIZE (vector_size.hpp is cyclic here)
-#endif
-
-inline bool AutoVecCountPaysOff(size_t count) {
-	return count >= STANDARD_VECTOR_SIZE / 4; // widened-kernel entry overhead needs a reasonably full vector
-}
-
 #if DUCKDB_AUTOVEC
 
 typedef uint8_t duckdb_av_u8x16 __attribute__((vector_size(16)));

@@ -87,77 +87,72 @@ static bool FORBounds(T lmin, T lmax, T rmin, T rmax, T &result_min, T &result_m
 #ifndef DUCKDB_SMALLER_BINARY_ALL
 using binary_buffer_kernel_t = void (*)(const BinaryBufferArgs &);
 
-// Resolves the buffer-level kernels the registered arithmetic already instantiated: same-width,
-// or a mixed unsigned pair whose wider side carries the result (in-register argument promotion
-// widens the narrow side). No arithmetic loop exists on the FOR side at all.
+//! Promotes both payloads to the result width before applying OP: plain argument promotion would
+//! evaluate a narrow pair at the wider operand's width and truncate before the result is stored.
+struct FORWidenOperatorWrapper {
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+		return OP::template Operation<RESULT_TYPE, RESULT_TYPE, RESULT_TYPE>(RESULT_TYPE(left), RESULT_TYPE(right));
+	}
+
+	static bool AddsNulls() {
+		return false;
+	}
+};
+
+// Resolves the buffer-level kernel for any (left width, right width, result width) triple: both payloads
+// are read at their stored width and promoted in registers, so no operand is ever materialised wider.
+// No arithmetic loop exists on the FOR side at all.
 template <class OP>
 struct FORStandardExecutor {
 	static PhysicalType MaxStored(PhysicalType a, PhysicalType b) {
 		return GetTypeIdSize(a) >= GetTypeIdSize(b) ? a : b;
 	}
-	static LogicalType ViewType(PhysicalType stored) {
-		switch (stored) {
-		case PhysicalType::UINT8:
-			return LogicalType::UTINYINT;
-		case PhysicalType::UINT16:
-			return LogicalType::USMALLINT;
-		case PhysicalType::UINT32:
-			return LogicalType::UINTEGER;
-		default:
-			return LogicalType::UBIGINT;
-		}
-	}
 	template <class TL, class TR, class TRES>
 	static void RunKernel(const BinaryBufferArgs &args) {
-		BinaryExecutor::ExecuteBuffers<TL, TR, TRES, BinaryStandardOperatorWrapper, OP, bool>(args, false);
+		BinaryExecutor::ExecuteBuffers<TL, TR, TRES, FORWidenOperatorWrapper, OP, bool>(args, false);
+	}
+	//! an operand never outgrows the result: clamping collapses the impossible instantiations
+	template <class T, class TRES>
+	using Operand = typename std::conditional<sizeof(T) <= sizeof(TRES), T, TRES>::type;
+	template <class TL, class TRES>
+	static binary_buffer_kernel_t KernelRight(PhysicalType rw) {
+		switch (rw) {
+		case PhysicalType::UINT8:
+			return &RunKernel<TL, Operand<uint8_t, TRES>, TRES>;
+		case PhysicalType::UINT16:
+			return &RunKernel<TL, Operand<uint16_t, TRES>, TRES>;
+		case PhysicalType::UINT32:
+			return &RunKernel<TL, Operand<uint32_t, TRES>, TRES>;
+		default:
+			return &RunKernel<TL, Operand<uint64_t, TRES>, TRES>;
+		}
+	}
+	template <class TRES>
+	static binary_buffer_kernel_t KernelPair(PhysicalType lw, PhysicalType rw) {
+		switch (lw) {
+		case PhysicalType::UINT8:
+			return KernelRight<Operand<uint8_t, TRES>, TRES>(rw);
+		case PhysicalType::UINT16:
+			return KernelRight<Operand<uint16_t, TRES>, TRES>(rw);
+		case PhysicalType::UINT32:
+			return KernelRight<Operand<uint32_t, TRES>, TRES>(rw);
+		default:
+			return KernelRight<Operand<uint64_t, TRES>, TRES>(rw);
+		}
 	}
 	static binary_buffer_kernel_t Kernel(PhysicalType lw, PhysicalType rw, PhysicalType res) {
-		if (lw == rw) {
-			D_ASSERT(lw == res);
-			switch (res) {
-			case PhysicalType::UINT8:
-				return &RunKernel<uint8_t, uint8_t, uint8_t>;
-			case PhysicalType::UINT16:
-				return &RunKernel<uint16_t, uint16_t, uint16_t>;
-			case PhysicalType::UINT32:
-				return &RunKernel<uint32_t, uint32_t, uint32_t>;
-			default:
-				return &RunKernel<uint64_t, uint64_t, uint64_t>;
-			}
+		D_ASSERT(GetTypeIdSize(res) >= GetTypeIdSize(MaxStored(lw, rw)));
+		switch (res) {
+		case PhysicalType::UINT8:
+			return KernelPair<uint8_t>(lw, rw);
+		case PhysicalType::UINT16:
+			return KernelPair<uint16_t>(lw, rw);
+		case PhysicalType::UINT32:
+			return KernelPair<uint32_t>(lw, rw);
+		default:
+			return KernelPair<uint64_t>(lw, rw);
 		}
-		D_ASSERT(res == MaxStored(lw, rw));
-#define DUCKDB_FOR_MIXED_PAIR(LP, RP, TL, TR_, TRES)                                                                   \
-	if (lw == PhysicalType::LP && rw == PhysicalType::RP) {                                                            \
-		return &RunKernel<TL, TR_, TRES>;                                                                              \
-	}
-		DUCKDB_FOR_MIXED_PAIR(UINT16, UINT8, uint16_t, uint8_t, uint16_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT8, UINT16, uint8_t, uint16_t, uint16_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT32, UINT8, uint32_t, uint8_t, uint32_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT8, UINT32, uint8_t, uint32_t, uint32_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT32, UINT16, uint32_t, uint16_t, uint32_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT16, UINT32, uint16_t, uint32_t, uint32_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT64, UINT8, uint64_t, uint8_t, uint64_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT8, UINT64, uint8_t, uint64_t, uint64_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT64, UINT16, uint64_t, uint16_t, uint64_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT16, UINT64, uint16_t, uint64_t, uint64_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT64, UINT32, uint64_t, uint32_t, uint64_t)
-		DUCKDB_FOR_MIXED_PAIR(UINT32, UINT64, uint32_t, uint64_t, uint64_t)
-#undef DUCKDB_FOR_MIXED_PAIR
-		throw InternalException("Unsupported type pair for FOR arithmetic kernel");
-	}
-	//! Widen a payload to the result width when the result outgrows both operands (existing WidenToFlat)
-	static data_ptr_t Operand(data_ptr_t data, PhysicalType stored, PhysicalType compute, idx_t count,
-	                          unique_ptr<Vector> &scratch) {
-		if (stored == compute) {
-			return data;
-		}
-		if (!scratch) {
-			scratch = make_uniq<Vector>(LogicalType::UBIGINT, idx_t(STANDARD_VECTOR_SIZE));
-		}
-		auto target = FlatVector::GetDataMutable(*scratch);
-		FORVector::WidenToFlat(ViewType(compute), stored, data, target, *FlatVector::IncrementalSelectionVector(),
-		                       count);
-		return target;
 	}
 };
 #endif
@@ -262,7 +257,7 @@ static bool TryFORConstant(Vector &left, Vector &right, Vector &result, idx_t co
 // FOR (op) FOR for op in {+, *}: compute the result width once, then run the registered kernel on both payloads.
 template <class DOMAIN_T, class OP>
 static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t count,
-                         buffer_ptr<DictionaryEntry> &dict_cache, unique_ptr<Vector> &scratch) {
+                         buffer_ptr<DictionaryEntry> &dict_cache) {
 	using TRAITS = FOROpTraits<OP>;
 #ifdef DUCKDB_SMALLER_BINARY_ALL
 	(void)left;
@@ -270,7 +265,6 @@ static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t coun
 	(void)result;
 	(void)count;
 	(void)dict_cache;
-	(void)scratch;
 	return false;
 #else
 	if constexpr (!TRAITS::IS_SUPPORTED || TRAITS::IS_SUBTRACT) {
@@ -317,24 +311,9 @@ static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t coun
 		}
 		auto fill_result = [&](Vector &target, idx_t n, const SelectionVector *gather_sel) {
 			FORVector::Create<DOMAIN_T>(target, compute, result_max);
-			auto ldata = FORVector::GetData(*lscan.for_vec);
-			auto rdata = FORVector::GetData(*rscan.for_vec);
-			auto lw = lscan.stored_type;
-			auto rw = rscan.stored_type;
-			if (compute != pair_max) {
-				// the result outgrows both operands: align the wider side so the pair carries the result width
-				const idx_t align_count = gather_sel ? child_count : n;
-				if (GetTypeIdSize(lw) >= GetTypeIdSize(rw)) {
-					ldata = EXECUTOR::Operand(ldata, lw, compute, align_count, scratch);
-					lw = compute;
-				} else {
-					rdata = EXECUTOR::Operand(rdata, rw, compute, align_count, scratch);
-					rw = compute;
-				}
-			}
 			BinaryBufferArgs args;
-			args.ldata = ldata;
-			args.rdata = rdata;
+			args.ldata = FORVector::GetData(*lscan.for_vec);
+			args.rdata = FORVector::GetData(*rscan.for_vec);
 			args.result_data = FORVector::GetData(target);
 			args.count = n;
 			args.lsel = gather_sel;
@@ -342,7 +321,7 @@ static bool TryFORColCol(Vector &left, Vector &right, Vector &result, idx_t coun
 			args.lvalidity = lscan.validity.get();
 			args.rvalidity = rscan.validity.get();
 			args.result_validity = &FORVector::Validity(target);
-			EXECUTOR::Kernel(lw, rw, compute)(args);
+			EXECUTOR::Kernel(lscan.stored_type, rscan.stored_type, compute)(args);
 		};
 		FORVector::KeepAlive(*lscan.for_vec);
 		FORVector::KeepAlive(*rscan.for_vec);

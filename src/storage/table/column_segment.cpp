@@ -493,9 +493,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	const bool nested = vector.GetType().IsNested(); // nested evaluation needs explicit indices
 	const bool identity_all = !sel.IsSet() && approved_tuple_count == scan_count;
 
-	// small counts skip the bitmap path without clearing bitmap_capable for later chunks
-	if (!nested && state.bitmap_capable && AutoVecCountPaysOff(scan_count) &&
-	    (identity_all || sel.IsSet())) { // bitmap scan-filter path
+	if (!nested && state.bitmap_capable && (identity_all || sel.IsSet())) { // bitmap scan-filter path
 		auto &new_sel = state.scratch;
 		idx_t matched = state.executor->SelectExpression(chunk, new_sel, nullptr, scan_count);
 		if (!new_sel.IsBitmap()) {

@@ -97,8 +97,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	const auto input_dictionary_size = input_dictionary_size_opt.GetIndex();
 	auto &input_sel = DictionaryVector::SelVector(first_input);
 
-	if (safe_autovec_arith && AutoVecCountPaysOff(args.size()) && // dense dictionary arithmetic
-	    input_dictionary_size <= STANDARD_VECTOR_SIZE &&
+	if (safe_autovec_arith && input_dictionary_size <= STANDARD_VECTOR_SIZE && // dense dictionary arithmetic
 	    DenseAutoVecPaysOff(args.size(), input_dictionary_size, GetTypeIdSize(result.GetType().InternalType()))) {
 		for (idx_t idx = 1; idx < dictionary_input_indices.size(); idx++) {
 			const auto &input = args.data[dictionary_input_indices[idx]];

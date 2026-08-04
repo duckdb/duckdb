@@ -6,6 +6,9 @@ require no_vector_verification
 
 require block_size 262144
 
+# single-chunk assumptions below need full-size vectors
+require vector_size 2048
+
 load {TEST_DIR}/bitpacking_for_compare_vector_type.db
 
 statement ok

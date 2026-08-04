@@ -74,8 +74,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
                                  SelectionVector *false_sel, SelectionResult *bitmap_sel = nullptr) {
 	auto &state = state_p->Cast<ConjunctionState>();
 	const bool is_and = expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
-	if (state.bitmap_capable && AutoVecCountPaysOff(count) && true_sel && !false_sel &&
-	    (!sel || !sel->IsSet())) { // bitmap AND/OR fast path
+	if (state.bitmap_capable && true_sel && !false_sel && (!sel || !sel->IsSet())) { // bitmap AND/OR fast path
 		auto &children = expr.GetChildren();
 		idx_t result_count = is_and ? count : 0;
 		bool have_accumulator = false;

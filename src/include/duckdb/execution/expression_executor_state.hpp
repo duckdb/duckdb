@@ -90,8 +90,6 @@ public:
 	SelectionResult tmp_sel1, tmp_sel2, tmp_sel3;
 	//! Reused dictionary child for FOR arithmetic over sliced inputs
 	buffer_ptr<DictionaryEntry> for_dictionary;
-	//! Lazy scratch payload for FOR arithmetic operand alignment
-	unique_ptr<Vector> for_scratch;
 
 private:
 	bool safe_autovec_arith = false;

@@ -131,8 +131,7 @@ static void FORArithmeticDomainFunction(DataChunk &input, ExpressionState &state
 	if (TryFORConstant<DOMAIN_T, OP>(input.data[0], input.data[1], result, input.size(), fstate.for_dictionary)) {
 		return;
 	}
-	if (TryFORColCol<DOMAIN_T, OP>(input.data[0], input.data[1], result, input.size(), fstate.for_dictionary,
-	                               fstate.for_scratch)) {
+	if (TryFORColCol<DOMAIN_T, OP>(input.data[0], input.data[1], result, input.size(), fstate.for_dictionary)) {
 		return;
 	}
 	GetScalarIntegerFunction<OP>(input.data[0].GetType().InternalType())(input, state, result);

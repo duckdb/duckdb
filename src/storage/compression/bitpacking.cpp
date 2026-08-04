@@ -789,7 +789,7 @@ void BitpackingScanPartialInternal(ColumnSegment &segment, ColumnScanState &stat
 	T *result_data = reinterpret_cast<T *>(result_buf);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
-	bool try_for = allow_for && sizeof(T) > 1 && result_offset == 0 && result.BufferMutable().for_active;
+	bool try_for = allow_for && sizeof(T) > 1 && result_offset == 0 && result.BufferMutable().TryForToken();
 	PhysicalType for_st = PhysicalType::INVALID;
 	T for_max = 0;
 	idx_t scanned = 0;

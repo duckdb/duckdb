@@ -232,8 +232,8 @@ struct BinaryExecutor {
 		const bool dense = !args.lsel &&
 		                   !args.rsel
 #if DUCKDB_AUTOVEC && defined(__x86_64__)
-		                   // the flat loop carries the widened-ISA target: pre-AVX2 CPUs and small counts gather
-		                   && CpuBenefitsFromAutoVec() && AutoVecCountPaysOff(args.count)
+		                   // the flat loop carries the widened-ISA target: pre-AVX2 CPUs gather instead
+		                   && CpuBenefitsFromAutoVec()
 #endif
 		    ;
 		if (dense) {
