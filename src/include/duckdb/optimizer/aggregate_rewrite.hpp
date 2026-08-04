@@ -14,6 +14,7 @@
 namespace duckdb {
 
 class BoundAggregateExpression;
+class ClientContext;
 class LogicalAggregate;
 class Optimizer;
 
@@ -40,11 +41,13 @@ struct DUCKDB_API AggregateRewritePlan {
 };
 
 struct DUCKDB_API AggregateRewriteInput {
+	AggregateRewriteInput(ClientContext &context, const BoundAggregateExpression &aggregate, AggregateRewriteMode mode);
 	AggregateRewriteInput(Optimizer &optimizer, const LogicalAggregate &op, const BoundAggregateExpression &aggregate,
 	                      AggregateRewriteMode mode);
 
-	Optimizer &optimizer;
-	const LogicalAggregate &op;
+	ClientContext &context;
+	optional_ptr<Optimizer> optimizer;
+	optional_ptr<const LogicalAggregate> op;
 	const BoundAggregateExpression &aggregate;
 	AggregateRewriteMode mode;
 };
@@ -56,6 +59,9 @@ struct DUCKDB_API AggregateRewriteResult {
 	unique_ptr<Expression> expression;
 	unique_ptr<AggregateRewritePlan> plan;
 };
+
+//! Applies a direct aggregate callback and returns its replacement expression, if any.
+DUCKDB_API unique_ptr<Expression> TryDirectAggregateRewrite(AggregateRewriteInput &input);
 
 struct DUCKDB_API FrequencyAggregateFinalizeInput {
 	FrequencyAggregateFinalizeInput(AggregateRewriteInput &rewrite_input, TableIndex aggregate_index,

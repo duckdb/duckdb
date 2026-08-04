@@ -24,17 +24,12 @@ static void RewriteAggregateCallbacks(Optimizer &optimizer, unique_ptr<LogicalOp
 		auto &aggregate_op = op->Cast<LogicalAggregate>();
 		for (auto &expr : aggregate_op.expressions) {
 			auto &aggregate = expr->Cast<BoundAggregateExpression>();
-			if (!aggregate.Function().HasRewriteCallback() ||
-			    aggregate.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
-				continue;
-			}
 			AggregateRewriteInput input(optimizer, aggregate_op, aggregate, AggregateRewriteMode::DIRECT);
-			auto rewrite = aggregate.Function().GetRewriteCallback()(input);
-			if (!rewrite || !rewrite->expression) {
+			auto rewrite = TryDirectAggregateRewrite(input);
+			if (!rewrite) {
 				continue;
 			}
-			D_ASSERT(rewrite->expression->GetReturnType() == expr->GetReturnType());
-			expr = std::move(rewrite->expression);
+			expr = std::move(rewrite);
 		}
 	}
 	for (auto &child : op->children) {

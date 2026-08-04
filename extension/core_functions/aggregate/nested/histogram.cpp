@@ -1,5 +1,7 @@
 #include "core_functions/aggregate/histogram_helpers.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/string_map_set.hpp"
@@ -8,11 +10,9 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/function/aggregate/list_aggregate.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -20,6 +20,21 @@
 namespace duckdb {
 
 namespace {
+static unique_ptr<BoundAggregateExpression> BindAggregate(ClientContext &context, const char *name,
+                                                          vector<unique_ptr<Expression>> children,
+                                                          unique_ptr<Expression> filter = nullptr) {
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), name));
+	vector<LogicalType> child_types;
+	for (auto &child : children) {
+		child_types.push_back(child->GetReturnType());
+	}
+	const auto &function = entry.functions.GetFunctionByArguments(context, child_types);
+	FunctionBinder function_binder(context);
+	return function_binder.BindAggregateFunction(function, std::move(children), std::move(filter));
+}
+
 static unique_ptr<Expression> BindScalar(ClientContext &context, const char *name,
                                          vector<unique_ptr<Expression>> children) {
 	FunctionBinder function_binder(context);
@@ -223,19 +238,16 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 }
 
 static FrequencyAggregateFinalizeResult FinalizeHistogramRewrite(FrequencyAggregateFinalizeInput &input) {
-	auto &optimizer = input.rewrite_input.optimizer;
-	auto frequency =
-	    BoundCastExpression::AddCastToType(optimizer.context, std::move(input.frequency), LogicalType::UBIGINT);
+	auto &context = input.rewrite_input.context;
+	auto frequency = BoundCastExpression::AddCastToType(context, std::move(input.frequency), LogicalType::UBIGINT);
 	vector<unique_ptr<Expression>> entry_children;
 	entry_children.push_back(std::move(input.value));
 	entry_children.push_back(std::move(frequency));
-	auto entry = BindScalar(optimizer.context, "row", std::move(entry_children));
+	auto entry = BindScalar(context, "row", std::move(entry_children));
 
 	vector<unique_ptr<Expression>> list_children;
 	list_children.push_back(std::move(entry));
-	FunctionBinder function_binder(optimizer.context);
-	auto list = function_binder.BindAggregateFunction(ListFun::GetFunction(), std::move(list_children),
-	                                                  std::move(input.filter));
+	auto list = BindAggregate(context, "list", std::move(list_children), std::move(input.filter));
 	auto list_type = list->GetReturnType();
 
 	FrequencyAggregateFinalizeResult result;
@@ -244,10 +256,10 @@ static FrequencyAggregateFinalizeResult FinalizeHistogramRewrite(FrequencyAggreg
 	    list_type, ColumnBinding(input.aggregate_index, ProjectionIndex(result.aggregates.size() - 1)));
 	vector<unique_ptr<Expression>> sort_children;
 	sort_children.push_back(std::move(list_ref));
-	auto sorted_entries = BindScalar(optimizer.context, "list_sort", std::move(sort_children));
+	auto sorted_entries = BindScalar(context, "list_sort", std::move(sort_children));
 	vector<unique_ptr<Expression>> map_children;
 	map_children.push_back(std::move(sorted_entries));
-	result.result = BindScalar(optimizer.context, "map_from_entries", std::move(map_children));
+	result.result = BindScalar(context, "map_from_entries", std::move(map_children));
 	D_ASSERT(result.result->GetReturnType() == input.rewrite_input.aggregate.GetReturnType());
 	return result;
 }

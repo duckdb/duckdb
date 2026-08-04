@@ -24,9 +24,14 @@ AggregateRewriteStage::AggregateRewriteStage(TableIndex group_index_p, TableInde
 AggregateRewritePlan::AggregateRewritePlan(OptimizerType optimizer_type_p) : optimizer_type(optimizer_type_p) {
 }
 
+AggregateRewriteInput::AggregateRewriteInput(ClientContext &context_p, const BoundAggregateExpression &aggregate_p,
+                                             AggregateRewriteMode mode_p)
+    : context(context_p), aggregate(aggregate_p), mode(mode_p) {
+}
+
 AggregateRewriteInput::AggregateRewriteInput(Optimizer &optimizer_p, const LogicalAggregate &op_p,
                                              const BoundAggregateExpression &aggregate_p, AggregateRewriteMode mode_p)
-    : optimizer(optimizer_p), op(op_p), aggregate(aggregate_p), mode(mode_p) {
+    : context(optimizer_p.context), optimizer(optimizer_p), op(op_p), aggregate(aggregate_p), mode(mode_p) {
 }
 
 unique_ptr<AggregateRewriteResult> AggregateRewriteResult::Direct(unique_ptr<Expression> expression) {
@@ -39,6 +44,19 @@ unique_ptr<AggregateRewriteResult> AggregateRewriteResult::MultiStage(unique_ptr
 	auto result = make_uniq<AggregateRewriteResult>();
 	result->plan = std::move(plan);
 	return result;
+}
+
+unique_ptr<Expression> TryDirectAggregateRewrite(AggregateRewriteInput &input) {
+	if (input.mode != AggregateRewriteMode::DIRECT || !input.aggregate.Function().HasRewriteCallback() ||
+	    input.aggregate.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+		return nullptr;
+	}
+	auto rewrite = input.aggregate.Function().GetRewriteCallback()(input);
+	if (!rewrite || !rewrite->expression) {
+		return nullptr;
+	}
+	D_ASSERT(rewrite->expression->GetReturnType() == input.aggregate.GetReturnType());
+	return std::move(rewrite->expression);
 }
 
 FrequencyAggregateFinalizeInput::FrequencyAggregateFinalizeInput(
@@ -78,15 +96,18 @@ static unique_ptr<Expression> CreateAggregateSortKey(ClientContext &context, con
 unique_ptr<AggregateRewriteResult> FrequencyAggregateRewrite::Create(AggregateRewriteInput &input, bool ignore_nulls,
                                                                      bool retain_order,
                                                                      frequency_aggregate_finalize_t finalize) {
-	if (input.mode != AggregateRewriteMode::MULTI_STAGE || input.aggregate.GetChildren().size() != 1) {
+	if (input.mode != AggregateRewriteMode::MULTI_STAGE || !input.optimizer || !input.op ||
+	    input.aggregate.GetChildren().size() != 1) {
 		return nullptr;
 	}
+	auto &optimizer = *input.optimizer;
+	auto &op = *input.op;
 
 	auto plan = make_uniq<AggregateRewritePlan>(OptimizerType::FREQUENCY_AGGREGATE_REWRITE);
-	const auto group_count = input.op.groups.size();
+	const auto group_count = op.groups.size();
 	vector<unique_ptr<Expression>> frequency_groups;
 	frequency_groups.reserve(group_count + 2);
-	for (auto &group : input.op.groups) {
+	for (auto &group : op.groups) {
 		frequency_groups.push_back(group->Copy());
 	}
 	frequency_groups.push_back(input.aggregate.GetChildren()[0]->Copy());
@@ -101,7 +122,7 @@ unique_ptr<AggregateRewriteResult> FrequencyAggregateRewrite::Create(AggregateRe
 	optional_idx count_column;
 	if (!input.aggregate.IsDistinct()) {
 		count_column = frequency_aggregates.size();
-		FunctionBinder function_binder(input.optimizer.context);
+		FunctionBinder function_binder(input.context);
 		frequency_aggregates.push_back(function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}));
 	}
 
@@ -109,23 +130,22 @@ unique_ptr<AggregateRewriteResult> FrequencyAggregateRewrite::Create(AggregateRe
 	LogicalType order_type = LogicalType::SQLNULL;
 	if (retain_order && input.aggregate.GetOrderBys()) {
 		order_column = frequency_aggregates.size();
-		auto sort_key = CreateAggregateSortKey(input.optimizer.context, *input.aggregate.GetOrderBys());
-		auto min_sort_key = BindMinAggregate(input.optimizer.context, std::move(sort_key));
+		auto sort_key = CreateAggregateSortKey(input.context, *input.aggregate.GetOrderBys());
+		auto min_sort_key = BindMinAggregate(input.context, std::move(sort_key));
 		order_type = min_sort_key->GetReturnType();
 		frequency_aggregates.push_back(std::move(min_sort_key));
 	}
 
-	auto frequency_group_index = input.optimizer.binder.GenerateTableIndex();
-	auto frequency_aggregate_index = input.optimizer.binder.GenerateTableIndex();
+	auto frequency_group_index = optimizer.binder.GenerateTableIndex();
+	auto frequency_aggregate_index = optimizer.binder.GenerateTableIndex();
 	plan->stages.emplace_back(frequency_group_index, frequency_aggregate_index, std::move(frequency_groups),
 	                          std::move(frequency_aggregates));
 
 	vector<unique_ptr<Expression>> final_groups;
 	final_groups.reserve(group_count);
 	for (idx_t group_idx = 0; group_idx < group_count; group_idx++) {
-		final_groups.push_back(
-		    make_uniq<BoundColumnRefExpression>(input.op.groups[group_idx]->GetReturnType(),
-		                                        ColumnBinding(frequency_group_index, ProjectionIndex(group_idx))));
+		final_groups.push_back(make_uniq<BoundColumnRefExpression>(
+		    op.groups[group_idx]->GetReturnType(), ColumnBinding(frequency_group_index, ProjectionIndex(group_idx))));
 	}
 
 	auto value =
@@ -161,8 +181,8 @@ unique_ptr<AggregateRewriteResult> FrequencyAggregateRewrite::Create(AggregateRe
 		    order_type, ColumnBinding(frequency_aggregate_index, ProjectionIndex(order_column.GetIndex())));
 	}
 
-	auto final_group_index = input.optimizer.binder.GenerateTableIndex();
-	auto final_aggregate_index = input.optimizer.binder.GenerateTableIndex();
+	auto final_group_index = optimizer.binder.GenerateTableIndex();
+	auto final_aggregate_index = optimizer.binder.GenerateTableIndex();
 	FrequencyAggregateFinalizeInput finalize_input(input, final_aggregate_index, std::move(value), std::move(frequency),
 	                                               std::move(filter), std::move(order_key));
 	auto final_result = finalize(finalize_input);
