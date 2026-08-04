@@ -337,11 +337,6 @@ unique_ptr<TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candida
 	return nullptr;
 }
 
-unique_ptr<TimeZone> ICUHelpers::TryGetTimeZone(string &tz_str) {
-	vector<string> candidates;
-	return GetTimeZoneInternal(tz_str, candidates);
-}
-
 unique_ptr<TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_message) {
 	vector<string> candidates;
 	auto tz = GetTimeZoneInternal(tz_str, candidates);

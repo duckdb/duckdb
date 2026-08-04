@@ -32,6 +32,11 @@ static inline void AssertInSupportedRange(idx_t input_size, int64_t offset, int6
 	}
 }
 
+bool SubstringInSupportedRange(int64_t offset, int64_t length) {
+	return offset >= SUPPORTED_LOWER_BOUND && offset <= SUPPORTED_UPPER_BOUND && length >= SUPPORTED_LOWER_BOUND &&
+	       length <= SUPPORTED_UPPER_BOUND;
+}
+
 static string_t SubstringEmptyString(Vector &result) {
 	auto result_string = StringVector::EmptyString(result, 0);
 	result_string.Finalize();
@@ -390,6 +395,8 @@ ScalarFunctionSet SubstringFun::GetFunctions() {
 	                                  SubstringPropagateStats));
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, SubstringPropagateStats));
+	// throws if the offset or length are out of the supported range
+	substr.SetFallible();
 	return (substr);
 }
 
@@ -401,6 +408,8 @@ ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                           SubstringFunction<SubstringGraphemeOp>, nullptr,
 	                                           SubstringGraphemePropagateStats));
+	// throws if the offset or length are out of the supported range
+	substr_grapheme.SetFallible();
 	return (substr_grapheme);
 }
 

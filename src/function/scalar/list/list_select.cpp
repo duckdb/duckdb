@@ -169,6 +169,8 @@ ScalarFunction ListWhereFun::GetFunction() {
 	auto fun =
 	    ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::BOOLEAN)},
 	                   LogicalType::LIST(LogicalType::TEMPLATE("T")), ListSelectFunction<SetSelectionVectorWhere>);
+	// throws if the selection list contains NULL values
+	fun.SetFallible();
 	return fun;
 }
 
@@ -176,6 +178,8 @@ ScalarFunction ListSelectFun::GetFunction() {
 	auto fun =
 	    ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::BIGINT)},
 	                   LogicalType::LIST(LogicalType::TEMPLATE("T")), ListSelectFunction<SetSelectionVectorSelect>);
+	// throws if the selection list contains NULL values
+	fun.SetFallible();
 	return fun;
 }
 

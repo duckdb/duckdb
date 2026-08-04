@@ -62,10 +62,10 @@ void Grego::DayToFields(int32_t day, int32_t &year, int8_t &month, int8_t &dom, 
 	dom = static_cast<int8_t>(doy - DaysBeforeMonth(year, month));
 }
 
-bool Grego::TimeToFields(double time, int32_t &year, int8_t &month, int8_t &dom, int8_t &dow, int16_t &doy,
+bool Grego::TimeToFields(int64_t time, int32_t &year, int8_t &month, int8_t &dom, int8_t &dow, int16_t &doy,
                          int32_t &mid) {
 	const auto day = FloorDiv::Divide(time, static_cast<int32_t>(MILLIS_PER_DAY), mid);
-	if (day > double(NumericLimits<int32_t>::Maximum()) || day < double(NumericLimits<int32_t>::Minimum())) {
+	if (day > int64_t(NumericLimits<int32_t>::Maximum()) || day < int64_t(NumericLimits<int32_t>::Minimum())) {
 		return false;
 	}
 	DayToFields(static_cast<int32_t>(day), year, month, dom, dow, doy);
