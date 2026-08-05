@@ -238,6 +238,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 	idx_t last_pos = 0;
 	string dollar_quote_marker;
 	idx_t dollar_marker_start = 0;
+	idx_t multi_line_comment_depth = 0;
 	for (idx_t i = 0; i < sql.size(); i++) {
 		auto c = sql[i];
 		switch (state) {
@@ -305,6 +306,7 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			if (c == '/' && i + 1 < sql.size() && sql[i + 1] == '*') {
 				i++;
 				state = TokenizeState::MULTI_LINE_COMMENT;
+				multi_line_comment_depth = 1;
 				break;
 			}
 			if (StringUtil::CharacterIsSpace(c)) {
@@ -467,11 +469,17 @@ bool BaseTokenizer::TokenizeInputInternal() {
 			}
 			break;
 		case TokenizeState::MULTI_LINE_COMMENT:
-			if (c == '*' && i + 1 < sql.size() && sql[i + 1] == '/') {
+			if (c == '/' && i + 1 < sql.size() && sql[i + 1] == '*') {
 				i++;
-				PushToken(last_pos, i + 1, TokenType::COMMENT);
-				last_pos = i + 1;
-				state = TokenizeState::STANDARD;
+				multi_line_comment_depth++;
+			} else if (c == '*' && i + 1 < sql.size() && sql[i + 1] == '/') {
+				i++;
+				multi_line_comment_depth--;
+				if (multi_line_comment_depth == 0) {
+					PushToken(last_pos, i + 1, TokenType::COMMENT);
+					last_pos = i + 1;
+					state = TokenizeState::STANDARD;
+				}
 			}
 			break;
 		case TokenizeState::DOLLAR_QUOTED_STRING: {
