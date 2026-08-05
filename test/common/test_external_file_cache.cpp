@@ -565,6 +565,32 @@ TEST_CASE("File with freshness deadline is invalidated when the file size change
 	REQUIRE(TotalCachedBytes(cache) == content_b.size());
 }
 
+TEST_CASE("Long-lived handle does not use cache after the freshness deadline", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
+
+	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(BLOCK_SIZE, 'A');
+	const string content_b(BLOCK_SIZE, 'B');
+	EFCTestFileGuard test_file("test_efc_freshness_long_lived_handle.bin", content_a);
+
+	CachingFileSystem cfs(*fresh_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
+
+	auto cached_file = cache.GetOrCreateCachedFile(test_file.GetPath());
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
+		cached_file->cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value - 1);
+	}
+
+	WriteTestContent(test_file.GetPath(), content_b);
+	REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
+}
+
 TEST_CASE("Expired freshness deadline is not served from cache", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;

@@ -198,6 +198,23 @@ shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCur
 	return current_cached_file;
 }
 
+bool CachingFileHandle::CanUseCache() {
+	if (!Validate()) {
+		return true;
+	}
+	auto current_cached_file = EnsureCachedFileCurrent();
+	{
+		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		if (ExternalFileCache::HasValidationMetadata(version_tag, last_modified)) {
+			return true;
+		}
+	}
+
+	annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+	return current_cached_file->cache_valid_until.IsFinite() &&
+	       Timestamp::GetCurrentTimestamp() < current_cached_file->cache_valid_until;
+}
+
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p,
                                      optional_ptr<FileOpener> opener_p)
@@ -282,15 +299,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		return FileBufferHandleGroup();
 	}
 
-	// Only cache when file validation metadata or a freshness deadline is available.
-	bool not_cacheable = false;
-	if (Validate()) {
-		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
-		not_cacheable =
-		    !ExternalFileCache::HasValidationMetadata(version_tag, last_modified) && !cache_valid_until.IsFinite();
-	}
-
-	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || not_cacheable) {
+	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || !CanUseCache()) {
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
@@ -364,17 +373,9 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
-	// Only cache when file validation metadata or a freshness deadline is available.
-	bool not_cacheable = false;
-	if (Validate()) {
-		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
-		not_cacheable =
-		    !ExternalFileCache::HasValidationMetadata(version_tag, last_modified) && !cache_valid_until.IsFinite();
-	}
-
 	// If we can't seek, we can't use the cache for these calls,
 	// because we won't be able to seek over any parts we skipped by reading from the cache
-	if (!external_file_cache.IsEnabled() || !CanSeek() || not_cacheable) {
+	if (!external_file_cache.IsEnabled() || !CanSeek() || !CanUseCache()) {
 		auto buf = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		auto file_handle = GetFileHandle();
 		nr_bytes = NumericCast<idx_t>(file_handle->Read(context, buf.GetDataMutable(), nr_bytes));
