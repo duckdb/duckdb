@@ -90,6 +90,7 @@ struct SelectionResult : private SelectionVector {
 		D_ASSERT(other.IsBitmap() && other.RowSpan() == row_span);
 		auto dst = reinterpret_cast<validity_t *>(PrepareBitmap(row_span));
 		auto src = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
+		DUCKDB_UNROLL_LOOP
 		for (idx_t w = 0; w < (row_span + 63) / 64; w++) {
 			dst[w] = ~src[w];
 		}
@@ -115,7 +116,7 @@ struct SelectionResult : private SelectionVector {
 	}
 
 private:
-	void IndexToBitmap(idx_t count, idx_t row_span) {
+	DUCKDB_AUTOVEC_TARGET void IndexToBitmap(idx_t count, idx_t row_span) {
 		D_ASSERT(!IsBitmap() && row_span <= STANDARD_VECTOR_SIZE);
 		auto keep = selection_data;
 		auto indices = sel_vector;
@@ -123,11 +124,13 @@ private:
 		memset(words, 0, ((STANDARD_VECTOR_SIZE + 63) / 64) * sizeof(uint64_t));
 		if (!indices) {
 			D_ASSERT(count <= row_span);
+			DUCKDB_UNROLL_LOOP
 			for (idx_t i = 0; i < count; i++) {
 				words[i >> 6] |= uint64_t(1) << (i & 63);
 			}
 			return;
 		}
+		DUCKDB_UNROLL_LOOP
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = indices[i];
 			words[idx >> 6] |= uint64_t(1) << (idx & 63);
@@ -146,6 +149,7 @@ private:
 		auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
 		const idx_t nwords = (selection_data->row_span + 63) / 64;
 		idx_t total = 0;
+		DUCKDB_UNROLL_LOOP
 		for (idx_t w = 0; w < nwords; w++) {
 			a[w] &= other_bitmap[w];
 			total += CountOnes<validity_t>::Count(a[w]);
@@ -158,6 +162,7 @@ private:
 		auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
 		const idx_t nwords = (selection_data->row_span + 63) / 64;
 		idx_t total = 0;
+		DUCKDB_UNROLL_LOOP
 		for (idx_t w = 0; w < nwords; w++) {
 			a[w] |= other_bitmap[w];
 			total += CountOnes<validity_t>::Count(a[w]);

@@ -119,7 +119,7 @@ inline bool IsStableExpressionCached(const Expression &expr) { // consistent, no
 }
 
 #if DUCKDB_AUTOVEC
-DUCKDB_AUTOVEC_TARGET_BEGIN // kernels below are gated behind CpuBenefitsFromAutoVec()
+// target attrs below: only reachable behind CpuBenefitsFromAutoVec(); lets the bitmap kernels inline
 
 struct NarrowCol {
 	const_data_ptr_t data = nullptr;
@@ -154,9 +154,11 @@ inline const Vector *TryGetDictChild(const Vector &v, const SelectionVector *&se
 }
 
 //! Uniform fill (folding validity) when FOR range analysis proves the comparison always true/false.
-inline void WriteConstantBitmap(bool value, idx_t count, const validity_t *validity, validity_t *__restrict bitmap) {
+DUCKDB_AUTOVEC_TARGET inline void WriteConstantBitmap(bool value, idx_t count, const validity_t *validity,
+                                                      validity_t *__restrict bitmap) {
 	const idx_t nwords = (count + 63) / 64;
 	const validity_t fill = value ? ~validity_t(0) : 0;
+	DUCKDB_UNROLL_LOOP
 	for (idx_t w = 0; w < nwords; w++) {
 		bitmap[w] = fill;
 	}
@@ -168,7 +170,7 @@ inline void WriteConstantBitmap(bool value, idx_t count, const validity_t *valid
 	}
 }
 
-inline void FillConstView(const ForView &view, ExpressionType op, idx_t span, validity_t *t_bm) {
+DUCKDB_AUTOVEC_TARGET inline void FillConstView(const ForView &view, ExpressionType op, idx_t span, validity_t *t_bm) {
 	const validity_t *validity = view.original_validity ? view.original_validity->GetData() : nullptr;
 	if (view.always_false || view.always_true) {
 		WriteConstantBitmap(view.always_true, span, validity, t_bm);
@@ -178,13 +180,16 @@ inline void FillConstView(const ForView &view, ExpressionType op, idx_t span, va
 	                        [&](auto tag) { return static_cast<decltype(tag)>(view.rewritten_constant); });
 }
 
-inline void FillNarrowCol(const NarrowCol &l, const NarrowCol &r, ExpressionType op, idx_t span, validity_t *t_bm) {
+DUCKDB_AUTOVEC_TARGET inline void FillNarrowCol(const NarrowCol &l, const NarrowCol &r, ExpressionType op, idx_t span,
+                                                validity_t *t_bm) {
 	DispatchFlatColCmpToBitmap(l.type, op, l.data, r.data, span, l.validity, r.validity, t_bm);
 }
 
-inline idx_t EmitBitmapSelection(SelectionResult &t, validity_t *t_bm, idx_t len, const SelectionVector *sel,
-                                 idx_t count, SelectionResult *bitmap_sel, SelectionVector *true_sel,
-                                 SelectionVector *false_sel, SelectionResult &tmp_sel2, SelectionResult &tmp_sel3) {
+DUCKDB_AUTOVEC_TARGET inline idx_t EmitBitmapSelection(SelectionResult &t, validity_t *t_bm, idx_t len,
+                                                       const SelectionVector *sel, idx_t count,
+                                                       SelectionResult *bitmap_sel, SelectionVector *true_sel,
+                                                       SelectionVector *false_sel, SelectionResult &tmp_sel2,
+                                                       SelectionResult &tmp_sel3) {
 	validity_t *f_bm = nullptr;
 	if (false_sel && !bitmap_sel) {
 		f_bm = tmp_sel3.Complement(t, len);
@@ -213,10 +218,12 @@ inline idx_t EmitBitmapSelection(SelectionResult &t, validity_t *t_bm, idx_t len
 //! bitmap (branchless/autovec), then combines lazily: any input selection is AND-ed in as a bitmap, and the result
 //! is emitted to whatever the caller wants (a result bitmap, or a true and/or false selection vector). Returns false
 //! (nothing written) for shapes it does not handle, so the caller falls through to generic selection.
-inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChunk &chunk, const SelectionVector *sel,
-                                      idx_t count, SelectionResult *bitmap_sel, SelectionVector *true_sel,
-                                      SelectionVector *false_sel, SelectionResult &tmp_sel1, SelectionResult &tmp_sel2,
-                                      SelectionResult &tmp_sel3, idx_t &result) {
+DUCKDB_AUTOVEC_TARGET inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChunk &chunk,
+                                                            const SelectionVector *sel, idx_t count,
+                                                            SelectionResult *bitmap_sel, SelectionVector *true_sel,
+                                                            SelectionVector *false_sel, SelectionResult &tmp_sel1,
+                                                            SelectionResult &tmp_sel2, SelectionResult &tmp_sel3,
+                                                            idx_t &result) {
 	auto &col = chunk.data[info.ref->Index()]; // dense compare reads the flat input directly
 	const auto pt = col.GetType().InternalType();
 	if (!BitmapCmpTypeSupported(pt)) {
@@ -263,6 +270,7 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 				const idx_t base = w * 64;
 				const idx_t n = MinValue<idx_t>(64, logical_span - base);
 				validity_t acc = 0;
+				DUCKDB_UNROLL_LOOP
 				for (idx_t j = 0; j < n; j++) {
 					const auto c = ldsel->get_index(base + j);
 					acc |= validity_t((child_bm[c >> 6] >> (c & 63)) & 1) << j;
@@ -332,7 +340,6 @@ inline bool SelectComparisonFromChunk(const BitmapComparisonInfo &info, DataChun
 	return true;
 }
 
-DUCKDB_AUTOVEC_TARGET_END
 #endif // DUCKDB_AUTOVEC
 
 } // namespace duckdb
